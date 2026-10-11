@@ -1,0 +1,71 @@
+<?php
+declare(strict_types=1);
+require dirname(__DIR__).'/autoload.php';
+
+use PhpWasmEngine\Engine;
+use PhpWasmEngine\Tiled\Loader;
+use PhpWasmEngine\Physics\
+{Body,Platformer,MapTerrain};
+use PhpWasmEngine\Render\
+{Device,Camera,MapRenderer,Sprite,SpriteRenderer};
+
+$scene = vrzno_env('scene')?:'platformer';
+$profile = vrzno_env('profile')?:'runner';
+if(!in_array($scene,['platformer','infinite','isometric'],true))
+{ throw new InvalidArgumentException('Invalid scene'); }
+$loader = new Loader;
+$map = $loader->map(__DIR__.'/assets/'.$scene.'.tmj');
+$device = new Device;
+$engine = new Engine($device);
+$renderer = new MapRenderer($map);
+$sprites = new SpriteRenderer($renderer->atlas);
+$terrain = MapTerrain::build($map);
+$movement = new Platformer($terrain);
+$body = new Body(80,100,$profile);
+$entity = $engine->entities->create($body,new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][$profile]));
+$camera = new Camera(0,0,960,540);
+$browser = new Vrzno;
+$canvas = vrzno_env('canvas');
+$status = $browser->document->querySelector('#status');
+$engine->systems->add('movement',function($entities,$dt) use ($engine,$movement,$body,$scene,$camera) {
+	if($scene === 'isometric')
+	{ $camera->x += $engine->controls->axis('left','right') * 300 * $dt;
+	$camera->y += $engine->controls->axis('up','down') * 300 * $dt;
+	return; }
+	if($body->y > 1200 || $engine->controls->pressed('reset'))
+	{ $body->x = 80;
+	$body->y = 100;
+	$body->vx = $body->vy = $body->groundSpeed = 0;
+	$body->grounded = false;
+	$body->ability = ''; }
+	$movement->step($body,$engine->controls,$dt);
+	$camera->follow($body->x,$body->y,$dt);
+	$camera->y = min(120,$camera->y);
+});
+if($scene === 'isometric')
+{ $camera->x = -160;
+$camera->y = -80; }
+$frames = 0;
+$engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,$camera,$canvas,$status,$terrain,$scene,&$frames) {
+	$device->begin();
+	$renderer->render($camera,$engine->time * 1000);
+	if($scene !== 'isometric')
+	{
+		$sprite = $engine->entities->get($entity,Sprite::class);
+		$sprite->x = $body->x;
+		$sprite->y = $body->y + $body->halfHeight;
+		$sprite->rotation = $body->angle;
+		$sprite->flipX = $body->facing < 0;
+		$sprite->scaleY = $body->rolling?.7:1;
+		$sprites->render([$sprite],$camera,$engine->time * 1000);
+	}
+	$device->present();
+	$frames++;
+	$canvas->dataset->frames = (string)$frames;
+	if($frames % 10 === 0)
+	{
+		$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y,'grounded' => $body->grounded,'ability' => $body->ability,'speed' => $body->groundSpeed]);
+		$status->textContent = sprintf('%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts',$body->ability?:($body->grounded?'ground':'air'),$body->groundSpeed,$renderer->stats['draws'] + $sprites->draws,$renderer->stats['instances'],$renderer->stats['uploads'],$terrain->raycasts);
+	}
+},function() use ($sprites,$renderer) { $sprites->close();
+$renderer->close(); });

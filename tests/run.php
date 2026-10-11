@@ -1,0 +1,248 @@
+<?php
+declare(strict_types=1);
+require dirname(__DIR__).'/autoload.php';
+
+use PhpWasmEngine\Asset\Assets;
+use PhpWasmEngine\Tiled\Gid;
+use PhpWasmEngine\Tiled\Loader;
+use PhpWasmEngine\Tiled\Projection;
+use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Ecs\Query;
+use PhpWasmEngine\Ecs\Scheduler;
+use PhpWasmEngine\Physics\Terrain;
+use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\Platformer;
+use PhpWasmEngine\Input\Controls;
+use PhpWasmEngine\FixedStep;
+
+$tests = [];
+function check(bool $value, string $message = 'assertion failed'): void
+{ if(!$value)
+{ throw new RuntimeException($message); } }
+function near(float $a, float $b, float $epsilon = .001): void { check(abs($a - $b) <= $epsilon, "$a != $b"); }
+function rejects(callable $fn): void
+{ try
+{ $fn(); } catch(Throwable $e)
+{ return; } throw new RuntimeException('expected exception'); }
+function test(string $name, callable $fn): void
+{ global $tests;
+$tests[$name] = $fn; }
+function fixture(array $data): Loader { return new Loader(new Assets(fn($path) => json_encode($data[$path], JSON_THROW_ON_ERROR))); }
+function mapData(array $layers = [], array $extra = []): array { return $extra + ['type' => 'map','orientation' => 'orthogonal','width' => 2,'height' => 2,'tilewidth' => 16,'tileheight' => 16,'layers' => $layers,'tilesets' => [['firstgid' => 1,'source' => 'tiles.tsj']]]; }
+function tiles(): array { return ['tilewidth' => 16,'tileheight' => 16,'tilecount' => 2,'columns' => 2,'image' => 'tiles.png','imagewidth' => 32,'imageheight' => 16,'tiles' => [['id' => 0,'properties' => [['name' => 'solid','value' => true]]],['id' => 1,'animation' => [['tileid' => 0,'duration' => 100],['tileid' => 1,'duration' => 200]]]]]; }
+function layer(array $extra = []): array { return $extra + ['type' => 'tilelayer','id' => 1,'width' => 2,'height' => 2,'data' => [1,0,0,2]]; }
+
+test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', function() {
+	$gid = Gid::from(4026531841.0);
+	check($gid->id === 1 && $gid->flags === 14);
+	check(bin2hex($gid->bytes()) === '010000e0');
+	foreach(range(0,7) as $bits)
+	{
+		$g = Gid::from(1 + $bits * 536870912.0);
+		[$x,$y] = $g->uv(.2,.7);
+		[$u,$v] = $g->inverseUv($x,$y);
+		near($u,.2);
+		near($v,.7);
+	}
+	rejects(fn() => Gid::from(-1));
+	rejects(fn() => Gid::from(4294967296.0));
+});
+test('external tilesets, inherited group state and relative paths', function() {
+	$loader = fixture(['/maps/a.tmj' => mapData([['type' => 'group','offsetx' => 4,'opacity' => .5,'parallaxx' => .5,'layers' => [layer(['offsetx' => 3,'opacity' => .5])]]]),'/maps/tiles.tsj' => tiles()]);
+	$map = $loader->map('/maps/a.tmj');
+	check($map === $loader->map('/maps/a.tmj'));
+	check($map->layers[0]->offsetX === 7.0);
+	near($map->layers[0]->opacity,.25);
+	near($map->layers[0]->parallaxX,.5);
+	check($map->tile(1)['image'] === '/maps/tiles.png');
+	check($map->animatedGid(2,99) === 1 && $map->animatedGid(2,100) === 2 && $map->animatedGid(2,300) === 1);
+});
+test('base64 and compressed layers reject corrupt lengths', function() {
+	foreach(['' => '', 'zlib' => 'gzcompress', 'gzip' => 'gzencode'] as $compression => $compress)
+	{
+		$bytes = hex2bin('01000080000000000000000002000000');
+		$data = base64_encode($compress ? $compress($bytes) : $bytes);
+		$loader = fixture(['a.tmj' => mapData([layer(['data' => $data,'encoding' => 'base64','compression' => $compression])]),'tiles.tsj' => tiles()]);
+		check($loader->map('a.tmj')->layers[0]->gidAt(0,0)->flags === 8);
+	}
+	$loader = fixture(['a.tmj' => mapData([layer(['data' => [1]])]),'tiles.tsj' => tiles()]);
+	rejects(fn() => $loader->map('a.tmj'));
+});
+test('infinite maps keep sparse negative chunks and allow edits', function() {
+	$loader = fixture(['a.tmj' => mapData([layer(['chunks' => [['x' => -10000,'y' => -4,'width' => 2,'height' => 1,'data' => [1,2]]]])],['infinite' => true]),'tiles.tsj' => tiles()]);
+	$map = $loader->map('a.tmj');
+	$layer = $map->layers[0];
+	check($layer->gidAt(-10000,-4)->id === 1 && $layer->gidAt(0,0)->id === 0);
+	$layer->set(-9999,-4,1);
+	check($layer->gidAt(-9999,-4)->id === 1);
+	$layer->set(50000,3,2);
+	check(count($layer->chunks) === 2);
+});
+test('orthogonal and isometric projections round trip negative coordinates', function() {
+	foreach(['orthogonal','isometric'] as $orientation)
+	{
+		$p = new Projection($orientation,64,32,10);
+		foreach([[-17.25,9.5],[0,0],[4,7]] as [$x,$y])
+		{ [$sx,$sy] = $p->project($x,$y);
+		[$tx,$ty] = $p->unproject($sx,$sy);
+		near($x,$tx);
+		near($y,$ty); }
+	}
+});
+test('world maps load on intersection and reuse assets', function() {
+	$reads = [];
+	$data = ['world.world' => ['maps' => [['fileName' => 'a.tmj','x' => 0,'y' => 0,'width' => 32,'height' => 32],['fileName' => 'b.tmj','x' => 1000,'y' => 0,'width' => 32,'height' => 32]]],'a.tmj' => mapData([layer()]),'b.tmj' => mapData([layer()]),'tiles.tsj' => tiles()];
+	$loader = new Loader(new Assets(function($path) use (&$reads,$data) { $reads[] = $path;
+	return json_encode($data[$path]); }));
+	$world = $loader->world('world.world');
+	check($reads === ['world.world']);
+	check(count($world->visible(0,0,64,64)) === 1);
+	check(!in_array('b.tmj',$reads,true));
+	$world->visible(0,0,64,64);
+	check(count(array_keys($reads,'a.tmj')) === 1);
+});
+class Position { public function __construct(public float $x = 0) {} }
+class Velocity { public function __construct(public float $x = 0) {} }
+class Frozen {}
+test('ECS supports inheritance, boolean queries, replacement and destruction', function() {
+	$r = new Registry;
+	$a = $r->create(new Position, new Velocity);
+	$b = $r->create(new Position,new Frozen);
+	check($r->query(Query::all(Position::class,Query::not(Frozen::class))) === [$a]);
+	check(count($r->query(Query::any(Velocity::class,Frozen::class))) === 2);
+	$r->add($a,new Position(9));
+	near($r->get($a,Position::class)->x,9);
+	$r->destroy($a);
+	check($r->query(Velocity::class) === []);
+	rejects(fn() => $r->get($a,Position::class));
+	$r->remove($b,Frozen::class);
+	check($r->query(Query::not(Frozen::class)) === [$b]);
+});
+test('systems order dependencies and defer structural changes', function() {
+	$r = new Registry;
+	$e = $r->create(new Position);
+	$s = new Scheduler($r);
+	$order = [];
+	$s->add('b',function($r) use (&$order,$e) {$order[] = 'b';
+	check($r->has($e,Position::class));},['a']);
+	$s->add('a',function($r) use (&$order,$e) {$order[] = 'a';
+	$r->defer(fn($r) => $r->destroy($e));});
+	$s->update(1 / 60);
+	check($order === ['a','b'] && !$r->alive($e));
+	$s->add('c',fn() => null,['d']);
+	$s->add('d',fn() => null,['c']);
+	rejects(fn() => $s->update(1 / 60));
+});
+test('fixed step is deterministic and limits catch-up', function() {
+	$clock = new FixedStep(1 / 60,5);
+	$n = 0;
+	$step = function($dt) use (&$n) {$n++;
+	near($dt,1 / 60);};
+	$clock->advance(1 / 120,$step);
+	check($n === 0);
+	$clock->advance(1 / 120,$step);
+	check($n === 1);
+	$clock->advance(5,$step);
+	check($n === 6 && $clock->droppedTime > 4);
+});
+function ground(): Terrain { return new Terrain([['points' => [[-10000,100],[10000,100],[10000,500],[-10000,500]]]]); }
+function tick(Platformer $p, Body $b, array $keys = [], int $frames = 1): void
+{ static $inputs;
+$inputs ??= new WeakMap;
+$i = $inputs[$b] ??= new Controls;
+for($n = 0;$n < $frames;$n++)
+{ $i->set($keys);
+$p->step($b,$i,1 / 60); } }
+test('landing, acceleration, braking, jumping and variable jump height', function() {
+	$p = new Platformer(ground());
+	$b = new Body(0,0);
+	tick($p,$b,[],50);
+	check($b->grounded);
+	near($b->y + $b->halfHeight,100,.1);
+	tick($p,$b,['right' => true],30);
+	check($b->groundSpeed > 0 && $b->x > 0);
+	$speed = $b->groundSpeed;
+	tick($p,$b,['left' => true],3);
+	check($b->groundSpeed < $speed);
+	tick($p,$b,['jump' => true]);
+	check(!$b->grounded && $b->vy < 0);
+	tick($p,$b,[]);
+	check($b->vy >= -241);
+});
+test('fast bodies do not tunnel through floors or walls', function() {
+	$terrain = new Terrain([['points' => [[-500,100],[500,100],[500,101],[-500,101]]],['points' => [[100,-500],[101,-500],[101,100],[100,100]]]]);
+	$p = new Platformer($terrain);
+	$b = new Body(0,0);
+	$b->terminalSpeed = 10000;
+	$b->vy = 8000;
+	tick($p,$b);
+	check($b->y + $b->halfHeight <= 100.01 && $b->grounded);
+	$b->groundSpeed = 8000;
+	tick($p,$b);
+	check($b->x + $b->radius <= 100.1);
+});
+test('slope sensors align feet and momentum leaves a ledge tangentially', function() {
+	$p = new Platformer(new Terrain([['points' => [[-1000,550],[100,0],[100,600],[-1000,600]]]]));
+	$b = new Body(-70,20);
+	tick($p,$b,[],30);
+	check($b->grounded && $b->angle < -.3);
+	$b->groundSpeed = 500;
+	tick($p,$b,['right' => true],30);
+	check(!$b->grounded && $b->x > 100);
+});
+test('one-way platforms permit upward passage and down-jump drop', function() {
+	$p = new Platformer(new Terrain([['points' => [[-100,100],[100,100]],'oneWay' => true]]));
+	$b = new Body(0,150);
+	$b->vy = -700;
+	tick($p,$b,['jump' => true],40);
+	check($b->grounded);
+	tick($p,$b,[]);
+	tick($p,$b,['down' => true,'jump' => true]);
+	check(!$b->grounded);
+	tick($p,$b,[],12);
+	check($b->y > 100);
+});
+test('dash charging launches and drop dash releases on landing', function() {
+	$p = new Platformer(ground());
+	$b = new Body(0,60,'runner');
+	tick($p,$b,[],10);
+	tick($p,$b,['down' => true,'action' => true],30);
+	check($b->charge > 0);
+	tick($p,$b,[]);
+	check($b->rolling && $b->groundSpeed > 500);
+	tick($p,$b,['jump' => true]);
+	tick($p,$b,['action' => true],70);
+	check($b->grounded && $b->rolling);
+});
+test('flight has a finite budget and glide can catch a wall and jump away', function() {
+	$p = new Platformer(ground());
+	$fly = new Body(0,-300,'flyer');
+	tick($p,$fly,['jump' => true]);
+	check($fly->ability === 'fly');
+	tick($p,$fly,['jump' => true],360);
+	check($fly->flightRemaining <= 0 || $fly->grounded);
+	$p = new Platformer(new Terrain([['points' => [[100,-500],[120,-500],[120,500],[100,500]]]]));
+	$b = new Body(70,0,'glider');
+	$b->vx = 300;
+	tick($p,$b,['jump' => true],12);
+	check($b->ability === 'climb');
+	$old = $b->y;
+	tick($p,$b,['up' => true],10);
+	check($b->y < $old);
+	tick($p,$b,['jump' => true]);
+	check($b->vx < 0 && $b->ability !== 'climb');
+});
+
+require __DIR__.'/physics.php';
+require __DIR__.'/integration.php';
+
+$failed = 0;
+foreach($tests as $name => $fn)
+{ try
+{ $fn();
+echo "PASS $name\n"; } catch(Throwable $e)
+{ $failed++;
+echo "FAIL $name: {$e->getMessage()}\n{$e->getTraceAsString()}\n"; } }
+echo count($tests)." tests, $failed failures\n";
+if($failed)
+{ exit(1); }

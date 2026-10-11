@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-static="true"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PHP WASM Engine</title>
+<link rel="stylesheet" href="./site.css">
+<main>
+<header><a href="https://github.com/seanmorris/php-wasm-engine">Source on GitHub ↗</a><p class="eyebrow">PHP · SDL · WebGL 2</p><h1>A 2D game engine, written in PHP.</h1><p>Load Tiled worlds, build entities from components, and run surface-based platforming in the browser.</p></header>
+<section aria-label="Live engine demo">
+<div class="toolbar"><label>Scene <select id="scene"><option value="platformer">Platformer</option><option value="infinite">Infinite map</option><option value="isometric">Isometric map</option></select></label><label>Movement <select id="profile"><option value="runner">Runner: dash</option><option value="glider">Glider: climb</option><option value="flyer">Flyer: flight</option></select></label><button id="start">Run PHP</button><button id="stop" disabled>Stop</button></div>
+<canvas width="960" height="540" tabindex="0" aria-label="PHP game. Use arrow keys, Space to jump, X for dash, R to reset."></canvas>
+<p id="status" role="status">The PHP runtime downloads when you press Run PHP.</p>
+<p class="controls">Arrows / WASD: move · Space / Z: jump · Down + X: charge dash · Hold X in air: drop dash · Jump again: glide or fly · Up / Down: climb · R: reset. Stop before switching scenes.</p>
+</section>
+<section><h2>Start locally</h2><pre><code>git clone https://github.com/seanmorris/php-wasm-engine.git
+cd php-wasm-engine
+npm ci
+npm start</code></pre><p>The demo uses a pinned build of <code>php-sdl-wasm</code>. JavaScript loads PHP and mounts files; PHP handles input, simulation, asset parsing, and GPU calls.</p></section>
+<section><h2>Use the PHP engine</h2><pre><code>require 'autoload.php';
+
+$loader = new PhpWasmEngine\Tiled\Loader;
+$map = $loader->map('/assets/level.tmj');
+$terrain = PhpWasmEngine\Physics\MapTerrain::build($map);
+$movement = new PhpWasmEngine\Physics\Platformer($terrain);
+$body = new PhpWasmEngine\Physics\Body(80, 100, 'runner');</code></pre><p>See <a href="https://github.com/seanmorris/php-wasm-engine#readme">the README</a> for the game loop, renderer, entities, asset formats, and collision model. <a href="architecture.md">Implementation notes</a> cover texture arrays, isometric ordering, and continuous collision casts.</p></section>
+</main><script type="module" src="./bootstrap.mjs"></script></html>

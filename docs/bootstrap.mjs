@@ -1,0 +1,34 @@
+const status=document.querySelector('#status');
+const canvas=document.querySelector('canvas');
+const start=document.querySelector('#start');
+const stop=document.querySelector('#stop');
+const staticSite=document.documentElement.dataset.static==='true';
+const base=new URL(staticSite?'./engine/':'../',import.meta.url);
+const runtimeBase=new URL(staticSite?'./runtime/':'../runtime/',import.meta.url);
+let php;
+export async function boot({scene='platformer',profile='runner',run=true,zlib=false}={}) {
+  if(php) await php.refresh();
+  const {PhpSdl}=await import(new URL('php8.4-sdl.mjs',runtimeBase));
+  const sharedLibs=zlib?[await import(new URL('extensions/zlib/8.4.mjs',runtimeBase))]:[];
+  php=new PhpSdl({canvas,scene,profile,sharedLibs,persist:false,ini:'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'});
+  window.enginePhp=php;
+  php.addEventListener('output',event=>{status.textContent=event.detail.join('');});
+  php.addEventListener('error',event=>{status.textContent=event.detail.join('');console.error(status.textContent);});
+  const module=await php.binary;
+  const response=await fetch(new URL('engine-files.json',base));
+  const files=await response.json();
+  await Promise.all(files.map(async path=>{
+    const response=await fetch(new URL(path,base),{cache:'no-store'});if(!response.ok) throw Error('Asset '+path+': '+response.status);
+    const full='/engine/'+path; module.FS.mkdirTree(full.slice(0,full.lastIndexOf('/')));
+    module.FS.writeFile(full,new Uint8Array(await response.arrayBuffer()));
+  }));
+  if(run) {const code=await php.run('<?php require "/engine/examples/game.php";'); if(code!==0) throw Error('PHP returned '+code);}
+  return php;
+}
+window.bootEngine=boot;
+start?.addEventListener('click',async()=>{
+  start.disabled=true; status.textContent='Loading PHP SDL…';
+  try {await boot({scene:document.querySelector('#scene').value,profile:document.querySelector('#profile').value});stop.disabled=false;canvas.focus();}
+  catch(error) {status.textContent=error.message;console.error(error);start.disabled=false;}
+});
+stop?.addEventListener('click',async()=>{await php?.refresh();stop.disabled=true;start.disabled=false;status.textContent='Stopped. Run to restart.';});

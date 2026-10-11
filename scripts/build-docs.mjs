@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {root,engineFiles} from './files.mjs';
+import {runtimeDirectory} from './runtime.mjs';
+const files=await engineFiles();
+for(const name of files) {const dest=path.join(root,'docs/engine',name);await fs.mkdir(path.dirname(dest),{recursive:true});await fs.copyFile(path.join(root,name),dest);}
+await fs.writeFile(path.join(root,'docs/engine/engine-files.json'),JSON.stringify(files));
+const runtime=await runtimeDirectory();
+const manifest=JSON.parse(await fs.readFile(path.join(runtime,'php8.4-sdl.manifest.json')));
+await fs.mkdir(path.join(root,'docs/runtime'),{recursive:true});
+for(const name of [...manifest.files.map(file=>file.path),'php8.4-sdl.manifest.json']) await fs.copyFile(path.join(runtime,name),path.join(root,'docs/runtime',name));
+console.log('Built docs/ with PHP sources, assets and the selected runtime.');

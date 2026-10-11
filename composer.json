@@ -1,0 +1,16 @@
+{
+  "name": "seanmorris/php-wasm-engine",
+  "description": "A PHP 2D engine for php-sdl-wasm with Tiled maps and surface-based platforming",
+  "type": "library",
+  "license": "Apache-2.0",
+  "require": {"php": ">=8.0", "ext-json": "*"},
+  "autoload": {"psr-4": {"PhpWasmEngine\\": "src/"}},
+  "scripts": {
+    "test": "php tests/run.php",
+    "lint": "php-cs-fixer fix --dry-run --diff",
+    "lint:fix": "php-cs-fixer fix"
+  },
+  "require-dev": {
+    "seanmorris/sm-no-saccade-style": "^0.1.6"
+  }
+}

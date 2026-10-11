@@ -1,0 +1,14 @@
+{
+  "name": "php-wasm-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/server.mjs",
+    "test": "php tests/run.php",
+    "test:browser": "playwright test",
+    "build:docs": "node scripts/build-docs.mjs",
+    "setup:runtime": "node scripts/runtime.mjs"
+  },
+  "devDependencies": {"@playwright/test": "^1.55.0"}
+}

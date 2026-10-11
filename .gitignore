@@ -1,0 +1,8 @@
+/node_modules/
+/vendor/
+/.runtime/
+/docs/runtime/
+/docs/engine/
+/test-results/
+/playwright-report/
+*.log
