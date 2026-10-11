@@ -5,6 +5,7 @@
 /.runtime-staging/
 /docs/runtime/
 /docs/engine/
+/docs/dist/
 /test-results/
 /playwright-report/
 *.log

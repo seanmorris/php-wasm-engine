@@ -11,7 +11,9 @@ npm ci
 npm start
 ~~~
 
-Open http://localhost:9130. Select the platformer, infinite map, or isometric scene, then press **Run PHP**. The WASM download starts on that click.
+Open http://localhost:9130. Select the platformer, infinite map, or isometric scene, then press **Run PHP**. The WASM download starts on that click. **Fullscreen** expands the demo while keeping its controls visible; use **Exit fullscreen** or Escape to return.
+
+`npm start` runs webpack-dev-server with live reload. Changes to the demo JavaScript, CSS, HTML, PHP sources, shaders, maps, and sprites reload the page. Press **Run PHP** again after a reload. Set `PORT` to use a port other than 9130.
 
 The server uses an installed compatible php-sdl-wasm package or downloads the verified preview in runtime-lock.json. The preview is a GitHub release artifact, not an npm publication. To use a local build:
 
@@ -164,6 +166,6 @@ To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT a
 npm run build:docs
 ~~~
 
-This copies PHP sources/assets and the selected runtime into ignored directories under docs/. Serve docs/ statically or use the included Pages workflow. No PHP server is involved. Generated WASM files do not belong in git.
+Webpack builds the demo from docs/ into docs/dist/. The build also copies PHP sources/assets and the selected runtime into that output directory. Serve docs/dist/ statically or use the included Pages workflow. Relative asset URLs support the repository's GitHub Pages path. No PHP server is involved. Generated bundles and WASM files do not belong in git.
 
 Apache-2.0. Runtime licenses and notices ship with its preview archive. No code or artwork from the reference games is copied into this project.
