@@ -19,6 +19,11 @@ final class WorldRenderer
 		$this->frame++;
 		foreach($this->world->visible($camera->x,$camera->y,$camera->width / $camera->zoom,$camera->height / $camera->zoom,$margin) as $map)
 		{
+			if(isset($this->resident[$map->path]) && $this->resident[$map->path][0]->map !== $map)
+			{
+				$this->resident[$map->path][0]->close();
+				unset($this->resident[$map->path]);
+			}
 			if(!isset($this->resident[$map->path]))
 			{ $this->resident[$map->path] = [new MapRenderer($map),0]; }
 			[$renderer] = $this->resident[$map->path];

@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 async function boot(page,zlib=false) {
   await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
-  await page.evaluate(zlib=>window.bootEngine({run:false,zlib}),zlib);
+  await page.evaluate(options=>window.bootEngine({run:false,...options}),{zlib,version:process.env.ENGINE_PHP_VERSION??'8.4'});
 }
 async function run(page,source) {
   const result=await page.evaluate(async source=>{
@@ -26,6 +26,15 @@ test('real GPU renders all flip flags, instances layers, edits tile slices, and 
   expect(result.clean.uploads).toBe(0);expect(result.dirty.uploads).toBe(1);
   expect(result.erased).toBe('000000ff');expect(result.culled.draws).toBe(0);
   expect(result.live).toEqual([false,false]);
+});
+test('isometric chunk seams match a CPU reference and sparse negative chunks stay culled',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-cases.php";'));
+  expect(result.isoExact).toBe(true);
+  expect(result.sparse.instances).toBe(1);
+  expect(result.negative).toBe('ff0000ff');
+  expect(result.rotated).toEqual(['ffff00ff','00ff00ff','0000ffff','ff0000ff']);
+  expect(result.error).toBe(0);
 });
 for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));

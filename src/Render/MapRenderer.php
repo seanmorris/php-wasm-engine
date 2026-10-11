@@ -173,8 +173,21 @@ final class MapRenderer
 				}
 			} } }
 			usort($commands,fn($a,$b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]);
+			$key = null;
+			$instances = '';
 			foreach($commands as $command)
-			{ $this->draw($command[3],$command[6],$command[4],$command[5]); }
+			{
+				$next = [$command[3],$command[4],$command[5]];
+				if($key !== null && $next !== $key)
+				{
+					$this->draw($key[0],$instances,$key[1],$key[2]);
+					$instances = '';
+				}
+				$key = $next;
+				$instances .= $command[6];
+			}
+			if($key !== null)
+			{ $this->draw($key[0],$instances,$key[1],$key[2]); }
 		}
 		glBindVertexArray(0);
 	}

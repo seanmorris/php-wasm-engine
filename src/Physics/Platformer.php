@@ -64,7 +64,8 @@ final class Platformer
 		$jumped = false;
 		if($b->jumpBuffer > 0 && $b->coyote > 0)
 		{
-			if($input->down('down'))
+			$platform = $this->terrain->raycast($b->x,$b->y,-sin($b->angle) * ($b->halfHeight + 1),cos($b->angle) * ($b->halfHeight + 1));
+			if($input->down('down') && $platform?->oneWay)
 			{ $b->dropTimer = .25;
 			$b->grounded = false;
 			$b->y += .2; }

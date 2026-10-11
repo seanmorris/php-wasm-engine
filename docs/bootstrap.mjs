@@ -6,10 +6,11 @@ const staticSite=document.documentElement.dataset.static==='true';
 const base=new URL(staticSite?'./engine/':'../',import.meta.url);
 const runtimeBase=new URL(staticSite?'./runtime/':'../runtime/',import.meta.url);
 let php;
-export async function boot({scene='platformer',profile='runner',run=true,zlib=false}={}) {
+export async function boot({scene='platformer',profile='runner',run=true,zlib=false,version='8.4'}={}) {
+  if(!/^8\.[0-5]$/.test(version)) throw Error('Unsupported PHP version');
   if(php) await php.refresh();
-  const {PhpSdl}=await import(new URL('php8.4-sdl.mjs',runtimeBase));
-  const sharedLibs=zlib?[await import(new URL('extensions/zlib/8.4.mjs',runtimeBase))]:[];
+  const {PhpSdl}=await import(new URL('php'+version+'-sdl.mjs',runtimeBase));
+  const sharedLibs=zlib?[await import(new URL('extensions/zlib/'+version+'.mjs',runtimeBase))]:[];
   php=new PhpSdl({canvas,scene,profile,sharedLibs,persist:false,ini:'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'});
   window.enginePhp=php;
   php.addEventListener('output',event=>{status.textContent=event.detail.join('');});

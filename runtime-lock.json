@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "package": "php-sdl-wasm",
+  "phpVersion": "8.4",
+  "url": "https://github.com/seanmorris/php-wasm-engine/releases/download/sdl-preview-8.4-20261011/php-engine-runtime.tgz",
+  "sha256": "38ca7876b20ec321cf45e97929bd14d4e2910e1585ff7bec0f553036503e8a95",
+  "sourceRepository": "https://github.com/seanmorris/php-wasm",
+  "hostSourceCommit": "7b80019e1bd6df2b28c7811f176e148e59c477f1",
+  "nativeWasmSha256": "a35bf60c1a7c40e9f677692f4c5f60dc41283853664dbbbd8247c75f9e226a1e",
+  "note": "Existing SDL native build, with current host package files and optional PHP zlib. No native rebuild or npm publication."
+}

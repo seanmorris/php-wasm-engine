@@ -154,6 +154,10 @@ PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmo
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
 
+The initial implementation passed 26 PHP regressions and native GPU checks on PHP 8.0–8.5, plus six Chromium integration tests on PHP 8.4. Isometric chunk rendering is compared pixel for pixel with a CPU reference. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+
+To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
+
 ## GitHub Pages
 
 ~~~sh

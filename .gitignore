@@ -1,6 +1,8 @@
 /node_modules/
 /vendor/
 /.runtime/
+/.runtime-download.tgz
+/.runtime-staging/
 /docs/runtime/
 /docs/engine/
 /test-results/
