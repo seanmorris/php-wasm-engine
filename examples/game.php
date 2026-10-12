@@ -22,7 +22,8 @@ $sprites = new SpriteRenderer($renderer->atlas);
 $terrain = MapTerrain::build($map);
 $movement = new Platformer($terrain);
 $body = new Body(80,100,$profile);
-$entity = $engine->entities->create($body,new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][$profile]));
+// The demo PNG has two transparent rows below the visible soles.
+$entity = $engine->entities->create($body,new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][$profile],originY: 30 / 32));
 $camera = new Camera(0,0,960,540);
 $browser = new Vrzno;
 $canvas = vrzno_env('canvas');
