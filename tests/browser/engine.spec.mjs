@@ -36,6 +36,24 @@ test('isometric chunk seams match a CPU reference and sparse negative chunks sta
   expect(result.rotated).toEqual(['ffff00ff','00ff00ff','0000ffff','ff0000ff']);
   expect(result.error).toBe(0);
 });
+test('background strips repeat, anchor, blend in map order and share textures',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax.php";'));
+  expect(result.exact).toEqual([true,true,true]);
+  expect(result.cleanUploads).toBe(0);
+  expect(result.sharedUploads).toBe(1);
+  expect(result.draws).toBe(3);
+  expect(result.painter).toEqual(['ff0000ff','ff0000ff','df0000ff','00ff00ff']);
+  expect(result.released).toEqual([true]);
+  expect(result.reordered).toBe('ff0000ff');
+  expect(result.stripPixels).toEqual(['000000ff','ff0000ff','00ff00ff','0000ffff','00ff00ff']);
+  expect(result.keyPixels).toEqual(['000000ff','00ff00ff','000000ff']);
+  expect(result.animation).toEqual([['ff0000ff',1],['00ff00ff',1],['ff0000ff',0]]);
+  expect(result.worldPixels).toEqual(['ff0000ff','ff0000ff']);
+  expect(result.worldStats).toEqual({maps:2,draws:4,instances:2,uploads:2});
+  expect(result.tileImageMatch).toBe(true);
+  expect(result.error).toBe(0);
+});
 for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();

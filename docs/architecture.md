@@ -5,6 +5,8 @@
 The initial design was informed by Sean Morris's local projects:
 
 - tigl: Tiled worlds, maps, tilesets, sprite sheets, properties, and world-space lookup.
+- tigl/app/sprite/Parallax.js: repeating image strips, independent scroll factors, and viewport anchors.
+- moving-boxes-2/app/backdrop/Backdrop.js: stacked strips, automatic drift, and animated image frames.
 - soop: object components, boolean queries, systems, and deferred structural commands.
 - moving-boxes-2/app/behavior/Platformer.js: surface modes, ground/air velocity, terrain sensors, tangent momentum, and normal-directed jumps.
 - moving-boxes-2/app/actor/Sonic.js: charge dash and landing-triggered drop dash.
@@ -25,7 +27,13 @@ Tiled GIDs use flag bits above PHP WASM's signed integer range. Gid decodes with
 
 Layers are split into at most 32×32 cells. Texture arrays are bounded by GL_MAX_ARRAY_TEXTURE_LAYERS. Independent instance attributes retain layer placement and appearance. Dirty revisions trigger a slice upload. Floating-point metadata supplies atlas rectangles and offsets; animation updates metadata rather than every tile.
 
-Isometric drawing orders diagonals globally, including negative chunks, at the cost of more draws. Games order sprites before passing them to SpriteRenderer. Objects and image layers retain metadata; games supply their graphics.
+Isometric drawing orders diagonals globally, including negative chunks, at the cost of more draws. Games order sprites before passing them to SpriteRenderer. Objects retain metadata; games supply their graphics.
+
+ImageRenderer draws Tiled image layers between tile batches in map order. A vertex-ID quad covers the visible part of the image, or the viewport along repeated axes. The fragment shader wraps texel coordinates, so a wide view does not create more geometry. PHP reduces the repeat phase before sending it to the GPU, retaining precision at negative and distant world coordinates. Integer texel fetches stabilize non-power-of-two repeat boundaries. Each image uploads once per renderer, including animated frames when first used; changing the camera or scrolling updates only uniforms.
+
+Parallax calculates layout without SDL. Normal image and tile layers use Tiled's view-center reference and the map's world-space parallax origin. Anchored strips use a common top/center/bottom stack offset and independent camera factors. Time is expressed in milliseconds, and automatic scrolling in pixels per second. The implementation uses explicit image frames instead of the reference project's DOM background and palette-recolor pipeline.
+
+WorldRenderer draws image layers before each map's first tile layer in a background pass across all visible maps. The remaining layers follow in map order. This keeps repeating skies behind terrain at map boundaries. MapRenderer's optional start/end layer indexes describe a half-open range for these passes.
 
 Format semantics follow the official [Tiled JSON format](https://doc.mapeditor.org/en/stable/reference/json-map-format/), [global tile IDs](https://doc.mapeditor.org/en/stable/reference/global-tile-ids/), and [world format](https://doc.mapeditor.org/en/stable/manual/worlds/).
 
@@ -44,7 +52,7 @@ Bodies must start outside solid geometry; terrain stays static during a step. Ma
 
 ## Ownership and limits
 
-Close renderers before Device::close destroys the context. MapRenderer owns its Atlas. SpriteRenderer borrows an Atlas. WorldRenderer owns resident map renderers. Engine runs user cleanup on stop and runtime refresh.
+Close renderers before Device::close destroys the context. MapRenderer owns its Atlas and ImageRenderer. SpriteRenderer borrows an Atlas. WorldRenderer owns resident map renderers. Engine runs user cleanup on stop and runtime refresh.
 
 The world file is a manifest. Intersecting maps load lazily. Each loaded map retains decoded chunks, and its renderer allocates the map's tile planes. WorldRenderer limits off-screen GPU residency; Loader retains data until forgotten. Sparse maps avoid allocating the rectangle between distant chunks. Individual chunks are not streamed from a server protocol.
 

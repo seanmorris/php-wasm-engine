@@ -104,7 +104,35 @@ final class Loader
 			} elseif($data['type'] === 'objectgroup')
 			{ $layer->objects = $data['objects'] ?? []; }
 			elseif($data['type'] === 'imagelayer')
-			{ $layer->image = Assets::relative($map->path,$data['image']); }
+			{
+				$layer->image = isset($data['image'])?Assets::relative($map->path,$data['image']):null;
+				$layer->imageWidth = (int)($data['imagewidth'] ?? 0);
+				$layer->imageHeight = (int)($data['imageheight'] ?? 0);
+				$layer->repeatX = (bool)($data['repeatx'] ?? isset($layer->properties['from']));
+				$layer->repeatY = (bool)($data['repeaty'] ?? false);
+				$layer->transparentColor = isset($data['transparentcolor'])?self::color($data['transparentcolor']):null;
+				if(isset($layer->properties['from']))
+				{
+					if(!in_array($layer->properties['from'],['top','center','bottom'],true))
+					{ throw new \UnexpectedValueException('Image anchor must be top, center or bottom'); }
+					// Anchored strips stay at the horizon unless vertical parallax is requested.
+					$layer->parallaxY = ($parent?->parallaxY ?? 1) * ($data['parallaxy'] ?? 0);
+				}
+				if(isset($layer->properties['frames']))
+				{
+					$frames = $layer->properties['frames'];
+					if(is_string($frames))
+					{ $frames = json_decode($frames,true,512,JSON_THROW_ON_ERROR); }
+					if(!is_array($frames) || !$frames || array_keys($frames) !== range(0,count($frames) - 1))
+					{ throw new \UnexpectedValueException('Image frames must be a nonempty list'); }
+					foreach($frames as $frame)
+					{
+						if(!is_array($frame) || !is_string($frame['image'] ?? null) || $frame['image'] === '' || !is_numeric($frame['duration'] ?? null) || !is_finite((float)$frame['duration']) || $frame['duration'] <= 0)
+						{ throw new \UnexpectedValueException('Image frames require an image and positive duration'); }
+						$layer->imageFrames[] = ['image' => Assets::relative($map->path,$frame['image']),'duration' => (float)$frame['duration']];
+					}
+				}
+			}
 			else
 			{ throw new \UnexpectedValueException('Unsupported layer type '.$data['type']); }
 			$map->layers[] = $layer;

@@ -235,6 +235,7 @@ test('flight has a finite budget and glide can catch a wall and jump away', func
 
 require __DIR__.'/physics.php';
 require __DIR__.'/integration.php';
+require __DIR__.'/parallax.php';
 
 $failed = 0;
 foreach($tests as $name => $fn)

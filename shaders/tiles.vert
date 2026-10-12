@@ -32,7 +32,8 @@ void main() {
     anchor.y+=tileSize.y-rect.w;
     if(isometric==1) anchor.x-=rect.z*.5;
     vec2 position=anchor+offset+cellCorner.zw*rect.zw+placement.xy+mapOrigin;
-    position-=(camera-parallaxOrigin)*placement.zw+parallaxOrigin;
+    vec2 halfView=viewport/zoom*.5;
+    position-=(camera+halfView-parallaxOrigin)*placement.zw+parallaxOrigin-halfView;
     position=position*zoom/viewport;
     gl_Position=emptyTile==1?vec4(2,2,0,1):vec4(position.x*2.-1.,1.-position.y*2.,0,1);
     // Invert Tiled's forward transform to sample the untransformed image.

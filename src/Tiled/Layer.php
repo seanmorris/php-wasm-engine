@@ -10,6 +10,10 @@ final class Layer
 	public float $offsetX = 0, $offsetY = 0, $opacity = 1, $parallaxX = 1, $parallaxY = 1;
 	public array $tint = [1,1,1,1];
 	public ?string $image = null;
+	public int $imageWidth = 0, $imageHeight = 0;
+	public bool $repeatX = false, $repeatY = false;
+	public array $imageFrames = [];
+	public ?array $transparentColor = null;
 	public function __construct(public int $id, public string $name, public string $type) {}
 	public function gidAt(int $x,int $y): Gid
 	{ foreach($this->chunks as $chunk)

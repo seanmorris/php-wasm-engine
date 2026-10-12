@@ -66,7 +66,48 @@ for($x = 8;$x <= 12;$x++)
 for($y = 6;$y < 14;$y++)
 { $floor[$y * $width + 68] = 1; }
 $base = ['type' => 'map','version' => '1.10','orientation' => 'orthogonal','renderorder' => 'right-down','width' => $width,'height' => $height,'tilewidth' => 32,'tileheight' => 32,'infinite' => false,'tilesets' => [['firstgid' => 1,'source' => 'tiles.tsj']]];
+// Repeating coastal strips, drawn entirely by the PHP image renderer.
+png(__DIR__.'/assets/sky.png',8,300,static fn($x,$y) => [15 + (int)($y / 18),30 + (int)($y / 10),52 + (int)($y / 7),255]);
+png(__DIR__.'/assets/clouds.png',512,96,static function($x,$y) {
+	foreach([[72,26,62,12],[110,19,29,17],[300,64,88,10],[348,55,42,15]] as [$cx,$cy,$rx,$ry])
+	{ if((($x - $cx) / $rx) ** 2 + (($y - $cy) / $ry) ** 2 < 1)
+	{ return [116,159,180,85]; } }
+	return [0,0,0,0];
+});
+foreach(['far' => [180,48,78,101],'near' => [140,39,67,80]] as $name => [$h,$r,$g,$b])
+{
+	png(__DIR__.'/assets/mountains-'.$name.'.png',512,$h,static function($x,$y) use ($name,$h,$r,$g,$b) {
+		$ridge = $name === 'far'?45 + 25 * sin($x * M_PI / 128) + 16 * cos($x * M_PI / 64):56 + 27 * cos($x * M_PI / 256) + 13 * sin($x * M_PI / 64);
+		if($y < $ridge)
+		{ return [0,0,0,0]; }
+		$shade = (int)(12 * ($y - $ridge) / $h);
+		return [$r - $shade,$g - $shade,$b - $shade,255];
+	});
+}
+png(__DIR__.'/assets/water.png',128,256,static function($x,$y) {
+	$shine = ($y % 13 === 0 && ($x + intdiv($y,13) * 19) % 64 < 28)?12:0;
+	return [31 + $shine,69 + $shine - (int)($y / 24),89 + $shine - (int)($y / 16),255];
+});
+foreach([0,1] as $frame)
+{ png(__DIR__.'/assets/shine-'.$frame.'.png',128,8,static fn($x,$y) => ($x + $frame * 16 + $y * 7) % 48 < 18 && $y % 3 === 0?[124,172,180,130]:[0,0,0,0]); }
+$background = [];
+$bands = [
+	['sky',0,0,0,8,300]
+	, ['clouds',36,.06,6,512,96]
+	, ['mountains-far',128,.16,0,512,180]
+	, ['water',284,.28,0,128,256]
+	, ['mountains-near',196,.38,0,512,140]
+	, ['shine-0',284,.28,18,128,8]
+];
+foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
+{
+	$properties = [['name' => 'from','type' => 'string','value' => 'bottom'],['name' => 'scrollX','type' => 'float','value' => $scroll]];
+	if($name === 'shine-0')
+	{ $properties[] = ['name' => 'frames','type' => 'string','value' => json_encode([['image' => 'shine-0.png','duration' => 180],['image' => 'shine-1.png','duration' => 180]])]; }
+	$background[] = ['id' => 10 + $i,'name' => $name,'type' => 'imagelayer','image' => $name.'.png','imagewidth' => $w,'imageheight' => $h,'repeatx' => true,'parallaxx' => $parallax,'offsety' => $offset,'properties' => $properties];
+}
 $base['layers'] = [['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $floor],['id' => 2,'name' => 'Markers','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $items],['id' => 3,'name' => 'Spawns','type' => 'objectgroup','objects' => [['id' => 1,'class' => 'Player','x' => 80,'y' => 100]]]];
+$base['layers'] = array_merge($background,$base['layers']);
 jsonAsset('platformer.tmj',$base);
 $infinite = $base;
 $infinite['infinite'] = true;
@@ -81,6 +122,7 @@ foreach([-32,0,32] as $offset)
 	$chunks[] = ['x' => $offset,'y' => 0,'width' => 32,'height' => 20,'data' => $data];
 }
 $infinite['layers'] = [['id' => 1,'name' => 'Infinite terrain','type' => 'tilelayer','chunks' => $chunks]];
+$infinite['layers'] = array_merge($background,$infinite['layers']);
 jsonAsset('infinite.tmj',$infinite);
 png(__DIR__.'/assets/iso.png',128,64,static function($x,$y) {
 	$id = intdiv($x,64);
@@ -94,7 +136,9 @@ png(__DIR__.'/assets/iso.png',128,64,static function($x,$y) {
 });
 jsonAsset('iso.tsj',['type' => 'tileset','tilewidth' => 64,'tileheight' => 64,'tilecount' => 2,'columns' => 2,'image' => 'iso.png','imagewidth' => 128,'imageheight' => 64]);
 $iso = ['type' => 'map','orientation' => 'isometric','width' => 12,'height' => 12,'tilewidth' => 64,'tileheight' => 32,'tilesets' => [['firstgid' => 1,'source' => 'iso.tsj']],'layers' => [['id' => 1,'name' => 'Isometric','type' => 'tilelayer','width' => 12,'height' => 12,'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1,range(0,143))]]];
+$iso['layers'] = array_merge($background,$iso['layers']);
 jsonAsset('isometric.tmj',$iso);
 jsonAsset('demo.world',['type' => 'world','maps' => [['fileName' => 'platformer.tmj','x' => 0,'y' => 0,'width' => 3072,'height' => 640],['fileName' => 'infinite.tmj','x' => 3072,'y' => 0,'width' => 3072,'height' => 640]]]);
 // Asymmetric four-quadrant image for orientation and flip regressions.
 png(__DIR__.'/assets/test.png',16,16,static fn($x,$y) => $y < 8?($x < 8?[255,0,0,255]:[0,255,0,255]):($x < 8?[0,0,255,255]:[255,255,0,255]));
+png(__DIR__.'/assets/test-parallax.png',7,5,static fn($x,$y) => $y < 2?($x < 3?[255,0,0,255]:[0,255,0,255]):($x < 3?[0,0,255,255]:[255,255,0,255]));

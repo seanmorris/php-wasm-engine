@@ -17,6 +17,7 @@ final class WorldRenderer
 	{
 		$stats = ['maps' => 0,'draws' => 0,'instances' => 0,'uploads' => 0];
 		$this->frame++;
+		$active = [];
 		foreach($this->world->visible($camera->x,$camera->y,$camera->width / $camera->zoom,$camera->height / $camera->zoom,$margin) as $map)
 		{
 			if(isset($this->resident[$map->path]) && $this->resident[$map->path][0]->map !== $map)
@@ -28,11 +29,27 @@ final class WorldRenderer
 			{ $this->resident[$map->path] = [new MapRenderer($map),0]; }
 			[$renderer] = $this->resident[$map->path];
 			$this->resident[$map->path][1] = $this->frame;
-			$renderer->render($camera,$milliseconds);
 			$stats['maps']++;
-			foreach($renderer->stats as $key => $value)
-			{ $stats[$key] += $value; }
+			$backgroundEnd = count($map->layers);
+			foreach($map->layers as $order => $layer)
+			{ if($layer->type === 'tilelayer')
+			{ $backgroundEnd = $order;
+			break; } }
+			$active[] = [$renderer,$backgroundEnd];
 		}
+		// A repeating background from a neighboring map must not cover earlier terrain.
+		foreach([true,false] as $background)
+		{ foreach($active as [$renderer,$boundary])
+		{
+			$start = $background?0:$boundary;
+			$end = $background?$boundary:count($renderer->map->layers);
+			if($start < $end)
+			{
+				$renderer->render($camera,$milliseconds,$start,$end);
+				foreach($renderer->stats as $key => $value)
+				{ $stats[$key] += $value; }
+			}
+		} }
 		uasort($this->resident,fn($a,$b) => $a[1] <=> $b[1]);
 		foreach($this->resident as $path => [$renderer,$frame])
 		{

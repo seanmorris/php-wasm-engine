@@ -10,8 +10,9 @@ final class MapRenderer
 	public Atlas $atlas;
 	public array $stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
 	private Program $program;
+	public ?ImageRenderer $images = null;
 	private array $pages = [], $buffers = [], $vao = [],$gridRanges = [];
-	private int $chunkCount = -1;
+	private array $layout = [];
 	private bool $closed = false;
 	public function __construct(public TileMap $map)
 	{
@@ -72,7 +73,8 @@ final class MapRenderer
 		foreach($this->map->layers as $order => $layer)
 		{ foreach($layer->chunks as $chunk)
 		{ $entries[] = [$layer,$chunk,$order]; } }
-		if(count($entries) !== $this->chunkCount)
+		$layout = array_map(fn($entry) => [spl_object_id($entry[0]),spl_object_id($entry[1]),$entry[2]],$entries);
+		if($layout !== $this->layout)
 		{
 			foreach($this->pages as $page)
 			{ glDeleteTextures(1,[$page['texture']]); } $this->pages = [];
@@ -83,7 +85,7 @@ final class MapRenderer
 				glTexStorage3D(GL_TEXTURE_2D_ARRAY,1,GL_RGBA8UI,32,32,count($group));
 				$this->pages[] = ['texture' => $texture,'entries' => $group,'revisions' => []];
 			}
-			$this->chunkCount = count($entries);
+			$this->layout = $layout;
 		}
 		foreach($this->pages as &$page)
 		{
@@ -106,8 +108,9 @@ final class MapRenderer
 		{ $points[] = $this->map->projection->project($x,$y); }
 		$xs = array_column($points,0);
 		$ys = array_column($points,1);
-		$cx = ($camera->x - ($this->map->data['parallaxoriginx'] ?? 0)) * $layer->parallaxX + ($this->map->data['parallaxoriginx'] ?? 0) - $this->map->x - $layer->offsetX;
-		$cy = ($camera->y - ($this->map->data['parallaxoriginy'] ?? 0)) * $layer->parallaxY + ($this->map->data['parallaxoriginy'] ?? 0) - $this->map->y - $layer->offsetY;
+		[$cx,$cy] = Parallax::camera($layer,$this->map,$camera);
+		$cx -= $this->map->x + $layer->offsetX;
+		$cy -= $this->map->y + $layer->offsetY;
 		// Atlas extent is conservative for oversized tiles and tileset offsets.
 		$margin = max($this->atlas->width,$this->atlas->height);
 		return max($xs) + $margin >= $cx && min($xs) - $margin <= $cx + $camera->width / $camera->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera->height / $camera->zoom;
@@ -124,11 +127,38 @@ final class MapRenderer
 		$this->stats['draws']++;
 		$this->stats['instances'] += $n;
 	}
-	public function render(Camera $camera,float $milliseconds = 0): void
+	/** Optional half-open layer range lets worlds draw all backgrounds before terrain. */
+	public function render(Camera $camera,float $milliseconds = 0,int $startLayer = 0,?int $endLayer = null): void
 	{
+		$endLayer ??= count($this->map->layers);
 		$this->stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
 		$this->sync();
 		$this->atlas->animate($milliseconds);
+		$start = $startLayer;
+		$prepared = false;
+		if($this->images !== null)
+		{ $this->images->draws = $this->images->uploads = 0; }
+		foreach($this->map->layers as $order => $layer)
+		{
+			if($order < $startLayer || $order >= $endLayer || $layer->type !== 'imagelayer' || !$layer->visible || $layer->opacity <= 0)
+			{ continue; }
+			if(!$prepared)
+			{
+				$this->images ??= new ImageRenderer($this->map);
+				$this->images->prepare($milliseconds);
+				$prepared = true;
+			}
+			$this->renderTiles($camera,$start,$order);
+			if($this->images->renderLayer($layer,$camera,$milliseconds))
+			{ $this->stats['draws']++; }
+			$start = $order + 1;
+		}
+		$this->renderTiles($camera,$start,$endLayer);
+	}
+	private function renderTiles(Camera $camera,int $start,int $end): void
+	{
+		if($start >= $end || !$this->pages)
+		{ return; }
 		$p = $this->program;
 		$p->use();
 		glBindVertexArray($this->vao[0]);
@@ -144,7 +174,7 @@ final class MapRenderer
 		glUniform2f($p->location('camera'),$camera->x,$camera->y);
 		glUniform2f($p->location('viewport'),$camera->width,$camera->height);
 		glUniform1f($p->location('zoom'),$camera->zoom);
-		glUniform2f($p->location('parallaxOrigin'),$this->map->data['parallaxoriginx'] ?? 0,$this->map->data['parallaxoriginy'] ?? 0);
+		glUniform2f($p->location('parallaxOrigin'),$this->map->x + ($this->map->data['parallaxoriginx'] ?? 0),$this->map->y + ($this->map->data['parallaxoriginy'] ?? 0));
 		$iso = $this->map->projection->orientation === 'isometric';
 		glUniform1i($p->location('isometric'),$iso?1:0);
 		glUniform1f($p->location('isoOrigin'),$this->map->projection->mapHeight * $this->map->projection->tileWidth / 2);
@@ -152,8 +182,8 @@ final class MapRenderer
 		{
 			foreach($this->pages as $page)
 			{ $instances = '';
-			foreach($page['entries'] as $slice => [$layer,$chunk])
-			{ if($this->visible($layer,$chunk,$camera))
+			foreach($page['entries'] as $slice => [$layer,$chunk,$order])
+			{ if($order >= $start && $order < $end && $this->visible($layer,$chunk,$camera))
 			{ $instances .= $this->instance($layer,$chunk,$slice); } } if($instances !== '')
 			{ $this->draw($page['texture'],$instances); } }
 		} else
@@ -163,7 +193,7 @@ final class MapRenderer
 			$commands = [];
 			foreach($this->pages as $page)
 			{ foreach($page['entries'] as $slice => [$layer,$chunk,$order])
-			{ if($this->visible($layer,$chunk,$camera))
+			{ if($order >= $start && $order < $end && $this->visible($layer,$chunk,$camera))
 			{
 				foreach($this->gridRanges as $diagonal => [$first,$count])
 				{
@@ -202,5 +232,6 @@ final class MapRenderer
 		if($this->vao)
 		{ glDeleteVertexArrays(1,$this->vao); } $this->program->close();
 		$this->atlas->close();
+		$this->images?->close();
 	}
 }

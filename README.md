@@ -63,7 +63,7 @@ $engine->start(function() use ($device,$renderer,$camera,$engine) {
 
 Loader accepts JSON maps (.tmj/.json), external JSON tilesets (.tsj), image collections, and explicit .world map lists. Relative paths resolve against the referring file. Assets caches reads; supply a reader callback for another storage backend.
 
-Tile rendering supports orthogonal/isometric projections, finite maps, sparse infinite chunks with negative coordinates, inherited group visibility/offsets/opacity/tint/parallax, tile animations, tileset margins/spacing/offsets, and flip flags. Maps retain object and image layer metadata. MapRenderer draws tile layers; SpriteRenderer draws actors. Image layers, Tiled text, and object templates are not automatically rendered.
+Tile rendering supports orthogonal/isometric projections, finite maps, sparse infinite chunks with negative coordinates, inherited group visibility/offsets/opacity/tint/parallax, tile animations, tileset margins/spacing/offsets, and flip flags. MapRenderer draws tile and image layers in map order; SpriteRenderer draws actors. Maps retain object metadata. Tiled text and object templates are not automatically rendered.
 
 JSON arrays and base64 layers need no extra extension. Compressed layers require PHP zlib, loaded through the base runtime's dependency resolver:
 
@@ -84,6 +84,39 @@ $map->layer('Terrain')->set(-2,3,17);
 ~~~
 
 World metadata loads first; intersecting maps load when requested. WorldRenderer evicts older off-screen GPU resources beyond its residency limit. Visible maps stay resident. World::unload releases a loader cache entry. Rebuild MapTerrain after collision tile changes. Visual edits update the changed GPU slice.
+
+## Background parallax
+
+Add Tiled image layers before the terrain. Set `repeatx`, `repeaty`, `parallaxx`, and `parallaxy` on each layer. A factor of 0 stays fixed relative to the view, 1 follows the map, and intermediate values simulate distance. Group factors multiply. Tile and image layers share Tiled's [view-center and map-origin reference](https://doc.mapeditor.org/en/stable/manual/layers/#parallax-reference-point), including maps placed in a world.
+
+For a viewport-anchored stack like tigl's backgrounds, set the image layer's custom `from` string property to `top`, `center`, or `bottom`. Position strips using `offsety`. Layers with the same anchor share a stack height computed from their image heights and offsets. `stackHeight` can override that height. Anchored strips default to horizontal repetition and zero vertical parallax; explicit `repeatx` and `parallaxy` values override those defaults.
+
+Custom properties add motion like moving-boxes-2's strips:
+
+| Property | Type | Effect |
+| --- | --- | --- |
+| `scrollX`, `scrollY` | float | Automatic image movement in pixels per second; positive values move right/down. |
+| `frames` | string | JSON list of `{"image":"cloud-0.png","duration":150}` entries. Durations are milliseconds; image paths are relative to the map. |
+
+Pass simulation time to `MapRenderer::render($camera, $milliseconds)` so scrolling and animation stop when simulation time stops. Opacity, tint, PNG alpha, and Tiled's `transparentcolor` are supported. Images keep their native proportions when the camera zooms. Repetition works with non-power-of-two images and negative world coordinates.
+
+PHP can also create and change layers directly:
+
+~~~php
+$clouds = new PhpWasmEngine\Tiled\Layer(20, 'Clouds', 'imagelayer');
+$clouds->image = '/assets/clouds.png';
+$clouds->repeatX = true;
+$clouds->parallaxX = .15;
+$clouds->parallaxY = 0;
+$clouds->properties = ['from' => 'bottom', 'scrollX' => 6];
+array_unshift($map->layers, $clouds);
+~~~
+
+For programmatic animation, set `$clouds->imageFrames` to an array of image/duration entries with resolved image paths.
+
+ImageRenderer caches each image once per map renderer and draws one clipped quad per image layer. Its `draws` and `uploads` counters are available through `$renderer->images`. MapRenderer's draw count includes images; its instance/upload counts still describe tile chunks. Close the MapRenderer to release both renderers' textures. WorldRenderer draws leading background layers for all visible maps before drawing their terrain, so a neighboring map's sky cannot cover existing terrain.
+
+The live demo includes original procedural sky, cloud, mountain, water, and shimmer strips. `php examples/generate-assets.php` regenerates them along with the demo maps.
 
 ## Sprites
 
@@ -156,7 +189,7 @@ PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmo
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
 
-The initial implementation passed 26 PHP regressions and native GPU checks on PHP 8.0–8.5, plus six Chromium integration tests on PHP 8.4. Isometric chunk rendering is compared pixel for pixel with a CPU reference. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passed 31 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus seven Chromium integration tests on PHP 8.4. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and adjacent world maps. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 
