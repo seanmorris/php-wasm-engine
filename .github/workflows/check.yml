@@ -10,8 +10,20 @@ jobs:
           php-version: '8.2'
           extensions: zlib
       - run: composer install --no-interaction --prefer-dist
+      - run: php examples/generate-assets.php && git diff --exit-code -- examples/assets
       - run: composer test
       - run: composer lint
+  tiled:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y tiled
+      - run: npm run test:tiled
+        env:
+          QT_QPA_PLATFORM: offscreen
   browser:
     runs-on: ubuntu-latest
     steps:

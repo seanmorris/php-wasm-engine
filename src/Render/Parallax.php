@@ -45,9 +45,10 @@ final class Parallax
 		{
 			$anchor = ['top' => 0,'center' => .5,'bottom' => 1][$layer->properties['from']];
 			$height = $layer->properties['stackHeight'] ?? $stackHeight;
-			$x = $layer->offsetX - ($camera->x - $map->x - ($map->data['parallaxoriginx'] ?? 0)) * $layer->parallaxX;
+			// Viewport-anchored strips share a world phase, even when their owning map changes.
+			$x = $layer->offsetX - $camera->x * $layer->parallaxX;
 			$y = ($camera->height / $camera->zoom - $height) * $anchor + $layer->offsetY
-				- ($camera->y - $map->y - ($map->data['parallaxoriginy'] ?? 0)) * $layer->parallaxY;
+				- $camera->y * $layer->parallaxY;
 		}
 		$seconds = max(0,$milliseconds) / 1000;
 		$x += (float)($layer->properties['scrollX'] ?? 0) * $seconds;

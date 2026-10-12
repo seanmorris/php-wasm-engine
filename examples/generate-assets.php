@@ -12,6 +12,8 @@ function png(string $path,int $width,int $height,callable $pixel): void
 	file_put_contents($path,"\x89PNG\r\n\x1a\n".$chunk('IHDR',pack('NNC5',$width,$height,8,6,0,0,0)).$chunk('IDAT',gzcompress($data)).$chunk('IEND',''));
 }
 function jsonAsset(string $name,array $data): void { file_put_contents(__DIR__.'/assets/'.$name,json_encode($data,JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"); }
+// Tiled's JSON importer reads omitted visibility and opacity as false and zero.
+$layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 png(__DIR__.'/assets/tiles.png',288,32,static function($x,$y) {
 	$id = intdiv($x,32);
 	$x %= 32;
@@ -104,9 +106,9 @@ foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
 	$properties = [['name' => 'from','type' => 'string','value' => 'bottom'],['name' => 'scrollX','type' => 'float','value' => $scroll]];
 	if($name === 'shine-0')
 	{ $properties[] = ['name' => 'frames','type' => 'string','value' => json_encode([['image' => 'shine-0.png','duration' => 180],['image' => 'shine-1.png','duration' => 180]])]; }
-	$background[] = ['id' => 10 + $i,'name' => $name,'type' => 'imagelayer','image' => $name.'.png','imagewidth' => $w,'imageheight' => $h,'repeatx' => true,'parallaxx' => $parallax,'offsety' => $offset,'properties' => $properties];
+	$background[] = ['id' => 10 + $i,'name' => $name,'type' => 'imagelayer','image' => $name.'.png','imagewidth' => $w,'imageheight' => $h,'repeatx' => true,'parallaxx' => $parallax,'parallaxy' => 0,'offsety' => $offset,'properties' => $properties] + $layerDefaults;
 }
-$base['layers'] = [['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $floor],['id' => 2,'name' => 'Markers','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $items],['id' => 3,'name' => 'Spawns','type' => 'objectgroup','objects' => [['id' => 1,'class' => 'Player','x' => 80,'y' => 100]]]];
+$base['layers'] = [['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $floor] + $layerDefaults,['id' => 2,'name' => 'Markers','type' => 'tilelayer','width' => $width,'height' => $height,'data' => $items] + $layerDefaults,['id' => 3,'name' => 'Spawns','type' => 'objectgroup','objects' => [['id' => 1,'class' => 'Player','x' => 80,'y' => 100]]] + $layerDefaults];
 $base['layers'] = array_merge($background,$base['layers']);
 jsonAsset('platformer.tmj',$base);
 $infinite = $base;
@@ -121,7 +123,7 @@ foreach([-32,0,32] as $offset)
 	{ $data[$y * 32 + $x] = 1; } }
 	$chunks[] = ['x' => $offset,'y' => 0,'width' => 32,'height' => 20,'data' => $data];
 }
-$infinite['layers'] = [['id' => 1,'name' => 'Infinite terrain','type' => 'tilelayer','chunks' => $chunks]];
+$infinite['layers'] = [['id' => 1,'name' => 'Infinite terrain','type' => 'tilelayer','chunks' => $chunks] + $layerDefaults];
 $infinite['layers'] = array_merge($background,$infinite['layers']);
 jsonAsset('infinite.tmj',$infinite);
 png(__DIR__.'/assets/iso.png',128,64,static function($x,$y) {
@@ -135,7 +137,7 @@ png(__DIR__.'/assets/iso.png',128,64,static function($x,$y) {
 	return [0,0,0,0];
 });
 jsonAsset('iso.tsj',['type' => 'tileset','tilewidth' => 64,'tileheight' => 64,'tilecount' => 2,'columns' => 2,'image' => 'iso.png','imagewidth' => 128,'imageheight' => 64]);
-$iso = ['type' => 'map','orientation' => 'isometric','width' => 12,'height' => 12,'tilewidth' => 64,'tileheight' => 32,'tilesets' => [['firstgid' => 1,'source' => 'iso.tsj']],'layers' => [['id' => 1,'name' => 'Isometric','type' => 'tilelayer','width' => 12,'height' => 12,'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1,range(0,143))]]];
+$iso = ['type' => 'map','orientation' => 'isometric','width' => 12,'height' => 12,'tilewidth' => 64,'tileheight' => 32,'tilesets' => [['firstgid' => 1,'source' => 'iso.tsj']],'layers' => [['id' => 1,'name' => 'Isometric','type' => 'tilelayer','width' => 12,'height' => 12,'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1,range(0,143))] + $layerDefaults]];
 $iso['layers'] = array_merge($background,$iso['layers']);
 jsonAsset('isometric.tmj',$iso);
 jsonAsset('demo.world',['type' => 'world','maps' => [['fileName' => 'platformer.tmj','x' => 0,'y' => 0,'width' => 3072,'height' => 640],['fileName' => 'infinite.tmj','x' => 4096,'y' => 0,'width' => 3072,'height' => 640,'bounds' => ['x' => -1024,'y' => 0,'width' => 3072,'height' => 640]]]]);
@@ -156,7 +158,7 @@ foreach(range(-2,2) as $section)
 	{ $cells[$y * 32 + $x] = 1; } }
 	foreach(range(0,31,4) as $x)
 	{ $cells[(9 + abs($section)) * 32 + $x] = 5; }
-	$streamMap['layers'][] = ['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => 32,'height' => 20,'data' => $cells];
+	$streamMap['layers'][] = ['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => 32,'height' => 20,'data' => $cells] + $layerDefaults;
 	$name = 'stream-'.($section + 2).'.tmj';
 	jsonAsset($name,$streamMap);
 	$worldMaps[] = ['fileName' => $name,'x' => $section * 1024,'y' => 0,'width' => 1024,'height' => 640];

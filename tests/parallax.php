@@ -74,6 +74,35 @@ test('finite images clip while repeated images cover both axes', function() {
 	$layer->repeatX = $layer->repeatY = true;
 	check(Parallax::layout($layer,$map,$camera)['rect'] === [0.0,0.0,100.0,80.0]);
 });
+test('anchored backgrounds keep their phase when their map placement and origin change',function() {
+	$map = fixture(['a.tmj' => mapData([]),'tiles.tsj' => tiles()])->map('a.tmj');
+	$layer = new Layer(1,'clouds','imagelayer');
+	$layer->imageWidth = 7;
+	$layer->imageHeight = 5;
+	$layer->repeatX = $layer->repeatY = true;
+	$layer->offsetX = 3;
+	$layer->offsetY = -2;
+	$layer->parallaxX = .43;
+	$layer->parallaxY = .17;
+	foreach(['top','center','bottom'] as $anchor)
+	{ foreach([.5,1,2.5] as $zoom)
+	{
+		$layer->properties = ['from' => $anchor,'scrollX' => 6,'scrollY' => -3];
+		$camera = new Camera(-177.25,36.75,200,100,$zoom);
+		$map->x = $map->y = 0;
+		$map->data['parallaxoriginx'] = $map->data['parallaxoriginy'] = 0;
+		$expected = Parallax::layout($layer,$map,$camera,3125,24);
+		foreach([[-1024,-640],[1024,640],[-1000004,500006]] as [$x,$y])
+		{
+			$map->x = $x;
+			$map->y = $y;
+			$map->data['parallaxoriginx'] = 11;
+			$map->data['parallaxoriginy'] = -9;
+			check(Parallax::layout($layer,$map,$camera,3125,24) === $expected,'map placement changed an anchored background');
+			check($map->x === (float)$x && $map->y === (float)$y,'layout changed the map placement');
+		}
+	} }
+});
 test('background animation and anchors reject invalid definitions', function() {
 	foreach(['[{"image":"x.png","duration":0}]','{}','[{"duration":10}]'] as $frames)
 	{

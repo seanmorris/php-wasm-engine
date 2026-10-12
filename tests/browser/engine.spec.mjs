@@ -54,6 +54,13 @@ test('background strips repeat, anchor, blend in map order and share textures',a
   expect(result.tileImageMatch).toBe(true);
   expect(result.error).toBe(0);
 });
+test('anchored backgrounds keep a shared phase across map boundaries and streaming',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax-world.php";'));
+  expect(Object.keys(result.checks).length).toBeGreaterThan(90);
+  for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
+  expect(result.error).toBe(0);
+});
 for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();

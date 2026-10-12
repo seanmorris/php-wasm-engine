@@ -132,8 +132,8 @@ final class MapRenderer
 		$this->stats['draws']++;
 		$this->stats['instances'] += $n;
 	}
-	/** Optional half-open layer range lets worlds draw all backgrounds before terrain. */
-	public function render(Camera $camera,float $milliseconds = 0,int $startLayer = 0,?int $endLayer = null): void
+	/** Worlds can exclude anchored images outside the selected background stack. */
+	public function render(Camera $camera,float $milliseconds = 0,int $startLayer = 0,?int $endLayer = null,bool $anchoredImages = true): void
 	{
 		$endLayer ??= count($this->map->layers);
 		$this->stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
@@ -146,6 +146,8 @@ final class MapRenderer
 		foreach($this->map->layers as $order => $layer)
 		{
 			if($order < $startLayer || $order >= $endLayer || $layer->type !== 'imagelayer' || !$layer->visible || $layer->opacity <= 0)
+			{ continue; }
+			if(!$anchoredImages && isset($layer->properties['from']))
 			{ continue; }
 			if(!$prepared)
 			{

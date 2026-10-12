@@ -105,6 +105,8 @@ PHP entities, map edits, camera state, and simulation time survive context loss.
 
 Loader accepts JSON maps (.tmj/.json), external JSON tilesets (.tsj), image collections, and explicit .world map lists. Relative paths resolve against the referring file. Assets caches reads; supply a reader callback for another storage backend.
 
+Open `examples/assets/stream.world` or `demo.world` in Tiled to edit the demo maps. Generated JSON includes `visible: true` and `opacity: 1` on every layer. Tiled 1.12.2 imports layers without those fields as hidden and fully transparent, even when their tile data is present. The generator also writes `parallaxy: 0` for anchored backgrounds so saving in Tiled preserves their vertical behavior.
+
 Tile rendering supports orthogonal/isometric projections, finite maps, sparse infinite chunks with negative coordinates, inherited group visibility/offsets/opacity/tint/parallax, tile animations, tileset margins/spacing/offsets, and flip flags. MapRenderer draws tile and image layers in map order; SpriteRenderer draws actors. Maps retain object metadata. Tiled text and object templates are not automatically rendered.
 
 JSON arrays and base64 layers need no extra extension. Compressed layers require PHP zlib, loaded through the base runtime's dependency resolver:
@@ -169,6 +171,10 @@ Add Tiled image layers before the terrain. Set `repeatx`, `repeaty`, `parallaxx`
 
 For a viewport-anchored stack like tigl's backgrounds, set the image layer's custom `from` string property to `top`, `center`, or `bottom`. Position strips using `offsety`. Layers with the same anchor share a stack height computed from their image heights and offsets. `stackHeight` can override that height. Anchored strips default to horizontal repetition and zero vertical parallax; explicit `repeatx` and `parallaxy` values override those defaults.
 
+Anchored strips scroll from world-camera coordinates. Map placement and map-local parallax origins do not change their phase. Use the same layer offsets, factors, images, and stack heights in neighboring maps to keep backgrounds aligned across boundaries. Tiled displays these images using its native layer rules; the engine applies the custom anchoring, scrolling, and frame animation during play.
+
+WorldRenderer draws one leading anchored stack, selected from the ready map containing the camera center. While crossing a gap or waiting for that map, it keeps the previous visible ready stack, or uses the first visible ready map. Manifest order breaks ties for overlapping maps. This avoids blending the same translucent background more than once. Regular Tiled image layers remain attached to each map; image layers after terrain retain their map order.
+
 Custom properties add motion like moving-boxes-2's strips:
 
 | Property | Type | Effect |
@@ -192,7 +198,7 @@ array_unshift($map->layers, $clouds);
 
 For programmatic animation, set `$clouds->imageFrames` to an array of image/duration entries with resolved image paths.
 
-ImageRenderer caches each image once per map renderer and draws one clipped quad per image layer. Its `draws` and `uploads` counters are available through `$renderer->images`. MapRenderer's draw count includes images; its instance/upload counts still describe tile chunks. Close the MapRenderer to release both renderers' textures. WorldRenderer draws leading background layers for all visible maps before drawing their terrain, so a neighboring map's sky cannot cover existing terrain.
+ImageRenderer caches each image once per map renderer and draws one clipped quad per image layer. Its `draws` and `uploads` counters are available through `$renderer->images`. MapRenderer's draw count includes images; its instance/upload counts still describe tile chunks. Close the MapRenderer to release both renderers' textures. WorldRenderer draws the selected anchored stack and regular leading image layers before drawing terrain, so a neighboring map's sky cannot cover existing terrain.
 
 The live demo includes original procedural sky, cloud, mountain, water, and shimmer strips. `php examples/generate-assets.php` regenerates them along with the demo maps.
 
@@ -267,7 +273,9 @@ PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmo
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
 
-Validation passed 40 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus 13 Chromium integration tests on PHP 8.4. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and adjacent world maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+With Tiled installed, run `npm run test:tiled` to open and export all eight demo maps and both tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI also regenerates the procedural assets and checks that the committed files match.
+
+Validation passed 43 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus 26 Chromium integration tests on PHP 8.4 and 10 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

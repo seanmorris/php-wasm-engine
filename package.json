@@ -9,6 +9,7 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "test": "php tests/run.php",
+    "test:tiled": "node --test tests/tiled.mjs",
     "test:browser": "playwright test",
     "build:docs": "webpack --mode production && node scripts/build-docs.mjs",
     "setup:runtime": "node scripts/runtime.mjs"

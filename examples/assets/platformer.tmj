@@ -24,6 +24,7 @@
             "imageheight": 300,
             "repeatx": true,
             "parallaxx": 0,
+            "parallaxy": 0,
             "offsety": 0,
             "properties": [
                 {
@@ -36,7 +37,11 @@
                     "type": "float",
                     "value": 0
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 11,
@@ -47,6 +52,7 @@
             "imageheight": 96,
             "repeatx": true,
             "parallaxx": 0.06,
+            "parallaxy": 0,
             "offsety": 36,
             "properties": [
                 {
@@ -59,7 +65,11 @@
                     "type": "float",
                     "value": 6
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 12,
@@ -70,6 +80,7 @@
             "imageheight": 180,
             "repeatx": true,
             "parallaxx": 0.16,
+            "parallaxy": 0,
             "offsety": 128,
             "properties": [
                 {
@@ -82,7 +93,11 @@
                     "type": "float",
                     "value": 0
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 13,
@@ -93,6 +108,7 @@
             "imageheight": 256,
             "repeatx": true,
             "parallaxx": 0.28,
+            "parallaxy": 0,
             "offsety": 284,
             "properties": [
                 {
@@ -105,7 +121,11 @@
                     "type": "float",
                     "value": 0
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 14,
@@ -116,6 +136,7 @@
             "imageheight": 140,
             "repeatx": true,
             "parallaxx": 0.38,
+            "parallaxy": 0,
             "offsety": 196,
             "properties": [
                 {
@@ -128,7 +149,11 @@
                     "type": "float",
                     "value": 0
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 15,
@@ -139,6 +164,7 @@
             "imageheight": 8,
             "repeatx": true,
             "parallaxx": 0.28,
+            "parallaxy": 0,
             "offsety": 284,
             "properties": [
                 {
@@ -156,7 +182,11 @@
                     "type": "string",
                     "value": "[{\"image\":\"shine-0.png\",\"duration\":180},{\"image\":\"shine-1.png\",\"duration\":180}]"
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 1,
@@ -2085,7 +2115,11 @@
                 1,
                 1,
                 1
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 2,
@@ -4014,7 +4048,11 @@
                 0,
                 0,
                 0
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         },
         {
             "id": 3,
@@ -4027,7 +4065,11 @@
                     "x": 80,
                     "y": 100
                 }
-            ]
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
         }
     ]
 }
