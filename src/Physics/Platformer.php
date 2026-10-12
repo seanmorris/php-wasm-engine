@@ -15,6 +15,11 @@ final class Platformer
 		$axis = $input->axis('left','right');
 		if($axis)
 		{ $b->facing = $axis <=> 0; }
+		// Retry blocked gates while overlapping, including actors at rest.
+		$seen = [];
+		while($gate = $this->terrain->nextSwitch($b,0,0,$seen))
+		{ $seen[$gate['id']] = true;
+		$this->terrain->applySwitch($b,$gate['switch']); }
 		$b->dropTimer = max(0,$b->dropTimer - $dt);
 		$b->jumpBuffer = max(0,$b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0,$b->coyote - $dt);
@@ -64,7 +69,7 @@ final class Platformer
 		$jumped = false;
 		if($b->jumpBuffer > 0 && $b->coyote > 0)
 		{
-			$platform = $this->terrain->raycast($b->x,$b->y,-sin($b->angle) * ($b->halfHeight + 1),cos($b->angle) * ($b->halfHeight + 1));
+			$platform = $this->terrain->raycast($b->x,$b->y,-sin($b->angle) * ($b->halfHeight + 1),cos($b->angle) * ($b->halfHeight + 1),false,$b->collisionLayer);
 			if($input->down('down') && $platform?->oneWay)
 			{ $b->dropTimer = .25;
 			$b->grounded = false;
@@ -159,7 +164,7 @@ final class Platformer
 	private function stand(Body $b): void
 	{
 		$extra = ($b->standingHeight - $b->halfHeight) * 2;
-		if(!$this->terrain->raycast($b->x,$b->y - $b->halfHeight,0,-$extra,true))
+		if(!$this->terrain->raycast($b->x,$b->y - $b->halfHeight,0,-$extra,true,$b->collisionLayer))
 		{ $b->rolling = false; }
 	}
 	/** Swept body cast. Every ray spans the full remaining displacement.
@@ -168,13 +173,28 @@ final class Platformer
      */
 	private function sweep(Body $b,float $dx,float $dy): void
 	{
-		for($iteration = 0;$iteration < 6 && abs($dx) + abs($dy) > 1e-7;$iteration++)
+		$seen = [];
+		$contacts = 0;
+		while($contacts < 6 && abs($dx) + abs($dy) > 1e-7)
 		{
 			$best = $this->terrain->castBody($b,$dx,$dy,$b->dropTimer > 0);
+			$gate = $this->terrain->nextSwitch($b,$dx,$dy,$seen);
+			if($gate && (!$best || $gate['t'] < $best->t))
+			{
+				$b->x += $dx * $gate['t'];
+				$b->y += $dy * $gate['t'];
+				$dx *= 1 - $gate['t'];
+				$dy *= 1 - $gate['t'];
+				$seen[$gate['id']] = true;
+				$this->terrain->applySwitch($b,$gate['switch']);
+				// Recast the unconsumed motion against the newly selected plane.
+				continue;
+			}
 			if(!$best)
 			{ $b->x += $dx;
 			$b->y += $dy;
 			return; }
+			$contacts++;
 			$b->x += $dx * $best->t + $best->nx * .001;
 			$b->y += $dy * $best->t + $best->ny * .001;
 			$floor = $best->ny < -.25;
@@ -216,7 +236,7 @@ final class Platformer
 		{
 			$x = $b->x + $side * $ca - ($b->halfHeight - 6) * $sa;
 			$y = $b->y + $side * $sa + ($b->halfHeight - 6) * $ca;
-			$hit = $this->terrain->raycast($x,$y,-$sa * 16,$ca * 16,$b->dropTimer > 0);
+			$hit = $this->terrain->raycast($x,$y,-$sa * 16,$ca * 16,$b->dropTimer > 0,$b->collisionLayer);
 			if($hit)
 			{ $hits[] = $hit; }
 		}
@@ -243,7 +263,7 @@ final class Platformer
 		$b->vx = 0;
 		$b->vy = $dy / $dt;
 		$this->sweep($b,0,$dy);
-		$hit = $this->terrain->raycast($b->x,$b->y,$b->wall * ($b->radius + 3),0,true);
+		$hit = $this->terrain->raycast($b->x,$b->y,$b->wall * ($b->radius + 3),0,true,$b->collisionLayer);
 		if(!$hit)
 		{ $b->ability = '';
 		$b->vx = $b->wall * 120;

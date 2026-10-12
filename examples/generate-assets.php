@@ -164,3 +164,4 @@ foreach(range(-2,2) as $section)
 	$worldMaps[] = ['fileName' => $name,'x' => $section * 1024,'y' => 0,'width' => 1024,'height' => 640];
 }
 jsonAsset('stream.world',['type' => 'world','maps' => $worldMaps]);
+require __DIR__.'/generate-loop.php';

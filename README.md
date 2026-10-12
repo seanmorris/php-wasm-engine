@@ -11,7 +11,7 @@ npm ci
 npm start
 ~~~
 
-Open http://localhost:9130. Select the platformer, infinite map, isometric scene, or streaming world, then press **Run PHP**. The WASM download starts on that click. **Fullscreen** expands the demo while keeping its controls visible; use **Exit fullscreen** or Escape to return.
+Open http://localhost:9130. Select the platformer, loop-de-loop, infinite map, isometric scene, or streaming world, then press **Run PHP**. The WASM download starts on that click. **Fullscreen** expands the demo while keeping its controls visible; use **Exit fullscreen** or Escape to return.
 
 `npm start` runs webpack-dev-server with live reload. Changes to the demo JavaScript, CSS, HTML, PHP sources, shaders, maps, and sprites reload the page. Press **Run PHP** again after a reload. Set `PORT` to use a port other than 9130.
 
@@ -258,10 +258,17 @@ Platformer is a new PHP implementation informed by the reference projects in [do
 - Surface-tangent ground speed and outward-normal jumps. Sensors follow slopes, walls, ceilings, and loops while momentum remains sufficient.
 - Runner charge/drop dash, glide with wall catching/climbing/jumping, and flight with a finite lift budget.
 - Solid polygons, tile collision shapes, one-way platforms, and down+jump drop-through.
+- Per-body collision planes and directional Tiled layer switches for open loops, including reversed crown gates and rolling-only gates.
 
 Terrain::castBody casts the center against segments expanded by the oriented body. The earliest time of impact limits the move; remaining motion slides along the surface. It covers the whole displacement, including tiny obstacles between point sensors. Short Terrain::raycast calls handle foot adhesion, head clearance when standing, and wall contact while climbing.
 
 Terrain is spatially indexed and matching internal tile edges cancel. Moving platforms, dynamic body collisions, and recovery from spawning inside solid terrain are not implemented. Place bodies in empty space. Sweeps resolve at most six contacts and discard unresolved motion in tight corners.
+
+Select **Loop-de-loop** and hold Right to run the loop, then Left to return through it. [`examples/assets/loop.tmj`](examples/assets/loop.tmj) splits an 8×8 circular tileset into a shared crown/floor and two selectable lower halves. `layer-switch` objects outside the entrances select the far wall. A `back=true` gate at the crown changes halves so the character can descend and exit. The rule follows ground speed around the surface, including the ceiling.
+
+`Body::$collisionLayer` defaults to 1. `MapTerrain::build` reads the integer `collisionLayer` property, or names such as `Collision 0`, `Collision 1`, and `Collision 2`. Zero is common terrain, always included. Set `collision=false` on decorative layers that reuse collision tiles. Rendering remains independent of collision selection. `Terrain::add($points, $oneWay, $collisionLayer)` supports the same planes for geometry created in PHP; `raycast(..., collisionLayer: $body->collisionLayer)` selects the plane for custom probes, and `castBody` reads it from the body.
+
+Gate crossings are swept over the full displacement and processed before later terrain impacts. After each switch, the remaining movement is recast against the destination. Blocked switches retry while overlapping; neither thin gates nor newly solid obstacles are skipped at high speed. The [layout and authoring guide](docs/loops.md) includes the reference map analysis, a diagram, and all switch properties.
 
 ## Rendering
 
@@ -284,11 +291,11 @@ npm run test:browser
 
 PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmorris/sm-no-saccade-style/tree/master/packages/php), pinned by composer.lock. Apply it with composer lint:fix.
 
-Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
+Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and entry/crown/exit traversal of the Tiled loop in both directions, walking and rolling.
 
-With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all eight demo maps and both tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
+With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all nine demo maps and three tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
 
-Validation passed 46 PHP regressions and parallax/sprite-switching GPU checks on PHP 8.0–8.5, plus 27 Chromium integration tests on PHP 8.4 and 10 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passed 56 PHP regressions and parallax/sprite-switching GPU checks on PHP 8.0–8.5, plus 29 Chromium integration tests on PHP 8.4 and 12 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

@@ -11,7 +11,7 @@ use PhpWasmEngine\Render\
 
 $scene = vrzno_env('scene')?:'platformer';
 $profile = vrzno_env('profile')?:'runner';
-if(!in_array($scene,['platformer','infinite','isometric'],true))
+if(!in_array($scene,['platformer','loop','infinite','isometric'],true))
 { throw new InvalidArgumentException('Invalid scene'); }
 $loader = new Loader;
 $map = $loader->map(__DIR__.'/assets/'.$scene.'.tmj');
@@ -36,6 +36,8 @@ $engine->systems->add('movement',function($entities,$dt) use ($engine,$movement,
 	{ $body->x = 80;
 	$body->y = 100;
 	$body->vx = $body->vy = $body->groundSpeed = 0;
+	$body->angle = 0;
+	$body->collisionLayer = 1;
 	$body->grounded = false;
 	$body->ability = ''; }
 	$movement->step($body,$engine->controls,$dt);
@@ -52,8 +54,8 @@ $engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,
 	if($scene !== 'isometric')
 	{
 		$sprite = $engine->entities->get($entity,Sprite::class);
-		$sprite->x = $body->x;
-		$sprite->y = $body->y + $body->halfHeight;
+		$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
+		$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
 		$sprite->rotation = $body->angle;
 		$sprite->flipX = $body->facing < 0;
 		$sprite->scaleY = $body->rolling?.7:1;
@@ -62,10 +64,12 @@ $engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,
 	$device->present();
 	$frames++;
 	$canvas->dataset->frames = (string)$frames;
+	$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y,'grounded' => $body->grounded,'ability' => $body->ability,'speed' => $body->groundSpeed,'angle' => $body->angle,'collisionLayer' => $body->collisionLayer]);
 	if($frames % 10 === 0)
 	{
-		$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y,'grounded' => $body->grounded,'ability' => $body->ability,'speed' => $body->groundSpeed]);
 		$status->textContent = sprintf('%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts',$body->ability?:($body->grounded?'ground':'air'),$body->groundSpeed,$renderer->stats['draws'] + $sprites->draws,$renderer->stats['instances'],$renderer->stats['uploads'],$terrain->raycasts);
+		if($scene === 'loop')
+		{ $status->textContent .= ' · collision layer '.$body->collisionLayer; }
 		if($engine->userPaused)
 		{ $status->textContent = 'Paused. Press Start / Options or P to resume.'; }
 	}

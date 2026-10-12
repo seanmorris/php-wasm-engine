@@ -7,6 +7,8 @@ final class Body
 	public float $radius = 8,$halfHeight = 18,$standingHeight = 18,$rollingHeight = 12;
 	public bool $grounded = false,$rolling = false;
 	public int $facing = 1,$wall = 0;
+	/** Zero is shared terrain; positive numbers select an additional collision plane. */
+	public int $collisionLayer = 1;
 	public string $ability = '';
 	public float $charge = 0,$dropCharge = 0,$flightRemaining = 5.8,$dropTimer = 0,$coyote = 0,$jumpBuffer = 0;
 	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 288,$gravity = 1800,$jumpSpeed = 660,$maxSpeed = 1080,$terminalSpeed = 1800;

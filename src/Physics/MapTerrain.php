@@ -13,6 +13,9 @@ final class MapTerrain
 		foreach($maps as $map)
 		{ foreach($map->layers as $layer)
 		{
+			if(!($layer->properties['collision'] ?? true))
+			{ continue; }
+			$collisionLayer = (int)($layer->properties['collisionLayer'] ?? (preg_match('/^Collision\s*(\d+)$/i',$layer->name,$match)?$match[1]:0));
 			$ox = $map->x + $layer->offsetX;
 			$oy = $map->y + $layer->offsetY;
 			foreach($layer->chunks as $chunk)
@@ -42,18 +45,30 @@ final class MapTerrain
 					{ [$u,$v] = $gid->uv($u / $w,$v / $h);
 					$transformed[] = [$ox + $px + $u * $w,$oy + $py + $v * $h]; }
 					$props = Loader::properties($shape['properties'] ?? []);
-					$terrain->add($transformed,(bool)($props['oneWay'] ?? $tile['properties']['oneWay'] ?? $layer->properties['oneWay'] ?? false));
+					$terrain->add($transformed,(bool)($props['oneWay'] ?? $tile['properties']['oneWay'] ?? $layer->properties['oneWay'] ?? false),$collisionLayer);
 				}
 			} } }
 			foreach($layer->objects as $object)
 			{
 				$props = Loader::properties($object['properties'] ?? []);
-				if(!($props['solid'] ?? $layer->properties['solid'] ?? false))
+				$switch = in_array(($object['class'] ?? '')?:($object['type'] ?? ''),['layer-switch','LayerSwitch'],true);
+				if(!$switch && !($props['solid'] ?? $layer->properties['solid'] ?? false))
 				{ continue; }
+				if($switch && isset($object['gid']))
+				{
+					// Tiled tile objects rotate around their bottom-left anchor.
+					$angle = deg2rad($object['rotation'] ?? 0);
+					$object['x'] += sin($angle) * ($object['height'] ?? 0);
+					$object['y'] -= cos($angle) * ($object['height'] ?? 0);
+				}
 				$points = self::points($object);
 				if($map->projection->orientation === 'isometric')
 				{ $points = array_map(fn($p) => $map->projection->project($p[0] / $map->projection->tileHeight,$p[1] / $map->projection->tileHeight),$points); }
-				$terrain->add(array_map(fn($p) => [$p[0] + $ox,$p[1] + $oy],$points),(bool)($props['oneWay'] ?? false));
+				$points = array_map(fn($p) => [$p[0] + $ox,$p[1] + $oy],$points);
+				if($switch)
+				{ $terrain->addSwitch(new LayerSwitch($points,(int)($props['fromLayer'] ?? 1),(int)($props['toLayer'] ?? 2),(bool)(int)($props['back'] ?? 0),(bool)(int)($props['roll'] ?? 0))); }
+				else
+				{ $terrain->add($points,(bool)($props['oneWay'] ?? false),(int)($props['collisionLayer'] ?? $collisionLayer)); }
 			}
 		} }
 		return $terrain;

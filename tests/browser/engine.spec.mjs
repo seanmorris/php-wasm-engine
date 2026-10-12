@@ -72,7 +72,7 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
   for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
   expect(result.error).toBe(0);
 });
-for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
+for(const scene of ['platformer','loop','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();
   await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-frames')),{timeout:60000}).toBeGreaterThan(20);
@@ -95,5 +95,37 @@ for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP 
   }
   await page.screenshot({path:'test-results/'+scene+'.png',fullPage:true});
   await page.locator('#stop').click();await expect(page.locator('#start')).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test('the live loop switches routes, exits, and runs back through the other direction',async({page})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');await page.locator('#scene').selectOption('loop');await page.locator('#start').click();
+  const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
+  await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
+  await page.evaluate(()=>{
+    window.loopTrace=[];
+    new MutationObserver(()=>{
+      const body=JSON.parse(document.querySelector('canvas').dataset.body||'{}');
+      loopTrace.push(body);
+    }).observe(document.querySelector('canvas'),{attributes:true,attributeFilter:['data-body']});
+  });
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(async()=>(await body()).x,{timeout:20000,intervals:[50]}).toBeGreaterThan(1184);
+  await page.keyboard.up('ArrowRight');
+  const forward=await page.evaluate(()=>loopTrace.splice(0));
+  expect(forward.some(b=>b.y<250&&Math.abs(b.angle)>2.6)).toBe(true);
+  expect(forward.some(b=>b.y<300&&b.x<912&&b.collisionLayer===1)).toBe(true);
+  expect((await body()).collisionLayer).toBe(2);
+  await page.keyboard.down('ArrowLeft');
+  await expect.poll(async()=>(await body()).x,{timeout:20000,intervals:[50]}).toBeLessThan(640);
+  await page.keyboard.up('ArrowLeft');
+  const backward=await page.evaluate(()=>loopTrace);
+  expect(backward.some(b=>b.y<250&&Math.abs(b.angle)>2.6)).toBe(true);
+  expect(backward.some(b=>b.y<300&&b.x>880&&b.collisionLayer===2)).toBe(true);
+  expect((await body()).collisionLayer).toBe(1);
+  await page.keyboard.press('r');
+  await expect.poll(async()=>Math.abs((await body()).x-80),{intervals:[50]}).toBeLessThan(1);
+  await page.locator('#stop').click();
   expect(errors).toEqual([]);
 });

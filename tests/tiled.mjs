@@ -46,7 +46,8 @@ function objects(before,after) {
     const imported=after[index];
     assert.equal(imported.visible,object.visible??true);
     assert.equal(imported.type??imported.class??'',object.type??object.class??'');
-    for(const key of ['id','x','y','width','height','rotation','polygon','polyline','point']) {
+    assert.deepEqual(properties(imported.properties),properties(object.properties));
+    for(const key of ['id','name','gid','x','y','width','height','rotation','polygon','polyline','point']) {
       if(key in object) assert.deepEqual(imported[key],object[key],key);
     }
   });

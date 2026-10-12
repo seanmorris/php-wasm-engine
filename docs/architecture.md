@@ -53,7 +53,11 @@ Platformer::sweep uses castBody for horizontal, vertical, and diagonal movement,
 
 Platformer::adhere casts two short inward rays for surface height and angle. Platformer::stand checks head clearance. Platformer::climb probes the wall's end. Grounded movement updates its tangent in increments of at most four pixels, capped at 1024 increments per step. Each increment still uses a continuous cast.
 
-Bodies must start outside solid geometry; terrain stays static during a step. Matching opposite tile edges cancel during construction. Arbitrary intersecting polygons are not boolean-unioned.
+Bodies must start outside solid geometry; terrain stays static during a step. Matching opposite tile edges are linked during construction and cancel during a query when both neighbors belong to active collision layers. Arbitrary intersecting polygons are not boolean-unioned.
+
+Each body selects one positive collision layer in addition to shared layer 0. MapTerrain reads layer properties or Collision N names and creates nonsolid LayerSwitch regions from Tiled objects. Platformer compares continuous body casts with continuous gate crossings, processes the earliest event, and recasts remaining motion after changing planes. Gates do not consume the terrain-contact budget. Destination occupancy and oriented-body intersection checks reject newly solid geometry before a switch; blocked gates retry while overlapping. Adhesion, standing, jump-platform and climbing probes all use the body's selected plane.
+
+The [loop guide](loops.md) analyzes moving-boxes-2's big-loop tileset, its shared crown and two selectable halves, and its three directional gates. The PHP implementation uses original procedural tiles with polygon collision metadata, tangent-speed routing at the ceiling, airborne crown-gate behavior, and swept triggers. Rendering remains independent of collision selection. The demo anchors sprites along the rotated body normal so their feet stay on the loop surface.
 
 ## Ownership and limits
 

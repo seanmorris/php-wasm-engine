@@ -234,6 +234,7 @@ test('flight has a finite budget and glide can catch a wall and jump away', func
 });
 
 require __DIR__.'/physics.php';
+require __DIR__.'/loops.php';
 require __DIR__.'/integration.php';
 require __DIR__.'/sprites.php';
 require __DIR__.'/parallax.php';

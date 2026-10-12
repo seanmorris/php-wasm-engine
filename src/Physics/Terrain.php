@@ -5,13 +5,16 @@ namespace PhpWasmEngine\Physics;
 /** Segment broadphase plus exact ray/segment intersection. Polygons may be concave. */
 final class Terrain
 {
-	private array $segments = [], $grid = [], $edges = [];
+	private array $segments = [], $grid = [], $edges = [], $opposites = [];
+	private array $polygons = [], $polygonGrid = [], $switches = [];
 	public int $raycasts = 0;
 	public function __construct(array $shapes = [],private int $cellSize = 64)
 	{ foreach($shapes as $shape)
-	{ $this->add($shape['points'],$shape['oneWay'] ?? false); } }
-	public function add(array $points,bool $oneWay = false): void
+	{ $this->add($shape['points'],$shape['oneWay'] ?? false,$shape['collisionLayer'] ?? 0); } }
+	public function add(array $points,bool $oneWay = false,int $collisionLayer = 0): void
 	{
+		if($collisionLayer < 0)
+		{ throw new \InvalidArgumentException('Collision layers must be nonnegative'); }
 		$count = count($points);
 		if($count < 2)
 		{ return; }
@@ -22,6 +25,16 @@ final class Terrain
 		$area += $x * $v - $u * $y; }
 		if($count > 2 && $area < 0)
 		{ $points = array_reverse($points); }
+		if($count > 2 && !$oneWay)
+		{
+			$id = count($this->polygons);
+			$this->polygons[] = [$points,$collisionLayer];
+			$xs = array_column($points,0);
+			$ys = array_column($points,1);
+			for($cy = (int)floor(min($ys) / $this->cellSize);$cy <= (int)floor(max($ys) / $this->cellSize);$cy++)
+			{ for($cx = (int)floor(min($xs) / $this->cellSize);$cx <= (int)floor(max($xs) / $this->cellSize);$cx++)
+			{ $this->polygonGrid["$cx,$cy"][] = $id; } }
+		}
 		$edges = $count === 2?1:$count;
 		for($i = 0;$i < $edges;$i++)
 		{
@@ -38,24 +51,122 @@ final class Terrain
 			{ continue; }
 			$key = json_encode([$x + 0.0,$y + 0.0,$u + 0.0,$v + 0.0]);
 			$reverse = json_encode([$u + 0.0,$v + 0.0,$x + 0.0,$y + 0.0]);
-			if(!$oneWay && isset($this->edges[$reverse]))
-			{
-				$this->segments[$this->edges[$reverse]] = null;
-				unset($this->edges[$reverse]);
-				continue;
-			}
 			$id = count($this->segments);
-			$this->segments[] = [$x,$y,$u,$v,$nx,$ny,$oneWay];
+			$this->segments[] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer];
 			if(!$oneWay)
-			{ $this->edges[$key] = $id; }
+			{
+				// A common edge cancels against an active neighbor, never an inactive plane.
+				foreach($this->edges[$reverse] ?? [] as $other)
+				{ $this->opposites[$id][] = $other;
+				$this->opposites[$other][] = $id; }
+				$this->edges[$key][] = $id;
+			}
 			for($cy = (int)floor(min($y,$v) / $this->cellSize);$cy <= (int)floor(max($y,$v) / $this->cellSize);$cy++)
 			{
 				for($cx = (int)floor(min($x,$u) / $this->cellSize);$cx <= (int)floor(max($x,$u) / $this->cellSize);$cx++)
 				{ $this->grid["$cx,$cy"][] = $id; } }
 		}
 	}
+	private function active(int $id,int $collisionLayer): bool
+	{
+		$plane = $this->segments[$id][7];
+		if($plane !== 0 && $plane !== $collisionLayer)
+		{ return false; }
+		foreach($this->opposites[$id] ?? [] as $other)
+		{ $plane = $this->segments[$other][7];
+		if($plane === 0 || $plane === $collisionLayer)
+		{ return false; } }
+		return true;
+	}
+	/** Occupancy of closed solid polygons. One-way surfaces have no solid interior. */
+	public function solidAt(float $x,float $y,int $collisionLayer = 1): bool
+	{
+		$cx = (int)floor($x / $this->cellSize);
+		$cy = (int)floor($y / $this->cellSize);
+		foreach($this->polygonGrid["$cx,$cy"] ?? [] as $id)
+		{
+			[$points,$plane] = $this->polygons[$id];
+			if($plane !== 0 && $plane !== $collisionLayer)
+			{ continue; }
+			$inside = false;
+			for($i = 0,$j = count($points) - 1;$i < count($points);$j = $i++)
+			{
+				[$ax,$ay] = $points[$i];
+				[$bx,$by] = $points[$j];
+				if(($ay > $y) !== ($by > $y) && $x < ($bx - $ax) * ($y - $ay) / ($by - $ay) + $ax)
+				{ $inside = !$inside; }
+			}
+			if($inside)
+			{ return true; }
+		}
+		return false;
+	}
+	public function addSwitch(LayerSwitch $switch): void { $this->switches[] = $switch; }
+	/** First eligible gate crossed by the body center, independent of object order. */
+	public function nextSwitch(Body $body,float $dx,float $dy,array $seen = []): ?array
+	{
+		$best = null;
+		foreach($this->switches as $id => $switch)
+		{
+			if(isset($seen[$id]) || $switch->target($body) === null)
+			{ continue; }
+			$t = $switch->crossing($body->x,$body->y,$dx,$dy);
+			if($t !== null && ($best === null || $t < $best['t']))
+			{ $best = ['id' => $id,'t' => $t,'switch' => $switch]; }
+		}
+		return $best;
+	}
+	public function applySwitch(Body $body,LayerSwitch $switch): bool
+	{
+		$target = $switch->target($body);
+		if($target === null || !$this->canSwitch($body,$target))
+		{ return false; }
+		$body->collisionLayer = $target;
+		return true;
+	}
+	/** Reject newly solid geometry inside the body, including thin obstacles off center. */
+	private function canSwitch(Body $body,int $target): bool
+	{
+		if($this->solidAt($body->x,$body->y,$target))
+		{ return false; }
+		$extent = hypot($body->radius,$body->halfHeight);
+		$ca = cos($body->angle);
+		$sa = sin($body->angle);
+		$seen = [];
+		for($cy = (int)floor(($body->y - $extent) / $this->cellSize);$cy <= (int)floor(($body->y + $extent) / $this->cellSize);$cy++)
+		{ for($cx = (int)floor(($body->x - $extent) / $this->cellSize);$cx <= (int)floor(($body->x + $extent) / $this->cellSize);$cx++)
+		{ foreach($this->grid["$cx,$cy"] ?? [] as $id)
+		{
+			if(isset($seen[$id]))
+			{ continue; } $seen[$id] = true;
+			if(!$this->active($id,$target) || $this->active($id,$body->collisionLayer))
+			{ continue; }
+			[$ax,$ay,$bx,$by,,,$oneWay] = $this->segments[$id];
+			if($oneWay)
+			{ continue; }
+			$near = 0;
+			$far = 1;
+			foreach([[$ca,$sa,$body->radius],[-$sa,$ca,$body->halfHeight]] as [$ux,$uy,$radius])
+			{
+				$radius = max(0,$radius - .001);
+				$origin = ($ax - $body->x) * $ux + ($ay - $body->y) * $uy;
+				$delta = ($bx - $ax) * $ux + ($by - $ay) * $uy;
+				if(abs($delta) < 1e-10)
+				{ if(abs($origin) >= $radius)
+				{ $far = -INF;
+				break; } continue; }
+				$t0 = (-$radius - $origin) / $delta;
+				$t1 = ($radius - $origin) / $delta;
+				$near = max($near,min($t0,$t1));
+				$far = min($far,max($t0,$t1));
+			}
+			if($near < $far)
+			{ return false; }
+		} } }
+		return true;
+	}
 	/** Earliest front-facing hit over the WHOLE displacement, not just its endpoint. */
-	public function raycast(float $x,float $y,float $dx,float $dy,bool $ignoreOneWay = false): ?Hit
+	public function raycast(float $x,float $y,float $dx,float $dy,bool $ignoreOneWay = false,int $collisionLayer = 1): ?Hit
 	{
 		$this->raycasts++;
 		if(abs($dx) + abs($dy) < 1e-12)
@@ -79,7 +190,7 @@ final class Terrain
 			foreach([[$cx,$cy],[$cx - 1,$cy],[$cx,$cy - 1],[$cx - 1,$cy - 1]] as [$gx,$gy])
 			{ foreach($this->grid["$gx,$gy"] ?? [] as $id)
 			{
-				if(isset($seen[$id]) || !isset($this->segments[$id]))
+				if(isset($seen[$id]) || !$this->active($id,$collisionLayer))
 				{ continue; } $seen[$id] = true;
 				[$ax,$ay,$bx,$by,$nx,$ny,$oneWay] = $this->segments[$id];
 				if(($ignoreOneWay && $oneWay) || $dx * $nx + $dy * $ny >= -1e-9)
@@ -126,7 +237,7 @@ final class Terrain
 		{ for($gx = $minX;$gx <= $maxX;$gx++)
 		{ foreach($this->grid["$gx,$gy"] ?? [] as $id)
 		{
-			if(isset($seen[$id]) || !isset($this->segments[$id]))
+			if(isset($seen[$id]) || !$this->active($id,$body->collisionLayer))
 			{ continue; } $seen[$id] = true;
 			[$ax,$ay,$bx,$by,$nx,$ny,$oneWay] = $this->segments[$id];
 			if(($ignoreOneWay && $oneWay) || $dx * $nx + $dy * $ny >= -1e-8)
