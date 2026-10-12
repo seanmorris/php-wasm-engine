@@ -38,6 +38,8 @@ $engine->start(function() use ($engine,$device,$renderer,$stream,$camera,$canvas
 	$canvas->dataset->world = json_encode(['x' => $camera->x,'y' => $camera->y,'loaded' => $paths,'pending' => $pending,'errors' => $stream->errors,'draws' => $stats['draws']]);
 	$status->textContent = sprintf('Camera %.0f, %.0f · %d maps ready · %d pending · %d draws · %s',$camera->x,$camera->y,count($paths),count($pending),$stats['draws'],implode(', ',$paths));
 	if($stream->errors)
-	{ $status->textContent = 'Map download failed. Press X to retry. '.implode('; ',$stream->errors); }
+	{ $status->textContent = 'Map download failed. Press keyboard X or gamepad B / Circle to retry. '.implode('; ',$stream->errors); }
+	if($engine->userPaused)
+	{ $status->textContent = 'Paused. Press Start / Options or P to resume.'; }
 },function() use ($renderer,$stream) { $renderer->close();
 $stream->close(); },fn() => $renderer->restore());

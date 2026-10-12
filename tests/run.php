@@ -237,6 +237,7 @@ require __DIR__.'/physics.php';
 require __DIR__.'/integration.php';
 require __DIR__.'/parallax.php';
 require __DIR__.'/world.php';
+require __DIR__.'/input.php';
 
 $failed = 0;
 foreach($tests as $name => $fn)

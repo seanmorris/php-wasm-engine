@@ -66,6 +66,8 @@ $engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,
 	{
 		$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y,'grounded' => $body->grounded,'ability' => $body->ability,'speed' => $body->groundSpeed]);
 		$status->textContent = sprintf('%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts',$body->ability?:($body->grounded?'ground':'air'),$body->groundSpeed,$renderer->stats['draws'] + $sprites->draws,$renderer->stats['instances'],$renderer->stats['uploads'],$terrain->raycasts);
+		if($engine->userPaused)
+		{ $status->textContent = 'Paused. Press Start / Options or P to resume.'; }
 	}
 },function() use ($sprites,$renderer) { $sprites->close();
 $renderer->close(); },function() use ($renderer,$sprites) { $renderer->restore();

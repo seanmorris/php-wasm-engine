@@ -27,6 +27,8 @@ final class Engine
 	private $restore = null, $document = null, $visibility = null;
 	private int $generation;
 	public bool $paused = false;
+	public bool $userPaused = false;
+	private bool $pauseHeld = false;
 	public function __construct(public Device $device)
 	{
 		$this->entities = new Registry;
@@ -63,7 +65,20 @@ final class Engine
 		if($this->input->quit)
 		{ $this->stop();
 		return; }
-		$alpha = $this->clock->advance($elapsed,function($dt) { $this->controls->set($this->input->snapshot());
+		$pause = (bool)($this->input->snapshot()['pause'] ?? false);
+		if($pause && !$this->pauseHeld)
+		{
+			$this->userPaused = !$this->userPaused;
+			$elapsed = 0;
+			$this->controls->reset();
+			if(!$this->userPaused)
+			{ $this->input->reset(); }
+		}
+		$this->pauseHeld = $pause;
+		if($this->userPaused)
+		{ $elapsed = 0;
+		$this->input->consume(); }
+		$alpha = $this->clock->advance($elapsed,function($dt) { $this->controls->set($this->input->consume());
 		$this->systems->update($dt);
 		$this->time += $dt; });
 		$render($this,$alpha);
@@ -119,7 +134,8 @@ final class Engine
 		try
 		{ if($this->cleanup)
 		{ ($this->cleanup)(); } } finally
-		{ $this->device->close();
+		{ $this->input->close();
+		$this->device->close();
 		$this->frame = null;
 		$this->cleanup = null;
 		$this->restore = $this->visibility = $this->document = null;

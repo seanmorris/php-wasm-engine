@@ -14,7 +14,7 @@ final class Platformer
 		{ throw new \InvalidArgumentException('Invalid physics step'); }
 		$axis = $input->axis('left','right');
 		if($axis)
-		{ $b->facing = $axis; }
+		{ $b->facing = $axis <=> 0; }
 		$b->dropTimer = max(0,$b->dropTimer - $dt);
 		$b->jumpBuffer = max(0,$b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0,$b->coyote - $dt);

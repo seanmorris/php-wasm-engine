@@ -12,12 +12,15 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/actor/Sonic.js: charge dash and landing-triggered drop dash.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
+- moving-boxes-2/app/controller/Controller.js, Axis.js, and GamepadConfig.js: left-stick/D-pad movement, A jump, B dash actions, Start pause, and a proportional 20% stick dead zone.
 
 The PHP implementation has its own data model, solver, units, control state, and renderer. Original actors, framework integration, combat, powerups, and artwork are not included.
 
 ## PHP and browser boundaries
 
 Asset, Tiled, Ecs, FixedStep, Controls, and Physics are ordinary PHP. Render and SdlInput call php-sdl-wasm extensions. Engine uses vrzno for frame scheduling and cleanup. The demo's PHP code updates its DOM status through vrzno.
+
+Gamepads polls SDL controller handles by instance ID, detects connection changes, and releases detached handles. SDL handles browser Gamepad API access and device mappings. SdlInput merges keyboard and gamepad strengths; Controls retains press/release edges for fixed simulation steps. Individual pad axes and buttons remain available for custom bindings. Canvas focus listeners cover element blur, which does not produce an SDL window-focus event. Focus, visibility and graphics recovery suppress held gamepad controls until neutral. Start toggles simulation pause while polling and rendering continue. Engine closes input before SDL teardown.
 
 docs/bootstrap.mjs imports the runtime and mounts files. It contains no movement, map parsing, entity processing, or rendering logic. Optional zlib uses php-sdl-wasm's sharedLibs resolver.
 
