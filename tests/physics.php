@@ -19,16 +19,22 @@ test('down-jump never drops through an ordinary solid floor', function() {
 });
 
 test('raycasts return the earliest wall across negative spatial cells', function() {
-	$terrain = new Terrain([['points' => [[-80,-20],[-79,-20],[-79,20],[-80,20]]]
-	, ['points' => [[30
-		, -20]
-		, [31,-20],[31,20],[30,20]]]]);
+	$terrain = new Terrain(
+		[['points' => [[-80,-20],[-79,-20],[-79,20],[-80,20]]]
+		, ['points' => [[30, -20], [31,-20]
+		, [
+			31,20
+		]
+		, [30,20]
+		]]]
+	);
 	$hit = $terrain->raycast(-200, 0, 400, 0);
 	check($hit !== null);
 	near($hit->x, -80);
 	near($hit->t, .3);
 	check($terrain->raycast(-200, 40, 400, 0) === null);
 });
+
 test('continuous body casts catch subpixel obstacles between sensor positions', function() {
 	$terrain = new Terrain([['points' => [[50,1.25],[50.1,1.25],[50.1,1.5],[50,1.5]]]]);
 	$body = new Body(0, 0);
@@ -41,6 +47,7 @@ test('continuous body casts catch subpixel obstacles between sensor positions', 
 	tick($p, $body);
 	check($body->x + $body->radius <= 50.001);
 });
+
 test('fast upward and diagonal sweeps hit thin ceilings and corners', function() {
 	$terrain = new Terrain([['points' => [[-100,-101],[100,-101],[100,-100],[-100,-100]]]]);
 	$p = new Platformer($terrain);
@@ -52,6 +59,7 @@ test('fast upward and diagonal sweeps hit thin ceilings and corners', function()
 	$terrain = new Terrain([['points' => [[50,50],[50.1,50],[50.1,50.1],[50,50.1]]]]);
 	check($terrain->castBody(new Body, 1000, 1000) !== null);
 });
+
 test('shared tile edges do not form invisible walls', function() {
 	$loader = new Loader;
 	$map = $loader->map(dirname(__DIR__).'/examples/assets/infinite.tmj');
@@ -63,16 +71,18 @@ test('shared tile edges do not form invisible walls', function() {
 	check($body->grounded && $body->x > 500);
 	near($body->y + $body->halfHeight, 448, .01);
 });
+
 test('surface attachment follows a full loop and releases at low speed', function() {
 	$terrain = new Terrain;
+
 	for($i = 0; $i < 128; $i++)
 	{
 		$a = M_PI / 2 - $i * M_PI / 64;
 		$b = M_PI / 2 - ($i + 1) * M_PI / 64;
-		$terrain->add([[300 + cos($a) * 160,300 + sin($a) * 160]
-		, [300 + cos($b) * 160
-		, 300 + sin(
-			$b) * 160]]);
+
+		$terrain->add(
+			[[300 + cos($a) * 160,300 + sin($a) * 160], [300 + cos($b) * 160, 300 + sin($b) * 160]]
+		);
 	}
 	$p = new Platformer($terrain);
 	$body = new Body(300, 442);
@@ -83,6 +93,7 @@ test('surface attachment follows a full loop and releases at low speed', functio
 	$minX = 1000;
 	$maxX = -1000;
 	$angle = 0;
+
 	for($i = 0; $i < 60; $i++)
 	{
 		tick($p, $body);
@@ -99,6 +110,7 @@ test('surface attachment follows a full loop and releases at low speed', functio
 	tick($p, $body);
 	check(!$body->grounded && $body->vy > 0);
 });
+
 test('jump impulse follows the surface normal and preserves tangent momentum', function() {
 	$body = new Body(0, 0);
 	$body->grounded = true;

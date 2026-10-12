@@ -77,44 +77,55 @@ final class Engine
 			$this->pause();
 			return;
 		}
+
 		if($this->paused || $this->generation !== $this->device->generation)
 		{
 			$elapsed = 0;
 			$this->input->reset();
 			$this->controls->reset();
 		}
+
 		if($this->generation !== $this->device->generation)
 		{
 			if($this->restore)
 			{
 				($this->restore)();
 			}
+
 			$this->generation = $this->device->generation;
 		}
+
 		$this->paused = false;
 		$this->input->poll();
+
 		if($this->input->quit)
 		{
 			$this->stop();
 			return;
 		}
+
 		$pause = (bool)($this->input->snapshot()['pause'] ?? false);
+
 		if($pause && !$this->pauseHeld)
 		{
 			$this->userPaused = !$this->userPaused;
 			$elapsed = 0;
 			$this->controls->reset();
+
 			if(!$this->userPaused)
 			{
 				$this->input->reset();
 			}
 		}
+
 		$this->pauseHeld = $pause;
+
 		if($this->userPaused)
 		{
 			$elapsed = 0;
 			$this->input->consume();
 		}
+
 		$alpha = $this->clock->advance($elapsed,
 			/**
 			 * Consume buffered input and advance systems for one fixed simulation step.
@@ -126,7 +137,8 @@ final class Engine
 				$this->controls->set($this->input->consume());
 				$this->systems->update($dt);
 				$this->time += $dt;
-		});
+			}
+		);
 		$render($this, $alpha);
 	}
 
@@ -148,11 +160,14 @@ final class Engine
 		{
 			return;
 		}
+
 		if(!function_exists('vrzno_env'))
 		{
 			throw new \RuntimeException(
-				'Browser scheduling requires vrzno; native hosts can call tick()');
+				'Browser scheduling requires vrzno; native hosts can call tick()'
+			);
 		}
+
 		$this->window = new \Vrzno;
 		$this->cleanup = $cleanup;
 		$this->restore = $restore;
@@ -180,8 +195,10 @@ final class Engine
 				{
 					return;
 				}
+
 				$elapsed = $this->previous === null?0:($now - $this->previous) / 1000;
 				$this->previous = $now;
+
 				try
 				{
 					$this->tick(max(0, $elapsed), $render);
@@ -194,8 +211,10 @@ final class Engine
 						$this->stop();
 						throw $error;
 					}
+
 					$this->pause();
 				}
+
 				if($this->running)
 				{
 					$this->raf = $this->window->requestAnimationFrame($this->frame);
@@ -209,10 +228,12 @@ final class Engine
 			 * @return null Releases frame listeners, input, and graphics ownership.
 			 */
 			fn() => $this->stop();
+
 		if($this->refresh)
 		{
 			$this->refresh->add($this->refreshCleanup);
 		}
+
 		$this->raf = $this->window->requestAnimationFrame($this->frame);
 	}
 
@@ -227,19 +248,24 @@ final class Engine
 		{
 			return;
 		}
+
 		$this->running = false;
+
 		if($this->raf !== null && $this->window)
 		{
 			$this->window->cancelAnimationFrame($this->raf);
 		}
+
 		if($this->refresh)
 		{
 			$this->refresh->delete($this->refreshCleanup);
 		}
+
 		if($this->document)
 		{
 			$this->document->removeEventListener('visibilitychange', $this->visibility);
 		}
+
 		try
 		{
 			if($this->cleanup)

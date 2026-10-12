@@ -20,6 +20,7 @@ test('controls retain proportional input and button edges across fixed steps', f
 	near($input->axis('left', 'right'), 0);
 	check(!$input->released('jump'));
 });
+
 test('partial stick movement preserves integer facing and proportional acceleration', function() {
 	$movement = new Platformer(new Terrain);
 	$body = new Body(0, 0);

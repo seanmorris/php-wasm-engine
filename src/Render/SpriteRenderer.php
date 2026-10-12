@@ -17,8 +17,10 @@ final class SpriteRenderer
 	 */
 	public function __construct(public Atlas $atlas)
 	{
-		$this->program = new Program(file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.frag'));
+		$this->program = new Program(
+			file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.vert')
+			, file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.frag')
+		);
 		$this->create();
 	}
 
@@ -33,6 +35,7 @@ final class SpriteRenderer
 		glBindVertexArray($this->vao[0]);
 		glGenBuffers(1, $this->buffers);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
+
 		for($i = 0; $i < 4; $i++)
 		{
 			glVertexAttribPointer($i, 4, GL_FLOAT, false, 64, $i * 16);
@@ -55,23 +58,42 @@ final class SpriteRenderer
 	public function render(array $sprites, Camera $camera, float $milliseconds = 0): void
 	{
 		$this->draws = 0;
+
 		if(!$sprites)
 		{
 			return;
 		}
+
 		$bytes = '';
+
 		foreach($sprites as $sprite)
 		{
 			$gid = $this->atlas->map->animatedGid($sprite->gid, $milliseconds + $sprite->time);
+
 			$rect = $this->atlas->rects[$gid] ?? throw new \OutOfBoundsException(
-				"Sprite GID $gid is missing");
-			$bytes .= pack('f*', $sprite->x, $sprite->y, $rect[2] * $sprite->scaleX, $rect[
-				3] * $sprite
-				->scaleY, ...$rect);
-			$bytes .= pack('f*', $sprite->originX, $sprite->originY, $sprite->rotation, ($sprite
-				->flipX?1:0) | ($sprite->flipY?2:0), $sprite->tint[0], $sprite->tint[1], $sprite
-					->tint[
-				2], $sprite->tint[3] * $sprite->opacity);
+				"Sprite GID $gid is missing"
+			);
+
+			$bytes .= pack(
+				'f*'
+				, $sprite->x
+				, $sprite->y
+				, $rect[2] * $sprite->scaleX
+				, $rect[3] * $sprite->scaleY
+				, ...$rect
+			);
+
+			$bytes .= pack(
+				'f*'
+				, $sprite->originX
+				, $sprite->originY
+				, $sprite->rotation
+				, ($sprite->flipX?1:0) | ($sprite->flipY?2:0)
+				, $sprite->tint[0]
+				, $sprite->tint[1]
+				, $sprite->tint[2]
+				, $sprite->tint[3] * $sprite->opacity
+			);
 		}
 		$p = $this->program;
 		$p->use();
@@ -100,6 +122,7 @@ final class SpriteRenderer
 		{
 			return;
 		}
+
 		$this->release();
 		$this->program->restore();
 		$this->create();
@@ -116,6 +139,7 @@ final class SpriteRenderer
 		{
 			return;
 		}
+
 		$this->closed = true;
 		$this->release();
 		$this->program->close();
@@ -132,10 +156,12 @@ final class SpriteRenderer
 		{
 			glDeleteBuffers(1, $this->buffers);
 		}
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
+
 		$this->buffers = $this->vao = [];
 	}
 }

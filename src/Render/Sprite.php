@@ -20,6 +20,7 @@ final class Sprite
 	 * @return void Initializes the sprite with unit scale, full opacity, and no rotation or flips.
 	 */
 	public function __construct(public int $gid, public float $x = 0, public float $y = 0
-		, public float $originX = .5, public float $originY = 1){
+		, public float $originX = .5, public float $originY = 1
+	){
 	}
 }

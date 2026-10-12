@@ -15,10 +15,12 @@ use PhpWasmEngine\Render\
 
 $scene = vrzno_env('scene')?:'platformer';
 $profile = vrzno_env('profile')?:'runner';
+
 if(!in_array($scene, ['platformer','loop','infinite','isometric'], true))
 {
 	throw new InvalidArgumentException('Invalid scene');
 }
+
 $loader = new Loader;
 $map = $loader->map(__DIR__.'/assets/'.$scene.'.tmj');
 $device = new Device;
@@ -28,21 +30,27 @@ $sprites = new SpriteRenderer($renderer->atlas);
 $terrain = MapTerrain::build($map);
 $movement = new Platformer($terrain);
 $body = new Body(80, 100, $profile);
+
 // The demo PNG has two transparent rows below the visible soles.
-$entity = $engine->entities->create($body, new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][
-	$profile], originY: 30 / 32));
+$entity = $engine->entities->create(
+	$body
+	, new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][$profile], originY: 30 / 32)
+);
 $camera = new Camera(0, 0, 960, 540);
 $browser = new Vrzno;
 $canvas = vrzno_env('canvas');
 $status = $browser->document->querySelector('#status');
+
 $engine->systems->add('movement', function($entities, $dt) use ($engine, $movement, $body, $scene
-	, $camera) {
+	, $camera
+) {
 	if($scene === 'isometric')
 	{
 		$camera->x += $engine->controls->axis('left', 'right') * 300 * $dt;
 		$camera->y += $engine->controls->axis('up', 'down') * 300 * $dt;
 		return;
 	}
+
 	if($body->y > 1200 || $engine->controls->pressed('reset'))
 	{
 		$body->x = 80;
@@ -53,21 +61,28 @@ $engine->systems->add('movement', function($entities, $dt) use ($engine, $moveme
 		$body->grounded = false;
 		$body->ability = '';
 	}
+
 	$movement->step($body, $engine->controls, $dt);
 	$camera->follow($body->x, $body->y, $dt);
 	$camera->y = min(120, $camera->y);
-});
+}
+);
+
 if($scene === 'isometric')
 {
 	$camera->x = -160;
 	$camera->y = -80;
 }
+
 $frames = 0;
+
 $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $entity, $camera
 	, $canvas
-	, $status, $terrain, $scene, &$frames) {
+	, $status, $terrain, $scene, &$frames
+) {
 	$device->begin();
 	$renderer->render($camera, $engine->time * 1000);
+
 	if($scene !== 'isometric')
 	{
 		$sprite = $engine->entities->get($entity, Sprite::class);
@@ -78,16 +93,22 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 		$sprite->scaleY = $body->rolling?.7:1;
 		$sprites->render([$sprite], $camera, $engine->time * 1000);
 	}
+
 	$device->present();
 	$frames++;
 	$canvas->dataset->frames = (string)$frames;
-	$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y
-	, 'grounded' => $body
-		->grounded
+
+	$canvas->dataset->body = json_encode(
+		['x' => $body->x
+		, 'y' => $body->y
+		, 'grounded' => $body->grounded
 		, 'ability' => $body->ability
-		, 'speed' => $body->groundSpeed
-		, 'angle' => $body->angle
-		, 'collisionLayer' => $body->collisionLayer]);
+			, 'speed' => $body->groundSpeed, 'angle' => $body->angle
+			, 'collisionLayer' => $body
+			->collisionLayer
+		]
+	);
+
 	if($frames % 10 === 0)
 	{
 		$status->textContent = sprintf(
@@ -97,11 +118,14 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 			, $renderer->stats['draws'] + $sprites->draws
 			, $renderer->stats['instances']
 			, $renderer->stats['uploads']
-			, $terrain->raycasts);
+			, $terrain->raycasts
+		);
+
 		if($scene === 'loop')
 		{
 			$status->textContent .= ' · collision layer '.$body->collisionLayer;
 		}
+
 		if($engine->userPaused)
 		{
 			$status->textContent = 'Paused. Press Start / Options or P to resume.';

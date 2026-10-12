@@ -57,6 +57,7 @@ final class Layer
 	public function set(int $x, int $y, $gid): void
 	{
 		$gid = $gid instanceof Gid?$gid:Gid::from($gid);
+
 		foreach($this->chunks as $chunk)
 		{
 			if($chunk->contains($x, $y))

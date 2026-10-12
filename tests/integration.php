@@ -14,6 +14,7 @@ test('sprite sheets expose Tiled classes as named animations', function() {
 	check($sheet->map->animatedGid(5, 180) === 6);
 	rejects(fn() => $sheet->sprite('missing'));
 });
+
 test('object factories produce PHP components at world positions', function() {
 	$loader = new Loader;
 	$map = $loader->map(dirname(__DIR__).'/examples/assets/platformer.tmj');
@@ -24,11 +25,18 @@ test('object factories produce PHP components at world positions', function() {
 	$entities = $spawner->spawn($map, $registry);
 	near($registry->get($entities[1], Body::class)->x, -20);
 });
+
 test('asset paths normalize parent segments and preserve URL authorities', function() {
 	check(Assets::relative('/assets/maps/a.tmj', '../tiles/b.tsj') === '/assets/tiles/b.tsj');
-	check(Assets::relative('https://example.test/maps/a.tmj'
-		, '../tiles/b.tsj') === 'https://example.test/tiles/b.tsj');
+
+	check(
+		Assets::relative(
+			'https://example.test/maps/a.tmj'
+			, '../tiles/b.tsj'
+		) === 'https://example.test/tiles/b.tsj'
+	);
 });
+
 test('asset read failures can be retried and unsupported formats fail explicitly', function() {
 	$tries = 0;
 	$assets = new Assets(function() use (&$tries) { return ++$tries === 1?false:'{}'; });

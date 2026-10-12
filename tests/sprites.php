@@ -36,10 +36,13 @@ test(
 		$sprite = $sheet->sprite('idle');
 		$other = $sheet->sprite('idle');
 
-		$frame = fn($sprite, $time) => $sheet->map->animatedGid($sprite->gid, $time + $sprite
-			->time);
+		$frame = fn($sprite, $time) => $sheet->map->animatedGid(
+			$sprite->gid
+			, $time + $sprite->time
+		);
 		check($sheet->play($sprite, 'run', 1000.5));
 		check($sheet->play($other, 'run', 1050.5));
+
 		foreach([[1000.5,1],[1100.49,1],[1100.5,2],[1300.49,2],[1300.5,1]] as [$time,$gid])
 		{
 			check(!$sheet->play($sprite, 'run', $time));
@@ -59,7 +62,8 @@ test(
 		check($sheet->play($sprite, '3', 1600));
 		check($frame($sprite, 1600) === 4, 'unnamed tiles remain selectable by local ID');
 		near($other->time, -1050.5);
-});
+	}
+);
 
 test('invalid animation requests leave sprite playback unchanged', function() {
 	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
@@ -68,6 +72,7 @@ test('invalid animation requests leave sprite playback unchanged', function() {
 	$before = get_object_vars($sprite);
 	rejects(fn() => $sheet->play($sprite, 'missing', 1200));
 	check(get_object_vars($sprite) === $before);
+
 	foreach([INF,-INF,NAN] as $time)
 	{
 		rejects(fn() => $sheet->play($sprite, 'jump', $time));

@@ -26,8 +26,11 @@ final class MapRenderer
 	public function __construct(public TileMap $map)
 	{
 		$this->atlas = new Atlas($map);
-		$this->program = new Program(file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.frag'));
+
+		$this->program = new Program(
+			file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.vert')
+			, file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.frag')
+		);
 		$this->create();
 	}
 
@@ -44,6 +47,7 @@ final class MapRenderer
 		glBindVertexArray($this->vao[0]);
 		glGenBuffers(2, $this->buffers);
 		$cells = [];
+
 		for($y = 0; $y < 32; $y++)
 		{
 			for($x = 0; $x < 32; $x++)
@@ -51,6 +55,7 @@ final class MapRenderer
 				$cells[] = [$x,$y];
 			}
 		}
+
 		if($map->projection->orientation === 'isometric')
 		{
 			usort($cells,
@@ -61,11 +66,13 @@ final class MapRenderer
 				 * @param array{0:int,1:int} $b Second local tile column and row.
 				 * @return int Negative, zero, or positive comparison result for painter order.
 				 */
-				fn($a, $b) => ($a[0] + $a[1]) <=> ($b[0] + $b[1]) ?: $b[0] <=> $a[0]);
+				fn($a, $b) => ($a[0] + $a[1]) <=> ($b[0] + $b[1]) ?: $b[0] <=> $a[0]
+			);
 		}
 		else
 		{
 			$order = $map->data['renderorder'] ?? 'right-down';
+
 			usort($cells,
 				/**
 				 * Order orthogonal cells according to Tiled's configured render direction.
@@ -75,18 +82,25 @@ final class MapRenderer
 				 * @return int Negative, zero, or positive comparison result.
 				 */
 				fn($a, $b) => (($order === 'right-up' || $order === 'left-up'?-1:1) * ($a[1] <=> $b[
-					1])) ?: ((str_starts_with($order, 'left')?-1:1) * ($a[0] <=> $b[0])));
+					1
+				])) ?: ((str_starts_with($order, 'left')?-1:1) * ($a[0] <=> $b[0]))
+			);
 		}
+
 		$bytes = '';
 		$vertex = 0;
+
 		foreach($cells as [$x,$y])
 		{
 			$diagonal = $x + $y;
+
 			if(!isset($this->gridRanges[$diagonal]))
 			{
 				$this->gridRanges[$diagonal] = [$vertex,0];
 			}
+
 			$this->gridRanges[$diagonal][1] += 6;
+
 			foreach([[0,0],[1,0],[0,1],[0,1],[1,0],[1,1]] as [$u,$v])
 			{
 				$bytes .= pack('f*', $x, $y, $u, $v);
@@ -98,6 +112,7 @@ final class MapRenderer
 		glVertexAttribPointer(0, 4, GL_FLOAT, false, 16, 0);
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[1]);
+
 		for($i = 1; $i <= 3; $i++)
 		{
 			glVertexAttribPointer($i, 4, GL_FLOAT, false, 48, ($i - 1) * 16);
@@ -115,19 +130,25 @@ final class MapRenderer
 	private function encoded(Chunk $chunk): string
 	{
 		$bytes = str_repeat("\0", 32 * 32 * 4);
+
 		for($y = 0; $y < $chunk->height; $y++)
 		{
 			for($x = 0; $x < $chunk->width; $x++)
 			{
 				$gid = $chunk->gidAt($chunk->x + $x, $chunk->y + $y);
 				$index = $this->atlas->indices[$gid->id] ?? 0;
+
 				if($gid->id && !$index)
 				{
 					throw new \UnexpectedValueException("Unknown tile GID {$gid->id}");
 				}
-				$bytes = substr_replace($bytes, (new Gid($index, $gid->flags))->bytes(), (
-					$y * 32 + $x) * 4
-					, 4);
+
+				$bytes = substr_replace(
+					$bytes
+					, (new Gid($index, $gid->flags))->bytes()
+					, ($y * 32 + $x) * 4
+					, 4
+				);
 			}
 		}
 		return $bytes;
@@ -141,6 +162,7 @@ final class MapRenderer
 	private function sync(): void
 	{
 		$entries = [];
+
 		foreach($this->map->layers as $order => $layer)
 		{
 			foreach($layer->chunks as $chunk)
@@ -148,6 +170,7 @@ final class MapRenderer
 				$entries[] = [$layer,$chunk,$order];
 			}
 		}
+
 		$layout = array_map(
 			/**
 			 * Identify the layer, chunk, and painter index for layout-change detection.
@@ -158,7 +181,9 @@ final class MapRenderer
 			 * layer order.
 			 */
 			fn($entry) => [spl_object_id($entry[0]),spl_object_id($entry[1]),$entry[2]]
-			, $entries);
+			, $entries
+		);
+
 		if($layout !== $this->layout)
 		{
 			foreach($this->pages as $page)
@@ -167,6 +192,7 @@ final class MapRenderer
 			}
 			$this->pages = [];
 			$limit = min(256, glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS));
+
 			foreach(array_chunk($entries, $limit) as $group)
 			{
 				$texture = Atlas::texture(GL_TEXTURE_2D_ARRAY);
@@ -175,15 +201,28 @@ final class MapRenderer
 			}
 			$this->layout = $layout;
 		}
+
 		foreach($this->pages as &$page)
 		{
 			glBindTexture(GL_TEXTURE_2D_ARRAY, $page['texture']);
+
 			foreach($page['entries'] as $slice => [$layer,$chunk])
 			{
 				if(($page['revisions'][$slice] ?? -1) !== $chunk->revision)
 				{
-					glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, $slice, 32, 32, 1, GL_RGBA_INTEGER
-						, GL_UNSIGNED_BYTE, $this->encoded($chunk));
+					glTexSubImage3D(
+						GL_TEXTURE_2D_ARRAY
+						, 0
+						, 0
+						, 0
+						, $slice
+						, 32
+						, 32
+						, 1
+						, GL_RGBA_INTEGER
+						, GL_UNSIGNED_BYTE
+						, $this->encoded($chunk)
+					);
 					$page['revisions'][$slice] = $chunk->revision;
 					$this->stats['uploads']++;
 				}
@@ -206,13 +245,19 @@ final class MapRenderer
 		{
 			return false;
 		}
+
 		$points = [];
+
 		foreach([[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
 		, [$chunk->x
 		, $chunk
-			->y + $chunk->height]
-			, [$chunk->x + $chunk->width,$chunk->y + $chunk->height]] as [$x
-				, $y]){
+			->y + $chunk->height
+		]
+			, [$chunk->x + $chunk->width,$chunk->y + $chunk->height]
+		] as [$x
+			, $y
+		]
+		){
 			$points[] = $this->map->projection->project($x, $y);
 		}
 		$xs = array_column($points, 0);
@@ -239,10 +284,18 @@ final class MapRenderer
 	 */
 	private function instance($layer, Chunk $chunk, int $slice): string
 	{
-		return pack('f*', $chunk->x, $chunk->y, $slice, $layer->opacity, $layer->offsetX, $layer
-			->offsetY
-			, $layer
-			->parallaxX, $layer->parallaxY, ...$layer->tint);
+		return pack(
+			'f*'
+			, $chunk->x
+			, $chunk->y
+			, $slice
+			, $layer->opacity
+			, $layer->offsetX
+			, $layer->offsetY
+			, $layer->parallaxX
+			, $layer->parallaxY
+			, ...$layer->tint
+		);
 	}
 
 	/**
@@ -279,7 +332,8 @@ final class MapRenderer
 	 * @return void Updates this call's draw, instance, and tile-upload statistics.
 	 */
 	public function render(Camera $camera, float $milliseconds = 0, int $startLayer = 0
-		, ?int $endLayer = null, bool $anchoredImages = true): void
+		, ?int $endLayer = null, bool $anchoredImages = true
+	): void
 	{
 		$endLayer ??= count($this->map->layers);
 		$this->stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
@@ -287,31 +341,39 @@ final class MapRenderer
 		$this->atlas->animate($milliseconds);
 		$start = $startLayer;
 		$prepared = false;
+
 		if($this->images !== null)
 		{
 			$this->images->draws = $this->images->uploads = 0;
 		}
+
 		foreach($this->map->layers as $order => $layer)
 		{
 			if($order < $startLayer || $order >= $endLayer || $layer->type !== 'imagelayer'
-				|| !$layer->visible || $layer->opacity <= 0){
+				|| !$layer->visible || $layer->opacity <= 0
+			){
 				continue;
 			}
+
 			if(!$anchoredImages && isset($layer->properties['from']))
 			{
 				continue;
 			}
+
 			if(!$prepared)
 			{
 				$this->images ??= new ImageRenderer($this->map);
 				$this->images->prepare($milliseconds);
 				$prepared = true;
 			}
+
 			$this->renderTiles($camera, $start, $order);
+
 			if($this->images->renderLayer($layer, $camera, $milliseconds))
 			{
 				$this->stats['draws']++;
 			}
+
 			$start = $order + 1;
 		}
 		$this->renderTiles($camera, $start, $endLayer);
@@ -331,6 +393,7 @@ final class MapRenderer
 		{
 			return;
 		}
+
 		$p = $this->program;
 		$p->use();
 		glBindVertexArray($this->vao[0]);
@@ -341,23 +404,36 @@ final class MapRenderer
 		glBindTexture(GL_TEXTURE_2D, $this->atlas->metadata);
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, $this->atlas->texture);
-		glUniform2f($p->location('tileSize'), $this->map->projection->tileWidth, $this->map
-			->projection->tileHeight);
+
+		glUniform2f(
+			$p->location('tileSize')
+			, $this->map->projection->tileWidth
+			, $this->map->projection->tileHeight
+		);
 		glUniform2f($p->location('mapOrigin'), $this->map->x, $this->map->y);
 		glUniform2f($p->location('camera'), $camera->x, $camera->y);
 		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
 		glUniform1f($p->location('zoom'), $camera->zoom);
-		glUniform2f($p->location('parallaxOrigin'), $this->map->x + ($this->map->data[
-			'parallaxoriginx'] ?? 0), $this->map->y + ($this->map->data['parallaxoriginy'] ?? 0));
+
+		glUniform2f(
+			$p->location('parallaxOrigin')
+			, $this->map->x + ($this->map->data['parallaxoriginx'] ?? 0)
+			, $this->map->y + ($this->map->data['parallaxoriginy'] ?? 0)
+		);
 		$iso = $this->map->projection->orientation === 'isometric';
 		glUniform1i($p->location('isometric'), $iso?1:0);
-		glUniform1f($p->location('isoOrigin'), $this->map->projection->mapHeight * $this->map
-			->projection->tileWidth / 2);
+
+		glUniform1f(
+			$p->location('isoOrigin')
+			, $this->map->projection->mapHeight * $this->map->projection->tileWidth / 2
+		);
+
 		if(!$iso)
 		{
 			foreach($this->pages as $page)
 			{
 				$instances = '';
+
 				foreach($page['entries'] as $slice => [$layer,$chunk,$order])
 				{
 					if($order >= $start && $order < $end && $this->visible($layer, $chunk, $camera))
@@ -365,6 +441,7 @@ final class MapRenderer
 						$instances .= $this->instance($layer, $chunk, $slice);
 					}
 				}
+
 				if($instances !== '')
 				{
 					$this->draw($page['texture'], $instances);
@@ -375,6 +452,7 @@ final class MapRenderer
 			// Merge chunk diagonals in world tile order so tall tiles at chunk seams
 			// blend correctly. Matching slices still share an instanced draw.
 			$commands = [];
+
 			foreach($this->pages as $page)
 			{
 				foreach($page['entries'] as $slice => [$layer,$chunk,$order])
@@ -387,14 +465,18 @@ final class MapRenderer
 							{
 								continue;
 							}
+
 							$commands[] = [$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x
 							, $page[
-								'texture']
-								, $first,$count,$this->instance($layer, $chunk, $slice)];
+								'texture'
+							]
+								, $first,$count,$this->instance($layer, $chunk, $slice)
+							];
 						}
 					}
 				}
 			}
+
 			usort($commands,
 				/**
 				 * Sort isometric draw commands by layer, world diagonal, and horizontal tie-break.
@@ -406,25 +488,31 @@ final class MapRenderer
 				 * @return int Negative, zero, or positive comparison result preserving painter
 				 * order.
 				 */
-				fn($a, $b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]);
+				fn($a, $b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]
+			);
 			$key = null;
 			$instances = '';
+
 			foreach($commands as $command)
 			{
 				$next = [$command[3],$command[4],$command[5]];
+
 				if($key !== null && $next !== $key)
 				{
 					$this->draw($key[0], $instances, $key[1], $key[2]);
 					$instances = '';
 				}
+
 				$key = $next;
 				$instances .= $command[6];
 			}
+
 			if($key !== null)
 			{
 				$this->draw($key[0], $instances, $key[1], $key[2]);
 			}
 		}
+
 		glBindVertexArray(0);
 	}
 
@@ -439,6 +527,7 @@ final class MapRenderer
 		{
 			return;
 		}
+
 		$this->release();
 		$this->program->restore();
 		$this->atlas->restore();
@@ -457,6 +546,7 @@ final class MapRenderer
 		{
 			return;
 		}
+
 		$this->closed = true;
 		$this->release();
 		$this->program->close();
@@ -475,14 +565,17 @@ final class MapRenderer
 		{
 			glDeleteTextures(1, [$page['texture']]);
 		}
+
 		if($this->buffers)
 		{
 			glDeleteBuffers(count($this->buffers), $this->buffers);
 		}
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
+
 		$this->pages = $this->buffers = $this->vao = $this->gridRanges = $this->layout = [];
 	}
 }

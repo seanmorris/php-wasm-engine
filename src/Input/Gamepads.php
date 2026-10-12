@@ -18,6 +18,7 @@ final class Gamepads
 	public function __construct(float $deadZone = .2)
 	{
 		$this->setDeadZone($deadZone);
+
 		if(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) !== 0)
 		{
 			throw new \RuntimeException(SDL_GetError());
@@ -36,6 +37,7 @@ final class Gamepads
 		{
 			throw new \InvalidArgumentException('The stick dead zone must be in [0, 1)');
 		}
+
 		$this->deadZone = $deadZone;
 	}
 
@@ -57,60 +59,78 @@ final class Gamepads
 		{
 			return;
 		}
+
 		SDL_GameControllerUpdate();
+
 		foreach($this->handles as $id => $handle)
 		{
 			if(SDL_GameControllerGetAttached($handle))
 			{
 				continue;
 			}
+
 			SDL_GameControllerClose($handle);
 			unset($this->handles[$id], $this->axes[$id], $this->buttons[$id], $this->blockedAxes[
-				$id]
-				, $this->blockedButtons[$id]);
+				$id
+			]
+				, $this->blockedButtons[$id]
+			);
 		}
+
 		for($index = 0, $count = SDL_NumJoysticks(); $index < $count; $index++)
 		{
 			$id = SDL_JoystickGetDeviceInstanceID($index);
+
 			if($id < 0 || isset($this->handles[$id]) || !SDL_IsGameController($index))
 			{
 				continue;
 			}
+
 			$handle = SDL_GameControllerOpen($index);
+
 			if($handle)
 			{
 				$this->handles[$id] = $handle;
 			}
 		}
+
 		foreach($this->handles as $id => $handle)
 		{
 			for($axis = 0; $axis < SDL_CONTROLLER_AXIS_MAX; $axis++)
 			{
 				$raw = SDL_GameControllerGetAxis($handle, $axis);
 				$value = $raw / ($raw < 0?32768:32767);
+
 				if($axis < SDL_CONTROLLER_AXIS_TRIGGERLEFT)
 				{
 					$value = abs($value) <= $this->deadZone?0:($value <=> 0) * (abs($value) - $this
-						->deadZone) / (
-							1 - $this->deadZone);
+						->deadZone
+					) / (
+						1 - $this->deadZone
+					);
 				}
 				else
 				{
 					$value = max(0, $value);
 				}
+
 				if($value == 0)
 				{
 					unset($this->blockedAxes[$id][$axis]);
 				}
+
 				$this->axes[$id][$axis] = empty($this->blockedAxes[$id][$axis])?$value:0;
 			}
+
 			for($button = 0; $button < SDL_CONTROLLER_BUTTON_MAX; $button++)
 			{
 				$held = (bool)SDL_GameControllerGetButton($handle, $button);
+
 				if(!$held)
 				{
 					unset($this->blockedButtons[$id][$button]);
 				}
+
 				$this->buttons[$id][$button] = $held && empty($this->blockedButtons[$id][$button]);
 			}
 		}
@@ -130,7 +150,9 @@ final class Gamepads
 		{
 			return $this->axes[$id][$axis] ?? 0;
 		}
+
 		$value = 0;
+
 		foreach($this->axes as $axes)
 		{
 			if(abs($axes[$axis] ?? 0) > abs($value))
@@ -154,6 +176,7 @@ final class Gamepads
 		{
 			return $this->buttons[$id][$button] ?? false;
 		}
+
 		foreach($this->buttons as $buttons)
 		{
 			if($buttons[$button] ?? false)
@@ -172,6 +195,7 @@ final class Gamepads
 	public function reset(): void
 	{
 		$this->poll();
+
 		foreach($this->axes as $id => $axes)
 		{
 			foreach($axes as $axis => $value)
@@ -182,6 +206,7 @@ final class Gamepads
 				}
 			}
 		}
+
 		foreach($this->buttons as $id => $buttons)
 		{
 			foreach($buttons as $button => $held)
@@ -206,7 +231,9 @@ final class Gamepads
 		{
 			return;
 		}
+
 		$this->closed = true;
+
 		foreach($this->handles as $handle)
 		{
 			SDL_GameControllerClose($handle);

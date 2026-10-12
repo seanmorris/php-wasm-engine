@@ -21,14 +21,17 @@ $canvas = vrzno_env('canvas');
 $browser = new Vrzno;
 $status = $browser->document->querySelector('#status');
 $frames = 0;
+
 $engine->systems->add('camera', function($entities, $dt) use ($engine, $camera, $stream) {
 	$camera->x += $engine->controls->axis('left', 'right') * 900 * $dt;
 	$camera->y += $engine->controls->axis('up', 'down') * 900 * $dt;
+
 	if($engine->controls->pressed('reset'))
 	{
 		$camera->x = 32;
 		$camera->y = 0;
 	}
+
 	if($engine->controls->pressed('action'))
 	{
 		foreach(array_keys($stream->errors) as $path)
@@ -37,32 +40,49 @@ $engine->systems->add('camera', function($entities, $dt) use ($engine, $camera, 
 		}
 	}
 });
+
 $engine->start(function() use ($engine, $device, $renderer, $stream, $camera, $canvas, $status
-	, &$frames) {
-	$stream->update($camera->x, $camera->y, $camera->width / $camera->zoom, $camera
-		->height / $camera
-		->zoom);
+	, &$frames
+) {
+	$stream->update(
+		$camera->x
+		, $camera->y
+		, $camera->width / $camera->zoom
+		, $camera->height / $camera->zoom
+	);
 	$device->begin();
 	$stats = $renderer->render($camera, $engine->time * 1000, 0);
 	$device->present();
 	$canvas->dataset->frames = (string)++$frames;
 	$paths = array_map('basename', array_keys($stream->loaded()));
 	$pending = array_map('basename', $stream->pending());
-	$canvas->dataset->world = json_encode(['x' => $camera->x
-	, 'y' => $camera->y
-	, 'loaded' => $paths
+
+	$canvas->dataset->world = json_encode(
+		['x' => $camera->x
+		, 'y' => $camera->y
+		, 'loaded' => $paths
 		, 'pending' => $pending
-		, 'errors' => $stream->errors
-		, 'draws' => $stats['draws']]);
-	$status->textContent = sprintf('Camera %.0f, %.0f · %d maps ready · %d pending · %d draws · %s'
-		, $camera->x, $camera->y, count($paths), count($pending), $stats['draws'], implode(', '
-			, $paths));
+			, 'errors' => $stream->errors, 'draws' => $stats['draws']
+		]
+	);
+
+	$status->textContent = sprintf(
+		'Camera %.0f, %.0f · %d maps ready · %d pending · %d draws · %s'
+		, $camera->x
+		, $camera->y
+		, count($paths)
+		, count($pending)
+		, $stats['draws']
+		, implode(', ', $paths)
+	);
+
 	if($stream->errors)
 	{
 		$status->textContent =
 			'Map download failed. Press keyboard X or gamepad B / Circle to retry. '
 			.implode('; ', $stream->errors);
 	}
+
 	if($engine->userPaused)
 	{
 		$status->textContent = 'Paused. Press Start / Options or P to resume.';

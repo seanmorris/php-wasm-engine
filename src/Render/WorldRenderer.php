@@ -45,22 +45,31 @@ final class WorldRenderer
 		$this->frame++;
 		$active = [];
 		$this->prune();
-		foreach($this->world->visible($camera->x, $camera->y, $camera->width / $camera->zoom
-			, $camera
-			->height / $camera->zoom, $margin) as $map){
+
+		foreach($this->world->visible(
+			$camera->x
+			, $camera->y
+			, $camera->width / $camera->zoom
+			, $camera->height / $camera->zoom
+			, $margin
+		) as $map
+		){
 			if(isset($this->resident[$map->path]) && $this->resident[$map->path][0]->map !== $map)
 			{
 				$this->resident[$map->path][0]->close();
 				unset($this->resident[$map->path]);
 			}
+
 			if(!isset($this->resident[$map->path]))
 			{
 				$this->resident[$map->path] = [new MapRenderer($map),0];
 			}
+
 			[$renderer] = $this->resident[$map->path];
 			$this->resident[$map->path][1] = $this->frame;
 			$stats['maps']++;
 			$backgroundEnd = count($map->layers);
+
 			foreach($map->layers as $order => $layer)
 			{
 				if($layer->type === 'tilelayer')
@@ -72,6 +81,7 @@ final class WorldRenderer
 			$active[$map->path] = [$renderer,$backgroundEnd];
 		}
 		$this->backgroundMap = $this->selectBackground($active, $camera);
+
 		// A repeating background from a neighboring map must not cover earlier terrain.
 		foreach([true,false] as $background)
 		{
@@ -79,11 +89,17 @@ final class WorldRenderer
 			{
 				$start = $background?0:$boundary;
 				$end = $background?$boundary:count($renderer->map->layers);
+
 				if($start < $end)
 				{
-					$renderer->render($camera, $milliseconds, $start, $end, !$background
-						|| $path === $this
-						->backgroundMap);
+					$renderer->render(
+						$camera
+						, $milliseconds
+						, $start
+						, $end
+						, !$background || $path === $this->backgroundMap
+					);
+
 					foreach($renderer->stats as $key => $value)
 					{
 						$stats[$key] += $value;
@@ -91,6 +107,7 @@ final class WorldRenderer
 				}
 			}
 		}
+
 		uasort($this->resident,
 			/**
 			 * Order resident renderers from least to most recently used.
@@ -99,17 +116,21 @@ final class WorldRenderer
 			 * @param array{0:MapRenderer,1:int} $b Second renderer and its last-visible frame.
 			 * @return int Negative, zero, or positive comparison of last-visible frame numbers.
 			 */
-			fn($a, $b) => $a[1] <=> $b[1]);
+			fn($a, $b) => $a[1] <=> $b[1]
+		);
+
 		foreach($this->resident as $path => [$renderer,$frame])
 		{
 			if(count($this->resident) <= $this->residentLimit)
 			{
 				break;
 			}
+
 			if($frame === $this->frame)
 			{
 				continue;
 			}
+
 			$renderer->close();
 			unset($this->resident[$path]);
 		}
@@ -130,17 +151,21 @@ final class WorldRenderer
 		$world = $this->world instanceof WorldStream?$this->world->world:$this->world;
 		$x = $camera->x + $camera->width / $camera->zoom / 2;
 		$y = $camera->y + $camera->height / $camera->zoom / 2;
+
 		foreach($world->entries($x, $y, 0, 0) as $entry)
 		{
 			$path = Assets::relative($world->path, $entry['fileName']);
+
 			if(isset($active[$path]))
 			{
 				return $path;
 			}
 		}
+
 		// Keep a visible ready background while crossing a gap or waiting on a map.
 		return isset($active[$this->backgroundMap ?? ''])?$this->backgroundMap:array_key_first(
-			$active);
+			$active
+		);
 	}
 
 	/**
@@ -153,6 +178,7 @@ final class WorldRenderer
 		if($this->world instanceof WorldStream)
 		{
 			$loaded = $this->world->loaded();
+
 			foreach($this->resident as $path => [$renderer])
 			{
 				if(!isset($loaded[$path]))
@@ -172,6 +198,7 @@ final class WorldRenderer
 	public function restore(): void
 	{
 		$this->prune();
+
 		foreach($this->resident as [$renderer])
 		{
 			$renderer->restore();

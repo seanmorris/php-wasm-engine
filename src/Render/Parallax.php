@@ -44,14 +44,19 @@ final class Parallax
 		{
 			return $layer->image;
 		}
-		$time = fmod(max(0, $milliseconds), array_sum(array_column($layer->imageFrames
-			, 'duration')));
+
+		$time = fmod(
+			max(0, $milliseconds)
+			, array_sum(array_column($layer->imageFrames, 'duration'))
+		);
+
 		foreach($layer->imageFrames as $frame)
 		{
 			if($time < $frame['duration'])
 			{
 				return $frame['image'];
 			}
+
 			$time -= $frame['duration'];
 		}
 		return $layer->imageFrames[0]['image'];
@@ -73,19 +78,24 @@ final class Parallax
 	 */
 	public static function layout(Layer $layer, TileMap $map, Camera $camera, float $milliseconds =
 		0
-		, float $stackHeight = 0): ?array
+		, float $stackHeight = 0
+	): ?array
 	{
 		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer
-			->imageHeight <= 0){
+			->imageHeight <= 0
+		){
 			return null;
 		}
+
 		if($camera->zoom <= 0)
 		{
 			throw new \InvalidArgumentException('Camera zoom must be positive');
 		}
+
 		[$cx,$cy] = self::camera($layer, $map, $camera);
 		$x = $map->x + $layer->offsetX - $cx;
 		$y = $map->y + $layer->offsetY - $cy;
+
 		if(isset($layer->properties['from']))
 		{
 			$anchor = ['top' => 0,'center' => .5,'bottom' => 1][$layer->properties['from']];
@@ -95,6 +105,7 @@ final class Parallax
 			$y = ($camera->height / $camera->zoom - $height) * $anchor + $layer->offsetY
 				- $camera->y * $layer->parallaxY;
 		}
+
 		$seconds = max(0, $milliseconds) / 1000;
 		$x += (float)($layer->properties['scrollX'] ?? 0) * $seconds;
 		$y += (float)($layer->properties['scrollY'] ?? 0) * $seconds;
@@ -106,24 +117,31 @@ final class Parallax
 		$top = $layer->repeatY?0.0:max(0.0, $y);
 		$right = $layer->repeatX?(float)$camera->width:min((float)$camera->width, $x + $width);
 		$bottom = $layer->repeatY?(float)$camera->height:min((float)$camera->height, $y + $height);
+
 		if($right <= $left || $bottom <= $top)
 		{
 			return null;
 		}
+
 		$u = ($left - $x) / $width;
 		$v = ($top - $y) / $height;
+
 		if($layer->repeatX)
 		{
 			$u -= floor($u);
 		}
+
 		if($layer->repeatY)
 		{
 			$v -= floor($v);
 		}
+
 		return ['rect' => [$left,$top,$right - $left,$bottom - $top]
 		, 'uv' => [$u,$v
 		, (
-			$right - $left) / $width
-			, ($bottom - $top) / $height]];
+			$right - $left
+		) / $width
+			, ($bottom - $top) / $height
+		]];
 	}
 }

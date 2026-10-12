@@ -20,33 +20,42 @@ final class LayerSwitch
 	 */
 	public function __construct(public array $points, public int $fromLayer = 1
 		, public int $toLayer =
-		2, public bool $back = false, public bool $roll = false){
+		2, public bool $back = false, public bool $roll = false
+	){
 		$count = count($points);
+
 		if($count < 3 || $fromLayer < 1 || $toLayer < 1 || $fromLayer === $toLayer)
 		{
 			throw new \InvalidArgumentException(
-				'A layer switch needs a convex region and two distinct positive layers');
+				'A layer switch needs a convex region and two distinct positive layers'
+			);
 		}
+
 		$area = 0;
+
 		for($i = 0; $i < $count; $i++)
 		{
 			[$x,$y] = $points[$i];
 			[$u,$v] = $points[($i + 1) % $count];
 			$area += $x * $v - $u * $y;
 		}
+
 		if(abs($area) < 1e-8)
 		{
 			throw new \InvalidArgumentException('Empty layer switch');
 		}
+
 		if($area < 0)
 		{
 			$this->points = array_reverse($points);
 		}
+
 		for($i = 0; $i < $count; $i++)
 		{
 			[$x,$y] = $this->points[$i];
 			[$u,$v] = $this->points[($i + 1) % $count];
 			[$a,$b] = $this->points[($i + 2) % $count];
+
 			if(($u - $x) * ($b - $v) - ($v - $y) * ($a - $u) < -1e-8)
 			{
 				throw new \InvalidArgumentException('Layer switches must be convex');
@@ -67,11 +76,14 @@ final class LayerSwitch
 		{
 			return null;
 		}
+
 		$speed = ($body->grounded?$body->groundSpeed:0) ?: ($body->vx ?: $body->facing);
+
 		if(!$speed)
 		{
 			return null;
 		}
+
 		$back = $this->back && $body->grounded;
 		$forward = ($speed > 0) !== $back;
 		$source = $forward?$this->fromLayer:$this->toLayer;
@@ -94,6 +106,7 @@ final class LayerSwitch
 		$near = 0;
 		$far = 1;
 		$count = count($this->points);
+
 		for($i = 0; $i < $count; $i++)
 		{
 			[$ax,$ay] = $this->points[$i];
@@ -102,15 +115,19 @@ final class LayerSwitch
 			$ny = $ax - $bx;
 			$distance = ($x - $ax) * $nx + ($y - $ay) * $ny;
 			$velocity = $dx * $nx + $dy * $ny;
+
 			if(abs($velocity) < 1e-10)
 			{
 				if($distance > 1e-8)
 				{
 					return null;
 				}
+
 				continue;
 			}
+
 			$t = -$distance / $velocity;
+
 			if($velocity < 0)
 			{
 				$near = max($near, $t);
@@ -118,6 +135,7 @@ final class LayerSwitch
 			{
 				$far = min($far, $t);
 			}
+
 			if($near > $far + 1e-9)
 			{
 				return null;

@@ -17,6 +17,7 @@ final class Hit
 	 * @return void Stores the contact data without modifying terrain or a body.
 	 */
 	public function __construct(public float $t, public float $x, public float $y, public float $nx
-		, public float $ny, public bool $oneWay = false){
+		, public float $ny, public bool $oneWay = false
+	){
 	}
 }

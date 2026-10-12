@@ -17,7 +17,8 @@ final class Chunk
 	 * @return void Creates an unmodified chunk with revision zero.
 	 */
 	public function __construct(public int $x, public int $y, public int $width, public int $height
-		, public string $data){
+		, public string $data
+	){
 		if($width < 1 || $height < 1 || strlen($data) !== $width * $height * 4)
 		{
 			throw new \UnexpectedValueException('Invalid chunk dimensions/data length');
@@ -47,8 +48,9 @@ final class Chunk
 	 */
 	public function gidAt(int $x, int $y): Gid
 	{
-		return $this->contains($x, $y) ? Gid::fromBytes(substr($this->data, (($y - $this->y) * $this
-			->width + $x - $this->x) * 4, 4)) : new Gid(0);
+		return $this->contains($x, $y) ? Gid::fromBytes(
+			substr($this->data, (($y - $this->y) * $this->width + $x - $this->x) * 4, 4)
+		) : new Gid(0);
 	}
 
 	/**
@@ -66,8 +68,13 @@ final class Chunk
 		{
 			throw new \OutOfBoundsException('Tile outside chunk');
 		}
-		$this->data = substr_replace($this->data, $gid->bytes(), (($y - $this->y) * $this
-			->width + $x - $this->x) * 4, 4);
+
+		$this->data = substr_replace(
+			$this->data
+			, $gid->bytes()
+			, (($y - $this->y) * $this->width + $x - $this->x) * 4
+			, 4
+		);
 		$this->revision++;
 	}
 }

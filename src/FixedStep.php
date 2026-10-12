@@ -36,10 +36,12 @@ final class FixedStep
 		{
 			throw new \InvalidArgumentException('Invalid elapsed time');
 		}
+
 		$cap = $this->step * $this->maxSteps;
 		$this->droppedTime += max(0, $elapsed - $cap);
 		$this->accumulator += min($elapsed, $cap);
 		$steps = 0;
+
 		while($this->accumulator + 1e-10 >= $this->step && $steps++ < $this->maxSteps)
 		{
 			$update($this->step);

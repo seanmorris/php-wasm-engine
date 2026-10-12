@@ -19,6 +19,7 @@ final class Registry
 	{
 		$id = $this->next++;
 		$this->entities[$id] = [];
+
 		foreach($components as $c)
 		{
 			$this->add($id, $c);
@@ -45,11 +46,14 @@ final class Registry
 	{
 		$this->requireEntity($id);
 		$type = get_class($component);
+
 		if(isset($this->entities[$id][$type]))
 		{
 			$this->remove($id, $type);
 		}
+
 		$this->entities[$id][$type] = $component;
+
 		foreach($this->types($component) as $class)
 		{
 			$this->index[$class][$id][$type] = true;
@@ -67,14 +71,17 @@ final class Registry
 	public function remove(int $id, string $type): void
 	{
 		$this->requireEntity($id);
+
 		foreach($this->entities[$id] as $class => $component)
 		{
 			if($component instanceof $type)
 			{
 				unset($this->entities[$id][$class]);
+
 				foreach($this->types($component) as $indexed)
 				{
 					unset($this->index[$indexed][$id][$class]);
+
 					if(empty($this->index[$indexed][$id]))
 					{
 						unset($this->index[$indexed][$id]);
@@ -94,6 +101,7 @@ final class Registry
 	public function destroy(int $id): void
 	{
 		$this->requireEntity($id);
+
 		foreach(array_keys($this->entities[$id]) as $type)
 		{
 			$this->remove($id, $type);
@@ -112,10 +120,12 @@ final class Registry
 	public function get(int $id, string $type): object
 	{
 		$this->requireEntity($id);
+
 		if(isset($this->entities[$id][$type]))
 		{
 			return $this->entities[$id][$type];
 		}
+
 		foreach($this->entities[$id] as $component)
 		{
 			if($component instanceof $type)
@@ -147,11 +157,14 @@ final class Registry
 		{
 			return array_keys($this->index[$query] ?? []);
 		}
+
 		if(!$query instanceof Query)
 		{
 			throw new \InvalidArgumentException('Expected component type or Query');
 		}
+
 		$candidates = array_keys($this->entities);
+
 		if($query->operation === 'all')
 		{
 			foreach($query->terms as $term)
@@ -159,6 +172,7 @@ final class Registry
 				if(is_string($term))
 				{
 					$ids = array_keys($this->index[$term] ?? []);
+
 					if(count($ids) < count($candidates))
 					{
 						$candidates = $ids;
@@ -166,6 +180,7 @@ final class Registry
 				}
 			}
 		}
+
 		return array_values(array_filter($candidates,
 			/**
 			 * Evaluate the composed query against a candidate entity.
@@ -173,7 +188,8 @@ final class Registry
 			 * @param int $id Candidate live entity ID.
 			 * @return bool Whether this candidate belongs in the query snapshot.
 			 */
-			fn($id) => $query->matches($this, $id)));
+			fn($id) => $query->matches($this, $id)
+		));
 	}
 
 	/**
@@ -198,8 +214,10 @@ final class Registry
 			{
 				throw new \RuntimeException('Recursive ECS command limit');
 			}
+
 			$commands = $this->commands;
 			$this->commands = [];
+
 			foreach($commands as $command)
 			{
 				$command($this);
@@ -245,8 +263,11 @@ final class Registry
 	 */
 	private function types(object $object): array
 	{
-		return array_merge([get_class($object)], array_values(class_parents($object)), array_values(
-			class_implements($object)));
+		return array_merge(
+			[get_class($object)]
+			, array_values(class_parents($object))
+			, array_values(class_implements($object))
+		);
 	}
 
 	/**

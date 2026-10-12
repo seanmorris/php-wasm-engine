@@ -14,6 +14,7 @@ $sprites = new SpriteRenderer($renderer->atlas);
 $camera = new Camera(0, 260, 320, 180);
 $sprite = new Sprite(7, 120, 380);
 $ticks = $restores = 0;
+
 // An in-memory tile edit must survive rebuilding the GPU texture array.
 foreach($map->layers as $layer)
 {
@@ -27,24 +28,33 @@ $engine->systems->add('count', function() use (&$ticks) { $ticks++; });
 $probe = vrzno_env('contextProbe');
 $beforeRender = vrzno_env('contextBeforeRender');
 $beforeRestore = vrzno_env('contextBeforeRestore');
+
 $engine->start(function() use ($engine, $device, $renderer, $sprites, $sprite, $camera, $probe
-	, $beforeRender, &$ticks, &$restores) {
+	, $beforeRender, &$ticks, &$restores
+) {
 	$beforeRender(json_encode(['time' => $engine->time,'ticks' => $ticks]));
 	$device->begin();
 	$renderer->render($camera, 350);
 	$sprites->render([$sprite], $camera, 350);
 	$pixels = hash('sha256', glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE));
 	$device->present();
-	$probe(json_encode(['time' => $engine->time
-	, 'ticks' => $ticks
-	, 'restores' => $restores
-		, 'pixels' => $pixels,'atlas' => spl_object_id($renderer->atlas)
-		, 'uploads' => $renderer
-		->stats['uploads']
-		, 'images' => $renderer->images->uploads
-		, 'right' => $engine->controls
-		->down('right')
-		, 'error' => glGetError()]));
+
+	$probe(
+		json_encode(
+			['time' => $engine->time, 'ticks' => $ticks, 'restores' => $restores
+			, 'pixels' =>
+				$pixels
+				, 'atlas' => spl_object_id($renderer->atlas)
+				, 'uploads' => $renderer->stats[
+				'uploads'
+				]
+				, 'images' => $renderer->images->uploads
+				, 'right' => $engine->controls
+				->down('right')
+				, 'error' => glGetError()
+			]
+		)
+	);
 }, function() use ($renderer, $sprites) {
 	$sprites->close();
 	$renderer->close();

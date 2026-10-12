@@ -6,10 +6,16 @@ use PhpWasmEngine\Physics\
 use PhpWasmEngine\Tiled\Loader;
 
 function gate(float $x, float $y, float $w, float $h, int $from = 1, int $to = 2, bool $back = false
-	, bool $roll = false): LayerSwitch
+	, bool $roll = false
+): LayerSwitch
 {
-	return new LayerSwitch([[$x,$y],[$x + $w,$y],[$x + $w,$y + $h],[$x,$y + $h]], $from, $to, $back
-		, $roll);
+	return new LayerSwitch(
+		[[$x,$y],[$x + $w,$y],[$x + $w,$y + $h],[$x,$y + $h]]
+		, $from
+		, $to
+		, $back
+		, $roll
+	);
 }
 
 test('collision planes are per body and always include common terrain', function() {
@@ -69,6 +75,7 @@ test('loop gates select by tangent speed and invert the crown gate in the air', 
 
 test('continuous gate casts process narrow gates in travel order before terrain', function() {
 	$t = new Terrain;
+
 	// Deliberately reverse object order, with more switches than the contact budget.
 	for($i = 8; $i >= 1; $i--)
 	{
@@ -137,15 +144,27 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 	, 'width' => 20
 		, 'height' => 30
 		, 'rotation' => 90
-		, 'properties' => [['name' => 'back','value' => '1']]];
-	$data = mapData([['type' => 'group','offsetx' => 4,'offsety' => -2
-	, 'layers' => [
-		layer(['name' => 'Collision 2','data' => [1,0,0,0]])
-		, layer(['name' => 'Art','data' => [0,1,0,0]
-		, 'properties' => [['name' => 'collision'
-			, 'value' => false]]])
-		, ['id' => 3,'type' => 'objectgroup','offsetx' => 3,'objects' => [$object]]
-	]]]);
+		, 'properties' => [['name' => 'back','value' => '1']]
+	];
+
+	$data = mapData(
+		[['type' => 'group','offsetx' => 4,'offsety' => -2
+		, 'layers' => [layer(
+			['name' => 'Collision 2','data' => [1,0,0,0]]
+		)
+		, layer(
+			['name' => 'Art','data' => [0,1,0,0]
+			, 'properties' => [['name' => 'collision'
+				, 'value' => false
+			]]]
+		)
+		, ['id' => 3
+		, 'type' =>
+			'objectgroup'
+			, 'offsetx' => 3,'objects' => [$object]
+		]
+		]]]
+	);
 	$map = fixture(['a' => $data,'tiles.tsj' => tiles()])->map('a');
 	$map->x = -100;
 	$map->y = 200;
@@ -164,6 +183,7 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 
 test('the tiled loop enters, changes route at the crown, and exits in both directions', function() {
 	$t = MapTerrain::build((new Loader)->map(dirname(__DIR__).'/examples/assets/loop.tmj'));
+
 	foreach([1,-1] as $direction)
 	{
 		foreach([false,true] as $rolling)
@@ -181,24 +201,29 @@ test('the tiled loop enters, changes route at the crown, and exits in both direc
 				$previous = 0;
 				$minY = 448;
 				$crownLayer = null;
+
 				for($i = 0; $i < 240; $i++)
 				{
 					tick($p, $b);
 					$turn += atan2(sin($b->angle - $previous), cos($b->angle - $previous));
 					$previous = $b->angle;
 					$minY = min($minY, $b->y);
+
 					if(($direction > 0?$b->x < 880:$b->x > 912) && $b->y < 250)
 					{
 						$crownLayer = $b->collisionLayer;
 					}
+
 					if(($direction > 0?$b->x > 1152:$b->x < 640))
 					{
 						break;
 					}
 				}
-				check($i < 240 && $minY < 225
-					, "loop traversal: direction=$direction speed=$speed rolling="
-					.(int)$rolling);
+
+				check(
+					$i < 240 && $minY < 225
+					, "loop traversal: direction=$direction speed=$speed rolling=" .(int)$rolling
+				);
 				check($crownLayer === ($direction > 0?1:2));
 				near($turn, -$direction * 2 * M_PI, .01);
 				check($b->grounded && $b->collisionLayer === ($direction > 0?2:1));

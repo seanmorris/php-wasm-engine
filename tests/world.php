@@ -12,10 +12,13 @@ function streamFixture(?callable $request = null, ?callable $release = null): Wo
 		, ['fileName' => 'b.tmj','x' => 200,'y' => 0,'width' => 100,'height' => 100]
 		, ['fileName' => 'far.tmj','x' => 2000,'y' => 0,'width' => 100,'height' => 100]
 	];
+
 	$data = ['world.world' => ['maps' => $maps],'a.tmj' => mapData([layer()])
 	, 'b.tmj' => mapData([
-		layer()])
-		, 'far.tmj' => mapData([layer()]),'tiles.tsj' => tiles()];
+		layer()
+	])
+		, 'far.tmj' => mapData([layer()]),'tiles.tsj' => tiles()
+	];
 	return new WorldStream(fixture($data)->world('world.world'), $request, $release, 20, 100);
 }
 
@@ -26,12 +29,17 @@ test('world metadata queries preserve manifest order without reading map files',
 		, ['fileName' => 'negative.tmj','x' => -200,'y' => -100,'width' => 100,'height' => 100]
 		, ['fileName' => 'overlap.tmj','x' => -150,'y' => -50,'width' => 100,'height' => 100]
 	];
+
 	$world = (new Loader(new Assets(function($path) use (&$reads, $maps) {
 		$reads[] = $path;
 		return json_encode(['maps' => $maps]);
 	})))->world('/maps/demo.world');
-	check(array_column($world->entries(-125, -25, 0, 0), 'fileName') === ['negative.tmj'
-		, 'overlap.tmj']);
+
+	check(
+		array_column($world->entries(-125, -25, 0, 0), 'fileName') === ['negative.tmj'
+			, 'overlap.tmj'
+		]
+	);
 	check(count($world->entries(0, -25, 0, 0, 50)) === 1);
 	check($reads === ['/maps/demo.world']);
 	rejects(fn() => $world->entries(0, 0, -1, 1));
@@ -42,6 +50,7 @@ test('world metadata queries preserve manifest order without reading map files',
 test('world streaming waits for map, tileset and image dependencies before activation', function() {
 	$ready = [];
 	$requests = [];
+
 	$stream = streamFixture(function($path) use (&$ready, &$requests) {
 		$requests[$path] = true;
 		return isset($ready[$path]);
@@ -85,17 +94,20 @@ test('world streaming retains boundary maps and releases shared files only after
 		check($stream->loaded() === []);
 		$stream->close();
 		check(count(array_keys($released, 'tiles.png')) === 1);
-});
+	}
+);
 
 test('stream failures remain explicit and retryable without requesting distant maps', function() {
 	$fail = true;
 	$retries = [];
+
 	$stream = streamFixture(function($path, $retry = false) use (&$fail, &$retries) {
 		if($retry)
 		{
 			$retries[] = $path;
 			$fail = false;
 		}
+
 		return $path === 'tiles.png' && $fail?'HTTP 503':true;
 	});
 	$stream->update(0, 0, 40, 40);
@@ -108,6 +120,7 @@ test('stream failures remain explicit and retryable without requesting distant m
 
 test('pending maps release requests when leaving the retention area', function() {
 	$released = [];
+
 	$stream = streamFixture(fn($path) => false, function($path) use (&$released) {
 		$released[] = $path;
 	});
@@ -121,21 +134,31 @@ test('pending maps release requests when leaving the retention area', function()
 
 test('world bounds index agrees with a flat scan across sparse and overlapping maps', function() {
 	$maps = [];
+
 	for($i = 0; $i < 160; $i++)
 	{
 		$maps[] = ['fileName' => "map-$i.tmj",'x' => (($i * 71) % 37 - 18) * 300
 		, 'y' => ((
-			$i * 13) % 31 - 15) * 200
+			$i * 13
+		) % 31 - 15
+		) * 200
 			, 'width' => ($i % 7 + 1) * 150
-			, 'height' => ($i % 5 + 1) * 200];
+			, 'height' => ($i % 5 + 1) * 200
+		];
 	}
 	$world = fixture(['world.world' => ['maps' => $maps]])->world('world.world');
+
 	for($i = 0; $i < 80; $i++)
 	{
 		$x = (($i * 17) % 23 - 11) * 400;
 		$y = (($i * 19) % 29 - 14) * 300;
-		$expected = array_filter($maps, fn($m) => $m['x'] + $m['width'] >= $x && $m['x'] <= $x + 700
-			&& $m['y'] + $m['height'] >= $y && $m['y'] <= $y + 500);
+
+		$expected = array_filter(
+			$maps
+			, fn($m) => $m['x'] + $m['width'] >= $x && $m['x'] <= $x + 700 && $m['y'] + $m[
+				'height'
+			] >= $y && $m['y'] <= $y + 500
+		);
 		check($world->entries($x, $y, 700, 500) === $expected);
 	}
 	$world->data['maps'][0]['x'] = 1000000;
@@ -149,20 +172,27 @@ test('a malformed external tileset can be replaced and retried', function() {
 	, 'x' => 0
 	, 'y' => 0
 	, 'width' => 100
-		, 'height' => 100]]]
-		, 'a.tmj' => mapData([layer()]),'tiles.tsj' => tiles()];
+		, 'height' => 100
+	]]]
+		, 'a.tmj' => mapData([layer()]),'tiles.tsj' => tiles()
+	];
+
 	$loader = new Loader(new Assets(function($path) use (&$broken, $data) {
 		return $broken && $path === 'tiles.tsj'?'{broken':json_encode($data[$path]);
 	}));
 	$retried = [];
+
 	$stream = new WorldStream($loader->world('world.world'), function($path, $retry = false) use (
-		&$retried) {
+		&$retried
+	) {
 		if($retry)
 		{
 			$retried[] = $path;
 		}
+
 		return true;
-	});
+	}
+	);
 	$stream->update(0, 0, 20, 20);
 	check(isset($stream->errors['a.tmj']));
 	$broken = false;
@@ -177,12 +207,16 @@ test('stream retries accept error keys relative to the application working direc
 	, 'y' => 0
 	, 'width' =>
 		100
-		, 'height' => 100]]]
+		, 'height' => 100
+	]]]
 		, 'maps/a.tmj' => mapData([layer()])
-		, 'maps/tiles.tsj' => tiles()];
-	$stream = new WorldStream(fixture($data)->world('maps/world.world'), fn($path, $retry =
-		false) =>
-		$path === 'maps/a.tmj'?'HTTP 503':true);
+		, 'maps/tiles.tsj' => tiles()
+	];
+
+	$stream = new WorldStream(
+		fixture($data)->world('maps/world.world')
+		, fn($path, $retry = false) => $path === 'maps/a.tmj'?'HTTP 503':true
+	);
 	$stream->update(0, 0, 20, 20);
 	check(isset($stream->errors['maps/a.tmj']));
 	$stream->retry('maps/a.tmj');
@@ -196,20 +230,28 @@ test('local world bounds select negative infinite chunks without shifting their 
 		, 'y' => 500
 		, 'width' => 300
 		, 'height' => 200
-			, 'bounds' => ['x' => -200,'y' => -100,'width' => 300,'height' => 200]];
+			, 'bounds' => ['x' => -200,'y' => -100,'width' => 300,'height' => 200]
+		];
 		$chunk = ['x' => -12,'y' => -6,'width' => 1,'height' => 1,'data' => [1]];
+
 		$data = ['world.world' => ['maps' => [$entry]]
 		, 'infinite.tmj' => mapData([layer(['chunks' => [
-			$chunk]])], ['infinite' => true])
-			, 'tiles.tsj' => tiles()];
+			$chunk
+		]])], ['infinite' => true]
+		)
+			, 'tiles.tsj' => tiles()
+		];
+
 		$stream = new WorldStream(
 			fixture($data)->world('world.world')
 			, loadMargin:0
-			, retainMargin:0);
+			, retainMargin:0
+		);
 		$stream->update(801, 401, 10, 10);
 		$map = $stream->loaded()['infinite.tmj'];
 		check($map->x === 1000.0 && $map->y === 500.0);
 		check($map->layers[0]->gidAt(-12, -6)->id === 1);
 		check(count($stream->visible(801, 401, 10, 10)) === 1);
 		check($stream->visible(1101, 401, 1, 1) === []);
-});
+	}
+);

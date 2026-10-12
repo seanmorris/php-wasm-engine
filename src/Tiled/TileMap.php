@@ -18,10 +18,12 @@ final class TileMap
 	 */
 	public function __construct(public string $path, public array $data)
 	{
-		$this->projection = new Projection($data['orientation'] ?? 'orthogonal', (int)$data[
-			'tilewidth'], (int)$data['tileheight'], !empty($data['infinite'])?0:(int)($data[
-				'height']
-			?? 0));
+		$this->projection = new Projection(
+			$data['orientation'] ?? 'orthogonal'
+			, (int)$data['tilewidth']
+			, (int)$data['tileheight']
+			, !empty($data['infinite'])?0:(int)($data['height'] ?? 0)
+		);
 	}
 
 	/**
@@ -54,18 +56,22 @@ final class TileMap
 	{
 		$tile = $this->tile($gid);
 		$animation = $tile['animation'] ?? [];
+
 		if(!$animation)
 		{
 			return $gid;
 		}
+
 		$total = array_sum(array_column($animation, 'duration'));
 		$time = fmod(max(0, $milliseconds), $total);
+
 		foreach($animation as $frame)
 		{
 			if($time < $frame['duration'])
 			{
 				return $tile['firstgid'] + $frame['tileid'];
 			}
+
 			$time -= $frame['duration'];
 		}
 		return $gid;

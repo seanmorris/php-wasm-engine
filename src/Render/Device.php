@@ -20,29 +20,42 @@ final class Device
 	 * @return void Acquires video/event resources and configures two-dimensional alpha blending.
 	 */
 	public function __construct(public int $width = 960, public int $height = 540, string $title =
-		'PHP WASM Engine'){
+		'PHP WASM Engine'
+	){
 		if(!function_exists('glDrawArraysInstanced'))
 		{
 			throw new \RuntimeException('Use a php-sdl-wasm build with the GLES 3 engine bindings');
 		}
+
 		if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) !== 0)
 		{
 			throw new \RuntimeException(SDL_GetError());
 		}
+
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-		$this->window = SDL_CreateWindow($title, 0, 0, $width, $height
-			, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+
+		$this->window = SDL_CreateWindow(
+			$title
+			, 0
+			, 0
+			, $width
+			, $height
+			, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+		);
 		$this->context = SDL_GL_CreateContext($this->window);
+
 		if(!$this->context || SDL_GL_MakeCurrent($this->window, $this->context) !== 0)
 		{
 			$this->close();
 			throw new \RuntimeException(SDL_GetError());
 		}
+
 		if(function_exists('vrzno_env'))
 		{
 			$this->canvas = vrzno_env('canvas');
+
 			if($this->canvas)
 			{
 				$this->webgl = $this->canvas->getContext('webgl2');
@@ -69,6 +82,7 @@ final class Device
 				$this->canvas->addEventListener('webglcontextrestored', $this->restoredListener);
 			}
 		}
+
 		$this->configure();
 	}
 
@@ -109,12 +123,14 @@ final class Device
 		{
 			return false;
 		}
+
 		if($this->pendingRestore)
 		{
 			$this->configure();
 			$this->pendingRestore = false;
 			$this->generation++;
 		}
+
 		return true;
 	}
 
@@ -150,21 +166,27 @@ final class Device
 		{
 			return;
 		}
+
 		$this->closed = true;
+
 		if($this->canvas)
 		{
 			$this->canvas->removeEventListener('webglcontextlost', $this->lostListener);
 			$this->canvas->removeEventListener('webglcontextrestored', $this->restoredListener);
 		}
+
 		$this->lostListener = $this->restoredListener = $this->canvas = $this->webgl = null;
+
 		if($this->context)
 		{
 			SDL_GL_DeleteContext($this->context);
 		}
+
 		if($this->window)
 		{
 			SDL_DestroyWindow($this->window);
 		}
+
 		SDL_Quit();
 	}
 }

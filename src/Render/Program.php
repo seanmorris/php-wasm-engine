@@ -29,19 +29,24 @@ final class Program
 	private function create(): void
 	{
 		$this->id = glCreateProgram();
+
 		try
 		{
 			foreach([[GL_VERTEX_SHADER,$this->vertex],[GL_FRAGMENT_SHADER,$this->fragment]] as [
-				$type,$source]){
+				$type,$source
+			]){
 				$shader = glCreateShader($type);
+
 				try
 				{
 					glShaderSource($shader, 1, $source);
 					glCompileShader($shader);
+
 					if(!glGetShaderiv($shader, GL_COMPILE_STATUS))
 					{
 						throw new \RuntimeException(glGetShaderInfoLog($shader));
 					}
+
 					glAttachShader($this->id, $shader);
 				}
 				finally
@@ -50,6 +55,7 @@ final class Program
 				}
 			}
 			glLinkProgram($this->id);
+
 			if(!glGetProgramiv($this->id, GL_LINK_STATUS))
 			{
 				throw new \RuntimeException(glGetProgramInfoLog($this->id));
@@ -72,6 +78,7 @@ final class Program
 		{
 			return;
 		}
+
 		$this->release();
 		$this->create();
 	}

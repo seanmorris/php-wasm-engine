@@ -43,13 +43,17 @@ final class Platformer
 		{
 			throw new \InvalidArgumentException('Invalid physics step');
 		}
+
 		$axis = $input->axis('left', 'right');
+
 		if($axis)
 		{
 			$b->facing = $axis <=> 0;
 		}
+
 		// Retry blocked gates while overlapping, including actors at rest.
 		$seen = [];
+
 		while($gate = $this->terrain->nextSwitch($b, 0, 0, $seen))
 		{
 			$seen[$gate['id']] = true;
@@ -58,10 +62,12 @@ final class Platformer
 		$b->dropTimer = max(0, $b->dropTimer - $dt);
 		$b->jumpBuffer = max(0, $b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0, $b->coyote - $dt);
+
 		if($input->pressed('jump'))
 		{
 			$b->jumpBuffer = .1;
 		}
+
 		if($b->grounded)
 		{
 			$b->flightRemaining = 5.8;
@@ -73,14 +79,18 @@ final class Platformer
 			$this->climb($b, $input, $dt);
 			return;
 		}
+
 		if($b->grounded)
 		{
 			if($input->down('down') && abs($b->groundSpeed) > 100)
 			{
 				$b->rolling = true;
 			}
-			if($b->profile === 'runner' && $input->down('down') && $input->down('action') && abs($b
-				->groundSpeed) < 120){
+
+			if($b->profile === 'runner' && $input->down('down') && $input->down('action') && abs(
+				$b->groundSpeed
+			) < 120
+			){
 				$b->charge = min(1, $b->charge + $dt * 1.4);
 				$b->groundSpeed = 0;
 			} elseif($b->charge > 0)
@@ -89,32 +99,43 @@ final class Platformer
 				$b->rolling = true;
 				$b->charge = 0;
 			}
+
 			if(!$b->charge)
 			{
 				$b->groundSpeed += sin($b->angle) * $b->gravity * ($b->rolling?.75:.35) * $dt;
+
 				if($axis && !$b->rolling)
 				{
 					$accel = $axis * $b->groundSpeed < 0?$b->braking:$b->acceleration;
+
 					// Input cannot erase momentum already above the running cap.
 					if(abs($b->groundSpeed) < $b->maxSpeed || $axis * $b->groundSpeed < 0)
 					{
-						$b->groundSpeed = self::approach($b->groundSpeed, $axis * $b->maxSpeed
-							, $accel * $dt);
+						$b->groundSpeed = self::approach(
+							$b->groundSpeed
+							, $axis * $b->maxSpeed
+							, $accel * $dt
+						);
 					}
 				} else
 				{
-					$b->groundSpeed = self::approach($b->groundSpeed, 0, ($b->rolling?$b
-						->friction * .12:$b
-						->friction) * $dt);
+					$b->groundSpeed = self::approach(
+						$b->groundSpeed
+						, 0
+						, ($b->rolling?$b->friction * .12:$b->friction) * $dt
+					);
 				}
 			}
+
 			if($b->rolling && abs($b->groundSpeed) < 60 && !$input->down('down'))
 			{
 				$this->stand($b);
 			}
+
 			$this->height($b);
 			$b->vx = cos($b->angle) * $b->groundSpeed;
 			$b->vy = sin($b->angle) * $b->groundSpeed;
+
 			// Slow actors lose adhesion on walls/ceilings. Fast actors retain tangent motion.
 			if(cos($b->angle) < .5 && abs($b->groundSpeed) < 180)
 			{
@@ -122,11 +143,20 @@ final class Platformer
 				$b->coyote = 0;
 			}
 		}
+
 		$jumped = false;
+
 		if($b->jumpBuffer > 0 && $b->coyote > 0)
 		{
-			$platform = $this->terrain->raycast($b->x, $b->y, -sin($b->angle) * ($b->halfHeight + 1)
-				, cos($b->angle) * ($b->halfHeight + 1), false, $b->collisionLayer);
+			$platform = $this->terrain->raycast(
+				$b->x
+				, $b->y
+				, -sin($b->angle) * ($b->halfHeight + 1)
+				, cos($b->angle) * ($b->halfHeight + 1)
+				, false
+				, $b->collisionLayer
+			);
+
 			if($input->down('down') && $platform?->oneWay)
 			{
 				$b->dropTimer = .25;
@@ -142,16 +172,19 @@ final class Platformer
 				$b->x += sin($b->angle) * .05;
 				$b->y -= cos($b->angle) * .05;
 			}
+
 			$b->jumpBuffer = 0;
 			$b->coyote = 0;
 			$jumped = true;
 		}
+
 		if(!$b->grounded)
 		{
 			if($input->released('jump') && $b->vy < -240 && $b->ability === '')
 			{
 				$b->vy = -240;
 			}
+
 			if(!$jumped && $input->pressed('jump'))
 			{
 				if($b->profile === 'flyer' && $b->flightRemaining > 0)
@@ -159,6 +192,7 @@ final class Platformer
 					$b->ability = 'fly';
 					$b->vy = -120;
 				}
+
 				if($b->profile === 'glider')
 				{
 					$b->ability = 'glide';
@@ -166,19 +200,24 @@ final class Platformer
 					$b->vy = max(0, $b->vy);
 				}
 			}
+
 			if($b->profile === 'runner' && $input->down('action'))
 			{
 				$b->dropCharge = min(1, $b->dropCharge + $dt * 2);
 			}
+
 			$gravity = $b->gravity;
+
 			if($b->ability === 'fly')
 			{
 				$b->flightRemaining = max(0, $b->flightRemaining - $dt);
 				$gravity *= .125;
+
 				if($input->down('jump') && $b->flightRemaining > 0)
 				{
 					$b->vy = max(-180, $b->vy - 600 * $dt);
 				}
+
 				if($b->flightRemaining <= 0 || $input->down('down'))
 				{
 					$b->ability = '';
@@ -188,6 +227,7 @@ final class Platformer
 				$gravity *= .125;
 				$b->vx = self::approach($b->vx, $b->facing * 420, 240 * $dt);
 				$b->vy = min(100, $b->vy);
+
 				if($input->down('down'))
 				{
 					$b->ability = '';
@@ -196,14 +236,17 @@ final class Platformer
 			{
 				$b->vx += $axis * $b->airAcceleration * $dt;
 			}
+
 			$b->vy = min($b->terminalSpeed, $b->vy + $gravity * $dt);
 		}
 
 		$wasGrounded = $b->grounded;
+
 		if($wasGrounded)
 		{
 			// Arc increments control curvature. Every increment remains a continuous cast.
 			$steps = max(1, min(1024, (int)ceil(abs($b->groundSpeed) * $dt / 4)));
+
 			for($i = 0; $i < $steps; $i++)
 			{
 				if($b->grounded)
@@ -211,7 +254,9 @@ final class Platformer
 					$b->vx = cos($b->angle) * $b->groundSpeed;
 					$b->vy = sin($b->angle) * $b->groundSpeed;
 				}
+
 				$this->sweep($b, $b->vx * $dt / $steps, $b->vy * $dt / $steps);
+
 				if($b->grounded)
 				{
 					$this->adhere($b);
@@ -222,18 +267,22 @@ final class Platformer
 		{
 			$this->sweep($b, $b->vx * $dt, $b->vy * $dt);
 		}
+
 		if(!$wasGrounded && $b->grounded)
 		{
 			$b->groundSpeed = $b->vx * cos($b->angle) + $b->vy * sin($b->angle);
+
 			if($b->dropCharge > 0)
 			{
 				$b->groundSpeed += $b->facing * (360 + 480 * $b->dropCharge);
 				$b->rolling = true;
 				$b->dropCharge = 0;
 			}
+
 			$b->ability = '';
 			$b->charge = 0;
 		}
+
 		if(!$b->grounded)
 		{
 			$b->angle = 0;
@@ -263,8 +312,15 @@ final class Platformer
 	private function stand(Body $b): void
 	{
 		$extra = ($b->standingHeight - $b->halfHeight) * 2;
-		if(!$this->terrain->raycast($b->x, $b->y - $b->halfHeight, 0, -$extra, true, $b
-			->collisionLayer)){
+
+		if(!$this->terrain->raycast(
+			$b->x
+			, $b->y - $b->halfHeight
+			, 0
+			, -$extra
+			, true
+			, $b->collisionLayer
+		)){
 			$b->rolling = false;
 		}
 	}
@@ -284,10 +340,12 @@ final class Platformer
 	{
 		$seen = [];
 		$contacts = 0;
+
 		while($contacts < 6 && abs($dx) + abs($dy) > 1e-7)
 		{
 			$best = $this->terrain->castBody($b, $dx, $dy, $b->dropTimer > 0);
 			$gate = $this->terrain->nextSwitch($b, $dx, $dy, $seen);
+
 			if($gate && (!$best || $gate['t'] < $best->t))
 			{
 				$b->x += $dx * $gate['t'];
@@ -299,18 +357,23 @@ final class Platformer
 				// Recast the unconsumed motion against the newly selected plane.
 				continue;
 			}
+
 			if(!$best)
 			{
 				$b->x += $dx;
 				$b->y += $dy;
 				return;
 			}
+
 			$contacts++;
 			$b->x += $dx * $best->t + $best->nx * .001;
 			$b->y += $dy * $best->t + $best->ny * .001;
 			$floor = $best->ny < -.25;
-			if($floor || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b
-				->angle)) > .5)){
+
+			if($floor || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos(
+				$b->angle
+			)) > .5
+			)){
 				$b->grounded = true;
 				$b->angle = atan2($best->nx, -$best->ny);
 				$distance = ($b->x - $best->x) * $best->nx + ($b->y - $best->y) * $best->ny;
@@ -325,8 +388,10 @@ final class Platformer
 					$b->vx = $b->vy = 0;
 					return;
 				}
+
 				$b->groundSpeed = 0;
 			}
+
 			$remaining = 1 - $best->t;
 			$dx *= $remaining;
 			$dy *= $remaining;
@@ -334,6 +399,7 @@ final class Platformer
 			$dx -= $into * $best->nx;
 			$dy -= $into * $best->ny;
 			$velocity = $b->vx * $best->nx + $b->vy * $best->ny;
+
 			if($velocity < 0)
 			{
 				$b->vx -= $velocity * $best->nx;
@@ -353,22 +419,33 @@ final class Platformer
 		$ca = cos($b->angle);
 		$sa = sin($b->angle);
 		$hits = [];
+
 		foreach([-$b->radius * .6,$b->radius * .6] as $side)
 		{
 			$x = $b->x + $side * $ca - ($b->halfHeight - 6) * $sa;
 			$y = $b->y + $side * $sa + ($b->halfHeight - 6) * $ca;
-			$hit = $this->terrain->raycast($x, $y, -$sa * 16, $ca * 16, $b->dropTimer > 0, $b
-				->collisionLayer);
+
+			$hit = $this->terrain->raycast(
+				$x
+				, $y
+				, -$sa * 16
+				, $ca * 16
+				, $b->dropTimer > 0
+				, $b->collisionLayer
+			);
+
 			if($hit)
 			{
 				$hits[] = $hit;
 			}
 		}
+
 		if(!$hits)
 		{
 			$b->grounded = false;
 			return;
 		}
+
 		$distance = min(array_map(
 			/**
 			 * Convert a foot-ray contact fraction to distance from the nominal sole.
@@ -376,9 +453,11 @@ final class Platformer
 			 * @param Hit $h Contact on a 16-pixel inward ray starting six pixels above the sole.
 			 * @return float Signed support correction in pixels.
 			 */
-			fn($h) => $h->t * 16 - 6, $hits));
+			fn($h) => $h->t * 16 - 6, $hits
+		));
 		$b->x -= $sa * $distance;
 		$b->y += $ca * $distance;
+
 		if(count($hits) === 2)
 		{
 			$b->angle = atan2($hits[1]->y - $hits[0]->y, $hits[1]->x - $hits[0]->x);
@@ -407,12 +486,21 @@ final class Platformer
 			$b->x -= $b->wall * .1;
 			return;
 		}
+
 		$dy = $input->axis('up', 'down') * 240 * $dt;
 		$b->vx = 0;
 		$b->vy = $dy / $dt;
 		$this->sweep($b, 0, $dy);
-		$hit = $this->terrain->raycast($b->x, $b->y, $b->wall * ($b->radius + 3), 0, true, $b
-			->collisionLayer);
+
+		$hit = $this->terrain->raycast(
+			$b->x
+			, $b->y
+			, $b->wall * ($b->radius + 3)
+			, 0
+			, true
+			, $b->collisionLayer
+		);
+
 		if(!$hit)
 		{
 			$b->ability = '';

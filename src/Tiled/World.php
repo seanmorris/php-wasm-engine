@@ -22,8 +22,10 @@ final class World
 		if(!empty($data['patterns']))
 		{
 			throw new \UnexpectedValueException(
-				'Export an explicit world maps list; filesystem patterns are not supported');
+				'Export an explicit world maps list; filesystem patterns are not supported'
+			);
 		}
+
 		$this->reindex();
 	}
 
@@ -37,12 +39,14 @@ final class World
 	{
 		$seen = [];
 		$indexed = $this->data['maps'] ?? [];
+
 		foreach($indexed as &$entry)
 		{
 			if(!is_string($entry['fileName'] ?? null) || $entry['fileName'] === '')
 			{
 				throw new \UnexpectedValueException('World maps require fileName');
 			}
+
 			foreach(['x','y','width','height'] as $key)
 			{
 				if(!is_numeric($entry[$key] ?? null) || !is_finite((float)$entry[$key]))
@@ -50,31 +54,40 @@ final class World
 					throw new \UnexpectedValueException('World map bounds must be finite numbers');
 				}
 			}
+
 			if($entry['width'] < 0 || $entry['height'] < 0)
 			{
 				throw new \UnexpectedValueException('World map dimensions must be nonnegative');
 			}
+
 			$path = Assets::relative($this->path, $entry['fileName']);
+
 			if(isset($seen[$path]))
 			{
 				throw new \UnexpectedValueException('World map filenames must be unique');
 			}
+
 			$seen[$path] = true;
+
 			// Optional local bounds keep negative infinite chunks separate from map origin.
 			if(isset($entry['bounds']))
 			{
 				foreach(['x','y','width','height'] as $key)
 				{
-					if(!is_numeric($entry['bounds'][$key] ?? null) || !is_finite((float)$entry[
-						'bounds'][$key])){
+					if(!is_numeric($entry['bounds'][$key] ?? null) || !is_finite(
+						(float)$entry['bounds'][$key]
+					)){
 						throw new \UnexpectedValueException(
-							'Local map bounds must be finite numbers');
+							'Local map bounds must be finite numbers'
+						);
 					}
 				}
+
 				if($entry['bounds']['width'] < 0 || $entry['bounds']['height'] < 0)
 				{
 					throw new \UnexpectedValueException('Local map dimensions must be nonnegative');
 				}
+
 				$entry['x'] += $entry['bounds']['x'];
 				$entry['y'] += $entry['bounds']['y'];
 				$entry['width'] = $entry['bounds']['width'];
@@ -106,14 +119,23 @@ final class World
 				throw new \InvalidArgumentException('World query must be finite');
 			}
 		}
+
 		if($width < 0 || $height < 0 || $margin < 0)
 		{
 			throw new \InvalidArgumentException(
-				'World query dimensions and margin must be nonnegative');
+				'World query dimensions and margin must be nonnegative'
+			);
 		}
+
 		$result = [];
-		foreach($this->index->query($x - $margin, $y - $margin, $x + $width + $margin
-			, $y + $height + $margin) as $id => $entry){
+
+		foreach($this->index->query(
+			$x - $margin
+			, $y - $margin
+			, $x + $width + $margin
+			, $y + $height + $margin
+		) as $id => $entry
+		){
 			$result[$id] = $this->data['maps'][$id];
 		}
 		return $result;
@@ -155,7 +177,8 @@ final class World
 			 * @return TileMap Cached map with its world origin applied.
 			 */
 			fn($entry) => $this->load($entry)
-			, $this->entries($x, $y, $width, $height, $margin)));
+			, $this->entries($x, $y, $width, $height, $margin)
+		));
 	}
 
 	/**

@@ -20,12 +20,14 @@ function imageMap(array $layers, array $extra = []): MapRenderer
 	, 'tileheight' => 16
 	, 'columns' => 1
 	, 'tilecount' => 1
-		, 'image' => $image];
+		, 'image' => $image
+	];
 	$data = $extra + ['orientation' => 'orthogonal'
 	, 'width' => 6
 	, 'height' => 4
 	, 'tilewidth' => 16
-		, 'tileheight' => 16,'tilesets' => [$set],'layers' => $layers];
+		, 'tileheight' => 16,'tilesets' => [$set],'layers' => $layers
+	];
 	file_put_contents($path, json_encode($data));
 	return new MapRenderer((new Loader)->map($path));
 }
@@ -43,14 +45,17 @@ $imageLayer = ['id' => 1
 	, 'parallaxx' => .5
 	, 'parallaxy' => .25
 	, 'offsetx' => 3
-	, 'offsety' => -2];
-$renderer = imageMap([$imageLayer], ['parallaxoriginx' => 7
-, 'parallaxoriginy' => -3
-, 'infinite' =>
-	true]);
+	, 'offsety' => -2
+];
+
+$renderer = imageMap(
+	[$imageLayer]
+	, ['parallaxoriginx' => 7, 'parallaxoriginy' => -3, 'infinite' => true]
+);
 $renderer->map->x = -100;
 $renderer->map->y = 20;
 $exact = [];
+
 foreach([[-100,-20,1],[-132,44,2],[-1000004,-500006,.5]] as [$cx,$cy,$zoom])
 {
 	$camera = new Camera($cx, $cy, 96, 64, $zoom);
@@ -62,6 +67,7 @@ foreach([[-100,-20,1],[-132,44,2],[-1000004,-500006,.5]] as [$cx,$cy,$zoom])
 	$originY = 17;
 	$scrollX = ($cx + 48 / $zoom - $originX) * .5 + $originX - 48 / $zoom;
 	$scrollY = ($cy + 32 / $zoom - $originY) * .25 + $originY - 32 / $zoom;
+
 	for($y = 63; $y >= 0; $y--)
 	{
 		for($x = 0; $x < 96; $x++)
@@ -70,8 +76,10 @@ foreach([[-100,-20,1],[-132,44,2],[-1000004,-500006,.5]] as [$cx,$cy,$zoom])
 			$v = (int)floor(($y + .5) / $zoom + $scrollY - 20 + 2);
 			$u = ($u % 7 + 7) % 7;
 			$v = ($v % 5 + 5) % 5;
-			$expected .= hex2bin($v < 2?($u < 3?'ff0000ff':'00ff00ff'):($u < 3?'0000ffff'
-				: 'ffff00ff'));
+
+			$expected .= hex2bin(
+				$v < 2?($u < 3?'ff0000ff':'00ff00ff'):($u < 3?'0000ffff' : 'ffff00ff')
+			);
 		}
 	}
 	$exact[] = $actual === $expected;
@@ -88,7 +96,8 @@ $front = ['type' => 'imagelayer'
 , 'offsety' => 4
 , 'tintcolor' =>
 	'#8080ffff'
-	, 'opacity' => .5];
+	, 'opacity' => .5
+];
 $hidden = ['type' => 'imagelayer','image' => '/missing.png','visible' => false];
 $renderer = imageMap([$back,$tile,$front,$hidden]);
 $device->begin([0,0,0,1]);
@@ -97,10 +106,12 @@ $painter = [pixel(4, 4),pixel(10, 4),pixel(14, 6),pixel(22, 6)];
 $sharedUploads = $renderer->images->uploads;
 $draws = $renderer->stats['draws'];
 $reflection = new ReflectionProperty($renderer->images, 'textures');
+
 if(PHP_VERSION_ID < 80100)
 {
 	$reflection->setAccessible(true);
 }
+
 $textures = array_column($reflection->getValue($renderer->images), 0);
 $layers = $renderer->map->layers;
 $renderer->map->layers = [$layers[0],$layers[2],$layers[1],$layers[3]];
@@ -118,7 +129,8 @@ $strip = ['type' => 'imagelayer'
 , 'parallaxx' => .5
 , 'offsety' =>
 	8
-	, 'properties' => $stripProperties];
+	, 'properties' => $stripProperties
+];
 $renderer = imageMap([$strip]);
 $camera = new Camera(-20, 200, 96, 64);
 $device->begin([0,0,0,1]);
@@ -134,12 +146,14 @@ $keyPixels = [pixel(4, 4),pixel(12, 4),pixel(20, 4)];
 $renderer->close();
 
 $animated = $back;
+
 $animated['properties'] = [['name' => 'frames'
-, 'value' => json_encode([['image' => $image
-	, 'duration' => 100]
-	, ['image' => $repeatImage,'duration' => 200]])]];
+, 'value' => json_encode(
+	[['image' => $image, 'duration' => 100], ['image' => $repeatImage,'duration' => 200]]
+)]];
 $renderer = imageMap([$animated]);
 $animation = [];
+
 foreach([0,100,300] as $time)
 {
 	$device->begin([0,0,0,1]);
@@ -148,6 +162,7 @@ foreach([0,100,300] as $time)
 }
 $renderer->close();
 $matching = [];
+
 foreach(['tilelayer','imagelayer'] as $type)
 {
 	$layer = ['type' => $type
@@ -155,7 +170,8 @@ foreach(['tilelayer','imagelayer'] as $type)
 	, 'width' => 1
 	, 'height' => 1
 	, 'data' => [1]
-		, 'parallaxx' => .5,'parallaxy' => .25,'offsetx' => 3,'offsety' => -2];
+		, 'parallaxx' => .5,'parallaxy' => .25,'offsetx' => 3,'offsety' => -2
+	];
 	$renderer = imageMap([$layer], ['parallaxoriginx' => 10,'parallaxoriginy' => 5]);
 	$renderer->map->x = 100;
 	$renderer->map->y = 20;
@@ -166,6 +182,7 @@ foreach(['tilelayer','imagelayer'] as $type)
 }
 $tileImageMatch = $matching[0] === $matching[1];
 $worldMaps = [];
+
 foreach([0,48] as $x)
 {
 	$renderer = imageMap([$back,$tile]);
@@ -174,7 +191,8 @@ foreach([0,48] as $x)
 	, 'y' => 0
 	, 'width' => 48
 	, 'height' =>
-		64];
+		64
+	];
 	$renderer->close();
 }
 file_put_contents('/parallax.world', json_encode(['maps' => $worldMaps]));
@@ -185,7 +203,21 @@ $worldPixels = [pixel(10, 4),pixel(58, 4)];
 $world->close();
 $error = glGetError();
 $device->close();
-echo json_encode(compact('exact', 'cleanUploads', 'painter', 'sharedUploads', 'draws', 'released'
-	, 'reordered', 'stripPixels', 'keyPixels', 'animation', 'tileImageMatch', 'worldPixels'
-	, 'worldStats'
-	, 'error'));
+echo json_encode(
+	compact(
+		'exact'
+		, 'cleanUploads'
+		, 'painter'
+		, 'sharedUploads'
+		, 'draws'
+		, 'released'
+		, 'reordered'
+		, 'stripPixels'
+		, 'keyPixels'
+		, 'animation'
+		, 'tileImageMatch'
+		, 'worldPixels'
+		, 'worldStats'
+		, 'error'
+	)
+);

@@ -69,15 +69,19 @@ final class Scheduler
 					{
 						return;
 					}
+
 					if(isset($active[$name]))
 					{
 						throw new \LogicException("System dependency cycle at $name");
 					}
+
 					if(!isset($this->systems[$name]))
 					{
 						throw new \LogicException("Unknown system dependency $name");
 					}
+
 					$active[$name] = true;
+
 					foreach($this->systems[$name][1] as $dependency)
 					{
 						$visit($dependency);
@@ -86,12 +90,14 @@ final class Scheduler
 					$done[$name] = true;
 					$result[] = $name;
 				};
+
 			foreach(array_keys($this->systems) as $name)
 			{
 				$visit($name);
 			}
 			$this->ordered = $result;
 		}
+
 		foreach($this->ordered as $name)
 		{
 			($this->systems[$name][0])($this->registry, $dt);

@@ -20,6 +20,7 @@ final class MapTerrain
 	public static function build(TileMap ...$maps): Terrain
 	{
 		$terrain = new Terrain;
+
 		foreach($maps as $map)
 		{
 			foreach($map->layers as $layer)
@@ -28,10 +29,16 @@ final class MapTerrain
 				{
 					continue;
 				}
+
 				$collisionLayer = (int)($layer->properties['collisionLayer'] ?? (preg_match(
-					'/^Collision\s*(\d+)$/i', $layer->name, $match)?$match[1]:0));
+					'/^Collision\s*(\d+)$/i'
+					, $layer->name
+					, $match
+				)?$match[1]:0
+				));
 				$ox = $map->x + $layer->offsetX;
 				$oy = $map->y + $layer->offsetY;
+
 				foreach($layer->chunks as $chunk)
 				{
 					for($y = $chunk->y; $y < $chunk->y + $chunk->height; $y++)
@@ -40,54 +47,73 @@ final class MapTerrain
 						{
 							$gid = $chunk->gidAt($x, $y);
 							$tile = $map->tile($gid->id);
+
 							if(!$tile)
 							{
 								continue;
 							}
+
 							[$px,$py] = $map->projection->project($x, $y);
 							$w = $tile['rect'][2];
 							$h = $tile['rect'][3];
+
 							if($map->projection->orientation === 'isometric')
 							{
 								$px -= $w / 2;
 							}
+
 							$py += $map->projection->tileHeight - $h;
 							$px += $tile['offset'][0];
 							$py += $tile['offset'][1];
 							$shapes = $tile['objectgroup']['objects'] ?? [];
+
 							if(!$shapes && ($tile['properties']['solid'] ?? $layer->properties[
-								'solid']
-								?? false)){
+								'solid'
+							]
+								?? false
+							)){
 								$shapes = [['x' => 0,'y' => 0,'width' => $w,'height' => $h]];
 							}
+
 							foreach($shapes as $shape)
 							{
 								$points = self::points($shape);
 								$transformed = [];
+
 								foreach($points as [$u,$v])
 								{
 									[$u,$v] = $gid->uv($u / $w, $v / $h);
 									$transformed[] = [$ox + $px + $u * $w,$oy + $py + $v * $h];
 								}
 								$props = Loader::properties($shape['properties'] ?? []);
-								$terrain->add($transformed, (bool)($props['oneWay'] ?? $tile[
-									'properties'][
-									'oneWay'] ?? $layer->properties['oneWay'] ?? false)
-									, $collisionLayer);
+
+								$terrain->add(
+									$transformed
+									, (bool)($props['oneWay'] ?? $tile['properties']['oneWay']
+										?? $layer->properties['oneWay'] ?? false
+									)
+									, $collisionLayer
+								);
 							}
 						}
 					}
 				}
+
 				foreach($layer->objects as $object)
 				{
 					$props = Loader::properties($object['properties'] ?? []);
-					$switch = in_array(($object['class'] ?? '')?:($object['type'] ?? ''), [
-						'layer-switch'
-						, 'LayerSwitch'], true);
+
+					$switch = in_array(
+						($object['class'] ?? '')?:($object['type'] ?? '')
+						, ['layer-switch', 'LayerSwitch']
+						, true
+					);
+
 					if(!$switch && !($props['solid'] ?? $layer->properties['solid'] ?? false))
 					{
 						continue;
 					}
+
 					if($switch && isset($object['gid']))
 					{
 						// Tiled tile objects rotate around their bottom-left anchor.
@@ -95,7 +121,9 @@ final class MapTerrain
 						$object['x'] += sin($angle) * ($object['height'] ?? 0);
 						$object['y'] -= cos($angle) * ($object['height'] ?? 0);
 					}
+
 					$points = self::points($object);
+
 					if($map->projection->orientation === 'isometric')
 					{
 						$points = array_map(
@@ -106,11 +134,14 @@ final class MapTerrain
 							 * Tiled pixel units.
 							 * @return array{0:float,1:float} Projected map-local X and Y.
 							 */
-							fn($p) => $map->projection->project($p[0] / $map->projection->tileHeight
-								, $p[
-								1] / $map->projection->tileHeight)
-							, $points);
+							fn($p) => $map->projection->project(
+								$p[0] / $map->projection->tileHeight
+								, $p[1] / $map->projection->tileHeight
+							)
+							, $points
+						);
 					}
+
 					$points = array_map(
 						/**
 						 * Translate a shape vertex by its map placement and inherited layer offset.
@@ -118,19 +149,28 @@ final class MapTerrain
 						 * @param array{0:float,1:float} $p Vertex before world translation.
 						 * @return array{0:float,1:float} World-space X and Y in pixels.
 						 */
-						fn($p) => [$p[0] + $ox,$p[1] + $oy], $points);
+						fn($p) => [$p[0] + $ox,$p[1] + $oy], $points
+					);
+
 					if($switch)
 					{
-						$terrain->addSwitch(new LayerSwitch($points, (int)($props['fromLayer'] ?? 1)
-							, (int)($props['toLayer']
-							?? 2), (bool)(int)($props['back'] ?? 0), (bool)(int)($props['roll']
-								?? 0)));
+						$terrain->addSwitch(
+							new LayerSwitch(
+								$points
+								, (int)($props['fromLayer'] ?? 1)
+								, (int)($props['toLayer'] ?? 2)
+								, (bool)(int)($props['back'] ?? 0)
+								, (bool)(int)($props['roll'] ?? 0)
+							)
+						);
 					}
 					else
 					{
-						$terrain->add($points, (bool)($props['oneWay'] ?? false), (int)($props[
-							'collisionLayer']
-							?? $collisionLayer));
+						$terrain->add(
+							$points
+							, (bool)($props['oneWay'] ?? false)
+							, (int)($props['collisionLayer'] ?? $collisionLayer)
+						);
 					}
 				}
 			}
@@ -152,25 +192,34 @@ final class MapTerrain
 		{
 			throw new \UnexpectedValueException('Resolve object templates before export');
 		}
+
 		$w = $object['width'] ?? 0;
 		$h = $object['height'] ?? 0;
 		$points = $object['polygon'] ?? $object['polyline'] ?? [['x' => 0,'y' => 0]
 		, ['x' => $w
-			, 'y' => 0]
-			, ['x' => $w,'y' => $h],['x' => 0,'y' => $h]];
+			, 'y' => 0
+		]
+			, ['x' => $w,'y' => $h],['x' => 0,'y' => $h]
+		];
+
 		if(!empty($object['ellipse']))
 		{
 			$points = [];
+
 			for($i = 0; $i < 24; $i++)
 			{
 				$points[] = ['x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
 				, 'y' => $h / 2 + sin(
-					$i * M_PI / 12) * $h / 2];
+					$i * M_PI / 12
+				) * $h / 2
+				];
 			}
 		}
+
 		$angle = deg2rad($object['rotation'] ?? 0);
 		$c = cos($angle);
 		$s = sin($angle);
+
 		return array_map(
 			/**
 			 * Rotate a local object vertex and translate it to the object position.
@@ -180,7 +229,10 @@ final class MapTerrain
 			 */
 			fn($p) => [($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s
 			, ($object['y'] ?? 0) + $p[
-				'x'] * $s + $p['y'] * $c]
-			, $points);
+				'x'
+			] * $s + $p['y'] * $c
+			]
+			, $points
+		);
 	}
 }

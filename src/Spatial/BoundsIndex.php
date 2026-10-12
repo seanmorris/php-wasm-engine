@@ -30,8 +30,10 @@ final class BoundsIndex
 		{
 			return [];
 		}
+
 		$xs = array_column($entries, 'x');
 		$ys = array_column($entries, 'y');
+
 		$right = array_map(
 			/**
 			 * Calculate an entry's right bound.
@@ -39,7 +41,9 @@ final class BoundsIndex
 			 * @param array<string,mixed> $e Bounds record containing x and width.
 			 * @return float|int Right coordinate in the index's coordinate space.
 			 */
-			fn($e) => $e['x'] + $e['width'], $entries);
+			fn($e) => $e['x'] + $e['width'], $entries
+		);
+
 		$bottom = array_map(
 			/**
 			 * Calculate an entry's bottom bound.
@@ -47,13 +51,17 @@ final class BoundsIndex
 			 * @param array<string,mixed> $e Bounds record containing y and height.
 			 * @return float|int Bottom coordinate in the index's coordinate space.
 			 */
-			fn($e) => $e['y'] + $e['height'], $entries);
+			fn($e) => $e['y'] + $e['height'], $entries
+		);
 		$bounds = [min($xs),min($ys),max($right),max($bottom)];
+
 		if(count($entries) <= 8)
 		{
 			return [$bounds,$entries];
 		}
+
 		$axis = $bounds[2] - $bounds[0] >= $bounds[3] - $bounds[1]?'x':'y';
+
 		uasort($entries,
 			/**
 			 * Sort entries along the selected subdivision axis while preserving keys.
@@ -62,7 +70,8 @@ final class BoundsIndex
 			 * @param array<string,mixed> $b Second entry with x/y coordinates.
 			 * @return int Negative, zero, or positive comparison of the chosen coordinate.
 			 */
-			fn($a, $b) => $a[$axis] <=> $b[$axis]);
+			fn($a, $b) => $a[$axis] <=> $b[$axis]
+		);
 		$halves = array_chunk($entries, (int)ceil(count($entries) / 2), true);
 		return [$bounds,null,$this->build($halves[0]),$this->build($halves[1])];
 	}
@@ -113,18 +122,24 @@ final class BoundsIndex
 		{
 			return;
 		}
+
 		if($node[1] !== null)
 		{
 			foreach($node[1] as $id => $entry)
 			{
-				if($this->overlaps([$entry['x'],$entry['y'],$entry['x'] + $entry['width']
-				, $entry['y'] + $entry[
-					'height']], $query)){
+				if($this->overlaps(
+					[$entry['x'],$entry['y'],$entry['x'] + $entry['width']
+					, $entry['y'] + $entry[
+						'height'
+					]]
+					, $query
+				)){
 					$result[$id] = $entry;
 				}
 			}
 			return;
 		}
+
 		$this->search($node[2], $query, $result);
 		$this->search($node[3], $query, $result);
 	}

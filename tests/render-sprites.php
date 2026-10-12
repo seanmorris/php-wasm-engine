@@ -21,10 +21,13 @@ $frames = [];
 $capture = function($time) use ($device, $camera, $renderer, $left, $right) {
 	$device->begin([0,0,0,1]);
 	$renderer->render([$left,$right], $camera, $time);
+
 	return [bin2hex(glReadPixels(12, 19, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE))
 	, bin2hex(glReadPixels(28, 19, 1, 1
-		, GL_RGBA, GL_UNSIGNED_BYTE))];
+		, GL_RGBA, GL_UNSIGNED_BYTE
+	))];
 };
+
 foreach([
 	[1000,'run','run',false]
 	, [1100,'run','jump',false]

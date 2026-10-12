@@ -25,12 +25,16 @@ final class WorldStream
 	 * @return void Creates an empty streaming state; no files are requested until update.
 	 */
 	public function __construct(public World $world, ?callable $request = null, ?callable $release =
-		null, public float $loadMargin = 256, public float $retainMargin = 768){
+		null, public float $loadMargin = 256, public float $retainMargin = 768
+	){
 		if(!is_finite($loadMargin) || !is_finite($retainMargin) || $loadMargin < 0
-			|| $retainMargin < $loadMargin){
+			|| $retainMargin < $loadMargin
+		){
 			throw new \InvalidArgumentException(
-				'Retention margin must be at least the nonnegative load margin');
+				'Retention margin must be at least the nonnegative load margin'
+			);
 		}
+
 		$this->request = $request ??
 			/**
 			 * Treat dependencies as mounted when no asynchronous transport was supplied.
@@ -59,22 +63,27 @@ final class WorldStream
 		{
 			return;
 		}
+
 		$near = $this->world->entries($x, $y, $width, $height, $this->loadMargin);
 		$keep = $this->world->entries($x, $y, $width, $height, $this->retainMargin);
 		$this->entered = $this->exited = [];
+
 		foreach($near as $order => $entry)
 		{
 			$path = Assets::relative($this->world->path, $entry['fileName']);
 			$this->states[$path] ??= ['entry' => $entry,'order' => $order,'files' => []
 			, 'map' =>
 				null
-				, 'ready' => false,'failed' => null];
+				, 'ready' => false,'failed' => null
+			];
 		}
 		$retained = [];
+
 		foreach($keep as $entry)
 		{
 			$retained[Assets::relative($this->world->path, $entry['fileName'])] = true;
 		}
+
 		// Acquire new dependencies before releasing old maps that may share them.
 		foreach($this->states as $path => &$state)
 		{
@@ -82,12 +91,14 @@ final class WorldStream
 			{
 				continue;
 			}
+
 			try
 			{
 				if(!$this->prepare($state, $path))
 				{
 					continue;
 				}
+
 				$state['ready'] = true;
 				$this->entered[] = $state['map'];
 			}
@@ -97,6 +108,7 @@ final class WorldStream
 			}
 		}
 		unset($state);
+
 		foreach(array_keys($this->states) as $path)
 		{
 			if(!isset($retained[$path]))
@@ -121,18 +133,22 @@ final class WorldStream
 			$state['files'][$path] = true;
 			$this->references[$path] = ($this->references[$path] ?? 0) + 1;
 		}
+
 		$state['failed'] = $path;
 		$result = ($this->request)($path, false);
+
 		if($result === true)
 		{
 			$state['failed'] = null;
 			return true;
 		}
+
 		if($result === false)
 		{
 			$state['failed'] = null;
 			return false;
 		}
+
 		throw new \RuntimeException($path.': '.(string)$result);
 	}
 
@@ -150,33 +166,40 @@ final class WorldStream
 		{
 			return false;
 		}
+
 		$state['failed'] = $path;
 		$data = $this->world->loader->assets->json($path);
 		$state['failed'] = null;
 		$ready = true;
+
 		foreach($data['tilesets'] ?? [] as $set)
 		{
 			if(isset($set['source']))
 			{
 				$source = Assets::relative($path, $set['source']);
+
 				if(!$this->available($state, $source))
 				{
 					$ready = false;
 					continue;
 				}
+
 				$state['failed'] = $source;
 				$this->world->loader->assets->json($source);
 				$state['failed'] = null;
 			}
 		}
+
 		if(!$ready)
 		{
 			return false;
 		}
+
 		$state['failed'] = $path;
 		$state['map'] ??= $this->world->load($state['entry']);
 		$state['failed'] = null;
 		$images = [];
+
 		foreach($state['map']->tilesets as $set)
 		{
 			foreach($set['definitions'] as $tile)
@@ -184,17 +207,20 @@ final class WorldStream
 				$images[$tile['image']] = true;
 			}
 		}
+
 		foreach($state['map']->layers as $layer)
 		{
 			if($layer->image !== null)
 			{
 				$images[$layer->image] = true;
 			}
+
 			foreach($layer->imageFrames as $frame)
 			{
 				$images[$frame['image']] = true;
 			}
 		}
+
 		foreach(array_keys($images) as $image)
 		{
 			$ready = $this->available($state, $image) && $ready;
@@ -210,6 +236,7 @@ final class WorldStream
 	public function loaded(): array
 	{
 		$states = $this->states;
+
 		uasort($states,
 			/**
 			 * Order streaming states by their original world manifest position.
@@ -218,8 +245,10 @@ final class WorldStream
 			 * @param array<string,mixed> $b Second map lifecycle record with an order field.
 			 * @return int Negative, zero, or positive comparison of manifest indexes.
 			 */
-			fn($a, $b) => $a['order'] <=> $b['order']);
+			fn($a, $b) => $a['order'] <=> $b['order']
+		);
 		$maps = [];
+
 		foreach($states as $path => $state)
 		{
 			if($state['ready'])
@@ -244,7 +273,8 @@ final class WorldStream
 			 * @param array<string,mixed> $state Map lifecycle record containing its ready flag.
 			 * @return bool True while loading or reporting an unresolved failure.
 			 */
-			fn($state) => !$state['ready']));
+			fn($state) => !$state['ready']
+		));
 	}
 
 	/**
@@ -261,9 +291,11 @@ final class WorldStream
 	array
 	{
 		$maps = [];
+
 		foreach($this->world->entries($x, $y, $width, $height, $margin) as $entry)
 		{
 			$path = Assets::relative($this->world->path, $entry['fileName']);
+
 			if($this->states[$path]['ready'] ?? false)
 			{
 				$maps[] = $this->states[$path]['map'];
@@ -289,7 +321,8 @@ final class WorldStream
 		foreach($this->world->entries($x, $y, $width, $height, $margin) as $entry)
 		{
 			if(!($this->states[Assets::relative($this->world->path, $entry['fileName'])]['ready']
-				?? false)){
+				?? false
+			)){
 				return false;
 			}
 		}
@@ -304,13 +337,18 @@ final class WorldStream
 	 */
 	public function retry(string $fileName): void
 	{
-		$path = isset($this->states[$fileName])?$fileName:Assets::relative($this->world->path
-			, $fileName);
+		$path = isset($this->states[$fileName])?$fileName:Assets::relative(
+			$this->world->path
+			, $fileName
+		);
+
 		if(!isset($this->errors[$path]))
 		{
 			return;
 		}
+
 		$failed = $this->states[$path]['failed'];
+
 		if($failed !== null)
 		{
 			$this->world->loader->assets->forget($failed);
@@ -323,6 +361,7 @@ final class WorldStream
 				$this->world->loader->assets->forget($file);
 			}
 		}
+
 		$this->world->unload($this->states[$path]['entry']['fileName']);
 		$this->states[$path]['map'] = null;
 		$this->states[$path]['failed'] = null;
@@ -339,19 +378,24 @@ final class WorldStream
 	private function evict(string $path): void
 	{
 		$state = $this->states[$path];
+
 		if($state['ready'])
 		{
 			$this->exited[] = $state['map'];
 		}
+
 		$this->world->unload($state['entry']['fileName']);
+
 		foreach(array_keys($state['files']) as $file)
 		{
 			if(--$this->references[$file] > 0)
 			{
 				continue;
 			}
+
 			unset($this->references[$file]);
 			$this->world->loader->assets->forget($file);
+
 			if($this->release)
 			{
 				($this->release)($file);
@@ -371,8 +415,10 @@ final class WorldStream
 		{
 			return;
 		}
+
 		$this->closed = true;
 		$this->entered = $this->exited = [];
+
 		foreach(array_keys($this->states) as $path)
 		{
 			$this->evict($path);

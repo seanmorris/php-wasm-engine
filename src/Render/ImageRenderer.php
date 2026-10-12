@@ -22,8 +22,10 @@ final class ImageRenderer
 	 */
 	public function __construct(public TileMap $map)
 	{
-		$this->program = new Program(file_get_contents(dirname(__DIR__, 2).'/shaders/images.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/images.frag'));
+		$this->program = new Program(
+			file_get_contents(dirname(__DIR__, 2).'/shaders/images.vert')
+			, file_get_contents(dirname(__DIR__, 2).'/shaders/images.frag')
+		);
 		$this->create();
 	}
 
@@ -49,32 +51,50 @@ final class ImageRenderer
 		{
 			return $this->textures[$path];
 		}
+
 		$source = IMG_Load($path);
+
 		if(!$source)
 		{
 			throw new \RuntimeException('Cannot load '.$path.': '.SDL_GetError());
 		}
+
 		$surface = null;
+
 		try
 		{
 			$width = $source->w;
 			$height = $source->h;
+
 			if(max($width, $height) > glGetIntegerv(GL_MAX_TEXTURE_SIZE))
 			{
 				throw new \RuntimeException('Background image exceeds GPU texture size');
 			}
+
 			$surface = new \SDL_Surface(0, $width, $height, 32, 255, 65280, 16711680, -16777216);
 			SDL_SetSurfaceBlendMode($source, SDL_BLENDMODE_NONE);
 			$destination = new \SDL_Rect(0, 0, $width, $height);
+
 			if(SDL_UpperBlit($source, null, $surface, $destination) !== 0)
 			{
 				throw new \RuntimeException(SDL_GetError());
 			}
+
 			glActiveTexture(GL_TEXTURE0);
 			$texture = Atlas::texture(GL_TEXTURE_2D);
 			$this->textures[$path] = [$texture,$width,$height];
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, $width, $height, 0, GL_RGBA, GL_UNSIGNED_BYTE
-				, $surface);
+
+			glTexImage2D(
+				GL_TEXTURE_2D
+				, 0
+				, GL_RGBA8
+				, $width
+				, $height
+				, 0
+				, GL_RGBA
+				, GL_UNSIGNED_BYTE
+				, $surface
+			);
 			$this->uploads++;
 			return $this->textures[$path];
 		}
@@ -84,6 +104,7 @@ final class ImageRenderer
 			{
 				SDL_FreeSurface($surface);
 			}
+
 			SDL_FreeSurface($source);
 		}
 	}
@@ -98,22 +119,29 @@ final class ImageRenderer
 	{
 		$this->draws = $this->uploads = 0;
 		$this->heights = [];
+
 		foreach($this->map->layers as $layer)
 		{
 			if($layer->type !== 'imagelayer')
 			{
 				continue;
 			}
+
 			$path = Parallax::image($layer, $milliseconds);
+
 			if($path !== null && $layer->visible && $layer->opacity > 0)
 			{
 				[, $layer->imageWidth,$layer->imageHeight] = $this->texture($path);
 			}
+
 			if(isset($layer->properties['from']))
 			{
 				$from = $layer->properties['from'];
-				$this->heights[$from] = max($this->heights[$from] ?? 0, $layer->offsetY + $layer
-					->imageHeight);
+
+				$this->heights[$from] = max(
+					$this->heights[$from] ?? 0
+					, $layer->offsetY + $layer->imageHeight
+				);
 			}
 		}
 	}
@@ -129,13 +157,20 @@ final class ImageRenderer
 	 */
 	public function renderLayer(Layer $layer, Camera $camera, float $milliseconds = 0): bool
 	{
-		$layout = Parallax::layout($layer, $this->map, $camera, $milliseconds, $this->heights[$layer
-			->properties['from'] ?? ''] ?? 0);
+		$layout = Parallax::layout(
+			$layer
+			, $this->map
+			, $camera
+			, $milliseconds
+			, $this->heights[$layer->properties['from'] ?? ''] ?? 0
+		);
 		$path = Parallax::image($layer, $milliseconds);
+
 		if($layout === null || $path === null)
 		{
 			return false;
 		}
+
 		[$texture] = $this->texture($path);
 		$p = $this->program;
 		$p->use();
@@ -146,8 +181,14 @@ final class ImageRenderer
 		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
 		glUniform4f($p->location('screenRect'), ...$layout['rect']);
 		glUniform4f($p->location('textureRect'), ...$layout['uv']);
-		glUniform4f($p->location('tint'), $layer->tint[0], $layer->tint[1], $layer->tint[2], $layer
-			->tint[3] * $layer->opacity);
+
+		glUniform4f(
+			$p->location('tint')
+			, $layer->tint[0]
+			, $layer->tint[1]
+			, $layer->tint[2]
+			, $layer->tint[3] * $layer->opacity
+		);
 		glUniform4f($p->location('colorKey'), ...($layer->transparentColor ?? [0,0,0,0]));
 		glUniform2i($p->location('repeatAxes'), $layer->repeatX?1:0, $layer->repeatY?1:0);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -166,6 +207,7 @@ final class ImageRenderer
 	public function render(Camera $camera, float $milliseconds = 0): void
 	{
 		$this->prepare($milliseconds);
+
 		foreach($this->map->layers as $layer)
 		{
 			if($layer->type === 'imagelayer')
@@ -186,6 +228,7 @@ final class ImageRenderer
 		{
 			return;
 		}
+
 		$this->release();
 		$this->program->restore();
 		$this->create();
@@ -202,6 +245,7 @@ final class ImageRenderer
 		{
 			return;
 		}
+
 		$this->closed = true;
 		$this->release();
 		$this->program->close();
@@ -215,14 +259,17 @@ final class ImageRenderer
 	private function release(): void
 	{
 		$ids = array_column($this->textures, 0);
+
 		if($ids)
 		{
 			glDeleteTextures(count($ids), $ids);
 		}
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
+
 		$this->textures = $this->vao = $this->heights = [];
 	}
 }

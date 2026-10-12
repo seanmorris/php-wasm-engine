@@ -61,7 +61,9 @@ function mapData(array $layers = [], array $extra = []): array
 	, 'height' => 2
 		, 'tilewidth' => 16,'tileheight' => 16,'layers' => $layers
 		, 'tilesets' => [['firstgid' => 1
-		, 'source' => 'tiles.tsj']]];
+		, 'source' => 'tiles.tsj'
+		]]
+	];
 }
 
 function tiles(): array
@@ -75,11 +77,14 @@ function tiles(): array
 		, 'tiles' => [['id' => 0
 		, 'properties' => [['name' =>
 		'solid'
-		, 'value' => true]]]
+		, 'value' => true
+		]]]
 		, ['id' => 1
 		, 'animation' => [['tileid' => 0,'duration' => 100]
 		, [
-		'tileid' => 1,'duration' => 200]]]]];
+		'tileid' => 1,'duration' => 200
+		]]]]
+	];
 }
 
 function layer(array $extra = []): array
@@ -88,13 +93,15 @@ function layer(array $extra = []): array
 	, 'data' => [1
 	, 0
 	, 0
-		, 2]];
+		, 2
+	]];
 }
 
 test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', function() {
 	$gid = Gid::from(4026531841.0);
 	check($gid->id === 1 && $gid->flags === 14);
 	check(bin2hex($gid->bytes()) === '010000e0');
+
 	foreach(range(0, 7) as $bits)
 	{
 		$g = Gid::from(1 + $bits * 536870912.0);
@@ -106,41 +113,66 @@ test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', functi
 	rejects(fn() => Gid::from(-1));
 	rejects(fn() => Gid::from(4294967296.0));
 });
+
 test('external tilesets, inherited group state and relative paths', function() {
-	$loader = fixture(['/maps/a.tmj' => mapData([['type' => 'group'
-	, 'offsetx' => 4
-	, 'opacity' => .5
-		, 'parallaxx' => .5,'layers' => [layer(['offsetx' => 3,'opacity' => .5])]]])
-		, '/maps/tiles.tsj' => tiles()]);
+	$loader = fixture(
+		['/maps/a.tmj' => mapData(
+			[['type' => 'group', 'offsetx' => 4, 'opacity' => .5, 'parallaxx' => .5
+			, 'layers' => [
+				layer(['offsetx' => 3,'opacity' => .5])
+			]]]
+		)
+			, '/maps/tiles.tsj' => tiles()
+		]
+	);
 	$map = $loader->map('/maps/a.tmj');
 	check($map === $loader->map('/maps/a.tmj'));
 	check($map->layers[0]->offsetX === 7.0);
 	near($map->layers[0]->opacity, .25);
 	near($map->layers[0]->parallaxX, .5);
 	check($map->tile(1)['image'] === '/maps/tiles.png');
-	check($map->animatedGid(2, 99) === 1 && $map->animatedGid(2, 100) === 2 && $map->animatedGid(2
-		, 300) === 1);
+
+	check(
+		$map->animatedGid(2, 99) === 1 && $map->animatedGid(2, 100) === 2 && $map->animatedGid(
+			2
+			, 300
+		) === 1
+	);
 });
+
 test('base64 and compressed layers reject corrupt lengths', function() {
 	foreach(['' => '', 'zlib' => 'gzcompress', 'gzip' => 'gzencode'] as $compression => $compress)
 	{
 		$bytes = hex2bin('01000080000000000000000002000000');
 		$data = base64_encode($compress ? $compress($bytes) : $bytes);
-		$loader = fixture(['a.tmj' => mapData([layer(['data' => $data
-		, 'encoding' => 'base64'
-			, 'compression' => $compression])])
-			, 'tiles.tsj' => tiles()]);
+
+		$loader = fixture(
+			['a.tmj' => mapData(
+				[layer(['data' => $data, 'encoding' => 'base64', 'compression' => $compression])]
+			)
+			, 'tiles.tsj' => tiles()
+			]
+		);
 		check($loader->map('a.tmj')->layers[0]->gidAt(0, 0)->flags === 8);
 	}
 	$loader = fixture(['a.tmj' => mapData([layer(['data' => [1]])]),'tiles.tsj' => tiles()]);
 	rejects(fn() => $loader->map('a.tmj'));
 });
+
 test('infinite maps keep sparse negative chunks and allow edits', function() {
-	$loader = fixture(['a.tmj' => mapData([layer(['chunks' => [['x' => -10000
-	, 'y' => -4
-	, 'width' => 2
-		, 'height' => 1,'data' => [1,2]]]])], ['infinite' => true])
-		, 'tiles.tsj' => tiles()]);
+	$loader = fixture(
+		['a.tmj' => mapData(
+			[layer(
+				['chunks' => [['x' => -10000, 'y' => -4, 'width' => 2, 'height' => 1
+				, 'data' => [1
+					, 2
+				]]]]
+			)]
+			, ['infinite' => true]
+		)
+		, 'tiles.tsj' => tiles()
+		]
+	);
 	$map = $loader->map('a.tmj');
 	$layer = $map->layers[0];
 	check($layer->gidAt(-10000, -4)->id === 1 && $layer->gidAt(0, 0)->id === 0);
@@ -149,10 +181,12 @@ test('infinite maps keep sparse negative chunks and allow edits', function() {
 	$layer->set(50000, 3, 2);
 	check(count($layer->chunks) === 2);
 });
+
 test('orthogonal and isometric projections round trip negative coordinates', function() {
 	foreach(['orthogonal','isometric'] as $orientation)
 	{
 		$p = new Projection($orientation, 64, 32, 10);
+
 		foreach([[-17.25,9.5],[0,0],[4,7]] as [$x,$y])
 		{
 			[$sx,$sy] = $p->project($x, $y);
@@ -162,17 +196,22 @@ test('orthogonal and isometric projections round trip negative coordinates', fun
 		}
 	}
 });
+
 test('world maps load on intersection and reuse assets', function() {
 	$reads = [];
 	$data = ['world.world' => ['maps' => [['fileName' => 'a.tmj'
 	, 'x' => 0
 	, 'y' => 0
 	, 'width' => 32
-		, 'height' => 32]
-		, ['fileName' => 'b.tmj','x' => 1000,'y' => 0,'width' => 32,'height' => 32]]]
+		, 'height' => 32
+	]
+		, ['fileName' => 'b.tmj','x' => 1000,'y' => 0,'width' => 32,'height' => 32]
+	]]
 		, 'a.tmj' => mapData([layer()])
 		, 'b.tmj' => mapData([layer()])
-		, 'tiles.tsj' => tiles()];
+		, 'tiles.tsj' => tiles()
+	];
+
 	$loader = new Loader(new Assets(function($path) use (&$reads, $data) {
 		$reads[] = $path;
 		return json_encode($data[$path]);
@@ -198,6 +237,7 @@ class Velocity
 }
 
 class Frozen {}
+
 test('ECS supports inheritance, boolean queries, replacement and destruction', function() {
 	$r = new Registry;
 	$a = $r->create(new Position, new Velocity);
@@ -212,15 +252,18 @@ test('ECS supports inheritance, boolean queries, replacement and destruction', f
 	$r->remove($b, Frozen::class);
 	check($r->query(Query::not(Frozen::class)) === [$b]);
 });
+
 test('systems order dependencies and defer structural changes', function() {
 	$r = new Registry;
 	$e = $r->create(new Position);
 	$s = new Scheduler($r);
 	$order = [];
+
 	$s->add('b', function($r) use (&$order, $e) {
 		$order[] = 'b';
 		check($r->has($e, Position::class));
 	}, ['a']);
+
 	$s->add('a', function($r) use (&$order, $e) {
 		$order[] = 'a';
 		$r->defer(fn($r) => $r->destroy($e));
@@ -231,6 +274,7 @@ test('systems order dependencies and defer structural changes', function() {
 	$s->add('d', fn() => null, ['c']);
 	rejects(fn() => $s->update(1 / 60));
 });
+
 test('fixed step is deterministic and limits catch-up', function() {
 	$clock = new FixedStep(1 / 60, 5);
 	$n = 0;
@@ -257,12 +301,14 @@ function tick(Platformer $p, Body $b, array $keys = [], int $frames = 1): void
 	static $inputs;
 	$inputs ??= new WeakMap;
 	$i = $inputs[$b] ??= new Controls;
+
 	for($n = 0; $n < $frames; $n++)
 	{
 		$i->set($keys);
 		$p->step($b, $i, 1 / 60);
 	}
 }
+
 test('landing, acceleration, braking, jumping and variable jump height', function() {
 	$p = new Platformer(ground());
 	$b = new Body(0, 0);
@@ -279,10 +325,17 @@ test('landing, acceleration, braking, jumping and variable jump height', functio
 	tick($p, $b, []);
 	check($b->vy >= -241);
 });
+
 test('fast bodies do not tunnel through floors or walls', function() {
-	$terrain = new Terrain([['points' => [[-500,100],[500,100],[500,101],[-500,101]]]
-	, ['points' => [
-		[100,-500],[101,-500],[101,100],[100,100]]]]);
+	$terrain = new Terrain(
+		[['points' => [[-500,100],[500,100],[500,101],[-500,101]]]
+		, ['points' => [[100,-500]
+		, [101
+			, -500
+		]
+		, [101,100],[100,100]
+		]]]
+	);
 	$p = new Platformer($terrain);
 	$b = new Body(0, 0);
 	$b->terminalSpeed = 10000;
@@ -293,6 +346,7 @@ test('fast bodies do not tunnel through floors or walls', function() {
 	tick($p, $b);
 	check($b->x + $b->radius <= 100.1);
 });
+
 test('slope sensors align feet and momentum leaves a ledge tangentially', function() {
 	$p = new Platformer(new Terrain([['points' => [[-1000,550],[100,0],[100,600],[-1000,600]]]]));
 	$b = new Body(-70, 20);
@@ -302,6 +356,7 @@ test('slope sensors align feet and momentum leaves a ledge tangentially', functi
 	tick($p, $b, ['right' => true], 30);
 	check(!$b->grounded && $b->x > 100);
 });
+
 test('one-way platforms permit upward passage and down-jump drop', function() {
 	$p = new Platformer(new Terrain([['points' => [[-100,100],[100,100]],'oneWay' => true]]));
 	$b = new Body(0, 150);
@@ -314,6 +369,7 @@ test('one-way platforms permit upward passage and down-jump drop', function() {
 	tick($p, $b, [], 12);
 	check($b->y > 100);
 });
+
 test('dash charging launches and drop dash releases on landing', function() {
 	$p = new Platformer(ground());
 	$b = new Body(0, 60, 'runner');
@@ -326,6 +382,7 @@ test('dash charging launches and drop dash releases on landing', function() {
 	tick($p, $b, ['action' => true], 70);
 	check($b->grounded && $b->rolling);
 });
+
 test('flight has a finite budget and glide can catch a wall and jump away', function() {
 	$p = new Platformer(ground());
 	$fly = new Body(0, -300, 'flyer');
@@ -354,6 +411,7 @@ require __DIR__.'/world.php';
 require __DIR__.'/input.php';
 
 $failed = 0;
+
 foreach($tests as $name => $fn)
 {
 	try
@@ -367,6 +425,7 @@ foreach($tests as $name => $fn)
 	}
 }
 echo count($tests)." tests, $failed failures\n";
+
 if($failed)
 {
 	exit(1);
