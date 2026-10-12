@@ -54,10 +54,16 @@ $engine->start(function() use ($device,$renderer,$camera,$engine) {
 	$device->present();
 },function() use ($renderer) {
 	$renderer->close();
+},function() use ($renderer) {
+	$renderer->restore();
 });
 ~~~
 
 [examples/game.php](examples/game.php) adds sprites, camera following, reset, and statistics. PHP schedules frames through vrzno; SDL_Delay is never used to yield. Engine::tick lets another PHP host supply time. Engine::stop cancels the callback and closes the device after your cleanup callback; create a new device to restart.
+
+Engine pauses simulation and drawing while the document is hidden or its WebGL context is lost. On restoration, Device reapplies GL state, then Engine calls the third `start()` callback before rendering. Restore each renderer there. MapRenderer restores its atlas and image layers in place; restore any SpriteRenderer that borrows that atlas afterward. WorldRenderer restores its resident maps. Restore a separately owned Atlas before its SpriteRenderer. Custom GPU resources also belong in this callback.
+
+PHP entities, map edits, camera state, and simulation time survive context loss. Resume discards elapsed idle time and held keys. Stop removes the browser listeners and remains available while graphics are lost. If Chrome discards the whole page, it reloads with a new PHP runtime; saving game state across that reload requires application persistence.
 
 ## Tiled data
 
@@ -172,7 +178,7 @@ MapRenderer uploads 32×32 tile-ID planes into GL_TEXTURE_2D_ARRAY. Unsigned RGB
 
 Orthogonal chunks/layers use glDrawArraysInstanced with per-instance placement, parallax, opacity, and tint. IDs upload initially and after edits. Isometric rendering merges diagonals across chunk boundaries in painter order, using additional draws to preserve overlapping tall tiles. Sprite batches are instanced. MapRenderer::stats reports draws, instances, and uploads.
 
-Atlas images and metadata must fit GPU texture limits; capacity errors are explicit. Sampling is nearest-neighbor. Close resources explicitly. Context restoration, atlas paging, moving-platform physics, lighting, audio abstractions, and editor integration are not included.
+Atlas images and metadata must fit GPU texture limits; capacity errors are explicit. Sampling is nearest-neighbor. Close resources explicitly. Atlas paging, moving-platform physics, lighting, audio abstractions, and editor integration are not included.
 
 ## Tests and style
 
@@ -189,7 +195,7 @@ PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmo
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
 
-Validation passed 31 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus seven Chromium integration tests on PHP 8.4. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and adjacent world maps. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passed 31 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus 11 Chromium integration tests on PHP 8.4. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and adjacent world maps. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

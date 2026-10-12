@@ -62,6 +62,9 @@ final class WorldRenderer
 		}
 		return $stats;
 	}
+	public function restore(): void
+	{ foreach($this->resident as [$renderer])
+	{ $renderer->restore(); } }
 	public function close(): void
 	{ foreach($this->resident as [$renderer])
 	{ $renderer->close(); } $this->resident = []; }

@@ -9,8 +9,12 @@ final class Atlas
 	public int $texture = 0,$metadata = 0,$width = 1,$height = 1;
 	public array $indices = [], $rects = [], $tiles = [];
 	private array $frames = [];
+	private bool $closed = false;
 	public function __construct(public TileMap $map)
+	{ $this->create(); }
+	private function create(): void
 	{
+		$map = $this->map;
 		$max = glGetIntegerv(GL_MAX_TEXTURE_SIZE);
 		$images = [];
 		$surfaces = [];
@@ -80,11 +84,20 @@ final class Atlas
 			$this->metadata = self::texture(GL_TEXTURE_2D);
 			glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA32F,$count,2,0,GL_RGBA,GL_FLOAT,$rectBytes.$offsetBytes);
 		} catch(\Throwable $error)
-		{ $this->close();
+		{ $this->release();
 		throw $error; }
 		finally
 		{ foreach($surfaces as $surface)
 		{ SDL_FreeSurface($surface); } }
+	}
+	/** Rebuild in place so SpriteRenderer keeps the same shared atlas. */
+	public function restore(): void
+	{
+		if($this->closed)
+		{ return; }
+		$this->release();
+		$this->indices = $this->rects = $this->tiles = $this->frames = [];
+		$this->create();
 	}
 	public static function texture(int $target): int
 	{
@@ -115,6 +128,9 @@ final class Atlas
 		return $updates;
 	}
 	public function close(): void
+	{ $this->closed = true;
+	$this->release(); }
+	private function release(): void
 	{ $ids = array_values(array_filter([$this->texture,$this->metadata]));
 	if($ids)
 	{ glDeleteTextures(count($ids),$ids); } $this->texture = $this->metadata = 0; }

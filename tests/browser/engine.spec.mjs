@@ -58,6 +58,16 @@ for(const scene of ['platformer','infinite','isometric']) test(scene+' live PHP 
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();
   await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-frames')),{timeout:60000}).toBeGreaterThan(20);
+  await page.evaluate(()=>{
+    window.loseExtension=document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
+    loseExtension.loseContext();
+  });
+  await expect(page.locator('#status')).toContainText('Graphics paused');
+  const pausedFrames=Number(await page.locator('canvas').getAttribute('data-frames'));
+  await page.waitForTimeout(100);
+  expect(Number(await page.locator('canvas').getAttribute('data-frames'))).toBe(pausedFrames);
+  await page.evaluate(()=>loseExtension.restoreContext());
+  await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-frames'))).toBeGreaterThan(pausedFrames+20);
   if(scene!=='isometric') {
     await expect.poll(async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}').grounded,{timeout:15000}).toBe(true);
     const before=JSON.parse(await page.locator('canvas').getAttribute('data-body'));

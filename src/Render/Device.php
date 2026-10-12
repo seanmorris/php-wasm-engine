@@ -6,6 +6,9 @@ final class Device
 	public $window;
 	private $context;
 	private bool $closed = false;
+	public int $generation = 0;
+	private $canvas = null, $webgl = null, $lostListener = null, $restoredListener = null;
+	private bool $lost = false, $pendingRestore = false;
 	public function __construct(public int $width = 960,public int $height = 540,string $title = 'PHP WASM Engine')
 	{
 		if(!function_exists('glDrawArraysInstanced'))
@@ -20,11 +23,46 @@ final class Device
 		if(!$this->context || SDL_GL_MakeCurrent($this->window,$this->context) !== 0)
 		{ $this->close();
 		throw new \RuntimeException(SDL_GetError()); }
+		if(function_exists('vrzno_env'))
+		{
+			$this->canvas = vrzno_env('canvas');
+			if($this->canvas)
+			{
+				$this->webgl = $this->canvas->getContext('webgl2');
+				$this->lostListener = function($event) {
+					$event->preventDefault();
+					$this->lost = $this->pendingRestore = true;
+				};
+				$this->restoredListener = function() { $this->lost = false; };
+				$this->canvas->addEventListener('webglcontextlost',$this->lostListener);
+				$this->canvas->addEventListener('webglcontextrestored',$this->restoredListener);
+			}
+		}
+		$this->configure();
+	}
+	private function configure(): void
+	{
 		glEnable(GL_BLEND);
 		glBlendFuncSeparate(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA,GL_ONE,GL_ONE_MINUS_SRC_ALPHA);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
 		glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+	}
+	/** Also check the browser before the asynchronous loss event is delivered. */
+	public function isLost(): bool
+	{ return $this->lost || ($this->webgl && $this->webgl->isContextLost()); }
+	/** Reapply GL state after restoration; Engine rebuilds resources before drawing. */
+	public function ready(): bool
+	{
+		if($this->closed || $this->isLost())
+		{ return false; }
+		if($this->pendingRestore)
+		{
+			$this->configure();
+			$this->pendingRestore = false;
+			$this->generation++;
+		}
+		return true;
 	}
 	public function begin(array $color = [.055,.075,.12,1]): void
 	{ glViewport(0,0,$this->width,$this->height);
@@ -35,6 +73,12 @@ final class Device
 	{
 		if($this->closed)
 		{ return; } $this->closed = true;
+		if($this->canvas)
+		{
+			$this->canvas->removeEventListener('webglcontextlost',$this->lostListener);
+			$this->canvas->removeEventListener('webglcontextrestored',$this->restoredListener);
+		}
+		$this->lostListener = $this->restoredListener = $this->canvas = $this->webgl = null;
 		if($this->context)
 		{ SDL_GL_DeleteContext($this->context); }
 		if($this->window)

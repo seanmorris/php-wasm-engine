@@ -24,6 +24,9 @@ final class Engine
 	private $refresh = null;
 	private $refreshCleanup = null;
 	private ?float $previous = null;
+	private $restore = null, $document = null, $visibility = null;
+	private int $generation;
+	public bool $paused = false;
 	public function __construct(public Device $device)
 	{
 		$this->entities = new Registry;
@@ -31,9 +34,31 @@ final class Engine
 		$this->controls = new Controls;
 		$this->input = new SdlInput;
 		$this->clock = new FixedStep;
+		$this->generation = $device->generation;
+	}
+	private function pause(): void
+	{
+		$this->paused = true;
+		$this->previous = null;
 	}
 	public function tick(float $elapsed,callable $render): void
 	{
+		if(($this->document && $this->document->hidden) || !$this->device->ready())
+		{ $this->pause();
+		return; }
+		if($this->paused || $this->generation !== $this->device->generation)
+		{
+			$elapsed = 0;
+			$this->input->reset();
+			$this->controls->reset();
+		}
+		if($this->generation !== $this->device->generation)
+		{
+			if($this->restore)
+			{ ($this->restore)(); }
+			$this->generation = $this->device->generation;
+		}
+		$this->paused = false;
 		$this->input->poll();
 		if($this->input->quit)
 		{ $this->stop();
@@ -43,7 +68,7 @@ final class Engine
 		$this->time += $dt; });
 		$render($this,$alpha);
 	}
-	public function start(callable $render,?callable $cleanup = null): void
+	public function start(callable $render,?callable $cleanup = null,?callable $restore = null): void
 	{
 		if($this->running)
 		{ return; }
@@ -51,6 +76,10 @@ final class Engine
 		{ throw new \RuntimeException('Browser scheduling requires vrzno; native hosts can call tick()'); }
 		$this->window = new \Vrzno;
 		$this->cleanup = $cleanup;
+		$this->restore = $restore;
+		$this->document = $this->window->document;
+		$this->visibility = fn() => $this->pause();
+		$this->document->addEventListener('visibilitychange',$this->visibility);
 		$this->running = true;
 		$this->previous = null;
 		$this->frame = function($now) use ($render) {
@@ -61,8 +90,13 @@ final class Engine
 			try
 			{ $this->tick(max(0,$elapsed),$render); }
 			catch(\Throwable $error)
-			{ $this->stop();
-			throw $error; }
+			{
+				// The GPU can disappear during a draw, before its loss event arrives.
+				if(!$this->device->isLost())
+				{ $this->stop();
+				throw $error; }
+				$this->pause();
+			}
 			if($this->running)
 			{ $this->raf = $this->window->requestAnimationFrame($this->frame); }
 		};
@@ -80,12 +114,16 @@ final class Engine
 		{ $this->window->cancelAnimationFrame($this->raf); }
 		if($this->refresh)
 		{ $this->refresh->delete($this->refreshCleanup); }
+		if($this->document)
+		{ $this->document->removeEventListener('visibilitychange',$this->visibility); }
 		try
 		{ if($this->cleanup)
 		{ ($this->cleanup)(); } } finally
 		{ $this->device->close();
 		$this->frame = null;
 		$this->cleanup = null;
+		$this->restore = $this->visibility = $this->document = null;
+		$this->raf = null;
 		$this->refreshCleanup = null; }
 	}
 }

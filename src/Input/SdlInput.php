@@ -5,6 +5,10 @@ final class SdlInput
 {
 	public bool $quit = false;
 	private array $keys = [];
+	/** Discard queued events and held keys after a suspended browser frame loop. */
+	public function reset(): void
+	{ $this->poll();
+	$this->keys = []; }
 	public function poll(): void
 	{
 		$event = new \SDL_Event;

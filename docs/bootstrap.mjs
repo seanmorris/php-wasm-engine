@@ -7,6 +7,12 @@ const stop=document.querySelector('#stop');
 const demo=document.querySelector('#demo');
 const fullscreen=document.querySelector('#fullscreen');
 const fullscreenError=document.querySelector('#fullscreen-error');
+canvas.addEventListener('webglcontextlost',()=>{
+  if(!stop.disabled) status.textContent='Graphics paused. Waiting for the browser to restore WebGL…';
+});
+canvas.addEventListener('webglcontextrestored',()=>{
+  if(!stop.disabled) status.textContent='Restoring graphics…';
+});
 fullscreen.hidden=!(document.fullscreenEnabled&&demo.requestFullscreen);
 document.addEventListener('fullscreenchange',()=>{
   fullscreen.textContent=document.fullscreenElement===demo?'Exit fullscreen':'Fullscreen';

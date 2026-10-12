@@ -68,4 +68,5 @@ $engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,
 		$status->textContent = sprintf('%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts',$body->ability?:($body->grounded?'ground':'air'),$body->groundSpeed,$renderer->stats['draws'] + $sprites->draws,$renderer->stats['instances'],$renderer->stats['uploads'],$terrain->raycasts);
 	}
 },function() use ($sprites,$renderer) { $sprites->close();
-$renderer->close(); });
+$renderer->close(); },function() use ($renderer,$sprites) { $renderer->restore();
+$sprites->restore(); });

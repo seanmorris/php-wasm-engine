@@ -14,6 +14,10 @@ final class ImageRenderer
 	public function __construct(public TileMap $map)
 	{
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/images.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/images.frag'));
+		$this->create();
+	}
+	private function create(): void
+	{
 		glGenVertexArrays(1,$this->vao);
 	}
 	private function texture(string $path): array
@@ -98,16 +102,29 @@ final class ImageRenderer
 		{ if($layer->type === 'imagelayer')
 		{ $this->renderLayer($layer,$camera,$milliseconds); } }
 	}
+	public function restore(): void
+	{
+		if($this->closed)
+		{ return; }
+		$this->release();
+		$this->program->restore();
+		$this->create();
+	}
 	public function close(): void
 	{
 		if($this->closed)
 		{ return; }
 		$this->closed = true;
+		$this->release();
+		$this->program->close();
+	}
+	private function release(): void
+	{
 		$ids = array_column($this->textures,0);
 		if($ids)
 		{ glDeleteTextures(count($ids),$ids); }
-		glDeleteVertexArrays(1,$this->vao);
-		$this->program->close();
-		$this->textures = [];
+		if($this->vao)
+		{ glDeleteVertexArrays(1,$this->vao); }
+		$this->textures = $this->vao = $this->heights = [];
 	}
 }

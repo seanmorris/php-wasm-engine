@@ -18,6 +18,11 @@ final class MapRenderer
 	{
 		$this->atlas = new Atlas($map);
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/tiles.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/tiles.frag'));
+		$this->create();
+	}
+	private function create(): void
+	{
+		$map = $this->map;
 		glGenVertexArrays(1,$this->vao);
 		glBindVertexArray($this->vao[0]);
 		glGenBuffers(2,$this->buffers);
@@ -221,17 +226,35 @@ final class MapRenderer
 		}
 		glBindVertexArray(0);
 	}
+
+	/** Restore GPU storage without replacing map, atlas or image renderer objects. */
+	public function restore(): void
+	{
+		if($this->closed)
+		{ return; }
+		$this->release();
+		$this->program->restore();
+		$this->atlas->restore();
+		$this->images?->restore();
+		$this->create();
+	}
 	public function close(): void
 	{
 		if($this->closed)
 		{ return; } $this->closed = true;
+		$this->release();
+		$this->program->close();
+		$this->atlas->close();
+		$this->images?->close();
+	}
+	private function release(): void
+	{
 		foreach($this->pages as $page)
 		{ glDeleteTextures(1,[$page['texture']]); }
 		if($this->buffers)
 		{ glDeleteBuffers(count($this->buffers),$this->buffers); }
 		if($this->vao)
-		{ glDeleteVertexArrays(1,$this->vao); } $this->program->close();
-		$this->atlas->close();
-		$this->images?->close();
+		{ glDeleteVertexArrays(1,$this->vao); }
+		$this->pages = $this->buffers = $this->vao = $this->gridRanges = $this->layout = [];
 	}
 }

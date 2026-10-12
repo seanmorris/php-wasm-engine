@@ -4,6 +4,7 @@ namespace PhpWasmEngine\Input;
 final class Controls
 {
 	private array $current = [], $previous = [];
+	public function reset(): void { $this->current = $this->previous = []; }
 	public function set(array $keys): void
 	{ $this->previous = $this->current;
 	$this->current = $keys; }

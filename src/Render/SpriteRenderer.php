@@ -10,6 +10,10 @@ final class SpriteRenderer
 	public function __construct(public Atlas $atlas)
 	{
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/sprites.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/sprites.frag'));
+		$this->create();
+	}
+	private function create(): void
+	{
 		glGenVertexArrays(1,$this->vao);
 		glBindVertexArray($this->vao[0]);
 		glGenBuffers(1,$this->buffers);
@@ -48,10 +52,24 @@ final class SpriteRenderer
 		glBindVertexArray(0);
 		$this->draws = 1;
 	}
+	/** The owner restores the shared atlas before restoring this sprite batch. */
+	public function restore(): void
+	{
+		if($this->closed)
+		{ return; }
+		$this->release();
+		$this->program->restore();
+		$this->create();
+	}
 	public function close(): void
 	{ if($this->closed)
 	{ return; } $this->closed = true;
-	glDeleteBuffers(1,$this->buffers);
-	glDeleteVertexArrays(1,$this->vao);
+	$this->release();
 	$this->program->close(); }
+	private function release(): void
+	{ if($this->buffers)
+	{ glDeleteBuffers(1,$this->buffers); }
+	if($this->vao)
+	{ glDeleteVertexArrays(1,$this->vao); }
+	$this->buffers = $this->vao = []; }
 }
