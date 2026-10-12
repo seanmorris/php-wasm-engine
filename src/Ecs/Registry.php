@@ -7,6 +7,10 @@ final class Registry
 {
 	private int $next = 1;
 	private array $entities = [], $index = [], $commands = [], $listeners = [];
+	private array $typeCache = [], $queryCache = [];
+	private int $cachedIds = 0;
+	private const QUERY_CACHE_ENTRIES = 64;
+	private const QUERY_CACHE_IDS = 131072;
 
 	/**
 	 * Allocate a stable entity ID and attach its initial components.
@@ -19,6 +23,7 @@ final class Registry
 	{
 		$id = $this->next++;
 		$this->entities[$id] = [];
+		$this->invalidateQueries();
 
 		foreach($components as $c)
 		{
@@ -52,12 +57,20 @@ final class Registry
 			$this->remove($id, $type);
 		}
 
+		// A removal listener may already have attached another instance of this concrete class.
+		$indexed = isset($this->entities[$id][$type]);
 		$this->entities[$id][$type] = $component;
 
-		foreach($this->types($component) as $class)
+		if(!$indexed)
 		{
-			$this->index[$class][$id][$type] = true;
+			foreach($this->types($component) as $class)
+			{
+				// Count overlapping concrete components without a map for each entity/type.
+				$this->index[$class][$id] = ($this->index[$class][$id] ?? 0) + 1;
+			}
 		}
+
+		$this->invalidateQueries();
 		$this->emit('added', $id, $component);
 	}
 
@@ -76,17 +89,21 @@ final class Registry
 		{
 			if($component instanceof $type)
 			{
-				unset($this->entities[$id][$class]);
-
-				foreach($this->types($component) as $indexed)
+				// Earlier callbacks can remove a later member of this foreach snapshot.
+				if(isset($this->entities[$id][$class]))
 				{
-					unset($this->index[$indexed][$id][$class]);
+					unset($this->entities[$id][$class]);
 
-					if(empty($this->index[$indexed][$id]))
+					foreach($this->types($component) as $indexed)
 					{
-						unset($this->index[$indexed][$id]);
+						if(--$this->index[$indexed][$id] === 0)
+						{
+							unset($this->index[$indexed][$id]);
+						}
 					}
 				}
+
+				$this->invalidateQueries();
 				$this->emit('removed', $id, $component);
 			}
 		}
@@ -107,6 +124,7 @@ final class Registry
 			$this->remove($id, $type);
 		}
 		unset($this->entities[$id]);
+		$this->invalidateQueries();
 	}
 
 	/**
@@ -163,7 +181,15 @@ final class Registry
 			throw new \InvalidArgumentException('Expected component type or Query');
 		}
 
-		$candidates = array_keys($this->entities);
+		// Value keys also cover freshly constructed descriptions and edits to nested public terms.
+		$key = serialize($query);
+
+		if(isset($this->queryCache[$key]))
+		{
+			return $this->queryCache[$key];
+		}
+
+		$candidates = $this->entities;
 
 		if($query->operation === 'all')
 		{
@@ -171,7 +197,7 @@ final class Registry
 			{
 				if(is_string($term))
 				{
-					$ids = array_keys($this->index[$term] ?? []);
+					$ids = $this->index[$term] ?? [];
 
 					if(count($ids) < count($candidates))
 					{
@@ -181,15 +207,122 @@ final class Registry
 			}
 		}
 
-		return array_values(array_filter($candidates,
-			/**
-			 * Evaluate the composed query against a candidate entity.
-			 *
-			 * @param int $id Candidate live entity ID.
-			 * @return bool Whether this candidate belongs in the query snapshot.
-			 */
-			fn($id) => $query->matches($this, $id)
-		));
+		// Intersect in the original candidate order, even when a nested set is more selective.
+		$ids = $candidates ? array_keys(
+			array_intersect_key($candidates, $this->matchingSet($query))
+		) : [];
+		$count = count($ids);
+
+		if($count > self::QUERY_CACHE_IDS)
+		{
+			return $ids;
+		}
+
+		if(count($this->queryCache) >= self::QUERY_CACHE_ENTRIES
+			|| $this->cachedIds + $count > self::QUERY_CACHE_IDS
+		){
+			$this->invalidateQueries();
+		}
+
+		$this->cachedIds += $count;
+		$this->queryCache[$key] = $ids;
+		return $ids;
+	}
+
+	/**
+	 * Evaluate membership using indexed sets, starting with the smallest intersection.
+	 *
+	 * @param Query|class-string $query Component type or nested boolean expression.
+	 * @return array<int,mixed> Entity-keyed set; values are not retained in snapshots.
+	 */
+	private function matchingSet($query): array
+	{
+		if(is_string($query))
+		{
+			return $this->index[$query] ?? [];
+		}
+
+		if(!in_array($query->operation, ['all', 'any', 'not'], true))
+		{
+			// Public operation fields historically allow other values; keep matches() semantics.
+			$matches = [];
+
+			foreach($this->entities as $id => $components)
+			{
+				if($query->matches($this, $id))
+				{
+					$matches[$id] = true;
+				}
+			}
+			return $matches;
+		}
+
+		$sets = [];
+		$exclusions = [];
+		$smallest = null;
+
+		foreach($query->terms as $term)
+		{
+			if($query->operation === 'all' && $term instanceof Query && $term->operation === 'not')
+			{
+				// A AND NOT(B, C) subtracts both sets without building a world-sized complement.
+				foreach($term->terms as $excluded)
+				{
+					$exclusions[] = $this->matchingSet($excluded);
+				}
+				continue;
+			}
+
+			$set = $this->matchingSet($term);
+
+			if($smallest === null || count($set) < count($sets[$smallest]))
+			{
+				$smallest = count($sets);
+			}
+
+			$sets[] = $set;
+		}
+
+		$result = $query->operation === 'any' ? [] : $this->entities;
+
+		if($query->operation === 'all' && $smallest !== null)
+		{
+			$result = $sets[$smallest];
+			unset($sets[$smallest]);
+		}
+
+		foreach($sets as $set)
+		{
+			if($query->operation === 'any')
+			{
+				$result += $set;
+			}
+			elseif($query->operation === 'not')
+			{
+				$result = array_diff_key($result, $set);
+			}
+			else
+			{
+				$result = array_intersect_key($result, $set);
+			}
+		}
+
+		foreach($exclusions as $set)
+		{
+			$result = array_diff_key($result, $set);
+		}
+		return $result;
+	}
+
+	/**
+	 * Retire query snapshots before lifecycle listeners can observe a structural change.
+	 *
+	 * @return void Drops cached arrays while existing caller snapshots retain their own values.
+	 */
+	private function invalidateQueries(): void
+	{
+		$this->queryCache = [];
+		$this->cachedIds = 0;
 	}
 
 	/**
@@ -255,7 +388,7 @@ final class Registry
 	}
 
 	/**
-	 * Collect every class and interface under which a component is indexed.
+	 * Cache every class and interface under which a concrete component class is indexed.
 	 *
 	 * @param object $object Component instance whose runtime type hierarchy is inspected.
 	 * @return list<class-string> Concrete class followed by parent classes and implemented
@@ -263,8 +396,10 @@ final class Registry
 	 */
 	private function types(object $object): array
 	{
-		return array_merge(
-			[get_class($object)]
+		$class = get_class($object);
+
+		return $this->typeCache[$class] ??= array_merge(
+			[$class]
 			, array_values(class_parents($object))
 			, array_values(class_implements($object))
 		);

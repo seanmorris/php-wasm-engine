@@ -409,6 +409,7 @@ require __DIR__.'/sprites.php';
 require __DIR__.'/parallax.php';
 require __DIR__.'/world.php';
 require __DIR__.'/input.php';
+require __DIR__.'/ecs.php';
 
 $failed = 0;
 

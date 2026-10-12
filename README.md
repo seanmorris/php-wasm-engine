@@ -252,6 +252,8 @@ $engine->entities->defer(fn($entities) => $entities->destroy($entity));
 
 Query::all, any, and not compose filters. Registry::on subscribes to added/removed components. Scheduler rejects missing dependencies and cycles, then flushes deferred changes after the systems finish. ObjectSpawner maps Tiled object classes to factories returning components.
 
+The registry evaluates boolean queries with indexed set operations and caches composed-query snapshots until a structural change. Shared ancestor memberships use counts, and query caches have fixed entry and ID budgets. The API and snapshot ordering are preserved. See [ECS benchmarks](docs/ecs-performance.md) for native PHP and browser measurements, SOOP-derived optimizations, and reproduction commands.
+
 ## Movement and raycasts
 
 Platformer is a new PHP implementation informed by the reference projects in [docs/architecture.md](docs/architecture.md). Units are pixels and seconds; the default simulation rate is 60 Hz.

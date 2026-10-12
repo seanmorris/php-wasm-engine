@@ -9,6 +9,8 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "test": "php tests/run.php",
+    "bench:ecs": "php benchmarks/ecs.php",
+    "bench:ecs:browser": "node scripts/bench-ecs-browser.mjs",
     "test:tiled": "node --test tests/tiled.mjs",
     "test:browser": "playwright test",
     "build:docs": "webpack --mode production && node scripts/build-docs.mjs",

@@ -12,6 +12,8 @@ jobs:
       - run: composer install --no-interaction --prefer-dist
       - run: php examples/generate-assets.php && git diff --exit-code -- examples/assets
       - run: composer test
+      - name: Check ECS benchmark workloads
+        run: php benchmarks/ecs.php --entities=1000 --samples=1 --iterations=1 > "$RUNNER_TEMP/ecs-benchmark.json"
       - run: composer lint
   tiled:
     runs-on: ubuntu-latest
