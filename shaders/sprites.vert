@@ -8,7 +8,7 @@ uniform vec2 camera;
 uniform vec2 viewport;
 uniform float zoom;
 out vec2 uv;
-out vec4 color;
+flat out vec4 color;
 flat out vec4 rect;
 void main() {
     vec2 corners[6]=vec2[6](vec2(0,0),vec2(1,0),vec2(0,1),vec2(0,1),vec2(1,0),vec2(1,1));

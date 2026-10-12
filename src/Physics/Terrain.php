@@ -7,6 +7,8 @@ final class Terrain
 {
 	private array $segments = [], $grid = [], $edges = [], $opposites = [];
 	private array $polygons = [], $polygonGrid = [], $switches = [];
+	private array $shapes = [];
+	private int $nextShape = 1, $nextSegment = 0, $nextPolygon = 0;
 	public int $raycasts = 0;
 
 	/**
@@ -19,6 +21,11 @@ final class Terrain
 	 */
 	public function __construct(array $shapes = [], private int $cellSize = 64)
 	{
+		if($cellSize < 1)
+		{
+			throw new \InvalidArgumentException('Terrain cell size must be positive');
+		}
+
 		foreach($shapes as $shape)
 		{
 			$this->add($shape['points'], $shape['oneWay'] ?? false, $shape['collisionLayer'] ?? 0);
@@ -38,16 +45,45 @@ final class Terrain
 	 */
 	public function add(array $points, bool $oneWay = false, int $collisionLayer = 0): void
 	{
+		$handle = $this->addShape($points, $oneWay, $collisionLayer);
+		// Permanent map terrain does not need to retain removable-shape bookkeeping.
+		unset($this->shapes[$handle]);
+	}
+
+	/**
+	 * Add geometry and retain a stable handle for removing it later.
+	 *
+	 * @param list<array{float|int,float|int}> $points Finite vertices forming an edge or polygon.
+	 * @param bool $oneWay Keep only upward-facing edges and permit passage from below.
+	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @return int Shape handle, never reused, accepted by removeShape.
+	 */
+	public function addShape(array $points, bool $oneWay = false, int $collisionLayer = 0): int
+	{
 		if($collisionLayer < 0)
 		{
 			throw new \InvalidArgumentException('Collision layers must be nonnegative');
 		}
 
 		$count = count($points);
+		$points = array_values($points);
+
+		foreach($points as $point)
+		{
+			if(!is_array($point) || !isset($point[0], $point[1])
+				|| !is_numeric($point[0]) || !is_numeric($point[1])
+				|| !is_finite((float)$point[0]) || !is_finite((float)$point[1])
+			){
+				throw new \InvalidArgumentException('Terrain vertices must be finite coordinates');
+			}
+		}
+
+		$shape = $this->nextShape++;
+		$this->shapes[$shape] = ['segments' => [], 'polygon' => null];
 
 		if($count < 2)
 		{
-			return;
+			return $shape;
 		}
 
 		$area = 0;
@@ -66,8 +102,9 @@ final class Terrain
 
 		if($count > 2 && !$oneWay)
 		{
-			$id = count($this->polygons);
-			$this->polygons[] = [$points,$collisionLayer];
+			$id = $this->nextPolygon++;
+			$this->polygons[$id] = [$points,$collisionLayer];
+			$this->shapes[$shape]['polygon'] = $id;
 			$xs = array_column($points, 0);
 			$ys = array_column($points, 1);
 
@@ -110,8 +147,9 @@ final class Terrain
 
 			$key = json_encode([$x + 0.0,$y + 0.0,$u + 0.0,$v + 0.0]);
 			$reverse = json_encode([$u + 0.0,$v + 0.0,$x + 0.0,$y + 0.0]);
-			$id = count($this->segments);
-			$this->segments[] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer];
+			$id = $this->nextSegment++;
+			$this->segments[$id] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer];
+			$this->shapes[$shape]['segments'][] = $id;
 
 			if(!$oneWay)
 			{
@@ -135,6 +173,111 @@ final class Terrain
 					$this->grid["$cx,$cy"][] = $id;
 				}
 			}
+		}
+		return $shape;
+	}
+
+	/**
+	 * Remove owned segments and polygon occupancy while exposing adjacent shared edges.
+	 *
+	 * @param int $handle Stable handle returned by addShape.
+	 * @return bool True when a shape was removed; false for unknown or already removed handles.
+	 */
+	public function removeShape(int $handle): bool
+	{
+		if(!isset($this->shapes[$handle]))
+		{
+			return false;
+		}
+
+		$shape = $this->shapes[$handle];
+
+		foreach($shape['segments'] as $id)
+		{
+			[$x, $y, $u, $v] = $this->segments[$id];
+
+			foreach($this->cells($x, $y, $u, $v) as $cell)
+			{
+				$this->removeIndex($this->grid, $cell, $id);
+			}
+
+			$key = json_encode([$x + 0.0, $y + 0.0, $u + 0.0, $v + 0.0]);
+			$this->removeIndex($this->edges, $key, $id);
+
+			foreach($this->opposites[$id] ?? [] as $other)
+			{
+				$this->removeIndex($this->opposites, $other, $id);
+			}
+			unset($this->segments[$id], $this->opposites[$id]);
+		}
+
+		$id = $shape['polygon'];
+
+		if($id !== null)
+		{
+			$xs = array_column($this->polygons[$id][0], 0);
+			$ys = array_column($this->polygons[$id][0], 1);
+
+			foreach($this->cells(min($xs), min($ys), max($xs), max($ys)) as $cell)
+			{
+				$this->removeIndex($this->polygonGrid, $cell, $id);
+			}
+			unset($this->polygons[$id]);
+		}
+
+		unset($this->shapes[$handle]);
+		return true;
+	}
+
+	/**
+	 * Enumerate spatial cells touched by an axis-aligned bound.
+	 *
+	 * @param float $x First endpoint's world X coordinate.
+	 * @param float $y First endpoint's world Y coordinate.
+	 * @param float $u Opposite endpoint's world X coordinate.
+	 * @param float $v Opposite endpoint's world Y coordinate.
+	 * @return \Generator<int,string> Cell keys covering the inclusive bounds.
+	 */
+	private function cells(float $x, float $y, float $u, float $v): \Generator
+	{
+		$left = (int)floor(min($x, $u) / $this->cellSize);
+		$right = (int)floor(max($x, $u) / $this->cellSize);
+		$top = (int)floor(min($y, $v) / $this->cellSize);
+		$bottom = (int)floor(max($y, $v) / $this->cellSize);
+
+		for($cy = $top; $cy <= $bottom; $cy++)
+		{
+			for($cx = $left; $cx <= $right; $cx++)
+			{
+				yield "$cx,$cy";
+			}
+		}
+	}
+
+	/**
+	 * Remove one geometry ID from a local index bucket and prune empty buckets.
+	 *
+	 * @param array<string|int,list<int>> $index Mutable spatial, edge, or adjacency index.
+	 * @param string|int $key Bucket key containing the geometry ID.
+	 * @param int $id Segment or polygon identifier to remove.
+	 * @return void Removes matching entries without reindexing unrelated geometry.
+	 */
+	private function removeIndex(array &$index, string|int $key, int $id): void
+	{
+		if(!isset($index[$key]))
+		{
+			return;
+		}
+
+		$remaining = array_values(array_diff($index[$key], [$id]));
+
+		if($remaining)
+		{
+			$index[$key] = $remaining;
+		}
+		else
+		{
+			unset($index[$key]);
 		}
 	}
 

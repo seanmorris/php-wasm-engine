@@ -2,7 +2,7 @@
 precision highp float;
 uniform sampler2D atlas;
 in vec2 uv;
-in vec4 color;
+flat in vec4 color;
 flat in vec4 rect;
 out vec4 outputColor;
 void main() {

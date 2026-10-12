@@ -3,6 +3,8 @@ declare(strict_types=1);
 require dirname(__DIR__).'/autoload.php';
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Effects\ParticleBurst;
+use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Physics\
 {
@@ -16,7 +18,7 @@ use PhpWasmEngine\Render\
 $scene = vrzno_env('scene')?:'platformer';
 $profile = vrzno_env('profile')?:'runner';
 
-if(!in_array($scene, ['platformer','loop','infinite','isometric'], true))
+if(!in_array($scene, ['platformer','loop','infinite','isometric','breakables'], true))
 {
 	throw new InvalidArgumentException('Invalid scene');
 }
@@ -68,6 +70,14 @@ $engine->systems->add('movement', function($entities, $dt) use ($engine, $moveme
 }
 );
 
+$blocks = null;
+
+if($scene === 'breakables')
+{
+	require __DIR__.'/breakables.php';
+	$blocks = configureBreakables($engine, $terrain, $map, $body);
+}
+
 if($scene === 'isometric')
 {
 	$camera->x = -160;
@@ -91,7 +101,7 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 		$sprite->rotation = $body->angle;
 		$sprite->flipX = $body->facing < 0;
 		$sprite->scaleY = $body->rolling?.7:1;
-		$sprites->render([$sprite], $camera, $engine->time * 1000);
+		$sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
 	}
 
 	$device->present();
@@ -109,6 +119,18 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 		]
 	);
 
+	if($scene === 'breakables')
+	{
+		$intact = count($engine->entities->query(BreakableBlock::class));
+		$pieces = 0;
+
+		foreach($engine->entities->query(ParticleBurst::class) as $id)
+		{
+			$pieces += count($engine->entities->get($id, ParticleBurst::class)->sprites->sprites);
+		}
+		$canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));
+	}
+
 	if($frames % 10 === 0)
 	{
 		$status->textContent = sprintf(
@@ -116,7 +138,7 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 			, $body->ability?:($body->grounded?'ground':'air')
 			, $body->groundSpeed
 			, $renderer->stats['draws'] + $sprites->draws
-			, $renderer->stats['instances']
+			, $renderer->stats['instances'] + $sprites->instances
 			, $renderer->stats['uploads']
 			, $terrain->raycasts
 		);
@@ -126,12 +148,19 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 			$status->textContent .= ' · collision layer '.$body->collisionLayer;
 		}
 
+		if($scene === 'breakables')
+		{
+			$status
+				->textContent .= " · $intact intact blocks · $pieces shards · X / B breaks nearby";
+		}
+
 		if($engine->userPaused)
 		{
 			$status->textContent = 'Paused. Press Start / Options or P to resume.';
 		}
 	}
-}, function() use ($sprites, $renderer) {
+}, function() use ($sprites, $renderer, $blocks) {
+	$blocks?->close();
 	$sprites->close();
 	$renderer->close();
 }, function() use ($renderer, $sprites) {

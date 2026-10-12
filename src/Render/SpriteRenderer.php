@@ -2,12 +2,15 @@
 declare(strict_types=1);
 namespace PhpWasmEngine\Render;
 
+use PhpWasmEngine\Ecs\Registry;
+
 final class SpriteRenderer
 {
 	private Program $program;
 	private array $vao = [],$buffers = [];
 	private bool $closed = false;
 	public int $draws = 0;
+	public int $instances = 0;
 
 	/**
 	 * Create the sprite shader and instancing buffers while borrowing an existing atlas.
@@ -58,6 +61,7 @@ final class SpriteRenderer
 	public function render(array $sprites, Camera $camera, float $milliseconds = 0): void
 	{
 		$this->draws = 0;
+		$this->instances = 0;
 
 		if(!$sprites)
 		{
@@ -68,11 +72,12 @@ final class SpriteRenderer
 
 		foreach($sprites as $sprite)
 		{
-			$gid = $this->atlas->map->animatedGid($sprite->gid, $milliseconds + $sprite->time);
+			$gid = $sprite->frame($this->atlas->map, $milliseconds);
 
 			$rect = $this->atlas->rects[$gid] ?? throw new \OutOfBoundsException(
 				"Sprite GID $gid is missing"
 			);
+			$rect = $sprite->rectangle($rect);
 
 			$bytes .= pack(
 				'f*'
@@ -109,6 +114,23 @@ final class SpriteRenderer
 		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count($sprites));
 		glBindVertexArray(0);
 		$this->draws = 1;
+		$this->instances = count($sprites);
+	}
+
+	/**
+	 * Draw single-sprite and multi-sprite entities in one shared-atlas batch.
+	 *
+	 * @param Registry $registry Registry containing Sprite and SpriteGroup components.
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time used to select animation frames.
+	 * @param list<int>|null $entityIds Explicit painter order, or null for entity creation order.
+	 * @return void Collects visible components and submits their sprites in one draw.
+	 */
+	public function renderEntities(Registry $registry, Camera $camera, float $milliseconds = 0,
+		?array $entityIds = null
+	): void
+	{
+		$this->render(SpriteGroup::collect($registry, $entityIds), $camera, $milliseconds);
 	}
 
 	/**

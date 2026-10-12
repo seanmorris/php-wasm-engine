@@ -11,7 +11,7 @@ npm ci
 npm start
 ~~~
 
-Open http://localhost:9130. Select the platformer, loop-de-loop, infinite map, isometric scene, or streaming world, then press **Run PHP**. The WASM download starts on that click. **Fullscreen** expands the demo while keeping its controls visible; use **Exit fullscreen** or Escape to return.
+Open http://localhost:9130. Select the platformer, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world, then press **Run PHP**. The WASM download starts on that click. **Fullscreen** expands the demo while keeping its controls visible; use **Exit fullscreen** or Escape to return.
 
 `npm start` runs webpack-dev-server with live reload. Changes to the demo JavaScript, CSS, HTML, PHP sources, shaders, maps, and sprites reload the page. Press **Run PHP** again after a reload. Set `PORT` to use a port other than 9130.
 
@@ -35,6 +35,9 @@ Gamepads work in every scene. Click the canvas and press a gamepad button if the
 | Pause / resume | Start / Options | P / Escape |
 | Reset position (demo shortcut) | Back / Select / Share | R |
 | Retry world downloads | B / Circle | X |
+| Shatter a nearby block in Breakable blocks | B / Circle | X |
+
+In **Breakable blocks**, walk into a block or jump onto it to test its collision. Press X or B / Circle nearby to break it into a grid of particles. R or Back / Select restores all three blocks. Their `columns` and `rows` properties in `examples/assets/breakables.tmj` set the grids to 4×3, 2×8, and 8×2. Tiled tile-object sizes set their world dimensions.
 
 ## Input
 
@@ -221,6 +224,8 @@ $atlas->close();
 
 Sprites support anchors, rotation, scaling, flips, tint, opacity, and animation offsets. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
+Set `$sprite->crop = [$x, $y, $width, $height]` to draw an integer pixel region relative to the current tile frame. The crop must fit inside that frame; `null` draws the whole image. Cropped dimensions determine the sprite's size and anchor. Set `animated = false` to treat `gid` as a concrete frame, even when that tile also defines an animation.
+
 Anchor the visible soles, accounting for transparent image padding. The demo's 32-pixel sprites have two transparent rows below their feet, so they use `originY: 30 / 32`. Their world anchor follows the body's rotated contact normal, keeping the artwork against floors, walls, and ceilings.
 
 Switch an existing sprite by name with `SpriteSheet::play()`. Pass the same simulation time, in milliseconds, that you pass to SpriteRenderer:
@@ -235,6 +240,64 @@ $sprites->render([$sprite],$camera,$now);
 A changed animation starts at its first frame. Repeated requests for the current animation keep its playback position, so calling `play()` every update does not freeze it. `play($sprite,'jump',$now,restart: true)` explicitly restarts it. The method returns `true` when playback starts or restarts, and `false` when unchanged. It preserves the sprite object, position, transform, tint, and opacity, and reuses its atlas.
 
 Tiled frame durations control looping; static tiles also work. Each sprite has its own clock offset. An animation created by `sprite()` initially follows the renderer's clock; use `restart: true` to start that same animation at a later time. Unknown names or non-finite times throw without changing the sprite. Use animations from the tileset backing the renderer's atlas.
+
+### Multiple sprites on one entity
+
+Keep a `Sprite` component for the usual single-image entity. Attach a `SpriteGroup` when an entity needs several independently positioned or animated images. The registry still keeps one component per concrete class.
+
+~~~php
+use PhpWasmEngine\Render\{Sprite, SpriteGroup};
+
+$player = $engine->entities->create(new Sprite(7, 80, 448));
+$assembly = $engine->entities->create(new SpriteGroup(
+    new Sprite(1, 320, 448),
+    new Sprite(5, 320, 400)
+));
+
+$group = $engine->entities->get($assembly, SpriteGroup::class);
+$group->sprites[1]->rotation = .2;
+$sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
+~~~
+
+Group positions are world coordinates. Each member has its own transform, crop, and animation clock. `renderEntities()` collects both component types in entity creation order, drawing a primary `Sprite` before its group members if an entity has both. Pass `entityIds: [$assembly, $player]` to choose painter order. `SpriteGroup::collect()` also returns the flat list for custom sorting or the existing `render()` API. Every selected sprite must use the renderer's atlas. `SpriteRenderer::$instances` counts submitted sprites.
+
+## Breakable blocks and particles
+
+`BreakableBlocks` adds a stationary rectangular collider to the same `Terrain` used by the player. It uses the sprite's crop, anchor, rotation, and scale at creation. Collision includes transparent pixels inside that rectangle. Blocks stop movement on all sides and support standing, like solid wall tiles.
+
+~~~php
+use PhpWasmEngine\Effects\ParticleSystem;
+use PhpWasmEngine\Gameplay\BreakableBlocks;
+use PhpWasmEngine\Render\Sprite;
+
+$blocks = new BreakableBlocks($engine->entities, $terrain, $map);
+$image = new Sprite(1, 320, 448, 0, 1);
+$image->scaleX = $image->scaleY = 3;
+$block = $blocks->create($image, columns: 4, rows: 3);
+
+$engine->systems->add('particles', [new ParticleSystem, 'update']);
+
+// Call from a hit, interaction, or damage system when the block should break.
+$blocks->shatter($block, $engine->time * 1000);
+
+// In the render callback, after drawing the map:
+$sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
+
+// In scene cleanup, before closing the terrain owner:
+$blocks->close();
+~~~
+
+`create()` returns an entity with `Sprite` and `BreakableBlock` components. `collisionLayer: 0` makes it solid on every plane; supply a positive plane to restrict it. Keep the manager alive and close it when the scene ends. Blocks stay at their initial collision pose; editing a sprite later does not make a moving platform.
+
+`shatter()` freezes the current animation frame, removes the collider and primary sprite, and attaches `SpriteGroup` and `ParticleBurst` to the **same entity ID**. It returns `true` once, then `false` for repeated calls. The new group contains exactly `columns * rows` pieces. Uneven image dimensions distribute integer pixels without overlap or gaps. Grid dimensions must be positive and no greater than the cropped source dimensions. Invalid grids, crops, or motion settings throw before changing an intact block.
+
+Pieces inherit flips, rotation, scale, tint, and opacity, then move outward under gravity, spin, and fade. They share the original atlas and one instanced sprite batch. No fragment textures or per-piece entities are allocated. `shatter()` accepts named `speed`, `lift`, `gravity`, and `lifetime` settings, in pixels and seconds. Defaults are 240 px/s outward speed, 240 px/s upward lift, 900 px/s² gravity, and a 1.2-second lifetime. Debris is nonsolid.
+
+`ParticleSystem::update()` queues destruction of expired particle entities; the scheduler flushes that queue after its systems finish. Call `Registry::flush()` yourself when driving the system directly. It destroys the whole particle entity, including any other components. Removing an intact `BreakableBlock` or destroying its entity releases the collider. `BreakableBlocks::close()` destroys its remaining blocks and debris while leaving unrelated terrain alone.
+
+For an effect independent of breakable terrain, create `ParticleBurst::grid($sprite, $map, $columns, $rows, $milliseconds)` and attach both the returned burst and `$burst->sprites` to a disposable entity. Alternatively, call `$burst->step($dt)` yourself and use `finished()` to manage its lifetime. This lets a persistent actor own a group without letting `ParticleSystem` retire that actor.
+
+Terrain also exposes `addShape($points, $oneWay, $collisionLayer): int` and `removeShape($handle): bool` for other removable obstacles. Handles are never reused. Removal updates spatial indexes, polygon occupancy, and shared-edge cancellation immediately. Make changes between physics steps. The existing full-displacement `castBody()` and adhesion raycasts see the current shapes, so fast movement cannot skip an intact block and a broken support releases the player on the next step.
 
 ## Entities and systems
 
@@ -307,7 +370,7 @@ Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read
 
 With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all nine demo maps and three tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
 
-Validation passed 56 PHP regressions and parallax/sprite-switching GPU checks on PHP 8.0–8.5, plus 29 Chromium integration tests on PHP 8.4 and 12 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passes 76 PHP regressions on native PHP 8.2 and 32-bit PHP WASM 8.4, 32 Chromium integration tests on PHP 8.4, and 13 import/export checks in Tiled 1.12.2. Sprite-group checks cover exact pixel partitions at right angles, rotated interior pixels with a subpixel edge tolerance, cropped animation snapshots, shared atlas batches, and restoring moving debris. Breakable regressions cover collision from every side, a 60,000 px/s sweep, standing support, collision planes, shared-edge removal, expiry, and reset. Context recovery tests force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 
