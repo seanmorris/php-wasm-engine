@@ -20,10 +20,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: sudo apt-get update && sudo apt-get install -y tiled
-      - run: npm run test:tiled
+      - name: Install Tiled 1.12.2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth libegl1 libxkbcommon-x11-0 libxcb-cursor0
+          mkdir -p "$RUNNER_TEMP/tiled"
+          cd "$RUNNER_TEMP/tiled"
+          curl --fail --location --retry 3 https://github.com/mapeditor/tiled/releases/download/v1.12.2/Tiled-1.12.2_Linux_x86_64.AppImage -o Tiled.AppImage
+          echo "5e0edbff61314f41af3c72c21ec006b363cf12047cc9cfb5bbd63a98bca3721c  Tiled.AppImage" | sha256sum --check
+          chmod +x Tiled.AppImage
+          ./Tiled.AppImage --appimage-extract > /dev/null
+          echo "TILED_BIN=$RUNNER_TEMP/tiled/squashfs-root/AppRun" >> "$GITHUB_ENV"
+      - run: xvfb-run -a npm run test:tiled
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: xcb
   browser:
     runs-on: ubuntu-latest
     steps:
