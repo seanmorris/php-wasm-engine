@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace PhpWasmEngine\Input;
+
 final class SdlInput
 {
 	public bool $quit = false;
@@ -9,6 +10,7 @@ final class SdlInput
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
 	private $canvas = null, $focusListener = null, $blurListener = null;
+
 	/**
 	 * Create gamepad polling and attach browser canvas focus listeners when available.
 	 *
@@ -18,7 +20,9 @@ final class SdlInput
 	{
 		$this->gamepads = new Gamepads;
 		if(function_exists('vrzno_env'))
-		{ $this->canvas = vrzno_env('canvas'); }
+		{
+			$this->canvas = vrzno_env('canvas');
+		}
 		if($this->canvas)
 		{
 			$this->focusListener =
@@ -35,11 +39,12 @@ final class SdlInput
 				 * @return null Suspends input until a later focus event.
 				 */
 				fn() => $this->focus(false);
-			$this->canvas->addEventListener('focus',$this->focusListener);
-			$this->canvas->addEventListener('blur',$this->blurListener);
+			$this->canvas->addEventListener('focus', $this->focusListener);
+			$this->canvas->addEventListener('blur', $this->blurListener);
 			$this->focus((bool)$this->canvas->matches(':focus'));
 		}
 	}
+
 	/**
 	 * Apply a focus transition and discard stale input state.
 	 *
@@ -49,20 +54,26 @@ final class SdlInput
 	private function focus(bool $focused): void
 	{
 		if($this->focused === $focused)
-		{ return; }
+		{
+			return;
+		}
 		$this->focused = $focused;
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		$this->resetPads = true;
 	}
+
 	/**
 	 * Discard queued events and held input after a suspended frame loop.
 	 *
 	 * @return void Clears keyboard buffers and suppresses currently held controller inputs.
 	 */
 	public function reset(): void
-	{ $this->poll();
-	$this->keys = $this->pressedKeys = $this->pressedButtons = [];
-	$this->gamepads->reset(); }
+	{
+		$this->poll();
+		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
+		$this->gamepads->reset();
+	}
+
 	/**
 	 * Drain SDL events and buffer keyboard and controller presses for simulation.
 	 *
@@ -71,35 +82,60 @@ final class SdlInput
 	public function poll(): void
 	{
 		if($this->closed)
-		{ return; }
+		{
+			return;
+		}
 		$event = new \SDL_Event;
 		while(SDL_PollEvent($event))
 		{
 			if($event->type === SDL_QUIT)
-			{ $this->quit = true; }
-			if($event->type === SDL_WINDOWEVENT && $event->window->event === SDL_WINDOWEVENT_FOCUS_LOST)
-			{ $this->focus(false); }
-			if($event->type === SDL_WINDOWEVENT && $event->window->event === SDL_WINDOWEVENT_FOCUS_GAINED)
-			{ $this->focus(!$this->canvas || $this->canvas->matches(':focus')); }
+			{
+				$this->quit = true;
+			}
+			if($event->type === SDL_WINDOWEVENT && $event->window
+				->event === SDL_WINDOWEVENT_FOCUS_LOST){
+				$this->focus(false);
+			}
+			if($event->type === SDL_WINDOWEVENT && $event->window
+				->event === SDL_WINDOWEVENT_FOCUS_GAINED){
+				$this->focus(!$this->canvas || $this->canvas->matches(':focus'));
+			}
 			if($event->type === SDL_KEYUP)
-			{ $this->keys[$event->key->keysym->sym] = false; }
+			{
+				$this->keys[$event->key->keysym->sym] = false;
+			}
 			// Repeated keydowns must not reactivate a key cleared by focus or pause recovery.
 			if($event->type === SDL_KEYDOWN && !$event->key->repeat && $this->focused)
-			{ $this->keys[$event->key->keysym->sym] = $this->pressedKeys[$event->key->keysym->sym] = true; }
+			{
+				$this->keys[$event->key->keysym->sym] = $this->pressedKeys[$event->key->keysym
+					->sym] = true;
+			}
 		}
 		if($this->resetPads || !$this->focused)
-		{ $this->gamepads->reset(); }
+		{
+			$this->gamepads->reset();
+		}
 		else
-		{ $this->gamepads->poll(); }
+		{
+			$this->gamepads->poll();
+		}
 		$this->resetPads = false;
-		foreach([SDL_CONTROLLER_BUTTON_A,SDL_CONTROLLER_BUTTON_B,SDL_CONTROLLER_BUTTON_BACK,SDL_CONTROLLER_BUTTON_START] as $button)
-		{ if($this->gamepads->button($button))
-		{ $this->pressedButtons[$button] = true; } }
+		foreach([SDL_CONTROLLER_BUTTON_A
+		, SDL_CONTROLLER_BUTTON_B
+		, SDL_CONTROLLER_BUTTON_BACK
+			, SDL_CONTROLLER_BUTTON_START] as $button){
+			if($this->gamepads->button($button))
+			{
+				$this->pressedButtons[$button] = true;
+			}
+		}
 	}
+
 	/**
 	 * Read input for one simulation step and consume buffered press edges.
 	 *
-	 * @return array<string,bool|int|float> Named button states and analog movement strengths; empty while unfocused or closed.
+	 * @return array<string,bool|int|float> Named button states and analog movement strengths; empty
+	 * while unfocused or closed.
 	 */
 	public function consume(): array
 	{
@@ -107,15 +143,20 @@ final class SdlInput
 		$this->pressedKeys = $this->pressedButtons = [];
 		return $snapshot;
 	}
+
 	/**
 	 * Merge keyboard keys, the strongest stick, and D-pad/button states.
 	 *
-	 * @return array<string,bool|int|float> Current logical controls without consuming buffered short presses.
+	 * @return array<string,bool|int|float> Current logical controls without consuming buffered
+	 * short presses.
 	 */
 	public function snapshot(): array
 	{
 		if($this->closed || !$this->focused)
-		{ return []; }
+		{
+			return [];
+		}
+
 		$down =
 			/**
 			 * Check whether any alternative keyboard binding is held or buffered.
@@ -124,13 +165,14 @@ final class SdlInput
 			 * @return bool True if any supplied SDL key code is active.
 			 */
 			fn(...$codes) => count(array_filter($codes,
-			/**
-			 * Check a single SDL key against held state and buffered short presses.
-			 *
-			 * @param int $code SDL key symbol to inspect.
-			 * @return bool Whether the key contributes an active binding.
-			 */
-			fn($code) => !empty($this->keys[$code]) || !empty($this->pressedKeys[$code]))) > 0;
+				/**
+				 * Check a single SDL key against held state and buffered short presses.
+				 *
+				 * @param int $code SDL key symbol to inspect.
+				 * @return bool Whether the key contributes an active binding.
+				 */
+				fn($code) => !empty($this->keys[$code]) || !empty($this->pressedKeys[$code]))) > 0;
+
 		$button =
 			/**
 			 * Merge a held controller button with its buffered short press.
@@ -146,11 +188,32 @@ final class SdlInput
 		$up = $button(SDL_CONTROLLER_BUTTON_DPAD_UP);
 		$downPad = $button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 		if($left || $right)
-		{ $x = (int)$right - (int)$left; }
+		{
+			$x = (int)$right - (int)$left;
+		}
 		if($up || $downPad)
-		{ $y = (int)$downPad - (int)$up; }
-		return ['left' => max((int)$down(SDLK_LEFT,SDLK_a),-$x,0),'right' => max((int)$down(SDLK_RIGHT,SDLK_d),$x,0),'up' => max((int)$down(SDLK_UP,SDLK_w),-$y,0),'down' => max((int)$down(SDLK_DOWN,SDLK_s),$y,0),'jump' => $down(SDLK_SPACE,SDLK_z,SDLK_RETURN) || $button(SDL_CONTROLLER_BUTTON_A),'action' => $down(SDLK_x,SDLK_LSHIFT,SDLK_LCTRL,SDLK_RCTRL) || $button(SDL_CONTROLLER_BUTTON_B),'reset' => $down(SDLK_r) || $button(SDL_CONTROLLER_BUTTON_BACK),'pause' => $down(SDLK_p,SDLK_ESCAPE) || $button(SDL_CONTROLLER_BUTTON_START)];
+		{
+			$y = (int)$downPad - (int)$up;
+		}
+		return ['left' => max((int)$down(SDLK_LEFT, SDLK_a), -$x, 0)
+		, 'right' => max((int)$down(
+			SDLK_RIGHT
+			, SDLK_d), $x, 0)
+			, 'up' => max((int)$down(SDLK_UP, SDLK_w), -$y, 0)
+			, 'down' => max(
+				(int)$down(SDLK_DOWN, SDLK_s)
+				, $y
+				, 0)
+				, 'jump' => $down(SDLK_SPACE, SDLK_z, SDLK_RETURN)
+			|| $button(SDL_CONTROLLER_BUTTON_A)
+			, 'action' => $down(SDLK_x, SDLK_LSHIFT, SDLK_LCTRL
+				, SDLK_RCTRL) || $button(SDL_CONTROLLER_BUTTON_B)
+				, 'reset' => $down(SDLK_r) || $button(
+					SDL_CONTROLLER_BUTTON_BACK)
+					, 'pause' => $down(SDLK_p, SDLK_ESCAPE) || $button(
+						SDL_CONTROLLER_BUTTON_START)];
 	}
+
 	/**
 	 * Detach browser focus listeners and release owned gamepad handles.
 	 *
@@ -159,13 +222,15 @@ final class SdlInput
 	public function close(): void
 	{
 		if($this->closed)
-		{ return; }
+		{
+			return;
+		}
 		$this->closed = true;
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		if($this->canvas)
 		{
-			$this->canvas->removeEventListener('focus',$this->focusListener);
-			$this->canvas->removeEventListener('blur',$this->blurListener);
+			$this->canvas->removeEventListener('focus', $this->focusListener);
+			$this->canvas->removeEventListener('blur', $this->blurListener);
 		}
 		$this->canvas = $this->focusListener = $this->blurListener = null;
 		$this->gamepads->close();

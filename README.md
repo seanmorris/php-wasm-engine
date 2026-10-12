@@ -291,7 +291,11 @@ npx playwright install chromium
 npm run test:browser
 ~~~
 
-PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmorris/sm-no-saccade-style/tree/master/packages/php), pinned by composer.lock. Apply it with composer lint:fix.
+PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmorris/sm-no-saccade-style/tree/fix/readable-block-layout/packages/php). `composer.lock` pins a tested commit of its `fix/readable-block-layout` development branch until these rules have a tagged release. Apply it with `composer lint:fix`.
+
+The preset uses a 100-column limit, tabs, blank lines before declarations and their PHPDoc, and spaces after argument commas and `for` header semicolons. Optional control braces expand to normal blocks. Compact braced constructs must fit entirely on one line and require braces in PHP. Literal contents are preserved.
+
+`composer lint` also runs `composer lint:readability`. This reports remaining long lines and warns about more than 10 consecutive code lines without a blank line, suggesting separation into semantic blocks. These warnings are advisory; they do not insert blank lines automatically.
 
 Every engine method, constructor, closure, and arrow function has PHPDoc describing its behavior, parameters, return type, and return value. Array shapes and callback signatures describe structured inputs and outputs. `composer lint` also runs `composer lint:docs`, which checks all 233 functions in `src/` and the autoloader without executing them. The check rejects missing function descriptions, undocumented or out-of-order parameters, and missing return types or descriptions. To inspect a specific file or directory, run `php scripts/check-phpdoc.php path/to/source`.
 

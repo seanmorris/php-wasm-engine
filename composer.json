@@ -3,15 +3,33 @@
   "description": "A PHP 2D engine for php-sdl-wasm with Tiled maps and surface-based platforming",
   "type": "library",
   "license": "Apache-2.0",
-  "require": {"php": ">=8.0", "ext-json": "*"},
-  "autoload": {"psr-4": {"PhpWasmEngine\\": "src/"}},
+  "require": {
+    "php": ">=8.0",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "PhpWasmEngine\\": "src/"
+    }
+  },
   "scripts": {
     "test": "php tests/run.php",
-    "lint": ["php-cs-fixer fix --dry-run --diff", "@lint:docs"],
+    "lint": [
+      "php-cs-fixer fix --dry-run --diff",
+      "@lint:docs",
+      "@lint:readability"
+    ],
     "lint:docs": "php scripts/check-phpdoc.php",
-    "lint:fix": "php-cs-fixer fix"
+    "lint:fix": "php-cs-fixer fix",
+    "lint:readability": "sm-no-saccade-style src tests examples autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
   },
   "require-dev": {
-    "seanmorris/sm-no-saccade-style": "^0.1.6"
-  }
+    "seanmorris/sm-no-saccade-style": "dev-fix/readable-block-layout"
+  },
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/seanmorris/sm-no-saccade-style"
+    }
+  ]
 }
