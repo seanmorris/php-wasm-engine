@@ -221,6 +221,19 @@ $atlas->close();
 
 Sprites support anchors, rotation, scaling, flips, tint, opacity, and animation offsets. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
+Switch an existing sprite by name with `SpriteSheet::play()`. Pass the same simulation time, in milliseconds, that you pass to SpriteRenderer:
+
+~~~php
+$now = $engine->time * 1000;
+$animation = $body->grounded ? 'run' : 'jump';
+$sheet->play($sprite,$animation,$now);
+$sprites->render([$sprite],$camera,$now);
+~~~
+
+A changed animation starts at its first frame. Repeated requests for the current animation keep its playback position, so calling `play()` every update does not freeze it. `play($sprite,'jump',$now,restart: true)` explicitly restarts it. The method returns `true` when playback starts or restarts, and `false` when unchanged. It preserves the sprite object, position, transform, tint, and opacity, and reuses its atlas.
+
+Tiled frame durations control looping; static tiles also work. Each sprite has its own clock offset. An animation created by `sprite()` initially follows the renderer's clock; use `restart: true` to start that same animation at a later time. Unknown names or non-finite times throw without changing the sprite. Use animations from the tileset backing the renderer's atlas.
+
 ## Entities and systems
 
 Registry stores PHP objects as components, indexes classes/interfaces/ancestors, and assigns monotonically increasing entity IDs. Replacing a component updates its indexes. Queries return snapshots.
@@ -273,9 +286,9 @@ PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmo
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and a full loop.
 
-With Tiled installed, run `npm run test:tiled` to open and export all eight demo maps and both tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI also regenerates the procedural assets and checks that the committed files match.
+With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all eight demo maps and both tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
 
-Validation passed 43 PHP regressions and parallax GPU checks on PHP 8.0–8.5, plus 26 Chromium integration tests on PHP 8.4 and 10 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passed 46 PHP regressions and parallax/sprite-switching GPU checks on PHP 8.0–8.5, plus 27 Chromium integration tests on PHP 8.4 and 10 import/export checks in Tiled 1.12.2. Four context recovery tests also pass on each PHP version from 8.0 through 8.5. They force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

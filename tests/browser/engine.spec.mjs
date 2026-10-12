@@ -54,6 +54,17 @@ test('background strips repeat, anchor, blend in map order and share textures',a
   expect(result.tileImageMatch).toBe(true);
   expect(result.error).toBe(0);
 });
+test('sprite animations switch by name, restart independently and reuse their atlas',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-sprites.php";'));
+  const red='ff0000ff',green='00ff00ff',blue='0000ffff',yellow='ffff00ff';
+  expect(result.frames).toEqual([
+    [red,red],[green,blue],[green,yellow],[red,yellow],[green,red],
+    [blue,red],[yellow,red],[yellow,green],[red,red]
+  ]);
+  for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
+  expect(result.error).toBe(0);
+});
 test('anchored backgrounds keep a shared phase across map boundaries and streaming',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax-world.php";'));

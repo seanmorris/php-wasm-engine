@@ -1,0 +1,22 @@
+{
+  "type": "tileset",
+  "name": "sprite animation fixture",
+  "tilewidth": 8,
+  "tileheight": 8,
+  "columns": 2,
+  "tilecount": 4,
+  "image": "../../examples/assets/test.png",
+  "imagewidth": 16,
+  "imageheight": 16,
+  "tiles": [
+    {"id": 0, "type": "idle"},
+    {"id": 1, "type": "run", "animation": [
+      {"tileid": 0, "duration": 100},
+      {"tileid": 1, "duration": 200}
+    ]},
+    {"id": 2, "class": "jump", "animation": [
+      {"tileid": 2, "duration": 50},
+      {"tileid": 3, "duration": 150}
+    ]}
+  ]
+}
