@@ -35,9 +35,9 @@ Gamepads work in every scene. Click the canvas and press a gamepad button if the
 | Pause / resume | Start / Options | P / Escape |
 | Reset position (demo shortcut) | Back / Select / Share | R |
 | Retry world downloads | B / Circle | X |
-| Shatter a nearby block in Breakable blocks | B / Circle | X |
+| Roll into breakable blocks | Down while moving | Down / S while moving |
 
-In **Breakable blocks**, walk into a block or jump onto it to test its collision. Press X or B / Circle nearby to break it into a grid of particles. R or Back / Select restores all three blocks. Their `columns` and `rows` properties in `examples/assets/breakables.tmj` set the grids to 4×3, 2×8, and 8×2. Tiled tile-object sizes set their world dimensions.
+In **Breakable blocks**, walking stops against a block and jumping can land on top. Gain speed and hold Down to roll through it, breaking it into a grid of particles without losing momentum. The runner can also charge a dash with Down + X or Down + B / Circle, then release the action button. R or Back / Select restores all three blocks. Their `columns` and `rows` properties in `examples/assets/breakables.tmj` set the grids to 4×3, 2×8, and 8×2. Tiled tile-object sizes set their world dimensions.
 
 ## Input
 
@@ -263,11 +263,14 @@ Group positions are world coordinates. Each member has its own transform, crop, 
 
 ## Breakable blocks and particles
 
-`BreakableBlocks` adds a stationary rectangular collider to the same `Terrain` used by the player. It uses the sprite's crop, anchor, rotation, and scale at creation. Collision includes transparent pixels inside that rectangle. Blocks stop movement on all sides and support standing, like solid wall tiles.
+`BreakableBlocks` adds a stationary rectangular collider to the same `Terrain` used by the player. It uses the sprite's crop, anchor, rotation, and scale at creation. Collision includes transparent pixels inside that rectangle. Blocks stop walking and support standing, like solid wall tiles. Bind `impact()` to the platformer to break them on rolling contact.
 
 ~~~php
 use PhpWasmEngine\Effects\ParticleSystem;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
+use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\Hit;
+use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Render\Sprite;
 
 $blocks = new BreakableBlocks($engine->entities, $terrain, $map);
@@ -275,10 +278,14 @@ $image = new Sprite(1, 320, 448, 0, 1);
 $image->scaleX = $image->scaleY = 3;
 $block = $blocks->create($image, columns: 4, rows: 3);
 
-$engine->systems->add('particles', [new ParticleSystem, 'update']);
+$movement = new Platformer(
+    $terrain,
+    onImpact: fn(Body $body, Hit $hit): bool =>
+        $blocks->impact($body, $hit, $engine->time * 1000)
+);
 
-// Call from a hit, interaction, or damage system when the block should break.
-$blocks->shatter($block, $engine->time * 1000);
+// Use this controller in your movement system, then update debris.
+$engine->systems->add('particles', [new ParticleSystem, 'update'], after: ['movement']);
 
 // In the render callback, after drawing the map:
 $sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
@@ -289,6 +296,8 @@ $blocks->close();
 
 `create()` returns an entity with `Sprite` and `BreakableBlock` components. `collisionLayer: 0` makes it solid on every plane; supply a positive plane to restrict it. Keep the manager alive and close it when the scene ends. Blocks stay at their initial collision pose; editing a sprite later does not make a moving platform.
 
+`impact()` checks `Body::$rolling` and the contacted shape. Walking leaves the block solid; rolling removes it before collision response, preserving speed and the remaining movement in that step. Each new sweep finds the next live obstacle, so a fast roll can break a chain of blocks and still stop at an ordinary wall. Blocks on inactive collision planes or behind a wall stay intact. Sensor probes and standing on a block do not trigger breaking. Call `shatter($block, $milliseconds)` directly for other damage or scripted triggers.
+
 `shatter()` freezes the current animation frame, removes the collider and primary sprite, and attaches `SpriteGroup` and `ParticleBurst` to the **same entity ID**. It returns `true` once, then `false` for repeated calls. The new group contains exactly `columns * rows` pieces. Uneven image dimensions distribute integer pixels without overlap or gaps. Grid dimensions must be positive and no greater than the cropped source dimensions. Invalid grids, crops, or motion settings throw before changing an intact block.
 
 Pieces inherit flips, rotation, scale, tint, and opacity, then move outward under gravity, spin, and fade. They share the original atlas and one instanced sprite batch. No fragment textures or per-piece entities are allocated. `shatter()` accepts named `speed`, `lift`, `gravity`, and `lifetime` settings, in pixels and seconds. Defaults are 240 px/s outward speed, 240 px/s upward lift, 900 px/s² gravity, and a 1.2-second lifetime. Debris is nonsolid.
@@ -297,7 +306,7 @@ Pieces inherit flips, rotation, scale, tint, and opacity, then move outward unde
 
 For an effect independent of breakable terrain, create `ParticleBurst::grid($sprite, $map, $columns, $rows, $milliseconds)` and attach both the returned burst and `$burst->sprites` to a disposable entity. Alternatively, call `$burst->step($dt)` yourself and use `finished()` to manage its lifetime. This lets a persistent actor own a group without letting `ParticleSystem` retire that actor.
 
-Terrain also exposes `addShape($points, $oneWay, $collisionLayer): int` and `removeShape($handle): bool` for other removable obstacles. Handles are never reused. Removal updates spatial indexes, polygon occupancy, and shared-edge cancellation immediately. Make changes between physics steps. The existing full-displacement `castBody()` and adhesion raycasts see the current shapes, so fast movement cannot skip an intact block and a broken support releases the player on the next step.
+Terrain also exposes `addShape($points, $oneWay, $collisionLayer): int`, `hasShape($handle): bool`, and `removeShape($handle): bool` for other removable obstacles. Handles are never reused. `Hit::$shape` identifies the removable shape, or is `null` for permanent geometry. Removal updates spatial indexes, polygon occupancy, and shared-edge cancellation immediately. Change geometry between physics steps or in the platformer's `onImpact(Body, Hit)` callback. The callback runs after the earliest body cast and before collision response; only actually removing the contacted shape allows passage, regardless of the return value. Casts and adhesion raycasts remain read-only. Fast movement cannot skip an intact block, and removing a support releases a resting player on the next step.
 
 ## Entities and systems
 
@@ -370,7 +379,7 @@ Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read
 
 With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all nine demo maps and three tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
 
-Validation passes 76 PHP regressions on native PHP 8.2 and 32-bit PHP WASM 8.4, 32 Chromium integration tests on PHP 8.4, and 13 import/export checks in Tiled 1.12.2. Sprite-group checks cover exact pixel partitions at right angles, rotated interior pixels with a subpixel edge tolerance, cropped animation snapshots, shared atlas batches, and restoring moving debris. Breakable regressions cover collision from every side, a 60,000 px/s sweep, standing support, collision planes, shared-edge removal, expiry, and reset. Context recovery tests force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passes 82 PHP regressions on native PHP 8.2 and 32-bit PHP WASM 8.4, 33 Chromium integration tests on PHP 8.4, and 13 import/export checks in Tiled 1.12.2. Sprite-group checks cover exact pixel partitions at right angles, rotated interior pixels with a subpixel edge tolerance, cropped animation snapshots, shared atlas batches, and restoring moving debris. Breakable regressions cover walking versus rolling at 60,000 px/s in both directions, a twelve-block chain followed by a solid wall, collision from every side, standing support, collision planes, read-only probes, shared-edge removal, expiry, keyboard/gamepad controls, and reset. Context recovery tests force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

@@ -106,7 +106,7 @@ for(const scene of ['platformer','loop','infinite','isometric','breakables']) te
   expect(errors).toEqual([]);
 });
 
-test('a live block stops the player, breaks into a grid, clears the path and resets',async({page})=>{
+test('a live block stops walking, shatters on rolling impact, restores debris and resets',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.locator('#scene').selectOption('breakables');
   await page.locator('#start').click();
@@ -120,8 +120,20 @@ test('a live block stops the player, breaks into a grid, clears the path and res
   await page.waitForTimeout(250);
   expect((await body()).x).toBeLessThanOrEqual(296.001);
   await page.keyboard.press('x');
+  await page.waitForTimeout(100);
+  expect(await state()).toEqual({intact:3,pieces:0});
+  expect((await body()).rolling).toBe(false);
+  await page.keyboard.up('ArrowRight');
+  await page.keyboard.press('r');
+  await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
+  await expect.poll(async()=>(await body()).grounded).toBe(true);
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(async()=>(await body()).x,{intervals:[16]}).toBeGreaterThan(160);
+  await page.keyboard.down('ArrowDown');
+  await expect.poll(async()=>(await body()).rolling,{intervals:[16]}).toBe(true);
   await expect.poll(async()=>await state(),{intervals:[16]}).toEqual({intact:2,pieces:12});
   await page.keyboard.up('ArrowRight');
+  await page.keyboard.up('ArrowDown');
   await page.evaluate(()=>{
     window.shardContext=document.querySelector('canvas').getContext('webgl2')
       .getExtension('WEBGL_lose_context');
@@ -143,6 +155,7 @@ test('a live block stops the player, breaks into a grid, clears the path and res
   await page.keyboard.press('r');
   await expect.poll(async()=>await state()).toEqual({intact:3,pieces:0});
   await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
+  expect((await body()).rolling).toBe(false);
   await page.locator('#stop').click();
   expect(errors).toEqual([]);
 });

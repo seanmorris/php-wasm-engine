@@ -8,7 +8,7 @@ use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Physics\
 {
-	Body,Platformer,MapTerrain
+	Body,Hit,Platformer,MapTerrain
 };
 use PhpWasmEngine\Render\
 {
@@ -30,7 +30,26 @@ $engine = new Engine($device);
 $renderer = new MapRenderer($map);
 $sprites = new SpriteRenderer($renderer->atlas);
 $terrain = MapTerrain::build($map);
-$movement = new Platformer($terrain);
+$blocks = null;
+$onImpact = null;
+
+if($scene === 'breakables')
+{
+	require __DIR__.'/breakables.php';
+	$blocks = configureBreakables($engine, $terrain, $map);
+
+	$onImpact =
+		/**
+		 * Break contacted blocks when the player is rolling, using the current animation time.
+		 *
+		 * @param Body $body Moving actor before collision response.
+		 * @param Hit $hit Earliest terrain contact in the current sweep.
+		 * @return bool True if the block was replaced by nonsolid debris.
+		 */
+		fn(Body $body, Hit $hit): bool => $blocks->impact($body, $hit, $engine->time * 1000);
+}
+
+$movement = new Platformer($terrain, $onImpact);
 $body = new Body(80, 100, $profile);
 
 // The demo PNG has two transparent rows below the visible soles.
@@ -61,6 +80,9 @@ $engine->systems->add('movement', function($entities, $dt) use ($engine, $moveme
 		$body->angle = 0;
 		$body->collisionLayer = 1;
 		$body->grounded = false;
+		$body->rolling = false;
+		$body->halfHeight = $body->standingHeight;
+		$body->charge = $body->dropCharge = 0;
 		$body->ability = '';
 	}
 
@@ -69,14 +91,6 @@ $engine->systems->add('movement', function($entities, $dt) use ($engine, $moveme
 	$camera->y = min(120, $camera->y);
 }
 );
-
-$blocks = null;
-
-if($scene === 'breakables')
-{
-	require __DIR__.'/breakables.php';
-	$blocks = configureBreakables($engine, $terrain, $map, $body);
-}
 
 if($scene === 'isometric')
 {
@@ -112,6 +126,7 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 		['x' => $body->x
 		, 'y' => $body->y
 		, 'grounded' => $body->grounded
+		, 'rolling' => $body->rolling
 		, 'ability' => $body->ability
 			, 'speed' => $body->groundSpeed, 'angle' => $body->angle
 			, 'collisionLayer' => $body
@@ -135,7 +150,7 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 	{
 		$status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
-			, $body->ability?:($body->grounded?'ground':'air')
+			, $body->ability?:($body->rolling?'rolling':($body->grounded?'ground':'air'))
 			, $body->groundSpeed
 			, $renderer->stats['draws'] + $sprites->draws
 			, $renderer->stats['instances'] + $sprites->instances
@@ -150,8 +165,7 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 
 		if($scene === 'breakables')
 		{
-			$status
-				->textContent .= " · $intact intact blocks · $pieces shards · X / B breaks nearby";
+			$status->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";
 		}
 
 		if($engine->userPaused)

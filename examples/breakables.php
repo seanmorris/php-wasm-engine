@@ -4,25 +4,21 @@ declare(strict_types=1);
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleSystem;
-use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
-use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Tiled\TileMap;
 
 /**
- * Populate the breakable-block scene and bind interaction, reset, and particle updates.
+ * Populate the breakable-block scene and bind reset and particle updates.
  *
  * @param Engine $engine Engine providing the registry, controls, scheduler, and clock.
  * @param Terrain $terrain Terrain shared by the player and stationary blocks.
  * @param TileMap $map Demo map containing editable breakable tile objects.
- * @param Body $body Player whose proximity permits breaking a block.
  * @return BreakableBlocks Block owner to close when the scene stops.
  */
-function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map, Body $body):
-BreakableBlocks
+function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map): BreakableBlocks
 {
 	$blocks = new BreakableBlocks($engine->entities, $terrain, $map);
 	$ids = [];
@@ -74,46 +70,16 @@ BreakableBlocks
 
 	$engine->systems->add('breakables',
 		/**
-		 * Break a nearby block on the action edge or restore all blocks on reset.
+		 * Restore the scene's intact blocks and retire old debris when reset is pressed.
 		 *
-		 * @param Registry $entities Registry supplying intact block sprites.
-		 * @param float $dt Fixed simulation delta in seconds, unused by this interaction.
-		 * @return void Shatters at most one block per press; movement alone stays blocked.
+		 * @param Registry $entities Scene registry, unused because the reset closure owns its IDs.
+		 * @param float $dt Fixed simulation delta in seconds, unused by reset.
+		 * @return void Recreates blocks on the reset edge.
 		 */
-		function(Registry $entities, float $dt) use ($engine, $blocks, $map, $body, $reset): void {
+		function(Registry $entities, float $dt) use ($engine, $reset): void {
 			if($engine->controls->pressed('reset'))
 			{
 				$reset();
-			}
-
-			if(!$engine->controls->pressed('action'))
-			{
-				return;
-			}
-
-			foreach($entities->query(BreakableBlock::class) as $id)
-			{
-				$sprite = $entities->get($id, Sprite::class);
-					$rect = $map->tile($sprite->gid)['rect'];
-
-
-				$dx = max(
-					$sprite->x - $body->x
-					, 0
-					, $body->x - $sprite->x - $rect[2] * $sprite->scaleX
-				);
-
-				$dy = max(
-					$sprite->y - $rect[3] * $sprite->scaleY - $body->y
-					, 0
-					, $body->y - $sprite->y
-				);
-
-				if($dx <= $body->radius + 24 && $dy <= $body->halfHeight + 24)
-				{
-					$blocks->shatter($id, $engine->time * 1000);
-					break;
-				}
 			}
 		}, after: ['movement']
 	);

@@ -8,6 +8,7 @@ final class Terrain
 	private array $segments = [], $grid = [], $edges = [], $opposites = [];
 	private array $polygons = [], $polygonGrid = [], $switches = [];
 	private array $shapes = [];
+	private array $segmentShapes = [];
 	private int $nextShape = 1, $nextSegment = 0, $nextPolygon = 0;
 	public int $raycasts = 0;
 
@@ -46,7 +47,12 @@ final class Terrain
 	public function add(array $points, bool $oneWay = false, int $collisionLayer = 0): void
 	{
 		$handle = $this->addShape($points, $oneWay, $collisionLayer);
+
 		// Permanent map terrain does not need to retain removable-shape bookkeeping.
+		foreach($this->shapes[$handle]['segments'] as $id)
+		{
+			unset($this->segmentShapes[$id]);
+		}
 		unset($this->shapes[$handle]);
 	}
 
@@ -150,6 +156,7 @@ final class Terrain
 			$id = $this->nextSegment++;
 			$this->segments[$id] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer];
 			$this->shapes[$shape]['segments'][] = $id;
+			$this->segmentShapes[$id] = $shape;
 
 			if(!$oneWay)
 			{
@@ -175,6 +182,17 @@ final class Terrain
 			}
 		}
 		return $shape;
+	}
+
+	/**
+	 * Check whether a removable collision shape is still present.
+	 *
+	 * @param int $handle Stable handle returned by addShape or supplied by a Hit.
+	 * @return bool True until the shape is removed; unknown and permanent handles return false.
+	 */
+	public function hasShape(int $handle): bool
+	{
+		return isset($this->shapes[$handle]);
 	}
 
 	/**
@@ -208,7 +226,7 @@ final class Terrain
 			{
 				$this->removeIndex($this->opposites, $other, $id);
 			}
-			unset($this->segments[$id], $this->opposites[$id]);
+			unset($this->segments[$id], $this->opposites[$id], $this->segmentShapes[$id]);
 		}
 
 		$id = $shape['polygon'];
@@ -582,6 +600,7 @@ final class Terrain
 							, $nx
 							, $ny
 							, $oneWay
+							, $this->segmentShapes[$id] ?? null
 						);
 					}
 				}
@@ -726,6 +745,7 @@ final class Terrain
 						, $hx
 						, $hy
 						, $oneWay
+						, $this->segmentShapes[$id] ?? null
 					);
 				}
 			}

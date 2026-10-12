@@ -245,3 +245,33 @@ for(const profile of ['runner','glider','flyer']) test(profile+' demo moves and 
   await expect(page.locator('#start')).toBeEnabled();
   expect(errors).toEqual([]);
 });
+
+test('gamepad dash breaks blocks on rolling contact after releasing the charge',async({page})=>{
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await pads(page);await page.goto('/');
+  await page.locator('#scene').selectOption('breakables');
+  await page.locator('#start').click();
+  const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
+  const blocks=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-breakables')||'{}');
+  await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
+  await change(page,{axes:[1]});
+  await expect.poll(async()=>(await body()).x).toBeGreaterThan(295);
+  await page.waitForTimeout(100);
+  expect((await body()).x).toBeLessThanOrEqual(296.001);
+  expect(await blocks()).toEqual({intact:3,pieces:0});
+  await change(page,{buttons:[1,13]});
+  await page.waitForTimeout(250);
+  expect(await blocks()).toEqual({intact:3,pieces:0});
+  expect((await body()).rolling).toBe(false);
+  await change(page,{buttons:[13]});
+  await expect.poll(async()=>(await blocks()).intact,{intervals:[16]}).toBe(2);
+  expect((await body()).rolling).toBe(true);
+  expect((await body()).speed).toBeGreaterThan(480);
+  await expect.poll(async()=>(await body()).x,{intervals:[16]}).toBeGreaterThan(410);
+  await change(page,{buttons:[8]});
+  await expect.poll(async()=>await blocks()).toEqual({intact:3,pieces:0});
+  await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
+  expect((await body()).rolling).toBe(false);
+  await page.locator('#stop').click();
+  expect(errors).toEqual([]);
+});

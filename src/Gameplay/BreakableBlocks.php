@@ -5,6 +5,8 @@ namespace PhpWasmEngine\Gameplay;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Physics\Terrain;
+use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Tiled\TileMap;
 
@@ -13,6 +15,8 @@ final class BreakableBlocks
 {
 	/** @var array<int,array{object,?int}> Owned entity markers and removable terrain handles. */
 	private array $owned = [];
+	/** @var array<int,int> Removable shape handles mapped to intact block entity IDs. */
+	private array $shapes = [];
 	private bool $closed = false;
 
 	/**
@@ -47,6 +51,7 @@ final class BreakableBlocks
 					if($handle !== null)
 					{
 						$manager->terrain->removeShape($handle);
+						unset($manager->shapes[$handle]);
 					}
 
 					unset($manager->owned[$id]);
@@ -113,6 +118,7 @@ final class BreakableBlocks
 		$handle = $this->terrain->addShape($points, collisionLayer: $collisionLayer);
 		$id = $this->registry->create();
 		$this->owned[$id] = [$block, $handle];
+		$this->shapes[$handle] = $id;
 
 		try
 		{
@@ -122,7 +128,7 @@ final class BreakableBlocks
 		catch(\Throwable $error)
 		{
 			$this->terrain->removeShape($handle);
-			unset($this->owned[$id]);
+			unset($this->owned[$id], $this->shapes[$handle]);
 
 			if($this->registry->alive($id))
 			{
@@ -132,6 +138,25 @@ final class BreakableBlocks
 			throw $error;
 		}
 		return $id;
+	}
+
+	/**
+	 * Shatter the contacted block when the moving body is rolling.
+	 *
+	 * @param Body $body Actor at the start of the current sweep, before collision response.
+	 * @param Hit $hit Earliest movement contact from this manager's terrain, not a sensor probe.
+	 * @param float $milliseconds Simulation time at which to freeze the visible animation.
+	 * @return bool True when this contact shattered an intact block; walking leaves it solid.
+	 */
+	public function impact(Body $body, Hit $hit, float $milliseconds = 0): bool
+	{
+		if(!$body->rolling || $hit->shape === null)
+		{
+			return false;
+		}
+
+		$id = $this->shapes[$hit->shape] ?? null;
+		return $id !== null && $this->shatter($id, $milliseconds);
 	}
 
 	/**

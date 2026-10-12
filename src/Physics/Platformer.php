@@ -6,15 +6,21 @@ use PhpWasmEngine\Input\Controls;
 /** Fresh surface-tangent controller. Distances are pixels, time is seconds. */
 final class Platformer
 {
+	private ?\Closure $onImpact;
 
 	/**
 	 * Bind surface-tangent movement to a terrain collision source.
 	 *
-	 * @param Terrain $terrain Static terrain and directional gates used by movement and sensor
+	 * @param Terrain $terrain Collision terrain and directional gates used by movement and sensor
 	 * casts.
+	 * @param callable(Body,Hit):mixed|null $onImpact Callback before collision response; removing
+	 * the contacted shape allows remaining movement. The callback's return value is ignored.
 	 * @return void Creates a controller that can update multiple independent bodies.
 	 */
-	public function __construct(public Terrain $terrain) {}
+	public function __construct(public Terrain $terrain, ?callable $onImpact = null)
+	{
+		$this->onImpact = $onImpact === null ? null : \Closure::fromCallable($onImpact);
+	}
 
 	/**
 	 * Move a scalar toward a target without overshooting.
@@ -328,7 +334,8 @@ final class Platformer
 	/**
 	 * Resolve the earliest terrain impact or gate crossing over the full remaining motion.
 	 * Expanded segment endpoints close sensor gaps; unresolved motion after six contacts is
-	 * discarded.
+	 * discarded. Removed shapes preserve momentum and do not consume that contact budget;
+	 * at most 1024 removals are processed per sweep to bound custom impact callbacks.
 	 *
 	 * @param Body $b Actor whose oriented bounds and collision layer participate in each cast.
 	 * @param float $dx Full proposed horizontal displacement in pixels.
@@ -340,8 +347,9 @@ final class Platformer
 	{
 		$seen = [];
 		$contacts = 0;
+		$removed = 0;
 
-		while($contacts < 6 && abs($dx) + abs($dy) > 1e-7)
+		while($contacts < 6 && $removed < 1024 && abs($dx) + abs($dy) > 1e-7)
 		{
 			$best = $this->terrain->castBody($b, $dx, $dy, $b->dropTimer > 0);
 			$gate = $this->terrain->nextSwitch($b, $dx, $dy, $seen);
@@ -363,6 +371,24 @@ final class Platformer
 				$b->x += $dx;
 				$b->y += $dy;
 				return;
+			}
+
+			if($this->onImpact !== null)
+			{
+				$shape = $best->shape;
+				$t = $best->t;
+				($this->onImpact)($b, $best);
+
+				if($shape !== null && !$this->terrain->hasShape($shape))
+				{
+					// Advance to the removed obstacle, then sweep the rest against live geometry.
+					$b->x += $dx * $t;
+					$b->y += $dy * $t;
+					$dx *= 1 - $t;
+					$dy *= 1 - $t;
+					$removed++;
+					continue;
+				}
 			}
 
 			$contacts++;
