@@ -138,7 +138,27 @@ jsonAsset('iso.tsj',['type' => 'tileset','tilewidth' => 64,'tileheight' => 64,'t
 $iso = ['type' => 'map','orientation' => 'isometric','width' => 12,'height' => 12,'tilewidth' => 64,'tileheight' => 32,'tilesets' => [['firstgid' => 1,'source' => 'iso.tsj']],'layers' => [['id' => 1,'name' => 'Isometric','type' => 'tilelayer','width' => 12,'height' => 12,'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1,range(0,143))]]];
 $iso['layers'] = array_merge($background,$iso['layers']);
 jsonAsset('isometric.tmj',$iso);
-jsonAsset('demo.world',['type' => 'world','maps' => [['fileName' => 'platformer.tmj','x' => 0,'y' => 0,'width' => 3072,'height' => 640],['fileName' => 'infinite.tmj','x' => 3072,'y' => 0,'width' => 3072,'height' => 640]]]);
+jsonAsset('demo.world',['type' => 'world','maps' => [['fileName' => 'platformer.tmj','x' => 0,'y' => 0,'width' => 3072,'height' => 640],['fileName' => 'infinite.tmj','x' => 4096,'y' => 0,'width' => 3072,'height' => 640,'bounds' => ['x' => -1024,'y' => 0,'width' => 3072,'height' => 640]]]]);
 // Asymmetric four-quadrant image for orientation and flip regressions.
 png(__DIR__.'/assets/test.png',16,16,static fn($x,$y) => $y < 8?($x < 8?[255,0,0,255]:[0,255,0,255]):($x < 8?[0,0,255,255]:[255,255,0,255]));
 png(__DIR__.'/assets/test-parallax.png',7,5,static fn($x,$y) => $y < 2?($x < 3?[255,0,0,255]:[0,255,0,255]):($x < 3?[0,0,255,255]:[255,255,0,255]));
+
+// Independently downloadable maps with shared tilesets and parallax images.
+$worldMaps = [];
+foreach(range(-2,2) as $section)
+{
+	$streamMap = $base;
+	$streamMap['width'] = 32;
+	$streamMap['layers'] = $background;
+	$cells = array_fill(0,32 * 20,0);
+	for($y = 13;$y < 20;$y++)
+	{ for($x = 0;$x < 32;$x++)
+	{ $cells[$y * 32 + $x] = 1; } }
+	foreach(range(0,31,4) as $x)
+	{ $cells[(9 + abs($section)) * 32 + $x] = 5; }
+	$streamMap['layers'][] = ['id' => 1,'name' => 'Terrain','type' => 'tilelayer','width' => 32,'height' => 20,'data' => $cells];
+	$name = 'stream-'.($section + 2).'.tmj';
+	jsonAsset($name,$streamMap);
+	$worldMaps[] = ['fileName' => $name,'x' => $section * 1024,'y' => 0,'width' => 1024,'height' => 640];
+}
+jsonAsset('stream.world',['type' => 'world','maps' => $worldMaps]);

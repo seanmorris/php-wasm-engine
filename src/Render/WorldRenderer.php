@@ -1,14 +1,15 @@
 <?php
 declare(strict_types=1);
 namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\World;
+use PhpWasmEngine\Tiled\
+{World,WorldStream};
 
 /** Lazy GPU residency for a Tiled world. Scene order follows the world's maps list. */
 final class WorldRenderer
 {
 	private array $resident = [];
 	private int $frame = 0;
-	public function __construct(public World $world,public int $residentLimit = 8)
+	public function __construct(public World|WorldStream $world,public int $residentLimit = 8)
 	{
 		if($residentLimit < 1)
 		{ throw new \InvalidArgumentException('residentLimit must be positive'); }
@@ -18,6 +19,7 @@ final class WorldRenderer
 		$stats = ['maps' => 0,'draws' => 0,'instances' => 0,'uploads' => 0];
 		$this->frame++;
 		$active = [];
+		$this->prune();
 		foreach($this->world->visible($camera->x,$camera->y,$camera->width / $camera->zoom,$camera->height / $camera->zoom,$margin) as $map)
 		{
 			if(isset($this->resident[$map->path]) && $this->resident[$map->path][0]->map !== $map)
@@ -62,8 +64,20 @@ final class WorldRenderer
 		}
 		return $stats;
 	}
+	private function prune(): void
+	{
+		if($this->world instanceof WorldStream)
+		{
+			$loaded = $this->world->loaded();
+			foreach($this->resident as $path => [$renderer])
+			{ if(!isset($loaded[$path]))
+			{ $renderer->close();
+			unset($this->resident[$path]); } }
+		}
+	}
 	public function restore(): void
-	{ foreach($this->resident as [$renderer])
+	{ $this->prune();
+	foreach($this->resident as [$renderer])
 	{ $renderer->restore(); } }
 	public function close(): void
 	{ foreach($this->resident as [$renderer])

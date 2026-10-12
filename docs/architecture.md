@@ -4,7 +4,7 @@
 
 The initial design was informed by Sean Morris's local projects:
 
-- tigl: Tiled worlds, maps, tilesets, sprite sheets, properties, and world-space lookup.
+- tigl/app/world/World.js, TileMap.js, and sprite/SpriteBoard.js: manifest bounds, spatial queries, deferred map initialization, cached requests, and visibility-driven renderer lifetimes.
 - tigl/app/sprite/Parallax.js: repeating image strips, independent scroll factors, and viewport anchors.
 - moving-boxes-2/app/backdrop/Backdrop.js: stacked strips, automatic drift, and animated image frames.
 - soop: object components, boolean queries, systems, and deferred structural commands.
@@ -54,6 +54,10 @@ Bodies must start outside solid geometry; terrain stays static during a step. Ma
 
 Close renderers before Device::close destroys the context. MapRenderer owns its Atlas and ImageRenderer. SpriteRenderer borrows an Atlas. WorldRenderer owns resident map renderers. Engine runs user cleanup on stop and runtime refresh.
 
-The world file is a manifest. Intersecting maps load lazily. Each loaded map retains decoded chunks, and its renderer allocates the map's tile planes. WorldRenderer limits off-screen GPU residency; Loader retains data until forgotten. Sparse maps avoid allocating the rectangle between distant chunks. Individual chunks are not streamed from a server protocol.
+World indexes manifest bounds in a static AABB tree. Queries preserve manifest painter order and allocate no cells between distant maps. Optional local bounds cover negative infinite chunks without shifting their world origin. With mounted files, World::visible loads intersecting maps synchronously. WorldStream instead polls a host file-transfer callback, discovering JSON, external tilesets, tile images, and image-layer frames in PHP. It activates maps only when dependencies are mounted. WorldRenderer accepts either source and never starts synchronous loads for pending streamed maps.
+
+Tigl's compiled world keeps map headers available before initializing its maps. SpriteBoard requests nearby renderers, TileMap caches initialization, and Session limits nearby entity simulation. WorldStream uses the standard explicit Tiled manifest bounds and adds separate preload and retention margins. Per-file reference counts keep shared files mounted until their last map leaves. Applications consume entered/exited changes to manage entities and collision terrain; they can gate motion on isReady for the body's swept bounds. Eviction discards map edits unless the application saves them.
+
+browser/AssetLoader.mjs only handles fetch, cancellation, and mounting. Promise identity checks prevent obsolete responses from writing to a restarted or closed session. Files are scoped to a configured source root. The PHP frame loop polls readiness, so downloads never suspend a PHP animation-frame callback. The streaming demo loads source and shaders at startup, then only the world manifest and nearby map dependencies. Other demos and GPU test fixtures still mount their assets up front. Whole maps are streamed; individual infinite-map chunks are not fetched separately.
 
 The atlas packs each map's source images and reports GPU capacity errors. Dense tile metadata currently uses one column per tile. Device listens for WebGL loss and restoration and checks `isContextLost()` before each frame, including the interval before the loss event arrives. Engine pauses hidden or lost-context frames, resets its time baseline and input on resume, and invokes the third `start()` callback to restore GPU resources before drawing. A loss during rendering also suspends the loop. Renderers retain PHP data while rebuilding programs, uniform locations, buffers, VAOs, texture arrays, atlas animation metadata, and image caches. Restore a shared Atlas through its owner before restoring sprite batches. Stop detaches browser listeners and releases resources even while the context is lost. Full browser page discard still requires application persistence.

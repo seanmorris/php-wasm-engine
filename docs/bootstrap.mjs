@@ -1,4 +1,5 @@
 import './site.css';
+import {AssetLoader} from '../browser/AssetLoader.mjs';
 
 const status=document.querySelector('#status');
 const canvas=document.querySelector('canvas');
@@ -45,12 +46,20 @@ export async function boot({scene='platformer',profile='runner',run=true,zlib=fa
   const module=await php.binary;
   const response=await fetch(new URL('engine-files.json',base));
   const files=await response.json();
-  await Promise.all(files.map(async path=>{
+  const streaming=run&&scene==='world';
+  await Promise.all(files.filter(path=>!streaming||!path.startsWith('examples/assets/')).map(async path=>{
     const response=await fetch(new URL(path,base),{cache:'no-store'});if(!response.ok) throw Error('Asset '+path+': '+response.status);
     const full='/engine/'+path; module.FS.mkdirTree(full.slice(0,full.lastIndexOf('/')));
     module.FS.writeFile(full,new Uint8Array(await response.arrayBuffer()));
   }));
-  if(run) {const code=await php.run('<?php require "/engine/examples/game.php";'); if(code!==0) throw Error('PHP returned '+code);}
+  if(streaming) {
+    const assets=new AssetLoader(module.FS,base);
+    module.requestAsset=(path,retry)=>assets.request(path,retry);
+    module.releaseAsset=path=>assets.release(path);
+    module.onRefresh.add(()=>assets.close());
+    await assets.load('/engine/examples/assets/stream.world');
+  }
+  if(run) {const code=await php.run('<?php require "/engine/examples/'+(streaming?'world':'game')+'.php";'); if(code!==0) throw Error('PHP returned '+code);}
   return php;
 }
 window.bootEngine=boot;
