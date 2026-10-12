@@ -8,20 +8,41 @@ final class Gamepads
 	private array $handles = [], $axes = [], $buttons = [], $blockedAxes = [], $blockedButtons = [];
 	private float $deadZone;
 	private bool $closed = false;
+	/**
+	 * Initialize SDL controller discovery and configure analog stick filtering.
+	 *
+	 * @param float $deadZone Stick dead-zone magnitude in [0,1); defaults to 20 percent.
+	 * @return void Acquires the SDL game-controller subsystem.
+	 */
 	public function __construct(float $deadZone = .2)
 	{
 		$this->setDeadZone($deadZone);
 		if(SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) !== 0)
 		{ throw new \RuntimeException(SDL_GetError()); }
 	}
+	/**
+	 * Configure the radial-independent dead zone used on each stick axis.
+	 *
+	 * @param float $deadZone Finite threshold in [0,1); values outside this range are rejected.
+	 * @return void Stores the threshold for subsequent polls.
+	 */
 	public function setDeadZone(float $deadZone): void
 	{
 		if(!is_finite($deadZone) || $deadZone < 0 || $deadZone >= 1)
 		{ throw new \InvalidArgumentException('The stick dead zone must be in [0, 1)'); }
 		$this->deadZone = $deadZone;
 	}
-	/** Connected SDL instance IDs, stable until unplugged, independent of browser slots. */
+	/**
+	 * List connected SDL instance IDs, independent of reusable browser gamepad slots.
+	 *
+	 * @return list<int> Controller instance IDs discovered by the most recent poll.
+	 */
 	public function ids(): array { return array_keys($this->handles); }
+	/**
+	 * Discover controllers, release disconnected handles, and sample normalized inputs.
+	 *
+	 * @return void Refreshes per-controller axes and buttons unless this owner has closed.
+	 */
 	public function poll(): void
 	{
 		if($this->closed)
@@ -66,7 +87,13 @@ final class Gamepads
 			}
 		}
 	}
-	/** Normalized axis with the stick dead zone removed; null ID selects the strongest pad. */
+	/**
+	 * Read a normalized axis after removing its stick dead zone.
+	 *
+	 * @param int $axis SDL_CONTROLLER_AXIS_* identifier.
+	 * @param int|null $id SDL instance ID; null selects the connected pad with the largest absolute value.
+	 * @return float Signed stick value in [-1,1], trigger value in [0,1], or zero when unavailable.
+	 */
 	public function axis(int $axis,?int $id = null): float
 	{
 		if($id !== null)
@@ -77,7 +104,13 @@ final class Gamepads
 		{ $value = $axes[$axis]; } }
 		return $value;
 	}
-	/** Null ID combines all pads for the default single-player controls. */
+	/**
+	 * Read a controller button or combine that button across all pads.
+	 *
+	 * @param int $button SDL_CONTROLLER_BUTTON_* identifier.
+	 * @param int|null $id SDL instance ID, or null to combine all connected controllers.
+	 * @return bool True if the selected controller, or any controller, holds the button.
+	 */
 	public function button(int $button,?int $id = null): bool
 	{
 		if($id !== null)
@@ -87,7 +120,11 @@ final class Gamepads
 		{ return true; } }
 		return false;
 	}
-	/** Held controls must return to neutral after focus, visibility or graphics recovery. */
+	/**
+	 * Suppress controls held across focus, visibility, or graphics recovery.
+	 *
+	 * @return void Clears samples and requires affected controls to return to neutral before reuse.
+	 */
 	public function reset(): void
 	{
 		$this->poll();
@@ -101,6 +138,11 @@ final class Gamepads
 		{ $this->blockedButtons[$id][$button] = true; } } }
 		$this->axes = $this->buttons = [];
 	}
+	/**
+	 * Release controller handles and this owner's SDL subsystem reference.
+	 *
+	 * @return void Closes once and clears controller state; repeated calls have no effect.
+	 */
 	public function close(): void
 	{
 		if($this->closed)

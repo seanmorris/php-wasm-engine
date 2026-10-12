@@ -5,6 +5,16 @@ namespace PhpWasmEngine\Physics;
 /** A convex, nonsolid gate selecting a directional route through overlapping terrain. */
 final class LayerSwitch
 {
+	/**
+	 * Define a convex nonsolid region that selects a directional collision route.
+	 *
+	 * @param list<array{0:float|int,1:float|int}> $points Convex gate vertices in world pixels; at least three noncollinear points.
+	 * @param int $fromLayer Positive source layer for forward travel through a normal gate.
+	 * @param int $toLayer Distinct positive destination layer for forward travel through a normal gate.
+	 * @param bool $back Reverse routing while grounded, as required at a loop crown.
+	 * @param bool $roll Require rolling with a body height of at most 28 pixels.
+	 * @return void Validates the region and normalizes its winding.
+	 */
 	public function __construct(public array $points,public int $fromLayer = 1,public int $toLayer = 2,public bool $back = false,public bool $roll = false)
 	{
 		$count = count($points);
@@ -28,6 +38,12 @@ final class LayerSwitch
 			{ throw new \InvalidArgumentException('Layer switches must be convex'); }
 		}
 	}
+	/**
+	 * Choose an eligible destination using tangent speed, airborne velocity, or facing.
+	 *
+	 * @param Body $body Actor whose collision layer and movement state determine the route.
+	 * @return int|null Destination layer, or null if direction, source layer, or rolling requirements prevent switching.
+	 */
 	public function target(Body $body): ?int
 	{
 		if($this->roll && (!$body->rolling || $body->halfHeight * 2 > 28))
@@ -41,7 +57,15 @@ final class LayerSwitch
 		$target = $forward?$this->toLayer:$this->fromLayer;
 		return $body->collisionLayer === $source || $body->collisionLayer === 0?$target:null;
 	}
-	/** Clip a full displacement against the gate. A narrow gate cannot be skipped. */
+	/**
+	 * Clip the complete body-center displacement against the convex gate.
+	 *
+	 * @param float $x Starting world X coordinate in pixels.
+	 * @param float $y Starting world Y coordinate in pixels.
+	 * @param float $dx Full horizontal displacement in pixels.
+	 * @param float $dy Full vertical displacement in pixels.
+	 * @return float|null Entry fraction in [0,1], zero when already inside, or null when the segment misses.
+	 */
 	public function crossing(float $x,float $y,float $dx,float $dy): ?float
 	{
 		$near = 0;

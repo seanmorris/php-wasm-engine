@@ -11,15 +11,32 @@ final class ImageRenderer
 	private array $vao = [], $textures = [], $heights = [];
 	private bool $closed = false;
 	public int $draws = 0, $uploads = 0;
+	/**
+	 * Create a shader and vertex array for the map's repeating image layers.
+	 *
+	 * @param TileMap $map Map supplying image layers and their world placement.
+	 * @return void Initializes lazy texture storage owned by this renderer.
+	 */
 	public function __construct(public TileMap $map)
 	{
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/images.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/images.frag'));
 		$this->create();
 	}
+	/**
+	 * Allocate the vertex array used by shader-generated image quads.
+	 *
+	 * @return void Creates the required GPU vertex-array handle.
+	 */
 	private function create(): void
 	{
 		glGenVertexArrays(1,$this->vao);
 	}
+	/**
+	 * Load and cache one image texture with its native dimensions.
+	 *
+	 * @param string $path Resolved image path accessible to SDL_image.
+	 * @return array{0:int,1:int,2:int} GL texture handle, pixel width, and pixel height.
+	 */
 	private function texture(string $path): array
 	{
 		if(isset($this->textures[$path]))
@@ -53,6 +70,12 @@ final class ImageRenderer
 			SDL_FreeSurface($source);
 		}
 	}
+	/**
+	 * Load visible image frames and measure anchored stacks before drawing layers.
+	 *
+	 * @param float $milliseconds Simulation time in milliseconds selecting animated image frames.
+	 * @return void Resets frame statistics and updates layer dimensions and stack heights.
+	 */
 	public function prepare(float $milliseconds = 0): void
 	{
 		$this->draws = $this->uploads = 0;
@@ -71,6 +94,14 @@ final class ImageRenderer
 			}
 		}
 	}
+	/**
+	 * Draw one visible image layer with repetition, tint, and optional color-key transparency.
+	 *
+	 * @param Layer $layer Image layer previously included in prepare so dimensions and stack heights are known.
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time in milliseconds for image animation and scrolling.
+	 * @return bool True when a quad was submitted; false when no image is visible.
+	 */
 	public function renderLayer(Layer $layer,Camera $camera,float $milliseconds = 0): bool
 	{
 		$layout = Parallax::layout($layer,$this->map,$camera,$milliseconds,$this->heights[$layer->properties['from'] ?? ''] ?? 0);
@@ -95,6 +126,13 @@ final class ImageRenderer
 		$this->draws++;
 		return true;
 	}
+	/**
+	 * Prepare and draw every image layer in map order.
+	 *
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time in milliseconds for image animation and scrolling.
+	 * @return void Updates draw/upload statistics while retaining cached image textures.
+	 */
 	public function render(Camera $camera,float $milliseconds = 0): void
 	{
 		$this->prepare($milliseconds);
@@ -102,6 +140,11 @@ final class ImageRenderer
 		{ if($layer->type === 'imagelayer')
 		{ $this->renderLayer($layer,$camera,$milliseconds); } }
 	}
+	/**
+	 * Rebuild shaders and vertex state, allowing image textures to reload lazily.
+	 *
+	 * @return void Clears stale texture handles unless the renderer has closed.
+	 */
 	public function restore(): void
 	{
 		if($this->closed)
@@ -110,6 +153,11 @@ final class ImageRenderer
 		$this->program->restore();
 		$this->create();
 	}
+	/**
+	 * Release all owned image textures, vertex arrays, and the shader program.
+	 *
+	 * @return void Permanently closes the renderer; repeated calls have no effect.
+	 */
 	public function close(): void
 	{
 		if($this->closed)
@@ -118,6 +166,11 @@ final class ImageRenderer
 		$this->release();
 		$this->program->close();
 	}
+	/**
+	 * Delete GPU image resources while retaining the map and shader wrapper.
+	 *
+	 * @return void Clears texture, vertex-array, and stack-height caches for reuse or teardown.
+	 */
 	private function release(): void
 	{
 		$ids = array_column($this->textures,0);

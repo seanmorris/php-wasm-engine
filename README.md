@@ -221,6 +221,8 @@ $atlas->close();
 
 Sprites support anchors, rotation, scaling, flips, tint, opacity, and animation offsets. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
+Anchor the visible soles, accounting for transparent image padding. The demo's 32-pixel sprites have two transparent rows below their feet, so they use `originY: 30 / 32`. Their world anchor follows the body's rotated contact normal, keeping the artwork against floors, walls, and ceilings.
+
 Switch an existing sprite by name with `SpriteSheet::play()`. Pass the same simulation time, in milliseconds, that you pass to SpriteRenderer:
 
 ~~~php
@@ -290,6 +292,8 @@ npm run test:browser
 ~~~
 
 PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmorris/sm-no-saccade-style/tree/master/packages/php), pinned by composer.lock. Apply it with composer lint:fix.
+
+Every engine method, constructor, closure, and arrow function has PHPDoc describing its behavior, parameters, return type, and return value. Array shapes and callback signatures describe structured inputs and outputs. `composer lint` also runs `composer lint:docs`, which checks all 233 functions in `src/` and the autoloader without executing them. The check rejects missing function descriptions, undocumented or out-of-order parameters, and missing return types or descriptions. To inspect a specific file or directory, run `php scripts/check-phpdoc.php path/to/source`.
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and entry/crown/exit traversal of the Tiled loop in both directions, walking and rolling.
 

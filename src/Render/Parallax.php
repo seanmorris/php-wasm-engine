@@ -7,6 +7,14 @@ use PhpWasmEngine\Tiled\
 /** Camera-relative image layout, independent of SDL and the GPU. */
 final class Parallax
 {
+	/**
+	 * Compute Tiled's view-center-based parallax camera for a map layer.
+	 *
+	 * @param Layer $layer Layer supplying horizontal and vertical parallax factors.
+	 * @param TileMap $map Map supplying world placement and the local parallax origin.
+	 * @param Camera $camera Current view position, viewport size, and zoom.
+	 * @return array{0:float,1:float} Effective world-space camera X and Y before layer placement.
+	 */
 	public static function camera(Layer $layer,TileMap $map,Camera $camera): array
 	{
 		$ox = $map->x + ($map->data['parallaxoriginx'] ?? 0);
@@ -18,6 +26,13 @@ final class Parallax
 			, $oy + ($camera->y + $halfY - $oy) * $layer->parallaxY - $halfY
 		];
 	}
+	/**
+	 * Select the current image from an optional looping image-layer animation.
+	 *
+	 * @param Layer $layer Image layer with a static source or timed image frames.
+	 * @param float $milliseconds Simulation time in milliseconds; negative time selects the first frame.
+	 * @return string|null Resolved image path, or null when the layer has no image.
+	 */
 	public static function image(Layer $layer,float $milliseconds = 0): ?string
 	{
 		if(!$layer->imageFrames)
@@ -31,7 +46,17 @@ final class Parallax
 		}
 		return $layer->imageFrames[0]['image'];
 	}
-	/** One clipped screen quad, with bounded UV phase even in an infinite world. */
+	/**
+	 * Compute a clipped screen quad and bounded texture phase for a parallax image.
+	 * Anchored strips use shared world-camera phase rather than their owning map's placement.
+	 *
+	 * @param Layer $layer Image layer with loaded dimensions, repetition, opacity, and scrolling properties.
+	 * @param TileMap $map Map used for ordinary layer placement and parallax origin.
+	 * @param Camera $camera Viewport and positive zoom used to clip the image.
+	 * @param float $milliseconds Simulation time in milliseconds for automatic scrolling.
+	 * @param float $stackHeight Shared anchored-stack height in world pixels, unless overridden by the layer.
+	 * @return array{rect:array{float,float,float,float},uv:array{float,float,float,float}}|null Screen x/y/width/height and normalized u/v/width/height, or null for invisible content.
+	 */
 	public static function layout(Layer $layer,TileMap $map,Camera $camera,float $milliseconds = 0,float $stackHeight = 0): ?array
 	{
 		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer->imageHeight <= 0)

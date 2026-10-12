@@ -6,7 +6,12 @@ use PhpWasmEngine\Tiled\
 
 final class MapTerrain
 {
-	/** Collidable tile metadata and object layers become world-space polygons. */
+	/**
+	 * Convert Tiled collision shapes and directional gates into shared world-space terrain.
+	 *
+	 * @param TileMap ...$maps Loaded maps whose world placement and inherited layer offsets are applied.
+	 * @return Terrain Spatially indexed polygons, selected collision planes, and layer-switch regions.
+	 */
 	public static function build(TileMap ...$maps): Terrain
 	{
 		$terrain = new Terrain;
@@ -63,8 +68,23 @@ final class MapTerrain
 				}
 				$points = self::points($object);
 				if($map->projection->orientation === 'isometric')
-				{ $points = array_map(fn($p) => $map->projection->project($p[0] / $map->projection->tileHeight,$p[1] / $map->projection->tileHeight),$points); }
-				$points = array_map(fn($p) => [$p[0] + $ox,$p[1] + $oy],$points);
+				{ $points = array_map(
+					/**
+					 * Project a Tiled isometric object point into map pixel coordinates.
+					 *
+					 * @param array{0:float,1:float} $p Object-space X and Y measured in Tiled pixel units.
+					 * @return array{0:float,1:float} Projected map-local X and Y.
+					 */
+					fn($p) => $map->projection->project($p[0] / $map->projection->tileHeight,$p[1] / $map->projection->tileHeight)
+					, $points); }
+				$points = array_map(
+					/**
+					 * Translate a shape vertex by its map placement and inherited layer offset.
+					 *
+					 * @param array{0:float,1:float} $p Vertex before world translation.
+					 * @return array{0:float,1:float} World-space X and Y in pixels.
+					 */
+					fn($p) => [$p[0] + $ox,$p[1] + $oy],$points);
 				if($switch)
 				{ $terrain->addSwitch(new LayerSwitch($points,(int)($props['fromLayer'] ?? 1),(int)($props['toLayer'] ?? 2),(bool)(int)($props['back'] ?? 0),(bool)(int)($props['roll'] ?? 0))); }
 				else
@@ -73,6 +93,12 @@ final class MapTerrain
 		} }
 		return $terrain;
 	}
+	/**
+	 * Expand a Tiled rectangle, ellipse, polygon, or polyline and apply object rotation.
+	 *
+	 * @param array<string,mixed> $object Tiled object definition; unresolved templates are rejected.
+	 * @return list<array{0:float|int,1:float|int}> Points in the object layer's coordinate space, before map placement.
+	 */
 	public static function points(array $object): array
 	{
 		if(isset($object['template']))
@@ -87,6 +113,14 @@ final class MapTerrain
 		$angle = deg2rad($object['rotation'] ?? 0);
 		$c = cos($angle);
 		$s = sin($angle);
-		return array_map(fn($p) => [($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s,($object['y'] ?? 0) + $p['x'] * $s + $p['y'] * $c],$points);
+		return array_map(
+			/**
+			 * Rotate a local object vertex and translate it to the object position.
+			 *
+			 * @param array{x:float|int,y:float|int} $p Local unrotated shape vertex.
+			 * @return array{0:float,1:float} Vertex in the containing layer's coordinate space.
+			 */
+			fn($p) => [($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s,($object['y'] ?? 0) + $p['x'] * $s + $p['y'] * $c]
+			, $points);
 	}
 }

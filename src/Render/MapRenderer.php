@@ -14,12 +14,23 @@ final class MapRenderer
 	private array $pages = [], $buffers = [], $vao = [],$gridRanges = [];
 	private array $layout = [];
 	private bool $closed = false;
+	/**
+	 * Create a map atlas, tile shader, and instancing geometry.
+	 *
+	 * @param TileMap $map Loaded map whose tile and image layers will be drawn.
+	 * @return void Acquires GPU resources owned by this renderer.
+	 */
 	public function __construct(public TileMap $map)
 	{
 		$this->atlas = new Atlas($map);
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/tiles.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/tiles.frag'));
 		$this->create();
 	}
+	/**
+	 * Build ordered 32-by-32 tile geometry and per-instance attributes.
+	 *
+	 * @return void Allocates vertex/buffer handles and records diagonal ranges for isometric sorting.
+	 */
 	private function create(): void
 	{
 		$map = $this->map;
@@ -31,11 +42,27 @@ final class MapRenderer
 		{ for($x = 0;$x < 32;$x++)
 		{ $cells[] = [$x,$y]; } }
 		if($map->projection->orientation === 'isometric')
-		{ usort($cells,fn($a,$b) => ($a[0] + $a[1]) <=> ($b[0] + $b[1]) ?: $b[0] <=> $a[0]); }
+		{ usort($cells,
+			/**
+			 * Order isometric cells by diagonal and then descending column.
+			 *
+			 * @param array{0:int,1:int} $a First local tile column and row.
+			 * @param array{0:int,1:int} $b Second local tile column and row.
+			 * @return int Negative, zero, or positive comparison result for painter order.
+			 */
+			fn($a,$b) => ($a[0] + $a[1]) <=> ($b[0] + $b[1]) ?: $b[0] <=> $a[0]); }
 		else
 		{
 			$order = $map->data['renderorder'] ?? 'right-down';
-			usort($cells,fn($a,$b) => (($order === 'right-up' || $order === 'left-up'?-1:1) * ($a[1] <=> $b[1])) ?: ((str_starts_with($order,'left')?-1:1) * ($a[0] <=> $b[0])));
+			usort($cells,
+				/**
+				 * Order orthogonal cells according to Tiled's configured render direction.
+				 *
+				 * @param array{0:int,1:int} $a First local tile column and row.
+				 * @param array{0:int,1:int} $b Second local tile column and row.
+				 * @return int Negative, zero, or positive comparison result.
+				 */
+				fn($a,$b) => (($order === 'right-up' || $order === 'left-up'?-1:1) * ($a[1] <=> $b[1])) ?: ((str_starts_with($order,'left')?-1:1) * ($a[0] <=> $b[0])));
 		}
 		$bytes = '';
 		$vertex = 0;
@@ -58,6 +85,12 @@ final class MapRenderer
 		glEnableVertexAttribArray($i);
 		glVertexAttribDivisor($i,1); }
 	}
+	/**
+	 * Encode a chunk as a padded 32-by-32 texture slice of dense atlas IDs.
+	 *
+	 * @param Chunk $chunk Source tile page, no larger than 32 cells on either axis.
+	 * @return string Packed 4096-byte RGBA8UI tile-ID slice preserving supported flip flags.
+	 */
 	private function encoded(Chunk $chunk): string
 	{
 		$bytes = str_repeat("\0",32 * 32 * 4);
@@ -72,13 +105,26 @@ final class MapRenderer
 		} }
 		return $bytes;
 	}
+	/**
+	 * Reconcile layer/chunk layout and upload only new or revised tile slices.
+	 *
+	 * @return void Updates texture-array pages, tracked revisions, and tile-upload statistics.
+	 */
 	private function sync(): void
 	{
 		$entries = [];
 		foreach($this->map->layers as $order => $layer)
 		{ foreach($layer->chunks as $chunk)
 		{ $entries[] = [$layer,$chunk,$order]; } }
-		$layout = array_map(fn($entry) => [spl_object_id($entry[0]),spl_object_id($entry[1]),$entry[2]],$entries);
+		$layout = array_map(
+			/**
+			 * Identify the layer, chunk, and painter index for layout-change detection.
+			 *
+			 * @param array{0:\PhpWasmEngine\Tiled\Layer,1:Chunk,2:int} $entry Layer/chunk pair and its flattened map order.
+			 * @return array{0:int,1:int,2:int} Layer object ID, chunk object ID, and flattened layer order.
+			 */
+			fn($entry) => [spl_object_id($entry[0]),spl_object_id($entry[1]),$entry[2]]
+			, $entries);
 		if($layout !== $this->layout)
 		{
 			foreach($this->pages as $page)
@@ -104,6 +150,14 @@ final class MapRenderer
 			} }
 		} unset($page);
 	}
+	/**
+	 * Conservatively test a transformed chunk against the view, allowing oversized tiles.
+	 *
+	 * @param \PhpWasmEngine\Tiled\Layer $layer Layer supplying visibility, offsets, and parallax.
+	 * @param Chunk $chunk Tile page whose projected bounds are tested.
+	 * @param Camera $camera Current viewport and world position.
+	 * @return bool True when a visible, nontransparent layer's chunk may contribute pixels.
+	 */
 	private function visible($layer,Chunk $chunk,Camera $camera): bool
 	{
 		if(!$layer->visible || $layer->opacity <= 0)
@@ -120,7 +174,24 @@ final class MapRenderer
 		$margin = max($this->atlas->width,$this->atlas->height);
 		return max($xs) + $margin >= $cx && min($xs) - $margin <= $cx + $camera->width / $camera->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera->height / $camera->zoom;
 	}
+	/**
+	 * Pack one chunk/layer instance for the tile shader.
+	 *
+	 * @param \PhpWasmEngine\Tiled\Layer $layer Layer supplying offsets, opacity, parallax factors, and tint.
+	 * @param Chunk $chunk Tile page supplying map-local grid position.
+	 * @param int $slice Index of the chunk within its bound texture array.
+	 * @return string Forty-eight bytes containing twelve float attributes for placement, slice, opacity, parallax, and tint.
+	 */
 	private function instance($layer,Chunk $chunk,int $slice): string { return pack('f*',$chunk->x,$chunk->y,$slice,$layer->opacity,$layer->offsetX,$layer->offsetY,$layer->parallaxX,$layer->parallaxY,...$layer->tint); }
+	/**
+	 * Submit packed instances sharing a texture array and vertex range.
+	 *
+	 * @param int $texture GL texture-array handle containing the referenced tile slices.
+	 * @param string $instances Concatenated 48-byte instance records.
+	 * @param int $first First vertex in the ordered tile geometry.
+	 * @param int $count Number of vertices per instance; six vertices represent each tile.
+	 * @return void Issues one instanced draw and updates draw/instance statistics.
+	 */
 	private function draw(int $texture,string $instances,int $first = 0,int $count = 6144): void
 	{
 		glActiveTexture(GL_TEXTURE0);
@@ -132,7 +203,17 @@ final class MapRenderer
 		$this->stats['draws']++;
 		$this->stats['instances'] += $n;
 	}
-	/** Worlds can exclude anchored images outside the selected background stack. */
+	/**
+	 * Draw a range of map layers, preserving image/tile order and updating animations.
+	 * World renderers can suppress anchored images outside the selected shared background stack.
+	 *
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time in milliseconds for tile and image animation.
+	 * @param int $startLayer Inclusive flattened layer index at which drawing begins.
+	 * @param int|null $endLayer Exclusive layer index; null includes all remaining layers.
+	 * @param bool $anchoredImages Whether to draw viewport-anchored image layers in the selected range.
+	 * @return void Updates this call's draw, instance, and tile-upload statistics.
+	 */
 	public function render(Camera $camera,float $milliseconds = 0,int $startLayer = 0,?int $endLayer = null,bool $anchoredImages = true): void
 	{
 		$endLayer ??= count($this->map->layers);
@@ -162,6 +243,14 @@ final class MapRenderer
 		}
 		$this->renderTiles($camera,$start,$endLayer);
 	}
+	/**
+	 * Render visible tile pages, merging world diagonals for isometric painter order.
+	 *
+	 * @param Camera $camera Current viewport, zoom, and world position.
+	 * @param int $start Inclusive flattened layer index.
+	 * @param int $end Exclusive flattened layer index.
+	 * @return void Submits batches only for eligible tile layers in the requested interval.
+	 */
 	private function renderTiles(Camera $camera,int $start,int $end): void
 	{
 		if($start >= $end || !$this->pages)
@@ -209,7 +298,15 @@ final class MapRenderer
 					$commands[] = [$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x,$page['texture'],$first,$count,$this->instance($layer,$chunk,$slice)];
 				}
 			} } }
-			usort($commands,fn($a,$b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]);
+			usort($commands,
+				/**
+				 * Sort isometric draw commands by layer, world diagonal, and horizontal tie-break.
+				 *
+				 * @param array{int,int,int,int,int,int,string} $a First layer/diagonal/column/texture/range/instance command.
+				 * @param array{int,int,int,int,int,int,string} $b Second layer/diagonal/column/texture/range/instance command.
+				 * @return int Negative, zero, or positive comparison result preserving painter order.
+				 */
+				fn($a,$b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]);
 			$key = null;
 			$instances = '';
 			foreach($commands as $command)
@@ -229,7 +326,11 @@ final class MapRenderer
 		glBindVertexArray(0);
 	}
 
-	/** Restore GPU storage without replacing map, atlas or image renderer objects. */
+	/**
+	 * Restore GPU storage without replacing map, atlas, or image-renderer objects.
+	 *
+	 * @return void Rebuilds owned shaders, textures, and buffers unless permanently closed.
+	 */
 	public function restore(): void
 	{
 		if($this->closed)
@@ -240,6 +341,11 @@ final class MapRenderer
 		$this->images?->restore();
 		$this->create();
 	}
+	/**
+	 * Release all owned map, atlas, image, and shader GPU resources.
+	 *
+	 * @return void Permanently closes the renderer; repeated calls have no effect.
+	 */
 	public function close(): void
 	{
 		if($this->closed)
@@ -249,6 +355,11 @@ final class MapRenderer
 		$this->atlas->close();
 		$this->images?->close();
 	}
+	/**
+	 * Delete tile texture-array pages and geometry buffers while retaining CPU map data.
+	 *
+	 * @return void Clears GPU layout and revision caches for rebuilding or teardown.
+	 */
 	private function release(): void
 	{
 		foreach($this->pages as $page)

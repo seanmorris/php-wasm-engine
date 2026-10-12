@@ -7,7 +7,19 @@ final class Loader
 {
 	private array $maps = [];
 	public Assets $assets;
+	/**
+	 * Create a Tiled JSON loader backed by reusable asset caches.
+	 *
+	 * @param Assets|null $assets Optional shared byte/JSON cache; null creates a filesystem-backed source.
+	 * @return void Initializes an empty map cache using the supplied or default source.
+	 */
 	public function __construct(?Assets $assets = null) { $this->assets = $assets ?? new Assets; }
+	/**
+	 * Load and cache a Tiled map, resolving tilesets and flattening nested layers.
+	 *
+	 * @param string $path Tiled JSON map path or URL understood by the asset source.
+	 * @return TileMap Shared cached map instance with normalized tile definitions and bounded chunks.
+	 */
 	public function map(string $path): TileMap
 	{
 		if(isset($this->maps[$path]))
@@ -22,18 +34,51 @@ final class Loader
 			$set['definitions'] = $this->definitions($set,$source);
 			$map->tilesets[] = $set;
 		}
-		usort($map->tilesets,fn($a,$b) => $a['firstgid'] <=> $b['firstgid']);
+		usort($map->tilesets,
+			/**
+			 * Order tilesets by their first global tile identifier.
+			 *
+			 * @param array<string,mixed> $a First tileset record.
+			 * @param array<string,mixed> $b Second tileset record.
+			 * @return int Negative, zero, or positive comparison of firstgid values.
+			 */
+			fn($a,$b) => $a['firstgid'] <=> $b['firstgid']);
 		$this->layers($map,$data['layers'] ?? [],null);
 		return $this->maps[$path] = $map;
 	}
+	/**
+	 * Invalidate one loaded map and its source JSON/byte cache.
+	 *
+	 * @param string $path Exact map cache key to discard.
+	 * @return void Future access reloads the map; external dependency caches remain independently managed.
+	 */
 	public function forget(string $path): void
 	{ unset($this->maps[$path]);
 	$this->assets->forget($path); }
+	/**
+	 * Read an explicit Tiled world manifest without loading its maps.
+	 *
+	 * @param string $path Tiled world JSON path or URL.
+	 * @return World Manifest model with a bounds index and this loader as its asset source.
+	 */
 	public function world(string $path): World { return new World($this,$path,$this->assets->json($path)); }
+	/**
+	 * Load a standalone tileset for use by sprite sheets or custom maps.
+	 *
+	 * @param string $path External Tiled tileset JSON path or URL.
+	 * @return array<int,array<string,mixed>> Normalized tile definitions keyed by local tile ID, using firstgid 1.
+	 */
 	public function tileset(string $path): array
 	{ $set = $this->assets->json($path);
 	$set['firstgid'] = 1;
 	return $this->definitions($set,$path); }
+	/**
+	 * Normalize tileset images, atlas rectangles, offsets, properties, and animations.
+	 *
+	 * @param array<string,mixed> $set Decoded tileset augmented with its map-level firstgid.
+	 * @param string $path Owning tileset or map filename used to resolve image references.
+	 * @return array<int,array<string,mixed>> Tile definitions keyed by local tile ID.
+	 */
 	private function definitions(array $set,string $path): array
 	{
 		$definitions = [];
@@ -59,6 +104,14 @@ final class Loader
 		}
 		return $definitions;
 	}
+	/**
+	 * Flatten group layers and decode their inherited render state and tile pages.
+	 *
+	 * @param TileMap $map Destination map receiving normalized layers.
+	 * @param list<array<string,mixed>> $layers Tiled layer definitions at the current group level.
+	 * @param Layer|null $parent Parent group supplying inherited offsets, tint, opacity, visibility, and parallax.
+	 * @return void Appends normalized leaf layers to the map in painter order.
+	 */
 	private function layers(TileMap $map,array $layers,?Layer $parent): void
 	{
 		foreach($layers as $data)
@@ -138,6 +191,15 @@ final class Loader
 			$map->layers[] = $layer;
 		}
 	}
+	/**
+	 * Decode a JSON GID array or a base64 layer, optionally inflating zlib or gzip.
+	 *
+	 * @param list<int|float|numeric-string>|string $data Row-major numeric GIDs or encoded base64 text.
+	 * @param int $count Expected number of cells, limited to 16 million.
+	 * @param string $encoding Layer encoding; encoded strings require base64.
+	 * @param string $compression Empty for uncompressed data, or zlib/gzip when the extension is available.
+	 * @return string Exactly four little-endian bytes per cell, with unsupported hexagonal rotation flags cleared.
+	 */
 	public static function decode($data,int $count,string $encoding = 'csv',string $compression = ''): string
 	{
 		if($count < 0 || $count > 16777216)
@@ -165,14 +227,33 @@ final class Loader
 		{ $bytes[$i] = chr(ord($bytes[$i]) & 239); }
 		return $bytes;
 	}
+	/**
+	 * Flatten Tiled's named property records into a lookup array.
+	 *
+	 * @param list<array{name:string,value:mixed}> $properties Decoded Tiled property records.
+	 * @return array<string,mixed> Property values keyed by name, with later duplicates replacing earlier ones.
+	 */
 	public static function properties(array $properties): array
 	{ $result = [];
 	foreach($properties as $p)
 	{ $result[$p['name']] = $p['value']; } return $result; }
+	/**
+	 * Decode Tiled RGB or ARGB hexadecimal color notation.
+	 *
+	 * @param string $hex Six-digit RGB or eight-digit ARGB color, optionally prefixed with #.
+	 * @return array{0:float,1:float,2:float,3:float} Normalized red, green, blue, and alpha channels in [0,1].
+	 */
 	public static function color(string $hex): array
 	{ $hex = ltrim($hex,'#');
 	if(strlen($hex) === 6)
 	{ $hex = 'ff'.$hex; } if(!preg_match('/^[0-9a-f]{8}$/i',$hex))
-	{ throw new \InvalidArgumentException('Invalid Tiled color'); } $v = array_map(fn($v) => hexdec($v) / 255,str_split($hex,2));
+	{ throw new \InvalidArgumentException('Invalid Tiled color'); } $v = array_map(
+		/**
+		 * Normalize one hexadecimal color channel.
+		 *
+		 * @param string $v Two hexadecimal digits for one color channel.
+		 * @return float Channel intensity in [0,1].
+		 */
+		fn($v) => hexdec($v) / 255,str_split($hex,2));
 	return [$v[1],$v[2],$v[3],$v[0]]; }
 }

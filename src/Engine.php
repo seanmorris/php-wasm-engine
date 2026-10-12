@@ -29,6 +29,12 @@ final class Engine
 	public bool $paused = false;
 	public bool $userPaused = false;
 	private bool $pauseHeld = false;
+	/**
+	 * Create the entity registry, scheduler, input reader, and simulation clock.
+	 *
+	 * @param Device $device SDL graphics device owned and closed by this engine.
+	 * @return void The engine is initialized without scheduling browser frames.
+	 */
 	public function __construct(public Device $device)
 	{
 		$this->entities = new Registry;
@@ -38,11 +44,24 @@ final class Engine
 		$this->clock = new FixedStep;
 		$this->generation = $device->generation;
 	}
+	/**
+	 * Suspend simulation and discard the previous browser timestamp.
+	 *
+	 * @return void The next visible frame starts with zero elapsed time.
+	 */
 	private function pause(): void
 	{
 		$this->paused = true;
 		$this->previous = null;
 	}
+	/**
+	 * Poll input, advance fixed simulation steps, and render an interpolation frame.
+	 * Hidden or lost-context frames suspend simulation; restoration rebuilds registered resources.
+	 *
+	 * @param float $elapsed Nonnegative elapsed frame time in seconds.
+	 * @param callable(Engine,float):void $render Receives this engine and the remaining fixed-step interpolation fraction.
+	 * @return void Systems and the render callback run when the device is ready.
+	 */
 	public function tick(float $elapsed,callable $render): void
 	{
 		if(($this->document && $this->document->hidden) || !$this->device->ready())
@@ -78,11 +97,26 @@ final class Engine
 		if($this->userPaused)
 		{ $elapsed = 0;
 		$this->input->consume(); }
-		$alpha = $this->clock->advance($elapsed,function($dt) { $this->controls->set($this->input->consume());
+		$alpha = $this->clock->advance($elapsed,
+			/**
+			 * Consume buffered input and advance systems for one fixed simulation step.
+			 *
+			 * @param float $dt Fixed simulation interval in seconds.
+			 * @return void Updates the simulation clock after all systems run.
+			 */
+			function($dt) { $this->controls->set($this->input->consume());
 		$this->systems->update($dt);
 		$this->time += $dt; });
 		$render($this,$alpha);
 	}
+	/**
+	 * Schedule browser animation frames and install visibility and runtime-refresh cleanup.
+	 *
+	 * @param callable(Engine,float):void $render Draw callback receiving this engine and an interpolation fraction.
+	 * @param (callable():void)|null $cleanup Optional callback that releases application resources before device teardown.
+	 * @param (callable():void)|null $restore Optional callback that rebuilds application GPU resources after context restoration.
+	 * @return void Starts the frame loop, or leaves an already running loop unchanged.
+	 */
 	public function start(callable $render,?callable $cleanup = null,?callable $restore = null): void
 	{
 		if($this->running)
@@ -93,11 +127,24 @@ final class Engine
 		$this->cleanup = $cleanup;
 		$this->restore = $restore;
 		$this->document = $this->window->document;
-		$this->visibility = fn() => $this->pause();
+		$this->visibility =
+			/**
+			 * Suspend timing when document visibility changes.
+			 *
+			 * @return null Marks the next resumed frame to discard elapsed idle time.
+			 */
+			fn() => $this->pause();
 		$this->document->addEventListener('visibilitychange',$this->visibility);
 		$this->running = true;
 		$this->previous = null;
-		$this->frame = function($now) use ($render) {
+		$this->frame =
+			/**
+			 * Run one browser animation frame and schedule its successor.
+			 *
+			 * @param float $now Browser requestAnimationFrame timestamp in milliseconds.
+			 * @return void Stops scheduling when the engine is stopped and pauses recoverable context losses.
+			 */
+			function($now) use ($render) {
 			if(!$this->running)
 			{ return; }
 			$elapsed = $this->previous === null?0:($now - $this->previous) / 1000;
@@ -114,13 +161,24 @@ final class Engine
 			}
 			if($this->running)
 			{ $this->raf = $this->window->requestAnimationFrame($this->frame); }
-		};
+			};
 		$this->refresh = vrzno_env('onRefresh');
-		$this->refreshCleanup = fn() => $this->stop();
+		$this->refreshCleanup =
+			/**
+			 * Stop the engine before its owning WASM runtime refreshes.
+			 *
+			 * @return null Releases frame listeners, input, and graphics ownership.
+			 */
+			fn() => $this->stop();
 		if($this->refresh)
 		{ $this->refresh->add($this->refreshCleanup); }
 		$this->raf = $this->window->requestAnimationFrame($this->frame);
 	}
+	/**
+	 * Cancel frame scheduling, detach browser listeners, and release owned resources.
+	 *
+	 * @return void Stops once; repeated calls leave the stopped engine unchanged.
+	 */
 	public function stop(): void
 	{
 		if(!$this->running)

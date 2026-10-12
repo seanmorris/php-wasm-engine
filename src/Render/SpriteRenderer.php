@@ -7,11 +7,22 @@ final class SpriteRenderer
 	private array $vao = [],$buffers = [];
 	private bool $closed = false;
 	public int $draws = 0;
+	/**
+	 * Create the sprite shader and instancing buffers while borrowing an existing atlas.
+	 *
+	 * @param Atlas $atlas Shared atlas containing every sprite GID supplied to render.
+	 * @return void Allocates sprite GPU resources without taking ownership of atlas textures.
+	 */
 	public function __construct(public Atlas $atlas)
 	{
 		$this->program = new Program(file_get_contents(dirname(__DIR__,2).'/shaders/sprites.vert'),file_get_contents(dirname(__DIR__,2).'/shaders/sprites.frag'));
 		$this->create();
 	}
+	/**
+	 * Allocate the vertex array and per-instance buffer used by sprite draws.
+	 *
+	 * @return void Configures position, rectangle, anchor, rotation, flip, and tint attributes.
+	 */
 	private function create(): void
 	{
 		glGenVertexArrays(1,$this->vao);
@@ -24,7 +35,14 @@ final class SpriteRenderer
 		glVertexAttribDivisor($i,1); }
 		glBindVertexArray(0);
 	}
-	/** Input order is painter order; caller may sort by feet Y for an isometric scene. */
+	/**
+	 * Draw sprites in supplied painter order with independent animation offsets.
+	 *
+	 * @param list<Sprite> $sprites Sprites sharing this renderer's atlas; caller controls painter order.
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time in milliseconds, added to each sprite's playback offset.
+	 * @return void Submits one instanced batch, or no draw for an empty sprite list.
+	 */
 	public function render(array $sprites,Camera $camera,float $milliseconds = 0): void
 	{
 		$this->draws = 0;
@@ -52,7 +70,11 @@ final class SpriteRenderer
 		glBindVertexArray(0);
 		$this->draws = 1;
 	}
-	/** The owner restores the shared atlas before restoring this sprite batch. */
+	/**
+	 * Recreate sprite shaders and buffers after the owner restores the borrowed atlas.
+	 *
+	 * @return void Rebuilds GPU state unless the renderer has closed.
+	 */
 	public function restore(): void
 	{
 		if($this->closed)
@@ -61,11 +83,21 @@ final class SpriteRenderer
 		$this->program->restore();
 		$this->create();
 	}
+	/**
+	 * Release owned sprite buffers and shaders without closing the shared atlas.
+	 *
+	 * @return void Permanently closes this renderer; repeated calls have no effect.
+	 */
 	public function close(): void
 	{ if($this->closed)
 	{ return; } $this->closed = true;
 	$this->release();
 	$this->program->close(); }
+	/**
+	 * Delete sprite buffer and vertex-array handles.
+	 *
+	 * @return void Clears owned handles while retaining the shared atlas reference.
+	 */
 	private function release(): void
 	{ if($this->buffers)
 	{ glDeleteBuffers(1,$this->buffers); }

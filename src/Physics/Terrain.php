@@ -8,9 +8,25 @@ final class Terrain
 	private array $segments = [], $grid = [], $edges = [], $opposites = [];
 	private array $polygons = [], $polygonGrid = [], $switches = [];
 	public int $raycasts = 0;
+	/**
+	 * Create spatial indexes and add the supplied solid or one-way shapes.
+	 *
+	 * @param list<array{points:array,oneWay?:bool,collisionLayer?:int}> $shapes Initial vertex lists with optional one-way and collision-plane metadata.
+	 * @param int $cellSize Positive broadphase cell size in world pixels.
+	 * @return void Initializes terrain with shared geometry unless a shape selects a plane.
+	 */
 	public function __construct(array $shapes = [],private int $cellSize = 64)
 	{ foreach($shapes as $shape)
 	{ $this->add($shape['points'],$shape['oneWay'] ?? false,$shape['collisionLayer'] ?? 0); } }
+	/**
+	 * Index a polygon or directed two-point edge on a collision plane.
+	 * Closed polygons may be concave; opposite edges are linked for cancellation between active neighbors.
+	 *
+	 * @param list<array{0:float|int,1:float|int}> $points World-space vertices; two points form a directed edge, three or more a closed polygon.
+	 * @param bool $oneWay Keep only upward-facing edges and permit passage from below.
+	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @return void Adds geometry without changing any body's selected plane.
+	 */
 	public function add(array $points,bool $oneWay = false,int $collisionLayer = 0): void
 	{
 		if($collisionLayer < 0)
@@ -67,6 +83,13 @@ final class Terrain
 				{ $this->grid["$cx,$cy"][] = $id; } }
 		}
 	}
+	/**
+	 * Determine whether an edge belongs to the queried route and remains exposed.
+	 *
+	 * @param int $id Internal segment index.
+	 * @param int $collisionLayer Selected body plane, in addition to shared plane zero.
+	 * @return bool True if the edge is active and has no active opposite neighbor.
+	 */
 	private function active(int $id,int $collisionLayer): bool
 	{
 		$plane = $this->segments[$id][7];
@@ -78,7 +101,15 @@ final class Terrain
 		{ return false; } }
 		return true;
 	}
-	/** Occupancy of closed solid polygons. One-way surfaces have no solid interior. */
+	/**
+	 * Test point occupancy against closed polygons on the selected and shared planes.
+	 * One-way edges have no solid interior.
+	 *
+	 * @param float $x World X coordinate in pixels.
+	 * @param float $y World Y coordinate in pixels.
+	 * @param int $collisionLayer Additional collision plane included with shared terrain.
+	 * @return bool True if any eligible polygon contains the point.
+	 */
 	public function solidAt(float $x,float $y,int $collisionLayer = 1): bool
 	{
 		$cx = (int)floor($x / $this->cellSize);
@@ -101,8 +132,22 @@ final class Terrain
 		}
 		return false;
 	}
+	/**
+	 * Register a nonsolid directional gate.
+	 *
+	 * @param LayerSwitch $switch Validated world-space gate to retain.
+	 * @return void Appends the region for subsequent movement queries.
+	 */
 	public function addSwitch(LayerSwitch $switch): void { $this->switches[] = $switch; }
-	/** First eligible gate crossed by the body center, independent of object order. */
+	/**
+	 * Find the first eligible gate crossed by a body center, independent of object order.
+	 *
+	 * @param Body $body Actor providing the start point, direction, and selected collision layer.
+	 * @param float $dx Full proposed horizontal displacement in pixels.
+	 * @param float $dy Full proposed vertical displacement in pixels.
+	 * @param array<int,bool> $seen Gate IDs already considered during this sweep, which must be skipped.
+	 * @return array{id:int,t:float,switch:LayerSwitch}|null Earliest gate with its internal ID and entry fraction, or null when none is eligible.
+	 */
 	public function nextSwitch(Body $body,float $dx,float $dy,array $seen = []): ?array
 	{
 		$best = null;
@@ -116,6 +161,13 @@ final class Terrain
 		}
 		return $best;
 	}
+	/**
+	 * Apply an eligible route change only when newly solid geometry leaves the body clear.
+	 *
+	 * @param Body $body Actor to update in place; the caller must already have reached the gate.
+	 * @param LayerSwitch $switch Reached gate whose directional rule chooses the destination.
+	 * @return bool True when the selected collision layer changed; false when ineligible or blocked.
+	 */
 	public function applySwitch(Body $body,LayerSwitch $switch): bool
 	{
 		$target = $switch->target($body);
@@ -124,7 +176,13 @@ final class Terrain
 		$body->collisionLayer = $target;
 		return true;
 	}
-	/** Reject newly solid geometry inside the body, including thin obstacles off center. */
+	/**
+	 * Check destination occupancy and new solid edges against the oriented body interior.
+	 *
+	 * @param Body $body Actor whose center, bounds, orientation, and current plane are inspected.
+	 * @param int $target Destination collision plane to test together with common terrain.
+	 * @return bool True when changing planes will not embed the actor in newly active solid geometry.
+	 */
 	private function canSwitch(Body $body,int $target): bool
 	{
 		if($this->solidAt($body->x,$body->y,$target))
@@ -165,7 +223,18 @@ final class Terrain
 		} } }
 		return true;
 	}
-	/** Earliest front-facing hit over the WHOLE displacement, not just its endpoint. */
+	/**
+	 * Find the earliest front-facing edge along the entire displacement.
+	 * Spatial-cell DDA traversal includes corner neighbors, so crossed thin edges cannot be skipped.
+	 *
+	 * @param float $x Ray origin X in world pixels.
+	 * @param float $y Ray origin Y in world pixels.
+	 * @param float $dx Full horizontal ray displacement in pixels.
+	 * @param float $dy Full vertical ray displacement in pixels.
+	 * @param bool $ignoreOneWay Exclude one-way platforms, such as during a drop-through.
+	 * @param int $collisionLayer Additional collision plane included with shared terrain.
+	 * @return Hit|null Earliest eligible contact, or null when the ray misses terrain.
+	 */
 	public function raycast(float $x,float $y,float $dx,float $dy,bool $ignoreOneWay = false,int $collisionLayer = 1): ?Hit
 	{
 		$this->raycasts++;
@@ -217,10 +286,16 @@ final class Terrain
 		}
 		return $best;
 	}
-	/** Raycast a body center against segments expanded by the oriented body.
-     * The three separating axes also cover segment endpoints between foot sensors.
-     * This is a continuous convex cast; speed never determines collision sampling.
-     */
+	/**
+	 * Cast the body center against segments expanded by its oriented rectangle.
+	 * Three separating axes include segment endpoints, covering obstacles between foot sensors without speed-based sampling.
+	 *
+	 * @param Body $body Actor providing bounds, angle, origin, and selected collision plane.
+	 * @param float $dx Full proposed horizontal displacement in pixels.
+	 * @param float $dy Full proposed vertical displacement in pixels.
+	 * @param bool $ignoreOneWay Exclude one-way platforms during this cast.
+	 * @return Hit|null Earliest body contact along the full displacement, or null when unobstructed.
+	 */
 	public function castBody(Body $body,float $dx,float $dy,bool $ignoreOneWay = false): ?Hit
 	{
 		$this->raycasts++;

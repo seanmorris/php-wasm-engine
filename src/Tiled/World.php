@@ -6,13 +6,25 @@ use PhpWasmEngine\Spatial\BoundsIndex;
 final class World
 {
 	private BoundsIndex $index;
+	/**
+	 * Create a world bounds index from an explicit map manifest.
+	 *
+	 * @param Loader $loader Shared loader used for map and dependency caches.
+	 * @param string $path World manifest path used to resolve map filenames.
+	 * @param array<string,mixed> $data Decoded Tiled world data; filesystem patterns are unsupported.
+	 * @return void Validates and indexes entries without reading any map contents.
+	 */
 	public function __construct(public Loader $loader,public string $path,public array $data)
 	{
 		if(!empty($data['patterns']))
 		{ throw new \UnexpectedValueException('Export an explicit world maps list; filesystem patterns are not supported'); }
 		$this->reindex();
 	}
-	/** Call after editing manifest bounds. No map contents are read here. */
+	/**
+	 * Rebuild the spatial index after editing manifest bounds.
+	 *
+	 * @return void Validates unique map filenames and finite nonnegative bounds without loading maps.
+	 */
 	public function reindex(): void
 	{
 		$seen = [];
@@ -47,7 +59,16 @@ final class World
 		unset($entry);
 		$this->index = new BoundsIndex($indexed);
 	}
-	/** Metadata only, in manifest painter order. Coordinates are the top-left corner. */
+	/**
+	 * Select map metadata intersecting a world rectangle in manifest painter order.
+	 *
+	 * @param float $x Left world coordinate in pixels.
+	 * @param float $y Top world coordinate in pixels.
+	 * @param float $width Nonnegative query width in pixels.
+	 * @param float $height Nonnegative query height in pixels.
+	 * @param float $margin Nonnegative expansion on every side in pixels.
+	 * @return array<int,array<string,mixed>> Original manifest entries keyed by their manifest index; map contents remain unloaded.
+	 */
 	public function entries(float $x,float $y,float $width,float $height,float $margin = 0): array
 	{
 		foreach([$x,$y,$width,$height,$margin] as $value)
@@ -60,6 +81,12 @@ final class World
 		{ $result[$id] = $this->data['maps'][$id]; }
 		return $result;
 	}
+	/**
+	 * Load one manifest entry and apply its world placement to the cached map.
+	 *
+	 * @param array<string,mixed> $entry Manifest record containing fileName and world x/y placement.
+	 * @return TileMap Loaded map instance with its world origin set from the entry.
+	 */
 	public function load(array $entry): TileMap
 	{
 		$map = $this->loader->map(Assets::relative($this->path,$entry['fileName']));
@@ -67,8 +94,31 @@ final class World
 		$map->y = (float)$entry['y'];
 		return $map;
 	}
-	/** Synchronous loading for files already available to PHP. */
+	/**
+	 * Synchronously load maps intersecting a rectangle when their files are already available.
+	 *
+	 * @param float $x Left world coordinate in pixels.
+	 * @param float $y Top world coordinate in pixels.
+	 * @param float $width Nonnegative query width in pixels.
+	 * @param float $height Nonnegative query height in pixels.
+	 * @param float $margin Nonnegative expansion on every side in pixels.
+	 * @return list<TileMap> Intersecting maps in manifest painter order.
+	 */
 	public function visible(float $x,float $y,float $width,float $height,float $margin = 0): array
-	{ return array_values(array_map(fn($entry) => $this->load($entry),$this->entries($x,$y,$width,$height,$margin))); }
+	{ return array_values(array_map(
+		/**
+		 * Load and position one selected world manifest entry.
+		 *
+		 * @param array<string,mixed> $entry Manifest entry containing a filename and placement.
+		 * @return TileMap Cached map with its world origin applied.
+		 */
+		fn($entry) => $this->load($entry)
+		, $this->entries($x,$y,$width,$height,$margin))); }
+	/**
+	 * Invalidate a map cache entry without releasing shared dependencies.
+	 *
+	 * @param string $fileName Map filename relative to the world manifest, or an absolute path.
+	 * @return void Removes the cached map and its source bytes/JSON.
+	 */
 	public function unload(string $fileName): void { $this->loader->forget(Assets::relative($this->path,$fileName)); }
 }

@@ -6,8 +6,30 @@ use PhpWasmEngine\Input\Controls;
 /** Fresh surface-tangent controller. Distances are pixels, time is seconds. */
 final class Platformer
 {
+	/**
+	 * Bind surface-tangent movement to a terrain collision source.
+	 *
+	 * @param Terrain $terrain Static terrain and directional gates used by movement and sensor casts.
+	 * @return void Creates a controller that can update multiple independent bodies.
+	 */
 	public function __construct(public Terrain $terrain) {}
+	/**
+	 * Move a scalar toward a target without overshooting.
+	 *
+	 * @param float $value Current scalar value.
+	 * @param float $target Desired scalar value.
+	 * @param float $step Nonnegative maximum change for this update.
+	 * @return float Value after applying at most the supplied step.
+	 */
 	private static function approach(float $value,float $target,float $step): float { return $value < $target?min($target,$value + $step):max($target,$value - $step); }
+	/**
+	 * Advance one actor through controls, abilities, continuous collision, and surface adhesion.
+	 *
+	 * @param Body $b Actor to simulate in place.
+	 * @param Controls $input Current logical controls and button edges.
+	 * @param float $dt Finite, positive simulation delta in seconds.
+	 * @return void Mutates pose, momentum, collision layer, and ability state on the supplied body.
+	 */
 	public function step(Body $b,Controls $input,float $dt): void
 	{
 		if($dt <= 0 || !is_finite($dt))
@@ -156,21 +178,38 @@ final class Platformer
 		if(!$b->grounded)
 		{ $b->angle = 0; }
 	}
+	/**
+	 * Apply rolling or standing height while preserving the contact point along the body normal.
+	 *
+	 * @param Body $b Actor whose rolling flag selects the desired height.
+	 * @return void Moves the body center and updates its half-height.
+	 */
 	private function height(Body $b): void
 	{ $height = $b->rolling?$b->rollingHeight:$b->standingHeight;
 	$b->y += ($b->halfHeight - $height) * cos($b->angle);
 	$b->x -= ($b->halfHeight - $height) * sin($b->angle);
 	$b->halfHeight = $height; }
+	/**
+	 * Leave rolling mode when a head-clearance ray finds room to stand.
+	 *
+	 * @param Body $b Actor whose current head position and standing height are tested.
+	 * @return void Clears the rolling flag only when the selected collision plane permits standing.
+	 */
 	private function stand(Body $b): void
 	{
 		$extra = ($b->standingHeight - $b->halfHeight) * 2;
 		if(!$this->terrain->raycast($b->x,$b->y - $b->halfHeight,0,-$extra,true,$b->collisionLayer))
 		{ $b->rolling = false; }
 	}
-	/** Swept body cast. Every ray spans the full remaining displacement.
-     * Earliest time of impact wins; the remaining motion slides along that surface.
-     * Expanded segment endpoints close the gaps between discrete perimeter sensors.
-     */
+	/**
+	 * Resolve the earliest terrain impact or gate crossing over the full remaining motion.
+	 * Expanded segment endpoints close sensor gaps; unresolved motion after six contacts is discarded.
+	 *
+	 * @param Body $b Actor whose oriented bounds and collision layer participate in each cast.
+	 * @param float $dx Full proposed horizontal displacement in pixels.
+	 * @param float $dy Full proposed vertical displacement in pixels.
+	 * @return void Moves the body, switches eligible routes, and clips momentum against contact normals.
+	 */
 	private function sweep(Body $b,float $dx,float $dy): void
 	{
 		$seen = [];
@@ -226,7 +265,12 @@ final class Platformer
 			$b->vy -= $velocity * $best->ny; }
 		}
 	}
-	/** Short inward rays keep two feet on the surface and allow floor/wall/ceiling transitions. */
+	/**
+	 * Cast short inward foot rays to maintain floor, wall, or ceiling attachment.
+	 *
+	 * @param Body $b Grounded actor whose pose and surface angle are updated.
+	 * @return void Aligns the actor to the nearest support, or releases it when both sensors miss.
+	 */
 	private function adhere(Body $b): void
 	{
 		$ca = cos($b->angle);
@@ -243,7 +287,14 @@ final class Platformer
 		if(!$hits)
 		{ $b->grounded = false;
 		return; }
-		$distance = min(array_map(fn($h) => $h->t * 16 - 6,$hits));
+		$distance = min(array_map(
+			/**
+			 * Convert a foot-ray contact fraction to distance from the nominal sole.
+			 *
+			 * @param Hit $h Contact on a 16-pixel inward ray starting six pixels above the sole.
+			 * @return float Signed support correction in pixels.
+			 */
+			fn($h) => $h->t * 16 - 6,$hits));
 		$b->x -= $sa * $distance;
 		$b->y += $ca * $distance;
 		if(count($hits) === 2)
@@ -251,6 +302,14 @@ final class Platformer
 		else
 		{ $b->angle = atan2($hits[0]->nx,-$hits[0]->ny); }
 	}
+	/**
+	 * Advance a glider along a caught wall, handling jumps and the wall's end.
+	 *
+	 * @param Body $b Actor currently using the climb ability.
+	 * @param Controls $input Logical climb and jump controls.
+	 * @param float $dt Simulation delta in seconds.
+	 * @return void Updates the actor's pose, velocity, and climb ability state.
+	 */
 	private function climb(Body $b,Controls $input,float $dt): void
 	{
 		if($input->pressed('jump'))

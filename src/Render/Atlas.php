@@ -10,8 +10,19 @@ final class Atlas
 	public array $indices = [], $rects = [], $tiles = [];
 	private array $frames = [];
 	private bool $closed = false;
+	/**
+	 * Pack a map's tileset images and upload dense tile metadata.
+	 *
+	 * @param TileMap $map Map supplying normalized tile definitions, source images, and animation frames.
+	 * @return void Creates an image texture and metadata texture in the current GL context.
+	 */
 	public function __construct(public TileMap $map)
 	{ $this->create(); }
+	/**
+	 * Shelf-pack source images and upload atlas pixels, rectangles, and tile offsets.
+	 *
+	 * @return void Initializes texture handles and GID indexes, rejecting content that exceeds GPU limits.
+	 */
 	private function create(): void
 	{
 		$map = $this->map;
@@ -36,7 +47,14 @@ final class Atlas
 			} }
 			if(count($this->indices) + 1 > $max)
 			{ throw new \RuntimeException('Atlas tile metadata exceeds GPU texture width'); }
-			$area = array_sum(array_map(fn($s) => ($s[0] + 2) * ($s[1] + 2),$images));
+			$area = array_sum(array_map(
+				/**
+				 * Include one pixel of packing padding around an image.
+				 *
+				 * @param array{0:int,1:int} $s Source image width and height in pixels.
+				 * @return int Padded image area in square pixels.
+				 */
+				fn($s) => ($s[0] + 2) * ($s[1] + 2),$images));
 			$this->width = min($max,max(1,(int)ceil(sqrt($area))));
 			foreach($images as [$w,$h])
 			{ if($w + 2 > $max || $h + 2 > $max)
@@ -90,7 +108,11 @@ final class Atlas
 		{ foreach($surfaces as $surface)
 		{ SDL_FreeSurface($surface); } }
 	}
-	/** Rebuild in place so SpriteRenderer keeps the same shared atlas. */
+	/**
+	 * Rebuild GPU textures in place so borrowing sprite renderers keep the same atlas object.
+	 *
+	 * @return void Recreates image/metadata storage and resets frame caches unless closed.
+	 */
 	public function restore(): void
 	{
 		if($this->closed)
@@ -99,6 +121,12 @@ final class Atlas
 		$this->indices = $this->rects = $this->tiles = $this->frames = [];
 		$this->create();
 	}
+	/**
+	 * Allocate and bind a texture with nearest filtering and clamp-to-edge wrapping.
+	 *
+	 * @param int $target GL texture target, such as GL_TEXTURE_2D or GL_TEXTURE_2D_ARRAY.
+	 * @return int Newly allocated GL texture handle owned by the caller.
+	 */
 	public static function texture(int $target): int
 	{
 		glGenTextures(1,$ids);
@@ -109,6 +137,12 @@ final class Atlas
 		glTexParameteri($target,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
 		return $ids[0];
 	}
+	/**
+	 * Update only metadata entries whose Tiled animation frame has changed.
+	 *
+	 * @param float $milliseconds Simulation or renderer time in milliseconds.
+	 * @return int Number of tile rectangle entries uploaded during this call.
+	 */
 	public function animate(float $milliseconds): int
 	{
 		$updates = 0;
@@ -127,9 +161,19 @@ final class Atlas
 		} }
 		return $updates;
 	}
+	/**
+	 * Permanently close the atlas and release its owned GPU textures.
+	 *
+	 * @return void Prevents restoration and deletes live texture handles.
+	 */
 	public function close(): void
 	{ $this->closed = true;
 	$this->release(); }
+	/**
+	 * Delete atlas image and metadata textures while retaining CPU descriptions.
+	 *
+	 * @return void Resets both texture handles to zero for teardown or restoration.
+	 */
 	private function release(): void
 	{ $ids = array_values(array_filter([$this->texture,$this->metadata]));
 	if($ids)
