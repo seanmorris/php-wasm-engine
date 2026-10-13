@@ -15,7 +15,7 @@ export default async (_env,argv)=>{
     module:{rules:[{test:/\.css$/,use:['style-loader','css-loader']}]},
     plugins:[
       new HtmlWebpackPlugin({template:'./docs/index.html'}),
-      new CopyPlugin({patterns:['architecture.md','loops.md','loop-layout.svg'].map(name=>({from:'docs/'+name,to:name}))})
+      new CopyPlugin({patterns:['architecture.md','loops.md','menus.md','startup.md','loop-layout.svg'].map(name=>({from:'docs/'+name,to:name}))})
     ]
   };
   if(development) {

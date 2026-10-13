@@ -1,79 +1,46 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__).'/autoload.php';
+require_once dirname(__DIR__).'/autoload.php';
+require_once __DIR__.'/breakables.php';
+require_once __DIR__.'/DemoLevel.php';
+require_once __DIR__.'/DemoGame.php';
+require_once __DIR__.'/menu.php';
+require_once __DIR__.'/cards.php';
+require_once __DIR__.'/DemoBackdrop.php';
+require_once __DIR__.'/DemoStartup.php';
 
 use PhpWasmEngine\Engine;
-use PhpWasmEngine\Tiled\Loader;
-use PhpWasmEngine\Physics\
-{Body,Platformer,MapTerrain};
-use PhpWasmEngine\Render\
-{Device,Camera,MapRenderer,Sprite,SpriteRenderer};
+use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Render\Camera;
+use PhpWasmEngine\Render\Device;
+use PhpWasmEngine\Render\Sprite;
 
-$scene = vrzno_env('scene')?:'platformer';
-$profile = vrzno_env('profile')?:'runner';
-if(!in_array($scene,['platformer','loop','infinite','isometric'],true))
-{ throw new InvalidArgumentException('Invalid scene'); }
-$loader = new Loader;
-$map = $loader->map(__DIR__.'/assets/'.$scene.'.tmj');
-$device = new Device;
-$engine = new Engine($device);
-$renderer = new MapRenderer($map);
-$sprites = new SpriteRenderer($renderer->atlas);
-$terrain = MapTerrain::build($map);
-$movement = new Platformer($terrain);
-$body = new Body(80,100,$profile);
+$scene = $scene ?? (vrzno_env('scene') ?: 'platformer');
+$profile = vrzno_env('profile') ?: 'runner';
+$engine = new Engine(new Device);
+$body = new Body(80, 100, $profile);
+
 // The demo PNG has two transparent rows below the visible soles.
-$entity = $engine->entities->create($body,new Sprite(['runner' => 7,'glider' => 8,'flyer' => 9][$profile],originY: 30 / 32));
-$camera = new Camera(0,0,960,540);
-$browser = new Vrzno;
-$canvas = vrzno_env('canvas');
-$status = $browser->document->querySelector('#status');
-$engine->systems->add('movement',function($entities,$dt) use ($engine,$movement,$body,$scene,$camera) {
-	if($scene === 'isometric')
-	{ $camera->x += $engine->controls->axis('left','right') * 300 * $dt;
-	$camera->y += $engine->controls->axis('up','down') * 300 * $dt;
-	return; }
-	if($body->y > 1200 || $engine->controls->pressed('reset'))
-	{ $body->x = 80;
-	$body->y = 100;
-	$body->vx = $body->vy = $body->groundSpeed = 0;
-	$body->angle = 0;
-	$body->collisionLayer = 1;
-	$body->grounded = false;
-	$body->ability = ''; }
-	$movement->step($body,$engine->controls,$dt);
-	$camera->follow($body->x,$body->y,$dt);
-	$camera->y = min(120,$camera->y);
-});
-if($scene === 'isometric')
-{ $camera->x = -160;
-$camera->y = -80; }
-$frames = 0;
-$engine->start(function() use ($device,$renderer,$sprites,$body,$engine,$entity,$camera,$canvas,$status,$terrain,$scene,&$frames) {
-	$device->begin();
-	$renderer->render($camera,$engine->time * 1000);
-	if($scene !== 'isometric')
-	{
-		$sprite = $engine->entities->get($entity,Sprite::class);
-		$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
-		$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
-		$sprite->rotation = $body->angle;
-		$sprite->flipX = $body->facing < 0;
-		$sprite->scaleY = $body->rolling?.7:1;
-		$sprites->render([$sprite],$camera,$engine->time * 1000);
-	}
-	$device->present();
-	$frames++;
-	$canvas->dataset->frames = (string)$frames;
-	$canvas->dataset->body = json_encode(['x' => $body->x,'y' => $body->y,'grounded' => $body->grounded,'ability' => $body->ability,'speed' => $body->groundSpeed,'angle' => $body->angle,'collisionLayer' => $body->collisionLayer]);
-	if($frames % 10 === 0)
-	{
-		$status->textContent = sprintf('%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts',$body->ability?:($body->grounded?'ground':'air'),$body->groundSpeed,$renderer->stats['draws'] + $sprites->draws,$renderer->stats['instances'],$renderer->stats['uploads'],$terrain->raycasts);
-		if($scene === 'loop')
-		{ $status->textContent .= ' · collision layer '.$body->collisionLayer; }
-		if($engine->userPaused)
-		{ $status->textContent = 'Paused. Press Start / Options or P to resume.'; }
-	}
-},function() use ($sprites,$renderer) { $sprites->close();
-$renderer->close(); },function() use ($renderer,$sprites) { $renderer->restore();
-$sprites->restore(); });
+$entity = $engine->entities->create(
+	$body
+	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
+);
+$camera = new Camera(0, 0, 960, 540);
+$game = new DemoGame($engine, $camera, $body, $entity);
+$pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);
+
+if($intro ?? false)
+{
+	$game->startup = new DemoStartup($game, $scene);
+}
+else
+{
+	$game->selectScene($scene);
+}
+
+$engine->start([$game, 'render'], [$game, 'close'], [$game, 'restore']);
+
+if($game->startup !== null)
+{
+	(vrzno_env('sceneReady'))(null);
+}

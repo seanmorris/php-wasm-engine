@@ -1,0 +1,12 @@
+{
+  "type": "tileset",
+  "name": "grid shattering fixture",
+  "tilewidth": 16,
+  "tileheight": 16,
+  "columns": 1,
+  "tilecount": 1,
+  "image": "../../examples/assets/test.png",
+  "imagewidth": 16,
+  "imageheight": 16,
+  "tiles": [{"id": 0, "class": "block"}]
+}

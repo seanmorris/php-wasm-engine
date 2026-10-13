@@ -5,40 +5,65 @@ declare(strict_types=1);
  * Discover named functions, methods, closures, and arrow functions without executing source.
  *
  * @param string $source Complete PHP source to parse with the current interpreter.
- * @return list<array{name:string,line:int,doc:string,params:list<string>}> Function locations, attached docblocks, and ordered parameter names.
+ * @return list<array{name:string,line:int,doc:string,params:list<string>}> Function locations,
+ * attached docblocks, and ordered parameter names.
  */
 function phpDocFunctions(string $source): array
 {
-	$tokens = token_get_all($source,TOKEN_PARSE);
+	$tokens = token_get_all($source, TOKEN_PARSE);
 	$functions = [];
 	$modifiers = [T_WHITESPACE,T_PUBLIC,T_PROTECTED,T_PRIVATE,T_STATIC,T_FINAL,T_ABSTRACT];
+
 	foreach($tokens as $i => $token)
 	{
-		if(!is_array($token) || !in_array($token[0],[T_FUNCTION,T_FN],true))
-		{ continue; }
+		if(!is_array($token) || !in_array($token[0], [T_FUNCTION,T_FN], true))
+		{
+			continue;
+		}
+
 		$previous = $i - 1;
-		while($previous >= 0 && is_array($tokens[$previous]) && in_array($tokens[$previous][0],$modifiers,true))
-		{ $previous--; }
-		$doc = $previous >= 0 && is_array($tokens[$previous]) && $tokens[$previous][0] === T_DOC_COMMENT?$tokens[$previous][1]:'';
+
+		while($previous >= 0 && is_array($tokens[$previous]) && in_array(
+			$tokens[$previous][0]
+			, $modifiers
+			, true
+		)){
+			$previous--;
+		}
+		$doc = $previous >= 0 && is_array($tokens[$previous]) && $tokens[$previous][
+			0
+		] === T_DOC_COMMENT?$tokens[$previous][1]:'';
 		$name = $token[0] === T_FN?'arrow function':'closure';
 		$j = $i + 1;
+
 		while($tokens[$j] !== '(')
 		{
 			$part = $tokens[$j++];
+
 			if(is_array($part) && $part[0] !== T_WHITESPACE && $part[1] !== '&')
-			{ $name = $part[1]; }
+			{
+				$name = $part[1];
+			}
 		}
 		$params = [];
 		$depth = 1;
+
 		while($depth > 0)
 		{
 			$part = $tokens[++$j];
+
 			if($part === '(')
-			{ $depth++; }
+			{
+				$depth++;
+			}
 			elseif($part === ')')
-			{ $depth--; }
+			{
+				$depth--;
+			}
 			elseif($depth === 1 && is_array($part) && $part[0] === T_VARIABLE)
-			{ $params[] = substr($part[1],1); }
+			{
+				$params[] = substr($part[1], 1);
+			}
 		}
 		$functions[] = ['name' => $name,'line' => $token[2],'doc' => $doc,'params' => $params];
 	}
@@ -55,14 +80,21 @@ function phpDocTypeDescription(string $tag): array
 {
 	$tag = trim($tag);
 	$depth = 0;
-	for($i = 0;$i < strlen($tag);$i++)
+
+	for($i = 0; $i < strlen($tag); $i++)
 	{
-		if(str_contains('([{<',$tag[$i]))
-		{ $depth++; }
-		elseif(str_contains(')]}>',$tag[$i]))
-		{ $depth--; }
+		if(str_contains('([{<', $tag[$i]))
+		{
+			$depth++;
+		}
+		elseif(str_contains(')]}>', $tag[$i]))
+		{
+			$depth--;
+		}
 		elseif($depth === 0 && ctype_space($tag[$i]))
-		{ return [substr($tag,0,$i),trim(substr($tag,$i))]; }
+		{
+			return [substr($tag, 0, $i),trim(substr($tag, $i))];
+		}
 	}
 	return [$tag,''];
 }
@@ -70,72 +102,121 @@ function phpDocTypeDescription(string $tag): array
 /**
  * Check a function's summary and its parameter/return type descriptions.
  *
- * @param array{name:string,line:int,doc:string,params:list<string>} $function Parsed function metadata and attached PHPDoc.
+ * @param array{name:string,line:int,doc:string,params:list<string>} $function Parsed function
+ * metadata and attached PHPDoc.
  * @return list<string> Documentation errors, empty when the function satisfies the contract.
  */
 function phpDocErrors(array $function): array
 {
 	if($function['doc'] === '')
-	{ return ['missing PHPDoc']; }
-	$clean = preg_replace('/^\h*\*\h?/m','',substr($function['doc'],3,-2));
+	{
+		return ['missing PHPDoc'];
+	}
+
+	$clean = preg_replace('/^\h*\*\h?/m', '', substr($function['doc'], 3, -2));
 	$errors = [];
-	if(!preg_match('/[a-z]/i',explode('@',$clean,2)[0]))
-	{ $errors[] = 'missing function description'; }
-	preg_match_all('/^\h*@param\h+(.+?)\h+(?:&)?(?:\.\.\.)?\$(\w+)\h+(\S[^\r\n]*)/m',$clean,$params,PREG_SET_ORDER);
+
+	if(!preg_match('/[a-z]/i', explode('@', $clean, 2)[0]))
+	{
+		$errors[] = 'missing function description';
+	}
+
+	preg_match_all(
+		'/^\h*@param\h+(.+?)\h+(?:&)?(?:\.\.\.)?\$(\w+)\h+(\S[^\r\n]*)/m'
+		, $clean
+		, $params
+		, PREG_SET_ORDER
+	);
 	$names = [];
+
 	foreach($params as $param)
 	{
 		$names[] = $param[2];
-		if(!preg_match('/[a-z]/i',$param[3]))
-		{ $errors[] = 'missing parameter description for $'.$param[2]; }
+
+		if(!preg_match('/[a-z]/i', $param[3]))
+		{
+			$errors[] = 'missing parameter description for $'.$param[2];
+		}
 	}
+
 	if($names !== $function['params'])
-	{ $errors[] = 'document every parameter in order with its type and description'; }
-	preg_match_all('/^\h*@return\h+([^\r\n]+)/m',$clean,$returns);
+	{
+		$errors[] = 'document every parameter in order with its type and description';
+	}
+
+	preg_match_all('/^\h*@return\h+([^\r\n]+)/m', $clean, $returns);
+
 	if(count($returns[1]) !== 1)
-	{ $errors[] = 'require one @return type and description'; }
+	{
+		$errors[] = 'require one @return type and description';
+	}
 	else
 	{
 		[$type,$description] = phpDocTypeDescription($returns[1][0]);
-		if($type === '' || !preg_match('/[a-z]/i',$description))
-		{ $errors[] = 'missing return type or description'; }
+
+		if($type === '' || !preg_match('/[a-z]/i', $description))
+		{
+			$errors[] = 'missing return type or description';
+		}
 	}
+
 	return $errors;
 }
 
-$paths = array_slice($argv,1)?:[dirname(__DIR__).'/src',dirname(__DIR__).'/autoload.php'];
+$paths = array_slice($argv, 1)?:[dirname(__DIR__).'/src',dirname(__DIR__).'/autoload.php'];
 $files = [];
+
 foreach($paths as $path)
 {
 	if(is_dir($path))
-	{ foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path,FilesystemIterator::SKIP_DOTS)) as $file)
-	{ if($file->isFile() && $file->getExtension() === 'php')
-	{ $files[] = $file->getPathname(); } } }
+	{
+		foreach(new RecursiveIteratorIterator(
+			new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+		) as $file
+		){
+			if($file->isFile() && $file->getExtension() === 'php')
+			{
+				$files[] = $file->getPathname();
+			}
+		}
+	}
 	else
-	{ $files[] = $path; }
+	{
+		$files[] = $path;
+	}
 }
 $files = array_unique($files);
 sort($files);
 $count = 0;
 $failures = 0;
+
 foreach($files as $file)
 {
 	try
 	{
 		$source = @file_get_contents($file);
+
 		if($source === false)
-		{ throw new RuntimeException('Cannot read source file'); }
+		{
+			throw new RuntimeException('Cannot read source file');
+		}
+
 		foreach(phpDocFunctions($source) as $function)
 		{
 			$count++;
+
 			foreach(phpDocErrors($function) as $error)
-			{ $failures++;
-			fwrite(STDERR,$file.':'.$function['line'].' '.$function['name'].': '.$error."\n"); }
+			{
+				$failures++;
+				fwrite(STDERR, $file.':'.$function['line'].' '.$function['name'].': '.$error."\n");
+			}
 		}
 	}
 	catch(Throwable $error)
-	{ $failures++;
-	fwrite(STDERR,$file.': '.$error->getMessage()."\n"); }
+	{
+		$failures++;
+		fwrite(STDERR, $file.': '.$error->getMessage()."\n");
+	}
 }
 echo "PHPDoc: $count functions, $failures failures\n";
 exit($failures?1:0);

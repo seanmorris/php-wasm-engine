@@ -54,13 +54,13 @@ function objects(before,after) {
 }
 
 for(const name of readdirSync(assets).filter(name=>name.endsWith('.tmj'))) {
-  test('Tiled imports '+name+' with visible terrain and intact layers',()=>{
+  test('Tiled imports '+name+' with visible content and intact layers',()=>{
     const file=join(assets,name);
     roundTrip(file,'map',(before,after,exported)=>{
       assert.equal(after.orientation,before.orientation);
       assert.equal(after.infinite,before.infinite??false);
       assert.equal(after.layers.length,before.layers.length);
-      let visibleTerrain=0;
+      let visibleTerrain=0, visibleImages=0;
       before.layers.forEach((layer,index)=>{
         const imported=after.layers[index];
         for(const key of ['id','name','type']) assert.equal(imported[key],layer[key]);
@@ -73,6 +73,7 @@ for(const name of readdirSync(assets).filter(name=>name.endsWith('.tmj'))) {
           if(imported.visible&&imported.opacity>0) visibleTerrain+=cells(imported).size;
         }
         if(layer.type==='imagelayer') {
+          if(imported.visible&&imported.opacity>0) visibleImages++;
           assert.equal(sourcePath(exported,imported.image),sourcePath(file,layer.image));
           for(const key of ['repeatx','repeaty']) assert.equal(imported[key]??false,layer[key]??false);
           assert.equal(imported.parallaxx??1,layer.parallaxx??1);
@@ -81,7 +82,11 @@ for(const name of readdirSync(assets).filter(name=>name.endsWith('.tmj'))) {
         }
         if(layer.type==='objectgroup') objects(layer.objects,imported.objects);
       });
-      assert.ok(visibleTerrain>0,'the editor must have visible terrain');
+      if(before.layers.some(layer=>layer.type==='tilelayer')) {
+        assert.ok(visibleTerrain>0,'the editor must have visible terrain');
+      } else {
+        assert.ok(visibleImages>0,'an image-only map must have visible image layers');
+      }
       assert.equal(after.tilesets.length,before.tilesets.length);
       before.tilesets.forEach((set,index)=>{
         assert.equal(after.tilesets[index].firstgid,set.firstgid);
@@ -95,6 +100,7 @@ for(const name of readdirSync(assets).filter(name=>name.endsWith('.tsj'))) {
   test('Tiled preserves '+name+' images, animations and collision shapes',()=>{
     const file=join(assets,name);
     roundTrip(file,'tileset',(before,after,exported)=>{
+      assert.deepEqual(properties(after.properties),properties(before.properties));
       for(const key of ['tilewidth','tileheight','tilecount','columns','imagewidth','imageheight']) {
         assert.equal(after[key],before[key],key);
       }

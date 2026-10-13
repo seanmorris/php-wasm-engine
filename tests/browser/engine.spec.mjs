@@ -65,6 +65,42 @@ test('sprite animations switch by name, restart independently and reuse their at
   for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
   expect(result.error).toBe(0);
 });
+
+test('sprite groups reproduce whole images, freeze animation and restore cropped debris',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-breakables.php";'));
+  expect(Object.keys(result.checks).length).toBeGreaterThan(48);
+  for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
+  expect(result.error).toBe(0);
+});
+
+test('sprite outlines expand by one world pixel with per-instance opt-outs',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-outlines.php";'));
+  expect(Object.keys(result.checks).length).toBeGreaterThan(35);
+  for(const [name,passed] of Object.entries(result.checks)) {
+    expect.soft(passed,JSON.stringify({name,differences:result.differences[name]})).toBe(true);
+  }
+  expect(result.error).toBe(0);
+});
+
+test('Tiled breakable objects render every flip and preserve the image when shattered',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-tiled-breakables.php";'));
+  expect(Object.keys(result.checks)).toHaveLength(96);
+  for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
+  expect(result.error).toBe(0);
+});
+
+test('bitmap fonts align exact pixels and menu editing survives graphics rebuilding',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-menus.php";'));
+  for(const [name,passed] of Object.entries(result.checks)) {
+    expect.soft(passed,JSON.stringify({name,differences:result.differences})).toBe(true);
+  }
+  expect(result.error).toBe(0);
+});
+
 test('anchored backgrounds keep a shared phase across map boundaries and streaming',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax-world.php";'));
@@ -72,9 +108,10 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
   for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
   expect(result.error).toBe(0);
 });
-for(const scene of ['platformer','loop','infinite','isometric']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
+for(const scene of ['platformer','loop','infinite','isometric','breakables']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(scene=>window.bootEngine({scene}),scene);
   await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-frames')),{timeout:60000}).toBeGreaterThan(20);
   await page.evaluate(()=>{
     window.loseExtension=document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
@@ -94,13 +131,68 @@ for(const scene of ['platformer','loop','infinite','isometric']) test(scene+' li
     await page.keyboard.press('Space');await page.waitForTimeout(100);
   }
   await page.screenshot({path:'test-results/'+scene+'.png',fullPage:true});
-  await page.locator('#stop').click();await expect(page.locator('#start')).toBeEnabled();
+  await page.evaluate(() => window.stopEngine());await expect(page.locator('#start')).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test('a live block stops walking, shatters on rolling impact, restores debris and resets',async({page})=>{
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'breakables'}));
+  const canvas=page.locator('canvas');
+  const state=async()=>JSON.parse(await canvas.getAttribute('data-breakables')||'{}');
+  const body=async()=>JSON.parse(await canvas.getAttribute('data-body')||'{}');
+  await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
+  expect(await state()).toEqual({intact:3,pieces:0});
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(async()=>(await body()).x,{timeout:15000}).toBeGreaterThan(295);
+  await page.waitForTimeout(250);
+  expect((await body()).x).toBeLessThanOrEqual(296.001);
+  await page.keyboard.press('x');
+  await page.waitForTimeout(100);
+  expect(await state()).toEqual({intact:3,pieces:0});
+  expect((await body()).rolling).toBe(false);
+  await page.keyboard.up('ArrowRight');
+  await page.keyboard.press('r');
+  await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
+  await expect.poll(async()=>(await body()).grounded).toBe(true);
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(async()=>(await body()).x,{intervals:[16]}).toBeGreaterThan(160);
+  await page.keyboard.down('ArrowDown');
+  await expect.poll(async()=>(await body()).rolling,{intervals:[16]}).toBe(true);
+  await expect.poll(async()=>await state(),{intervals:[16]}).toEqual({intact:2,pieces:12});
+  await page.keyboard.up('ArrowRight');
+  await page.keyboard.up('ArrowDown');
+  await page.evaluate(()=>{
+    window.shardContext=document.querySelector('canvas').getContext('webgl2')
+      .getExtension('WEBGL_lose_context');
+    shardContext.loseContext();
+  });
+  await expect(page.locator('#status')).toContainText('Graphics paused');
+  const pausedFrames=Number(await canvas.getAttribute('data-frames'));
+  await page.waitForTimeout(100);
+  expect(Number(await canvas.getAttribute('data-frames'))).toBe(pausedFrames);
+  expect(await state()).toEqual({intact:2,pieces:12});
+  await page.evaluate(()=>shardContext.restoreContext());
+  await expect.poll(async()=>Number(await canvas.getAttribute('data-frames')))
+    .toBeGreaterThan(pausedFrames+2);
+  expect(await state()).toEqual({intact:2,pieces:12});
+  await page.keyboard.down('ArrowRight');
+  await expect.poll(async()=>(await body()).x,{timeout:10000}).toBeGreaterThan(420);
+  await page.keyboard.up('ArrowRight');
+  await expect.poll(async()=>(await state()).pieces).toBe(0);
+  await page.keyboard.press('r');
+  await expect.poll(async()=>await state()).toEqual({intact:3,pieces:0});
+  await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
+  expect((await body()).rolling).toBe(false);
+  await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });
 
 test('the live loop switches routes, exits, and runs back through the other direction',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');await page.locator('#scene').selectOption('loop');await page.locator('#start').click();
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'loop'}));
   const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
   await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
   await page.evaluate(()=>{
@@ -126,6 +218,6 @@ test('the live loop switches routes, exits, and runs back through the other dire
   expect((await body()).collisionLayer).toBe(1);
   await page.keyboard.press('r');
   await expect.poll(async()=>Math.abs((await body()).x-80),{intervals:[50]}).toBeLessThan(1);
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });

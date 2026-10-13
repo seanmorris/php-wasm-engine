@@ -9,7 +9,7 @@ export async function runtimeDirectory() {
   for(const dir of candidates) { try { await fs.access(path.join(dir,'php8.4-sdl.manifest.json')); return dir; } catch {} }
   if(explicit) throw Error('PHP_SDL_ROOT must name a built php-sdl-wasm package directory: '+explicit);
   let lock; try { lock=JSON.parse(await fs.readFile(path.join(root,'runtime-lock.json'))); } catch { throw Error('Set PHP_SDL_ROOT to your php-sdl-wasm package directory. No preview runtime lock is available.'); }
-  console.log('Downloading the pinned php-sdl-wasm demo runtime…');
+  console.error('Downloading the pinned php-sdl-wasm demo runtime…');
   const response=await fetch(lock.url); if(!response.ok) throw Error('Runtime download: '+response.status);
   const bytes=Buffer.from(await response.arrayBuffer());
   if(createHash('sha256').update(bytes).digest('hex')!==lock.sha256) throw Error('Runtime archive checksum mismatch');
