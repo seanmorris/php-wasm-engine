@@ -222,7 +222,7 @@ $sprites->close();
 $atlas->close();
 ~~~
 
-Sprites support anchors, rotation, scaling, flips, tint, opacity, and animation offsets. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
+Sprites support anchors, rotation, scaling, flips, tint, opacity, animation offsets, and black outlines. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
 Set `$sprite->crop = [$x, $y, $width, $height]` to draw an integer pixel region relative to the current tile frame. The crop must fit inside that frame; `null` draws the whole image. Cropped dimensions determine the sprite's size and anchor. Set `animated = false` to treat `gid` as a concrete frame, even when that tile also defines an animation.
 
@@ -240,6 +240,19 @@ $sprites->render([$sprite],$camera,$now);
 A changed animation starts at its first frame. Repeated requests for the current animation keep its playback position, so calling `play()` every update does not freeze it. `play($sprite,'jump',$now,restart: true)` explicitly restarts it. The method returns `true` when playback starts or restarts, and `false` when unchanged. It preserves the sprite object, position, transform, tint, and opacity, and reuses its atlas.
 
 Tiled frame durations control looping; static tiles also work. Each sprite has its own clock offset. An animation created by `sprite()` initially follows the renderer's clock; use `restart: true` to start that same animation at a later time. Unknown names or non-finite times throw without changing the sprite. Use animations from the tileset backing the renderer's atlas.
+
+### Sprite outlines
+
+Sprites have a black outline by default. The shader expands the silhouette by one world pixel along each of the sprite's local axes, following its rotation. Scaling the artwork keeps that thickness at one world pixel; camera zoom scales it on screen. Transparent gaps get the same outline, and samples stay inside the current animation frame or crop.
+
+~~~php
+$sprite->outline = false; // Disable the outline for this sprite.
+$sprite->outline = true;  // Restore the default.
+~~~
+
+Each member of a `SpriteGroup` has its own flag. Outlined and unoutlined sprites share the same instanced draw and atlas. The original artwork keeps its anchor and dimensions; expansion affects rendering only, so body and block collision bounds stay the same. RGB tint leaves the outline black. Source alpha, tint alpha, and sprite opacity control its fade; colored and partially transparent artwork retains its original appearance.
+
+`BreakableBlocks::create()` disables outlines on its sprite, and the resulting shards inherit that setting. `ParticleBurst::grid()` copies the source flag for other effects. Disable it before splitting an image when pieces should meet without black seams.
 
 ### Multiple sprites on one entity
 
@@ -300,7 +313,7 @@ $blocks->close();
 
 `shatter()` freezes the current animation frame, removes the collider and primary sprite, and attaches `SpriteGroup` and `ParticleBurst` to the **same entity ID**. It returns `true` once, then `false` for repeated calls. The new group contains exactly `columns * rows` pieces. Uneven image dimensions distribute integer pixels without overlap or gaps. Grid dimensions must be positive and no greater than the cropped source dimensions. Invalid grids, crops, or motion settings throw before changing an intact block.
 
-Pieces inherit flips, rotation, scale, tint, and opacity, then move outward under gravity, spin, and fade. They share the original atlas and one instanced sprite batch. No fragment textures or per-piece entities are allocated. `shatter()` accepts named `speed`, `lift`, `gravity`, and `lifetime` settings, in pixels and seconds. Defaults are 240 px/s outward speed, 240 px/s upward lift, 900 px/s² gravity, and a 1.2-second lifetime. Debris is nonsolid.
+Pieces inherit flips, rotation, scale, tint, opacity, and the outline flag, then move outward under gravity, spin, and fade. Breakable blocks disable outlines on both their intact sprite and shards. They share the original atlas and one instanced sprite batch. No fragment textures or per-piece entities are allocated. `shatter()` accepts named `speed`, `lift`, `gravity`, and `lifetime` settings, in pixels and seconds. Defaults are 240 px/s outward speed, 240 px/s upward lift, 900 px/s² gravity, and a 1.2-second lifetime. Debris is nonsolid.
 
 `ParticleSystem::update()` queues destruction of expired particle entities; the scheduler flushes that queue after its systems finish. Call `Registry::flush()` yourself when driving the system directly. It destroys the whole particle entity, including any other components. Removing an intact `BreakableBlock` or destroying its entity releases the collider. `BreakableBlocks::close()` destroys its remaining blocks and debris while leaving unrelated terrain alone.
 
@@ -379,7 +392,7 @@ Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read
 
 With Tiled 1.12.2 installed, run `npm run test:tiled` to open and export all nine demo maps and three tilesets through the editor's JSON importer. The checks cover visible terrain, cell coordinates, layer state, image references, animation, and collision shapes. Set `TILED_BIN` to select another executable or extracted AppImage's `AppRun`. Headless runs use Qt's offscreen platform; builds that only bundle XCB need an X server, such as `xvfb-run -a npm run test:tiled`. CI uses the checksum-verified [Tiled 1.12.2 AppImage](https://github.com/mapeditor/tiled/releases/tag/v1.12.2), regenerates the procedural assets, and checks that the committed files match.
 
-Validation passes 82 PHP regressions on native PHP 8.2 and 32-bit PHP WASM 8.4, 33 Chromium integration tests on PHP 8.4, and 13 import/export checks in Tiled 1.12.2. Sprite-group checks cover exact pixel partitions at right angles, rotated interior pixels with a subpixel edge tolerance, cropped animation snapshots, shared atlas batches, and restoring moving debris. Breakable regressions cover walking versus rolling at 60,000 px/s in both directions, a twelve-block chain followed by a solid wall, collision from every side, standing support, collision planes, read-only probes, shared-edge removal, expiry, keyboard/gamepad controls, and reset. Context recovery tests force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
+Validation passes 83 PHP regressions on native PHP 8.2 and 32-bit PHP WASM 8.4, 34 Chromium integration tests on PHP 8.4, and 13 import/export checks in Tiled 1.12.2. Outline checks compare GPU pixels with independently expanded shapes across scale, zoom, rotation, flips, crops, animation, alpha, and per-sprite opt-outs, including subpixel-sized artwork and atlas restoration. Sprite-group checks cover exact pixel partitions at right angles, rotated interior pixels with a subpixel edge tolerance, cropped animation snapshots, shared atlas batches, and restoring moving debris. Breakable regressions cover walking versus rolling at 60,000 px/s in both directions, a twelve-block chain followed by a solid wall, collision from every side, standing support, collision planes, read-only probes, shared-edge removal, expiry, keyboard/gamepad controls, and reset. Context recovery tests force WebGL loss between frames, during rendering, and during recovery, compare restored GPU pixels, and check repeated recovery, stop/restart, visibility changes, and held input. Isometric chunk and repeating-image rendering are compared pixel for pixel with CPU references. Background checks cover zoom, negative coordinates, non-power-of-two images, animation, blending, texture reuse, layer reordering, and a shared world phase while switching, loading, and revisiting maps. World streaming checks cover request selection, shared assets, retention, retry, cancellation, and context recovery. The static docs build was also tested against the downloaded preview. These checks establish behavior in the tested runtime/browser, not a throughput benchmark.
 
 To test another locally built runtime, set ENGINE_PHP_VERSION and PHP_SDL_ROOT and select the pure PHP/GPU tests. The pinned demo archive contains PHP 8.4 only.
 

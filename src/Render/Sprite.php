@@ -12,6 +12,8 @@ final class Sprite
 	/** @var array{int,int,int,int}|null Tile-relative pixel crop, or null for the whole frame. */
 	public ?array $crop = null;
 	public bool $animated = true;
+	/** @var bool Expand the rendered silhouette by one world pixel with a black shader outline. */
+	public bool $outline = true;
 
 	/**
 	 * Create an atlas-backed sprite positioned by a normalized image anchor.
@@ -22,7 +24,7 @@ final class Sprite
 	 * @param float $y World Y coordinate of the sprite anchor in pixels.
 	 * @param float $originX Horizontal anchor fraction of image width; 0 is left and 1 is right.
 	 * @param float $originY Vertical anchor fraction of image height; 0 is top and 1 is bottom.
-	 * @return void Initializes the sprite with unit scale, full opacity, and no rotation or flips.
+	 * @return void Initializes unit scale, full opacity, an outline, and no rotation or flips.
 	 */
 	public function __construct(public int $gid, public float $x = 0, public float $y = 0
 		, public float $originX = .5, public float $originY = 1

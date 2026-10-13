@@ -73,6 +73,17 @@ test('sprite groups reproduce whole images, freeze animation and restore cropped
   for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
   expect(result.error).toBe(0);
 });
+
+test('sprite outlines expand by one world pixel with per-instance opt-outs',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-outlines.php";'));
+  expect(Object.keys(result.checks).length).toBeGreaterThan(35);
+  for(const [name,passed] of Object.entries(result.checks)) {
+    expect.soft(passed,JSON.stringify({name,differences:result.differences[name]})).toBe(true);
+  }
+  expect(result.error).toBe(0);
+});
+
 test('anchored backgrounds keep a shared phase across map boundaries and streaming',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax-world.php";'));

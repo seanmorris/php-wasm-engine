@@ -63,7 +63,7 @@ final class BreakableBlocks
 	/**
 	 * Create a stationary solid block from a sprite's scaled, rotated, cropped rectangle.
 	 *
-	 * @param Sprite $sprite Primary sprite retained by the new entity, with world-space pose.
+	 * @param Sprite $sprite Primary sprite retained by the entity, with its outline disabled.
 	 * @param int $columns Horizontal shard count, no greater than the source crop's pixel width.
 	 * @param int $rows Vertical shard count, no greater than the source crop's pixel height.
 	 * @param int $collisionLayer Nonnegative solid plane; zero collides with every body.
@@ -119,14 +119,18 @@ final class BreakableBlocks
 		$id = $this->registry->create();
 		$this->owned[$id] = [$block, $handle];
 		$this->shapes[$handle] = $id;
+		$outline = $sprite->outline;
 
 		try
 		{
+			// Tile-like blocks and their cropped debris should join without outline seams.
+			$sprite->outline = false;
 			$this->registry->add($id, $sprite);
 			$this->registry->add($id, $block);
 		}
 		catch(\Throwable $error)
 		{
+			$sprite->outline = $outline;
 			$this->terrain->removeShape($handle);
 			unset($this->owned[$id], $this->shapes[$handle]);
 

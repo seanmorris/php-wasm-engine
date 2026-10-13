@@ -17,6 +17,7 @@ test('switching sprite animations preserves the entity component and its appeara
 	$sprite->tint = [.2,.3,.4,.5];
 	$sprite->originX = .25;
 	$sprite->originY = .75;
+	$sprite->outline = false;
 	$before = get_object_vars($sprite);
 	$registry = new Registry;
 	$entity = $registry->create($sprite);

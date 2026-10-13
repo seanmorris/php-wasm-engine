@@ -83,6 +83,8 @@ foreach([0, M_PI / 2, .37] as $rotation)
 		for($flags = 0; $flags < 4; $flags++)
 		{
 			$sprite = new Sprite(1, 48, 48, .35, .8);
+			// Compare the underlying image partition without per-piece outline borders.
+			$sprite->outline = false;
 			$sprite->crop = [1, 2, 13, 11];
 			$sprite->rotation = $rotation;
 			$sprite->scaleX = 3 * $scale;
@@ -142,6 +144,7 @@ $sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $sprite = $sheet->sprite('run', 40, 40);
+$sprite->outline = false;
 $sprite->scaleX = $sprite->scaleY = 4;
 
 $device->begin([0, 0, 0, 1]);

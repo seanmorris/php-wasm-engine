@@ -30,7 +30,7 @@ final class SpriteRenderer
 	/**
 	 * Allocate the vertex array and per-instance buffer used by sprite draws.
 	 *
-	 * @return void Configures position, rectangle, anchor, rotation, flip, and tint attributes.
+	 * @return void Configures position, rectangle, transform, flip/outline, and tint attributes.
 	 */
 	private function create(): void
 	{
@@ -93,7 +93,7 @@ final class SpriteRenderer
 				, $sprite->originX
 				, $sprite->originY
 				, $sprite->rotation
-				, ($sprite->flipX?1:0) | ($sprite->flipY?2:0)
+				, ($sprite->flipX?1:0) | ($sprite->flipY?2:0) | ($sprite->outline?4:0)
 				, $sprite->tint[0]
 				, $sprite->tint[1]
 				, $sprite->tint[2]

@@ -13,6 +13,32 @@ use PhpWasmEngine\Render\SpriteGroup;
 use PhpWasmEngine\Render\SpriteSheet;
 use PhpWasmEngine\Tiled\Loader;
 
+test('breakable boxes disable outlines and shards inherit their source outline flag', function() {
+	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$r = new Registry;
+	$t = new Terrain;
+	$blocks = new BreakableBlocks($r, $t, $sheet->map);
+	$sprite = new Sprite(1, 50, 50, 0, 0);
+	check($sprite->outline ?? false, 'ordinary sprites enable outlining by default');
+	$outlined = ParticleBurst::grid($sprite, $sheet->map, 2, 2);
+
+	foreach($outlined->sprites->sprites as $piece)
+	{
+		check($piece->outline, 'independent particles inherit the source setting');
+	}
+
+	$id = $blocks->create($sprite, 2, 2);
+	check($r->get($id, Sprite::class) === $sprite && !$sprite->outline);
+	check(!$t->solidAt(49.5, 58) && $t->solidAt(50.5, 58));
+	check($blocks->shatter($id));
+
+	foreach($r->get($id, SpriteGroup::class)->sprites as $piece)
+	{
+		check(!$piece->outline, 'block shards must retain the opt-out');
+	}
+	$blocks->close();
+});
+
 test('entities retain single sprites and ordered groups without changing component replacement'
 	, function() {
 		$r = new Registry;
