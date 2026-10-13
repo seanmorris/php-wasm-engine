@@ -23,16 +23,23 @@ final class Card
 	 * @param callable():bool|null $ready Optional polled loading gate; timers wait for true.
 	 * @param callable(Card):void|null $onEnter Hook for starting application work or audio.
 	 * @param callable(Card,bool):void|null $onLeave Cleanup hook; second argument means cancelled.
+	 * @param string|null $align Left, center, or right; null inherits the renderer's alignment.
 	 * @return void Stores validated timing and callbacks for CardSequence.
 	 */
 	public function __construct(public string $id, public string $title = '',
 		public string $text = '', public ?float $duration = 2.5, public float $skipAfter = .5,
 		public float $fadeIn = .25, public float $fadeOut = .25, public bool $skippable = true,
-		?callable $ready = null, ?callable $onEnter = null, ?callable $onLeave = null
+		?callable $ready = null, ?callable $onEnter = null, ?callable $onLeave = null,
+		public ?string $align = null
 	){
 		if($id === '')
 		{
 			throw new \InvalidArgumentException('Cards require a nonempty ID');
+		}
+
+		if($align !== null && !in_array($align, ['left', 'center', 'right'], true))
+		{
+			throw new \InvalidArgumentException('Alignment must be left, center, or right');
 		}
 
 		foreach([$duration ?? 0, $skipAfter, $fadeIn, $fadeOut] as $seconds)

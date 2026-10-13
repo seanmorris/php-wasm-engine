@@ -9,8 +9,10 @@ Press **Run PHP** in the [live demo](./) to try the complete startup sequence:
    a fresh Start, Enter, or click after two seconds.
 5. The main menu offers Play, Level, Movement, Settings, Credits, and Replay intro.
 
-The first intro card stays fully visible for four seconds, with a half-second
-fade at each end. Its timer starts when the preloader finishes.
+The loading card keeps its completed file count fully visible for at least two
+seconds before fading out, including when the assets are already loaded. The
+following engine credit card stays fully visible for four seconds. Both use
+half-second entrance and exit fades.
 
 The title's background keeps its offset and animation clock when the main menu
 opens. Gameplay time stays paused throughout startup. Level assets download when
@@ -101,6 +103,7 @@ $alpha = $cards->opacity();
 | `ready` | Polled `callable(): bool`; timeout and activation wait for true |
 | `onEnter` | `callable(Card): void` for application work or audio |
 | `onLeave` | `callable(Card, bool): void`; the boolean reports cancellation |
+| `align` | `left`, `center`, or `right`; `null` inherits the card renderer's style |
 
 Readiness latches once true. `duration` includes the entrance fade; the exit fade
 is additional. Early presses are consumed. Holding a button past `skipAfter` or
@@ -120,7 +123,7 @@ It resets input on transitions so the press opening a menu cannot also select Pl
 
 ## Rendering and loading
 
-`Ui\CardRenderer` draws centered, wrapped bitmap text, fades, prompts, and a
+`Ui\CardRenderer` draws aligned, wrapped bitmap text, fades, prompts, and a
 known-file progress bar. The application renders any backdrop first and supplies
 the prompt, including its blink behavior:
 
@@ -131,8 +134,13 @@ use PhpWasmEngine\Ui\CardRenderer;
 $renderer = new CardRenderer($pauseMenu->renderer->font, $pauseMenu->renderer->atlas);
 $renderer->style['heading'] = [.4, 1, 1, 1];
 $renderer->style['scale'] = 2;
+$renderer->style['align'] = 'center'; // Default; also accepts left and right.
 $renderer->render($cards, 960, 540, 'Press Start / Enter', backdrop: true);
 ```
+
+Each line aligns independently within the middle 85 percent of the viewport.
+Set `align` on an individual card to override the renderer for its heading, body,
+and prompt, for example `new Card('credits', 'Credits', "Code\nArtwork", align: 'left')`.
 
 Pass `progress: ['ready' => 3, 'total' => 8, 'failed' => 0]` to draw a bar. Those
 counts describe dependencies discovered so far: parsing a map or tileset can

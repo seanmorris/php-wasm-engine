@@ -51,6 +51,14 @@ final class Menu
 				throw new \InvalidArgumentException("Unknown menu input: $type");
 			}
 
+			foreach(['align', 'valueAlign'] as $key)
+			{
+				if(isset($item[$key]) && !in_array($item[$key], ['left', 'center', 'right'], true))
+				{
+					throw new \InvalidArgumentException('Alignment must be left, center, or right');
+				}
+			}
+
 			if($type === 'number')
 			{
 				foreach(['min', 'max', 'step'] as $key)

@@ -5,6 +5,105 @@ use PhpWasmEngine\Ui\TextBuffer;
 use PhpWasmEngine\Render\BitmapFont;
 use PhpWasmEngine\Tiled\Loader;
 
+test('each wheel event moves one visible row regardless of HID line count', function() {
+	$items = [];
+
+	for($i = 0; $i < 12; $i++)
+	{
+		$items['item'.$i] = ['hidden' => $i === 6];
+	}
+	$menu = new Menu($items);
+	$menu->open();
+	$input = new MenuInput;
+
+	foreach([1, 4, 120, .25] as $amount)
+	{
+		$menu->select('item5');
+		$input->update($menu, [], 0, [['type' => 'wheel', 'y' => -$amount]]);
+		check($menu->selected === 'item7', "Wheel delta -$amount must move one visible row");
+		$input->update($menu, [], 0, [['type' => 'wheel', 'y' => $amount]]);
+		check($menu->selected === 'item5', "Wheel delta $amount must move one visible row");
+	}
+
+	$input->update($menu, [], 0, [['type' => 'wheel', 'y' => 0]]);
+	check($menu->selected === 'item5');
+
+	$input->update($menu, [], 0, [
+		['type' => 'wheel', 'y' => -4], ['type' => 'wheel', 'y' => -4]
+	]);
+	check($menu->selected === 'item8');
+
+	foreach(['item0' => 4, 'item11' => -4] as $id => $amount)
+	{
+		$menu->select($id);
+		$input->update($menu, [], 0, [['type' => 'wheel', 'y' => $amount]]);
+		check($menu->selected === $id, 'Wheel navigation clamps at the page boundary');
+	}
+});
+
+test('bitmap alignment places each wrapped line and its carets within the line box', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__).'/examples/assets/font.tsj');
+
+	foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
+	{
+		$layout = $font->layout("AA\nI", 2, 100, align: $align);
+		near($layout['width'], 32);
+		near($layout['height'], 64);
+		near($layout['sprites'][0]->x, 68 * $factor);
+		near($layout['sprites'][2]->x, 88 * $factor);
+		near($layout['positions'][2][0], 32 + 68 * $factor);
+		near($layout['positions'][2][1], 0);
+		near($layout['positions'][3][0], 88 * $factor);
+		near($layout['positions'][4][0], 12 + 88 * $factor);
+
+		$wrapped = $font->layout('AAI', 2, 36, align: $align);
+		near($wrapped['sprites'][0]->x, 4 * $factor);
+		near($wrapped['sprites'][2]->x, 24 * $factor);
+		near($wrapped['positions'][2][0], 24 * $factor);
+		near($wrapped['positions'][2][1], 32);
+
+		check(
+			$font->measure('AAI', 2, 36) === ['width' => $wrapped['width']
+			, 'height' => $wrapped[
+				'height'
+			]]
+		);
+	}
+});
+
+test('unwrapped alignment supports fields, empty lines, themed symbols and overflow', function() {
+	$path = dirname(__DIR__).'/examples/assets/';
+	$font = new BitmapFont(new Loader, $path.'font.tsj', [$path.'buttons.tsj']);
+	$layout = $font->layout("AA\nI", align: 'center');
+	near($layout['sprites'][2]->x, 5);
+	$layout = $font->layout("I\n\n", align: 'right', alignWidth: 40);
+	check($layout['positions'] === [[34.0, 0.0], [40.0, 0.0], [40.0, 16.0], [40.0, 32.0]]);
+	$layout = $font->layout('', align: 'center', alignWidth: 40);
+	check($layout['positions'] === [[20.0, 0.0]] && $layout['sprites'] === []);
+	near($layout['height'], 0);
+	$layout = $font->layout('AAAA', align: 'right', alignWidth: 12);
+	near($layout['positions'][0][0], 0);
+	near($layout['width'], 32);
+	near($layout['height'], 16);
+
+	foreach(['keyboard', 'xbox', 'playstation', 'generic'] as $theme)
+	{
+		$font->theme = $theme;
+		$left = $font->layout('⓿ I');
+		$right = $font->layout('⓿ I', align: 'right', alignWidth: 100);
+		near($right['positions'][3][0], 100);
+		near($right['sprites'][0]->x - $left['sprites'][0]->x, 100 - $left['width']);
+		check($right['sprites'][0]->tint === $left['sprites'][0]->tint);
+	}
+
+	rejects(fn() => $font->layout('A', align: 'justify'));
+
+	foreach([0, -1, NAN, INF] as $invalid)
+	{
+		rejects(fn() => $font->layout('A', alignWidth: $invalid));
+	}
+});
+
 test('repeated activation keys cannot finish a field entered by the same hold', function() {
 	$menu = new Menu(['name' => ['input' => 'string', 'value' => 'Player']]);
 	$menu->open();
@@ -154,6 +253,11 @@ test('slider dragging clamps outside its track instead of entering text editing'
 });
 
 test('invalid numeric definitions and malformed font annotations are rejected', function() {
+	foreach(['align', 'valueAlign'] as $key)
+	{
+		rejects(fn() => new Menu(['bad' => [$key => 'justify']]));
+	}
+
 	foreach([['step' => 0], ['min' => 10, 'max' => 1], ['max' => INF]] as $invalid)
 	{
 		rejects(fn() => new Menu(['bad' => ['input' => 'number'] + $invalid]));

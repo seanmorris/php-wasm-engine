@@ -146,7 +146,28 @@ test('pointer sliders clamp outside their track and reset without opening an edi
   await page.mouse.click(hints.x,hints.y);
   await expect.poll(async()=>(await state(page)).values.hints).toBe(false);
   await page.mouse.wheel(0,200);
-  await expect.poll(async()=>(await state(page)).selected).toBe('locked');
+  await expect.poll(async()=>(await state(page)).selected).toBe('scene');
+  expect(errors).toEqual([]);
+});
+
+test('wheel pixels, lines and pages each move one menu item', async ({page}) => {
+  const errors = await start(page);
+  await open(page);
+  await choose(page, 'settings');
+  await page.keyboard.press('Enter');
+
+  for(const [deltaMode, deltaY] of [[0, 120], [1, 4], [2, 1]]) {
+    await choose(page, 'hints');
+    for(const direction of [1, -1]) {
+      await page.locator('canvas').evaluate((canvas, options) => {
+        canvas.dispatchEvent(new WheelEvent('wheel', {
+          ...options, bubbles: true, cancelable: true
+        }));
+      }, {deltaMode, deltaY: deltaY * direction});
+      await expect.poll(async () => (await state(page)).selected)
+        .toBe(direction > 0 ? 'scene' : 'hints');
+    }
+  }
   expect(errors).toEqual([]);
 });
 

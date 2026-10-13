@@ -93,6 +93,7 @@ test('card timing and sequence definitions reject invalid values', function() {
 	rejects(fn() => new Card('bad', duration: -1));
 	rejects(fn() => new Card('bad', fadeIn: NAN));
 	rejects(fn() => new Card('bad', skipAfter: INF));
+	rejects(fn() => new Card('bad', align: 'justify'));
 	rejects(fn() => new CardSequence([new Card('same'), new Card('same')]));
 	rejects(fn() => new CardSequence([false]));
 	$sequence = new CardSequence([new Card('ok')]);

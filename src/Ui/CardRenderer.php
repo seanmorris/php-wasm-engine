@@ -12,7 +12,9 @@ use PhpWasmEngine\Render\SpriteRenderer;
 final class CardRenderer
 {
 	public Atlas $atlas;
-	public array $style = ['scale' => 2, 'heading' => [1, .85, .25, 1]
+	public array $style = ['scale' => 2
+	, 'align' => 'center'
+	, 'heading' => [1, .85, .25, 1]
 		, 'foreground' => [1, 1, 1, 1], 'backdropDim' => .25
 	];
 
@@ -66,13 +68,14 @@ final class CardRenderer
 		]];
 		$batch = [];
 		$this->nextCache = [];
+		$align = $card->align ?? $this->style['align'];
 
 		foreach([
 			[$card->title, .3, $scale * 1.6, $this->style['heading']]
 			, [$card->text, .5, $scale, $this->style['foreground']]
 			, [$prompt, .8, $scale, $this->style['foreground']]
 		] as [$text, $y, $size, $color]){
-			$glyphs = $this->text($text, $width, $height * $y, $size, $color);
+			$glyphs = $this->text($text, $width, $height * $y, $size, $color, $align);
 
 			foreach($glyphs as $original)
 			{
@@ -99,28 +102,31 @@ final class CardRenderer
 	}
 
 	/**
-	 * Cache centered, wrapped text without incorporating per-frame fade values in the key.
+	 * Cache aligned, wrapped text without incorporating per-frame fade values in the key.
 	 *
 	 * @param string $text UTF-8 heading, message, or prompt.
-	 * @param int $width Viewport width used to center the layout.
+	 * @param int $width Viewport width; text uses the middle 85 percent as its alignment box.
 	 * @param float $y Vertical center of the text block in screen pixels.
 	 * @param float $scale Output pixels per source font pixel.
 	 * @param array{float,float,float,float} $color Text tint before the card fade.
+	 * @param string $align Left, center, or right alignment for each wrapped line.
 	 * @return list<\PhpWasmEngine\Render\Sprite> Cached glyphs; callers must not mutate them.
 	 */
-	private function text(string $text, int $width, float $y, float $scale, array $color): array
+	private function text(string $text, int $width, float $y, float $scale, array $color,
+		string $align
+	): array
 	{
-		$key = serialize([$text, $width, $y, $scale, $color, $this->font->theme]);
+		$key = serialize([$text, $width, $y, $scale, $color, $align, $this->font->theme]);
 		$glyphs = $this->cache[$key] ?? null;
 
 		if($glyphs === null)
 		{
-			$layout = $this->font->layout($text, $scale, $width * .85, $color);
+			$layout = $this->font->layout($text, $scale, $width * .85, $color, $align);
 			$glyphs = $layout['sprites'];
 
 			foreach($glyphs as $sprite)
 			{
-				$sprite->x += ($width - $layout['width']) / 2;
+				$sprite->x += $width * .075;
 				$sprite->y += $y - $layout['height'] / 2;
 			}
 		}

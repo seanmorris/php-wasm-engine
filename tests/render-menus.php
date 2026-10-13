@@ -9,7 +9,11 @@ use PhpWasmEngine\Render\Device;
 use PhpWasmEngine\Render\SpriteRenderer;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Ui\Menu;
+use PhpWasmEngine\Ui\MenuInput;
 use PhpWasmEngine\Ui\MenuRenderer;
+use PhpWasmEngine\Ui\Card;
+use PhpWasmEngine\Ui\CardRenderer;
+use PhpWasmEngine\Ui\CardSequence;
 
 // Known solid quadrants let the test check glyph output without sampling the font itself.
 $data = json_decode(file_get_contents(__DIR__.'/assets/sprites.tsj'), true);
@@ -164,6 +168,143 @@ $renderer->render($menu, 320, 180);
 $checks['caller scissor preserved'] = glIsEnabled(GL_SCISSOR_TEST)
 	&& glGetIntegerv(GL_SCISSOR_BOX) === [3, 4, 100, 80];
 glDisable(GL_SCISSOR_TEST);
+
+// Change alignment on the same renderer to exercise cached glyphs and pointer coordinates.
+foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
+{
+	$renderer->style['align'] = $align;
+	$menu = new Menu(['name' => ['label' => 'A', 'input' => 'string', 'value' => 'AAA']], 'B');
+	$menu->open();
+	$device->begin([0, 0, 0, 1]);
+	$renderer->render($menu, 320, 180);
+	$region = $renderer->regions[0];
+	[$x, $y, $w] = $region['rect'];
+	$fieldWidth = $w * .48 - 6;
+	$origin = $x + $w * .52 + ($fieldWidth - 21) * $factor;
+	$label = $x + 2 + ($w * .49 - 2 - 19) * $factor + 13;
+	$heading = $x + ($w - 9) * $factor;
+	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+	$checks[$align.' value glyphs'] = menuPixel($pixels, (int)round($origin + 2), (int)$y + 7)
+		=== 'ff0000ff';
+	$checks[$align.' label glyphs'] = menuPixel($pixels, (int)round($label + 2), (int)$y + 7)
+		=== 'ff0000ff';
+	$checks[$align.' heading glyphs'] = menuPixel($pixels, (int)round($heading + 2), (int)$y - 22)
+		=== '00ff00ff';
+	$checks[$align.' caret hit region'] = abs($region['carets'][1] - ($origin + 7)) < .001;
+
+	$input = new MenuInput;
+
+	$input->update(
+		$menu
+		, []
+		, 0
+		, [['type' => 'pointer', 'action' => 'down', 'x' => $origin + 7, 'y' => $y + 10]]
+		, $renderer->regions
+	);
+	$checks[$align.' pointer places caret'] = $menu->editor?->caret === 1;
+	$device->begin([0, 0, 0, 1]);
+	$renderer->render($menu, 320, 180);
+	$checks[$align.' editing preserves placement'] = $renderer->regions[0]['carets']
+		=== $region['carets'];
+
+	$menu->editor->anchor = 1;
+	$menu->editor->caret = 2;
+	$menu->editor->compose('BBBB', 1, 1);
+	$device->begin([0, 0, 0, 1]);
+	$renderer->render($menu, 320, 180);
+	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+	$preview = $x + $w * .52 + ($fieldWidth - 50) * $factor;
+
+	$checks[$align.' composition caret'] = menuPixel(
+		$pixels
+		, (int)round($preview + 25)
+		, (int)$y + 15
+	)
+		=== 'ffffffff';
+
+	$checks[$align.' composition selection'] = menuPixel(
+		$pixels
+		, (int)round($preview + 20)
+		, (int)$y + 15
+	)
+		=== '00ff00ff';
+
+	$checks[$align.' composition underline'] = menuPixel(
+		$pixels
+		, (int)round($preview + 12)
+		, (int)$y + 17
+	)
+		=== 'ffffffff';
+
+	$menu->editor->compose('');
+	$menu->editor->insert(str_repeat('A', 80));
+	$renderer->render($menu, 320, 180);
+	$menu->editor->selectAll();
+	$menu->editor->insert('AAA');
+	$renderer->render($menu, 320, 180);
+	$checks[$align.' short text resets horizontal scrolling'] = $renderer->regions[0]['carets']
+		=== $region['carets'];
+}
+
+$renderer->style['align'] = 'right';
+$renderer->style['titleAlign'] = 'left';
+$renderer->style['valueAlign'] = 'center';
+
+$menu = new Menu(
+	['override' => ['label' => 'A'
+	, 'align' => 'left'
+	, 'valueAlign' => 'right'
+	, 'input' => 'string'
+		, 'value' => 'AAA'
+	]]
+	, 'B'
+);
+$menu->open();
+$device->begin([0, 0, 0, 1]);
+$renderer->render($menu, 320, 180);
+$region = $renderer->regions[0];
+[$x, $y, $w] = $region['rect'];
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+$checks['item label overrides menu alignment'] = menuPixel($pixels, (int)$x + 17, (int)$y + 7)
+	=== 'ff0000ff';
+$checks['item value overrides column alignment'] = abs(end($region['carets']) - ($x + $w - 6))
+	< .001;
+$checks['heading alignment override'] = menuPixel($pixels, (int)$x + 2, (int)$y - 22)
+	=== '00ff00ff';
+
+$card = new Card('aligned', text: "BB\nB", duration: null, fadeIn: 0);
+$sequence = new CardSequence([$card]);
+$sequence->start();
+$cards = new CardRenderer($font, $renderer->atlas);
+$cards->style['scale'] = .5;
+
+foreach(['center' => .5, 'left' => 0, 'right' => 1] as $align => $factor)
+{
+	$cards->style['align'] = $align;
+	$device->begin([0, 0, 0, 1]);
+	$cards->render($sequence, 320, 180);
+	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+	$first = 24 + (272 - 9) * $factor;
+	$second = 24 + (272 - 4.5) * $factor;
+	$checks[$align.' card first line'] = menuPixel($pixels, (int)round($first + 1), 86)
+		=== '00ff00ff';
+	$checks[$align.' card second line'] = menuPixel($pixels, (int)round($second + 1), 91)
+		=== '00ff00ff';
+
+	$checks[$align.' card previous layout cleared'] = menuPixel(
+		$pixels
+		, $align === 'left' ? 158 : 25
+		, 91
+	)
+		=== '000000ff';
+}
+
+$card->align = 'left';
+$device->begin([0, 0, 0, 1]);
+$cards->render($sequence, 320, 180);
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+$checks['card overrides renderer alignment'] = menuPixel($pixels, 25, 91) === '00ff00ff';
+$cards->close();
 $renderer->close();
 $checks['atlas released'] = !glIsTexture($renderer->atlas->texture);
 $error = glGetError();

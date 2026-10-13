@@ -175,7 +175,8 @@ requests separately; PHP requires no JavaScript Promise type.
 | Page Up/Down, shoulders | Move seven rows, clamping at the ends |
 | Home/End | First/last row, or field boundary while editing |
 | Hold keyboard Z / pad Y or Triangle for 500 ms, middle-click | Reset outside text editing |
-| Mouse, wheel | Select rows, scroll, drag sliders or text selections |
+| Mouse | Select rows, drag sliders or text selections |
+| Wheel | Move one visible row per event, clamping at the ends; ignore scroll magnitude |
 
 Navigation repeats after 500 ms, every 250 ms initially, then every 50 ms after
 1.5 seconds. Editing supports Shift-selection, Ctrl/Cmd+A, deletion, and
@@ -216,6 +217,48 @@ Style also provides `width`, `padding`, `foreground`, `disabled`, `highlight`,
 `selection`, and `dimmer`. Layout uses drawing-buffer dimensions and screen
 coordinates independent of the world camera. Source-pixel cropping clips glyphs
 without changing GL scissor state. Render UI in the normal full-screen viewport.
+
+### Text alignment
+
+Set `align` to `left`, `center`, or `right`. Menus default to `left`. Optional
+`titleAlign`, `valueAlign`, and `hintAlign` style entries override it for the
+heading, value column, and control hints. Labels align within their label column;
+action rows use the full row width. Subtext follows the menu's alignment.
+
+```php
+$pauseMenu->renderer->style['align'] = 'left';
+$pauseMenu->renderer->style['titleAlign'] = 'center';
+$pauseMenu->renderer->style['valueAlign'] = 'right';
+
+$menu = new Menu([
+    'play' => ['label' => 'Play', 'align' => 'center'],
+    'name' => [
+        'label' => 'Name', 'input' => 'string', 'value' => 'Player',
+        'align' => 'left', 'valueAlign' => 'right'
+    ]
+]);
+```
+
+An item's `align` overrides the menu's alignment for its label. Values use the
+item's `valueAlign`, then the renderer's `valueAlign`, then the item's effective
+alignment. Carets, selections, IME previews, and mouse hit testing follow the
+aligned text. Long fields scroll to keep the caret visible and realign when the
+text fits again. Sliders retain their track and align the adjacent value text.
+
+Use the same alignment directly with the bitmap font:
+
+```php
+$layout = $font->layout("Heading\nSupporting text", maxWidth: 320, align: 'center');
+$field = $font->layout('Player', align: 'right', alignWidth: 160);
+```
+
+Each explicit or wrapped line aligns independently. `maxWidth` controls wrapping
+and supplies the alignment width. With infinite `maxWidth`, lines align within
+the widest measured line. `alignWidth` supplies a separate alignment width without
+enabling wrapping, as in the field example. Lines wider than that box start at its
+left edge. Returned dimensions measure the content; sprites and caret positions
+include the alignment offsets. Invalid alignment names and nonpositive or
+nonfinite explicit alignment widths throw `InvalidArgumentException`.
 
 ## Annotate a tileset
 

@@ -165,11 +165,14 @@ final class BitmapFont
 	 * @param float $scale Positive pixel scale used for both glyphs and advances.
 	 * @param float $maxWidth Maximum line width in output pixels; infinity disables wrapping.
 	 * @param array{float,float,float,float} $tint RGBA multiplier for tintable glyphs.
+	 * @param string $align Horizontal alignment of each line: left, center, or right.
+	 * @param float|null $alignWidth Positive finite alignment box width, independent of wrapping.
+	 * Null uses maxWidth when finite, otherwise the widest measured line. Overflow stays left.
 	 * @return array{sprites:list<Sprite>,width:float,height:float,positions:array} Glyph batch,
-	 * measured line box, and codepoint caret positions including the final caret.
+	 * measured content dimensions, and aligned codepoint positions including the final caret.
 	 */
 	public function layout(string $text, float $scale = 1, float $maxWidth = INF,
-		array $tint = [1, 1, 1, 1]
+		array $tint = [1, 1, 1, 1], string $align = 'left', ?float $alignWidth = null
 	): array
 	{
 		self::positive($scale);
@@ -179,8 +182,21 @@ final class BitmapFont
 			throw new \InvalidArgumentException('Text width must be positive');
 		}
 
-		$x = $y = $width = 0.0;
-		$sprites = $positions = [];
+		$factor = match($align)
+		{
+			'left' => 0.0, 'center' => .5, 'right' => 1.0,
+			default => throw new \InvalidArgumentException(
+				'Alignment must be left, center, or right'
+			)
+		};
+
+		if($alignWidth !== null)
+		{
+			self::positive($alignWidth);
+		}
+
+		$x = $y = 0.0;
+		$sprites = $positions = $lines = [];
 		$chars = self::characters(str_replace(["\r\n", "\r"], "\n", $text));
 
 		foreach($chars as $char)
@@ -190,17 +206,22 @@ final class BitmapFont
 
 			if($char === "\n" || ($x > 0 && $x + $advance > $maxWidth))
 			{
-				$width = max($width, $x);
+				if($char === "\n")
+				{
+					$positions[] = [$x, $y];
+				}
+
+				$lines[] = [$x, count($sprites), count($positions)];
 				$x = 0;
 				$y += $this->lineHeight * $scale;
 			}
-
-			$positions[] = [$x, $y];
 
 			if($char === "\n")
 			{
 				continue;
 			}
+
+			$positions[] = [$x, $y];
 
 			if($char !== ' ')
 			{
@@ -221,7 +242,27 @@ final class BitmapFont
 			$x += $advance;
 		}
 		$positions[] = [$x, $y];
-		return ['sprites' => $sprites, 'width' => max($width, $x)
+		$lines[] = [$x, count($sprites), count($positions)];
+		$width = max(array_column($lines, 0));
+		$alignWidth ??= is_finite($maxWidth) ? $maxWidth : $width;
+		$spriteIndex = $positionIndex = 0;
+
+		foreach($lines as [$lineWidth, $spriteEnd, $positionEnd])
+		{
+			$offset = max(0, $alignWidth - $lineWidth) * $factor;
+
+			while($spriteIndex < $spriteEnd)
+			{
+				$sprites[$spriteIndex++]->x += $offset;
+			}
+
+			while($positionIndex < $positionEnd)
+			{
+				$positions[$positionIndex++][0] += $offset;
+			}
+		}
+
+		return ['sprites' => $sprites, 'width' => $width
 			, 'height' => $text === '' ? 0.0 : $y + $this->lineHeight * $scale
 			, 'positions' => $positions
 		];

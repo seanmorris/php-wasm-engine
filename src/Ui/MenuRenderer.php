@@ -14,7 +14,10 @@ final class MenuRenderer
 	public Atlas $atlas;
 	public array $regions = [];
 	public ?array $editorRect = null;
-	public array $style = ['scale' => 2, 'width' => 720, 'padding' => 8
+	public array $style = ['scale' => 2
+	, 'width' => 720
+	, 'padding' => 8
+	, 'align' => 'left'
 		, 'foreground' => [1, 1, 1, 1], 'selected' => [1, .85, .25, 1]
 		, 'disabled' => [.5, .5, .5, 1], 'panel' => [.025, .035, .065, .94]
 		, 'highlight' => [.16, .22, .32, 1], 'selection' => [.2, .35, .6, 1]
@@ -76,18 +79,24 @@ final class MenuRenderer
 	 * @param array{float,float,float,float} $color Text tint; button glyphs keep their own colors.
 	 * @param array{float,float,float,float} $clip Visible screen-space bounds.
 	 * @param float $wrap Maximum line width, or infinity for a horizontally clipped field.
+	 * @param string $align Left, center, or right alignment within the available width.
+	 * @param float|null $alignWidth Alignment width; null uses the clip's right edge minus x.
 	 * @return array Layout including uncropped caret positions relative to the text origin.
 	 */
 	private function text(string $text, float $x, float $y, float $scale, array $color,
-		array $clip, float $wrap = INF
+		array $clip, float $wrap = INF, string $align = 'left', ?float $alignWidth = null
 	): array
 	{
-		$key = serialize([$text, $x, $y, $scale, $color, $clip, $wrap, $this->font->theme]);
+		$alignWidth ??= max(1, $clip[0] + $clip[2] - $x);
+
+		$key = serialize(
+			[$text, $x, $y, $scale, $color, $clip, $wrap, $align, $alignWidth, $this->font->theme]
+		);
 		$cached = $this->cache[$key] ?? null;
 
 		if(!$cached)
 		{
-			$layout = $this->font->layout($text, $scale, $wrap, $color);
+			$layout = $this->font->layout($text, $scale, $wrap, $color, $align, $alignWidth);
 			$visible = [];
 
 			foreach($layout['sprites'] as $sprite)
@@ -166,6 +175,7 @@ final class MenuRenderer
 			, $s
 			, $color
 			, [$inner[0], $inner[1], $inner[2], $header]
+			, align: $this->style['titleAlign'] ?? $this->style['align']
 		);
 		$line = $inner[1] + $header;
 
@@ -189,13 +199,18 @@ final class MenuRenderer
 			, $color
 			, [$inner[0], $line, $inner[2], 16 * $s]
 			, $inner[2]
+			, $this->style['align']
 		);
 
 		if($this->showHints)
 		{
 			$hints = $menu->editor ? 'ENTER / ESC Finish   CTRL+A Select all'
 				: '✚ Move   ⓿ Select   ❶ Back   Hold ❸ Reset';
-			$this->text($hints, $inner[0], $line + 18 * $s, $s * .75, $color, $inner);
+
+			$this->text(
+				$hints, $inner[0], $line + 18 * $s, $s * .75, $color, $inner
+				, align: $this->style['hintAlign'] ?? $this->style['align']
+			);
 		}
 
 		$this->rects->render($this->boxes, $width, $height);
@@ -231,6 +246,7 @@ final class MenuRenderer
 		}
 
 		$labelWidth = $type !== '' ? $w * .49 : $w;
+		$align = $item['align'] ?? $this->style['align'];
 
 		$this->text(
 			($selected ? '> ' : '  ').$item['label']
@@ -239,11 +255,13 @@ final class MenuRenderer
 			, $scale
 			, $color
 			, [$x, $y, $labelWidth, $h]
+			, align: $align
 		);
 		$region = ['id' => $id, 'rect' => $rect];
 
 		if($type !== '')
 		{
+			$valueAlign = $item['valueAlign'] ?? $this->style['valueAlign'] ?? $align;
 			$clip = [$x + $w * .52, $y, $w * .48 - 4 * $scale, $h];
 			$value = $type === 'boolean' ? ($item['value'] ? 'ON' : 'OFF') : (string)$item['value'];
 			$isEditing = $selected && $menu->editor;
@@ -276,12 +294,17 @@ final class MenuRenderer
 
 			if($isEditing)
 			{
-				$region['carets'] = $this->field($menu->editor, $clip, $scale, $color, $seconds);
+				$region['carets'] = $this->field(
+					$menu->editor, $clip, $scale, $color, $seconds, $valueAlign
+				);
 				$this->editorRect = array_map('intval', $clip);
 			}
 			else
 			{
-				$layout = $this->text($value, $clip[0], $y + 4 * $scale, $scale, $color, $clip);
+				$layout = $this->text(
+					$value, $clip[0], $y + 4 * $scale, $scale, $color, $clip
+					, align: $valueAlign, alignWidth: max(1, $clip[2] - 2 * $scale)
+				);
 				$region['carets'] = [];
 
 				foreach($layout['positions'] as $position)
@@ -302,10 +325,11 @@ final class MenuRenderer
 	 * @param float $scale Font scale for the field.
 	 * @param array{float,float,float,float} $color Field glyph tint.
 	 * @param float $seconds UI elapsed time for caret blinking.
+	 * @param string $align Horizontal alignment applied to text, carets, and selection.
 	 * @return list<float> Screen X coordinates of committed-text caret positions.
 	 */
 	private function field(TextBuffer $editor, array $clip, float $scale, array $color,
-		float $seconds
+		float $seconds, string $align
 	): array
 	{
 		if($this->lastEditor !== $editor)
@@ -314,7 +338,8 @@ final class MenuRenderer
 			$this->editScroll = 0;
 		}
 
-		$base = $this->font->layout($editor->text, $scale);
+		$alignWidth = max(1, $clip[2] - 2 * $scale);
+		$base = $this->font->layout($editor->text, $scale, align: $align, alignWidth: $alignWidth);
 		[$start, $end] = $editor->selection();
 		$text = $editor->text;
 		$layout = $base;
@@ -329,14 +354,14 @@ final class MenuRenderer
 			$preedit = BitmapFont::characters($editor->composition);
 			array_splice($chars, $start, $end - $start, $preedit);
 			$text = implode('', $chars);
-			$layout = $this->font->layout($text, $scale);
+			$layout = $this->font->layout($text, $scale, align: $align, alignWidth: $alignWidth);
 			$selectionStart = $start + $editor->compositionStart;
 			$selectionEnd = $selectionStart + $editor->compositionLength;
 			$caretIndex = $selectionEnd;
 		}
 
 		$caret = $layout['positions'][$caretIndex][0];
-		$this->editScroll = max(0, min($this->editScroll, $caret));
+		$this->editScroll = max(0, min($this->editScroll, $layout['width'] - $alignWidth, $caret));
 		$this->editScroll = max($this->editScroll, $caret - $clip[2] + 2 * $scale);
 		$x = $clip[0] - $this->editScroll;
 		$y = $clip[1] + 4 * $scale;
@@ -361,7 +386,7 @@ final class MenuRenderer
 			);
 		}
 
-		$this->text($text, $x, $y, $scale, $color, $clip);
+		$this->text($text, $x, $y, $scale, $color, $clip, align: $align, alignWidth: $alignWidth);
 
 		if(fmod($seconds, 1) < .55)
 		{

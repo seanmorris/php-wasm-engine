@@ -66,7 +66,7 @@ final class MenuInput
 	 * revert, pageUp/pageDown, home/end states; directions activate at half strength.
 	 * @param float $dt Nonnegative elapsed UI time in seconds.
 	 * @param list<array<string,mixed>> $events Ordered key, text, composition, pointer,
-	 * and wheel events.
+	 * and wheel events; each wheel event moves one row using only its vertical direction.
 	 * @param list<array<string,mixed>> $regions Visible row hit regions from MenuRenderer.
 	 * @return bool True when this frame belongs to the menu, including its opening/closing frame.
 	 */
@@ -130,7 +130,7 @@ final class MenuInput
 			}
 			elseif($event['type'] === 'wheel')
 			{
-				$menu->move((int)-($event['y'] <=> 0) * 3, false);
+				$menu->move(-($event['y'] <=> 0), false);
 			}
 		}
 

@@ -31,7 +31,9 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 			'loading'
 			, 'Loading the demo'
 			, 'Discovering title assets...'
-			, duration: .4
+			, duration: 2.5
+			, fadeIn: .5
+			, fadeOut: .5
 			, skippable: false
 			, ready: $ready
 		)
