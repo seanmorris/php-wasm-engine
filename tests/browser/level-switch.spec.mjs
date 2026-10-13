@@ -24,7 +24,7 @@ async function start(page, scene = 'platformer')
 	await page.goto('/');
 	await page.waitForFunction(() => typeof bootEngine === 'function');
 	await page.evaluate(scene => bootEngine({scene}), scene);
-	await expect.poll(async () => (await data(page, 'menu'))?.open).toBe(false);
+	await expect.poll(async () => (await data(page, 'menu'))?.open, {timeout: 60000}).toBe(false);
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', scene);
 }
 

@@ -223,6 +223,7 @@ async ({page}) => {
 	await expect.poll(async () => (await data(page)).time).toBeGreaterThan(hidden.time);
 	expect((await data(page)).gameTime).toBe(0);
 	await page.keyboard.press('Escape');
+	await expect.poll(async () => (await data(page, 'menu')).selected).toBe('settings');
 	await page.keyboard.press('Escape');
 	await expect.poll(async () => (await data(page)).card).toBe('title');
 	await expect.poll(async () => (await data(page)).elapsed).toBeGreaterThan(2);
