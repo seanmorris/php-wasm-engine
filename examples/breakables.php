@@ -16,9 +16,12 @@ use PhpWasmEngine\Tiled\TileMap;
  * @param Engine $engine Engine providing the registry, controls, scheduler, and clock.
  * @param Terrain $terrain Terrain shared by the player and stationary blocks.
  * @param TileMap $map Demo map containing editable breakable tile objects.
+ * @param string $prefix Unique prefix for systems owned by this level instance.
  * @return BreakableBlocks Block owner to close when the scene stops.
  */
-function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map): BreakableBlocks
+function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
+	string $prefix = ''
+): BreakableBlocks
 {
 	$blocks = new BreakableBlocks($engine->entities, $terrain, $map);
 	$ids = [];
@@ -66,9 +69,18 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map): Br
 				}
 			}
 		};
-	$reset();
 
-	$engine->systems->add('breakables',
+	try
+	{
+		$reset();
+	}
+	catch(Throwable $error)
+	{
+		$blocks->close();
+		throw $error;
+	}
+
+	$engine->systems->add($prefix.'breakables',
 		/**
 		 * Restore the scene's intact blocks and retire old debris when reset is pressed.
 		 *
@@ -84,6 +96,10 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map): Br
 		}, after: ['movement']
 	);
 
-	$engine->systems->add('particles', [new ParticleSystem, 'update'], after: ['breakables']);
+	$engine->systems->add(
+		$prefix.'particles'
+		, [new ParticleSystem, 'update']
+		, after: [$prefix.'breakables']
+	);
 	return $blocks;
 }

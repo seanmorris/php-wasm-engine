@@ -1,0 +1,446 @@
+<?php
+declare(strict_types=1);
+
+use PhpWasmEngine\Engine;
+use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\ParticleBurst;
+use PhpWasmEngine\Gameplay\BreakableBlock;
+use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Render\Camera;
+use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Ui\PauseMenu;
+
+/** One engine session with replaceable level resources and persistent player/menu settings. */
+final class DemoGame
+{
+	public ?DemoLevel $level = null;
+	public ?DemoLevel $pending = null;
+	public ?PauseMenu $menu = null;
+	public string $scene = '';
+	public string $error = '';
+	private object $host;
+	private object $canvas;
+	private object $status;
+	private int $frames = 0;
+
+	/**
+	 * Attach persistent movement and browser diagnostics to the running session.
+	 *
+	 * @param Engine $engine Engine retained across every level selection.
+	 * @param Camera $camera Shared viewport and user zoom setting.
+	 * @param Body $body Persistent player body receiving each destination's spawn pose.
+	 * @param int $entity Registry ID for the persistent player body and sprite.
+	 * @return void Installs one movement system; assets load after selectScene is called.
+	 */
+	public function __construct(public Engine $engine, public Camera $camera,
+		public Body $body, public int $entity
+	){
+		$this->host = vrzno_env('demoControls');
+		$this->canvas = vrzno_env('canvas');
+		$this->status = (new Vrzno)->document->querySelector('#status');
+		$engine->systems->add('movement', [$this, 'update']);
+	}
+
+	/**
+	 * Start or replace a nonblocking level request without restarting PHP or simulation.
+	 *
+	 * @param string $scene Platformer, loop, breakables, infinite, isometric, or world identifier.
+	 * @return void Keeps the current level until ready; selecting it again cancels the request.
+	 */
+	public function selectScene(string $scene): void
+	{
+		if(!in_array(
+			$scene
+			, ['platformer', 'loop', 'breakables', 'infinite', 'isometric', 'world']
+			, true
+		)){
+			throw new InvalidArgumentException('Unknown demo level');
+		}
+
+		$this->releasePending();
+
+		if($this->scene === $scene)
+		{
+			$this->menu?->menu->close();
+			return;
+		}
+
+		$scope = (vrzno_env('createAssetScope'))();
+		$this->pending = new DemoLevel($scene, $scope);
+	}
+
+	/**
+	 * Cancel staged resources while leaving the active level and session untouched.
+	 *
+	 * @return void Releases the pending level and clears the previous load error.
+	 */
+	public function cancelLoad(): void
+	{
+		$cancelled = $this->pending !== null;
+		$this->releasePending();
+
+		if($cancelled && $this->level === null)
+		{
+			$this->notifyReady('Level load cancelled. Run to retry.');
+		}
+	}
+
+	/**
+	 * Release a staged level when replacing it, handling a failure, or stopping the session.
+	 *
+	 * @return void Clears staged resources without settling an initial browser start request.
+	 */
+	private function releasePending(): void
+	{
+		$this->pending?->close($this->engine);
+		$this->pending = null;
+		$this->error = '';
+	}
+
+	/**
+	 * Apply a movement profile to the existing actor at its current pose.
+	 *
+	 * @param string $profile Runner, glider, or flyer movement profile.
+	 * @return void Updates jump tuning and sprite art, retiring incompatible ability state.
+	 */
+	public function selectProfile(string $profile): void
+	{
+		$defaults = new Body(profile: $profile);
+		$this->body->profile = $profile;
+		$this->body->jumpSpeed = $defaults->jumpSpeed;
+		$this->body->ability = '';
+		$this->body->wall = 0;
+		$this->body->charge = $this->body->dropCharge = $this->body->dropTimer = 0;
+		$this->body->flightRemaining = $defaults->flightRemaining;
+		$this->engine->entities->get($this->entity, Sprite::class)->gid =
+			['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile];
+		$this->host->profile = $profile;
+		$this->canvas->dataset->profile = $profile;
+		$this->menu?->menu->close();
+	}
+
+	/**
+	 * Reset transient player movement while retaining the body, profile, and tuning.
+	 *
+	 * @return void Places the actor at the demo spawn with no buffered actions or old collisions.
+	 */
+	private function resetPlayer(): void
+	{
+		$defaults = new Body(80, 100, $this->body->profile);
+
+		foreach(['x'
+		, 'y'
+		, 'vx'
+		, 'vy'
+		, 'groundSpeed'
+		, 'angle'
+		, 'grounded'
+		, 'rolling'
+		, 'facing'
+			, 'wall'
+			, 'collisionLayer'
+			, 'ability'
+			, 'charge'
+			, 'dropCharge'
+			, 'flightRemaining'
+			, 'dropTimer', 'coyote', 'jumpBuffer'
+		] as $property
+		){
+			$this->body->$property = $defaults->$property;
+		}
+		$this->body->halfHeight = $this->body->standingHeight;
+	}
+
+	/**
+	 * Poll staging at a frame boundary and commit only a fully prepared destination.
+	 *
+	 * @return void Keeps failures local to the request, with the old scene still usable.
+	 */
+	private function load(): void
+	{
+		if($this->pending === null)
+		{
+			return;
+		}
+
+		try
+		{
+			if(!$this->pending->prepare($this->engine, $this->camera))
+			{
+				return;
+			}
+		}
+		catch(Throwable $error)
+		{
+			// A context loss is handled by Engine; preserve the destination for a fresh prepare.
+			$id = $this->pending->id;
+			$this->releasePending();
+
+			if($this->engine->device->isLost())
+			{
+				$this->selectScene($id);
+				throw $error;
+			}
+
+			$this->error = $error->getMessage();
+
+			if($this->level === null)
+			{
+				$this->notifyReady($this->error);
+			}
+
+			return;
+		}
+
+		$previous = $this->level;
+		$this->level = $this->pending;
+		$this->pending = null;
+		$this->scene = $this->level->id;
+		$previous?->close($this->engine);
+		$this->resetPlayer();
+		[$this->camera->x, $this->camera->y] = $this->level->origin();
+		$this->engine->input->reset();
+		$this->engine->controls->reset();
+		$this->host->scene = $this->scene;
+		$this->canvas->dataset->scene = $this->scene;
+		$this->menu?->menu->close();
+
+		if($previous === null)
+		{
+			$this->notifyReady();
+		}
+
+		foreach(['world', 'breakables'] as $key)
+		{
+			unset($this->canvas->dataset->$key);
+		}
+	}
+
+	/**
+	 * Settle the browser's initial Run request after a scene loads or fails.
+	 *
+	 * @param string|null $error Failure message, or null after successful preparation.
+	 * @return void Leaves later level transitions entirely inside the running PHP session.
+	 */
+	private function notifyReady(?string $error = null): void
+	{
+		$ready = vrzno_env('sceneReady');
+
+		if($ready)
+		{
+			$ready($error);
+		}
+	}
+
+	/**
+	 * Advance the active level using the persistent input and player objects.
+	 *
+	 * @param Registry $entities Session registry supplied by the scheduler.
+	 * @param float $dt Fixed simulation delta in seconds.
+	 * @return void Updates player physics or pans the camera in the two inspection demos.
+	 */
+	public function update(Registry $entities, float $dt): void
+	{
+		if($this->level === null)
+		{
+			return;
+		}
+
+		$controls = $this->engine->controls;
+
+		if($this->scene === 'world' || $this->scene === 'isometric')
+		{
+			$speed = $this->scene === 'world' ? 900 : 300;
+			$this->camera->x += $controls->axis('left', 'right') * $speed * $dt;
+			$this->camera->y += $controls->axis('up', 'down') * $speed * $dt;
+
+			if($controls->pressed('reset'))
+			{
+				[$this->camera->x, $this->camera->y] = $this->level->origin();
+			}
+
+			if($controls->pressed('action'))
+			{
+				foreach(array_keys($this->level->stream->errors) as $path)
+				{
+					$this->level->stream->retry($path);
+				}
+			}
+
+			return;
+		}
+
+		if($this->body->y > 1200 || $controls->pressed('reset'))
+		{
+			$this->resetPlayer();
+		}
+
+		$this->level->movement->step($this->body, $controls, $dt);
+		$this->camera->follow($this->body->x, $this->body->y, $dt);
+		$this->camera->y = min(120, $this->camera->y);
+	}
+
+	/**
+	 * Draw the active scene and persistent pause menu, polling staged assets once per frame.
+	 *
+	 * @return void Presents graphics and publishes current diagnostics without replacing the loop.
+	 */
+	public function render(): void
+	{
+		$this->load();
+		$this->engine->device->begin();
+
+		if($this->level !== null)
+		{
+			$this->drawLevel();
+			$this->canvas->dataset->frames = (string)++$this->frames;
+		}
+
+		$this->menu->render();
+		$this->engine->device->present();
+		$this->canvas->dataset->menu = demoMenuState($this->menu, $this->engine);
+		$this->canvas->dataset->loading = $this->pending?->id ?? '';
+		$this->canvas->dataset->levelError = $this->error;
+
+		if($this->error !== '')
+		{
+			$this->status->textContent = 'Level load failed. Select the level to retry. '.$this
+				->error;
+		}
+		elseif($this->pending !== null)
+		{
+			$this->status->textContent = 'Loading '.$this->pending->id.'…';
+		}
+		elseif($this->menu->menu->isOpen)
+		{
+			$this->status->textContent = 'Paused. Press Start / Options or P to resume.';
+		}
+	}
+
+	/**
+	 * Render either the streamed world or a map with its player and optional block entities.
+	 *
+	 * @return void Updates scene diagnostics and status text after drawing the current level.
+	 */
+	private function drawLevel(): void
+	{
+		$level = $this->level;
+		$camera = $this->camera;
+		$time = $this->engine->time * 1000;
+
+		if($this->scene === 'world')
+		{
+			$level->stream->update(
+				$camera->x
+				, $camera->y
+				, $camera->width / $camera->zoom
+				, $camera->height / $camera->zoom
+			);
+			$stats = $level->renderer->render($camera, $time, 0);
+			$loaded = array_map('basename', array_keys($level->stream->loaded()));
+			$pending = array_map('basename', $level->stream->pending());
+
+			$this->canvas->dataset->world = json_encode(
+				['x' => $camera->x
+				, 'y' => $camera->y
+				, 'loaded' => $loaded
+				, 'pending' => $pending
+					, 'errors' => $level->stream->errors, 'draws' => $stats['draws']
+				]
+			);
+
+			$this->status->textContent = sprintf(
+				'Camera %.0f, %.0f · %d maps ready · %d pending · %d draws · %s'
+				, $camera->x, $camera->y, count($loaded), count($pending), $stats['draws']
+				, implode(', ', $loaded)
+			);
+
+			if($level->stream->errors)
+			{
+				$this->status->textContent = 'Map download failed. Press X or B / Circle to retry. '
+					.implode('; ', $level->stream->errors);
+			}
+
+			return;
+		}
+
+		$body = $this->body;
+		$level->renderer->render($camera, $time);
+
+		if($this->scene !== 'isometric')
+		{
+			$sprite = $this->engine->entities->get($this->entity, Sprite::class);
+			$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
+			$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
+			$sprite->rotation = $body->angle;
+			$sprite->flipX = $body->facing < 0;
+			$sprite->scaleY = $body->rolling ? .7 : 1;
+			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
+		}
+
+		$this->canvas->dataset->body = json_encode(
+			['x' => $body->x, 'y' => $body->y, 'grounded' => $body->grounded
+			, 'rolling' => $body
+				->rolling
+				, 'ability' => $body->ability, 'speed' => $body->groundSpeed
+				, 'angle' =>
+				$body->angle
+				, 'collisionLayer' => $body->collisionLayer
+			]
+		);
+		$stats = $level->renderer->stats;
+
+		$this->status->textContent = sprintf(
+			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
+			, $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'))
+			, $body->groundSpeed, $stats['draws'] + $level->sprites->draws
+			, $stats['instances'] + $level->sprites->instances, $stats['uploads']
+			, $level->terrain->raycasts
+		);
+
+		if($this->scene === 'loop')
+		{
+			$this->status->textContent .= ' · collision layer '.$body->collisionLayer;
+		}
+
+		if($this->scene === 'breakables')
+		{
+			$intact = count($this->engine->entities->query(BreakableBlock::class));
+			$pieces = 0;
+
+			foreach($this->engine->entities->query(ParticleBurst::class) as $id)
+			{
+				$pieces += count(
+					$this->engine->entities->get($id, ParticleBurst::class)->sprites->sprites
+				);
+			}
+			$this->canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));
+			$this->status
+				->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";
+		}
+	}
+
+	/**
+	 * Restore scene and UI graphics after browser context recovery.
+	 *
+	 * @return void Keeps the active level, clock, input bindings, and menu settings intact.
+	 */
+	public function restore(): void
+	{
+		$this->level?->restore();
+		$this->menu?->restore();
+	}
+
+	/**
+	 * Release active and staged resources when the user stops the actual game session.
+	 *
+	 * @return void Detaches the menu and retires scene resources before Engine closes its device.
+	 */
+	public function close(): void
+	{
+		$this->menu?->close();
+		$this->releasePending();
+		$this->level?->close($this->engine);
+		$this->level = null;
+	}
+}

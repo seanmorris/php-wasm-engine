@@ -18,6 +18,7 @@ final class BreakableBlocks
 	/** @var array<int,int> Removable shape handles mapped to intact block entity IDs. */
 	private array $shapes = [];
 	private bool $closed = false;
+	private \Closure $removed;
 
 	/**
 	 * Bind block lifecycle to one registry and one terrain collision index.
@@ -32,7 +33,7 @@ final class BreakableBlocks
 	){
 		$owner = \WeakReference::create($this);
 
-		$registry->on('removed',
+		$this->removed =
 			/**
 			 * Release geometry when its owning marker or completed burst leaves the registry.
 			 *
@@ -56,8 +57,8 @@ final class BreakableBlocks
 
 					unset($manager->owned[$id]);
 				}
-			}
-		);
+			};
+		$registry->on('removed', $this->removed);
 	}
 
 	/**
@@ -217,5 +218,6 @@ final class BreakableBlocks
 				$this->registry->destroy($id);
 			}
 		}
+		$this->registry->off('removed', $this->removed);
 	}
 }

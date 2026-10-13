@@ -11,10 +11,10 @@ use PhpWasmEngine\Ui\PauseMenu;
  *
  * @param Engine $engine Active engine whose input is captured by the menu.
  * @param Camera $camera Camera receiving live zoom changes.
- * @param string $scene Scene name displayed as read-only output.
+ * @param DemoGame $game Persistent session receiving level and movement selections.
  * @return PauseMenu Adapter owned by the demo's render, restore, and cleanup callbacks.
  */
-function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMenu
+function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMenu
 {
 	$settings = (object)['name' => 'Player', 'scale' => 2, 'theme' => 'auto', 'hints' => true];
 	$adapter = null;
@@ -62,7 +62,7 @@ function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMen
 				$settings->hints = $adapter->renderer->showHints = $value;
 			}
 		]
-		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'value' => $scene]
+		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
 		, 'time' => ['label' => 'Game time', 'input' => 'output'
 			, 'get' => fn() => sprintf('%.2f s', $engine->time)
 			, 'subtext' => 'Simulation time stays fixed while the menu is open.'
@@ -102,16 +102,27 @@ function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMen
 	foreach($levelNames as $id => $label)
 	{
 		$levels[$id] = ['label' => $label, 'input' => 'output'
-			, 'get' => fn() => $host->scene === $id ? 'Current' : ''
-			, 'callback' => fn() => $host->load($id, $host->profile)
+			, 'get' => fn() => $game->pending?->id === $id ? 'Loading'
+				: ($game->scene === $id ? 'Current' : '')
+			, 'callback' => fn() => $game->selectScene($id)
 		];
 	}
+
+	$levels['load-error'] = ['label' => 'Level download failed'
+	, 'input' => 'output'
+		, 'hidden' => fn() => $game->error === ''
+		, 'subtext' => 'Select the level again to retry, or choose another level.'
+	];
+	$levels['cancel-load'] = ['label' => 'Cancel level change'
+		, 'hidden' => fn() => $game->pending === null && $game->error === ''
+		, 'callback' => fn() => $game->cancelLoad()
+	];
 
 	foreach($profileNames as $id => $label)
 	{
 		$profiles[$id] = ['label' => $label, 'input' => 'output'
 			, 'get' => fn() => $host->profile === $id ? 'Current' : ''
-			, 'callback' => fn() => $host->load($host->scene, $id)
+			, 'callback' => fn() => $game->selectProfile($id)
 		];
 	}
 
@@ -126,12 +137,13 @@ function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMen
 			'Live text, numbers, sliders, choices, and boolean inputs.'
 		]
 		, 'level' => ['label' => 'Level', 'input' => 'output'
-			, 'value' => $levelNames[$scene], 'children' => $levels
-			, 'subtext' => 'Load a level using the selected movement profile.'
+			, 'get' => fn() => $levelNames[$game->scene] ?? 'Loading'
+			, 'children' => $levels
+			, 'subtext' => 'Change levels while keeping game time and settings.'
 		]
 		, 'movement' => ['label' => 'Movement', 'input' => 'output'
 			, 'get' => fn() => $profileNames[$host->profile], 'children' => $profiles
-			, 'subtext' => 'Choose a profile and restart the level.'
+			, 'subtext' => 'Change the current player without restarting the level.'
 		]
 		, 'mute' => ['label' => 'Mute audio', 'input' => 'boolean'
 			, 'get' => fn() => $host->muted

@@ -5,16 +5,14 @@ export class DemoControls
 {
 	/**
 	 * Bind accessible shortcuts without starting PHP or opening an audio device.
-	 * @param {Function} restart Deferred demo restart using the selected level/profile.
 	 */
-	constructor(restart)
+	constructor()
 	{
 		this.scene = 'platformer';
 		this.profile = 'runner';
 		this.muted = false;
 		this.fullscreenBusy = false;
 		this.fullscreenError = '';
-		this.restart = restart;
 		this.frame = document.querySelector('#game-frame');
 		this.canvas = this.frame.querySelector('canvas');
 		this.muteButton = document.querySelector('#mute');
@@ -125,25 +123,6 @@ export class DemoControls
 			this.update();
 			this.canvas.focus({preventScroll: true});
 		}
-	}
-
-	/**
-	 * Restart after a menu callback has returned to the browser event loop.
-	 * @param {string} scene Selected demo scene ID.
-	 * @param {string} profile Selected movement profile ID.
-	 * @returns {void} Leaves PHP teardown to the serialized bootstrap lifecycle.
-	 */
-	load(scene, profile)
-	{
-		this.cancelLoad();
-		this.pendingLoad = setTimeout(() => this.restart({scene, profile}), 0);
-	}
-
-	/** @returns {void} Cancels a queued menu action when Stop or another load supersedes it. */
-	cancelLoad()
-	{
-		clearTimeout(this.pendingLoad);
-		this.pendingLoad = null;
 	}
 
 	/** @returns {void} Synchronizes labels, pressed states, and fullscreen error output. */

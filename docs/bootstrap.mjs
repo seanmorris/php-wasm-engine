@@ -7,7 +7,7 @@ const canvas = document.querySelector('canvas');
 const start = document.querySelector('#start');
 const base = new URL('./engine/', document.baseURI);
 const runtimeBase = new URL('./runtime/', document.baseURI);
-const controls = new DemoControls(options => boot(options).catch(report));
+const controls = new DemoControls();
 window.demoControls = controls;
 let php, runtimeKey, pending;
 let queue = Promise.resolve();
@@ -38,7 +38,6 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		return Promise.reject(Error('Unsupported PHP version, scene, or movement profile'));
 	}
 
-	controls.cancelLoad();
 	pending?.abort();
 	const request = pending = new AbortController();
 	const {signal} = request;
@@ -52,7 +51,8 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		if(php) await php.refresh();
 		signal.throwIfAborted();
 
-		for(const key of ['frames', 'body', 'menu', 'world', 'breakables', 'scene', 'profile'])
+		for(const key of ['frames', 'body', 'menu', 'world', 'breakables', 'scene', 'profile',
+			'loading', 'levelError'])
 		{
 			delete canvas.dataset[key];
 		}
@@ -86,8 +86,7 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		const response = await fetch(new URL('engine-files.json', base), {signal});
 		if(!response.ok) throw Error('Engine manifest: ' + response.status);
 		const files = await response.json();
-		const streaming = run && scene === 'world';
-		await Promise.all(files.filter(path => !streaming || !path.startsWith('examples/assets/')
+		await Promise.all(files.filter(path => !run || !path.startsWith('examples/assets/')
 			|| /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)).map(async path => {
 			const response = await fetch(new URL(path, base), {cache: 'no-store', signal});
 			if(!response.ok) throw Error('Asset ' + path + ': ' + response.status);
@@ -98,11 +97,10 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 			module.FS.writeFile(full, bytes);
 		}));
 
-		if(streaming)
+		if(run)
 		{
 			const assets = new AssetLoader(module.FS, base);
-			module.requestAsset = (path, retry) => assets.request(path, retry);
-			module.releaseAsset = path => assets.release(path);
+			module.createAssetScope = () => assets.scope();
 			const close = () => {
 				assets.close();
 				module.onRefresh.delete(close);
@@ -110,19 +108,33 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 			};
 			module.onRefresh.add(close);
 			signal.addEventListener('abort', close, {once: true});
-			await assets.load('/engine/examples/assets/stream.world');
 		}
 
 		signal.throwIfAborted();
 		if(run)
 		{
-			const file = streaming ? 'world' : 'game';
-			const code = await php.run('<?php require "/engine/examples/' + file + '.php";');
-			if(code !== 0) throw Error('PHP returned ' + code);
+			let ready, fail;
+			const loaded = new Promise((resolve, reject) => { ready = resolve; fail = reject; });
+			// Stop must settle this wait before its queued PHP cleanup can run.
+			const aborted = () => fail(signal.reason);
+			module.sceneReady = error => error ? fail(Error(error)) : ready();
+			signal.addEventListener('abort', aborted, {once: true});
+			loaded.catch(() => {});
+			try
+			{
+				const code = await php.run('<?php require "/engine/examples/game.php";');
+				if(code !== 0) throw Error('PHP returned ' + code);
+				await loaded;
+			}
+			finally
+			{
+				module.sceneReady = null;
+				signal.removeEventListener('abort', aborted);
+			}
 		}
 
 		signal.throwIfAborted();
-		canvas.dataset.scene = scene;
+		if(!run) canvas.dataset.scene = scene;
 		canvas.dataset.profile = profile;
 		setState(run ? 'running' : 'idle');
 		if(run) canvas.focus({preventScroll: true});
@@ -168,7 +180,6 @@ function report(error)
  */
 export function stopEngine()
 {
-	controls.cancelLoad();
 	pending?.abort();
 	pending = null;
 	setState('stopping');

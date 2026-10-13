@@ -7,12 +7,32 @@ continue.
 
 ## Demo browser controls
 
-**Level** and **Movement** open selection pages. Selecting an item restarts the
-level with the chosen profile; changing levels retains that profile. The centered
-Run PHP button hides once the game starts and returns if a download fails. A
-restart refreshes PHP and reuses the WASM instance when its version and extensions
-match. Scripts can call `bootEngine({scene, profile})` and `stopEngine()`; stopping
-also cancels an in-progress download.
+**Level** changes scenes within the running PHP engine. The clock, registry,
+player object, selected movement profile, and menu settings survive. Each new
+level resets the player's spawn pose and releases the previous level's graphics,
+collision, blocks, and particles. **Movement** changes the current player's
+profile and sprite in place, preserving position and settings.
+
+The current level stays available while the destination downloads. Select
+another level to replace a pending request, or use **Cancel level change**.
+Failed downloads leave the current level intact; select the failed level again
+to retry. Maps, tilesets, and images load on demand. Shared files stay mounted
+until the last level or streamed map releases them.
+
+The centered Run PHP button starts a session and returns if startup fails.
+Scripts can call `bootEngine({scene, profile})` for an explicit fresh session
+or `stopEngine()` to cancel downloads and stop it. Inside running PHP, use:
+
+```php
+$game->selectScene('loop');      // Stage a level; the frame loop commits it when ready.
+$game->selectProfile('glider');  // Update the current actor immediately.
+$game->cancelLoad();            // Retain the active scene.
+```
+
+`$game->scene` identifies the active level, `$game->pending?->id` identifies a
+pending destination, and `$game->error` contains the most recent load failure.
+These are demo session methods in `examples/DemoGame.php`; the engine's reusable
+loading primitives remain `WorldStream` and the host `AssetLoader`.
 
 **Mute audio** and **Fullscreen** appear in the pause menu and as two icon buttons
 at the bottom-right of the game. The buttons have keyboard focus, accessible
@@ -31,10 +51,8 @@ reloads when local storage is available. The sample levels currently have no
 soundtrack; the audio regression plays a generated tone through the native mixer
 and checks the signal after this gain.
 
-The PHP menu calls the demo host through `vrzno_env('demoControls')`. The
-JavaScript host supplies browser fullscreen, persistent mute, and deferred
-restart actions. Level restarts wait until the current PHP callback returns,
-then stop its frame loop, close streaming requests, and refresh PHP. These host
+The PHP menu calls `DemoGame` for scene and movement changes. The browser host
+at `vrzno_env('demoControls')` supplies fullscreen and persistent mute. Browser
 controls live in `docs/controls.mjs`; the reusable `Menu` API does not require
 a browser host.
 

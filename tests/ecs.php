@@ -309,3 +309,23 @@ test('ECS nested boolean queries agree with object membership through structural
 		}
 	}
 );
+
+test('ECS listeners can detach without retaining retired scene closures', function() {
+	$registry = new Registry;
+	$events = [];
+
+	$keep = function($registry, $id) use (&$events) { $events[] = $id; };
+
+	$retire = static function() { throw new RuntimeException('Retired scene was notified'); };
+	$weak = WeakReference::create($retire);
+	$registry->on('added', $retire);
+	$registry->on('added', $keep);
+	$registry->on('added', $retire);
+	$registry->off('removed', $retire);
+	$registry->off('added', $retire);
+	$registry->off('added', $retire);
+	unset($retire);
+	check($weak->get() === null);
+	$id = $registry->create(new stdClass);
+	check($events === [$id]);
+});

@@ -372,6 +372,24 @@ final class Registry
 	}
 
 	/**
+	 * Unsubscribe a scene's callback without disturbing other lifecycle listeners.
+	 *
+	 * @param string $event Event name used when subscribing.
+	 * @param callable(Registry,int,object):void $listener Exact callback previously registered.
+	 * @return void Removes all matching registrations; an unknown callback has no effect.
+	 */
+	public function off(string $event, callable $listener): void
+	{
+		foreach($this->listeners[$event] ?? [] as $key => $registered)
+		{
+			if($registered === $listener)
+			{
+				unset($this->listeners[$event][$key]);
+			}
+		}
+	}
+
+	/**
 	 * Notify all listeners registered for a component lifecycle event.
 	 *
 	 * @param string $event Lifecycle event name.

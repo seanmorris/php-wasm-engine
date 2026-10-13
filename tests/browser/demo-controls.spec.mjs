@@ -21,6 +21,7 @@ async function start(page) {
 	await page.click('#start');
 	await expect.poll(async () => (await menu(page))?.open, {timeout: 60000}).toBe(false);
 	await expect(page.locator('#start')).toBeHidden();
+	await expect(page.locator('canvas')).toHaveAttribute('data-scene', /.+/);
 }
 
 test.afterEach(async ({page}) => {
@@ -62,7 +63,7 @@ async ({page}) => {
 	expect(binaries).toEqual([]);
 });
 
-test('pause menu changes levels and movement using one runtime and preserves the selected profile',
+test('pause menu changes levels and movement without restarting PHP or the engine',
 async ({page}) => {
 	const errors = [], binaries = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -71,7 +72,19 @@ async ({page}) => {
 	});
 	await page.goto('/');
 	await start(page);
-	await page.evaluate(() => { window.firstRuntime = enginePhp; });
+	await page.evaluate(async () => {
+		window.firstRuntime = enginePhp;
+		window.refreshes = 0;
+		const refresh = enginePhp.refresh.bind(enginePhp);
+		enginePhp.refresh = (...args) => { refreshes++; return refresh(...args); };
+		await enginePhp.run(`<?php
+			$sessionMarker = [$engine, $engine->clock, $engine->entities, $body, $pauseMenu];
+			$sessionTime = $engine->time;
+			$camera->zoom = 1.25;
+			$pauseMenu->theme = 'playstation';
+			$extraEntity = $engine->entities->create(new stdClass);
+		`);
+	});
 	await open(page);
 	await activate(page, 'movement');
 	await expect.poll(async () => (await menu(page)).title).toBe('Movement');
@@ -79,6 +92,7 @@ async ({page}) => {
 	await expect(page.locator('canvas')).toHaveAttribute('data-profile', 'glider');
 	await expect.poll(async () => (await menu(page))?.open).toBe(false);
 	expect(await page.evaluate(() => enginePhp === firstRuntime)).toBe(true);
+	expect(await page.evaluate(() => refreshes)).toBe(0);
 	await open(page);
 	await activate(page, 'level');
 	await activate(page, 'world');
@@ -100,6 +114,17 @@ async ({page}) => {
 		return JSON.parse(module.canvas.dataset.profileProbe);
 	});
 	expect(body).toEqual(['glider', 570, '']);
+	await page.evaluate(() => enginePhp.run(`<?php
+		vrzno_env('canvas')->dataset->sessionProbe = json_encode([
+			$sessionMarker === [$engine, $engine->clock, $engine->entities, $body, $pauseMenu],
+			$engine->time >= $sessionTime, $camera->zoom, $pauseMenu->theme,
+			$engine->entities->alive($extraEntity)
+		]);
+	`));
+	await expect(page.locator('canvas')).toHaveAttribute(
+		'data-session-probe', '[true,true,1.25,"playstation",true]'
+	);
+	expect(await page.evaluate(() => refreshes)).toBe(0);
 	expect(binaries).toHaveLength(1);
 	expect(errors).toEqual([]);
 });
@@ -269,7 +294,9 @@ async ({page}) => {
 	await expect(page.locator('#mute')).toHaveAttribute('aria-pressed', 'false');
 });
 
-for(const asset of ['engine-files.json', 'examples/assets/stream.world'])
+for(const [asset, scene] of [
+	['examples/assets/stream.world', 'world'], ['examples/assets/loop.tmj', 'loop']
+])
 test('Scripted stop cancels ' + asset + ' during a level change and Run can retry',
 async ({page}) => {
 	const errors = [];
@@ -280,7 +307,7 @@ async ({page}) => {
 	await page.route('**/engine/' + asset, route => { pending = route; });
 	await open(page);
 	await activate(page, 'level');
-	await activate(page, 'world');
+	await activate(page, scene);
 	await expect.poll(() => Boolean(pending)).toBe(true);
 	await page.evaluate(() => window.stopEngine());
 	await expect(page.locator('#start')).toBeEnabled();
@@ -289,21 +316,22 @@ async ({page}) => {
 		pending.fulfill({json: ['autoload.php']}).catch(() => {}));
 	await page.unroute('**/engine/' + asset);
 	await test.step('Retry cancelled level', () => start(page));
-	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'world');
+	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'platformer');
 	expect(errors).toEqual([]);
 });
 
 
-test('failed level downloads expose a retry without leaving a running frame loop',
+for(const asset of ['engine-files.json', 'examples/assets/platformer.tmj'])
+test('failed startup ' + asset + ' exposes Run without leaving a frame loop',
 async ({page}) => {
 	await page.goto('/');
-	await page.route('**/engine/engine-files.json', route =>
+	await page.route('**/engine/' + asset, route =>
 		route.fulfill({status: 503, body: 'Unavailable'}));
 	await page.click('#start');
-	await expect(page.locator('#status')).toContainText('Engine manifest: 503');
+	await expect(page.locator('#status')).toContainText('503');
 	await expect(page.locator('#start')).toBeEnabled();
 	await expect(page.locator('#stop')).toHaveCount(0);
-	await page.unroute('**/engine/engine-files.json');
+	await page.unroute('**/engine/' + asset);
 	await start(page);
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'platformer');
 });
