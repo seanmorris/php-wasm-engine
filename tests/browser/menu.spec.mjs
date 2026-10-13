@@ -90,6 +90,61 @@ for(const fallback of [false,true]) test('live text editing and external focus w
   expect(errors).toEqual([]);
 });
 
+for(const fallback of [false,true]) for(const recovery of ['visibility','focus','graphics']) {
+  test('editing discards held-key repeats after '+recovery+' recovery with '+(fallback?'textarea':'EditContext'),async({page})=>{
+    const errors=await start(page,{fallback});
+    await open(page);
+    await choose(page,'settings');await page.keyboard.press('Enter');
+    await choose(page,'name');await page.keyboard.press('Enter');
+    await page.keyboard.press('Control+a');
+    await page.keyboard.insertText('abcdefgh');
+    await expect.poll(async()=>(await state(page)).values.name).toBe('abcdefgh');
+    await page.keyboard.down('Backspace');
+    await expect.poll(async()=>(await state(page)).values.name).toBe('abcdefg');
+    await page.keyboard.down('Backspace');
+    await expect.poll(async()=>(await state(page)).values.name).toBe('abcdef');
+
+    const frames=()=>page.locator('canvas').evaluate(canvas=>Number(canvas.dataset.frames));
+    if(recovery==='visibility') {
+      await page.evaluate(()=>{
+        Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await page.waitForTimeout(100);
+      await page.evaluate(()=>{
+        delete document.hidden;
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+    } else if(recovery==='focus') {
+      await page.locator('#mute').focus();
+      await page.waitForTimeout(100);
+      await page.locator('canvas').focus();
+    } else {
+      await page.evaluate(()=>{
+        window.menuLoss=document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
+        menuLoss.loseContext();
+      });
+      await expect(page.locator('#status')).toContainText('Graphics paused');
+      await page.evaluate(()=>menuLoss.restoreContext());
+    }
+    const recovered=await frames();
+    await expect.poll(frames).toBeGreaterThan(recovered+2);
+    expect((await state(page)).editing).toBe(true);
+    await page.keyboard.down('Backspace');
+    await page.keyboard.down('Backspace');
+    const repeated=await frames();
+    await expect.poll(frames).toBeGreaterThan(repeated+2);
+    expect((await state(page)).values.name).toBe('abcdef');
+    await page.keyboard.up('Backspace');
+    await page.keyboard.down('Backspace');
+    await expect.poll(async()=>(await state(page)).values.name).toBe('abcde');
+    await page.keyboard.down('Backspace');
+    await expect.poll(async()=>(await state(page)).values.name).toBe('abcd');
+    await page.keyboard.up('Backspace');
+    expect(errors).toEqual([]);
+  });
+}
+
 test('pad hints switch themes on input and allow an explicit override',async({page})=>{
   const errors=await start(page);
   await open(page);

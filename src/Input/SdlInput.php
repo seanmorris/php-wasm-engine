@@ -10,6 +10,8 @@ final class SdlInput
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
 	private $canvas = null, $focusListener = null, $blurListener = null;
+	private $keyboardWindow = null, $keyListener = null;
+	private array $browserKeys = [];
 	private array $uiEvents = [];
 	private array $uiBlocked = [];
 	private bool $uiEditing = false;
@@ -51,6 +53,39 @@ final class SdlInput
 			$this->canvas->addEventListener('focus', $this->focusListener);
 			$this->canvas->addEventListener('blur', $this->blurListener);
 			$this->focus((bool)$this->canvas->matches(':focus'));
+			$this->keyboardWindow = $this->canvas->ownerDocument->defaultView;
+			$this->keyListener =
+				/**
+				 * Reject browser repeats whose physical press was discarded during recovery.
+				 * SDL can report the first repeat after blur as a new keydown.
+				 *
+				 * @param object $event Keyboard event for the canvas or IME target.
+				 * @return void Filters stale repeats before SDL receives them.
+				 */
+				function(object $event): void {
+					$this->focus($this->ownsFocus());
+
+					if(!$this->focused)
+					{
+						return;
+					}
+
+					if($event->type === 'keyup')
+					{
+						unset($this->browserKeys[$event->code]);
+					}
+					elseif(!$event->repeat)
+					{
+						$this->browserKeys[$event->code] = true;
+					}
+					elseif(empty($this->browserKeys[$event->code]))
+					{
+						$event->preventDefault();
+						$event->stopImmediatePropagation();
+					}
+				};
+			$this->keyboardWindow->addEventListener('keydown', $this->keyListener, true);
+			$this->keyboardWindow->addEventListener('keyup', $this->keyListener, true);
 		}
 	}
 
@@ -72,6 +107,7 @@ final class SdlInput
 		$this->uiEvents = [];
 		$this->uiBlocked = [];
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
+		$this->browserKeys = [];
 		$this->resetPads = true;
 	}
 
@@ -84,6 +120,7 @@ final class SdlInput
 	{
 		$this->poll();
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
+		$this->browserKeys = [];
 		$this->gamepads->reset();
 		$this->uiEvents = [];
 		$this->generation++;
@@ -299,14 +336,18 @@ final class SdlInput
 		$this->setTextInput(false);
 		$this->closed = true;
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
+		$this->browserKeys = [];
 
 		if($this->canvas)
 		{
 			$this->canvas->removeEventListener('focus', $this->focusListener);
 			$this->canvas->removeEventListener('blur', $this->blurListener);
+			$this->keyboardWindow->removeEventListener('keydown', $this->keyListener, true);
+			$this->keyboardWindow->removeEventListener('keyup', $this->keyListener, true);
 		}
 
 		$this->canvas = $this->focusListener = $this->blurListener = null;
+		$this->keyboardWindow = $this->keyListener = null;
 		$this->gamepads->close();
 	}
 
@@ -420,6 +461,12 @@ final class SdlInput
 				];
 				break;
 			case SDL_KEYDOWN:
+				// Recovery discards the original press; its repeats must not keep editing.
+				if($event->key->repeat && empty($this->keys[$event->key->keysym->sym]))
+				{
+					break;
+				}
+
 				$this->uiEvents[] = ['type' => 'key'
 				, 'key' => SDL_GetKeyName(
 					$event->key->keysym->sym
