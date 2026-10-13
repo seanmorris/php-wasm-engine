@@ -55,6 +55,7 @@ test('world streaming waits for map, tileset and image dependencies before activ
 		$requests[$path] = true;
 		return isset($ready[$path]);
 	});
+
 	$stream->update(0, 0, 40, 40);
 	check(array_keys($requests) === ['a.tmj']);
 	check(!$stream->isReady(0, 0, 40, 40) && $stream->loaded() === []);
@@ -77,6 +78,7 @@ test('world streaming retains boundary maps and releases shared files only after
 	, function() {
 		$released = [];
 		$stream = streamFixture(null, function($path) use (&$released) { $released[] = $path; });
+
 		$stream->update(0, 0, 40, 40);
 		$first = $stream->loaded()['a.tmj'];
 		$first->layers[0]->set(0, 0, 2);
@@ -110,6 +112,7 @@ test('stream failures remain explicit and retryable without requesting distant m
 
 		return $path === 'tiles.png' && $fail?'HTTP 503':true;
 	});
+
 	$stream->update(0, 0, 40, 40);
 	check(isset($stream->errors['a.tmj']) && !$stream->isReady(0, 0, 40, 40));
 	$stream->retry('a.tmj');
@@ -124,6 +127,7 @@ test('pending maps release requests when leaving the retention area', function()
 	$stream = streamFixture(fn($path) => false, function($path) use (&$released) {
 		$released[] = $path;
 	});
+
 	$stream->update(0, 0, 40, 40);
 	$stream->update(2000, 0, 40, 40);
 	check($released === ['a.tmj']);
@@ -146,6 +150,7 @@ test('world bounds index agrees with a flat scan across sparse and overlapping m
 			, 'height' => ($i % 5 + 1) * 200
 		];
 	}
+
 	$world = fixture(['world.world' => ['maps' => $maps]])->world('world.world');
 
 	for($i = 0; $i < 80; $i++)
@@ -161,6 +166,7 @@ test('world bounds index agrees with a flat scan across sparse and overlapping m
 		);
 		check($world->entries($x, $y, 700, 500) === $expected);
 	}
+
 	$world->data['maps'][0]['x'] = 1000000;
 	$world->reindex();
 	check(count($world->entries(1000000, $maps[0]['y'], 0, 0)) === 1);
@@ -180,6 +186,7 @@ test('a malformed external tileset can be replaced and retried', function() {
 	$loader = new Loader(new Assets(function($path) use (&$broken, $data) {
 		return $broken && $path === 'tiles.tsj'?'{broken':json_encode($data[$path]);
 	}));
+
 	$retried = [];
 
 	$stream = new WorldStream($loader->world('world.world'), function($path, $retry = false) use (
@@ -193,6 +200,7 @@ test('a malformed external tileset can be replaced and retried', function() {
 		return true;
 	}
 	);
+
 	$stream->update(0, 0, 20, 20);
 	check(isset($stream->errors['a.tmj']));
 	$broken = false;

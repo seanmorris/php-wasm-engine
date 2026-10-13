@@ -36,6 +36,7 @@ function jsonAsset(string $name, array $data): void
 		, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
 	);
 }
+
 // Tiled's JSON importer reads omitted visibility and opacity as false and zero.
 $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
@@ -92,6 +93,7 @@ png(__DIR__.'/assets/tiles.png', 288, 32, static function($x, $y) {
 
 	return [[86,167,245,255],[242,120,114,255],[246,189,83,255]][$id - 6];
 });
+
 $solid = [['name' => 'solid','type' => 'bool','value' => true]];
 $tiles = ['type' => 'tileset'
 , 'name' => 'demo'
@@ -196,6 +198,7 @@ for($y = 6; $y < 14; $y++)
 {
 	$floor[$y * $width + 68] = 1;
 }
+
 $base = ['type' => 'map','version' => '1.10','orientation' => 'orthogonal'
 , 'renderorder' =>
 	'right-down'
@@ -223,6 +226,7 @@ png(__DIR__.'/assets/clouds.png', 512, 96, static function($x, $y) {
 			return [116,159,180,85];
 		}
 	}
+
 	return [0,0,0,0];
 });
 
@@ -264,6 +268,7 @@ foreach([0,1] as $frame)
 		]:[0,0,0,0]
 	);
 }
+
 $background = [];
 $bands = [
 	['sky',0,0,0,8,300]
@@ -306,6 +311,7 @@ foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
 		, 'properties' => $properties
 	] + $layerDefaults;
 }
+
 $title = $base;
 $title['width'] = 30;
 $title['height'] = 17;
@@ -353,8 +359,10 @@ foreach([-32,0,32] as $offset)
 			$data[$y * 32 + $x] = 1;
 		}
 	}
+
 	$chunks[] = ['x' => $offset,'y' => 0,'width' => 32,'height' => 20,'data' => $data];
 }
+
 $infinite['layers'] = [['id' => 1
 , 'name' => 'Infinite terrain'
 , 'type' => 'tilelayer'
@@ -472,6 +480,7 @@ foreach(range(-2, 2) as $section)
 	{
 		$cells[(9 + abs($section)) * 32 + $x] = 5;
 	}
+
 	$streamMap['layers'][] = ['id' => 1
 	, 'name' => 'Terrain'
 	, 'type' => 'tilelayer'
@@ -488,5 +497,6 @@ foreach(range(-2, 2) as $section)
 		640
 	];
 }
+
 jsonAsset('stream.world', ['type' => 'world','maps' => $worldMaps]);
 require __DIR__.'/generate-loop.php';

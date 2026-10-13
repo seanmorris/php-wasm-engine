@@ -30,6 +30,7 @@ function clipLoop(array $points, int $axis, float $bound, bool $greater): array
 
 		$previous = $point;
 	}
+
 	return $result;
 }
 
@@ -48,6 +49,7 @@ png(__DIR__.'/assets/loop.png', 256, 256, static function($x, $y) {
 
 	return ($x + $y) % 7 === 0?[71,100,105,255]:[42,63,77,255];
 });
+
 $loopTiles = [];
 
 for($y = 0; $y < 8; $y++)
@@ -77,6 +79,7 @@ for($y = 0; $y < 8; $y++)
 				$polygon = clipLoop($polygon, $axis, $bound, $greater);
 			}
 		}
+
 		$unique = [];
 
 		foreach($polygon as [$px,$py])
@@ -140,6 +143,7 @@ for($y = 0; $y < 8; $y++)
 		$planes[$plane][($y + 6) * $width + $x + 24] = 10 + $y * 8 + $x;
 	}
 }
+
 $loopLayers = $background;
 
 foreach($planes as $plane => $cells)
@@ -155,6 +159,7 @@ foreach($planes as $plane => $cells)
 		]]
 	] + $layerDefaults;
 }
+
 $gates = [];
 
 foreach([['Left entrance',704,176,32,288,false],['Crown',880,168,32,64,true]
@@ -174,6 +179,7 @@ foreach([['Left entrance',704,176,32,288,false],['Crown',880,168,32,64,true]
 		, 'properties' => [['name' => 'back','type' => 'bool','value' => $back]]
 	];
 }
+
 $loopLayers[] = ['id' => 4,'name' => 'Layer switches','type' => 'objectgroup'
 , 'objects' =>
 	$gates

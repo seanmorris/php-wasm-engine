@@ -84,6 +84,7 @@ test('surface attachment follows a full loop and releases at low speed', functio
 			[[300 + cos($a) * 160,300 + sin($a) * 160], [300 + cos($b) * 160, 300 + sin($b) * 160]]
 		);
 	}
+
 	$p = new Platformer($terrain);
 	$body = new Body(300, 442);
 	$body->grounded = true;
@@ -103,6 +104,7 @@ test('surface attachment follows a full loop and releases at low speed', functio
 		$angle = max($angle, abs($body->angle));
 		check($body->grounded);
 	}
+
 	check($minY < 170 && $minX < 170 && $maxX > 430 && $angle > 3);
 	$body = new Body(300, 158);
 	$body->grounded = true;

@@ -119,6 +119,7 @@ final class MenuRenderer
 				$sprite->y += $top * $sprite->scaleY;
 				$visible[] = $sprite;
 			}
+
 			$cached = [$layout, $visible];
 		}
 
@@ -185,6 +186,7 @@ final class MenuRenderer
 			$this->row($menu, $id, $item, $rect, $s, $seconds);
 			$line += $rowHeight;
 		}
+
 		$line = $inner[1] + $header + $count * $rowHeight + 4 * $s;
 		$message = $menu->loading ? 'Loading...' : ($menu->error ?? ($rows[$menu->selected][
 			'subtext'
@@ -399,6 +401,7 @@ final class MenuRenderer
 		{
 			$positions[] = $x + $position[0];
 		}
+
 		return $positions;
 	}
 

@@ -45,6 +45,7 @@ foreach([
 	$checks['single batch '.$time] = $renderer->draws === 1;
 	$checks['same atlas '.$time] = $atlas->texture === $texture && $atlas->metadata === $metadata;
 }
+
 $before = $capture(1875);
 $atlas->restore();
 $renderer->restore();

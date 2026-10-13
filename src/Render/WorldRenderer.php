@@ -78,8 +78,10 @@ final class WorldRenderer
 					break;
 				}
 			}
+
 			$active[$map->path] = [$renderer,$backgroundEnd];
 		}
+
 		$this->backgroundMap = $this->selectBackground($active, $camera);
 
 		// A repeating background from a neighboring map must not cover earlier terrain.
@@ -134,6 +136,7 @@ final class WorldRenderer
 			$renderer->close();
 			unset($this->resident[$path]);
 		}
+
 		return $stats;
 	}
 
@@ -216,6 +219,7 @@ final class WorldRenderer
 		{
 			$renderer->close();
 		}
+
 		$this->resident = [];
 		$this->backgroundMap = null;
 	}

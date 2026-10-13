@@ -81,6 +81,7 @@ test('continuous gate casts process narrow gates in travel order before terrain'
 	{
 		$t->addSwitch(gate($i * 10, -30, .01, 60, $i, $i + 1));
 	}
+
 	$t->add([[100,-30],[100.1,-30],[100.1,30],[100,30]], false, 9);
 	$b = new Body;
 	$b->vx = 60000;

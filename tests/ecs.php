@@ -70,6 +70,7 @@ test('ECS snapshots remain correct when many query descriptions exceed cache cap
 		$query = Query::all(EcsBase::class, Query::not('MissingEcsComponent'.$i));
 		check($r->query($query) === $ids);
 	}
+
 	$r->destroy($ids[0]);
 	check($snapshot === $ids);
 	check($r->query(Query::all(EcsBase::class)) === array_slice($ids, 1));
@@ -135,6 +136,7 @@ test('ECS lifecycle listeners see fresh queries during replacement and destructi
 			];
 		});
 	}
+
 	$r->add($id, new EcsBase);
 	$r->destroy($id);
 
@@ -164,6 +166,7 @@ test('ECS deferred commands invalidate cached snapshots when flushed', function(
 		$registry->add($id, new EcsOther);
 		$registry->defer(fn($registry) => $registry->create(new EcsBase));
 	});
+
 	check($r->query($query) === $snapshot);
 	$r->flush();
 	check($r->query($query) === [$id + 1]);
@@ -180,6 +183,7 @@ test('ECS indexes survive structural changes made inside removal listeners', fun
 			$registry->remove($entity, EcsSibling::class);
 		}
 	});
+
 	$r->remove($id, EcsTagged::class);
 	check(!$r->has($id, EcsTagged::class));
 	check(!$r->has($id, EcsSibling::class));
@@ -198,6 +202,7 @@ test('ECS indexes survive structural changes made inside removal listeners', fun
 			check($registry->query(Query::all(EcsTagged::class)) === [$entity]);
 		}
 	});
+
 	$r->add($id, $replacement);
 	check($r->get($id, EcsBase::class) === $replacement);
 	check($r->query(EcsTagged::class) === [$id]);
@@ -224,6 +229,7 @@ function ecsReferenceMatch(array $components, $query): bool
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -317,6 +323,7 @@ test('ECS listeners can detach without retaining retired scene closures', functi
 	$keep = function($registry, $id) use (&$events) { $events[] = $id; };
 
 	$retire = static function() { throw new RuntimeException('Retired scene was notified'); };
+
 	$weak = WeakReference::create($retire);
 	$registry->on('added', $retire);
 	$registry->on('added', $keep);

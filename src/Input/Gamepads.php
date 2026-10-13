@@ -198,6 +198,7 @@ final class Gamepads
 				$value = $axes[$axis];
 			}
 		}
+
 		return $value;
 	}
 
@@ -222,6 +223,7 @@ final class Gamepads
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -255,6 +257,7 @@ final class Gamepads
 				}
 			}
 		}
+
 		$this->axes = $this->buttons = [];
 	}
 
@@ -278,6 +281,7 @@ final class Gamepads
 		{
 			SDL_GameControllerClose($handle);
 		}
+
 		$this->handles = $this->axes = $this->buttons = $this->blockedAxes = $this->blockedButtons =
 			[];
 		SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);

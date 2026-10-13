@@ -58,6 +58,7 @@ final class BreakableBlocks
 					unset($manager->owned[$id]);
 				}
 			};
+
 		$registry->on('removed', $this->removed);
 	}
 
@@ -142,6 +143,7 @@ final class BreakableBlocks
 
 			throw $error;
 		}
+
 		return $id;
 	}
 
@@ -218,6 +220,7 @@ final class BreakableBlocks
 				$this->registry->destroy($id);
 			}
 		}
+
 		$this->registry->off('removed', $this->removed);
 	}
 }

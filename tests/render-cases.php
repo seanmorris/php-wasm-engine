@@ -45,6 +45,7 @@ for($y = 0; $y < 2; $y++)
 		$cells[] = [$x,$y];
 	}
 }
+
 usort($cells, fn($a, $b) => ($a[0] + $a[1]) <=> ($b[0] + $b[1])?:$b[0] <=> $a[0]);
 $colors = [hex2bin('ff0000ff'),hex2bin('00ff00ff'),hex2bin('0000ffff'),hex2bin('ffff00ff')];
 
@@ -76,6 +77,7 @@ foreach($cells as [$x,$y])
 		}
 	}
 }
+
 $isoExact = $expected === $actual;
 $isoStats = $renderer->stats;
 $renderer->close();
@@ -113,6 +115,7 @@ foreach([[28,28],[36,28],[28,36],[36,36]] as [$x,$y])
 {
 	$rotated[] = bin2hex(glReadPixels($x, 191 - $y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE));
 }
+
 $sprites->close();
 $renderer->close();
 $error = glGetError();

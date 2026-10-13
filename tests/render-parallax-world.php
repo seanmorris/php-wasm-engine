@@ -58,6 +58,7 @@ foreach([-128,0,128] as $i => $x)
 	);
 	$entries[] = ['fileName' => $path,'x' => $x,'y' => -128,'width' => 128,'height' => 256];
 }
+
 file_put_contents('/phase-reference.tmj', json_encode($data));
 file_put_contents('/phase.world', json_encode(['maps' => $entries]));
 $source = (new Loader)->world('/phase.world');
@@ -82,6 +83,7 @@ function frame(Device $device, MapRenderer|WorldRenderer $renderer, Camera $came
 
 	return [glReadPixels(0, 0, 64, 48, GL_RGBA, GL_UNSIGNED_BYTE),$stats];
 }
+
 $checks = [];
 
 foreach([.5,1,2] as $zoom)
@@ -103,6 +105,7 @@ foreach([.5,1,2] as $zoom)
 		}
 	}
 }
+
 // A single translucent stack must survive explicit GPU restoration too.
 $world->restore();
 [$actual] = frame($device, $world, $camera, $time);
@@ -118,6 +121,7 @@ foreach($entries as $entry)
 {
 	$candidates[] = new MapRenderer($source->load($entry));
 }
+
 $world = new WorldRenderer($source);
 
 foreach([[-.25,0],[.25,1],[-.25,0]] as $i => [$focus,$selected])
@@ -128,6 +132,7 @@ foreach([[-.25,0],[.25,1],[-.25,0]] as $i => [$focus,$selected])
 	[$actual] = frame($device, $world, $camera, 600, 128);
 	$checks['selection '.$i] = $actual === $expected && $actual !== $different;
 }
+
 $world->close();
 
 foreach($candidates as $candidate)
@@ -166,6 +171,7 @@ foreach([[-64,false],[.25,false],[.25,true],[192,true],[-64,true]] as $i => [$fo
 		$checks['old map evicted'] = !isset($stream->loaded()['/phase-0.tmj']);
 	}
 }
+
 $world->close();
 $stream->close();
 $reference->close();

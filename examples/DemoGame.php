@@ -150,6 +150,7 @@ final class DemoGame
 		){
 			$this->body->$property = $defaults->$property;
 		}
+
 		$this->body->halfHeight = $this->body->standingHeight;
 	}
 
@@ -426,6 +427,7 @@ final class DemoGame
 					$this->engine->entities->get($id, ParticleBurst::class)->sprites->sprites
 				);
 			}
+
 			$this->canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));
 			$this->status
 				->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";

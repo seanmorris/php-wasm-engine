@@ -73,6 +73,7 @@ function samePartition(string $whole, string $pieces, Sprite $sprite): bool
 			return false;
 		}
 	}
+
 	return true;
 }
 

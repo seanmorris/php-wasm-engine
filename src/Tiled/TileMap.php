@@ -41,6 +41,7 @@ final class TileMap
 				return $set['definitions'][$gid - $set['firstgid']] ?? null;
 			}
 		}
+
 		return null;
 	}
 
@@ -74,6 +75,7 @@ final class TileMap
 
 			$time -= $frame['duration'];
 		}
+
 		return $gid;
 	}
 
@@ -92,6 +94,7 @@ final class TileMap
 				return $layer;
 			}
 		}
+
 		throw new \OutOfBoundsException("No layer $name");
 	}
 }

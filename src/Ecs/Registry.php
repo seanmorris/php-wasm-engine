@@ -29,6 +29,7 @@ final class Registry
 		{
 			$this->add($id, $c);
 		}
+
 		return $id;
 	}
 
@@ -123,6 +124,7 @@ final class Registry
 		{
 			$this->remove($id, $type);
 		}
+
 		unset($this->entities[$id]);
 		$this->invalidateQueries();
 	}
@@ -151,6 +153,7 @@ final class Registry
 				return $component;
 			}
 		}
+
 		throw new \OutOfBoundsException("Entity $id has no $type");
 	}
 
@@ -254,6 +257,7 @@ final class Registry
 					$matches[$id] = true;
 				}
 			}
+
 			return $matches;
 		}
 
@@ -270,6 +274,7 @@ final class Registry
 				{
 					$exclusions[] = $this->matchingSet($excluded);
 				}
+
 				continue;
 			}
 
@@ -311,6 +316,7 @@ final class Registry
 		{
 			$result = array_diff_key($result, $set);
 		}
+
 		return $result;
 	}
 

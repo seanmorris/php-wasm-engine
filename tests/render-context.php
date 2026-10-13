@@ -24,7 +24,9 @@ foreach($map->layers as $layer)
 		break;
 	}
 }
+
 $engine->systems->add('count', function() use (&$ticks) { $ticks++; });
+
 $probe = vrzno_env('contextProbe');
 $beforeRender = vrzno_env('contextBeforeRender');
 $beforeRestore = vrzno_env('contextBeforeRestore');

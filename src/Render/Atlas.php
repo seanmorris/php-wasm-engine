@@ -90,6 +90,7 @@ final class Atlas
 
 				$this->width = max($this->width, $w + 2);
 			}
+
 			$positions = [];
 			$x = 1;
 			$y = 1;
@@ -108,6 +109,7 @@ final class Atlas
 				$x += $w + 2;
 				$row = max($row, $h);
 			}
+
 			$this->height = max(1, $y + $row + 1);
 
 			if($this->height > $max)
@@ -141,6 +143,7 @@ final class Atlas
 						throw new \RuntimeException(SDL_GetError());
 					}
 				}
+
 				$this->texture = self::texture(GL_TEXTURE_2D);
 
 				glTexImage2D(
@@ -158,6 +161,7 @@ final class Atlas
 			{
 				SDL_FreeSurface($surface);
 			}
+
 			$count = count($this->indices) + 1;
 			$rectBytes = str_repeat("\0", $count * 16);
 			$offsetBytes = $rectBytes;
@@ -177,6 +181,7 @@ final class Atlas
 					, 16
 				);
 			}
+
 			$this->metadata = self::texture(GL_TEXTURE_2D);
 
 			glTexImage2D(
@@ -280,6 +285,7 @@ final class Atlas
 				$updates++;
 			}
 		}
+
 		return $updates;
 	}
 

@@ -86,6 +86,7 @@ final class Scheduler
 					{
 						$visit($dependency);
 					}
+
 					unset($active[$name]);
 					$done[$name] = true;
 					$result[] = $name;
@@ -95,6 +96,7 @@ final class Scheduler
 			{
 				$visit($name);
 			}
+
 			$this->ordered = $result;
 		}
 
@@ -102,6 +104,7 @@ final class Scheduler
 		{
 			($this->systems[$name][0])($this->registry, $dt);
 		}
+
 		$this->registry->flush();
 	}
 }

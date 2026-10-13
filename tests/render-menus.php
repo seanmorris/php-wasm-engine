@@ -41,6 +41,7 @@ foreach([
 	{
 		$tile['properties'][] = compact('name', 'value');
 	}
+
 	$data['tiles'][] = $tile;
 }
 
@@ -92,6 +93,7 @@ for($y = 0; $y < 180; $y++)
 				$color = $rgba;
 			}
 		}
+
 		$actual = menuPixel($pixels, $x, $y);
 
 		if($actual !== $color && count($differences) < 8)
@@ -100,6 +102,7 @@ for($y = 0; $y < 180; $y++)
 		}
 	}
 }
+
 $checks['glyph crops offsets wrapping scale and tint'] = !$differences;
 $checks['one glyph batch'] = $sprites->draws === 1 && $sprites->instances === 6;
 $sprites->close();
@@ -114,6 +117,7 @@ foreach(['panel', 'dimmer', 'highlight'] as $key)
 {
 	$renderer->style[$key] = [0, 0, 0, 0];
 }
+
 $renderer->showHints = false;
 $menu = new Menu(['name' => ['label' => '', 'input' => 'string', 'value' => 'AAA']], '');
 $menu->open();
@@ -152,6 +156,7 @@ for($y = (int)$top; $y < $top + 14; $y++)
 		$checks['field clips its glyphs'] &= menuPixel($pixels, $x, $y) === '000000ff';
 	}
 }
+
 $checks['field clips its glyphs'] = (bool)$checks['field clips its glyphs'];
 $texture = $renderer->atlas->texture;
 $font->theme = 'generic';

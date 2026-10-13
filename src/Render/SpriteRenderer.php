@@ -45,6 +45,7 @@ final class SpriteRenderer
 			glEnableVertexAttribArray($i);
 			glVertexAttribDivisor($i, 1);
 		}
+
 		glBindVertexArray(0);
 	}
 
@@ -101,6 +102,7 @@ final class SpriteRenderer
 				, $sprite->tint[3] * $sprite->opacity
 			);
 		}
+
 		$p = $this->program;
 		$p->use();
 		glBindVertexArray($this->vao[0]);

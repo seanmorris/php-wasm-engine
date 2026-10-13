@@ -71,6 +71,7 @@ final class Device
 						$event->preventDefault();
 						$this->lost = $this->pendingRestore = true;
 					};
+
 				$this->restoredListener =
 					/**
 					 * Record the browser's restored-context notification.
@@ -78,6 +79,7 @@ final class Device
 					 * @return void Clears the loss flag while leaving resource restoration pending.
 					 */
 					function() { $this->lost = false; };
+
 				$this->canvas->addEventListener('webglcontextlost', $this->lostListener);
 				$this->canvas->addEventListener('webglcontextrestored', $this->restoredListener);
 			}

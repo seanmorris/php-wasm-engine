@@ -96,6 +96,7 @@ test('breakable boxes disable outlines and shards inherit their source outline f
 	{
 		check(!$piece->outline, 'block shards must retain the opt-out');
 	}
+
 	$blocks->close();
 });
 
@@ -288,6 +289,7 @@ test('invalid grids and crops leave an intact block solid and visible', function
 	{
 		rejects(fn() => $blocks->create(new Sprite(1), $columns, $rows));
 	}
+
 	check($r->query(Sprite::class) === []);
 
 	$id = $blocks->create(new Sprite(1, 0, 0, 0, 0), 2, 2);
@@ -320,6 +322,7 @@ test('particle motion is independent of step partition and expires without stale
 			near($sprite->rotation, $other->rotation);
 			near($sprite->opacity, $other->opacity);
 		}
+
 		$age = $a->age;
 
 		foreach([-1, INF, NAN] as $dt)

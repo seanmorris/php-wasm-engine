@@ -139,6 +139,7 @@ final class Loader
 					throw new \UnexpectedValueException('Animation durations must be positive');
 				}
 			}
+
 			$definitions[$id] = $tile + ['id' => $id
 			, 'firstgid' => $set['firstgid']
 			, 'rect' => $rect
@@ -153,6 +154,7 @@ final class Loader
 			);
 			$definitions[$id]['properties'] = self::properties($tile['properties'] ?? []);
 		}
+
 		return $definitions;
 	}
 
@@ -187,6 +189,7 @@ final class Loader
 			{
 				$value *= ($parent?->tint[$i] ?? 1);
 			}
+
 			unset($value);
 			$layer->properties = self::properties($data['properties'] ?? []);
 
@@ -355,6 +358,7 @@ final class Loader
 			{
 				$bytes .= Gid::from($gid)->bytes();
 			}
+
 			return $bytes;
 		}
 
@@ -395,6 +399,7 @@ final class Loader
 		{
 			$bytes[$i] = chr(ord($bytes[$i]) & 239);
 		}
+
 		return $bytes;
 	}
 
@@ -413,6 +418,7 @@ final class Loader
 		{
 			$result[$p['name']] = $p['value'];
 		}
+
 		return $result;
 	}
 

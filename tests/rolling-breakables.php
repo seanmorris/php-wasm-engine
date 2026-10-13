@@ -88,6 +88,7 @@ test('rolling consumes an entire block chain in one sweep and then stops at ordi
 		{
 			$blocks->create(new Sprite(1, 50 + $i * 24, -8, 0, 0), 2, 2);
 		}
+
 		$t->add([[360, -100], [376, -100], [376, 100], [360, 100]]);
 		$behind = $blocks->create(new Sprite(1, 410, -8, 0, 0), 2, 2);
 

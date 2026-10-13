@@ -94,6 +94,7 @@ final class World
 				$entry['height'] = $entry['bounds']['height'];
 			}
 		}
+
 		unset($entry);
 		$this->index = new BoundsIndex($indexed);
 	}
@@ -138,6 +139,7 @@ final class World
 		){
 			$result[$id] = $this->data['maps'][$id];
 		}
+
 		return $result;
 	}
 

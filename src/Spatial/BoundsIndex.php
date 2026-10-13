@@ -137,6 +137,7 @@ final class BoundsIndex
 					$result[$id] = $entry;
 				}
 			}
+
 			return;
 		}
 

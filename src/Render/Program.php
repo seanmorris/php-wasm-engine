@@ -54,6 +54,7 @@ final class Program
 					glDeleteShader($shader);
 				}
 			}
+
 			glLinkProgram($this->id);
 
 			if(!glGetProgramiv($this->id, GL_LINK_STATUS))

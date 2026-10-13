@@ -105,6 +105,7 @@ final class BitmapFont
 					$this->glyphs[$theme][$char] = $glyph;
 				}
 			}
+
 			$first += $tiles ? max(array_keys($tiles)) + 1 : 0;
 		}
 
@@ -246,6 +247,7 @@ final class BitmapFont
 
 			$x += $advance;
 		}
+
 		$positions[] = [$x, $y];
 		$lines[] = [$x, count($sprites), count($positions)];
 		$width = max(array_column($lines, 0));

@@ -36,6 +36,7 @@ function pixel(int $x, int $y): string
 {
 	return bin2hex(glReadPixels($x, 63 - $y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE));
 }
+
 $repeatImage = dirname(__DIR__).'/examples/assets/test-parallax.png';
 $imageLayer = ['id' => 1
 , 'type' => 'imagelayer'
@@ -82,8 +83,10 @@ foreach([[-100,-20,1],[-132,44,2],[-1000004,-500006,.5]] as [$cx,$cy,$zoom])
 			);
 		}
 	}
+
 	$exact[] = $actual === $expected;
 }
+
 $cleanUploads = $renderer->images->uploads;
 $renderer->close();
 
@@ -160,6 +163,7 @@ foreach([0,100,300] as $time)
 	$renderer->render(new Camera(0, 0, 96, 64), $time);
 	$animation[] = [pixel(4, 1),$renderer->images->uploads];
 }
+
 $renderer->close();
 $matching = [];
 
@@ -180,6 +184,7 @@ foreach(['tilelayer','imagelayer'] as $type)
 	$matching[] = glReadPixels(0, 0, 96, 64, GL_RGBA, GL_UNSIGNED_BYTE);
 	$renderer->close();
 }
+
 $tileImageMatch = $matching[0] === $matching[1];
 $worldMaps = [];
 
@@ -195,6 +200,7 @@ foreach([0,48] as $x)
 	];
 	$renderer->close();
 }
+
 file_put_contents('/parallax.world', json_encode(['maps' => $worldMaps]));
 $world = new PhpWasmEngine\Render\WorldRenderer((new Loader)->world('/parallax.world'));
 $device->begin([0,0,0,1]);

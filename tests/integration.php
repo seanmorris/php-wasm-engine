@@ -40,6 +40,7 @@ test('asset paths normalize parent segments and preserve URL authorities', funct
 test('asset read failures can be retried and unsupported formats fail explicitly', function() {
 	$tries = 0;
 	$assets = new Assets(function() use (&$tries) { return ++$tries === 1?false:'{}'; });
+
 	rejects(fn() => $assets->read('a'));
 	check($assets->read('a') === '{}');
 	rejects(fn() => Loader::decode('!!!!', 1, 'base64'));

@@ -87,6 +87,7 @@ final class Menu
 				'select' => $item['options'][0] ?? null, default => ''
 			};
 		}
+
 		$this->finishEdit();
 		$this->items = $items;
 		$this->refresh();
@@ -116,6 +117,7 @@ final class Menu
 		{
 			$this->back();
 		}
+
 		$this->isOpen = false;
 	}
 
@@ -205,6 +207,7 @@ final class Menu
 				$item['value'] = ($item['get'])();
 			}
 		}
+
 		unset($item);
 		$rows = $this->rows();
 
@@ -495,6 +498,7 @@ final class Menu
 				break;
 			default: return;
 		}
+
 		$this->setValue($this->selected, $value);
 	}
 

@@ -10,6 +10,7 @@ test('demo preload is readable but leaves promptly after cached or delayed asset
 		{
 			$ready = $delay === 0;
 			$sequence = demoCards(function() use (&$ready): bool { return $ready; });
+
 			$sequence->start();
 
 			if($delay)
@@ -42,6 +43,7 @@ test('cards wait for readiness before timing out or accepting a skip', function(
 			ready: function() use (&$ready) { return $ready; }
 		)
 	]);
+
 	$sequence->start();
 	$sequence->update(.5);
 	near($sequence->opacity(), 1);
@@ -93,6 +95,7 @@ test('card callbacks run once on completion, cancellation, and replay', function
 			$events[] = $cancelled ? 'cancel' : 'leave';
 		}
 	);
+
 	$sequence = new CardSequence([$card]);
 	$sequence->start();
 	$sequence->update(.5);

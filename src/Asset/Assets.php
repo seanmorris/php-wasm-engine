@@ -126,6 +126,7 @@ final class Assets
 				$parts[] = $part;
 			}
 		}
+
 		return $prefix.($absolute?'/':'').implode('/', $parts);
 	}
 }

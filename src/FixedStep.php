@@ -47,6 +47,7 @@ final class FixedStep
 			$update($this->step);
 			$this->accumulator -= $this->step;
 		}
+
 		return max(0, $this->accumulator / $this->step);
 	}
 }
