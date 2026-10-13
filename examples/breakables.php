@@ -7,6 +7,7 @@ use PhpWasmEngine\Effects\ParticleSystem;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Tiled\Gid;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Tiled\TileMap;
 
@@ -52,9 +53,10 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 					}
 
 					$properties = Loader::properties($object['properties'] ?? []);
+					$gid = Gid::from($object['gid']);
 
 					$sprite = new Sprite(
-						$object['gid']
+						$gid->id
 						, $object['x'] + $map->x + $layer->offsetX
 						, $object['y'] + $map->y + $layer->offsetY
 						, 0
@@ -64,6 +66,18 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 					$sprite->scaleX = $object['width'] / $rect[2];
 					$sprite->scaleY = $object['height'] / $rect[3];
 					$sprite->rotation = deg2rad($object['rotation'] ?? 0);
+					$sprite->flipX = (bool)($gid->flags & 8);
+					$sprite->flipY = (bool)($gid->flags & 4);
+
+					if($gid->flags & 2)
+					{
+						// Swap source axes before H/V flips, keeping Tiled's bottom-left pivot.
+						$sprite->originX = 1;
+						$sprite->scaleX = $object['height'] / $rect[2];
+						$sprite->scaleY = $object['width'] / $rect[3];
+						$sprite->rotation += M_PI / 2;
+						[$sprite->flipX, $sprite->flipY] = [$sprite->flipY, !$sprite->flipX];
+					}
 
 					$ids[] = $blocks->create($sprite, $properties['columns'], $properties['rows']);
 				}

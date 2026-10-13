@@ -13,6 +13,66 @@ use PhpWasmEngine\Render\SpriteGroup;
 use PhpWasmEngine\Render\SpriteSheet;
 use PhpWasmEngine\Tiled\Loader;
 
+test('Tiled breakable objects decode unsigned flips and keep their rotated collision bounds'
+	, function() {
+		require_once dirname(__DIR__).'/examples/breakables.php';
+
+		$engine = (new ReflectionClass(
+			PhpWasmEngine\Engine::class
+		))->newInstanceWithoutConstructor();
+		$engine->entities = new Registry;
+		$engine->systems = new PhpWasmEngine\Ecs\Scheduler($engine->entities);
+
+		foreach([0, 4, 8, 12, 2, 6, 10, 14] as $flags)
+		{
+			$object = ['class' => 'breakable', 'gid' => 1 + $flags * 268435456.0
+				, 'x' => 60, 'y' => 74, 'width' => 48, 'height' => 24, 'rotation' => 30
+				, 'properties' => [['name' => 'columns', 'value' => 3]
+				, ['name' => 'rows'
+					, 'value' => 4
+				]]
+			];
+
+			$data = mapData(
+				[['id' => 1, 'type' => 'objectgroup', 'offsetx' => 3, 'offsety' => 5
+				, 'objects' => [
+					$object
+				]]]
+			);
+			$map = fixture(['blocks.tmj' => $data, 'tiles.tsj' => tiles()])->map('blocks.tmj');
+			$map->x = 7;
+			$map->y = 11;
+			$terrain = new Terrain;
+			$blocks = configureBreakables($engine, $terrain, $map, 'flags-'.$flags.'-');
+			$ids = $engine->entities->query(Sprite::class);
+			check(count($ids) === 1);
+			$id = $ids[0];
+			$sprite = $engine->entities->get($id, Sprite::class);
+			check($sprite->gid === 1, 'flip bits must never reach tile lookup');
+
+			// Check the Tiled object rectangle independently of the sprite's transformed anchor.
+			foreach([[24, -12, true], [-1, -12, false], [49, -12, false]
+				, [24, -25, false], [24, 1, false]
+			] as [$x, $y, $solid]){
+				$worldX = 70 + $x * cos(M_PI / 6) - $y * sin(M_PI / 6);
+				$worldY = 90 + $x * sin(M_PI / 6) + $y * cos(M_PI / 6);
+				check($terrain->solidAt($worldX, $worldY) === $solid, 'object bounds '.$flags);
+			}
+
+			check($blocks->shatter($id));
+			check(count($engine->entities->get($id, SpriteGroup::class)->sprites) === 12);
+
+			check(
+				!$terrain->solidAt(
+					70 + 24 * cos(M_PI / 6) + 12 * sin(M_PI / 6)
+					, 90 + 24 * sin(M_PI / 6) - 12 * cos(M_PI / 6)
+				)
+			);
+			$blocks->close();
+		}
+	}
+);
+
 test('breakable boxes disable outlines and shards inherit their source outline flag', function() {
 	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
 	$r = new Registry;

@@ -84,6 +84,14 @@ test('sprite outlines expand by one world pixel with per-instance opt-outs',asyn
   expect(result.error).toBe(0);
 });
 
+test('Tiled breakable objects render every flip and preserve the image when shattered',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-tiled-breakables.php";'));
+  expect(Object.keys(result.checks)).toHaveLength(96);
+  for(const [name,passed] of Object.entries(result.checks)) expect(passed,name).toBe(true);
+  expect(result.error).toBe(0);
+});
+
 test('bitmap fonts align exact pixels and menu editing survives graphics rebuilding',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-menus.php";'));
