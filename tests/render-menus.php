@@ -31,7 +31,7 @@ foreach([
 	, ['glyph.char' => 'B', 'glyph.advance' => 9]
 	, ['glyph.char' => '?']
 	, ['glyph.char' => '⓿', 'glyph.theme' => 'keyboard', 'glyph.advance' => 10
-		, 'glyph.tint' => false
+		, 'glyph.tint' => false, 'glyph.pixelRatio' => 2, 'glyph.smooth' => true
 	]
 ] as $id => $properties
 ){
@@ -60,7 +60,7 @@ $sprites->render(
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $expected = [
 	[2, 4, 12, 10, '800000ff'], [14, 0, 16, 16, '008000ff']
-	, [40, 0, 16, 16, 'ffff00ff'], [0, 20, 16, 16, '000080ff']
+	, [40, 0, 8, 8, 'ffff00ff'], [0, 20, 16, 16, '000080ff']
 	, [2, 44, 12, 10, '800000ff'], [16, 44, 12, 10, '800000ff']
 ];
 $checks = [];
@@ -305,6 +305,30 @@ $cards->render($sequence, 320, 180);
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $checks['card overrides renderer alignment'] = menuPixel($pixels, 25, 91) === '00ff00ff';
 $cards->close();
+
+$font->theme = 'keyboard';
+$renderer->style['width'] = 36;
+$renderer->style['titleAlign'] = 'left';
+
+foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
+{
+	$menu = new Menu(['button' => ['label' => '']], $title);
+	$menu->open();
+	$device->begin([0, 0, 0, 1]);
+	$renderer->render($menu, 320, 180);
+	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+	[$x, $y] = $renderer->regions[0]['rect'];
+
+	for($column = $left; $column <= $right; $column++)
+	{
+		$expected = $column < $right ? 'ffff00ff' : '000000ff';
+
+		$checks["dense glyph clipping $title $column"] = menuPixel(
+			$pixels, (int)$x + $column, (int)$y - 23
+		) === $expected;
+	}
+}
+
 $renderer->close();
 $checks['atlas released'] = !glIsTexture($renderer->atlas->texture);
 $error = glGetError();

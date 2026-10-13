@@ -11,6 +11,7 @@ out vec2 uv;
 flat out vec4 color;
 flat out vec4 rect;
 flat out vec2 outlinePixels;
+flat out int smoothSampling;
 
 void main() {
     vec2 corners[6]=vec2[6](
@@ -32,4 +33,5 @@ void main() {
     uv=corner; if((flags&1)!=0) uv.x=1.-uv.x; if((flags&2)!=0) uv.y=1.-uv.y;
     rect=rectangle; color=tint;
     outlinePixels=padding*rectangle.zw;
+    smoothSampling=flags&8;
 }

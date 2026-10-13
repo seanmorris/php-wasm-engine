@@ -82,11 +82,14 @@ final class BitmapFont
 				$probe = new Sprite($first + $id);
 				$probe->crop = $crop;
 				$probe->rectangle($tile['rect']);
+				$pixelRatio = self::positive($p['glyph.pixelRatio'] ?? 1);
 				$glyph = ['gid' => $first + $id, 'crop' => $crop
-					, 'advance' => self::positive($p['glyph.advance'] ?? $width)
+					, 'advance' => self::positive($p['glyph.advance'] ?? $width / $pixelRatio)
 					, 'x' => (float)($p['glyph.offsetX'] ?? 0)
 					, 'y' => (float)($p['glyph.offsetY'] ?? 0)
 					, 'tint' => (bool)($p['glyph.tint'] ?? true)
+					, 'pixelRatio' => $pixelRatio
+					, 'smooth' => (bool)($p['glyph.smooth'] ?? false)
 				];
 				$theme = $p['glyph.theme'] ?? '';
 
@@ -162,7 +165,8 @@ final class BitmapFont
 	 * Lay out text at the origin with bounded lines and metadata-derived spacing.
 	 *
 	 * @param string $text UTF-8 text; CRLF is normalized to a line break.
-	 * @param float $scale Positive pixel scale used for both glyphs and advances.
+	 * @param float $scale Positive output scale per logical font pixel, independent of texture
+	 * density.
 	 * @param float $maxWidth Maximum line width in output pixels; infinity disables wrapping.
 	 * @param array{float,float,float,float} $tint RGBA multiplier for tintable glyphs.
 	 * @param string $align Horizontal alignment of each line: left, center, or right.
@@ -233,8 +237,9 @@ final class BitmapFont
 					, 0
 				);
 				$sprite->crop = $glyph['crop'];
-				$sprite->scaleX = $sprite->scaleY = $scale;
+				$sprite->scaleX = $sprite->scaleY = $scale / $glyph['pixelRatio'];
 				$sprite->outline = $sprite->animated = false;
+				$sprite->smooth = $glyph['smooth'];
 				$sprite->tint = $glyph['tint'] ? $tint : [1, 1, 1, $tint[3]];
 				$sprites[] = $sprite;
 			}

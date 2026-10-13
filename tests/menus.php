@@ -293,6 +293,38 @@ test('invalid numeric definitions and malformed font annotations are rejected', 
 	}
 });
 
+test('glyph texture density preserves layout, default advances and text filtering', function() {
+	$path = dirname(__DIR__).'/examples/assets/font.tsj';
+	$data = json_decode(file_get_contents($path), true);
+	$data['tiles'][0]['properties'] = [
+		['name' => 'glyph.char', 'value' => '0']
+		, ['name' => 'glyph.width', 'value' => 8]
+		, ['name' => 'glyph.height', 'value' => 12]
+		, ['name' => 'glyph.pixelRatio', 'value' => 2]
+		, ['name' => 'glyph.smooth', 'value' => true]
+		, ['name' => 'glyph.offsetX', 'value' => 1]
+		, ['name' => 'glyph.offsetY', 'value' => -2]
+	];
+	$font = new BitmapFont(fixture(['dense.tsj' => $data]), 'dense.tsj');
+	$layout = $font->layout('0A', 3);
+	[$icon, $letter] = $layout['sprites'];
+	near($icon->scaleX, 1.5);
+	near($icon->scaleY, 1.5);
+	near($icon->x, 3);
+	near($icon->y, -6);
+	near($letter->x, 12);
+	near($letter->scaleX, 3);
+	near($layout['width'], 36);
+	check($icon->smooth && !$letter->smooth);
+	check($icon->crop === [0, 0, 8, 12]);
+
+	foreach([0, -1, 'NaN', INF] as $invalid)
+	{
+		$data['tiles'][0]['properties'][3]['value'] = $invalid;
+		rejects(fn() => new BitmapFont(fixture(['bad.tsj' => $data]), 'bad.tsj'));
+	}
+});
+
 test('button glyphs select annotated themes and retain their original colors', function() {
 	$font = new BitmapFont(
 		new Loader
@@ -307,6 +339,9 @@ test('button glyphs select annotated themes and retain their original colors', f
 		$glyph = $font->layout('⓿', tint: [1, 0, 0, .5])['sprites'][0];
 		$ids[] = $glyph->gid;
 		check($glyph->tint === [1, 1, 1, .5]);
+		check($glyph->smooth && $glyph->crop[3] >= 64);
+		near($glyph->crop[3] * $glyph->scaleY, 16);
+		near($font->measure('⓿')['width'], $theme === 'keyboard' ? 26 : 18);
 	}
 	check(count(array_unique($ids)) === 4);
 	$font->theme = 'unknown';
