@@ -85,6 +85,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		'no' => ['label' => 'No, keep settings', 'callback' => fn(Menu $menu) => $menu->back()]
 		, 'yes' => ['label' => 'Yes, restore defaults', 'callback' => $reset]
 	]];
+	$game->settings = $items;
 
 	$host = vrzno_env('demoControls');
 	$levels = [];
@@ -166,6 +167,11 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 			'Player'
 			, 'input' => 'output', 'get' => fn() => $settings->name
 		]
+		, 'main-menu' => ['label' => 'Main menu'
+			, 'hidden' => fn() => $game->startup === null
+			, 'callback' => fn() => $game->startup->showMenu()
+			, 'subtext' => 'Keep this level available to resume.'
+		]
 		]
 		, 'Paused'
 	);
@@ -179,11 +185,12 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
  *
  * @param PauseMenu $pauseMenu Demo menu adapter after its latest render.
  * @param Engine $engine Engine supplying paused simulation time.
+ * @param Menu|null $active Optional main menu instead of the adapter's pause menu.
  * @return string JSON snapshot of page state, values, hit regions, and active glyph theme.
  */
-function demoMenuState(PauseMenu $pauseMenu, Engine $engine): string
+function demoMenuState(PauseMenu $pauseMenu, Engine $engine, ?Menu $active = null): string
 {
-	$menu = $pauseMenu->menu;
+	$menu = $active ?? $pauseMenu->menu;
 	$values = [];
 
 	foreach($menu->rows() as $id => $row)

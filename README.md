@@ -11,7 +11,9 @@ npm ci
 npm start
 ~~~
 
-Open http://localhost:9130 and press **Run PHP** in the center of the game frame to download the runtime and start the platformer. Press **P**, **Escape**, or **Start / Options** to open the pause menu. **Level** selects the platformer, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place.
+Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
+
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -65,6 +67,21 @@ SDL supplies device mappings. `axis()` returns stick values in -1..1 and trigger
 `Engine` buffers keyboard presses and sampled gamepad action presses until the next simulation step, so short taps survive frames without an update. Custom loops should call `SdlInput::poll()` each frame and pass `SdlInput::consume()` to `Controls::set()` once per simulation step. `snapshot()` previews the pending input without consuming it.
 
 Start pauses simulation while rendering and controller polling continue. `Engine::$userPaused` reports this state. Losing canvas focus clears input. After focus, tab visibility or WebGL recovery, held gamepad buttons and axes must return to neutral before they can act again. This prevents an idle tab from replaying a jump or dash. `Engine::stop()` closes controller handles before shutting down SDL. Native hosts that drive `tick()` themselves should call `$engine->input->close()` before `$device->close()`.
+
+## Intro cards and startup
+
+`Ui\Card` and `Ui\CardSequence` provide timed cards, readiness gates, guarded
+skipping, fades, and lifecycle callbacks without SDL. `Ui\CardRenderer` draws
+bitmap content and loading progress over an application backdrop. The demo uses
+an image-only Tiled map for the title and keeps its parallax offset continuous
+behind the main menu. Gameplay assets download when Play is selected.
+
+[examples/intro.php](examples/intro.php) starts the complete flow;
+[examples/cards.php](examples/cards.php) defines card text and timing. The
+[startup guide](docs/startup.md) covers reusable APIs, input, retries, resource
+ownership, and the moving-boxes-2 reference behavior. Scripts can use
+`bootEngine({intro: true})` for startup or `bootEngine({intro: false, scene: 'loop'})`
+for direct gameplay. In-session transitions retain the same engine.
 
 ## Bitmap fonts and menus
 

@@ -1,6 +1,34 @@
 import {test, expect} from '@playwright/test';
 import {AssetLoader} from '../../browser/AssetLoader.mjs';
 
+test('scope progress counts failures and resets a retried dependency to pending', async () => {
+	const originalFetch = globalThis.fetch;
+	const transfers = [];
+	globalThis.fetch = () => new Promise(resolve => transfers.push(resolve));
+	const assets = new AssetLoader({mkdirTree() {}, writeFile() {}, unlink() {}},
+		'https://example.test/engine/');
+	try
+	{
+		const scope = assets.scope(), path = '/engine/title.tmj';
+		scope.request(path);
+		transfers.shift()(new Response('Offline', {status: 503}));
+		await assets.files.get(path).promise;
+		expect(scope.progress()).toEqual({ready: 0, total: 1, failed: 1});
+		scope.request(path, true);
+		expect(scope.progress()).toEqual({ready: 0, total: 1, failed: 0});
+		transfers.shift()(new Response('{}'));
+		await assets.files.get(path).promise;
+		expect(scope.progress()).toEqual({ready: 1, total: 1, failed: 0});
+		scope.close();
+		expect(scope.progress()).toEqual({ready: 0, total: 0, failed: 0});
+	}
+	finally
+	{
+		assets.close();
+		globalThis.fetch = originalFetch;
+	}
+});
+
 test('asset scopes share pending files and retain mounted files until their last owner closes',
 async () => {
 	const mounted = new Map(), transfers = [];
@@ -16,16 +44,20 @@ async () => {
 	{
 		const first = assets.scope(), second = assets.scope();
 		const path = '/engine/tiles.png';
+		expect(first.progress()).toEqual({ready: 0, total: 0, failed: 0});
 		expect(first.request(path)).toBe(false);
 		expect(second.request(path)).toBe(false);
 		expect(transfers).toHaveLength(1);
+		expect(second.progress()).toEqual({ready: 0, total: 1, failed: 0});
 		first.close();
 		expect(transfers[0].signal.aborted).toBe(false);
 		transfers[0].resolve(new Response('image'));
 		await assets.files.get(path).promise;
 		expect(second.request(path)).toBe(true);
+		expect(second.progress()).toEqual({ready: 1, total: 1, failed: 0});
 		expect(mounted.has(path)).toBe(true);
 		second.release(path);
+		expect(second.progress()).toEqual({ready: 0, total: 0, failed: 0});
 		expect(mounted.has(path)).toBe(false);
 		second.close();
 		expect(first.request(path)).toBe('Asset scope is closed');

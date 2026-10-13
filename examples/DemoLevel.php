@@ -186,6 +186,17 @@ final class DemoLevel
 	}
 
 	/**
+	 * Count the dependencies discovered so far for the staged level.
+	 *
+	 * @return array{ready:int,total:int,failed:int} Counts owned by this level's asset scope.
+	 */
+	public function progress(): array
+	{
+		$counts = $this->assets->progress();
+		return ['ready' => $counts->ready, 'total' => $counts->total, 'failed' => $counts->failed];
+	}
+
+	/**
 	 * Rebuild active graphics while preserving downloaded files and collision state.
 	 *
 	 * @return void Restores map and sprite GPU objects in their original ownership order.

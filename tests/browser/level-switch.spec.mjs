@@ -159,7 +159,7 @@ test('cancelling the first level load settles startup and Run can retry', async 
 	expect(await page.evaluate(() => startResult)).toContain('cancelled');
 	await pending.fulfill({status: 200, body: '{}'}).catch(() => {});
 	await page.unroute('**/loop.tmj');
-	await page.click('#start');
+	await page.evaluate(() => window.bootEngine({intro: false}));
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'loop');
 	await expect(page.locator('#start')).toBeHidden();
 });

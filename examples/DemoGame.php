@@ -16,6 +16,8 @@ final class DemoGame
 	public ?DemoLevel $level = null;
 	public ?DemoLevel $pending = null;
 	public ?PauseMenu $menu = null;
+	public ?DemoStartup $startup = null;
+	public array $settings = [];
 	public string $scene = '';
 	public string $error = '';
 	private object $host;
@@ -79,7 +81,7 @@ final class DemoGame
 		$cancelled = $this->pending !== null;
 		$this->releasePending();
 
-		if($cancelled && $this->level === null)
+		if($cancelled && $this->level === null && $this->startup === null)
 		{
 			$this->notifyReady('Level load cancelled. Run to retry.');
 		}
@@ -184,7 +186,7 @@ final class DemoGame
 
 			$this->error = $error->getMessage();
 
-			if($this->level === null)
+			if($this->level === null && $this->startup === null)
 			{
 				$this->notifyReady($this->error);
 			}
@@ -289,6 +291,16 @@ final class DemoGame
 	{
 		$this->load();
 		$this->engine->device->begin();
+
+		if($this->startup?->render())
+		{
+			$this->engine->device->present();
+
+			$this->canvas->dataset->menu = demoMenuState(
+				$this->menu, $this->engine, $this->startup->menu
+			);
+			return;
+		}
 
 		if($this->level !== null)
 		{
@@ -429,6 +441,7 @@ final class DemoGame
 	{
 		$this->level?->restore();
 		$this->menu?->restore();
+		$this->startup?->restore();
 	}
 
 	/**
@@ -438,6 +451,7 @@ final class DemoGame
 	 */
 	public function close(): void
 	{
+		$this->startup?->close();
 		$this->menu?->close();
 		$this->releasePending();
 		$this->level?->close($this->engine);

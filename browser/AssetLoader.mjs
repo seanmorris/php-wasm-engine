@@ -72,7 +72,7 @@ export class AssetLoader
 
 	/**
 	 * Own a set of files while sharing transfers and mounts with other live scopes.
-	 * @returns {object} Request/release/close callbacks suitable for a PHP WorldStream.
+	 * @returns {object} Request, progress, release, and close callbacks for a PHP WorldStream.
 	 */
 	scope()
 	{
@@ -89,6 +89,17 @@ export class AssetLoader
 			}
 		};
 		return {
+			// Counts describe dependencies discovered so far, not a fixed download percentage.
+			progress: () => {
+				let ready = 0, failed = 0;
+				for(const path of owned)
+				{
+					const state = this.files.get(path)?.state;
+					if(state === true) ready++;
+					else if(typeof state === 'string') failed++;
+				}
+				return {ready, total: owned.size, failed};
+			},
 			request: (path, retry = false) => {
 				if(closed) return 'Asset scope is closed';
 				const state = this.request(path, retry);

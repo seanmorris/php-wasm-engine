@@ -5,6 +5,9 @@ import {DemoControls} from './controls.mjs';
 const status = document.querySelector('#status');
 const canvas = document.querySelector('canvas');
 const start = document.querySelector('#start');
+const preloader = document.querySelector('#preloader');
+const progress = document.querySelector('#preload-progress');
+const preloadLabel = document.querySelector('#preload-label');
 const base = new URL('./engine/', document.baseURI);
 const runtimeBase = new URL('./runtime/', document.baseURI);
 const controls = new DemoControls();
@@ -29,7 +32,7 @@ canvas.addEventListener('webglcontextrestored', () => {
  * @returns {Promise<object>} Ready PHP instance, or a rejection on failure/cancellation.
  */
 export function boot({scene = controls.scene, profile = controls.profile, run = true,
-	zlib = false, version = '8.4'} = {})
+	zlib = false, version = '8.4', intro = false} = {})
 {
 	if(!/^8\.[0-5]$/.test(version)
 		|| !['world', 'platformer', 'loop', 'breakables', 'infinite', 'isometric'].includes(scene)
@@ -44,6 +47,8 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 	controls.scene = scene;
 	controls.profile = profile;
 	setState('loading');
+	progress.removeAttribute('value');
+	preloadLabel.textContent = 'Downloading and initializing PHP SDL…';
 	status.textContent = 'Loading PHP SDL…';
 
 	const task = queue.then(async () => {
@@ -52,7 +57,7 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		signal.throwIfAborted();
 
 		for(const key of ['frames', 'body', 'menu', 'world', 'breakables', 'scene', 'profile',
-			'loading', 'levelError'])
+			'loading', 'levelError', 'intro'])
 		{
 			delete canvas.dataset[key];
 		}
@@ -86,8 +91,13 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		const response = await fetch(new URL('engine-files.json', base), {signal});
 		if(!response.ok) throw Error('Engine manifest: ' + response.status);
 		const files = await response.json();
-		await Promise.all(files.filter(path => !run || !path.startsWith('examples/assets/')
-			|| /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)).map(async path => {
+		const needed = files.filter(path => !run || !path.startsWith('examples/assets/')
+			|| /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path));
+		let mounted = 0;
+		progress.max = needed.length;
+		progress.value = 0;
+		preloadLabel.textContent = `Loading engine and font files: 0 / ${needed.length}`;
+		await Promise.all(needed.map(async path => {
 			const response = await fetch(new URL(path, base), {cache: 'no-store', signal});
 			if(!response.ok) throw Error('Asset ' + path + ': ' + response.status);
 			const bytes = new Uint8Array(await response.arrayBuffer());
@@ -95,6 +105,8 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 			const full = '/engine/' + path;
 			module.FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
 			module.FS.writeFile(full, bytes);
+			progress.value = ++mounted;
+			preloadLabel.textContent = `Loading engine and font files: ${mounted} / ${needed.length}`;
 		}));
 
 		if(run)
@@ -122,7 +134,8 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 			loaded.catch(() => {});
 			try
 			{
-				const code = await php.run('<?php require "/engine/examples/game.php";');
+				const entry = intro ? 'intro' : 'game';
+				const code = await php.run(`<?php require "/engine/examples/${entry}.php";`);
 				if(code !== 0) throw Error('PHP returned ' + code);
 				await loaded;
 			}
@@ -209,6 +222,7 @@ function setState(next)
 	state = next;
 	canvas.dataset.state = state;
 	start.hidden = state === 'running';
+	preloader.hidden = state !== 'loading';
 	start.disabled = state === 'loading' || state === 'stopping';
 	start.textContent = state === 'loading' ? 'Loading PHP…'
 		: state === 'stopping' ? 'Stopping…' : 'Run PHP';
@@ -216,4 +230,4 @@ function setState(next)
 
 window.bootEngine = boot;
 window.stopEngine = stopEngine;
-start.addEventListener('click', () => boot().catch(report));
+start.addEventListener('click', () => boot({intro: true}).catch(report));

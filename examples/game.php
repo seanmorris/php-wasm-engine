@@ -5,6 +5,9 @@ require_once __DIR__.'/breakables.php';
 require_once __DIR__.'/DemoLevel.php';
 require_once __DIR__.'/DemoGame.php';
 require_once __DIR__.'/menu.php';
+require_once __DIR__.'/cards.php';
+require_once __DIR__.'/DemoBackdrop.php';
+require_once __DIR__.'/DemoStartup.php';
 
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Physics\Body;
@@ -25,5 +28,19 @@ $entity = $engine->entities->create(
 $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $entity);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);
-$game->selectScene($scene);
+
+if($intro ?? false)
+{
+	$game->startup = new DemoStartup($game, $scene);
+}
+else
+{
+	$game->selectScene($scene);
+}
+
 $engine->start([$game, 'render'], [$game, 'close'], [$game, 'restore']);
+
+if($game->startup !== null)
+{
+	(vrzno_env('sceneReady'))(null);
+}

@@ -16,3 +16,5 @@
 #game-frame::backdrop{background:#0e131f}
 
 #start{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:14px 24px;font-weight:600;box-shadow:0 4px 24px #0008}
+#preloader{position:absolute;left:10%;right:10%;top:60%;text-align:center;font-size:14px;color:#b6c3d6;pointer-events:none}
+#preloader p{margin:8px 0}#preloader progress{width:min(80%,400px);height:8px;accent-color:#8ce4c4}

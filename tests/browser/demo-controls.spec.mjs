@@ -18,7 +18,7 @@ async function activate(page, id) {
 
 async function start(page) {
 	await expect(page.locator('#start')).toBeEnabled();
-	await page.click('#start');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'platformer'}));
 	await expect.poll(async () => (await menu(page))?.open, {timeout: 60000}).toBe(false);
 	await expect(page.locator('#start')).toBeHidden();
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', /.+/);
@@ -327,7 +327,7 @@ async ({page}) => {
 	await page.goto('/');
 	await page.route('**/engine/' + asset, route =>
 		route.fulfill({status: 503, body: 'Unavailable'}));
-	await page.click('#start');
+	await page.evaluate(() => window.bootEngine({intro: false}).catch(() => {}));
 	await expect(page.locator('#status')).toContainText('503');
 	await expect(page.locator('#start')).toBeEnabled();
 	await expect(page.locator('#stop')).toHaveCount(0);

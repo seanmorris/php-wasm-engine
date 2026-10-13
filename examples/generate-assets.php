@@ -306,6 +306,22 @@ foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
 		, 'properties' => $properties
 	] + $layerDefaults;
 }
+$title = $base;
+$title['width'] = 30;
+$title['height'] = 17;
+$title['tilesets'] = [];
+$title['layers'] = $background;
+
+foreach($title['layers'] as &$band)
+{
+	if(in_array($band['name'], ['water', 'shine-0'], true))
+	{
+		$band['offsety'] = 336;
+	}
+}
+unset($band);
+jsonAsset('title.tmj', $title);
+
 $base['layers'] = [['id' => 1
 , 'name' => 'Terrain'
 , 'type' => 'tilelayer'

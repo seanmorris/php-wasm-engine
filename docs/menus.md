@@ -19,9 +19,13 @@ Failed downloads leave the current level intact; select the failed level again
 to retry. Maps, tilesets, and images load on demand. Shared files stay mounted
 until the last level or streamed map releases them.
 
-The centered Run PHP button starts a session and returns if startup fails.
+The centered Run PHP button starts the preloader, intro cards, parallax title,
+and main menu. Choose Play to load a level. Main menu in the pause menu keeps
+the level available to resume. See the [startup guide](startup.md) for that flow.
+
 Scripts can call `bootEngine({scene, profile})` for an explicit fresh session
-or `stopEngine()` to cancel downloads and stop it. Inside running PHP, use:
+directly in a level, `bootEngine({intro: true})` for the full intro, or
+`stopEngine()` to cancel downloads and stop it. Inside running PHP, use:
 
 ```php
 $game->selectScene('loop');      // Stage a level; the frame loop commits it when ready.
