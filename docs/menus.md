@@ -60,6 +60,17 @@ at `vrzno_env('demoControls')` supplies fullscreen and persistent mute. Browser
 controls live in `docs/controls.mjs`; the reusable `Menu` API does not require
 a browser host.
 
+## Demo diagnostics
+
+**Settings → Debug overlay** enables the upper-right player, camera, collision, and
+rendering panel. **F9** toggles it while the game has keyboard focus. Repeated keydown
+events do not repeatedly toggle the panel. Camera-only scenes report no active player.
+
+**Settings → FPS meter** controls a separate lower-left display, enabled by default.
+It shows browser FPS and average frame interval in milliseconds, even while gameplay
+is paused. Level changes preserve both settings; Reset settings restores the defaults.
+The panel and meter appear during gameplay and remain hidden on intro/title screens.
+
 ## Define a menu
 
 ```php

@@ -420,6 +420,7 @@ require __DIR__.'/breakables.php';
 require __DIR__.'/rolling-breakables.php';
 require __DIR__.'/menus.php';
 require __DIR__.'/cards.php';
+require __DIR__.'/debug-overlay.php';
 
 $failed = 0;
 

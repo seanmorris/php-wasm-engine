@@ -62,6 +62,18 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 				$settings->hints = $adapter->renderer->showHints = $value;
 			}
 		]
+		, 'debug' => ['label' => 'Debug overlay'
+		, 'input' => 'boolean'
+		, 'default' => false
+			, 'subtext' => 'F9 toggles player, camera, collision, and rendering diagnostics.'
+			, 'get' => fn() => $game->debug->enabled
+			, 'set' => fn($value) => $game->debug->enabled = $value
+		]
+		, 'fps' => ['label' => 'FPS meter', 'input' => 'boolean', 'default' => true
+			, 'subtext' => 'Browser frames per second and average frame interval in milliseconds.'
+			, 'get' => fn() => $game->debug->showFps
+			, 'set' => fn($value) => $game->debug->showFps = $value
+		]
 		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
 		, 'time' => ['label' => 'Game time', 'input' => 'output'
 			, 'get' => fn() => sprintf('%.2f s', $engine->time)
@@ -72,11 +84,13 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		]
 	];
 
-	$reset = function(Menu $menu) use ($settings, $camera, &$adapter) {
+	$reset = function(Menu $menu) use ($settings, $camera, $game, &$adapter) {
 		$settings->name = 'Player';
 		$settings->scale = $adapter->renderer->style['scale'] = 2;
 		$settings->theme = $adapter->theme = 'auto';
 		$settings->hints = $adapter->renderer->showHints = true;
+		$game->debug->enabled = false;
+		$game->debug->showFps = true;
 		$camera->zoom = 1;
 		$menu->back();
 	};

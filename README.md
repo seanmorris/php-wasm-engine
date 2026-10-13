@@ -101,6 +101,37 @@ See [menus and font annotations](docs/menus.md) for a PHP example, controls,
 bindings, lazy submenus, graphics lifecycle, and custom appearance.
 [examples/menu.php](examples/menu.php) builds the live demo menu.
 
+## Debug overlay
+
+Press **F9** with the game focused, or toggle **Settings → Debug overlay** from the
+pause or main menu. The upper-right bitmap panel follows moving-boxes-2's debug OSD:
+player position, ground and air velocity, grounded state, surface orientation,
+collision layer, and ground/air angles. Speeds use pixels per second and angles use
+radians. Camera-only scenes report **None (camera)** instead of stale player values.
+
+The panel also shows camera position and zoom, entity count, ready/pending/failed
+map counts, world draw calls and instances, tile uploads, collision casts per rendered
+frame, and simulation time. World draw counts exclude the overlay and menus. Detailed
+values refresh at 10 Hz; glyph layouts are cached and the overlay adds two batched
+draw calls using the menu's existing font atlas.
+
+**Settings → FPS meter** independently controls the lower-left FPS/frame-interval
+display, enabled by default. FPS measures browser frames, including paused menus,
+and discards the idle interval after tab or graphics recovery. Both preferences
+survive level changes. Reset settings restores the defaults.
+
+The example keeps the implementation in [DemoDebugOverlay.php](examples/DemoDebugOverlay.php).
+It renders inside the canvas, so fullscreen, camera zoom, and context recovery keep
+the panel in screen space. Example PHP can control it directly:
+
+```php
+$game->debug->enabled = true;
+$game->debug->showFps = false;
+```
+
+`canvas.dataset.debug` contains the current display state and sampled rows for browser
+inspection. The overlay stays hidden during intro cards and the main menu.
+
 ## A PHP game
 
 ~~~php
