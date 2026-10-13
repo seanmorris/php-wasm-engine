@@ -102,7 +102,8 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
 });
 for(const scene of ['platformer','loop','infinite','isometric','breakables']) test(scene+' live PHP demo starts, responds to input and stops',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');await page.locator('#scene').selectOption(scene);await page.locator('#start').click();
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(scene=>window.bootEngine({scene}),scene);
   await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-frames')),{timeout:60000}).toBeGreaterThan(20);
   await page.evaluate(()=>{
     window.loseExtension=document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
@@ -122,14 +123,14 @@ for(const scene of ['platformer','loop','infinite','isometric','breakables']) te
     await page.keyboard.press('Space');await page.waitForTimeout(100);
   }
   await page.screenshot({path:'test-results/'+scene+'.png',fullPage:true});
-  await page.locator('#stop').click();await expect(page.locator('#start')).toBeEnabled();
+  await page.evaluate(() => window.stopEngine());await expect(page.locator('#start')).toBeEnabled();
   expect(errors).toEqual([]);
 });
 
 test('a live block stops walking, shatters on rolling impact, restores debris and resets',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');await page.locator('#scene').selectOption('breakables');
-  await page.locator('#start').click();
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'breakables'}));
   const canvas=page.locator('canvas');
   const state=async()=>JSON.parse(await canvas.getAttribute('data-breakables')||'{}');
   const body=async()=>JSON.parse(await canvas.getAttribute('data-body')||'{}');
@@ -176,13 +177,14 @@ test('a live block stops walking, shatters on rolling impact, restores debris an
   await expect.poll(async()=>await state()).toEqual({intact:3,pieces:0});
   await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
   expect((await body()).rolling).toBe(false);
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });
 
 test('the live loop switches routes, exits, and runs back through the other direction',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/');await page.locator('#scene').selectOption('loop');await page.locator('#start').click();
+  await page.goto('/');await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'loop'}));
   const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
   await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
   await page.evaluate(()=>{
@@ -208,6 +210,6 @@ test('the live loop switches routes, exits, and runs back through the other dire
   expect((await body()).collisionLayer).toBe(1);
   await page.keyboard.press('r');
   await expect.poll(async()=>Math.abs((await body()).x-80),{intervals:[50]}).toBeLessThan(1);
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });

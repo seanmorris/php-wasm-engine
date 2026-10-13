@@ -5,6 +5,39 @@ contains text, numeric, slider, selection, boolean, and read-only rows. Valid
 changes apply immediately. The simulation stops while menu input and rendering
 continue.
 
+## Demo browser controls
+
+**Level** and **Movement** open selection pages. Selecting an item restarts the
+level with the chosen profile; changing levels retains that profile. The centered
+Run PHP button hides once the game starts and returns if a download fails. A
+restart refreshes PHP and reuses the WASM instance when its version and extensions
+match. Scripts can call `bootEngine({scene, profile})` and `stopEngine()`; stopping
+also cancels an in-progress download.
+
+**Mute audio** and **Fullscreen** appear in the pause menu and as two icon buttons
+at the bottom-right of the game. The buttons have keyboard focus, accessible
+labels, and pressed states. Fullscreen includes only the game frame, canvas, and
+corner controls. The page text stays outside it. Menu text editing
+also stays inside the fullscreen frame, including the SDL textarea fallback.
+
+Fullscreen state follows the browser, including exits through Escape. If a
+browser rejects a gamepad-triggered request, click the corner fullscreen button.
+Browsers without fullscreen support hide both fullscreen controls.
+
+Mute uses a master gain on the pinned runtime's SDL audio output. Channel/music
+volumes, fades, and playback positions are preserved, and newly opened output
+devices inherit the setting. The preference survives level changes and page
+reloads when local storage is available. The sample levels currently have no
+soundtrack; the audio regression plays a generated tone through the native mixer
+and checks the signal after this gain.
+
+The PHP menu calls the demo host through `vrzno_env('demoControls')`. The
+JavaScript host supplies browser fullscreen, persistent mute, and deferred
+restart actions. Level restarts wait until the current PHP callback returns,
+then stop its frame loop, close streaming requests, and refresh PHP. These host
+controls live in `docs/controls.mjs`; the reusable `Menu` API does not require
+a browser host.
+
 ## Define a menu
 
 ```php

@@ -4,8 +4,8 @@ async function start(page) {
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('/');
-  await page.locator('#scene').selectOption('world');
-  await page.locator('#start').click();
+  await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'world'}));
   await expect.poll(async()=>(await state(page)).draws||0,{timeout:60000}).toBeGreaterThan(0);
   return errors;
 }
@@ -57,7 +57,7 @@ test('world downloads nearby maps and shared dependencies, evicts distant files 
   expect(requests.filter(path=>path==='stream-2.tmj')).toHaveLength(2);
   expect((await state(page)).errors).toEqual([]);
   await page.screenshot({path:'test-results/world.png',fullPage:true});
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   await expect(page.locator('#start')).toBeEnabled();
   expect(errors).toEqual([]);
 });
@@ -81,7 +81,7 @@ test('failed map fetches stay local, retry with X, and cannot resurrect a stoppe
   await pan(page,'ArrowLeft',-1600);
   await pan(page,'ArrowRight',500);
   await expect.poll(()=>attempts).toBe(3);
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   await expect(page.locator('#start')).toBeEnabled();
   unblock();
   await page.waitForTimeout(200);

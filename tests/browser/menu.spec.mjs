@@ -18,8 +18,8 @@ async function start(page,{scene='platformer',fallback=false}={}) {
     };
   },{fallback});
   await page.goto('/');
-  await page.selectOption('#scene',scene);
-  await page.click('#start');
+  await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(scene=>window.bootEngine({scene}),scene);
   await expect.poll(()=>state(page)).not.toBeNull();
   return errors;
 }
@@ -76,7 +76,7 @@ for(const fallback of [false,true]) test('live text editing and external focus w
   await page.waitForTimeout(150);
   expect((await state(page)).title).toBe('Settings');
   await page.keyboard.up('Escape');
-  await page.locator('#scene').focus();
+  await page.locator('#mute').focus();
   await page.keyboard.press('p');
   expect((await state(page)).open).toBe(true);
   await page.locator('canvas').focus();
@@ -174,7 +174,7 @@ for(const fallback of [false,true]) test('fullscreen IME commits once and cancel
   await choose(page,'settings');await page.keyboard.press('Enter');
   await choose(page,'name');await page.keyboard.press('Enter');
   await page.click('#fullscreen');
-  await expect.poll(()=>page.evaluate(()=>document.fullscreenElement?.id)).toBe('demo');
+  await expect.poll(()=>page.evaluate(()=>document.fullscreenElement?.id)).toBe('game-frame');
   await expect.poll(async()=>(await state(page)).editing).toBe(true);
   if(fallback) await expect(page.locator('textarea[aria-label="SDL text input"]')).toBeFocused();
   await page.keyboard.press('Control+a');
@@ -186,14 +186,14 @@ for(const fallback of [false,true]) test('fullscreen IME commits once and cancel
   await expect.poll(async()=>(await state(page)).composition).toBe('');
   await composition(page,fallback,'start','未完');
   await expect.poll(async()=>(await state(page)).composition).toBe('未完');
-  await page.locator('#scene').focus();
+  await page.locator('#mute').focus();
   await expect.poll(async()=>(await state(page)).composition).toBe('');
   expect((await state(page)).values.name).toBe('かな');
   await page.locator('canvas').focus();
   await page.keyboard.press('Escape');
   await expect.poll(async()=>(await state(page)).editing).toBe(false);
   await page.evaluate(()=>document.fullscreenElement&&document.exitFullscreen());
-  await page.click('#stop');
+  await page.evaluate(() => window.stopEngine());
   await expect(page.locator('textarea[aria-label="SDL text input"]')).toHaveCount(0);
   expect(await page.locator('canvas').evaluate(c=>c.editContext)).toBeNull();
   expect(errors).toEqual([]);

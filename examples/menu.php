@@ -7,7 +7,7 @@ use PhpWasmEngine\Ui\Menu;
 use PhpWasmEngine\Ui\PauseMenu;
 
 /**
- * Build shared pause settings for both the platformer and streaming-world demos.
+ * Build pause settings and browser controls for the platformer and streaming-world demos.
  *
  * @param Engine $engine Active engine whose input is captured by the menu.
  * @param Camera $camera Camera receiving live zoom changes.
@@ -86,6 +86,35 @@ function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMen
 		, 'yes' => ['label' => 'Yes, restore defaults', 'callback' => $reset]
 	]];
 
+	$host = vrzno_env('demoControls');
+	$levels = [];
+	$profiles = [];
+	$levelNames = ['platformer' => 'Platformer', 'world' => 'Streaming world'
+		, 'loop' => 'Loop-de-loop', 'breakables' => 'Breakable blocks'
+		, 'infinite' => 'Infinite map', 'isometric' => 'Isometric map'
+	];
+	$profileNames = [
+		'runner' => 'Runner: dash'
+		, 'glider' => 'Glider: climb'
+		, 'flyer' => 'Flyer: flight'
+	];
+
+	foreach($levelNames as $id => $label)
+	{
+		$levels[$id] = ['label' => $label, 'input' => 'output'
+			, 'get' => fn() => $host->scene === $id ? 'Current' : ''
+			, 'callback' => fn() => $host->load($id, $host->profile)
+		];
+	}
+
+	foreach($profileNames as $id => $label)
+	{
+		$profiles[$id] = ['label' => $label, 'input' => 'output'
+			, 'get' => fn() => $host->profile === $id ? 'Current' : ''
+			, 'callback' => fn() => $host->load($host->scene, $id)
+		];
+	}
+
 	$menu = new Menu(
 		['resume' => ['label' => 'Resume'
 		, 'callback' => fn(Menu $menu) => $menu->close()
@@ -95,6 +124,31 @@ function createDemoMenu(Engine $engine, Camera $camera, string $scene): PauseMen
 			, 'children' => $items
 			, 'subtext' =>
 			'Live text, numbers, sliders, choices, and boolean inputs.'
+		]
+		, 'level' => ['label' => 'Level', 'input' => 'output'
+			, 'value' => $levelNames[$scene], 'children' => $levels
+			, 'subtext' => 'Load a level using the selected movement profile.'
+		]
+		, 'movement' => ['label' => 'Movement', 'input' => 'output'
+			, 'get' => fn() => $profileNames[$host->profile], 'children' => $profiles
+			, 'subtext' => 'Choose a profile and restart the level.'
+		]
+		, 'mute' => ['label' => 'Mute audio', 'input' => 'boolean'
+			, 'get' => fn() => $host->muted
+			, 'set' => fn($value) => $host->setMuted($value)
+			, 'subtext' => 'Shared with the speaker button in the lower-right corner.'
+		]
+		, 'fullscreen' => ['label' => 'Fullscreen', 'input' => 'boolean'
+			, 'get' => fn() => $host->fullscreen
+			, 'set' => fn($value) => $host->setFullscreen($value)
+			, 'hidden' => fn() => !$host->fullscreenAvailable
+			, 'disabled' => fn() => $host->fullscreenBusy
+			, 'subtext' => 'Some browsers require clicking the corner fullscreen button.'
+		]
+		, 'fullscreen-error' => ['label' => 'Fullscreen request denied'
+		, 'input' => 'output'
+			, 'hidden' => fn() => $host->fullscreenError === ''
+			, 'subtext' => 'Try the corner fullscreen button. The game can stay in this view.'
 		]
 		, 'name' => ['label' =>
 			'Player'

@@ -162,7 +162,7 @@ for(const suspension of ['visibility','WebGL','focus']) test(suspension+' resume
   await expect.poll(async()=> (await frame(page)).presses).toBe(1);
   if(suspension==='visibility') await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});
   if(suspension==='WebGL') await page.evaluate(()=>{window.inputLoss=document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');inputLoss.loseContext();});
-  if(suspension==='focus') await page.locator('#scene').focus();
+  if(suspension==='focus') await page.locator('#mute').focus();
   await page.waitForTimeout(150);
   if(suspension==='focus') expect((await frame(page)).axis).toBe(0);
   const count=await page.evaluate(()=>inputFrames.length);
@@ -224,7 +224,8 @@ test('keyboard pause ignores key repeat after resuming',async({page})=>{
 for(const profile of ['runner','glider','flyer']) test(profile+' demo moves and activates abilities with a gamepad',async({page})=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await pads(page);await page.goto('/');
-  await page.locator('#profile').selectOption(profile);await page.locator('#start').click();
+  await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(profile=>window.bootEngine({profile}),profile);
   const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
   await expect.poll(async()=> (await body()).grounded,{timeout:60000}).toBe(true);
   const before=await body();
@@ -241,7 +242,7 @@ for(const profile of ['runner','glider','flyer']) test(profile+' demo moves and 
     await change(page,{buttons:[0]});
     await expect.poll(async()=> (await body()).ability,{intervals:[20]}).toBe(profile==='glider'?'glide':'fly');
   }
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   await expect(page.locator('#start')).toBeEnabled();
   expect(errors).toEqual([]);
 });
@@ -249,8 +250,8 @@ for(const profile of ['runner','glider','flyer']) test(profile+' demo moves and 
 test('gamepad dash breaks blocks on rolling contact after releasing the charge',async({page})=>{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await pads(page);await page.goto('/');
-  await page.locator('#scene').selectOption('breakables');
-  await page.locator('#start').click();
+  await page.waitForFunction(()=>typeof window.bootEngine==='function');
+  await page.evaluate(()=>window.bootEngine({scene:'breakables'}));
   const body=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
   const blocks=async()=>JSON.parse(await page.locator('canvas').getAttribute('data-breakables')||'{}');
   await expect.poll(async()=>(await body()).grounded,{timeout:60000}).toBe(true);
@@ -272,6 +273,6 @@ test('gamepad dash breaks blocks on rolling contact after releasing the charge',
   await expect.poll(async()=>await blocks()).toEqual({intact:3,pieces:0});
   await expect.poll(async()=>Math.abs((await body()).x-80)).toBeLessThan(1);
   expect((await body()).rolling).toBe(false);
-  await page.locator('#stop').click();
+  await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });

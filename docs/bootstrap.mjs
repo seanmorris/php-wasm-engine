@@ -1,72 +1,208 @@
 import './site.css';
 import {AssetLoader} from '../browser/AssetLoader.mjs';
+import {DemoControls} from './controls.mjs';
 
-const status=document.querySelector('#status');
-const canvas=document.querySelector('canvas');
-const start=document.querySelector('#start');
-const stop=document.querySelector('#stop');
-const demo=document.querySelector('#demo');
-const fullscreen=document.querySelector('#fullscreen');
-const fullscreenError=document.querySelector('#fullscreen-error');
-canvas.addEventListener('webglcontextlost',()=>{
-  if(!stop.disabled) status.textContent='Graphics paused. Waiting for the browser to restore WebGL…';
+const status = document.querySelector('#status');
+const canvas = document.querySelector('canvas');
+const start = document.querySelector('#start');
+const base = new URL('./engine/', document.baseURI);
+const runtimeBase = new URL('./runtime/', document.baseURI);
+const controls = new DemoControls(options => boot(options).catch(report));
+window.demoControls = controls;
+let php, runtimeKey, pending;
+let queue = Promise.resolve();
+let state = 'idle';
+
+canvas.addEventListener('webglcontextlost', () => {
+	if(state === 'running')
+	{
+		status.textContent = 'Graphics paused. Waiting for the browser to restore WebGL…';
+	}
 });
-canvas.addEventListener('webglcontextrestored',()=>{
-  if(!stop.disabled) status.textContent='Restoring graphics…';
+canvas.addEventListener('webglcontextrestored', () => {
+	if(state === 'running') status.textContent = 'Restoring graphics…';
 });
-fullscreen.hidden=!(document.fullscreenEnabled&&demo.requestFullscreen);
-document.addEventListener('fullscreenchange',()=>{
-  fullscreen.textContent=document.fullscreenElement===demo?'Exit fullscreen':'Fullscreen';
-  canvas.focus({preventScroll:true});
-});
-fullscreen.addEventListener('click',async()=>{
-  fullscreen.disabled=true;fullscreenError.hidden=true;
-  try {
-    if(document.fullscreenElement===demo) await document.exitFullscreen();
-    else await demo.requestFullscreen();
-  }
-  catch(error) {
-    fullscreenError.textContent='Fullscreen could not be changed. You can keep playing in the current view.';
-    fullscreenError.hidden=false;
-  }
-  finally {fullscreen.disabled=false;}
-});
-const base=new URL('./engine/',document.baseURI);
-const runtimeBase=new URL('./runtime/',document.baseURI);
-let php;
-export async function boot({scene='platformer',profile='runner',run=true,zlib=false,version='8.4'}={}) {
-  if(!/^8\.[0-5]$/.test(version)) throw Error('Unsupported PHP version');
-  if(php) await php.refresh();
-  const {PhpSdl}=await import(/* webpackIgnore: true */ new URL('php'+version+'-sdl.mjs',runtimeBase));
-  const sharedLibs=zlib?[await import(/* webpackIgnore: true */ new URL('extensions/zlib/'+version+'.mjs',runtimeBase))]:[];
-  php=new PhpSdl({canvas,scene,profile,sharedLibs,persist:false,ini:'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'});
-  window.enginePhp=php;
-  php.addEventListener('output',event=>{status.textContent=event.detail.join('');});
-  php.addEventListener('error',event=>{status.textContent=event.detail.join('');console.error(status.textContent);});
-  const module=await php.binary;
-  const response=await fetch(new URL('engine-files.json',base));
-  const files=await response.json();
-  const streaming=run&&scene==='world';
-  await Promise.all(files.filter(path=>!streaming||!path.startsWith('examples/assets/')
-    || /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)).map(async path=>{
-    const response=await fetch(new URL(path,base),{cache:'no-store'});if(!response.ok) throw Error('Asset '+path+': '+response.status);
-    const full='/engine/'+path; module.FS.mkdirTree(full.slice(0,full.lastIndexOf('/')));
-    module.FS.writeFile(full,new Uint8Array(await response.arrayBuffer()));
-  }));
-  if(streaming) {
-    const assets=new AssetLoader(module.FS,base);
-    module.requestAsset=(path,retry)=>assets.request(path,retry);
-    module.releaseAsset=path=>assets.release(path);
-    module.onRefresh.add(()=>assets.close());
-    await assets.load('/engine/examples/assets/stream.world');
-  }
-  if(run) {const code=await php.run('<?php require "/engine/examples/'+(streaming?'world':'game')+'.php";'); if(code!==0) throw Error('PHP returned '+code);}
-  return php;
+
+/**
+ * Load one demo, reusing its WASM runtime when the PHP version/extensions match.
+ * @param {object} options Scene, movement profile, PHP version, and fixture options.
+ * @returns {Promise<object>} Ready PHP instance, or a rejection on failure/cancellation.
+ */
+export function boot({scene = controls.scene, profile = controls.profile, run = true,
+	zlib = false, version = '8.4'} = {})
+{
+	if(!/^8\.[0-5]$/.test(version)
+		|| !['world', 'platformer', 'loop', 'breakables', 'infinite', 'isometric'].includes(scene)
+		|| !['runner', 'glider', 'flyer'].includes(profile))
+	{
+		return Promise.reject(Error('Unsupported PHP version, scene, or movement profile'));
+	}
+
+	controls.cancelLoad();
+	pending?.abort();
+	const request = pending = new AbortController();
+	const {signal} = request;
+	controls.scene = scene;
+	controls.profile = profile;
+	setState('loading');
+	status.textContent = 'Loading PHP SDL…';
+
+	const task = queue.then(async () => {
+		signal.throwIfAborted();
+		if(php) await php.refresh();
+		signal.throwIfAborted();
+
+		for(const key of ['frames', 'body', 'menu', 'world', 'breakables', 'scene', 'profile'])
+		{
+			delete canvas.dataset[key];
+		}
+
+		const key = version + ':' + Boolean(zlib);
+		if(!php || runtimeKey !== key)
+		{
+			const {PhpSdl} = await import(/* webpackIgnore: true */
+				new URL('php' + version + '-sdl.mjs', runtimeBase));
+			const sharedLibs = zlib ? [await import(/* webpackIgnore: true */
+				new URL('extensions/zlib/' + version + '.mjs', runtimeBase))] : [];
+			signal.throwIfAborted();
+			php = new PhpSdl({canvas, sharedLibs, persist: false,
+				ini: 'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'});
+			window.enginePhp = php;
+			const instance = php;
+			php.addEventListener('output', event => {
+				if(php === instance) status.textContent = event.detail.join('');
+			});
+			php.addEventListener('error', event => {
+				if(php === instance) status.textContent = event.detail.join('');
+				console.error(event.detail.join(''));
+			});
+			controls.attach(await php.binary);
+			runtimeKey = key;
+		}
+
+		const module = await php.binary;
+		signal.throwIfAborted();
+		Object.assign(module, {scene, profile, demoControls: controls});
+		const response = await fetch(new URL('engine-files.json', base), {signal});
+		if(!response.ok) throw Error('Engine manifest: ' + response.status);
+		const files = await response.json();
+		const streaming = run && scene === 'world';
+		await Promise.all(files.filter(path => !streaming || !path.startsWith('examples/assets/')
+			|| /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)).map(async path => {
+			const response = await fetch(new URL(path, base), {cache: 'no-store', signal});
+			if(!response.ok) throw Error('Asset ' + path + ': ' + response.status);
+			const bytes = new Uint8Array(await response.arrayBuffer());
+			signal.throwIfAborted();
+			const full = '/engine/' + path;
+			module.FS.mkdirTree(full.slice(0, full.lastIndexOf('/')));
+			module.FS.writeFile(full, bytes);
+		}));
+
+		if(streaming)
+		{
+			const assets = new AssetLoader(module.FS, base);
+			module.requestAsset = (path, retry) => assets.request(path, retry);
+			module.releaseAsset = path => assets.release(path);
+			const close = () => {
+				assets.close();
+				module.onRefresh.delete(close);
+				signal.removeEventListener('abort', close);
+			};
+			module.onRefresh.add(close);
+			signal.addEventListener('abort', close, {once: true});
+			await assets.load('/engine/examples/assets/stream.world');
+		}
+
+		signal.throwIfAborted();
+		if(run)
+		{
+			const file = streaming ? 'world' : 'game';
+			const code = await php.run('<?php require "/engine/examples/' + file + '.php";');
+			if(code !== 0) throw Error('PHP returned ' + code);
+		}
+
+		signal.throwIfAborted();
+		canvas.dataset.scene = scene;
+		canvas.dataset.profile = profile;
+		setState(run ? 'running' : 'idle');
+		if(run) canvas.focus({preventScroll: true});
+		return php;
+	}).catch(async error => {
+		const cancelled = signal.aborted;
+		request.abort();
+		try
+		{
+			if(php) await php.refresh();
+		}
+		catch
+		{
+			// A failed native initialization cannot be refreshed. Let Run create a new instance.
+			php = window.enginePhp = null;
+			runtimeKey = null;
+		}
+
+		if(pending === request)
+		{
+			setState('idle');
+			if(!cancelled) status.textContent = error.message;
+		}
+		throw cancelled ? signal.reason : error;
+	});
+	queue = task.catch(() => {});
+	return task;
 }
-window.bootEngine=boot;
-start?.addEventListener('click',async()=>{
-  start.disabled=true; status.textContent='Loading PHP SDL…';
-  try {await boot({scene:document.querySelector('#scene').value,profile:document.querySelector('#profile').value});stop.disabled=false;canvas.focus();}
-  catch(error) {status.textContent=error.message;console.error(error);start.disabled=false;}
-});
-stop?.addEventListener('click',async()=>{await php?.refresh();stop.disabled=true;start.disabled=false;status.textContent='Stopped. Run to restart.';});
+
+/**
+ * Report a failed start while treating a requested cancellation as normal control flow.
+ * @param {Error} error Failed runtime or asset request.
+ * @returns {void} Logs actionable failures for the browser's developer console.
+ */
+function report(error)
+{
+	if(error.name !== 'AbortError') console.error(error);
+}
+
+/**
+ * Stop active PHP work or cancel a download, then show the centered Run button.
+ * @returns {Promise<void>} Settles after frame callbacks and streaming requests are released.
+ */
+export function stopEngine()
+{
+	controls.cancelLoad();
+	pending?.abort();
+	pending = null;
+	setState('stopping');
+	const task = queue.then(async () => {
+		try
+		{
+			await php?.refresh();
+			if(!pending) status.textContent = 'Stopped. Run to restart.';
+		}
+		finally
+		{
+			// A newer scripted boot owns its own loading UI.
+			if(!pending) setState('idle');
+		}
+	});
+	queue = task.catch(() => {});
+	return task;
+}
+
+/**
+ * Keep the centered startup control visible only while no demo is running.
+ * @param {string} next Idle, loading, stopping, or running state of the demo host.
+ * @returns {void} Updates the button and a script-readable canvas state.
+ */
+function setState(next)
+{
+	state = next;
+	canvas.dataset.state = state;
+	start.hidden = state === 'running';
+	start.disabled = state === 'loading' || state === 'stopping';
+	start.textContent = state === 'loading' ? 'Loading PHP…'
+		: state === 'stopping' ? 'Stopping…' : 'Run PHP';
+}
+
+window.bootEngine = boot;
+window.stopEngine = stopEngine;
+start.addEventListener('click', () => boot().catch(report));
