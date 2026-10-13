@@ -39,7 +39,9 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 			'engine'
 			, 'PHP WASM ENGINE'
 			, "Written in PHP\nPowered by SDL and WebGL 2"
-			, duration: 2.5
+			, duration: 4.5
+			, fadeIn: .5
+			, fadeOut: .5
 		)
 		, new Card(
 			'controls'

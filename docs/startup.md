@@ -9,6 +9,9 @@ Press **Run PHP** in the [live demo](./) to try the complete startup sequence:
    a fresh Start, Enter, or click after two seconds.
 5. The main menu offers Play, Level, Movement, Settings, Credits, and Replay intro.
 
+The first intro card stays fully visible for four seconds, with a half-second
+fade at each end. Its timer starts when the preloader finishes.
+
 The title's background keeps its offset and animation clock when the main menu
 opens. Gameplay time stays paused throughout startup. Level assets download when
 you choose **Play**. **Settings** demonstrates live text, numbers, a slider,
