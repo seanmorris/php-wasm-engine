@@ -415,6 +415,7 @@ require __DIR__.'/sprites.php';
 require __DIR__.'/parallax.php';
 require __DIR__.'/world.php';
 require __DIR__.'/input.php';
+require __DIR__.'/sequences.php';
 require __DIR__.'/ecs.php';
 require __DIR__.'/breakables.php';
 require __DIR__.'/rolling-breakables.php';

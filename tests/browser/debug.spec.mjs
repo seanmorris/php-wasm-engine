@@ -223,3 +223,25 @@ async ({page}) => {
 	expect((await state(page)).enabled).toBe(true);
 	expect(errors).toEqual([]);
 });
+
+test('demo recognizes Konami and reports fighting inputs in its debug panel', async ({page}) => {
+	const errors = await start(page);
+	for(const key of ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft',
+		'ArrowRight', 'ArrowLeft', 'ArrowRight', 'x', 'Space'])
+	{
+		await page.keyboard.press(key);
+	}
+	await expect.poll(async () => (await state(page)).enabled).toBe(true);
+	await expect.poll(async () => (await state(page)).rows.Sequence).toBe('konami');
+	await page.keyboard.down('ArrowDown');
+	await page.keyboard.press('c');
+	await page.keyboard.up('ArrowDown');
+	await expect.poll(async () => (await state(page)).rows.Sequence).toBe('uppercut');
+	expect(Number((await state(page)).rows.Matches)).toBeGreaterThanOrEqual(2);
+	const panel = (await state(page)).panel;
+	expect(panel[1] + panel[3]).toBeLessThanOrEqual(540);
+	await page.evaluate(() => window.bootEngine());
+	await expect.poll(async () => (await state(page)).enabled).toBe(false);
+	expect(JSON.parse(await page.locator('canvas').getAttribute('data-sequences')).count).toBe(0);
+	expect(errors).toEqual([]);
+});

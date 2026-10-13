@@ -154,6 +154,8 @@ final class DemoDebugOverlay
 			, 'Render frame' => (string)$this->frame
 			, 'Game seconds' => sprintf('%.2f', $game->engine->time)
 			, 'Input' => $game->engine->input->inputTheme
+			, 'Sequence' => $game->lastSequence ?: '-'
+			, 'Matches' => (string)$game->sequenceCount
 		];
 	}
 
