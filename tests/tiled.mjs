@@ -95,6 +95,7 @@ for(const name of readdirSync(assets).filter(name=>name.endsWith('.tsj'))) {
   test('Tiled preserves '+name+' images, animations and collision shapes',()=>{
     const file=join(assets,name);
     roundTrip(file,'tileset',(before,after,exported)=>{
+      assert.deepEqual(properties(after.properties),properties(before.properties));
       for(const key of ['tilewidth','tileheight','tilecount','columns','imagewidth','imageheight']) {
         assert.equal(after[key],before[key],key);
       }

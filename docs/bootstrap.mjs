@@ -47,7 +47,8 @@ export async function boot({scene='platformer',profile='runner',run=true,zlib=fa
   const response=await fetch(new URL('engine-files.json',base));
   const files=await response.json();
   const streaming=run&&scene==='world';
-  await Promise.all(files.filter(path=>!streaming||!path.startsWith('examples/assets/')).map(async path=>{
+  await Promise.all(files.filter(path=>!streaming||!path.startsWith('examples/assets/')
+    || /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)).map(async path=>{
     const response=await fetch(new URL(path,base),{cache:'no-store'});if(!response.ok) throw Error('Asset '+path+': '+response.status);
     const full='/engine/'+path; module.FS.mkdirTree(full.slice(0,full.lastIndexOf('/')));
     module.FS.writeFile(full,new Uint8Array(await response.arrayBuffer()));

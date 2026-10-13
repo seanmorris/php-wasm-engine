@@ -84,6 +84,15 @@ test('sprite outlines expand by one world pixel with per-instance opt-outs',asyn
   expect(result.error).toBe(0);
 });
 
+test('annotated bitmap fonts render exact pixels and menu editing survives graphics rebuilding',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-menus.php";'));
+  for(const [name,passed] of Object.entries(result.checks)) {
+    expect.soft(passed,JSON.stringify({name,differences:result.differences})).toBe(true);
+  }
+  expect(result.error).toBe(0);
+});
+
 test('anchored backgrounds keep a shared phase across map boundaries and streaming',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-parallax-world.php";'));

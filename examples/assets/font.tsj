@@ -1,0 +1,1974 @@
+{
+  "columns": 26,
+  "image": "font.png",
+  "imageheight": 48,
+  "imagewidth": 260,
+  "margin": 0,
+  "name": "font",
+  "spacing": 0,
+  "tilecount": 78,
+  "tiledversion": "1.10.1",
+  "tileheight": 16,
+  "tilewidth": 10,
+  "type": "tileset",
+  "version": "1.10",
+  "properties": [
+    {
+      "name": "font.lineHeight",
+      "type": "int",
+      "value": 16
+    },
+    {
+      "name": "font.spaceAdvance",
+      "type": "int",
+      "value": 8
+    },
+    {
+      "name": "font.fallback",
+      "type": "string",
+      "value": "?"
+    },
+    {
+      "name": "font.caseFold",
+      "type": "bool",
+      "value": true
+    }
+  ],
+  "tiles": [
+    {
+      "id": 0,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "0"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "1"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "2"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "3"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "4"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "5"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "6"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "7"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "8"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "9"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": ":"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "-"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "."
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "/"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": ","
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 3
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 2
+        },
+        {
+          "name": "glyph.offsetY",
+          "type": "int",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "?"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "!"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "@"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 11
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "#"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 11
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "$"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 11
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "%"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "^"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "&"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "*"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "("
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": ")"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "A"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "B"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "C"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "D"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "E"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "F"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "G"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "H"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "I"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 6
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 6
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "J"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "K"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "L"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 6
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 6
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "M"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "N"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "O"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "P"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "Q"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "R"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "S"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "T"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "U"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "V"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "W"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "X"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "Y"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "Z"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⏺"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "▶"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.aliases",
+          "type": "string",
+          "value": "⯈"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⏸"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⏹"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⏮"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⏭"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "'"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "\""
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "="
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "+"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "["
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "]"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "{"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "}"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "\\"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": ";"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "~"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "|"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "_"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": ">"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "<"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⯇"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⯅"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "⯆"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "properties": [
+        {
+          "name": "glyph.char",
+          "type": "string",
+          "value": "`"
+        },
+        {
+          "name": "glyph.width",
+          "type": "int",
+          "value": 8
+        },
+        {
+          "name": "glyph.height",
+          "type": "int",
+          "value": 12
+        },
+        {
+          "name": "glyph.advance",
+          "type": "int",
+          "value": 8
+        }
+      ]
+    }
+  ]
+}

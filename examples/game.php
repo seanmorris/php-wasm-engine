@@ -61,6 +61,8 @@ $camera = new Camera(0, 0, 960, 540);
 $browser = new Vrzno;
 $canvas = vrzno_env('canvas');
 $status = $browser->document->querySelector('#status');
+require __DIR__.'/menu.php';
+$pauseMenu = createDemoMenu($engine, $camera, $scene);
 
 $engine->systems->add('movement', function($entities, $dt) use ($engine, $movement, $body, $scene
 	, $camera
@@ -102,7 +104,7 @@ $frames = 0;
 
 $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $entity, $camera
 	, $canvas
-	, $status, $terrain, $scene, &$frames
+	, $status, $terrain, $scene, &$frames, $pauseMenu
 ) {
 	$device->begin();
 	$renderer->render($camera, $engine->time * 1000);
@@ -118,7 +120,9 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 		$sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
 	}
 
+	$pauseMenu->render();
 	$device->present();
+	$canvas->dataset->menu = demoMenuState($pauseMenu, $engine);
 	$frames++;
 	$canvas->dataset->frames = (string)$frames;
 
@@ -173,11 +177,13 @@ $engine->start(function() use ($device, $renderer, $sprites, $body, $engine, $en
 			$status->textContent = 'Paused. Press Start / Options or P to resume.';
 		}
 	}
-}, function() use ($sprites, $renderer, $blocks) {
+}, function() use ($sprites, $renderer, $blocks, $pauseMenu) {
+	$pauseMenu->close();
 	$blocks?->close();
 	$sprites->close();
 	$renderer->close();
-}, function() use ($renderer, $sprites) {
+}, function() use ($renderer, $sprites, $pauseMenu) {
 	$renderer->restore();
 	$sprites->restore();
+	$pauseMenu->restore();
 });

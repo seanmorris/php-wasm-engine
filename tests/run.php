@@ -412,6 +412,7 @@ require __DIR__.'/input.php';
 require __DIR__.'/ecs.php';
 require __DIR__.'/breakables.php';
 require __DIR__.'/rolling-breakables.php';
+require __DIR__.'/menus.php';
 
 $failed = 0;
 

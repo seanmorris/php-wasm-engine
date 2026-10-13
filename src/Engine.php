@@ -33,6 +33,17 @@ final class Engine
 	public bool $paused = false;
 	public bool $userPaused = false;
 	private bool $pauseHeld = false;
+	private $inputHandler = null;
+	private bool $inputCaptured = false;
+
+	/**
+	 * Install an optional input owner that runs before pause handling and fixed simulation.
+	 *
+	 * @param (callable(Engine,float):bool)|null $handler UI callback receiving real frame seconds;
+	 * return true to capture this frame and suppress built-in pause and gameplay updates.
+	 * @return void Replaces the handler; null restores the original input path.
+	 */
+	public function setInputHandler(?callable $handler): void { $this->inputHandler = $handler; }
 
 	/**
 	 * Create the entity registry, scheduler, input reader, and simulation clock.
@@ -104,9 +115,10 @@ final class Engine
 			return;
 		}
 
+		$captured = $this->inputHandler ? (bool)($this->inputHandler)($this, $elapsed) : false;
 		$pause = (bool)($this->input->snapshot()['pause'] ?? false);
 
-		if($pause && !$this->pauseHeld)
+		if(!$captured && $pause && !$this->pauseHeld)
 		{
 			$this->userPaused = !$this->userPaused;
 			$elapsed = 0;
@@ -120,10 +132,20 @@ final class Engine
 
 		$this->pauseHeld = $pause;
 
-		if($this->userPaused)
+		if($captured !== $this->inputCaptured)
+		{
+			$this->input->reset();
+			$this->controls->reset();
+			$elapsed = 0;
+		}
+
+		$this->inputCaptured = $captured;
+
+		if($this->userPaused || $captured)
 		{
 			$elapsed = 0;
 			$this->input->consume();
+			$this->controls->reset();
 		}
 
 		$alpha = $this->clock->advance($elapsed,
@@ -281,6 +303,7 @@ final class Engine
 			$this->restore = $this->visibility = $this->document = null;
 			$this->raf = null;
 			$this->refreshCleanup = null;
+			$this->inputHandler = null;
 		}
 	}
 }

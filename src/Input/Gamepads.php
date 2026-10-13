@@ -8,6 +8,9 @@ final class Gamepads
 	private array $handles = [], $axes = [], $buttons = [], $blockedAxes = [], $blockedButtons = [];
 	private float $deadZone;
 	private bool $closed = false;
+	public ?int $activeId = null;
+	public int $activity = 0;
+	private array $names = [];
 
 	/**
 	 * Initialize SDL controller discovery and configure analog stick filtering.
@@ -49,6 +52,16 @@ final class Gamepads
 	public function ids(): array { return array_keys($this->handles); }
 
 	/**
+	 * Identify the last-used controller for themed control hints.
+	 *
+	 * @return string SDL controller name, or an empty string when no active pad remains.
+	 */
+	public function activeName(): string
+	{
+		return $this->names[$this->activeId] ?? '';
+	}
+
+	/**
 	 * Discover controllers, release disconnected handles, and sample normalized inputs.
 	 *
 	 * @return void Refreshes per-controller axes and buttons unless this owner has closed.
@@ -70,6 +83,13 @@ final class Gamepads
 			}
 
 			SDL_GameControllerClose($handle);
+			unset($this->names[$id]);
+
+			if($this->activeId === $id)
+			{
+				$this->activeId = null;
+			}
+
 			unset($this->handles[$id], $this->axes[$id], $this->buttons[$id], $this->blockedAxes[
 				$id
 			]
@@ -91,6 +111,8 @@ final class Gamepads
 			if($handle)
 			{
 				$this->handles[$id] = $handle;
+				// Controller mappings may rename every pad to "Standard Gamepad".
+				$this->names[$id] = (string)SDL_JoystickNameForIndex($index);
 			}
 		}
 
@@ -119,7 +141,15 @@ final class Gamepads
 					unset($this->blockedAxes[$id][$axis]);
 				}
 
-				$this->axes[$id][$axis] = empty($this->blockedAxes[$id][$axis])?$value:0;
+				$value = empty($this->blockedAxes[$id][$axis]) ? $value : 0;
+
+				if(abs($value) >= .5 && abs($value - ($this->axes[$id][$axis] ?? 0)) >= .1)
+				{
+					$this->activeId = $id;
+					$this->activity++;
+				}
+
+				$this->axes[$id][$axis] = $value;
 			}
 
 			for($button = 0; $button < SDL_CONTROLLER_BUTTON_MAX; $button++)
@@ -131,7 +161,15 @@ final class Gamepads
 					unset($this->blockedButtons[$id][$button]);
 				}
 
-				$this->buttons[$id][$button] = $held && empty($this->blockedButtons[$id][$button]);
+				$held = $held && empty($this->blockedButtons[$id][$button]);
+
+				if($held && empty($this->buttons[$id][$button]))
+				{
+					$this->activeId = $id;
+					$this->activity++;
+				}
+
+				$this->buttons[$id][$button] = $held;
 			}
 		}
 	}
@@ -233,6 +271,8 @@ final class Gamepads
 		}
 
 		$this->closed = true;
+		$this->names = [];
+		$this->activeId = null;
 
 		foreach($this->handles as $handle)
 		{

@@ -10,6 +10,13 @@ final class SdlInput
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
 	private $canvas = null, $focusListener = null, $blurListener = null;
+	private array $uiEvents = [];
+	private array $uiBlocked = [];
+	private bool $uiEditing = false;
+	private bool $textInput = false, $switchingText = false;
+	private $textTarget = null;
+	public int $generation = 0;
+	public string $inputTheme = 'keyboard';
 
 	/**
 	 * Create gamepad polling and attach browser canvas focus listeners when available.
@@ -40,7 +47,7 @@ final class SdlInput
 				 *
 				 * @return null Suspends input until a later focus event.
 				 */
-				fn() => $this->focus(false);
+				fn() => $this->switchingText ? null : $this->focus($this->ownsFocus());
 			$this->canvas->addEventListener('focus', $this->focusListener);
 			$this->canvas->addEventListener('blur', $this->blurListener);
 			$this->focus((bool)$this->canvas->matches(':focus'));
@@ -61,6 +68,9 @@ final class SdlInput
 		}
 
 		$this->focused = $focused;
+		$this->generation++;
+		$this->uiEvents = [];
+		$this->uiBlocked = [];
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		$this->resetPads = true;
 	}
@@ -75,6 +85,9 @@ final class SdlInput
 		$this->poll();
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		$this->gamepads->reset();
+		$this->uiEvents = [];
+		$this->generation++;
+		$this->uiBlocked = [];
 	}
 
 	/**
@@ -87,6 +100,13 @@ final class SdlInput
 		if($this->closed)
 		{
 			return;
+		}
+
+		$this->uiEvents = [];
+
+		if($this->canvas)
+		{
+			$this->focus($this->ownsFocus());
 		}
 
 		$event = new \SDL_Event;
@@ -107,22 +127,32 @@ final class SdlInput
 			if($event->type === SDL_WINDOWEVENT && $event->window
 				->event === SDL_WINDOWEVENT_FOCUS_GAINED
 			){
-				$this->focus(!$this->canvas || $this->canvas->matches(':focus'));
+				$this->focus($this->ownsFocus());
 			}
 
 			if($event->type === SDL_KEYUP)
 			{
 				$this->keys[$event->key->keysym->sym] = false;
+				unset($this->uiBlocked[$event->key->keysym->sym]);
 			}
 
 			// Repeated keydowns must not reactivate a key cleared by focus or pause recovery.
 			if($event->type === SDL_KEYDOWN && !$event->key->repeat && $this->focused)
 			{
+				unset($this->uiBlocked[$event->key->keysym->sym]);
+				$this->inputTheme = 'keyboard';
 				$this->keys[$event->key->keysym->sym] = $this->pressedKeys[$event->key->keysym
 					->sym
 				] = true;
 			}
+
+			if($this->focused)
+			{
+				$this->uiEvent($event);
+			}
 		}
+
+		$activity = $this->gamepads->activity;
 
 		if($this->resetPads || !$this->focused)
 		{
@@ -134,6 +164,15 @@ final class SdlInput
 		}
 
 		$this->resetPads = false;
+
+		if($activity !== $this->gamepads->activity && $this->focused)
+		{
+			$this->inputTheme = self::padTheme($this->gamepads->activeName());
+		}
+		elseif($this->inputTheme !== 'keyboard' && !$this->gamepads->ids())
+		{
+			$this->inputTheme = 'keyboard';
+		}
 
 		foreach([SDL_CONTROLLER_BUTTON_A
 		, SDL_CONTROLLER_BUTTON_B
@@ -257,6 +296,7 @@ final class SdlInput
 			return;
 		}
 
+		$this->setTextInput(false);
 		$this->closed = true;
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 
@@ -268,5 +308,258 @@ final class SdlInput
 
 		$this->canvas = $this->focusListener = $this->blurListener = null;
 		$this->gamepads->close();
+	}
+
+	/**
+	 * Classify controller names without assuming that unknown standard pads are Xbox pads.
+	 *
+	 * @param string $name SDL/browser controller name, including optional USB vendor IDs.
+	 * @return string xbox, playstation, or generic hint theme.
+	 */
+	public static function padTheme(string $name): string
+	{
+		if(preg_match('/playstation|dualshock|dualsense|sony|054c/i', $name))
+		{
+			return 'playstation';
+		}
+
+		if(preg_match('/xbox|xinput|microsoft|045e/i', $name))
+		{
+			return 'xbox';
+		}
+
+		return 'generic';
+	}
+
+	/**
+	 * Check browser focus without treating SDL's owned IME textarea as an external editor.
+	 *
+	 * @return bool True for native input, the canvas, or the captured SDL editing target.
+	 */
+	private function ownsFocus(): bool
+	{
+		return !$this->canvas || $this->canvas->matches(':focus')
+			|| ($this->textTarget && $this->textTarget->matches(':focus'));
+	}
+
+	/**
+	 * Start or stop SDL's existing browser/native text transport and position its candidate hint.
+	 *
+	 * @param bool $enabled Whether an application text field is being edited.
+	 * @param array{int,int,int,int}|null $rect Candidate rectangle in SDL window pixels.
+	 * @return void Owns only the focus listeners added for SDL's editing target.
+	 */
+	public function setTextInput(bool $enabled, ?array $rect = null): void
+	{
+		if($rect && $enabled)
+		{
+			SDL_SetTextInputRect(new \SDL_Rect(...$rect));
+		}
+
+		if($enabled === $this->textInput || $this->closed)
+		{
+			return;
+		}
+
+		$this->switchingText = true;
+		$this->textInput = $enabled;
+
+		try
+		{
+			if($enabled)
+			{
+				SDL_StartTextInput();
+
+				if($this->canvas)
+				{
+					$target = $this->canvas->getRootNode()->activeElement;
+
+					if($target && $target->tagName === 'TEXTAREA')
+					{
+						$this->textTarget = $target;
+						$target->addEventListener('focus', $this->focusListener);
+						$target->addEventListener('blur', $this->blurListener);
+					}
+				}
+			}
+			else
+			{
+				if($this->textTarget)
+				{
+					$this->textTarget->removeEventListener('focus', $this->focusListener);
+					$this->textTarget->removeEventListener('blur', $this->blurListener);
+				}
+
+				$this->textTarget = null;
+				SDL_StopTextInput();
+			}
+		}
+		finally
+		{
+			$this->switchingText = false;
+			$this->focus($this->ownsFocus());
+		}
+	}
+
+	/**
+	 * Snapshot relevant SDL event fields before the reusable event object is overwritten.
+	 *
+	 * @param \SDL_Event $event Current event from the central SDL poll loop.
+	 * @return void Appends text, composition, editing keys, or pointer events for this UI frame.
+	 */
+	private function uiEvent(\SDL_Event $event): void
+	{
+		switch($event->type)
+		{
+			case SDL_TEXTINPUT:
+				$this->uiEvents[] = ['type' => 'text', 'text' => $event->text->text];
+				break;
+			case SDL_TEXTEDITING:
+				$this->uiEvents[] = ['type' => 'composition', 'text' => $event->edit->text
+					, 'start' => $event->edit->start, 'length' => $event->edit->length
+				];
+				break;
+			case SDL_KEYDOWN:
+				$this->uiEvents[] = ['type' => 'key'
+				, 'key' => SDL_GetKeyName(
+					$event->key->keysym->sym
+				)
+					, 'shift' => (bool)($event->key->keysym->mod & KMOD_SHIFT)
+					, 'ctrl' => (bool)($event->key->keysym->mod & (KMOD_CTRL | KMOD_GUI))
+					, 'repeat' => (bool)$event->key->repeat
+				];
+				break;
+			case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
+				$this->inputTheme = 'keyboard';
+				$this->uiEvents[] = ['type' => 'pointer'
+					, 'action' => $event->type === SDL_MOUSEBUTTONDOWN ? 'down' : 'up'
+					, 'x' => $event->button->x, 'y' => $event->button->y
+					, 'button' => $event->button
+						->button
+				];
+				break;
+			case SDL_MOUSEMOTION:
+				$this->uiEvents[] = ['type' => 'pointer', 'action' => 'move'
+					, 'x' => $event->motion->x, 'y' => $event->motion->y
+				];
+				break;
+			case SDL_MOUSEWHEEL:
+				$this->uiEvents[] = ['type' => 'wheel'
+				, 'y' => $event->wheel->y
+					* ($event->wheel->direction === SDL_MOUSEWHEEL_FLIPPED ? -1 : 1)
+				];
+				break;
+		}
+	}
+
+	/**
+	 * Check a UI keyboard binding, suppressing keys held across editing transitions.
+	 *
+	 * @param int ...$codes Alternative SDL key codes for one command.
+	 * @return bool True if an unblocked key is held or has a buffered press edge.
+	 */
+	private function held(int ...$codes): bool
+	{
+		foreach($codes as $code)
+		{
+			if(empty($this->uiBlocked[$code])
+				&& (!empty($this->keys[$code]) || !empty($this->pressedKeys[$code]))
+			){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Read UI buttons and ordered events without consuming fixed-step gameplay edges.
+	 *
+	 * @param bool $editing Suppress printable keyboard navigation bindings during text entry.
+	 * @param bool $open Interpret Escape as Back when open, or as opening Pause otherwise.
+	 * @return array{buttons:array,events:array,focused:bool,generation:int,theme:string} UI frame
+	 * with independent logical controls and focus/recovery generation.
+	 */
+	public function uiFrame(bool $editing = false, bool $open = false): array
+	{
+		$buttons = [];
+
+		if($editing !== $this->uiEditing)
+		{
+			// A held Enter/Escape must not activate again after it ends editing.
+			foreach($this->keys as $code => $held)
+			{
+				if($held)
+				{
+					$this->uiBlocked[$code] = true;
+				}
+			}
+			$this->uiEditing = $editing;
+		}
+
+		if($this->focused && !$this->closed)
+		{
+			foreach([
+				['left', 'right', SDL_CONTROLLER_AXIS_LEFTX
+					, SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+					, SDLK_LEFT, SDLK_a, SDLK_RIGHT, SDLK_d
+				]
+				, ['up', 'down', SDL_CONTROLLER_AXIS_LEFTY
+					, SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN
+					, SDLK_UP, SDLK_w, SDLK_DOWN, SDLK_s
+				]
+			] as [$negative
+			, $positive
+			, $axis
+			, $padNegative
+			, $padPositive
+			, $keyA
+			, $keyB
+			, $keyC
+				, $keyD
+			]){
+				$minus = $this->gamepads->button($padNegative);
+				$plus = $this->gamepads->button($padPositive);
+				$value = $minus || $plus ? (int)$plus - (int)$minus : $this->gamepads->axis($axis);
+
+				$buttons[$negative] = max(
+					0
+					, -$value
+					, (int)(!$editing && $this->held($keyA, $keyB))
+				);
+				$buttons[$positive] = max(0, $value, (int)(!$editing && $this->held($keyC, $keyD)));
+			}
+
+			$buttons['confirm'] = (!$editing && $this->held(SDLK_RETURN, SDLK_KP_ENTER, SDLK_SPACE))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_A);
+
+			$buttons['back'] = (!$editing && $this->held(
+				SDLK_ESCAPE
+				, SDLK_x
+				, SDLK_LCTRL
+				, SDLK_RCTRL
+			))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_B);
+
+			$buttons['pause'] = (!$editing && ($this->held(
+				SDLK_p
+			) || (!$open && $this->held(
+				SDLK_ESCAPE
+			))))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_START);
+			$buttons['revert'] = (!$editing && $this->held(SDLK_z))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_Y);
+			$buttons['pageUp'] = (!$editing && $this->held(SDLK_PAGEUP))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+			$buttons['pageDown'] = (!$editing && $this->held(SDLK_PAGEDOWN))
+				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+			$buttons['home'] = !$editing && $this->held(SDLK_HOME);
+			$buttons['end'] = !$editing && $this->held(SDLK_END);
+		}
+
+		return ['buttons' => $buttons
+		, 'events' => $this->uiEvents
+		, 'focused' => $this->focused
+			, 'generation' => $this->generation, 'theme' => $this->inputTheme
+		];
 	}
 }
