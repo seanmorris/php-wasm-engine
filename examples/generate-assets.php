@@ -269,9 +269,9 @@ $bands = [
 	['sky',0,0,0,8,300]
 	, ['clouds',36,.06,6,512,96]
 	, ['mountains-far',128,.16,0,512,180]
-	, ['water',284,.28,0,128,256]
+	, ['water',336,.28,0,128,256]
 	, ['mountains-near',196,.38,0,512,140]
-	, ['shine-0',284,.28,18,128,8]
+	, ['shine-0',336,.28,18,128,8]
 ];
 
 foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
@@ -312,14 +312,6 @@ $title['height'] = 17;
 $title['tilesets'] = [];
 $title['layers'] = $background;
 
-foreach($title['layers'] as &$band)
-{
-	if(in_array($band['name'], ['water', 'shine-0'], true))
-	{
-		$band['offsety'] = 336;
-	}
-}
-unset($band);
 jsonAsset('title.tmj', $title);
 
 $base['layers'] = [['id' => 1

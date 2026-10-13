@@ -106,7 +106,7 @@
             "repeatx": true,
             "parallaxx": 0.28,
             "parallaxy": 0,
-            "offsety": 284,
+            "offsety": 336,
             "properties": [
                 {
                     "name": "from",
@@ -162,7 +162,7 @@
             "repeatx": true,
             "parallaxx": 0.28,
             "parallaxy": 0,
-            "offsety": 284,
+            "offsety": 336,
             "properties": [
                 {
                     "name": "from",
