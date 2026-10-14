@@ -51,13 +51,18 @@ final class DemoStartup
 	{
 		$levels = [];
 
-		foreach(['platformer' => 'Platformer', 'world' => 'Streaming world'
-			, 'loop' => 'Loop-de-loop', 'breakables' => 'Breakable blocks'
-			, 'infinite' => 'Infinite map', 'isometric' => 'Isometric map'
-		] as $id => $label
-		){
-
-			$levels[$id] = ['label' => $label, 'input' => 'output'
+		foreach([
+			'platformer' => 'Platformer'
+			, 'world' => 'Streaming world'
+			, 'loop' => 'Loop-de-loop'
+			, 'breakables' => 'Breakable blocks'
+			, 'infinite' => 'Infinite map'
+			, 'isometric' => 'Isometric map'
+		] as $id => $label)
+		{
+			$levels[$id] = [
+				'label' => $label
+				, 'input' => 'output'
 				, 'get' => fn() => $this->scene === $id ? 'Selected' : ''
 				, 'callback' => function(Menu $menu) use ($id): void {
 					$this->scene = $id;
@@ -68,19 +73,24 @@ final class DemoStartup
 
 		$items = [
 			'play' => [
-				'label' => 'Play', 'callback' => [$this, 'play']
+				'label' => 'Play'
+				, 'callback' => [$this, 'play']
 				, 'subtext' => 'Load the selected level and enter the game.'
 			]
 			, 'resume' => [
-				'label' => 'Resume game', 'callback' => [$this, 'resume']
+				'label' => 'Resume game'
+				, 'callback' => [$this, 'resume']
 				, 'hidden' => fn() => $this->game->level === null
 			]
 			, 'level' => [
-				'label' => 'Level', 'input' => 'output'
-				, 'get' => fn() => $this->scene, 'children' => $levels
+				'label' => 'Level'
+				, 'input' => 'output'
+				, 'get' => fn() => $this->scene
+				, 'children' => $levels
 			]
 			, 'movement' => [
-				'label' => 'Movement', 'input' => 'select'
+				'label' => 'Movement'
+				, 'input' => 'select'
 				, 'options' => ['runner', 'glider', 'flyer']
 				, 'get' => fn() => $this->game->body->profile
 				, 'set' => fn($value) => $this->game->selectProfile($value)
@@ -446,26 +456,23 @@ final class DemoStartup
 	{
 		$canvas = vrzno_env('canvas');
 
-		$canvas->dataset->intro = json_encode(
-			['phase' => $this->phase, 'card' => $this->cards->current()?->id
-			, 'state' => $this
-				->cards->state
-				, 'elapsed' => $this->cards->elapsed, 'time' => $this->time
-				, 'pan' =>
-				$this->camera->x
-				, 'gameTime' => $this->game->engine->time
-				, 'error' => $this
-				->error ?: $this->game->error
-				, 'progress' => $this->backdrop->progress()
-			]
-		);
+		$canvas->dataset->intro = json_encode([
+			'phase' => $this->phase
+			, 'card' => $this->cards->current()?->id
+			, 'state' => $this->cards->state
+			, 'elapsed' => $this->cards->elapsed
+			, 'time' => $this->time
+			, 'pan' => $this->camera->x
+			, 'gameTime' => $this->game->engine->time
+			, 'error' => $this->error ?: $this->game->error
+			, 'progress' => $this->backdrop->progress()
+		]);
 
 		if($this->phase !== 'playing')
 		{
 			$status = (new Vrzno)->document->querySelector('#status');
 			$status->textContent = ($this->error ?: $this->game->error)
-				?: ($this
-					->phase === 'menu'
+				?: ($this->phase === 'menu'
 					? 'Choose Play, or adjust Level, Movement, and Settings.'
 					: 'Start / Enter selects. Arrow keys or the D-pad move. Escape / B goes back.'
 				);
