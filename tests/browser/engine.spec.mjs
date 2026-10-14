@@ -181,7 +181,7 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
 	expect(result.error).toBe(0);
 });
 
-for(const scene of ['platformer','loop','infinite','isometric','breakables'])
+for(const scene of ['platformer','badniks','loop','infinite','isometric','breakables'])
 test(
 	scene + ' live PHP demo starts, responds to input and stops'
 	, async({page}) => {

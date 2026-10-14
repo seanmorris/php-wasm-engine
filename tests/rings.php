@@ -3,7 +3,9 @@ use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Gameplay\Ring;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Gameplay\Rings;
+use PhpWasmEngine\Gameplay\ScatteredRing;
 use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Tiled\TileMap;
@@ -110,4 +112,58 @@ test('ring values and HUD rows validate and format gameplay state', function() {
 		, 'tileheight' => 1
 	]), ''
 	));
+});
+
+test('damage rings scatter in bounded arcs, bounce continuously, delay pickup, and expire', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/badniks.tmj');
+	$registry = new Registry;
+	$terrain = MapTerrain::build($map);
+	$rings = new Rings($registry, $map, terrain: $terrain);
+	$body = new Body(480, 400);
+	$counter = new RingCounter(20);
+	$player = $registry->create($body, $counter);
+	$scattered = $rings->scatter($player, $body, $counter);
+	check(count($scattered) === 16 && $counter->rings === 20);
+	check($rings->scatteredCount() === 16);
+	check(count(array_filter($scattered, fn($id) => $registry->get($id, ScatteredRing::class)->collectible)) === 11);
+
+	$first = $scattered[0];
+	$ring = $registry->get($first, Ring::class);
+	$motion = $registry->get($first, ScatteredRing::class);
+	$start = [$ring->x, $ring->y];
+	$rings->update($registry, .05);
+	check([$ring->x, $ring->y] === $start, 'launch delay must hold scattered rings in place');
+	$rings->update($registry, .06);
+	check([$ring->x, $ring->y] !== $start);
+
+	$body->x = $body->y = 0;
+	$rings->sync($player, $body);
+	$motion->collectible = false;
+	$motion->age = .2;
+	$motion->launchDelay = 0;
+	$motion->vx = 0;
+	$motion->vy = 6000;
+	$ring->x = 480;
+	$ring->y = 400;
+	$rings->update($registry, .02);
+	check($ring->y <= 440.01 && $motion->vy < 0, 'a fast ring must bounce without crossing the floor');
+
+	$recoverable = $scattered[1];
+	$pickup = $registry->get($recoverable, Ring::class);
+	$pickupMotion = $registry->get($recoverable, ScatteredRing::class);
+	$pickupMotion->age = $pickupMotion->pickupDelay;
+	$pickupMotion->launchDelay = 0;
+	$pickupMotion->vx = $pickupMotion->vy = $pickupMotion->gravity = 0;
+	$body->x = $pickup->x;
+	$body->y = $pickup->y;
+	$rings->sync($player, $body);
+	$rings->update($registry, 1 / 60);
+	check(!$registry->alive($recoverable) && $counter->rings === 21);
+
+	$expiring = $scattered[2];
+	$expiry = $registry->get($expiring, ScatteredRing::class);
+	$expiry->age = $expiry->lifetime - .01;
+	$rings->update($registry, .02);
+	check(!$registry->alive($expiring));
+	$rings->close();
 });

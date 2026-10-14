@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, CrabMeat badniks, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -72,6 +72,30 @@ The example player HUD renders **SCORE**, **TIME**, and **RINGS** at the upper l
 the annotated menu font, colored labels, and pixel shadows matching moving-boxes-2.
 It has no background panel and hides in camera-only scenes. The FPS meter remains an
 independent lower-left diagnostic with no black rectangle behind it.
+
+## Badniks and CrabMeat
+
+`Gameplay\Badnik` holds the position, contact bounds, points, and optional explosion art shared by enemy types. A species component implements the empty `BadnikBehavior` marker. `Badniks` owns player contacts, mercy damage, scoring, airborne rebound, explosions, and owner-tagged ballistic projectiles. A grounded walking player takes damage and loses held rings. The player sprite flickers during mercy and cannot turn its damage knockback into an attack. A rolling or airborne player outside mercy pops the badnik and receives its point value.
+
+`Gameplay\CrabMeats` promotes `CrabMeat` objects from Tiled. It recreates the reference schedule in time-based engine units: 65 walking frames, 10 standing frames, 15 firing-pose frames, paired shots on frame 87, and a three-frame launch delay. Each patrol leg alternates direction. Tiled properties keep their familiar frame units; `patrolSpeed`, projectile speeds, and projectile gravity use per-frame units and convert to pixels per second internally.
+
+~~~php
+use PhpWasmEngine\Gameplay\{Badniks,CrabMeats,PlayerCombat};
+
+$player = $engine->entities->create($body, $counter, new PlayerCombat, $sprite);
+$badniks = new Badniks($engine->entities, $terrain, $rings);
+$crabs = new CrabMeats($engine->entities, $terrain, $map, $badniks);
+$badniks->sync($player, $body); // Also call after teleports.
+
+$engine->systems->add('crabmeats', [$crabs, 'update'], after: ['movement']);
+$engine->systems->add('badniks', [$badniks, 'update'], after: ['crabmeats']);
+~~~
+
+Annotate tiles with `crabmeat-standing`, `crabmeat-walking`, `crabmeat-shooting`, `badnik-projectile`, and `badnik-explosion` classes. The walking, shooting, and explosion tiles may use ordinary Tiled animation frames. Place point objects with class `CrabMeat`; supported properties include `direction`, `patrolBeat`, `patrolPause`, `patrolSpeed`, `patrolOffset`, `shotTelegraph`, projectile tuning, `collisionLayer`, and `points`. Call `$badniks->close()` during level cleanup.
+
+Player-to-badnik and player-to-projectile contacts use relative swept bounds, so either participant can cross the other between fixed updates without tunneling. Projectile-to-terrain movement uses `Terrain::castBody()` over the complete displacement. A projectile whose owning badnik has popped retires without damaging the player.
+
+When `Badniks` receives the level's `Rings` manager, damage scatters up to sixteen held rings in two radial groups before clearing the counter. The burst keeps moving-boxes-2's reduced recovery set: every third ring is a short-lived visual, while the others become collectible after 48 reference frames. `ScatteredRing` stores velocity, gravity, pickup delay, lifetime, restitution, and collision layer. `Rings` uses full body casts for terrain bounces and relative swept pickup checks for moving rings. Recovered rings return to `RingCounter`; unrecovered rings expire between about 3.7 and 6 seconds.
 
 ## Input
 

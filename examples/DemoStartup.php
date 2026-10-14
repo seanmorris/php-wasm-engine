@@ -53,6 +53,7 @@ final class DemoStartup
 
 		foreach([
 			'platformer' => 'Platformer'
+			, 'badniks' => 'CrabMeat badniks'
 			, 'world' => 'Streaming world'
 			, 'loop' => 'Loop-de-loop'
 			, 'breakables' => 'Breakable blocks'

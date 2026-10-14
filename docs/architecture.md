@@ -13,9 +13,11 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
+- moving-boxes-2/app/actor/CrabMeat.js, behavior/Patrol.js, mixin/CanPop.js, and actor/Projectile.js: reusable badnik contacts, alternating patrol phases, paired delayed shots, ballistic motion, and player attack responses.
+- moving-boxes-2/app/actor/PointActor.js and actor/Ring.js: bounded radial ring loss, a delayed recovery window, reduced collectible sets, ballistic gravity, terrain bounces, and expiry.
 - moving-boxes-2/app/controller/Controller.js, Axis.js, and GamepadConfig.js: left-stick/D-pad movement, A jump, B dash actions, Start pause, and a proportional 20% stick dead zone.
 
-The PHP implementation has its own data model, solver, units, control state, and renderer. Original actors, framework integration, combat, powerups, and artwork are not included.
+The PHP implementation has its own data model, solver, units, control state, and renderer. The CrabMeat demo uses original procedural artwork and component systems rather than the reference framework's actor hierarchy.
 
 ## PHP and browser boundaries
 
@@ -59,6 +61,10 @@ Physics/Terrain.php provides two casts:
 Platformer::sweep uses castBody for horizontal, vertical, and diagonal movement, including dash, fall, flight, glide, and climb. Its optional onImpact callback receives the earliest body hit before collision response. Hit::$shape identifies removable geometry; a null handle means permanent terrain. If the callback removes the contacted shape, the sweep advances to that contact and recasts the remaining displacement without clipping velocity. Removed shapes do not consume the six-contact budget; a separate limit of 1024 removals bounds callbacks that keep creating obstacles. Otherwise, the sweep moves to contact, projects velocity and remaining displacement onto the surface, then repeats for up to six contacts. Unresolved displacement is discarded. Callback return values alone cannot disable a collision.
 
 Platformer::adhere casts two short inward rays for surface height and angle. Platformer::stand checks head clearance. Platformer::climb probes the wall's end. Grounded movement updates its tangent in increments of at most four pixels, capped at 1024 increments per step. Each increment still uses a continuous cast.
+
+Badniks stores each player's and badnik's previous center. It performs a relative swept AABB test over both full displacements, which catches fast rolling attacks and normal contacts even when the rectangles do not overlap at either endpoint. Projectile contacts sweep the player and shot relative to one another. Projectile terrain motion constructs a small body and calls `Terrain::castBody()` for the complete ballistic displacement before committing the new position. These checks prevent high-speed actors and shots from tunneling through their targets. CrabMeats uses short downward rays to retain floor contact and `castBody()` to stop horizontal patrol movement at a wall.
+
+Rings applies the same continuous rules to damage bursts. Each `ScatteredRing` casts its circular body over the complete ballistic step, reflects velocity from the earliest terrain normal, and processes up to four contacts. Pickup checks subtract ring motion from player motion before testing the swept bounds. Fast bounces and player crossings therefore cannot pass through thin terrain or each other between fixed updates. A pickup delay prevents the player from immediately reclaiming rings while still inside the burst. Decorative members never enter the pickup path and expire earlier.
 
 Bodies must start outside solid geometry. Geometry can change between steps or in the impact callback, after a body cast has completed. Casts and sensor probes are read-only. Matching opposite tile edges are linked during construction and cancel during a query when both neighbors belong to active collision layers. Arbitrary intersecting polygons are not boolean-unioned.
 

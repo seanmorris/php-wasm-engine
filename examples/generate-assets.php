@@ -40,7 +40,7 @@ $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
 $playerColors = [[86,167,245,255],[242,120,114,255],[246,189,83,255]];
 
-png(__DIR__ . '/assets/tiles.png', 576, 32, static function($x, $y) use($playerColors) {
+png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerColors) {
 	$id = intdiv($x, 32);
 	$x %= 32;
 
@@ -86,7 +86,70 @@ png(__DIR__ . '/assets/tiles.png', 576, 32, static function($x, $y) use($playerC
 			];
 	}
 
-	if($id >= 12)
+	if($id >= 18 && $id <= 22)
+	{
+		$walking = $id === 19 || $id === 20;
+		$shooting = $id === 21 || $id === 22;
+		$alternate = $id % 2;
+		$red = [226,76,88,255];
+		$dark = [112,39,58,255];
+		$cream = [248,229,180,255];
+
+		if(($x >= 9 && $x <= 22 && $y >= 13 && $y <= 26)
+			|| ($y >= 24 && $y <= 27 && (($x >= 4 && $x <= 11) || ($x >= 20 && $x <= 27)))
+		){
+			return $y >= 22 ? $dark : $red;
+		}
+
+		if(($x >= 11 && $x <= 14 && $y >= 8 && $y <= 15)
+			|| ($x >= 18 && $x <= 21 && $y >= 8 && $y <= 15)
+		){
+			return $y <= 10 ? $cream : $dark;
+		}
+
+		$legY = $walking ? 27 + $alternate : 28;
+
+		if($y >= $legY && $y <= 30 && (($x >= 2 && $x <= 12) || ($x >= 19 && $x <= 29)))
+		{
+			return $dark;
+		}
+
+		$clawY = $shooting ? 5 + $alternate * 3 : 15 + $alternate;
+
+		if($y >= $clawY && $y <= $clawY + 7
+			&& (($x >= 1 && $x <= 8) || ($x >= 23 && $x <= 30))
+		){
+			return $red;
+		}
+
+		return [0,0,0,0];
+	}
+
+	if($id === 23)
+	{
+		$distance = hypot($x - 16, $y - 16);
+
+		if($distance <= 5)
+		{
+			return $distance < 2 ? [255,244,190,255] : [101,214,239,255];
+		}
+
+		return [0,0,0,0];
+	}
+
+	if($id === 24 || $id === 25)
+	{
+		$dx = abs($x - 16);
+		$dy = abs($y - 16);
+		$outer = $id === 24 ? 12 : 15;
+		$inside = $dx + $dy <= $outer && (min($dx, $dy) <= 4 || $dx + $dy <= 8);
+
+		return $inside
+			? ($dx + $dy < 7 ? [255,246,183,255] : [255,132,62,255])
+			: [0,0,0,0];
+	}
+
+	if($id >= 12 && $id < 18)
 	{
 		$profile = intdiv($id - 12, 2);
 		$dx = $x - 16;
@@ -141,10 +204,10 @@ $tiles = [
 	, 'name' => 'demo'
 	, 'tilewidth' => 32
 	, 'tileheight' => 32
-	, 'columns' => 18
-	, 'tilecount' => 18
+	, 'columns' => 26
+	, 'tilecount' => 26
 	, 'image' => 'tiles.png'
-	, 'imagewidth' => 576
+	, 'imagewidth' => 832
 	, 'imageheight' => 32
 	, 'tiles' => [
 		['id' => 0,'properties' => $solid]
@@ -243,6 +306,32 @@ $tiles = [
 			, 'animation' => [
 				['tileid' => 16,'duration' => 80]
 				, ['tileid' => 17,'duration' => 80]
+			]
+		]
+		, ['id' => 18,'class' => 'crabmeat-standing']
+		, [
+			'id' => 19
+			, 'class' => 'crabmeat-walking'
+			, 'animation' => [
+				['tileid' => 19,'duration' => 120]
+				, ['tileid' => 20,'duration' => 120]
+			]
+		]
+		, [
+			'id' => 21
+			, 'class' => 'crabmeat-shooting'
+			, 'animation' => [
+				['tileid' => 21,'duration' => 100]
+				, ['tileid' => 22,'duration' => 100]
+			]
+		]
+		, ['id' => 23,'class' => 'badnik-projectile']
+		, [
+			'id' => 24
+			, 'class' => 'badnik-explosion'
+			, 'animation' => [
+				['tileid' => 24,'duration' => 80]
+				, ['tileid' => 25,'duration' => 80]
 			]
 		]
 	]
@@ -480,6 +569,41 @@ $base['layers'] = [
 
 $base['layers'] = array_merge($background, $base['layers']);
 jsonAsset('platformer.tmj', $base);
+$badniks = $base;
+$badniks['layers'][] = [
+	'id' => 4
+	, 'name' => 'Badniks'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'CrabMeat'
+			, 'point' => true
+			, 'x' => 480
+			, 'y' => 448
+			, 'properties' => [
+				['name' => 'direction','type' => 'int','value' => -1]
+				, ['name' => 'patrolBeat','type' => 'float','value' => 90]
+				, ['name' => 'patrolPause','type' => 'float','value' => 25]
+				, ['name' => 'patrolSpeed','type' => 'float','value' => .25]
+				, ['name' => 'shotTelegraph','type' => 'float','value' => 65]
+			]
+		]
+		, [
+			'id' => 3
+			, 'class' => 'CrabMeat'
+			, 'point' => true
+			, 'x' => 1408
+			, 'y' => 448
+			, 'properties' => [
+				['name' => 'direction','type' => 'int','value' => 1]
+				, ['name' => 'patrolOffset','type' => 'float','value' => 45]
+			]
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('badniks.tmj', $badniks);
 $infinite = $base;
 $infinite['infinite'] = true;
 $infinite['width'] = $infinite['height'] = 0;
