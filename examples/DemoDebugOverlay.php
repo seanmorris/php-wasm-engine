@@ -102,7 +102,24 @@ final class DemoDebugOverlay
 
 		$mode = ((int)floor(($body->angle + M_PI / 4) / (M_PI / 2)) % 4 + 4) % 4;
 		$surface = ['Floor (0)', 'L-wall (1)', 'Ceiling (2)', 'R-wall (3)'][$mode];
-		$state = $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'));
+		$state = $body->ability;
+
+		if($state === '' && $body->charge > 0)
+		{
+			$state = 'spindash';
+		}
+		elseif($state === '' && $body->rolling)
+		{
+			$state = 'rolling';
+		}
+		elseif($state === '' && $body->crouching)
+		{
+			$state = 'crouching';
+		}
+		elseif($state === '')
+		{
+			$state = $body->grounded ? 'ground' : 'air';
+		}
 
 		return [
 			'Player' => $body->profile

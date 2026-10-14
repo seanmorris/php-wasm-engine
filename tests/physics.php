@@ -6,16 +6,14 @@ use PhpWasmEngine\Physics\
 use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Tiled\Loader;
 
-test('down-jump never drops through an ordinary solid floor', function() {
+test('down-jump charges on solid terrain instead of dropping through it', function() {
 	$p = new Platformer(ground());
 	$body = new Body(0, 60);
 	tick($p, $body, [], 20);
 	tick($p, $body, ['down' => true,'jump' => true]);
-	check($body->vy < 0);
+	check($body->grounded && $body->crouching && $body->charge > 0);
+	near($body->vy, 0);
 	near($body->dropTimer, 0);
-	tick($p, $body, [], 80);
-	check($body->grounded);
-	near($body->y + $body->halfHeight, 100, .01);
 });
 
 test('raycasts return the earliest wall across negative spatial cells', function() {

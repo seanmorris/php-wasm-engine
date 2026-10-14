@@ -421,14 +421,47 @@ test('one-way platforms permit upward passage and down-jump drop', function() {
 	check($b->y > 100);
 });
 
-test('dash charging launches and drop dash releases on landing', function() {
+test('stationary down crouches while moving down enters a roll', function() {
 	$p = new Platformer(ground());
 	$b = new Body(0, 60, 'runner');
 	tick($p, $b, [], 10);
-	tick($p, $b, ['down' => true,'action' => true], 30);
-	check($b->charge > 0);
+	tick($p, $b, ['down' => true]);
+	check($b->crouching && !$b->rolling);
+	near($b->halfHeight, $b->standingHeight);
+	tick($p, $b, ['down' => true], 45);
+	check($b->crouchTime >= .75);
 	tick($p, $b, []);
-	check($b->rolling && $b->groundSpeed > 500);
+	check(!$b->crouching && !$b->rolling && $b->crouchTime === 0.0);
+	$b->groundSpeed = 300;
+	tick($p, $b, ['down' => true]);
+	check($b->rolling && !$b->crouching);
+});
+
+test('down plus jump taps or held action build a decaying spindash charge', function() {
+	$p = new Platformer(ground());
+	$b = new Body(0, 60, 'runner');
+	tick($p, $b, [], 10);
+	tick($p, $b, ['down' => true]);
+	tick($p, $b, ['down' => true,'jump' => true]);
+	$first = $b->charge;
+	check($first > 0 && $b->grounded && $b->crouching && !$b->rolling && $b->crouchTime === 0.0);
+	tick($p, $b, ['down' => true], 8);
+	check($b->charge < $first);
+	tick($p, $b, ['down' => true]);
+	$decayed = $b->charge;
+	check($decayed > 0 && $b->crouching && !$b->rolling);
+	tick($p, $b, ['down' => true,'action' => true], 8);
+	check($b->charge > $decayed, 'holding action must build charge every step');
+	tick($p, $b, ['down' => true]);
+	check($b->charge > 0 && !$b->rolling);
+	tick($p, $b, []);
+	check(!$b->crouching && $b->rolling && $b->groundSpeed > 500);
+});
+
+test('drop dash charges in air and releases on landing', function() {
+	$p = new Platformer(ground());
+	$b = new Body(0, 60, 'runner');
+	tick($p, $b, [], 10);
 	tick($p, $b, ['jump' => true]);
 	tick($p, $b, ['action' => true], 70);
 	check($b->grounded && $b->rolling);

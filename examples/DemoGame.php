@@ -159,6 +159,8 @@ final class DemoGame
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
 		$this->body->ability = '';
+		$this->body->crouching = false;
+		$this->body->crouchTime = 0;
 		$this->body->wall = 0;
 		$this->body->charge = $this->body->dropCharge = $this->body->dropTimer = 0;
 		$this->body->flightRemaining = $defaults->flightRemaining;
@@ -192,11 +194,13 @@ final class DemoGame
 			, 'angle'
 			, 'grounded'
 			, 'rolling'
+			, 'crouching'
 			, 'facing'
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'
 			, 'charge'
+			, 'crouchTime'
 			, 'dropCharge'
 			, 'flightRemaining'
 			, 'dropTimer', 'coyote', 'jumpBuffer'
@@ -207,6 +211,52 @@ final class DemoGame
 
 		$this->body->halfHeight = $this->body->standingHeight;
 		$this->level?->rings?->sync($this->entity, $this->body);
+	}
+
+	/**
+	 * Name the player's mutually exclusive visible movement pose.
+	 *
+	 * @param Body $body Player body carrying crouch, charge, roll, and grounded state.
+	 * @return string Spindash, rolling, crouching, ground, or air diagnostic pose.
+	 */
+	private function playerPose(Body $body): string
+	{
+		if($body->charge > 0)
+		{
+			return 'spindash';
+		}
+
+		if($body->rolling)
+		{
+			return 'rolling';
+		}
+
+		if($body->crouching)
+		{
+			return 'crouching';
+		}
+
+		return $body->grounded ? 'ground' : 'air';
+	}
+
+	/**
+	 * Resolve generated player art for a movement profile and visible pose.
+	 *
+	 * @param string $profile Runner, glider, or flyer artwork family.
+	 * @param string $pose Pose returned by playerPose; air and ground share standing art.
+	 * @return int Global demo tileset ID, including animated rolling art for a spindash.
+	 */
+	private function playerGid(string $profile, string $pose): int
+	{
+		$art = in_array($pose, ['rolling', 'spindash'], true)
+			? 'rolling'
+			: ($pose === 'crouching' ? 'crouching' : 'standing');
+
+		return [
+			'runner' => ['standing' => 7, 'crouching' => 10, 'rolling' => 13]
+			, 'glider' => ['standing' => 8, 'crouching' => 11, 'rolling' => 15]
+			, 'flyer' => ['standing' => 9, 'crouching' => 12, 'rolling' => 17]
+		][$profile][$art];
 	}
 
 	/**
@@ -336,7 +386,11 @@ final class DemoGame
 		}
 
 		$this->level->movement->step($this->body, $controls, $dt);
-		$this->camera->follow($this->body->x, $this->body->y, $dt);
+		$lookDown = $this->body->crouchTime >= .75
+			? min(120, $this->camera->height / $this->camera->zoom / 5)
+			: 0;
+
+		$this->camera->follow($this->body->x, $this->body->y + $lookDown, $dt);
 		$this->camera->y = min(120, $this->camera->y);
 	}
 
@@ -448,15 +502,24 @@ final class DemoGame
 
 		$body = $this->body;
 		$level->renderer->render($camera, $time);
+		$pose = $this->playerPose($body);
 
 		if($this->scene !== 'isometric')
 		{
 			$sprite = $this->engine->entities->get($this->entity, Sprite::class);
+			$gid = $this->playerGid($body->profile, $pose);
+
+			if($sprite->gid !== $gid)
+			{
+				$sprite->gid = $gid;
+				$sprite->time = -$time;
+			}
+
 			$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
 			$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
-			$sprite->scaleY = $body->rolling ? .7 : 1;
+			$sprite->scaleY = 1;
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
@@ -465,6 +528,10 @@ final class DemoGame
 			, 'y' => $body->y
 			, 'grounded' => $body->grounded
 			, 'rolling' => $body->rolling
+			, 'crouching' => $body->crouching
+			, 'crouchTime' => $body->crouchTime
+			, 'charge' => $body->charge
+			, 'pose' => $pose
 			, 'ability' => $body->ability
 			, 'speed' => $body->groundSpeed
 			, 'angle' => $body->angle
@@ -482,7 +549,7 @@ final class DemoGame
 
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
-			, $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'))
+			, $body->ability ?: $pose
 			, $body->groundSpeed
 			, $stats['draws'] + $level->sprites->draws
 			, $stats['instances'] + $level->sprites->instances
