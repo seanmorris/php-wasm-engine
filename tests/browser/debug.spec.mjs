@@ -58,6 +58,7 @@ test(
 		await expect.poll(async () => (await state(page)).fps).toBeGreaterThan(0);
 		expect((await state(page)).enabled).toBe(false);
 		expect((await state(page)).showFps).toBe(true);
+		expect((await state(page)).draws).toBe(1);
 		await page.keyboard.down('F9');
 		await expect.poll(async () => (await state(page)).enabled).toBe(true);
 		await expect.poll(async () => (await state(page)).rows.Player).toBe('runner');

@@ -467,6 +467,7 @@ require __DIR__ . '/rolling-breakables.php';
 require __DIR__ . '/menus.php';
 require __DIR__ . '/cards.php';
 require __DIR__ . '/debug-overlay.php';
+require __DIR__ . '/rings.php';
 
 $failed = 0;
 

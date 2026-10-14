@@ -43,6 +43,35 @@ Gamepads work in every scene. Click the canvas and press a gamepad button if the
 
 In **Breakable blocks**, walking stops against a block and jumping can land on top. Gain speed and hold Down to roll through it, breaking it into a grid of particles without losing momentum. The runner can also charge a dash with Down + X or Down + B / Circle, then release the action button. R or Back / Select restores all three blocks. Their `columns` and `rows` properties in `examples/assets/breakables.tmj` set the grids to 4×3, 2×8, and 8×2. Tiled tile-object sizes set their world dimensions.
 
+## Collectible rings and player HUD
+
+The platformer map marks animated tiles with the Tiled class `ring`. `Gameplay\Rings`
+turns those cells into `Ring` plus `Sprite` entities and clears the original map cells
+before rendering. Each player that owns both `Body` and `RingCounter` can collect them.
+The pickup check sweeps from the previous body position to the current one, so fast
+movement cannot tunnel through a ring. Call `sync()` after a teleport to prevent the
+teleport path from collecting anything.
+
+~~~php
+use PhpWasmEngine\Gameplay\{RingCounter,Rings};
+
+$counter = new RingCounter;
+$player = $engine->entities->create($body, $counter, $sprite);
+$rings = new Rings($engine->entities, $map); // Run before constructing MapRenderer.
+$rings->sync($player, $body);
+$engine->systems->add('rings', [$rings, 'update'], after: ['movement']);
+~~~
+
+The optional `ring.radius`, `ring.value`, and `ring.points` tile properties configure
+each pickup. `close()` removes every uncollected entity owned by that map. The live demo
+resets rings and elapsed level time when a level changes while retaining score in the
+player component.
+
+The example player HUD renders **SCORE**, **TIME**, and **RINGS** at the upper left with
+the annotated menu font, colored labels, and pixel shadows matching moving-boxes-2.
+It has no background panel and hides in camera-only scenes. The FPS meter remains an
+independent lower-left diagnostic with no black rectangle behind it.
+
 ## Input
 
 `Engine` initializes SDL game controllers and discovers pads connected before or during a run. Disconnecting a pad releases its input. Keyboard and gamepad input combine for one player; D-pad input overrides the left stick on that axis. Stick movement remains proportional after a 20% dead zone, matching moving-boxes-2. Keyboard and D-pad movement use full strength.
@@ -138,7 +167,7 @@ frame, and simulation time. World draw counts exclude the overlay and menus. Det
 values refresh at 10 Hz; glyph layouts are cached and the overlay adds two batched
 draw calls using the menu's existing font atlas.
 
-**Settings → FPS meter** independently controls the lower-left FPS/frame-interval
+**Settings → FPS meter** independently controls the unboxed lower-left FPS/frame-interval
 display, enabled by default. FPS measures browser frames, including paused menus,
 and discards the idle interval after tab or graphics recovery. Both preferences
 survive level changes. Reset settings restores the defaults.
