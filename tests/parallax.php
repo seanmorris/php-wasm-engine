@@ -6,10 +6,12 @@ use PhpWasmEngine\Render\
 use PhpWasmEngine\Tiled\Layer;
 
 test('image layers inherit group state and resolve animated backgrounds', function() {
-	$properties = [[
-		'name' => 'frames'
-		, 'value' => '[{"image":"a.png","duration":100},{"image":"b.png","duration":200}]'
-	]];
+	$properties = [
+		[
+			'name' => 'frames'
+			, 'value' => '[{"image":"a.png","duration":100},{"image":"b.png","duration":200}]'
+		]
+	];
 
 	$image = [
 		'type' => 'imagelayer'
@@ -23,15 +25,17 @@ test('image layers inherit group state and resolve animated backgrounds', functi
 		, 'properties' => $properties
 	];
 
-	$data = mapData([[
-		'type' => 'group'
-		, 'offsetx' => 10
-		, 'opacity' => .5
-		, 'parallaxx' => .5
-		, 'layers' => [
-			$image
+	$data = mapData([
+		[
+			'type' => 'group'
+			, 'offsetx' => 10
+			, 'opacity' => .5
+			, 'parallaxx' => .5
+			, 'layers' => [
+				$image
+			]
 		]
-	]]);
+	]);
 
 	$map = fixture(['/maps/a.tmj' => $data,'/maps/tiles.tsj' => tiles()])->map('/maps/a.tmj');
 	$layer = $map->layers[0];
@@ -154,14 +158,18 @@ test('background animation and anchors reject invalid definitions', function() {
 	foreach(['[{"image":"x.png","duration":0}]','{}','[{"duration":10}]'] as $frames)
 	{
 		$loader = fixture([
-			'a.tmj' => mapData([[
-				'type' => 'imagelayer'
-				, 'image' => 'x.png'
-				, 'properties' => [[
-					'name' => 'frames'
-					, 'value' => $frames
-				]]
-			]])
+			'a.tmj' => mapData([
+				[
+					'type' => 'imagelayer'
+					, 'image' => 'x.png'
+					, 'properties' => [
+						[
+							'name' => 'frames'
+							, 'value' => $frames
+						]
+					]
+				]
+			])
 			, 'tiles.tsj' => tiles()
 		]);
 
@@ -169,14 +177,18 @@ test('background animation and anchors reject invalid definitions', function() {
 	}
 
 	$loader = fixture([
-		'a.tmj' => mapData([[
-			'type' => 'imagelayer'
-			, 'image' => 'x.png'
-			, 'properties' => [[
-				'name' => 'from'
-				, 'value' => 'sideways'
-			]]
-		]])
+		'a.tmj' => mapData([
+			[
+				'type' => 'imagelayer'
+				, 'image' => 'x.png'
+				, 'properties' => [
+					[
+						'name' => 'from'
+						, 'value' => 'sideways'
+					]
+				]
+			]
+		])
 		, 'tiles.tsj' => tiles()
 	]);
 

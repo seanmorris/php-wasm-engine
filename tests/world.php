@@ -17,7 +17,7 @@ function streamFixture(?callable $request = null, ?callable $release = null): Wo
 		'world.world' => ['maps' => $maps]
 		, 'a.tmj' => mapData([layer()])
 		, 'b.tmj' => mapData([
-		layer()
+			layer()
 		])
 		, 'far.tmj' => mapData([layer()])
 		, 'tiles.tsj' => tiles()
@@ -41,7 +41,8 @@ test('world metadata queries preserve manifest order without reading map files',
 	})))->world('/maps/demo.world');
 
 	check(
-		array_column($world->entries(-125, -25, 0, 0), 'fileName') === ['negative.tmj'
+		array_column($world->entries(-125, -25, 0, 0), 'fileName') === [
+			'negative.tmj'
 			, 'overlap.tmj'
 		]
 	);
@@ -184,13 +185,15 @@ test('a malformed external tileset can be replaced and retried', function() {
 	$broken = true;
 	$data = [
 		'world.world' => [
-			'maps' => [[
-				'fileName' => 'a.tmj'
-				, 'x' => 0
-				, 'y' => 0
-				, 'width' => 100
-				, 'height' => 100
-			]]
+			'maps' => [
+				[
+					'fileName' => 'a.tmj'
+					, 'x' => 0
+					, 'y' => 0
+					, 'width' => 100
+					, 'height' => 100
+				]
+			]
 		]
 		, 'a.tmj' => mapData([layer()])
 		, 'tiles.tsj' => tiles()
@@ -225,13 +228,15 @@ test('a malformed external tileset can be replaced and retried', function() {
 test('stream retries accept error keys relative to the application working directory', function() {
 	$data = [
 		'maps/world.world' => [
-			'maps' => [[
-				'fileName' => 'a.tmj'
-				, 'x' => 0
-				, 'y' => 0
-				, 'width' => 100
-				, 'height' => 100
-			]]
+			'maps' => [
+				[
+					'fileName' => 'a.tmj'
+					, 'x' => 0
+					, 'y' => 0
+					, 'width' => 100
+					, 'height' => 100
+				]
+			]
 		]
 		, 'maps/a.tmj' => mapData([layer()])
 		, 'maps/tiles.tsj' => tiles()
@@ -264,11 +269,13 @@ test(
 
 		$data = [
 			'world.world' => ['maps' => [$entry]]
-			, 'infinite.tmj' => mapData([layer([
-				'chunks' => [
-			$chunk
-				]
-			])], ['infinite' => true]
+			, 'infinite.tmj' => mapData([
+				layer([
+					'chunks' => [
+						$chunk
+					]
+				])
+			], ['infinite' => true]
 			)
 			, 'tiles.tsj' => tiles()
 		];

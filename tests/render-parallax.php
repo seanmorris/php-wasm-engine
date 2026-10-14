@@ -155,10 +155,12 @@ $renderer->close();
 
 $animated = $back;
 
-$animated['properties'] = [[
-	'name' => 'frames'
-	, 'value' => json_encode([['image' => $image, 'duration' => 100], ['image' => $repeatImage,'duration' => 200]])
-]];
+$animated['properties'] = [
+	[
+		'name' => 'frames'
+		, 'value' => json_encode([['image' => $image, 'duration' => 100], ['image' => $repeatImage,'duration' => 200]])
+	]
+];
 
 $renderer = imageMap([$animated]);
 $animation = [];

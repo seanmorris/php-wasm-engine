@@ -18,6 +18,7 @@ final class Assets
 	 */
 	public function __construct(?callable $reader = null)
 	{
+
 		/**
 		 * Read an asset through PHP filesystem and stream support.
 		 *

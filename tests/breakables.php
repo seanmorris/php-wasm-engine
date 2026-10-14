@@ -32,22 +32,26 @@ test(
 				, 'width' => 48
 				, 'height' => 24
 				, 'rotation' => 30
-				, 'properties' => [['name' => 'columns', 'value' => 3]
-				, [
-					'name' => 'rows'
-					, 'value' => 4
-				]]
+				, 'properties' => [
+					['name' => 'columns', 'value' => 3]
+					, [
+						'name' => 'rows'
+						, 'value' => 4
+					]
+				]
 			];
 
-			$data = mapData([[
-				'id' => 1
-				, 'type' => 'objectgroup'
-				, 'offsetx' => 3
-				, 'offsety' => 5
-				, 'objects' => [
-					$object
+			$data = mapData([
+				[
+					'id' => 1
+					, 'type' => 'objectgroup'
+					, 'offsetx' => 3
+					, 'offsety' => 5
+					, 'objects' => [
+						$object
+					]
 				]
-			]]);
+			]);
 
 			$map = fixture(['blocks.tmj' => $data, 'tiles.tsj' => tiles()])->map('blocks.tmj');
 			$map->x = 7;
@@ -61,7 +65,8 @@ test(
 			check($sprite->gid === 1, 'flip bits must never reach tile lookup');
 
 			// Check the Tiled object rectangle independently of the sprite's transformed anchor.
-			foreach([[24, -12, true], [-1, -12, false], [49, -12, false]
+			foreach([
+				[24, -12, true], [-1, -12, false], [49, -12, false]
 				, [24, -25, false], [24, 1, false]
 			] as [$x, $y, $solid])
 			{

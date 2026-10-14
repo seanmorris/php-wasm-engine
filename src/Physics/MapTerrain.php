@@ -201,11 +201,12 @@ final class MapTerrain
 
 		$w = $object['width'] ?? 0;
 		$h = $object['height'] ?? 0;
-		$points = $object['polygon'] ?? $object['polyline'] ?? [['x' => 0,'y' => 0]
-		, [
-			'x' => $w
-			, 'y' => 0
-		]
+		$points = $object['polygon'] ?? $object['polyline'] ?? [
+			['x' => 0,'y' => 0]
+			, [
+				'x' => $w
+				, 'y' => 0
+			]
 			, ['x' => $w,'y' => $h],['x' => 0,'y' => $h]
 		];
 
@@ -233,10 +234,11 @@ final class MapTerrain
 			 * @param array{x:float|int,y:float|int} $p Local unrotated shape vertex.
 			 * @return array{0:float,1:float} Vertex in the containing layer's coordinate space.
 			 */
-			fn($p) => [($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s
-			, ($object['y'] ?? 0) + $p[
+			fn($p) => [
+				($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s
+				, ($object['y'] ?? 0) + $p[
 				'x'
-			] * $s + $p['y'] * $c
+				] * $s + $p['y'] * $c
 			]
 			, $points
 		);

@@ -149,27 +149,32 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 		, 'properties' => [['name' => 'back','value' => '1']]
 	];
 
-	$data = mapData([[
-		'type' => 'group'
-		, 'offsetx' => 4
-		, 'offsety' => -2
-		, 'layers' => [layer(['name' => 'Collision 2','data' => [1,0,0,0]])
-		, layer([
-			'name' => 'Art'
-			, 'data' => [0,1,0,0]
-			, 'properties' => [[
-				'name' => 'collision'
-				, 'value' => false
-			]]
-		])
-		, [
-			'id' => 3
-			, 'type' => 'objectgroup'
-			, 'offsetx' => 3
-			, 'objects' => [$object]
+	$data = mapData([
+		[
+			'type' => 'group'
+			, 'offsetx' => 4
+			, 'offsety' => -2
+			, 'layers' => [
+				layer(['name' => 'Collision 2','data' => [1,0,0,0]])
+				, layer([
+					'name' => 'Art'
+					, 'data' => [0,1,0,0]
+					, 'properties' => [
+						[
+							'name' => 'collision'
+							, 'value' => false
+						]
+					]
+				])
+				, [
+					'id' => 3
+					, 'type' => 'objectgroup'
+					, 'offsetx' => 3
+					, 'objects' => [$object]
+				]
+			]
 		]
-		]
-	]]);
+	]);
 
 	$map = fixture(['a' => $data,'tiles.tsj' => tiles()])->map('a');
 	$map->x = -100;

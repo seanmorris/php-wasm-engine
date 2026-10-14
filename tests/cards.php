@@ -67,7 +67,8 @@ test('cards wait for readiness before timing out or accepting a skip', function(
 });
 
 test('card input requires a fresh press after the guard and between cards', function() {
-	$sequence = new CardSequence([new Card('one', duration: null, skipAfter: .5, fadeOut: 0)
+	$sequence = new CardSequence([
+		new Card('one', duration: null, skipAfter: .5, fadeOut: 0)
 		, new Card('two', duration: null, skipAfter: .5, fadeOut: 0)
 	]);
 

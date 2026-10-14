@@ -62,7 +62,8 @@ final class MenuRenderer
 		{
 			$x = max($rect[0], $clip[0]);
 			$y = max($rect[1], $clip[1]);
-			$rect = [$x, $y, min($rect[0] + $rect[2], $clip[0] + $clip[2]) - $x
+			$rect = [
+				$x, $y, min($rect[0] + $rect[2], $clip[0] + $clip[2]) - $x
 				, min($rect[1] + $rect[3], $clip[1] + $clip[3]) - $y
 			];
 		}
@@ -300,7 +301,8 @@ final class MenuRenderer
 				$this->box([$clip[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled']);
 
 				$this->box(
-					[$clip[0] + $track * $ratio - 2 * $scale, $y + 5 * $scale, 4 * $scale
+					[
+						$clip[0] + $track * $ratio - 2 * $scale, $y + 5 * $scale, 4 * $scale
 						, 10 * $scale
 					]
 					, $color

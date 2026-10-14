@@ -12,12 +12,14 @@ use PhpWasmEngine\Render\
 $device = new Device(64, 48);
 $image = dirname(__DIR__) . '/examples/assets/test-parallax.png';
 $other = dirname(__DIR__) . '/examples/assets/test.png';
-$properties = [['name' => 'from','value' => 'center']
-, ['name' => 'scrollX','value' => 6]
-, [
-	'name' => 'scrollY'
-	, 'value' => -3
-]];
+$properties = [
+	['name' => 'from','value' => 'center']
+	, ['name' => 'scrollX','value' => 6]
+	, [
+		'name' => 'scrollY'
+		, 'value' => -3
+	]
+];
 
 $back = [
 	'type' => 'imagelayer'

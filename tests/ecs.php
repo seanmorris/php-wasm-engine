@@ -131,7 +131,8 @@ test('ECS lifecycle listeners see fresh queries during replacement and destructi
 	foreach(['added', 'removed'] as $event)
 	{
 		$r->on($event, function($registry, $entity, $component) use (&$events, $query, $event) {
-			$events[] = [$event, get_class($component), $registry->query($query)
+			$events[] = [
+				$event, get_class($component), $registry->query($query)
 				, $registry->query(EcsBase::class), $registry->alive($entity)
 			];
 		});
@@ -141,16 +142,19 @@ test('ECS lifecycle listeners see fresh queries during replacement and destructi
 	$r->destroy($id);
 
 	check(
-		$events === [['removed', EcsBase::class, [$id], [], true]
-		, ['added'
-		, EcsBase::class
-		, [$id]
-			, [$id], true
-		]
-		, ['removed', EcsOther::class, [$id], [$id], true]
-		, ['removed'
-			, EcsBase::class, [], [], true
-		]
+		$events === [
+			['removed', EcsBase::class, [$id], [], true]
+			, [
+				'added'
+				, EcsBase::class
+				, [$id]
+				, [$id], true
+			]
+			, ['removed', EcsOther::class, [$id], [$id], true]
+			, [
+				'removed'
+				, EcsBase::class, [], [], true
+			]
 		]
 	);
 
@@ -251,8 +255,9 @@ test(
 		$model = [];
 		$types = [EcsBase::class, EcsChild::class, EcsSibling::class, EcsOther::class];
 
-		$queries = [Query::all(), Query::any(), Query::not()
-		, Query::not(EcsBase::class, EcsOther::class)
+		$queries = [
+			Query::all(), Query::any(), Query::not()
+			, Query::not(EcsBase::class, EcsOther::class)
 			, Query::all(EcsTagged::class, Query::not(EcsOther::class))
 			, Query::any(Query::all(EcsTagged::class, EcsOther::class), Query::not(EcsBase::class))
 			, Query::not(Query::any(EcsOther::class, EcsSibling::class), Query::not(EcsTagged::class))

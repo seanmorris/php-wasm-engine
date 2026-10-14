@@ -252,12 +252,15 @@ final class MapRenderer
 
 		$points = [];
 
-		foreach([[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
-		, [$chunk->x
-		, $chunk->y + $chunk->height
-		]
+		foreach([
+			[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
+			, [
+				$chunk->x
+				, $chunk->y + $chunk->height
+			]
 			, [$chunk->x + $chunk->width,$chunk->y + $chunk->height]
-		] as [$x
+		] as [
+			$x
 			, $y
 		]
 		){
@@ -472,10 +475,11 @@ final class MapRenderer
 								continue;
 							}
 
-							$commands[] = [$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x
-							, $page[
+							$commands[] = [
+								$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x
+								, $page[
 								'texture'
-							]
+								]
 								, $first,$count,$this->instance($layer, $chunk, $slice)
 							];
 						}

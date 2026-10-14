@@ -666,15 +666,18 @@ final class SdlInput
 		if($this->focused && !$this->closed)
 		{
 			foreach([
-				['left', 'right', SDL_CONTROLLER_AXIS_LEFTX
+				[
+					'left', 'right', SDL_CONTROLLER_AXIS_LEFTX
 					, SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT
 					, SDLK_LEFT, SDLK_a, SDLK_RIGHT, SDLK_d
 				]
-				, ['up', 'down', SDL_CONTROLLER_AXIS_LEFTY
+				, [
+					'up', 'down', SDL_CONTROLLER_AXIS_LEFTY
 					, SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN
 					, SDLK_UP, SDLK_w, SDLK_DOWN, SDLK_s
 				]
-			] as [$negative
+			] as [
+				$negative
 				, $positive
 				, $axis
 				, $padNegative

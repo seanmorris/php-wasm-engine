@@ -258,10 +258,11 @@ final class DemoDebugOverlay
 
 			$y = $height - ($this->font->lineHeight * $scale + 3 * $pad);
 			$meterWidth = 224 * $scale;
-			$boxes[] = [$pad
-			, $y
-			, $meterWidth
-			, $this->font->lineHeight * $scale + 2 * $pad
+			$boxes[] = [
+				$pad
+				, $y
+				, $meterWidth
+				, $this->font->lineHeight * $scale + 2 * $pad
 				, .025, .035, .065, .84
 			];
 

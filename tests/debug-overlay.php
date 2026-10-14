@@ -71,7 +71,8 @@ test(
 			$rows = DemoDebugOverlay::playerRows($body);
 
 			check(
-				$rows['Surface'] === ['Floor (0)', 'L-wall (1)', 'Ceiling (2)', 'R-wall (3)'
+				$rows['Surface'] === [
+					'Floor (0)', 'L-wall (1)', 'Ceiling (2)', 'R-wall (3)'
 					, 'Floor (0)'
 				][$index]
 			);

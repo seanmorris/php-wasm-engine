@@ -69,9 +69,12 @@ final class CardRenderer
 
 		$opacity = $sequence->opacity();
 		$scale = min($this->style['scale'], $width / 420, $height / 240);
-		$boxes = [[0, 0, $width, $height, 0, 0, 0
-			, $backdrop ? $this->style['backdropDim'] : 1
-		]];
+		$boxes = [
+			[
+				0, 0, $width, $height, 0, 0, 0
+				, $backdrop ? $this->style['backdropDim'] : 1
+			]
+		];
 
 		$batch = [];
 		$this->nextCache = [];

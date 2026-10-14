@@ -67,9 +67,10 @@ final class BitmapFont
 
 				$width = (int)($p['glyph.width'] ?? $tile['rect'][2]);
 				$height = (int)($p['glyph.height'] ?? $tile['rect'][3]);
-				$crop = [(int)($p['glyph.cropX'] ?? 0)
-				, (int)($p['glyph.cropY'] ?? 0)
-				, $width
+				$crop = [
+					(int)($p['glyph.cropX'] ?? 0)
+					, (int)($p['glyph.cropY'] ?? 0)
+					, $width
 					, $height
 				];
 

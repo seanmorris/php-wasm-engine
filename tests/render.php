@@ -29,23 +29,25 @@ $map = [
 	, 'tilewidth' => 16
 	, 'tileheight' => 16
 	, 'tilesets' => [$set]
-	, 'layers' => [ [
-		'id' => 1
-		, 'type' => 'tilelayer'
-		, 'name' => 'test'
-		, 'width' => 8
-		, 'height' => 1
-		, 'data' => $values
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'type' => 'tilelayer'
+			, 'name' => 'test'
+			, 'width' => 8
+			, 'height' => 1
+			, 'data' => $values
+		]
+		, [
+			'id' => 2
+			, 'type' => 'tilelayer'
+			, 'name' => 'second'
+			, 'width' => 8
+			, 'height' => 1
+			, 'offsety' => 32
+			, 'data' => [1,0,0,0,0,0,0,0]
+		]
 	]
-	, [
-		'id' => 2
-		, 'type' => 'tilelayer'
-		, 'name' => 'second'
-		, 'width' => 8
-		, 'height' => 1
-		, 'offsety' => 32
-		, 'data' => [1,0,0,0,0,0,0,0]
-	] ]
 ];
 
 file_put_contents('/test.tmj', json_encode($map));

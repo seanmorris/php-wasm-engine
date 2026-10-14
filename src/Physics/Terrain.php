@@ -488,7 +488,8 @@ final class Terrain
 					$near = 0;
 					$far = 1;
 
-					foreach([[$ca,$sa,$body->radius],[-$sa,$ca,$body->halfHeight]] as [$ux,$uy
+					foreach([[$ca,$sa,$body->radius],[-$sa,$ca,$body->halfHeight]] as [
+						$ux,$uy
 						, $radius
 					]){
 						$radius = max(0, $radius - .001);

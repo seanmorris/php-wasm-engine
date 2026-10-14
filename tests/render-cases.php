@@ -25,13 +25,15 @@ $data = [
 	, 'tilewidth' => 16
 	, 'tileheight' => 8
 	, 'tilesets' => [$set]
-	, 'layers' => [[
-		'id' => 1
-		, 'type' => 'tilelayer'
-		, 'width' => 34
-		, 'height' => 2
-		, 'data' => array_fill(0, 68, 1)
-	]]
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'type' => 'tilelayer'
+			, 'width' => 34
+			, 'height' => 2
+			, 'data' => array_fill(0, 68, 1)
+		]
+	]
 ];
 
 file_put_contents('/iso-test.tmj', json_encode($data));
@@ -95,19 +97,22 @@ $data = [
 	, 'tilewidth' => 16
 	, 'tileheight' => 16
 	, 'tilesets' => [$set]
-	, 'layers' => [[
-		'id' => 1
-		, 'type' => 'tilelayer'
-		, 'chunks' => [['x' => -10000,'y' => -2,'width' => 1,'height' => 1,'data' => [1]]
-	, [
-		'x' => 10000
-		, 'y' => 0
-		, 'width' => 1
-		, 'height' => 1
-		, 'data' => [1]
-	]
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'type' => 'tilelayer'
+			, 'chunks' => [
+				['x' => -10000,'y' => -2,'width' => 1,'height' => 1,'data' => [1]]
+				, [
+					'x' => 10000
+					, 'y' => 0
+					, 'width' => 1
+					, 'height' => 1
+					, 'data' => [1]
+				]
+			]
 		]
-	]]
+	]
 ];
 
 file_put_contents('/sparse-test.tmj', json_encode($data));

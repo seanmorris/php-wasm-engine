@@ -55,10 +55,11 @@ png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
 			? [105,212,157,255]
 			: (($x + $y) % 7 === 0
 				? [71,100,105,255]
-				: [42
-		, 63
-		, 77
-			, 255
+				: [
+					42
+					, 63
+					, 77
+					, 255
 				]
 			);
 	}
@@ -71,13 +72,15 @@ png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
 	if($id === 4 || $id === 5)
 	{
 		return hypot($x - 16, $y - 16) < ($id === 4?10:7) && hypot($x - 16, $y - 16) > 4
-			? [255
-		, 211
-		, 107
-			, 255
+			? [
+				255
+				, 211
+				, 107
+				, 255
 			]
-			: [0
-			, 0,0,0
+			: [
+				0
+				, 0,0,0
 			];
 	}
 
@@ -111,62 +114,73 @@ $tiles = [
 	, 'imagewidth' => 288
 	, 'imageheight' => 32
 	, 'tiles' => [
-	['id' => 0,'properties' => $solid]
-	, [
-		'id' => 1
-		, 'objectgroup' => [
-			'objects' => [[
-				'x' => 0
-				, 'y' => 0
-				, 'polygon' => [['x' => 0,'y' => 32],['x' => 32,'y' => 0],['x' => 32,'y' => 32]]
-			]]
-		]
-	]
-	, [
-		'id' => 2
-		, 'objectgroup' => [
-			'objects' => [[
-				'x' => 0
-				, 'y' => 0
-				, 'polygon' => [['x' => 0,'y' => 0]
-	, [
-		'x' => 32
-		, 'y' => 32
-	]
-	, ['x' => 0,'y' => 32]
+		['id' => 0,'properties' => $solid]
+		, [
+			'id' => 1
+			, 'objectgroup' => [
+				'objects' => [
+					[
+						'x' => 0
+						, 'y' => 0
+						, 'polygon' => [['x' => 0,'y' => 32],['x' => 32,'y' => 0],['x' => 32,'y' => 32]]
+					]
 				]
-			]]
+			]
+		]
+		, [
+			'id' => 2
+			, 'objectgroup' => [
+				'objects' => [
+					[
+						'x' => 0
+						, 'y' => 0
+						, 'polygon' => [
+							['x' => 0,'y' => 0]
+							, [
+								'x' => 32
+								, 'y' => 32
+							]
+							, ['x' => 0,'y' => 32]
+						]
+					]
+				]
+			]
+		]
+		, [
+			'id' => 3
+			, 'properties' => [
+				[
+					'name' => 'oneWay'
+					, 'value' => true
+				]
+			]
+			, 'objectgroup' => [
+				'objects' => [
+					[
+						'x' => 0
+						, 'y' => 0
+						, 'width' => 32
+						, 'height' => 6
+					]
+				]
+			]
+		]
+		, [
+			'id' => 4
+			, 'animation' => [
+				['tileid' => 4,'duration' => 180]
+				, [
+					'tileid' => 5
+					, 'duration' => 180
+				]
+			]
+		]
+		, ['id' => 6,'class' => 'runner'] , ['id' => 7,'class' => 'glider']
+		, [
+			'id' => 8
+			, 'class' => 'flyer'
 		]
 	]
-	, [
-		'id' => 3
-		, 'properties' => [[
-			'name' => 'oneWay'
-			, 'value' => true
-		]]
-		, 'objectgroup' => [
-			'objects' => [[
-				'x' => 0
-				, 'y' => 0
-				, 'width' => 32
-				, 'height' => 6
-			]]
-		]
-	]
-	, [
-		'id' => 4
-		, 'animation' => [['tileid' => 4,'duration' => 180]
-	, [
-		'tileid' => 5
-		, 'duration' => 180
-	]
-		]
-	]
-	, ['id' => 6,'class' => 'runner'] , ['id' => 7,'class' => 'glider']
-	, [
-		'id' => 8
-		, 'class' => 'flyer'
-	] ]
 ];
 
 jsonAsset('tiles.tsj', $tiles);
@@ -298,10 +312,11 @@ foreach([0,1] as $frame)
 		, 128
 		, 8
 		, static fn($x, $y) => ($x + $frame * 16 + $y * 7) % 48 < 18 && $y % 3 === 0
-			? [124
-		, 172
-		, 180
-			, 130
+			? [
+				124
+				, 172
+				, 180
+				, 130
 			]
 			: [0,0,0,0]
 	);
@@ -319,23 +334,27 @@ $bands = [
 
 foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
 {
-	$properties = [['name' => 'from','type' => 'string','value' => 'bottom']
-	, [
-		'name' => 'scrollX'
-		, 'type' => 'float'
-		, 'value' => $scroll
-	]];
+	$properties = [
+		['name' => 'from','type' => 'string','value' => 'bottom']
+		, [
+			'name' => 'scrollX'
+			, 'type' => 'float'
+			, 'value' => $scroll
+		]
+	];
 
 	if($name === 'shine-0')
 	{
 		$properties[] = [
 			'name' => 'frames'
 			, 'type' => 'string'
-			, 'value' => json_encode([['image' => 'shine-0.png', 'duration' => 180]
-			, [
-				'image' => 'shine-1.png'
-				, 'duration' => 180
-			]])
+			, 'value' => json_encode([
+				['image' => 'shine-0.png', 'duration' => 180]
+				, [
+					'image' => 'shine-1.png'
+					, 'duration' => 180
+				]
+			])
 		];
 	}
 
@@ -362,14 +381,15 @@ $title['layers'] = $background;
 
 jsonAsset('title.tmj', $title);
 
-$base['layers'] = [[
-	'id' => 1
-	, 'name' => 'Terrain'
-	, 'type' => 'tilelayer'
-	, 'width' => $width
-	, 'height' => $height
-	, 'data' => $floor
-] + $layerDefaults
+$base['layers'] = [
+	[
+		'id' => 1
+		, 'name' => 'Terrain'
+		, 'type' => 'tilelayer'
+		, 'width' => $width
+		, 'height' => $height
+		, 'data' => $floor
+	] + $layerDefaults
 	, [
 		'id' => 2
 		, 'name' => 'Markers'
@@ -382,12 +402,14 @@ $base['layers'] = [[
 		'id' => 3
 		, 'name' => 'Spawns'
 		, 'type' => 'objectgroup'
-		, 'objects' => [[
-			'id' => 1
-			, 'class' => 'Player'
-			, 'x' => 80
-			, 'y' => 100
-		]]
+		, 'objects' => [
+			[
+				'id' => 1
+				, 'class' => 'Player'
+				, 'x' => 80
+				, 'y' => 100
+			]
+		]
 	] + $layerDefaults
 ];
 
@@ -413,12 +435,13 @@ foreach([-32,0,32] as $offset)
 	$chunks[] = ['x' => $offset,'y' => 0,'width' => 32,'height' => 20,'data' => $data];
 }
 
-$infinite['layers'] = [[
-	'id' => 1
-	, 'name' => 'Infinite terrain'
-	, 'type' => 'tilelayer'
-	, 'chunks' => $chunks
-] + $layerDefaults
+$infinite['layers'] = [
+	[
+		'id' => 1
+		, 'name' => 'Infinite terrain'
+		, 'type' => 'tilelayer'
+		, 'chunks' => $chunks
+	] + $layerDefaults
 ];
 
 $infinite['layers'] = array_merge($background, $infinite['layers']);
@@ -464,14 +487,15 @@ $iso = [
 	, 'tilewidth' => 64
 	, 'tileheight' => 32
 	, 'tilesets' => [['firstgid' => 1,'source' => 'iso.tsj']]
-	, 'layers' => [[
-		'id' => 1
-		, 'name' => 'Isometric'
-		, 'type' => 'tilelayer'
-		, 'width' => 12
-		, 'height' => 12
-		, 'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1, range(0, 143))
-	] + $layerDefaults
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'name' => 'Isometric'
+			, 'type' => 'tilelayer'
+			, 'width' => 12
+			, 'height' => 12
+			, 'data' => array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1, range(0, 143))
+		] + $layerDefaults
 	]
 ];
 
@@ -482,21 +506,22 @@ jsonAsset(
 	'demo.world'
 	, [
 		'type' => 'world'
-		, 'maps' => [[
-			'fileName' => 'platformer.tmj'
-			, 'x' => 0
-			, 'y' => 0
-			, 'width' => 3072
-			, 'height' => 640
-		]
-	, [
-		'fileName' => 'infinite.tmj'
-		, 'x' => 4096
-		, 'y' => 0
-		, 'width' => 3072
-		, 'height' => 640
-		, 'bounds' => ['x' => -1024,'y' => 0,'width' => 3072,'height' => 640]
-	]
+		, 'maps' => [
+			[
+				'fileName' => 'platformer.tmj'
+				, 'x' => 0
+				, 'y' => 0
+				, 'width' => 3072
+				, 'height' => 640
+			]
+			, [
+				'fileName' => 'infinite.tmj'
+				, 'x' => 4096
+				, 'y' => 0
+				, 'width' => 3072
+				, 'height' => 640
+				, 'bounds' => ['x' => -1024,'y' => 0,'width' => 3072,'height' => 640]
+			]
 		]
 	]
 );
@@ -510,8 +535,9 @@ png(
 		? ($x < 8?[255,0,0,255]:[0, 255, 0, 255])
 		: ($x < 8
 			? [0,0,255,255]
-			: [255
-		, 255,0,255
+			: [
+				255
+				, 255,0,255
 			]
 		)
 );
@@ -524,8 +550,9 @@ png(
 		? ($x < 3?[255,0,0,255]:[0, 255, 0,255])
 		: ($x < 3
 			? [0,0,255,255]
-			: [255
-		, 255,0,255
+			: [
+				255
+				, 255,0,255
 			]
 		)
 );

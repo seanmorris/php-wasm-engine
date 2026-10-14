@@ -135,10 +135,12 @@ final class BoundsIndex
 			foreach($node[1] as $id => $entry)
 			{
 				if($this->overlaps(
-					[$entry['x'],$entry['y'],$entry['x'] + $entry['width']
-					, $entry['y'] + $entry[
+					[
+						$entry['x'],$entry['y'],$entry['x'] + $entry['width']
+						, $entry['y'] + $entry[
 						'height'
-					]]
+						]
+					]
 					, $query
 				)){
 					$result[$id] = $entry;

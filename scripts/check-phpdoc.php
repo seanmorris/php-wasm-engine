@@ -72,12 +72,13 @@ function phpDocAssignment(array $tokens, int $equals): string
 
 			if($depth || in_array(
 				$token[0]
-				, [T_VARIABLE
-				, T_WHITESPACE
-				, T_STRING
-				, T_NAME_QUALIFIED
-				, T_NAME_FULLY_QUALIFIED
-				, T_OBJECT_OPERATOR
+				, [
+					T_VARIABLE
+					, T_WHITESPACE
+					, T_STRING
+					, T_NAME_QUALIFIED
+					, T_NAME_FULLY_QUALIFIED
+					, T_OBJECT_OPERATOR
 					, T_DOUBLE_COLON
 				]
 				, true

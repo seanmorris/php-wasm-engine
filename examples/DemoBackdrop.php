@@ -26,13 +26,15 @@ final class DemoBackdrop
 			new Loader
 			, __DIR__ . '/assets/title.world'
 			, [
-				'maps' => [[
-					'fileName' => 'title.tmj'
-					, 'x' => 0
-					, 'y' => 0
-					, 'width' => 1
-					, 'height' => 1
-				]]
+				'maps' => [
+					[
+						'fileName' => 'title.tmj'
+						, 'x' => 0
+						, 'y' => 0
+						, 'width' => 1
+						, 'height' => 1
+					]
+				]
 			]
 		);
 

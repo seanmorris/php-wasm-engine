@@ -15,10 +15,12 @@ function clipLoop(array $points, int $axis, float $bound, bool $greater): array
 		if($inside($point) !== $inside($previous))
 		{
 			$t = ($bound - $previous[$axis]) / ($point[$axis] - $previous[$axis]);
-			$intersection = [$previous[0] + $t * ($point[0] - $previous[0])
-			, $previous[1] + $t * (
-				$point[1] - $previous[1]
-			)];
+			$intersection = [
+				$previous[0] + $t * ($point[0] - $previous[0])
+				, $previous[1] + $t * (
+					$point[1] - $previous[1]
+				)
+			];
 
 			$intersection[$axis] = $bound;
 			$result[] = $intersection;
@@ -67,11 +69,14 @@ for($y = 0; $y < 8; $y++)
 			$polygon[] = [round(128 + cos($angle) * 128, 6),round(128 + sin($angle) * 128, 6)];
 		}
 
-		foreach([[0,$x * 32,true],[0,($x + 1) * 32,false],[1,$y * 32,true]
-		, [1
-		, ($y + 1) * 32
-			, false
-		]] as [
+		foreach([
+			[0,$x * 32,true],[0,($x + 1) * 32,false],[1,$y * 32,true]
+			, [
+				1
+				, ($y + 1) * 32
+				, false
+			]
+		] as [
 			$axis,$bound,$greater
 		]
 		){
@@ -103,12 +108,14 @@ for($y = 0; $y < 8; $y++)
 			$loopTiles[] = [
 				'id' => $y * 8 + $x
 				, 'objectgroup' => [
-					'objects' => [[
-						'id' => 1
-						, 'x' => 0
-						, 'y' => 0
-						, 'polygon' => $unique
-					]]
+					'objects' => [
+						[
+							'id' => 1
+							, 'x' => 0
+							, 'y' => 0
+							, 'polygon' => $unique
+						]
+					]
 				]
 			];
 		}
@@ -165,21 +172,26 @@ foreach($planes as $plane => $cells)
 		, 'width' => $width
 		, 'height' => $height
 		, 'data' => $cells
-		, 'properties' => [[
-			'name' => 'collisionLayer'
-			, 'type' => 'int'
-			, 'value' => $plane
-		]]
+		, 'properties' => [
+			[
+				'name' => 'collisionLayer'
+				, 'type' => 'int'
+				, 'value' => $plane
+			]
+		]
 	] + $layerDefaults;
 }
 
 $gates = [];
 
-foreach([['Left entrance',704,176,32,288,false],['Crown',880,168,32,64,true]
-, ['Right entrance'
-, 1056
-	, 176,32,288,false
-]] as $i => [$name,$x,$y,$w,$h,$back])
+foreach([
+	['Left entrance',704,176,32,288,false],['Crown',880,168,32,64,true]
+	, [
+		'Right entrance'
+		, 1056
+		, 176,32,288,false
+	]
+] as $i => [$name,$x,$y,$w,$h,$back])
 {
 	$gates[] = [
 		'id' => $i + 1
@@ -212,11 +224,13 @@ jsonAsset(
 		, 'tilewidth' => 32
 		, 'tileheight' => 32
 		, 'infinite' => false
-		, 'tilesets' => [['firstgid' => 1,'source' => 'tiles.tsj']
-		, [
-			'firstgid' => 10
-			, 'source' => 'loop.tsj'
-		]]
+		, 'tilesets' => [
+			['firstgid' => 1,'source' => 'tiles.tsj']
+			, [
+				'firstgid' => 10
+				, 'source' => 'loop.tsj'
+			]
+		]
 		, 'layers' => $loopLayers
 	]
 );

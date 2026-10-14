@@ -114,7 +114,8 @@ final class ParticleBurst
 
 				$vx = (2 * $cx / $width - 1) * $speed * ($sprite->scaleX < 0 ? -1 : 1);
 				$vy = (2 * $cy / $height - 1) * $speed * ($sprite->scaleY < 0 ? -1 : 1);
-				$motion[] = [$vx * $cos - $vy * $sin, $vx * $sin + $vy * $cos - $lift
+				$motion[] = [
+					$vx * $cos - $vy * $sin, $vx * $sin + $vy * $cos - $lift
 					, (2 * $cx / $width - 1) * 8, $sprite->opacity
 				];
 			}

@@ -89,7 +89,8 @@ function outlineSample(Sprite $sprite, Camera $camera, array $regions, float $x,
 		$pixel = [0, 0, 0, $alpha];
 	}
 
-	return [$pixel[0] / 255 * $sprite->tint[0], $pixel[1] / 255 * $sprite->tint[1]
+	return [
+		$pixel[0] / 255 * $sprite->tint[0], $pixel[1] / 255 * $sprite->tint[1]
 		, $pixel[2] / 255 * $sprite->tint[2]
 		, $pixel[3] / 255 * $sprite->tint[3] * $sprite->opacity
 	];

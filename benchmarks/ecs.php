@@ -209,83 +209,88 @@ function benchmark(array $options): array
 		$counts[$name] = count($expected);
 	}
 
-	$cases['all_fresh_description'] = [fn() => fingerprint(
-		$registry->query(Query::all(Position::class, Velocity::class, Query::not(Frozen::class)))
-	)
-	, $cases['all_common'][1], 1
+	$cases['all_fresh_description'] = [
+		fn() => fingerprint($registry->query(Query::all(Position::class, Velocity::class, Query::not(Frozen::class))))
+		, $cases['all_common'][1], 1
 	];
 
-	$cases['all_after_mutation'] = [function() use ($registry, $queries): int {
-		$registry->add(1, new Marker);
-		$registry->remove(1, Marker::class);
+	$cases['all_after_mutation'] = [
+		function() use ($registry, $queries): int {
+			$registry->add(1, new Marker);
+			$registry->remove(1, Marker::class);
 
-		return fingerprint($registry->query($queries['all_common']));
-	}
-	, $cases['all_common'][1], 1
+			return fingerprint($registry->query($queries['all_common']));
+		}
+		, $cases['all_common'][1], 1
 	];
 
-	$cases['nested_after_mutation'] = [function() use ($registry, $queries): int {
-		$registry->add(1, new Marker);
-		$registry->remove(1, Marker::class);
+	$cases['nested_after_mutation'] = [
+		function() use ($registry, $queries): int {
+			$registry->add(1, new Marker);
+			$registry->remove(1, Marker::class);
 
-		return fingerprint($registry->query($queries['nested']));
-	}
-	, $cases['nested'][1], 1
+			return fingerprint($registry->query($queries['nested']));
+		}
+		, $cases['nested'][1], 1
 	];
 
 	foreach(['get_exact' => Position::class, 'get_interface' => Located::class] as $name => $type)
 	{
-		$cases[$name] = [function() use ($registry, $size, $type): int {
+		$cases[$name] = [
+			function() use ($registry, $size, $type): int {
+				$found = 0;
+
+				for($id = 1; $id <= $size; $id++)
+				{
+					$found += $registry->get($id, $type) instanceof Position ? 1 : 0;
+				}
+
+				return $found;
+			}
+			, $size, $size
+		];
+	}
+
+	$cases['add_remove_1000'] = [
+		function() use ($registry): int {
 			$found = 0;
 
-			for($id = 1; $id <= $size; $id++)
+			for($id = 1; $id <= 1000; $id++)
 			{
-				$found += $registry->get($id, $type) instanceof Position ? 1 : 0;
+				$registry->add($id, new Marker);
+				$found += $registry->has($id, Marker::class) ? 1 : 0;
+				$registry->remove($id, Marker::class);
 			}
 
 			return $found;
 		}
-		, $size, $size
-		];
-	}
-
-	$cases['add_remove_1000'] = [function() use ($registry): int {
-		$found = 0;
-
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->add($id, new Marker);
-			$found += $registry->has($id, Marker::class) ? 1 : 0;
-			$registry->remove($id, Marker::class);
-		}
-
-		return $found;
-	}
-	, 1000, 1000
+		, 1000, 1000
 	];
 
-	$cases['replace_1000'] = [function() use ($registry): int {
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->add($id, new Position);
-		}
+	$cases['replace_1000'] = [
+		function() use ($registry): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->add($id, new Position);
+			}
 
-		return count($registry->query(Position::class));
-	}
-	, $size, 1000
+			return count($registry->query(Position::class));
+		}
+		, $size, 1000
 	];
 
-	$cases['create_destroy_1000'] = [function(): int {
-		$registry = scene(1000);
+	$cases['create_destroy_1000'] = [
+		function(): int {
+			$registry = scene(1000);
 
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->destroy($id);
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->destroy($id);
+			}
+
+			return count($registry->query(Query::all()));
 		}
-
-		return count($registry->query(Query::all()));
-	}
-	, 0, 1000
+		, 0, 1000
 	];
 
 	$scheduler = new Scheduler($registry);
@@ -301,12 +306,13 @@ function benchmark(array $options): array
 		}
 	});
 
-	$cases['system_update'] = [function() use ($scheduler, &$moved): int {
-		$scheduler->update(1 / 60);
+	$cases['system_update'] = [
+		function() use ($scheduler, &$moved): int {
+			$scheduler->update(1 / 60);
 
-		return $moved;
-	}
-	, $counts['all_common'], 1
+			return $moved;
+		}
+		, $counts['all_common'], 1
 	];
 
 	$results = [];

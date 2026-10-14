@@ -128,12 +128,13 @@ final class Loader
 			$spacing = $set['spacing'] ?? 0;
 			$rect = isset($tile['image'])
 				? [0,0,$width,$height]
-				: [$margin + ($id % $columns) * (
-					$width + $spacing
-				)
-				, $margin + intdiv($id, $columns) * ($height + $spacing)
-				, $width
-				, $height
+				: [
+					$margin + ($id % $columns) * (
+						$width + $spacing
+					)
+					, $margin + intdiv($id, $columns) * ($height + $spacing)
+					, $width
+					, $height
 				];
 
 			foreach($tile['animation'] ?? [] as $frame)
@@ -205,13 +206,15 @@ final class Loader
 
 			if($data['type'] === 'tilelayer')
 			{
-				$chunks = $data['chunks'] ?? [[
-					'x' => $data['x'] ?? 0
-					, 'y' => $data['y'] ?? 0
-					, 'width' => $data['width']
-					, 'height' => $data['height']
-					, 'data' => $data['data'] ?? []
-				]];
+				$chunks = $data['chunks'] ?? [
+					[
+						'x' => $data['x'] ?? 0
+						, 'y' => $data['y'] ?? 0
+						, 'width' => $data['width']
+						, 'height' => $data['height']
+						, 'data' => $data['data'] ?? []
+					]
+				];
 
 				foreach($chunks as $chunk)
 				{

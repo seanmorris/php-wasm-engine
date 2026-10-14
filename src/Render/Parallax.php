@@ -138,11 +138,12 @@ final class Parallax
 
 		return [
 			'rect' => [$left,$top,$right - $left,$bottom - $top]
-			, 'uv' => [$u,$v
-		, (
-			$right - $left
-		) / $width
-			, ($bottom - $top) / $height
+			, 'uv' => [
+				$u,$v
+				, (
+					$right - $left
+				) / $width
+				, ($bottom - $top) / $height
 			]
 		];
 	}

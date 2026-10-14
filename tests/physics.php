@@ -19,13 +19,15 @@ test('down-jump never drops through an ordinary solid floor', function() {
 });
 
 test('raycasts return the earliest wall across negative spatial cells', function() {
-	$terrain = new Terrain([['points' => [[-80,-20],[-79,-20],[-79,20],[-80,20]]]
+	$terrain = new Terrain([
+		['points' => [[-80,-20],[-79,-20],[-79,20],[-80,20]]]
 		, [
-			'points' => [[30, -20], [31,-20]
-		, [
-			31,20
-		]
-		, [30,20]
+			'points' => [
+				[30, -20], [31,-20]
+				, [
+					31,20
+				]
+				, [30,20]
 			]
 		]
 	]);
