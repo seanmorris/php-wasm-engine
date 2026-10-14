@@ -14,20 +14,22 @@ $image = dirname(__DIR__) . '/examples/assets/test-parallax.png';
 $other = dirname(__DIR__) . '/examples/assets/test.png';
 $properties = [['name' => 'from','value' => 'center']
 , ['name' => 'scrollX','value' => 6]
-, ['name' =>
-	'scrollY'
+, [
+	'name' => 'scrollY'
 	, 'value' => -3
 ]];
 
-$back = ['type' => 'imagelayer'
-, 'image' => $image
-, 'repeatx' => true
-, 'repeaty' => true
-, 'parallaxx' =>
-	.43
-	, 'parallaxy' => .17,'offsetx' => 3,'offsety' => -2,'opacity' => .6
-	, 'properties' =>
-	$properties
+$back = [
+	'type' => 'imagelayer'
+	, 'image' => $image
+	, 'repeatx' => true
+	, 'repeaty' => true
+	, 'parallaxx' => .43
+	, 'parallaxy' => .17
+	, 'offsetx' => 3
+	, 'offsety' => -2
+	, 'opacity' => .6
+	, 'properties' => $properties
 ];
 
 $front = $back;
@@ -35,16 +37,19 @@ $front['image'] = $other;
 $front['offsetx'] = -5;
 $front['opacity'] = .3;
 
-$front['properties'][] = ['name' => 'frames'
-, 'value' => json_encode([['image' => $other, 'duration' => 100], ['image' => $image,'duration' => 200]])];
+$front['properties'][] = [
+	'name' => 'frames'
+	, 'value' => json_encode([['image' => $other, 'duration' => 100], ['image' => $image,'duration' => 200]])
+];
 
-$data = ['orientation' => 'orthogonal'
-, 'width' => 8
-, 'height' => 16
-, 'tilewidth' => 16
-, 'tileheight' =>
-	16
-	, 'layers' => [$back,$front],'tilesets' => []
+$data = [
+	'orientation' => 'orthogonal'
+	, 'width' => 8
+	, 'height' => 16
+	, 'tilewidth' => 16
+	, 'tileheight' => 16
+	, 'layers' => [$back,$front]
+	, 'tilesets' => []
 ];
 
 $entries = [];

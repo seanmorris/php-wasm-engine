@@ -22,19 +22,20 @@ $engine->start(function() use ($engine, $probe, &$presses, &$releases, &$ticks, 
 	$matches = array_merge($matches, $input->sequences->drain());
 
 	$probe(
-		json_encode(
-			['keys' => $input->snapshot(), 'ids' => $input->gamepads->ids()
-			, 'matches' => $matches, 'progress' => $input->sequences->progress('combo')
-			, 'axis' => $engine
-				->controls->axis('left', 'right')
-				, 'rightStick' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_RIGHTX)
-				, 'trigger' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT)
-				, 'extra' => $input->gamepads->button(SDL_CONTROLLER_BUTTON_X)
-				, 'presses' => $presses, 'releases' => $releases
-				, 'ticks' =>
-				$ticks
-				, 'time' => $engine->time,'paused' => $engine->userPaused
-			]
-		)
+		json_encode([
+			'keys' => $input->snapshot()
+			, 'ids' => $input->gamepads->ids()
+			, 'matches' => $matches
+			, 'progress' => $input->sequences->progress('combo')
+			, 'axis' => $engine->controls->axis('left', 'right')
+			, 'rightStick' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_RIGHTX)
+			, 'trigger' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT)
+			, 'extra' => $input->gamepads->button(SDL_CONTROLLER_BUTTON_X)
+			, 'presses' => $presses
+			, 'releases' => $releases
+			, 'ticks' => $ticks
+			, 'time' => $engine->time
+			, 'paused' => $engine->userPaused
+		])
 	);
 });

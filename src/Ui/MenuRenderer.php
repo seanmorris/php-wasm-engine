@@ -14,13 +14,17 @@ final class MenuRenderer
 	public Atlas $atlas;
 	public array $regions = [];
 	public ?array $editorRect = null;
-	public array $style = ['scale' => 2
-	, 'width' => 720
-	, 'padding' => 8
-	, 'align' => 'left'
-		, 'foreground' => [1, 1, 1, 1], 'selected' => [1, .85, .25, 1]
-		, 'disabled' => [.5, .5, .5, 1], 'panel' => [.025, .035, .065, .94]
-		, 'highlight' => [.16, .22, .32, 1], 'selection' => [.2, .35, .6, 1]
+	public array $style = [
+		'scale' => 2
+		, 'width' => 720
+		, 'padding' => 8
+		, 'align' => 'left'
+		, 'foreground' => [1, 1, 1, 1]
+		, 'selected' => [1, .85, .25, 1]
+		, 'disabled' => [.5, .5, .5, 1]
+		, 'panel' => [.025, .035, .065, .94]
+		, 'highlight' => [.16, .22, .32, 1]
+		, 'selection' => [.2, .35, .6, 1]
 		, 'dimmer' => [0, 0, 0, .45]
 	];
 	public bool $showHints = true;

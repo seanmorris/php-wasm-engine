@@ -58,8 +58,8 @@ final class ParticleBurst
 			, $sprite->x, $sprite->y, $sprite->rotation
 			, $sprite->scaleX, $sprite->scaleY, $sprite->originX, $sprite->originY
 			, $sprite->opacity, $sprite->time
-		] as $value
-		){
+		] as $value)
+		{
 			if(!is_finite($value))
 			{
 				throw new \InvalidArgumentException('Particle pose, timing, and motion must be finite');

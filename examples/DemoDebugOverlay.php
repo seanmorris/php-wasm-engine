@@ -105,9 +105,11 @@ final class DemoDebugOverlay
 		$state = $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'));
 
 		return [
-			'Player' => $body->profile, 'Grounded' => $body->grounded ? 'Yes' : 'No'
+			'Player' => $body->profile
+			, 'Grounded' => $body->grounded ? 'Yes' : 'No'
 			, 'Surface' => $body->grounded ? $surface : 'Air'
-			, 'X px' => sprintf('%.3f', $body->x), 'Y px' => sprintf('%.3f', $body->y)
+			, 'X px' => sprintf('%.3f', $body->x)
+			, 'Y px' => sprintf('%.3f', $body->y)
 			, 'Collision layer' => (string)$body->collisionLayer
 			, 'Gnd px/s' => sprintf('%.3f', $body->groundSpeed)
 			, 'X px/s' => sprintf('%.3f', $body->vx)
@@ -169,7 +171,9 @@ final class DemoDebugOverlay
 		$this->terrain = $terrain;
 		$this->previousCasts = $total;
 
-		$this->snapshot = ['enabled' => $this->enabled, 'showFps' => $this->showFps
+		$this->snapshot = [
+			'enabled' => $this->enabled
+			, 'showFps' => $this->showFps
 			, 'visible' => $visible && !$this->closed
 			, 'frame' => $this->frame
 			, 'fps' => $this->fps

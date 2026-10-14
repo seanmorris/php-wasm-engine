@@ -719,8 +719,7 @@ final class Terrain
 						$far = min($far, max($t0, $t1));
 					}
 
-					if($near < -1e-7 || $near > 1 || $near > $far + 1e-8 || ($best && $near >= $best
-						->t
+					if($near < -1e-7 || $near > 1 || $near > $far + 1e-8 || ($best && $near >= $best->t
 					)){
 						continue;
 					}

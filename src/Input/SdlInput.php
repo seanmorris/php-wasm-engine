@@ -37,11 +37,21 @@ final class SdlInput
 		$this->bindings = [
 			0 => [SDLK_SPACE, SDLK_z, SDLK_RETURN, SDLK_KP_ENTER]
 			, 1 => [SDLK_x, SDLK_LSHIFT, SDLK_LCTRL, SDLK_RCTRL]
-			, 2 => [SDLK_c], 3 => [SDLK_v], 4 => [SDLK_q], 5 => [SDLK_e]
-			, 6 => [SDLK_1], 7 => [SDLK_3], 8 => [SDLK_r], 9 => [SDLK_p, SDLK_ESCAPE]
-			, 10 => [SDLK_TAB], 11 => [SDLK_BACKSPACE]
-			, 12 => [SDLK_UP, SDLK_w], 13 => [SDLK_DOWN, SDLK_s]
-			, 14 => [SDLK_LEFT, SDLK_a], 15 => [SDLK_RIGHT, SDLK_d], 16 => []
+			, 2 => [SDLK_c]
+			, 3 => [SDLK_v]
+			, 4 => [SDLK_q]
+			, 5 => [SDLK_e]
+			, 6 => [SDLK_1]
+			, 7 => [SDLK_3]
+			, 8 => [SDLK_r]
+			, 9 => [SDLK_p, SDLK_ESCAPE]
+			, 10 => [SDLK_TAB]
+			, 11 => [SDLK_BACKSPACE]
+			, 12 => [SDLK_UP, SDLK_w]
+			, 13 => [SDLK_DOWN, SDLK_s]
+			, 14 => [SDLK_LEFT, SDLK_a]
+			, 15 => [SDLK_RIGHT, SDLK_d]
+			, 16 => []
 		];
 
 		if(function_exists('vrzno_env'))
@@ -259,14 +269,12 @@ final class SdlInput
 				$this->quit = true;
 			}
 
-			if($event->type === SDL_WINDOWEVENT && $event->window
-				->event === SDL_WINDOWEVENT_FOCUS_LOST
+			if($event->type === SDL_WINDOWEVENT && $event->window->event === SDL_WINDOWEVENT_FOCUS_LOST
 			){
 				$this->focus(false);
 			}
 
-			if($event->type === SDL_WINDOWEVENT && $event->window
-				->event === SDL_WINDOWEVENT_FOCUS_GAINED
+			if($event->type === SDL_WINDOWEVENT && $event->window->event === SDL_WINDOWEVENT_FOCUS_GAINED
 			){
 				$this->focus($this->ownsFocus());
 			}
@@ -282,8 +290,7 @@ final class SdlInput
 			{
 				unset($this->uiBlocked[$event->key->keysym->sym]);
 				$this->inputTheme = 'keyboard';
-				$this->keys[$event->key->keysym->sym] = $this->pressedKeys[$event->key->keysym
-					->sym
+				$this->keys[$event->key->keysym->sym] = $this->pressedKeys[$event->key->keysym->sym
 				] = true;
 			}
 
@@ -346,14 +353,18 @@ final class SdlInput
 		}
 
 		$pad = [
-			0 => SDL_CONTROLLER_BUTTON_A, 1 => SDL_CONTROLLER_BUTTON_B
-			, 2 => SDL_CONTROLLER_BUTTON_X, 3 => SDL_CONTROLLER_BUTTON_Y
+			0 => SDL_CONTROLLER_BUTTON_A
+			, 1 => SDL_CONTROLLER_BUTTON_B
+			, 2 => SDL_CONTROLLER_BUTTON_X
+			, 3 => SDL_CONTROLLER_BUTTON_Y
 			, 4 => SDL_CONTROLLER_BUTTON_LEFTSHOULDER
 			, 5 => SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
-			, 8 => SDL_CONTROLLER_BUTTON_BACK, 9 => SDL_CONTROLLER_BUTTON_START
+			, 8 => SDL_CONTROLLER_BUTTON_BACK
+			, 9 => SDL_CONTROLLER_BUTTON_START
 			, 10 => SDL_CONTROLLER_BUTTON_LEFTSTICK
 			, 11 => SDL_CONTROLLER_BUTTON_RIGHTSTICK
-			, 12 => SDL_CONTROLLER_BUTTON_DPAD_UP, 13 => SDL_CONTROLLER_BUTTON_DPAD_DOWN
+			, 12 => SDL_CONTROLLER_BUTTON_DPAD_UP
+			, 13 => SDL_CONTROLLER_BUTTON_DPAD_DOWN
 			, 14 => SDL_CONTROLLER_BUTTON_DPAD_LEFT
 			, 15 => SDL_CONTROLLER_BUTTON_DPAD_RIGHT
 			, 16 => SDL_CONTROLLER_BUTTON_GUIDE
@@ -552,8 +563,11 @@ final class SdlInput
 				$this->uiEvents[] = ['type' => 'text', 'text' => $event->text->text];
 				break;
 			case SDL_TEXTEDITING:
-				$this->uiEvents[] = ['type' => 'composition', 'text' => $event->edit->text
-					, 'start' => $event->edit->start, 'length' => $event->edit->length
+				$this->uiEvents[] = [
+					'type' => 'composition'
+					, 'text' => $event->edit->text
+					, 'start' => $event->edit->start
+					, 'length' => $event->edit->length
 				];
 
 				break;
@@ -564,8 +578,9 @@ final class SdlInput
 					break;
 				}
 
-				$this->uiEvents[] = ['type' => 'key'
-				, 'key' => SDL_GetKeyName($event->key->keysym->sym)
+				$this->uiEvents[] = [
+					'type' => 'key'
+					, 'key' => SDL_GetKeyName($event->key->keysym->sym)
 					, 'shift' => (bool)($event->key->keysym->mod & KMOD_SHIFT)
 					, 'ctrl' => (bool)($event->key->keysym->mod & (KMOD_CTRL | KMOD_GUI))
 					, 'repeat' => (bool)$event->key->repeat
@@ -574,24 +589,28 @@ final class SdlInput
 				break;
 			case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 				$this->inputTheme = 'keyboard';
-				$this->uiEvents[] = ['type' => 'pointer'
+				$this->uiEvents[] = [
+					'type' => 'pointer'
 					, 'action' => $event->type === SDL_MOUSEBUTTONDOWN ? 'down' : 'up'
-					, 'x' => $event->button->x, 'y' => $event->button->y
-					, 'button' => $event->button
-						->button
+					, 'x' => $event->button->x
+					, 'y' => $event->button->y
+					, 'button' => $event->button->button
 				];
 
 				break;
 			case SDL_MOUSEMOTION:
-				$this->uiEvents[] = ['type' => 'pointer', 'action' => 'move'
-					, 'x' => $event->motion->x, 'y' => $event->motion->y
+				$this->uiEvents[] = [
+					'type' => 'pointer'
+					, 'action' => 'move'
+					, 'x' => $event->motion->x
+					, 'y' => $event->motion->y
 				];
 
 				break;
 			case SDL_MOUSEWHEEL:
-				$this->uiEvents[] = ['type' => 'wheel'
-				, 'y' => $event->wheel->y
-					* ($event->wheel->direction === SDL_MOUSEWHEEL_FLIPPED ? -1 : 1)
+				$this->uiEvents[] = [
+					'type' => 'wheel'
+					, 'y' => $event->wheel->y * ($event->wheel->direction === SDL_MOUSEWHEEL_FLIPPED ? -1 : 1)
 				];
 
 				break;
@@ -695,10 +714,12 @@ final class SdlInput
 			$buttons['end'] = !$editing && $this->held(SDLK_END);
 		}
 
-		return ['buttons' => $buttons
-		, 'events' => $this->uiEvents
-		, 'focused' => $this->focused
-			, 'generation' => $this->generation, 'theme' => $this->inputTheme
+		return [
+			'buttons' => $buttons
+			, 'events' => $this->uiEvents
+			, 'focused' => $this->focused
+			, 'generation' => $this->generation
+			, 'theme' => $this->inputTheme
 		];
 	}
 }

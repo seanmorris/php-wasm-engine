@@ -15,19 +15,23 @@ function imageMap(array $layers, array $extra = []): MapRenderer
 	global $sequence,$image;
 	$sequence++;
 	$path = '/parallax-' . $sequence . '.tmj';
-	$set = ['firstgid' => 1
-	, 'tilewidth' => 16
-	, 'tileheight' => 16
-	, 'columns' => 1
-	, 'tilecount' => 1
+	$set = [
+		'firstgid' => 1
+		, 'tilewidth' => 16
+		, 'tileheight' => 16
+		, 'columns' => 1
+		, 'tilecount' => 1
 		, 'image' => $image
 	];
 
-	$data = $extra + ['orientation' => 'orthogonal'
-	, 'width' => 6
-	, 'height' => 4
-	, 'tilewidth' => 16
-		, 'tileheight' => 16,'tilesets' => [$set],'layers' => $layers
+	$data = $extra + [
+		'orientation' => 'orthogonal'
+		, 'width' => 6
+		, 'height' => 4
+		, 'tilewidth' => 16
+		, 'tileheight' => 16
+		, 'tilesets' => [$set]
+		, 'layers' => $layers
 	];
 
 	file_put_contents($path, json_encode($data));
@@ -41,10 +45,11 @@ function pixel(int $x, int $y): string
 }
 
 $repeatImage = dirname(__DIR__) . '/examples/assets/test-parallax.png';
-$imageLayer = ['id' => 1
-, 'type' => 'imagelayer'
-, 'image' => $repeatImage
-, 'repeatx' => true
+$imageLayer = [
+	'id' => 1
+	, 'type' => 'imagelayer'
+	, 'image' => $repeatImage
+	, 'repeatx' => true
 	, 'repeaty' => true
 	, 'parallaxx' => .5
 	, 'parallaxy' => .25
@@ -91,12 +96,12 @@ $renderer->close();
 // A shared image can appear on both sides of a tile layer without changing painter order.
 $back = ['type' => 'imagelayer','image' => $image,'repeatx' => true,'repeaty' => true];
 $tile = ['type' => 'tilelayer','width' => 1,'height' => 1,'offsetx' => 8,'data' => [1]];
-$front = ['type' => 'imagelayer'
-, 'image' => $image
-, 'offsetx' => 12
-, 'offsety' => 4
-, 'tintcolor' =>
-	'#8080ffff'
+$front = [
+	'type' => 'imagelayer'
+	, 'image' => $image
+	, 'offsetx' => 12
+	, 'offsety' => 4
+	, 'tintcolor' => '#8080ffff'
 	, 'opacity' => .5
 ];
 
@@ -125,12 +130,12 @@ $renderer->close();
 $released = array_map(fn($texture) => !glIsTexture($texture), $textures);
 
 $stripProperties = [['name' => 'from','value' => 'bottom'],['name' => 'scrollX','value' => 8]];
-$strip = ['type' => 'imagelayer'
-, 'image' => $image
-, 'repeatx' => true
-, 'parallaxx' => .5
-, 'offsety' =>
-	8
+$strip = [
+	'type' => 'imagelayer'
+	, 'image' => $image
+	, 'repeatx' => true
+	, 'parallaxx' => .5
+	, 'offsety' => 8
 	, 'properties' => $stripProperties
 ];
 
@@ -150,8 +155,10 @@ $renderer->close();
 
 $animated = $back;
 
-$animated['properties'] = [['name' => 'frames'
-, 'value' => json_encode([['image' => $image, 'duration' => 100], ['image' => $repeatImage,'duration' => 200]])]];
+$animated['properties'] = [[
+	'name' => 'frames'
+	, 'value' => json_encode([['image' => $image, 'duration' => 100], ['image' => $repeatImage,'duration' => 200]])
+]];
 
 $renderer = imageMap([$animated]);
 $animation = [];
@@ -168,12 +175,16 @@ $matching = [];
 
 foreach(['tilelayer','imagelayer'] as $type)
 {
-	$layer = ['type' => $type
-	, 'image' => $image
-	, 'width' => 1
-	, 'height' => 1
-	, 'data' => [1]
-		, 'parallaxx' => .5,'parallaxy' => .25,'offsetx' => 3,'offsety' => -2
+	$layer = [
+		'type' => $type
+		, 'image' => $image
+		, 'width' => 1
+		, 'height' => 1
+		, 'data' => [1]
+		, 'parallaxx' => .5
+		, 'parallaxy' => .25
+		, 'offsetx' => 3
+		, 'offsety' => -2
 	];
 
 	$renderer = imageMap([$layer], ['parallaxoriginx' => 10,'parallaxoriginy' => 5]);
@@ -191,12 +202,12 @@ $worldMaps = [];
 foreach([0,48] as $x)
 {
 	$renderer = imageMap([$back,$tile]);
-	$worldMaps[] = ['fileName' => $renderer->map->path
-	, 'x' => $x
-	, 'y' => 0
-	, 'width' => 48
-	, 'height' =>
-		64
+	$worldMaps[] = [
+		'fileName' => $renderer->map->path
+		, 'x' => $x
+		, 'y' => 0
+		, 'width' => 48
+		, 'height' => 64
 	];
 
 	$renderer->close();

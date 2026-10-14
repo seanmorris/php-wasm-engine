@@ -154,10 +154,15 @@ final class MenuInput
 			$menu->activate();
 		}
 
-		foreach(['up' => -1, 'down' => 1, 'pageUp' => -7, 'pageDown' => 7
-			, 'home' => -1000000, 'end' => 1000000
-		] as $key => $distance
-		){
+		foreach([
+			'up' => -1
+			, 'down' => 1
+			, 'pageUp' => -7
+			, 'pageDown' => 7
+			, 'home' => -1000000
+			, 'end' => 1000000
+		] as $key => $distance)
+		{
 			$count = $this->pulses($key, true);
 
 			for($i = 0; $i < $count; $i++)

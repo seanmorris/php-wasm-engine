@@ -144,9 +144,10 @@ final class Loader
 				}
 			}
 
-			$definitions[$id] = $tile + ['id' => $id
-			, 'firstgid' => $set['firstgid']
-			, 'rect' => $rect
+			$definitions[$id] = $tile + [
+				'id' => $id
+				, 'firstgid' => $set['firstgid']
+				, 'rect' => $rect
 				, 'offset' => [$set['tileoffset']['x'] ?? 0,$set['tileoffset']['y'] ?? 0]
 			];
 
@@ -204,10 +205,12 @@ final class Loader
 
 			if($data['type'] === 'tilelayer')
 			{
-				$chunks = $data['chunks'] ?? [['x' => $data['x'] ?? 0,'y' => $data['y'] ?? 0
-					, 'width' => $data['width'],'height' => $data['height']
-					, 'data' => $data['data']
-					?? []
+				$chunks = $data['chunks'] ?? [[
+					'x' => $data['x'] ?? 0
+					, 'y' => $data['y'] ?? 0
+					, 'width' => $data['width']
+					, 'height' => $data['height']
+					, 'data' => $data['data'] ?? []
 				]];
 
 				foreach($chunks as $chunk)
@@ -295,7 +298,8 @@ final class Loader
 							throw new \UnexpectedValueException('Image frames require an image and positive duration');
 						}
 
-						$layer->imageFrames[] = ['image' => Assets::relative($map->path, $frame['image'])
+						$layer->imageFrames[] = [
+							'image' => Assets::relative($map->path, $frame['image'])
 							, 'duration' => (float)$frame['duration']
 						];
 					}

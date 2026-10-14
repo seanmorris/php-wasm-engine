@@ -6,11 +6,12 @@ use PhpWasmEngine\Render\
 	Device,Camera,MapRenderer
 };
 $path = dirname(__DIR__) . '/examples/assets/';
-$set = ['firstgid' => 1
-, 'tilewidth' => 16
-, 'tileheight' => 16
-, 'columns' => 1
-, 'tilecount' => 1
+$set = [
+	'firstgid' => 1
+	, 'tilewidth' => 16
+	, 'tileheight' => 16
+	, 'columns' => 1
+	, 'tilecount' => 1
 	, 'image' => $path . 'test.png'
 ];
 
@@ -21,25 +22,30 @@ foreach([0,4,8,12,2,6,10,14] as $flags)
 	$values[] = 1 + $flags * 268435456.0;
 }
 
-$map = ['orientation' => 'orthogonal'
-, 'width' => 8
-, 'height' => 1
-, 'tilewidth' => 16
-, 'tileheight' =>
-	16
-	, 'tilesets' => [$set]
-	, 'layers' => [ ['id' => 1
-	, 'type' => 'tilelayer'
-	, 'name' => 'test'
-	, 'width' => 8,'height' => 1,'data' => $values
-	]
-	, ['id' => 2,'type' => 'tilelayer'
-	, 'name' =>
-	'second'
+$map = [
+	'orientation' => 'orthogonal'
 	, 'width' => 8
 	, 'height' => 1
-	, 'offsety' => 32
-	, 'data' => [1,0,0,0,0,0,0,0]] ]
+	, 'tilewidth' => 16
+	, 'tileheight' => 16
+	, 'tilesets' => [$set]
+	, 'layers' => [ [
+		'id' => 1
+		, 'type' => 'tilelayer'
+		, 'name' => 'test'
+		, 'width' => 8
+		, 'height' => 1
+		, 'data' => $values
+	]
+	, [
+		'id' => 2
+		, 'type' => 'tilelayer'
+		, 'name' => 'second'
+		, 'width' => 8
+		, 'height' => 1
+		, 'offsety' => 32
+		, 'data' => [1,0,0,0,0,0,0,0]
+	] ]
 ];
 
 file_put_contents('/test.tmj', json_encode($map));

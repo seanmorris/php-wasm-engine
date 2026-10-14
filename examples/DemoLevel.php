@@ -76,13 +76,15 @@ final class DemoLevel
 				$world = new World(
 					$loader
 					, $path
-					, ['maps' => [[
-						'fileName' => $this->id . '.tmj'
-						, 'x' => 0
-						, 'y' => 0
-						, 'width' => 1
-						, 'height' => 1
-					]]]
+					, [
+						'maps' => [[
+							'fileName' => $this->id . '.tmj'
+							, 'x' => 0
+							, 'y' => 0
+							, 'width' => 1
+							, 'height' => 1
+						]]
+					]
 				);
 			}
 

@@ -61,7 +61,10 @@ final class Sequences
 			throw new \InvalidArgumentException('Sequence controls cannot be empty');
 		}
 
-		return ['button12' => 'up', 'button13' => 'down', 'button14' => 'left'
+		return [
+			'button12' => 'up'
+			, 'button13' => 'down'
+			, 'button14' => 'left'
 			, 'button15' => 'right'
 		][$name] ?? $name;
 	}
@@ -193,8 +196,9 @@ final class Sequences
 
 		$relative = strtr(
 			$direction
-			, ['left' => $this->facing === 1 ? 'back' : 'forward'
-			, 'right' => $this->facing === 1 ? 'forward' : 'back'
+			, [
+				'left' => $this->facing === 1 ? 'back' : 'forward'
+				, 'right' => $this->facing === 1 ? 'forward' : 'back'
 			]
 		);
 
@@ -315,8 +319,11 @@ final class Sequences
 			}
 		}
 
-		$event = ['press' => $press, 'release' => array_diff_key($previous, $held)
-			, 'held' => $held, 'since' => $since
+		$event = [
+			'press' => $press
+			, 'release' => array_diff_key($previous, $held)
+			, 'held' => $held
+			, 'since' => $since
 		];
 
 		$this->held = $next;
@@ -366,7 +373,9 @@ final class Sequences
 				{
 					if(!$completed)
 					{
-						$this->matches[] = ['name' => $name, 'time' => $time
+						$this->matches[] = [
+							'name' => $name
+							, 'time' => $time
 							, 'duration' => $time - $candidate['start']
 						];
 

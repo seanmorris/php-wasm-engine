@@ -42,20 +42,19 @@ $engine->start(function() use ($engine, $device, $renderer, $sprites, $sprite, $
 	$device->present();
 
 	$probe(
-		json_encode(
-			['time' => $engine->time, 'ticks' => $ticks, 'restores' => $restores
-			, 'pixels' =>
-				$pixels
-				, 'atlas' => spl_object_id($renderer->atlas)
-				, 'uploads' => $renderer->stats[
+		json_encode([
+			'time' => $engine->time
+			, 'ticks' => $ticks
+			, 'restores' => $restores
+			, 'pixels' => $pixels
+			, 'atlas' => spl_object_id($renderer->atlas)
+			, 'uploads' => $renderer->stats[
 				'uploads'
-				]
-				, 'images' => $renderer->images->uploads
-				, 'right' => $engine->controls
-				->down('right')
-				, 'error' => glGetError()
 			]
-		)
+			, 'images' => $renderer->images->uploads
+			, 'right' => $engine->controls->down('right')
+			, 'error' => glGetError()
+		])
 	);
 }, function() use ($renderer, $sprites) {
 	$sprites->close();

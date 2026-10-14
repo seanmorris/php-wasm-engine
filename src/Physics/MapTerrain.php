@@ -202,7 +202,8 @@ final class MapTerrain
 		$w = $object['width'] ?? 0;
 		$h = $object['height'] ?? 0;
 		$points = $object['polygon'] ?? $object['polyline'] ?? [['x' => 0,'y' => 0]
-		, ['x' => $w
+		, [
+			'x' => $w
 			, 'y' => 0
 		]
 			, ['x' => $w,'y' => $h],['x' => 0,'y' => $h]
@@ -214,8 +215,9 @@ final class MapTerrain
 
 			for($i = 0; $i < 24; $i++)
 			{
-				$points[] = ['x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
-				, 'y' => $h / 2 + sin($i * M_PI / 12) * $h / 2
+				$points[] = [
+					'x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
+					, 'y' => $h / 2 + sin($i * M_PI / 12) * $h / 2
 				];
 			}
 		}

@@ -90,8 +90,8 @@ final class BreakableBlocks
 		foreach([
 			$sprite->x, $sprite->y, $sprite->scaleX, $sprite->scaleY, $sprite->rotation
 			, $sprite->originX, $sprite->originY, $sprite->time, $milliseconds
-		] as $value
-		){
+		] as $value)
+		{
 			if(!is_finite($value))
 			{
 				throw new \InvalidArgumentException('Block pose and animation time must be finite');

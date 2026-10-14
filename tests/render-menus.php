@@ -26,16 +26,26 @@ $data['properties'] = [
 $data['tiles'] = [];
 
 foreach([
-	['glyph.char' => 'A', 'glyph.width' => 6, 'glyph.height' => 5
-		, 'glyph.advance' => 7, 'glyph.offsetX' => 1, 'glyph.offsetY' => 2
+	[
+		'glyph.char' => 'A'
+		, 'glyph.width' => 6
+		, 'glyph.height' => 5
+		, 'glyph.advance' => 7
+		, 'glyph.offsetX' => 1
+		, 'glyph.offsetY' => 2
 	]
 	, ['glyph.char' => 'B', 'glyph.advance' => 9]
 	, ['glyph.char' => '?']
-	, ['glyph.char' => '⓿', 'glyph.theme' => 'keyboard', 'glyph.advance' => 10
-		, 'glyph.tint' => false, 'glyph.pixelRatio' => 2, 'glyph.smooth' => true
+	, [
+		'glyph.char' => '⓿'
+		, 'glyph.theme' => 'keyboard'
+		, 'glyph.advance' => 10
+		, 'glyph.tint' => false
+		, 'glyph.pixelRatio' => 2
+		, 'glyph.smooth' => true
 	]
-] as $id => $properties
-){
+] as $id => $properties)
+{
 	$tile = ['id' => $id, 'properties' => []];
 
 	foreach($properties as $name => $value)
@@ -255,12 +265,15 @@ $renderer->style['titleAlign'] = 'left';
 $renderer->style['valueAlign'] = 'center';
 
 $menu = new Menu(
-	['override' => ['label' => 'A'
-	, 'align' => 'left'
-	, 'valueAlign' => 'right'
-	, 'input' => 'string'
-		, 'value' => 'AAA'
-	]]
+	[
+		'override' => [
+			'label' => 'A'
+			, 'align' => 'left'
+			, 'valueAlign' => 'right'
+			, 'input' => 'string'
+			, 'value' => 'AAA'
+		]
+	]
 	, 'B'
 );
 

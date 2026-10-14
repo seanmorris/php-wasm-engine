@@ -11,7 +11,8 @@ $rules = $config->getRules();
 $rules[SeanMorris\NoSaccadeStyle\Fixers::ALLMAN_TABS] = ['max_line_length' => 120];
 
 return $config->setRules(
-	$rules + ['no_multiple_statements_per_line' => true
+	$rules + [
+		'no_multiple_statements_per_line' => true
 		, 'binary_operator_spaces' => ['default' => 'single_space']
 	]
 );

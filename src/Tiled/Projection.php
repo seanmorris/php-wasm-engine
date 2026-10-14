@@ -42,13 +42,11 @@ final class Projection
 	public function project(float $x, float $y): array
 	{
 		return $this->orientation === 'isometric'
-			? [($x - $y + $this->mapHeight) * $this
-			->tileWidth / 2
+			? [($x - $y + $this->mapHeight) * $this->tileWidth / 2
 			, ($x + $y) * $this->tileHeight / 2
 			]
 			: [$x * $this->tileWidth
-			, $y * $this
-			->tileHeight
+			, $y * $this->tileHeight
 			];
 	}
 

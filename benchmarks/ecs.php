@@ -135,10 +135,13 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 	$middle = intdiv(count($sorted), 2);
 	$median = count($sorted) % 2 ? $sorted[$middle] : ($sorted[$middle - 1] + $sorted[$middle]) / 2;
 
-	return ['median_us' => $median
-	, 'min_us' => min($times)
-	, 'max_us' => max($times)
-		, 'samples_us' => $times, 'checksum' => $expected, 'iterations' => $iterations
+	return [
+		'median_us' => $median
+		, 'min_us' => min($times)
+		, 'max_us' => max($times)
+		, 'samples_us' => $times
+		, 'checksum' => $expected
+		, 'iterations' => $iterations
 	];
 }
 
@@ -323,8 +326,13 @@ function benchmark(array $options): array
 		$registry->query($query);
 	}
 
-	return ['php' => PHP_VERSION, 'int_bytes' => PHP_INT_SIZE, 'sapi' => PHP_SAPI
-		, 'jit' => ini_get('opcache.jit'), 'entities' => $size, 'samples' => $samples
+	return [
+		'php' => PHP_VERSION
+		, 'int_bytes' => PHP_INT_SIZE
+		, 'sapi' => PHP_SAPI
+		, 'jit' => ini_get('opcache.jit')
+		, 'entities' => $size
+		, 'samples' => $samples
 		, 'registry_bytes' => $before ? $resident : null
 		, 'query_cache_bytes' => $before ? memory_get_usage() - $before : null
 		, 'results' => $results

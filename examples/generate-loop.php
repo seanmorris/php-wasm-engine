@@ -100,21 +100,29 @@ for($y = 0; $y < 8; $y++)
 
 		if(count($unique) >= 3)
 		{
-			$loopTiles[] = ['id' => $y * 8 + $x
-			, 'objectgroup' => ['objects' => [['id' => 1
-			, 'x' => 0
-			, 'y' => 0
-				, 'polygon' => $unique
-			]]]];
+			$loopTiles[] = [
+				'id' => $y * 8 + $x
+				, 'objectgroup' => [
+					'objects' => [[
+						'id' => 1
+						, 'x' => 0
+						, 'y' => 0
+						, 'polygon' => $unique
+					]]
+				]
+			];
 		}
 	}
 }
 
 jsonAsset(
 	'loop.tsj'
-	, ['type' => 'tileset', 'name' => 'loop', 'tilewidth' => 32, 'tileheight' => 32
-	, 'tilecount' =>
-		64
+	, [
+		'type' => 'tileset'
+		, 'name' => 'loop'
+		, 'tilewidth' => 32
+		, 'tileheight' => 32
+		, 'tilecount' => 64
 		, 'columns' => 8
 		, 'image' => 'loop.png'
 		, 'imagewidth' => 256
@@ -150,14 +158,17 @@ $loopLayers = $background;
 
 foreach($planes as $plane => $cells)
 {
-	$loopLayers[] = ['id' => $plane + 1
-	, 'name' => 'Collision ' . $plane
-	, 'type' => 'tilelayer'
-	, 'width' =>
-		$width
-		, 'height' => $height,'data' => $cells
-		, 'properties' => [['name' => 'collisionLayer'
-		, 'type' => 'int','value' => $plane
+	$loopLayers[] = [
+		'id' => $plane + 1
+		, 'name' => 'Collision ' . $plane
+		, 'type' => 'tilelayer'
+		, 'width' => $width
+		, 'height' => $height
+		, 'data' => $cells
+		, 'properties' => [[
+			'name' => 'collisionLayer'
+			, 'type' => 'int'
+			, 'value' => $plane
 		]]
 	] + $layerDefaults;
 }
@@ -168,30 +179,34 @@ foreach([['Left entrance',704,176,32,288,false],['Crown',880,168,32,64,true]
 , ['Right entrance'
 , 1056
 	, 176,32,288,false
-]] as $i => [$name,$x,$y,$w,$h,$back]
-){
-	$gates[] = ['id' => $i + 1
-	, 'name' => $name
-	, 'class' => 'layer-switch'
-	, 'x' => $x
-	, 'y' => $y
-	, 'width' =>
-		$w
+]] as $i => [$name,$x,$y,$w,$h,$back])
+{
+	$gates[] = [
+		'id' => $i + 1
+		, 'name' => $name
+		, 'class' => 'layer-switch'
+		, 'x' => $x
+		, 'y' => $y
+		, 'width' => $w
 		, 'height' => $h
 		, 'properties' => [['name' => 'back','type' => 'bool','value' => $back]]
 	];
 }
 
-$loopLayers[] = ['id' => 4,'name' => 'Layer switches','type' => 'objectgroup'
-, 'objects' =>
-	$gates
+$loopLayers[] = [
+	'id' => 4
+	, 'name' => 'Layer switches'
+	, 'type' => 'objectgroup'
+	, 'objects' => $gates
 ] + $layerDefaults;
 
 jsonAsset(
 	'loop.tmj'
-	, ['type' => 'map', 'version' => '1.10', 'orientation' => 'orthogonal'
-	, 'renderorder' =>
-		'right-down'
+	, [
+		'type' => 'map'
+		, 'version' => '1.10'
+		, 'orientation' => 'orthogonal'
+		, 'renderorder' => 'right-down'
 		, 'width' => $width
 		, 'height' => $height
 		, 'tilewidth' => 32
@@ -199,7 +214,8 @@ jsonAsset(
 		, 'infinite' => false
 		, 'tilesets' => [['firstgid' => 1,'source' => 'tiles.tsj']
 		, [
-		'firstgid' => 10,'source' => 'loop.tsj'
+			'firstgid' => 10
+			, 'source' => 'loop.tsj'
 		]]
 		, 'layers' => $loopLayers
 	]

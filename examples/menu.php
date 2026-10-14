@@ -53,9 +53,10 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 				$adapter->renderer->style['scale'] = $value;
 			}
 		]
-		, 'theme' => ['label' => 'Button hints'
-		, 'input' => 'select'
-		, 'default' => 'auto'
+		, 'theme' => [
+			'label' => 'Button hints'
+			, 'input' => 'select'
+			, 'default' => 'auto'
 			, 'options' => ['auto', 'keyboard', 'xbox', 'playstation', 'generic']
 			, 'subtext' => 'Auto follows the last keyboard or controller input.'
 			, 'get' => fn() => $settings->theme
@@ -63,33 +64,42 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 				$settings->theme = $adapter->theme = $value;
 			}
 		]
-		, 'hints' => ['label' => 'Control hints'
-		, 'input' => 'boolean'
-		, 'default' => true
+		, 'hints' => [
+			'label' => 'Control hints'
+			, 'input' => 'boolean'
+			, 'default' => true
 			, 'subtext' => 'Show keyboard or gamepad glyphs below the menu.'
 			, 'get' => fn() => $settings->hints
 			, 'set' => function($value) use ($settings, &$adapter) {
 				$settings->hints = $adapter->renderer->showHints = $value;
 			}
 		]
-		, 'debug' => ['label' => 'Debug overlay'
-		, 'input' => 'boolean'
-		, 'default' => false
+		, 'debug' => [
+			'label' => 'Debug overlay'
+			, 'input' => 'boolean'
+			, 'default' => false
 			, 'subtext' => 'F9 toggles player, camera, collision, and rendering diagnostics.'
 			, 'get' => fn() => $game->debug->enabled
 			, 'set' => fn($value) => $game->debug->enabled = $value
 		]
-		, 'fps' => ['label' => 'FPS meter', 'input' => 'boolean', 'default' => true
+		, 'fps' => [
+			'label' => 'FPS meter'
+			, 'input' => 'boolean'
+			, 'default' => true
 			, 'subtext' => 'Browser frames per second and average frame interval in milliseconds.'
 			, 'get' => fn() => $game->debug->showFps
 			, 'set' => fn($value) => $game->debug->showFps = $value
 		]
 		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
-		, 'time' => ['label' => 'Game time', 'input' => 'output'
+		, 'time' => [
+			'label' => 'Game time'
+			, 'input' => 'output'
 			, 'get' => fn() => sprintf('%.2f s', $engine->time)
 			, 'subtext' => 'Simulation time stays fixed while the menu is open.'
 		]
-		, 'locked' => ['label' => 'Unavailable item', 'disabled' => true
+		, 'locked' => [
+			'label' => 'Unavailable item'
+			, 'disabled' => true
 			, 'subtext' => 'Disabled rows remain readable but cannot activate.'
 		]
 	];
@@ -105,11 +115,13 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		$menu->back();
 	};
 
-	$items['defaults'] = ['label' => 'Reset settings'
-	, 'children' => [
-		'no' => ['label' => 'No, keep settings', 'callback' => fn(Menu $menu) => $menu->back()]
-		, 'yes' => ['label' => 'Yes, restore defaults', 'callback' => $reset]
-	]];
+	$items['defaults'] = [
+		'label' => 'Reset settings'
+		, 'children' => [
+			'no' => ['label' => 'No, keep settings', 'callback' => fn(Menu $menu) => $menu->back()]
+			, 'yes' => ['label' => 'Yes, restore defaults', 'callback' => $reset]
+		]
+	];
 
 	$game->settings = $items;
 
@@ -142,70 +154,88 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		];
 	}
 
-	$levels['load-error'] = ['label' => 'Level download failed'
-	, 'input' => 'output'
+	$levels['load-error'] = [
+		'label' => 'Level download failed'
+		, 'input' => 'output'
 		, 'hidden' => fn() => $game->error === ''
 		, 'subtext' => 'Select the level again to retry, or choose another level.'
 	];
 
-	$levels['cancel-load'] = ['label' => 'Cancel level change'
+	$levels['cancel-load'] = [
+		'label' => 'Cancel level change'
 		, 'hidden' => fn() => $game->pending === null && $game->error === ''
 		, 'callback' => fn() => $game->cancelLoad()
 	];
 
 	foreach($profileNames as $id => $label)
 	{
-		$profiles[$id] = ['label' => $label, 'input' => 'output'
+		$profiles[$id] = [
+			'label' => $label
+			, 'input' => 'output'
 			, 'get' => fn() => $host->profile === $id ? 'Current' : ''
 			, 'callback' => fn() => $game->selectProfile($id)
 		];
 	}
 
 	$menu = new Menu(
-		['resume' => ['label' => 'Resume'
-		, 'callback' => fn(Menu $menu) => $menu->close()
-			, 'subtext' => 'Return to the game.'
-		]
-		, 'settings' => ['label' => 'Settings'
-			, 'children' => $items
-			, 'subtext' =>
-			'Live text, numbers, sliders, choices, and boolean inputs.'
-		]
-		, 'level' => ['label' => 'Level', 'input' => 'output'
-			, 'get' => fn() => $levelNames[$game->scene] ?? 'Loading'
-			, 'children' => $levels
-			, 'subtext' => 'Change levels while keeping game time and settings.'
-		]
-		, 'movement' => ['label' => 'Movement', 'input' => 'output'
-			, 'get' => fn() => $profileNames[$host->profile], 'children' => $profiles
-			, 'subtext' => 'Change the current player without restarting the level.'
-		]
-		, 'mute' => ['label' => 'Mute audio', 'input' => 'boolean'
-			, 'get' => fn() => $host->muted
-			, 'set' => fn($value) => $host->setMuted($value)
-			, 'subtext' => 'Shared with the speaker button in the lower-right corner.'
-		]
-		, 'fullscreen' => ['label' => 'Fullscreen', 'input' => 'boolean'
-			, 'get' => fn() => $host->fullscreen
-			, 'set' => fn($value) => $host->setFullscreen($value)
-			, 'hidden' => fn() => !$host->fullscreenAvailable
-			, 'disabled' => fn() => $host->fullscreenBusy
-			, 'subtext' => 'Some browsers require clicking the corner fullscreen button.'
-		]
-		, 'fullscreen-error' => ['label' => 'Fullscreen request denied'
-		, 'input' => 'output'
-			, 'hidden' => fn() => $host->fullscreenError === ''
-			, 'subtext' => 'Try the corner fullscreen button. The game can stay in this view.'
-		]
-		, 'name' => ['label' =>
-			'Player'
-			, 'input' => 'output', 'get' => fn() => $settings->name
-		]
-		, 'main-menu' => ['label' => 'Main menu'
-			, 'hidden' => fn() => $game->startup === null
-			, 'callback' => fn() => $game->startup->showMenu()
-			, 'subtext' => 'Keep this level available to resume.'
-		]
+		[
+			'resume' => [
+				'label' => 'Resume'
+				, 'callback' => fn(Menu $menu) => $menu->close()
+				, 'subtext' => 'Return to the game.'
+			]
+			, 'settings' => [
+				'label' => 'Settings'
+				, 'children' => $items
+				, 'subtext' => 'Live text, numbers, sliders, choices, and boolean inputs.'
+			]
+			, 'level' => [
+				'label' => 'Level'
+				, 'input' => 'output'
+				, 'get' => fn() => $levelNames[$game->scene] ?? 'Loading'
+				, 'children' => $levels
+				, 'subtext' => 'Change levels while keeping game time and settings.'
+			]
+			, 'movement' => [
+				'label' => 'Movement'
+				, 'input' => 'output'
+				, 'get' => fn() => $profileNames[$host->profile]
+				, 'children' => $profiles
+				, 'subtext' => 'Change the current player without restarting the level.'
+			]
+			, 'mute' => [
+				'label' => 'Mute audio'
+				, 'input' => 'boolean'
+				, 'get' => fn() => $host->muted
+				, 'set' => fn($value) => $host->setMuted($value)
+				, 'subtext' => 'Shared with the speaker button in the lower-right corner.'
+			]
+			, 'fullscreen' => [
+				'label' => 'Fullscreen'
+				, 'input' => 'boolean'
+				, 'get' => fn() => $host->fullscreen
+				, 'set' => fn($value) => $host->setFullscreen($value)
+				, 'hidden' => fn() => !$host->fullscreenAvailable
+				, 'disabled' => fn() => $host->fullscreenBusy
+				, 'subtext' => 'Some browsers require clicking the corner fullscreen button.'
+			]
+			, 'fullscreen-error' => [
+				'label' => 'Fullscreen request denied'
+				, 'input' => 'output'
+				, 'hidden' => fn() => $host->fullscreenError === ''
+				, 'subtext' => 'Try the corner fullscreen button. The game can stay in this view.'
+			]
+			, 'name' => [
+				'label' => 'Player'
+				, 'input' => 'output'
+				, 'get' => fn() => $settings->name
+			]
+			, 'main-menu' => [
+				'label' => 'Main menu'
+				, 'hidden' => fn() => $game->startup === null
+				, 'callback' => fn() => $game->startup->showMenu()
+				, 'subtext' => 'Keep this level available to resume.'
+			]
 		]
 		, 'Paused'
 	);
@@ -234,16 +264,15 @@ function demoMenuState(PauseMenu $pauseMenu, Engine $engine, ?Menu $active = nul
 		$values[$id] = $row['value'] ?? null;
 	}
 
-	return json_encode(
-		['open' => $menu->isOpen
+	return json_encode([
+		'open' => $menu->isOpen
 		, 'title' => $menu->title
 		, 'selected' => $menu->selected
-			, 'editing' => $menu->editor !== null
-			, 'composition' => $menu->editor?->composition
-			, 'values' => $values, 'time' => $engine->time
-			, 'theme' => $pauseMenu->renderer->font
-			->theme
-			, 'regions' => $pauseMenu->renderer->regions
-		]
-	);
+		, 'editing' => $menu->editor !== null
+		, 'composition' => $menu->editor?->composition
+		, 'values' => $values
+		, 'time' => $engine->time
+		, 'theme' => $pauseMenu->renderer->font->theme
+		, 'regions' => $pauseMenu->renderer->regions
+	]);
 }

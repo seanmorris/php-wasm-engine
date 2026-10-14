@@ -65,10 +65,12 @@ test('bitmap alignment places each wrapped line and its carets within the line b
 		near($wrapped['positions'][2][1], 32);
 
 		check(
-			$font->measure('AAI', 2, 36) === ['width' => $wrapped['width']
-			, 'height' => $wrapped[
+			$font->measure('AAI', 2, 36) === [
+				'width' => $wrapped['width']
+				, 'height' => $wrapped[
 				'height'
-			]]
+				]
+			]
 		);
 	}
 });
@@ -129,10 +131,15 @@ test('menu conditions repair focus and block all ways of changing disabled value
 	$calls = 0;
 
 	$menu = new Menu([
-		'first' => ['input' => 'string', 'value' => 'kept'
+		'first' => [
+			'input' => 'string'
+			, 'value' => 'kept'
 			, 'hidden' => function() use (&$hidden) { return $hidden; }
 		]
-		, 'locked' => ['input' => 'boolean', 'value' => false, 'disabled' => true
+		, 'locked' => [
+			'input' => 'boolean'
+			, 'value' => false
+			, 'disabled' => true
 			, 'set' => function() use (&$calls) { $calls++; }
 			, 'revert' => function() use (&$calls) { $calls++; }
 		]
@@ -162,11 +169,15 @@ test('menu conditions repair focus and block all ways of changing disabled value
 test('leaving a pending submenu cancels polling and keeps the parent usable', function() {
 	$polls = 0;
 
-	$menu = new Menu(['remote' => ['children' => function() use (&$polls) {
-		$polls++;
+	$menu = new Menu([
+		'remote' => [
+			'children' => function() use (&$polls) {
+				$polls++;
 
-		return null;
-	}]]);
+				return null;
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -180,13 +191,16 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 	$value = 'before';
 	$sets = 0;
 
-	$menu = new Menu(['text' => ['input' => 'string'
-		, 'get' => function() use (&$value) { return $value; }
-		, 'set' => function($text) use (&$value, &$sets) {
-			$value = $text;
-			$sets++;
-		}
-	]]);
+	$menu = new Menu([
+		'text' => [
+			'input' => 'string'
+			, 'get' => function() use (&$value) { return $value; }
+			, 'set' => function($text) use (&$value, &$sets) {
+				$value = $text;
+				$sets++;
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -214,15 +228,16 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 });
 
 test('slider dragging clamps outside its track instead of entering text editing', function() {
-	$menu = new Menu(
-		['slider' => ['input' => 'number'
-		, 'min' => 0
-		, 'max' => 10
-		, 'step' => .5
-		, 'value' => 5
+	$menu = new Menu([
+		'slider' => [
+			'input' => 'number'
+			, 'min' => 0
+			, 'max' => 10
+			, 'step' => .5
+			, 'value' => 5
 			, 'subType' => 'range'
-		]]
-	);
+		]
+	]);
 
 	$menu->open();
 	$input = new MenuInput;
@@ -345,13 +360,16 @@ test('button glyphs select annotated themes and retain their original colors', f
 
 test('menu pages restore selection and scroll, wrap rows and skip hidden entries', function() {
 	$menu = new Menu(
-		['first' => ['label' => 'First'], 'hidden' => ['hidden' => true]
-		, 'settings' => [
-			'children' => ['flag' => ['input' => 'boolean', 'value' => false]]
-		]
-		, 'locked' => [
-			'disabled' => true, 'callback' => fn() => throw new Exception('disabled')
-		]
+		[
+			'first' => ['label' => 'First']
+			, 'hidden' => ['hidden' => true]
+			, 'settings' => [
+				'children' => ['flag' => ['input' => 'boolean', 'value' => false]]
+			]
+			, 'locked' => [
+				'disabled' => true
+				, 'callback' => fn() => throw new Exception('disabled')
+			]
 		]
 		, 'Pause'
 	);
@@ -383,7 +401,11 @@ test('menu live bindings change once, clamp steps, cycle choices and reset defau
 	$calls = 0;
 
 	$menu = new Menu([
-		'amount' => ['input' => 'number', 'min' => 0, 'max' => 1, 'step' => .1
+		'amount' => [
+			'input' => 'number'
+			, 'min' => 0
+			, 'max' => 1
+			, 'step' => .1
 			, 'get' => function() use (&$value) { return $value; }
 			, 'set' => function($next) use (&$value, &$calls) {
 				$value = $next;
@@ -421,12 +443,15 @@ test('menu live bindings change once, clamp steps, cycle choices and reset defau
 });
 
 test('editing retains live values and discards only incomplete numeric drafts', function() {
-	$menu = new Menu(
-		['name' => ['input' => 'string', 'value' => 'Ada']
-		, 'number' => ['input' => 'number'
-			, 'value' => 3, 'min' => -10, 'max' => 10
-		]]
-	);
+	$menu = new Menu([
+		'name' => ['input' => 'string', 'value' => 'Ada']
+		, 'number' => [
+			'input' => 'number'
+			, 'value' => 3
+			, 'min' => -10
+			, 'max' => 10
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -454,21 +479,25 @@ test('editing retains live values and discards only incomplete numeric drafts', 
 test('lazy menus poll only while active and recover from errors with retry', function() {
 	$count = 0;
 
-	$menu = new Menu(['load' => ['children' => function() use (&$count) {
-		$count++;
+	$menu = new Menu([
+		'load' => [
+			'children' => function() use (&$count) {
+				$count++;
 
-		if($count === 1)
-		{
-			return null;
-		}
+				if($count === 1)
+				{
+					return null;
+				}
 
-		if($count === 2)
-		{
-			throw new RuntimeException('offline');
-		}
+				if($count === 2)
+				{
+					throw new RuntimeException('offline');
+				}
 
-		return ['ready' => ['label' => 'Ready']];
-	}]]);
+				return ['ready' => ['label' => 'Ready']];
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -508,9 +537,11 @@ test('menu repeat uses elapsed time, page jumps clamp and reset fires once per h
 
 	for($i = 0; $i < 20; $i++)
 	{
-		$items['item' . $i] = ['revert' => function() use (&$resets) {
-			$resets++;
-		}];
+		$items['item' . $i] = [
+			'revert' => function() use (&$resets) {
+				$resets++;
+			}
+		];
 	}
 
 	$menu = new Menu($items);

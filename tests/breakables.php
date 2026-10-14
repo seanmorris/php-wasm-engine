@@ -24,20 +24,30 @@ test(
 
 		foreach([0, 4, 8, 12, 2, 6, 10, 14] as $flags)
 		{
-			$object = ['class' => 'breakable', 'gid' => 1 + $flags * 268435456.0
-				, 'x' => 60, 'y' => 74, 'width' => 48, 'height' => 24, 'rotation' => 30
+			$object = [
+				'class' => 'breakable'
+				, 'gid' => 1 + $flags * 268435456.0
+				, 'x' => 60
+				, 'y' => 74
+				, 'width' => 48
+				, 'height' => 24
+				, 'rotation' => 30
 				, 'properties' => [['name' => 'columns', 'value' => 3]
-				, ['name' => 'rows'
+				, [
+					'name' => 'rows'
 					, 'value' => 4
 				]]
 			];
 
-			$data = mapData(
-				[['id' => 1, 'type' => 'objectgroup', 'offsetx' => 3, 'offsety' => 5
+			$data = mapData([[
+				'id' => 1
+				, 'type' => 'objectgroup'
+				, 'offsetx' => 3
+				, 'offsety' => 5
 				, 'objects' => [
 					$object
-				]]]
-			);
+				]
+			]]);
 
 			$map = fixture(['blocks.tmj' => $data, 'tiles.tsj' => tiles()])->map('blocks.tmj');
 			$map->x = 7;
@@ -53,7 +63,8 @@ test(
 			// Check the Tiled object rectangle independently of the sprite's transformed anchor.
 			foreach([[24, -12, true], [-1, -12, false], [49, -12, false]
 				, [24, -25, false], [24, 1, false]
-			] as [$x, $y, $solid]){
+			] as [$x, $y, $solid])
+			{
 				$worldX = 70 + $x * cos(M_PI / 6) - $y * sin(M_PI / 6);
 				$worldY = 90 + $x * sin(M_PI / 6) + $y * cos(M_PI / 6);
 				check($terrain->solidAt($worldX, $worldY) === $solid, 'object bounds ' . $flags);

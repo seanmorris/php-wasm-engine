@@ -57,46 +57,63 @@ function fixture(array $data): Loader
 
 function mapData(array $layers = [], array $extra = []): array
 {
-	return $extra + ['type' => 'map'
-	, 'orientation' => 'orthogonal'
-	, 'width' => 2
-	, 'height' => 2
-		, 'tilewidth' => 16,'tileheight' => 16,'layers' => $layers
-		, 'tilesets' => [['firstgid' => 1
-		, 'source' => 'tiles.tsj'
+	return $extra + [
+		'type' => 'map'
+		, 'orientation' => 'orthogonal'
+		, 'width' => 2
+		, 'height' => 2
+		, 'tilewidth' => 16
+		, 'tileheight' => 16
+		, 'layers' => $layers
+		, 'tilesets' => [[
+			'firstgid' => 1
+			, 'source' => 'tiles.tsj'
 		]]
 	];
 }
 
 function tiles(): array
 {
-	return ['tilewidth' => 16
-	, 'tileheight' => 16
-	, 'tilecount' => 2
-	, 'columns' => 2
-	, 'image' => 'tiles.png'
-		, 'imagewidth' => 32,'imageheight' => 16
-		, 'tiles' => [['id' => 0
-		, 'properties' => [['name' =>
-		'solid'
-		, 'value' => true
-		]]]
-		, ['id' => 1
-		, 'animation' => [['tileid' => 0,'duration' => 100]
+	return [
+		'tilewidth' => 16
+		, 'tileheight' => 16
+		, 'tilecount' => 2
+		, 'columns' => 2
+		, 'image' => 'tiles.png'
+		, 'imagewidth' => 32
+		, 'imageheight' => 16
+		, 'tiles' => [[
+			'id' => 0
+			, 'properties' => [[
+				'name' => 'solid'
+				, 'value' => true
+			]]
+		]
 		, [
-		'tileid' => 1,'duration' => 200
-		]]]]
+			'id' => 1
+			, 'animation' => [['tileid' => 0,'duration' => 100]
+		, [
+			'tileid' => 1
+			, 'duration' => 200
+		]
+			]
+		]]
 	];
 }
 
 function layer(array $extra = []): array
 {
-	return $extra + ['type' => 'tilelayer','id' => 1,'width' => 2,'height' => 2
-	, 'data' => [1
+	return $extra + [
+		'type' => 'tilelayer'
+		, 'id' => 1
+		, 'width' => 2
+		, 'height' => 2
+		, 'data' => [1
 	, 0
 	, 0
 		, 2
-	]];
+		]
+	];
 }
 
 test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', function() {
@@ -118,16 +135,18 @@ test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', functi
 });
 
 test('external tilesets, inherited group state and relative paths', function() {
-	$loader = fixture(
-		['/maps/a.tmj' => mapData(
-			[['type' => 'group', 'offsetx' => 4, 'opacity' => .5, 'parallaxx' => .5
+	$loader = fixture([
+		'/maps/a.tmj' => mapData([[
+			'type' => 'group'
+			, 'offsetx' => 4
+			, 'opacity' => .5
+			, 'parallaxx' => .5
 			, 'layers' => [
 				layer(['offsetx' => 3,'opacity' => .5])
-			]]]
-		)
-			, '/maps/tiles.tsj' => tiles()
-		]
-	);
+			]
+		]])
+		, '/maps/tiles.tsj' => tiles()
+	]);
 
 	$map = $loader->map('/maps/a.tmj');
 	check($map === $loader->map('/maps/a.tmj'));
@@ -145,11 +164,10 @@ test('base64 and compressed layers reject corrupt lengths', function() {
 		$bytes = hex2bin('01000080000000000000000002000000');
 		$data = base64_encode($compress ? $compress($bytes) : $bytes);
 
-		$loader = fixture(
-			['a.tmj' => mapData([layer(['data' => $data, 'encoding' => 'base64', 'compression' => $compression])])
+		$loader = fixture([
+			'a.tmj' => mapData([layer(['data' => $data, 'encoding' => 'base64', 'compression' => $compression])])
 			, 'tiles.tsj' => tiles()
-			]
-		);
+		]);
 
 		check($loader->map('a.tmj')->layers[0]->gidAt(0, 0)->flags === 8);
 	}
@@ -159,19 +177,23 @@ test('base64 and compressed layers reject corrupt lengths', function() {
 });
 
 test('infinite maps keep sparse negative chunks and allow edits', function() {
-	$loader = fixture(
-		['a.tmj' => mapData(
-			[layer(
-				['chunks' => [['x' => -10000, 'y' => -4, 'width' => 2, 'height' => 1
-				, 'data' => [1
+	$loader = fixture([
+		'a.tmj' => mapData(
+			[layer([
+				'chunks' => [[
+					'x' => -10000
+					, 'y' => -4
+					, 'width' => 2
+					, 'height' => 1
+					, 'data' => [1
 					, 2
-				]]]]
-			)]
+					]
+				]]
+			])]
 			, ['infinite' => true]
 		)
 		, 'tiles.tsj' => tiles()
-		]
-	);
+	]);
 
 	$map = $loader->map('a.tmj');
 	$layer = $map->layers[0];
@@ -199,14 +221,18 @@ test('orthogonal and isometric projections round trip negative coordinates', fun
 
 test('world maps load on intersection and reuse assets', function() {
 	$reads = [];
-	$data = ['world.world' => ['maps' => [['fileName' => 'a.tmj'
-	, 'x' => 0
-	, 'y' => 0
-	, 'width' => 32
-		, 'height' => 32
-	]
+	$data = [
+		'world.world' => [
+			'maps' => [[
+				'fileName' => 'a.tmj'
+				, 'x' => 0
+				, 'y' => 0
+				, 'width' => 32
+				, 'height' => 32
+			]
 		, ['fileName' => 'b.tmj','x' => 1000,'y' => 0,'width' => 32,'height' => 32]
-	]]
+			]
+		]
 		, 'a.tmj' => mapData([layer()])
 		, 'b.tmj' => mapData([layer()])
 		, 'tiles.tsj' => tiles()
@@ -331,15 +357,16 @@ test('landing, acceleration, braking, jumping and variable jump height', functio
 });
 
 test('fast bodies do not tunnel through floors or walls', function() {
-	$terrain = new Terrain(
-		[['points' => [[-500,100],[500,100],[500,101],[-500,101]]]
-		, ['points' => [[100,-500]
+	$terrain = new Terrain([['points' => [[-500,100],[500,100],[500,101],[-500,101]]]
+		, [
+			'points' => [[100,-500]
 		, [101
 			, -500
 		]
 		, [101,100],[100,100]
-		]]]
-	);
+			]
+		]
+	]);
 
 	$p = new Platformer($terrain);
 	$b = new Body(0, 0);

@@ -74,10 +74,13 @@ final class WorldStream
 		foreach($near as $order => $entry)
 		{
 			$path = Assets::relative($this->world->path, $entry['fileName']);
-			$this->states[$path] ??= ['entry' => $entry,'order' => $order,'files' => []
-			, 'map' =>
-				null
-				, 'ready' => false,'failed' => null
+			$this->states[$path] ??= [
+				'entry' => $entry
+				, 'order' => $order
+				, 'files' => []
+				, 'map' => null
+				, 'ready' => false
+				, 'failed' => null
 			];
 		}
 

@@ -36,7 +36,8 @@ foreach([
 	, [1500,'jump','run',false]
 	, [1550,'jump','run',false]
 	, [1750,'run','run',false]
-] as [$time,$a,$b,$restart]){
+] as [$time,$a,$b,$restart])
+{
 	$sheet->play($left, $a, $time, restart: $restart);
 	$sheet->play($right, $b, $time);
 	$frames[] = $capture($time);

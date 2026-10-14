@@ -77,7 +77,9 @@ final class BitmapFont
 				$probe->crop = $crop;
 				$probe->rectangle($tile['rect']);
 				$pixelRatio = self::positive($p['glyph.pixelRatio'] ?? 1);
-				$glyph = ['gid' => $first + $id, 'crop' => $crop
+				$glyph = [
+					'gid' => $first + $id
+					, 'crop' => $crop
 					, 'advance' => self::positive($p['glyph.advance'] ?? $width / $pixelRatio)
 					, 'x' => (float)($p['glyph.offsetX'] ?? 0)
 					, 'y' => (float)($p['glyph.offsetY'] ?? 0)
@@ -259,7 +261,9 @@ final class BitmapFont
 			}
 		}
 
-		return ['sprites' => $sprites, 'width' => $width
+		return [
+			'sprites' => $sprites
+			, 'width' => $width
 			, 'height' => $text === '' ? 0.0 : $y + $this->lineHeight * $scale
 			, 'positions' => $positions
 		];

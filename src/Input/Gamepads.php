@@ -127,8 +127,7 @@ final class Gamepads
 				{
 					$value = abs($value) <= $this->deadZone
 						? 0
-						: ($value <=> 0) * (abs($value) - $this
-						->deadZone
+						: ($value <=> 0) * (abs($value) - $this->deadZone
 						) / (
 							1 - $this->deadZone
 						);

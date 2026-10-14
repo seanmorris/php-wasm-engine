@@ -207,11 +207,11 @@ test('analog thresholds cancel opposing directions and validate sequence definit
 	check(array_column($input->drain(), 'name') === ['right']);
 
 	foreach([[], [[]], [['press' => 0, 'release' => 1]]
-	, [['release' => 0
-	, 'minHold' =>
-		-1
-	]]] as $steps
-	){
+	, [[
+		'release' => 0
+		, 'minHold' => -1
+	]]] as $steps)
+	{
 		rejects(fn() => $input->add('bad', $steps));
 	}
 

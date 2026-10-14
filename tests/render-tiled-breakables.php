@@ -26,17 +26,28 @@ foreach([0, 90] as $rotation)
 {
 	foreach([0, 4, 8, 12, 2, 6, 10, 14] as $index => $flags)
 	{
-		$data = ['orientation' => 'orthogonal', 'width' => 1, 'height' => 1
-			, 'tilewidth' => 16, 'tileheight' => 16
-			, 'tilesets' => [['firstgid' => 1, 'tilewidth' => 16, 'tileheight' => 16
-				, 'columns' => 1, 'tilecount' => 1
+		$data = [
+			'orientation' => 'orthogonal'
+			, 'width' => 1
+			, 'height' => 1
+			, 'tilewidth' => 16
+			, 'tileheight' => 16
+			, 'tilesets' => [[
+				'firstgid' => 1
+				, 'tilewidth' => 16
+				, 'tileheight' => 16
+				, 'columns' => 1
+				, 'tilecount' => 1
 				, 'image' => dirname(__DIR__) . '/examples/assets/test.png'
 			]]
-			, 'layers' => [['id' => 1
-			, 'type' => 'objectgroup'
-			, 'offsetx' => 3
-			, 'offsety' => 5
-				, 'objects' => [['class' => 'breakable', 'gid' => 1 + $flags * 268435456.0
+			, 'layers' => [[
+				'id' => 1
+				, 'type' => 'objectgroup'
+				, 'offsetx' => 3
+				, 'offsety' => 5
+				, 'objects' => [[
+					'class' => 'breakable'
+					, 'gid' => 1 + $flags * 268435456.0
 					, 'x' => 60
 					, 'y' => 74
 					, 'width' => 48

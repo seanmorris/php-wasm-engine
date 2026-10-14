@@ -214,8 +214,14 @@ $cases = [
 	, 'zero scale' => ['scaleX' => 0]
 	, 'zoomed' => ['x' => 16, 'y' => 20]
 	, 'zoomed out' => ['x' => 80.25, 'y' => 80.25]
-	, 'subpixel source' => ['x' => 20, 'y' => 20, 'originX' => 0, 'originY' => 0
-		, 'crop' => [11, 11, 1, 1], 'scaleX' => .5, 'scaleY' => .5
+	, 'subpixel source' => [
+		'x' => 20
+		, 'y' => 20
+		, 'originX' => 0
+		, 'originY' => 0
+		, 'crop' => [11, 11, 1, 1]
+		, 'scaleX' => .5
+		, 'scaleY' => .5
 	]
 ];
 

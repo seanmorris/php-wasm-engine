@@ -26,17 +26,16 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 		return new CardSequence([$title]);
 	}
 
-	return new CardSequence(
-		[new Card(
-			'loading'
-			, 'Loading the demo'
-			, 'Discovering title assets...'
-			, duration: 1
-			, fadeIn: .25
-			, fadeOut: .25
-			, skippable: false
-			, ready: $ready
-		)
+	return new CardSequence([new Card(
+		'loading'
+		, 'Loading the demo'
+		, 'Discovering title assets...'
+		, duration: 1
+		, fadeIn: .25
+		, fadeOut: .25
+		, skippable: false
+		, ready: $ready
+	)
 		, new Card(
 			'engine'
 			, 'PHP WASM ENGINE'
@@ -52,6 +51,5 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 			, duration: 3
 		)
 		, $title
-		]
-	);
+	]);
 }

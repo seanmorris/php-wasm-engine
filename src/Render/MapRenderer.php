@@ -254,8 +254,7 @@ final class MapRenderer
 
 		foreach([[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
 		, [$chunk->x
-		, $chunk
-			->y + $chunk->height
+		, $chunk->y + $chunk->height
 		]
 			, [$chunk->x + $chunk->width,$chunk->y + $chunk->height]
 		] as [$x
@@ -274,8 +273,7 @@ final class MapRenderer
 		$margin = max($this->atlas->width, $this->atlas->height);
 
 		return max($xs) + $margin >= $cx && min($xs) - $margin <= $cx + $camera->width / $camera
-			->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera
-			->height / $camera->zoom;
+			->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera->height / $camera->zoom;
 	}
 
 	/**

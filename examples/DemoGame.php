@@ -159,7 +159,9 @@ final class DemoGame
 		$this->body->flightRemaining = $defaults->flightRemaining;
 
 		$this->engine->entities->get($this->entity, Sprite::class)->gid = [
-			'runner' => 7, 'glider' => 8, 'flyer' => 9
+			'runner' => 7
+			, 'glider' => 8
+			, 'flyer' => 9
 		][$profile];
 
 		$this->host->profile = $profile;
@@ -193,8 +195,8 @@ final class DemoGame
 			, 'dropCharge'
 			, 'flightRemaining'
 			, 'dropTimer', 'coyote', 'jumpBuffer'
-		] as $property
-		){
+		] as $property)
+		{
 			$this->body->$property = $defaults->$property;
 		}
 

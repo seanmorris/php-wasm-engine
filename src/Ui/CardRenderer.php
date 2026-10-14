@@ -12,10 +12,12 @@ use PhpWasmEngine\Render\SpriteRenderer;
 final class CardRenderer
 {
 	public Atlas $atlas;
-	public array $style = ['scale' => 2
-	, 'align' => 'center'
-	, 'heading' => [1, .85, .25, 1]
-		, 'foreground' => [1, 1, 1, 1], 'backdropDim' => .25
+	public array $style = [
+		'scale' => 2
+		, 'align' => 'center'
+		, 'heading' => [1, .85, .25, 1]
+		, 'foreground' => [1, 1, 1, 1]
+		, 'backdropDim' => .25
 	];
 
 	private SpriteRenderer $sprites;
@@ -79,7 +81,8 @@ final class CardRenderer
 			[$card->title, .3, $scale * 1.6, $this->style['heading']]
 			, [$card->text, .5, $scale, $this->style['foreground']]
 			, [$prompt, .8, $scale, $this->style['foreground']]
-		] as [$text, $y, $size, $color]){
+		] as [$text, $y, $size, $color])
+		{
 			$glyphs = $this->text($text, $width, $height * $y, $size, $color, $align);
 
 			foreach($glyphs as $original)

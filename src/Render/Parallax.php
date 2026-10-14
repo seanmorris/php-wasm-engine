@@ -82,8 +82,7 @@ final class Parallax
 		, float $milliseconds = 0
 		, float $stackHeight = 0
 	): ?array {
-		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer
-			->imageHeight <= 0
+		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer->imageHeight <= 0
 		){
 			return null;
 		}
@@ -137,12 +136,14 @@ final class Parallax
 			$v -= floor($v);
 		}
 
-		return ['rect' => [$left,$top,$right - $left,$bottom - $top]
-		, 'uv' => [$u,$v
+		return [
+			'rect' => [$left,$top,$right - $left,$bottom - $top]
+			, 'uv' => [$u,$v
 		, (
 			$right - $left
 		) / $width
 			, ($bottom - $top) / $height
-		]];
+			]
+		];
 	}
 }

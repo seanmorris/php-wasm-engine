@@ -137,33 +137,39 @@ test('a switch cannot put a thin destination obstacle inside the body', function
 });
 
 test('map planes and switch objects retain world, group, rotation and tile anchors', function() {
-	$object = ['id' => 5
-	, 'type' => 'layer-switch'
-	, 'gid' => 1
-	, 'x' => 30
-	, 'y' => 40
-	, 'width' => 20
+	$object = [
+		'id' => 5
+		, 'type' => 'layer-switch'
+		, 'gid' => 1
+		, 'x' => 30
+		, 'y' => 40
+		, 'width' => 20
 		, 'height' => 30
 		, 'rotation' => 90
 		, 'properties' => [['name' => 'back','value' => '1']]
 	];
 
-	$data = mapData(
-		[['type' => 'group','offsetx' => 4,'offsety' => -2
+	$data = mapData([[
+		'type' => 'group'
+		, 'offsetx' => 4
+		, 'offsety' => -2
 		, 'layers' => [layer(['name' => 'Collision 2','data' => [1,0,0,0]])
-		, layer(
-			['name' => 'Art','data' => [0,1,0,0]
-			, 'properties' => [['name' => 'collision'
+		, layer([
+			'name' => 'Art'
+			, 'data' => [0,1,0,0]
+			, 'properties' => [[
+				'name' => 'collision'
 				, 'value' => false
-			]]]
-		)
-		, ['id' => 3
-		, 'type' =>
-			'objectgroup'
-			, 'offsetx' => 3,'objects' => [$object]
+			]]
+		])
+		, [
+			'id' => 3
+			, 'type' => 'objectgroup'
+			, 'offsetx' => 3
+			, 'objects' => [$object]
 		]
-		]]]
-	);
+		]
+	]]);
 
 	$map = fixture(['a' => $data,'tiles.tsj' => tiles()])->map('a');
 	$map->x = -100;

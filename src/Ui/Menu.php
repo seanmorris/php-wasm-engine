@@ -320,7 +320,9 @@ final class Menu
 
 		if(isset($item['children']))
 		{
-			$this->stack[] = ['items' => $this->items, 'selected' => $this->selected
+			$this->stack[] = [
+				'items' => $this->items
+				, 'selected' => $this->selected
 				, 'title' => $this->title
 				, 'scroll' => $this->scroll
 				, 'loader' => $this->loader
