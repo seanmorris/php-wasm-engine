@@ -5,7 +5,9 @@ use PhpWasmEngine\Engine;
 use PhpWasmEngine\Gameplay\Badniks;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
+use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Rings;
+use PhpWasmEngine\Gameplay\Shields;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\MapTerrain;
@@ -31,6 +33,8 @@ final class DemoLevel
 	public ?Rings $rings = null;
 	public ?Badniks $badniks = null;
 	public ?CrabMeats $crabs = null;
+	public ?Monitors $monitors = null;
+	public ?Shields $shields = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -163,12 +167,21 @@ final class DemoLevel
 		{
 			$this->badniks = new Badniks($engine->entities, $this->terrain, $this->rings);
 			$this->crabs = new CrabMeats($engine->entities, $this->terrain, $map, $this->badniks);
+			$this->shields = new Shields($engine->entities, $map);
+			$this->monitors = new Monitors($engine->entities, $this->terrain, $map, shields: $this->shields);
 			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
+			$engine->systems->add($this->systemPrefix . 'monitors', [$this->monitors, 'update'], after: ['movement']);
 
 			$engine->systems->add(
 				$this->systemPrefix . 'badniks'
 				, [$this->badniks, 'update']
 				, after: [$this->systemPrefix . 'crabs']
+			);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'shields'
+				, [$this->shields, 'update']
+				, after: [$this->systemPrefix . 'badniks']
 			);
 		}
 
@@ -177,18 +190,19 @@ final class DemoLevel
 			$this->blocks = configureBreakables($engine, $this->terrain, $map, $this->systemPrefix);
 		}
 
-		$this->movement = new Platformer(
-			$this->terrain
-			, /**
-			 * Shatter rolling contacts against blocks owned by this level.
-			 *
-			 * @param Body $body Actor at the beginning of the collision sweep.
-			 * @param Hit $hit First impact in the continuous terrain cast.
-			 * @return bool True when the contact removed a block's collision shape.
-			 */
-			fn(Body $body, Hit $hit): bool =>
-				$this->blocks?->impact($body, $hit, $engine->time * 1000) ?? false
-		);
+		/**
+		 * Remove breakable blocks or monitors contacted in an eligible movement pose.
+		 *
+		 * @param Body $body Actor at the beginning of the collision sweep.
+		 * @param Hit $hit First impact in the continuous terrain cast.
+		 * @return bool True when the contact removed an owned collision shape.
+		 */
+		$impact = function(Body $body, Hit $hit) use ($engine): bool {
+			return ($this->blocks?->impact($body, $hit, $engine->time * 1000) ?? false)
+				|| ($this->monitors?->impact($body, $hit, $engine->time * 1000) ?? false);
+		};
+
+		$this->movement = new Platformer($this->terrain, $impact);
 
 		return true;
 	}
@@ -250,9 +264,13 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'rings');
 		$engine->systems->remove($this->systemPrefix . 'badniks');
 		$engine->systems->remove($this->systemPrefix . 'crabs');
+		$engine->systems->remove($this->systemPrefix . 'monitors');
+		$engine->systems->remove($this->systemPrefix . 'shields');
 		$this->blocks?->close();
 		$this->rings?->close();
 		$this->badniks?->close();
+		$this->monitors?->close();
+		$this->shields?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();

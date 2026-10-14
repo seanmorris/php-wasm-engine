@@ -7,6 +7,7 @@ use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\RingCounter;
+use PhpWasmEngine\Gameplay\Shield;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Sprite;
@@ -393,6 +394,7 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
+		$this->level->shields?->control($this->entity, $controls, $dt);
 		$this->level->movement->step($this->body, $controls, $dt);
 		$lookDown = $this->body->crouchTime >= .75
 			? min(120, $this->camera->height / $this->camera->zoom / 5)
@@ -549,6 +551,9 @@ final class DemoGame
 			, 'collisionLayer' => $body->collisionLayer
 			, 'mercy' => $this->engine->entities->get($this->entity, PlayerCombat::class)->mercy
 			, 'opacity' => $playerOpacity
+			, 'shield' => $this->engine->entities->has($this->entity, Shield::class)
+				? $this->engine->entities->get($this->entity, Shield::class)->active
+				: ''
 		]);
 
 		$stats = $level->renderer->stats;
@@ -592,6 +597,8 @@ final class DemoGame
 		if($this->scene === 'badniks')
 		{
 			$counts = $level->badniks->counts();
+			$counts['monitors'] = $level->monitors->counts();
+			$counts['shields'] = $level->shields->counts();
 			$combat = $this->engine->entities->get($this->entity, PlayerCombat::class);
 			$counts['hits'] = $combat->hits;
 			$counts['defeats'] = $combat->defeats;
@@ -599,9 +606,11 @@ final class DemoGame
 			$this->canvas->dataset->badniks = json_encode($counts);
 
 			$this->status->textContent .= sprintf(
-				' · %d badniks · %d shots · %d defeated'
+				' · %d badniks · %d shots · %d monitors · %d shields · %d defeated'
 				, $counts['badniks']
 				, $counts['projectiles']
+				, $counts['monitors']['intact']
+				, $counts['shields']['active']
 				, $counts['defeats']
 			);
 		}

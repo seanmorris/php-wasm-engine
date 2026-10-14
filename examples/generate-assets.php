@@ -338,6 +338,247 @@ $tiles = [
 ];
 
 jsonAsset('tiles.tsj', $tiles);
+
+png(__DIR__ . '/assets/monitors.png', 768, 32, static function($x, $y) {
+	$id = intdiv($x, 32);
+	$x %= 32;
+	$transparent = [0,0,0,0];
+	$dark = [31,39,52,255];
+	$middle = [92,111,128,255];
+	$light = [204,220,224,255];
+	$gold = [255,205,73,255];
+	$colors = [
+		[139,231,255,255]
+		, [112,184,255,255]
+		, [255,100,43,255]
+		, [67,220,240,255]
+		, [255,242,116,255]
+	];
+
+	if($id === 0 || $id === 1)
+	{
+		if(($x >= 2 && $x <= 29 && $y >= 2 && $y <= 27)
+			|| ($y >= 28 && $y <= 31 && (($x >= 4 && $x <= 11) || ($x >= 21 && $x <= 28)))
+		){
+			if($x >= 5 && $x <= 26 && $y >= 5 && $y <= 21)
+			{
+				return ($x + $y + $id) % 7 === 0 ? [52,75,85,255] : [12,20,29,255];
+			}
+
+			return ($x <= 4 || $y <= 4) ? $light : (($x + $y + $id) % 5 === 0 ? $middle : $dark);
+		}
+
+		return $transparent;
+	}
+
+	if($id === 2)
+	{
+		if($y >= 18 && $y <= 29 && $x >= 2 && $x <= 29)
+		{
+			return (($x + $y) % 6 === 0) ? $middle : $dark;
+		}
+
+		if(($x >= 3 && $x <= 8 && $y >= 10 && $y <= 20)
+			|| ($x >= 23 && $x <= 28 && $y >= 13 && $y <= 21)
+		){
+			return $middle;
+		}
+
+		return $transparent;
+	}
+
+	if($id === 3)
+	{
+		$distance = hypot($x - 16, $y - 16);
+
+		return $distance >= 5 && $distance <= 8 ? $gold : $transparent;
+	}
+
+	if($id === 4)
+	{
+		return $transparent;
+	}
+
+	if($id === 5)
+	{
+		foreach([[11,17],[16,12],[21,17]] as [$cx, $cy])
+		{
+			$distance = hypot($x - $cx, $y - $cy);
+
+			if($distance >= 3 && $distance <= 5)
+			{
+				return $gold;
+			}
+		}
+
+		return $transparent;
+	}
+
+	if($id === 6 || $id === 7)
+	{
+		$dx = abs($x - 16);
+		$dy = abs($y - 16);
+		$outer = $id === 6 ? 12 : 15;
+		$inside = $dx + $dy <= $outer && (min($dx, $dy) <= 4 || $dx + $dy <= 8);
+
+		return $inside
+			? ($dx + $dy < 7 ? [255,246,183,255] : [255,132,62,255])
+			: $transparent;
+	}
+
+	if($id >= 9 && $id <= 13)
+	{
+		$type = $id - 9;
+		$color = $colors[$type];
+		$dx = $x - 16;
+		$dy = $y - 16;
+		$distance = hypot($dx, $dy);
+
+		if($type === 0)
+		{
+			return $distance >= 7 && $distance <= 10 ? $color : $transparent;
+		}
+
+		if($type === 1)
+		{
+			$bolt = ($y >= 5 && $y <= 26)
+				&& (($x >= 15 && $x <= 19 && $y < 15)
+					|| ($x >= 11 && $x <= 16 && $y >= 13 && $y < 18)
+					|| ($x >= 13 && $x <= 16 && $y >= 17)
+				);
+
+			return $bolt ? $color : $transparent;
+		}
+
+		if($type === 2)
+		{
+			$flame = $y >= 6 && $y <= 26 && abs($dx) <= max(2, intdiv($y - 2, 3))
+				&& !($y > 18 && abs($dx) < 3);
+
+			return $flame ? ($distance < 6 ? [255,225,96,255] : $color) : $transparent;
+		}
+
+		if($type === 3)
+		{
+			return $distance >= 7 && $distance <= 11
+				? ($x < 13 && $y < 13 ? $light : $color)
+				: $transparent;
+		}
+
+		$star = abs($dx) <= 2 || abs($dy) <= 2 || abs($dx - $dy) <= 1 || abs($dx + $dy) <= 1;
+
+		return $star && $distance <= 11 ? $color : $transparent;
+	}
+
+	if($id >= 14 && $id <= 23)
+	{
+		$type = intdiv($id - 14, 2);
+		$frame = ($id - 14) % 2;
+		$color = $colors[$type];
+		$dx = $x - 16;
+		$dy = $y - 16;
+		$distance = hypot($dx, $dy);
+		$radius = 13 + $frame;
+		$edge = $distance >= $radius - 1.5 && $distance <= $radius + .75;
+		$spark = (($x + $y * 3 + $type * 5 + $frame * 7) % 19 === 0)
+			&& $distance >= 10 && $distance <= 15;
+
+		if($type === 1 && $edge)
+		{
+			$edge = (($x + $y + $frame * 2) % 5) < 3;
+		}
+
+		if($type === 2 && $edge)
+		{
+			$edge = $y < 22 || (($x + $frame) % 4) < 2;
+		}
+
+		if($type === 4 && $spark)
+		{
+			return [255,255,255,255];
+		}
+
+		return $edge || $spark ? $color : $transparent;
+	}
+
+	return $transparent;
+});
+
+$monitors = [
+	'type' => 'tileset'
+	, 'name' => 'monitors'
+	, 'tilewidth' => 32
+	, 'tileheight' => 32
+	, 'columns' => 24
+	, 'tilecount' => 24
+	, 'image' => 'monitors.png'
+	, 'imagewidth' => 768
+	, 'imageheight' => 32
+	, 'tiles' => [
+		[
+			'id' => 0
+			, 'class' => 'monitor-shell'
+			, 'animation' => [
+				['tileid' => 0,'duration' => 180]
+				, ['tileid' => 1,'duration' => 180]
+			]
+		]
+		, ['id' => 2,'class' => 'monitor-broken']
+		, [
+			'id' => 3
+			, 'class' => 'monitor-screen-ring'
+			, 'animation' => [
+				['tileid' => 4,'duration' => 192]
+				, ['tileid' => 3,'duration' => 460]
+				, ['tileid' => 4,'duration' => 116]
+			]
+		]
+		, [
+			'id' => 5
+			, 'class' => 'monitor-screen-triple-ring'
+			, 'animation' => [
+				['tileid' => 4,'duration' => 192]
+				, ['tileid' => 5,'duration' => 460]
+				, ['tileid' => 4,'duration' => 116]
+			]
+		]
+		, [
+			'id' => 6
+			, 'class' => 'monitor-explosion'
+			, 'animation' => [
+				['tileid' => 6,'duration' => 80]
+				, ['tileid' => 7,'duration' => 80]
+			]
+		]
+		, ...array_map(
+			static fn($type, $id) => [
+				'id' => $id
+				, 'class' => 'monitor-screen-shield-' . $type
+				, 'animation' => [
+					['tileid' => 4,'duration' => 192]
+					, ['tileid' => $id,'duration' => 460]
+					, ['tileid' => 4,'duration' => 116]
+				]
+			]
+			, ['normal', 'electric', 'fire', 'water', 'star']
+			, range(9, 13)
+		)
+		, ...array_map(
+			static fn($type, $id) => [
+				'id' => $id
+				, 'class' => 'shield-aura-' . $type
+				, 'animation' => [
+					['tileid' => $id,'duration' => 120]
+					, ['tileid' => $id + 1,'duration' => 120]
+				]
+			]
+			, ['normal', 'electric', 'fire', 'water', 'star']
+			, [14, 16, 18, 20, 22]
+		)
+	]
+];
+
+jsonAsset('monitors.tsj', $monitors);
 $width = 96;
 $height = 20;
 $floor = array_fill(0, $width * $height, 0);
@@ -570,6 +811,7 @@ $base['layers'] = [
 $base['layers'] = array_merge($background, $base['layers']);
 jsonAsset('platformer.tmj', $base);
 $badniks = $base;
+$badniks['tilesets'][] = ['firstgid' => 27,'source' => 'monitors.tsj'];
 $badniks['layers'][] = [
 	'id' => 4
 	, 'name' => 'Badniks'
@@ -599,6 +841,63 @@ $badniks['layers'][] = [
 				['name' => 'direction','type' => 'int','value' => 1]
 				, ['name' => 'patrolOffset','type' => 'float','value' => 45]
 			]
+		]
+	]
+] + $layerDefaults;
+
+$badniks['layers'][] = [
+	'id' => 5
+	, 'name' => 'Monitors'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 4
+			, 'class' => 'RingMonitor'
+			, 'point' => true
+			, 'x' => 288
+			, 'y' => 448
+		]
+		, [
+			'id' => 5
+			, 'class' => 'TripleRingMonitor'
+			, 'point' => true
+			, 'x' => 800
+			, 'y' => 448
+		]
+		, [
+			'id' => 6
+			, 'class' => 'NormalShieldMonitor'
+			, 'point' => true
+			, 'x' => 1056
+			, 'y' => 448
+		]
+		, [
+			'id' => 7
+			, 'class' => 'ElectricShieldMonitor'
+			, 'point' => true
+			, 'x' => 1216
+			, 'y' => 448
+		]
+		, [
+			'id' => 8
+			, 'class' => 'FireShieldMonitor'
+			, 'point' => true
+			, 'x' => 1632
+			, 'y' => 448
+		]
+		, [
+			'id' => 9
+			, 'class' => 'WaterShieldMonitor'
+			, 'point' => true
+			, 'x' => 1856
+			, 'y' => 448
+		]
+		, [
+			'id' => 10
+			, 'class' => 'StarShieldMonitor'
+			, 'point' => true
+			, 'x' => 2080
+			, 'y' => 448
 		]
 	]
 ] + $layerDefaults;

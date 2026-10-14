@@ -266,7 +266,7 @@ final class Badniks
 
 				if($this->registry->has($projectile->owner, Badnik::class))
 				{
-					$this->damage($player, $body, $projectile->x);
+					$this->damage($player, $body, $projectile->x, $projectile->damageType);
 				}
 
 				$this->retire($id);
@@ -323,7 +323,18 @@ final class Badniks
 					continue 2;
 				}
 
+				$shielded = $combat->mercy <= 0
+					&& $this->registry->has($player, Shield::class)
+					&& $this->registry->get($player, Shield::class)->active !== '';
+
 				$this->damage($player, $body, $badnik->x);
+
+				if($shielded)
+				{
+					$this->pop($id, $player);
+
+					continue 2;
+				}
 			}
 		}
 
@@ -336,24 +347,33 @@ final class Badniks
 	 * @param int $player Player entity owning combat state and the supplied body.
 	 * @param Body $body Player movement body at contact.
 	 * @param float $sourceX Horizontal position of the damaging badnik or projectile.
+	 * @param string $damageType Nonempty category used by shield immunity rules.
 	 * @return bool True when mercy allowed this hit to change player state.
 	 */
-	private function damage(int $player, Body $body, float $sourceX): bool
-	{
+	private function damage(
+		int $player
+		, Body $body
+		, float $sourceX
+		, string $damageType = 'normal'
+	): bool {
 		$counter = $this->registry->has($player, RingCounter::class)
 			? $this->registry->get($player, RingCounter::class)
 			: null;
 
 		$combat = $this->registry->get($player, PlayerCombat::class);
+		$shield = $this->registry->has($player, Shield::class)
+			? $this->registry->get($player, Shield::class)
+			: null;
 
-		if($combat->mercy <= 0 && $counter !== null && $counter->rings > 0)
-		{
+		if($combat->mercy <= 0 && $counter !== null && $counter->rings > 0
+			&& !($shield?->protects($damageType) ?? false)
+		){
 			$this->rings?->scatter($player, $body, $counter);
 		}
 
 		$direction = $body->x < $sourceX ? -1 : 1;
 
-		return $combat->damage($body, $counter, $direction);
+		return $combat->damage($body, $counter, $direction, $shield, $damageType);
 	}
 
 	/**

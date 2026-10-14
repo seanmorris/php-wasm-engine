@@ -80,19 +80,39 @@ final class PlayerCombat
 	 * @param Body $body Player body whose movement state receives knockback.
 	 * @param RingCounter|null $counter Optional ring inventory emptied by the hit.
 	 * @param int $direction Horizontal knockback direction, normalized to minus or plus one.
-	 * @return bool True when damage was applied; false during mercy.
+	 * @param Shield|null $shield Optional active shield that may ignore or absorb this hit.
+	 * @param string $damageType Nonempty application-defined category for elemental immunity.
+	 * @return bool True when damage or shield absorption caused a knockback; false during mercy or
+	 * for an immune shield.
 	 */
-	public function damage(Body $body, ?RingCounter $counter, int $direction): bool
-	{
+	public function damage(
+		Body $body
+		, ?RingCounter $counter
+		, int $direction
+		, ?Shield $shield = null
+		, string $damageType = 'normal'
+	): bool {
 		if($this->mercy > 0)
 		{
 			return false;
 		}
 
+		if($damageType === '')
+		{
+			throw new \InvalidArgumentException('Player damage type cannot be empty');
+		}
+
+		if($shield?->immune($damageType))
+		{
+			return false;
+		}
+
+		$absorbed = $shield?->absorb($damageType) ?? false;
+
 		$this->hits++;
 		$this->mercy = $this->mercyDuration;
 
-		if($counter !== null)
+		if($counter !== null && !$absorbed)
 		{
 			$counter->rings = 0;
 		}

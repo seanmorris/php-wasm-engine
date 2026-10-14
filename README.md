@@ -41,6 +41,7 @@ Gamepads work in every scene. Click the canvas and press a gamepad button if the
 | Reset position (demo shortcut) | Back / Select / Share | R |
 | Retry world downloads | B / Circle | X |
 | Roll into breakable blocks | Down while moving | Down / S while moving |
+| Fire-shield air thrust | Left / right shoulder | Button 4 / 5 binding |
 
 In **Breakable blocks**, walking stops against a block and jumping can land on top. Gain speed and hold Down to roll through it, breaking it into a grid of particles without losing momentum. At rest, hold Down to crouch; after 0.75 seconds the camera looks lower. Tap Jump to add a discrete charge or hold X or B / Circle to build charge continuously, then release Down to launch a spindash. Untapped charge slowly decays, and charging recenters the camera. R or Back / Select restores all three blocks. Their `columns` and `rows` properties in `examples/assets/breakables.tmj` set the grids to 4×3, 2×8, and 8×2. Tiled tile-object sizes set their world dimensions.
 
@@ -96,6 +97,64 @@ Annotate tiles with `crabmeat-standing`, `crabmeat-walking`, `crabmeat-shooting`
 Player-to-badnik and player-to-projectile contacts use relative swept bounds, so either participant can cross the other between fixed updates without tunneling. Projectile-to-terrain movement uses `Terrain::castBody()` over the complete displacement. A projectile whose owning badnik has popped retires without damaging the player.
 
 When `Badniks` receives the level's `Rings` manager, damage scatters up to sixteen held rings in two radial groups before clearing the counter. The burst keeps moving-boxes-2's reduced recovery set: every third ring is a short-lived visual, while the others become collectible after 48 reference frames. `ScatteredRing` stores velocity, gravity, pickup delay, lifetime, restitution, and collision layer. `Rings` uses full body casts for terrain bounces and relative swept pickup checks for moving rings. Recovered rings return to `RingCounter`; unrecovered rings expire between about 3.7 and 6 seconds.
+
+## Monitors and pluggable rewards
+
+`Gameplay\Monitor` describes a solid, bottom-anchored reward box independently of its reward. `Monitors` adds each box to the same removable `Terrain` index used by the platformer. Walking leaves it solid. A roll, jump, or other airborne attack outside mercy removes the contacted shape during the continuous movement sweep, so a fast player breaks the monitor without stopping or tunneling through it. Airborne players rebound after the hit.
+
+`MonitorEffect` is the reward API. `RingMonitorEffect` supplies the reference 10-ring reward and accepts any positive amount, including the 30-ring variant. `ShieldMonitorEffect` grants normal, electric, fire, water, or star shields. Implement the interface for lives, information triggers, or game-specific inventory without changing collision and rendering behavior.
+
+~~~php
+use PhpWasmEngine\Gameplay\{Monitor,Monitors,RingMonitorEffect,Shield,ShieldMonitorEffect,Shields};
+use PhpWasmEngine\Physics\{Body,Hit,Platformer};
+use PhpWasmEngine\Render\Sprite;
+
+$shields = new Shields($engine->entities, $map);
+$monitors = new Monitors($engine->entities, $terrain, $map, shields: $shields);
+
+$movement = new Platformer(
+	$terrain
+	, onImpact: fn(Body $body, Hit $hit): bool =>
+		$monitors->impact($body, $hit, $engine->time * 1000)
+);
+
+$engine->systems->add('monitors', [$monitors, 'update'], after: ['movement']);
+$engine->systems->add('shields', [$shields, 'update'], after: ['monitors']);
+
+// Run before Platformer::step() so shield actions share the same generic controls.
+$shields->control($player, $engine->controls, $dt);
+
+// Direct creation accepts any MonitorEffect and atlas-backed casing/screen sprites.
+$monitor = $monitors->create(
+	new Monitor(320, 448, brokenGid: $brokenGid, explosionGid: $explosionGid)
+	, new RingMonitorEffect(10)
+	, new Sprite($shellGid, 320, 448, .5, 1)
+	, new Sprite($ringScreenGid, 320, 430, .5, .5)
+);
+
+$shieldMonitor = $monitors->create(
+	new Monitor(480, 448, brokenGid: $brokenGid, explosionGid: $explosionGid)
+	, new ShieldMonitorEffect(Shield::ELECTRIC, shields: $shields)
+	, new Sprite($shellGid, 480, 448, .5, 1)
+	, new Sprite($electricScreenGid, 480, 430, .5, .5)
+);
+~~~
+
+Tiled point objects may use `Monitor`, `RingMonitor`, `TripleRingMonitor`, `NormalShieldMonitor`, `ElectricShieldMonitor`, `FireShieldMonitor`, `WaterShieldMonitor`, or `StarShieldMonitor`. `BubbleShieldMonitor` is an alias for water. The historical `SheildNormalMonitor` and corresponding elemental class spellings are accepted when importing moving-boxes-2 data. A base `Monitor` selects the same effects with its `reward` property. `amount`, `points`, `starDuration`, `width`, `height`, and `collisionLayer` are optional.
+
+Annotate tiles with `monitor-shell`, `monitor-broken`, `monitor-explosion`, and the appropriate `monitor-screen-*` class. Shield screens use `monitor-screen-shield-normal`, `-electric`, `-fire`, `-water`, and `-star`. Optional `shield-aura-*` tiles give `Shields` animated player art. Tiled animation controls casing static, screen flicker, aura motion, and the explosion.
+
+The intact entity combines its casing `Sprite` with a screen `SpriteGroup`. On the first pop, the casing switches to its broken tile and stays in the level, while the screen rises and fades on a temporary entity and the reward applies exactly once. `pop()` is also available for scripted damage. Destroying an intact monitor externally releases its collider. Call `close()` during level cleanup to retire casings and effects.
+
+## Shields
+
+`Gameplay\Shield` is a player component with a scriptable inventory and one active selection. `grant()`, `select()`, `has()`, and `inventory()` are independent of input and rendering. Acquiring normal, electric, fire, or water retains that type until it absorbs a non-immune hit. Acquiring star temporarily overrides the current selection for 26 seconds by default, then restores it. Reacquiring star refreshes the timer. Granting another type during star adds it to inventory without interrupting the override.
+
+`PlayerCombat::damage()` accepts an optional shield and damage category. Any active shield prevents ring loss for one otherwise damaging hit, then receives the same mercy knockback as the unshielded player. Electric, fire, and water shields ignore their matching category and generic `projectile` damage without consuming the shield or starting mercy. Star ignores every category. `Badniks` reads the player's component automatically: shielded body contact defeats the badnik, immune projectiles retire harmlessly, and an absorbed hit does not scatter rings.
+
+`Shields` owns only map-specific aura entities, so shield inventory can persist when a level closes. Its fixed-step `update()` advances star time, follows each `Body`, retires consumed auras, and completes water rebounds. Call `control()` before platformer movement to enable the reference abilities through `Controls`: electric gets three airborne jump presses, fire spends a quarter-second thrust budget with buttons 4 and 5, and water converts an airborne jump press into a downward attack and upward rebound. Landing resets electric and fire budgets. Menus and scripts can call `Shield::select()` to switch among acquired types.
+
+Aura rendering is optional. With no annotated map, construct `Shields` without its second argument to update headless `Shield` components and abilities. A `ShieldMonitorEffect` without a manager still grants inventory, which scripts can advance directly through `Shield::update()`. With a map, `Shields` creates a separate `ShieldAura` plus `Sprite`, allowing the ordinary sprite batch to draw it over the player. `Shields::close()` removes those map-specific sprites without erasing inventory. Call `Monitors::close()` as well to retire monitor casings and pop effects.
 
 ## Input
 

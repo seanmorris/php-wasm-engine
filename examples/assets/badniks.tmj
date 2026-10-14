@@ -12,6 +12,10 @@
         {
             "firstgid": 1,
             "source": "tiles.tsj"
+        },
+        {
+            "firstgid": 27,
+            "source": "monitors.tsj"
         }
     ],
     "layers": [
@@ -4128,6 +4132,66 @@
                             "value": 45
                         }
                     ]
+                }
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": 5,
+            "name": "Monitors",
+            "type": "objectgroup",
+            "objects": [
+                {
+                    "id": 4,
+                    "class": "RingMonitor",
+                    "point": true,
+                    "x": 288,
+                    "y": 448
+                },
+                {
+                    "id": 5,
+                    "class": "TripleRingMonitor",
+                    "point": true,
+                    "x": 800,
+                    "y": 448
+                },
+                {
+                    "id": 6,
+                    "class": "NormalShieldMonitor",
+                    "point": true,
+                    "x": 1056,
+                    "y": 448
+                },
+                {
+                    "id": 7,
+                    "class": "ElectricShieldMonitor",
+                    "point": true,
+                    "x": 1216,
+                    "y": 448
+                },
+                {
+                    "id": 8,
+                    "class": "FireShieldMonitor",
+                    "point": true,
+                    "x": 1632,
+                    "y": 448
+                },
+                {
+                    "id": 9,
+                    "class": "WaterShieldMonitor",
+                    "point": true,
+                    "x": 1856,
+                    "y": 448
+                },
+                {
+                    "id": 10,
+                    "class": "StarShieldMonitor",
+                    "point": true,
+                    "x": 2080,
+                    "y": 448
                 }
             ],
             "visible": true,
