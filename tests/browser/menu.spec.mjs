@@ -119,6 +119,7 @@ test('live text editing and external focus with ' + (fallback
 	await page.locator('canvas').focus();
 	await choose(page, 'name');
 	await page.keyboard.press('Enter');
+	await expect.poll(async() => (await state(page)).editing).toBe(true);
 	await page.keyboard.press('End');
 	await page.keyboard.type(' ok');
 	await expect.poll(async() => (await state(page)).values.name).toBe('Paws xr ok');
