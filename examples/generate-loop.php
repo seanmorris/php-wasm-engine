@@ -140,6 +140,7 @@ jsonAsset(
 
 $width = 64;
 $height = 20;
+$loopFirstGid = $tiles['tilecount'] + 1;
 $planes = array_fill(0, 3, array_fill(0, $width * $height, 0));
 
 // A 256px loop at (768,192), with a shared floor at y=448.
@@ -157,7 +158,7 @@ for($y = 0; $y < 8; $y++)
 	{
 		// Common crown, left route on 1, right route on 2, as in moving-boxes-2.
 		$plane = $y < 2?0:($x < 4?1:2);
-		$planes[$plane][($y + 6) * $width + $x + 24] = 10 + $y * 8 + $x;
+		$planes[$plane][($y + 6) * $width + $x + 24] = $loopFirstGid + $y * 8 + $x;
 	}
 }
 
@@ -227,7 +228,7 @@ jsonAsset(
 		, 'tilesets' => [
 			['firstgid' => 1,'source' => 'tiles.tsj']
 			, [
-				'firstgid' => 10
+				'firstgid' => $loopFirstGid
 				, 'source' => 'loop.tsj'
 			]
 		]
