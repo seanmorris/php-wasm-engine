@@ -18,14 +18,15 @@ final class Assets
 	 */
 	public function __construct(?callable $reader = null)
 	{
-		$this->reader = $reader ??
-				/**
-				 * Read an asset through PHP filesystem and stream support.
-				 *
-				 * @param string $path File or stream-wrapper URL requested by the asset cache.
-				 * @return string|false Complete bytes, or false when the source cannot be read.
-				 */
-				static fn($path) => file_get_contents($path);
+		/**
+		 * Read an asset through PHP filesystem and stream support.
+		 *
+		 * @param string $path File or stream-wrapper URL requested by the asset cache.
+		 * @return string|false Complete bytes, or false when the source cannot be read.
+		 */
+		$defaultReader = static fn($path) => file_get_contents($path);
+
+		$this->reader = $reader ?? $defaultReader;
 	}
 
 	/**

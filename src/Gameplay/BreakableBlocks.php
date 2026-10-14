@@ -117,7 +117,8 @@ final class BreakableBlocks
 		{
 			$x = ($u - $sprite->originX) * $width * $sprite->scaleX;
 			$y = ($v - $sprite->originY) * $height * $sprite->scaleY;
-			$points[] = [$sprite->x + $x * $cos - $y * $sin
+			$points[] = [
+				$sprite->x + $x * $cos - $y * $sin
 				, $sprite->y + $x * $sin + $y * $cos
 			];
 		}
