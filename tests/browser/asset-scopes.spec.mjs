@@ -4,6 +4,7 @@ import {AssetLoader} from '../../browser/AssetLoader.mjs';
 test('scope progress counts failures and resets a retried dependency to pending', async () => {
 	const originalFetch = globalThis.fetch;
 	const transfers = [];
+
 	globalThis.fetch = () => new Promise(resolve => transfers.push(resolve));
 
 	const assets = new AssetLoader(
@@ -45,13 +46,15 @@ test(
 	, async () => {
 		const mounted = new Map(), transfers = [];
 		const originalFetch = globalThis.fetch;
+
 		globalThis.fetch = (_url, {signal}) => new Promise(resolve => {
 			transfers.push({signal, resolve});
 		});
 
 		const assets = new AssetLoader({
 
-			mkdirTree() {}, writeFile: (path, bytes) => mounted.set(path, bytes)
+			mkdirTree() {}
+			, writeFile: (path, bytes) => mounted.set(path, bytes)
 			, unlink: path => mounted.delete(path)
 		}, 'https://example.test/engine/'
 		);
@@ -90,14 +93,17 @@ test('closing an asset scope cancels unshared downloads and rejects late respons
 	const mounted = new Map();
 	const originalFetch = globalThis.fetch;
 	let resolve, signal;
+
 	globalThis.fetch = (_url, options) => {
 		signal = options.signal;
+
 		return new Promise(done => { resolve = done; });
 	};
 
 	const assets = new AssetLoader({
 
-		mkdirTree() {}, writeFile: (path, bytes) => mounted.set(path, bytes)
+		mkdirTree() {}
+		, writeFile: (path, bytes) => mounted.set(path, bytes)
 		, unlink: path => mounted.delete(path)
 	}, 'https://example.test/engine/'
 	);
@@ -123,6 +129,7 @@ test('closing an asset scope cancels unshared downloads and rejects late respons
 test('an explicit retry replaces malformed mounted data without unlinking another scope', async () => {
 	const mounted = new Map(), transfers = [];
 	const originalFetch = globalThis.fetch;
+
 	globalThis.fetch = () => new Promise(resolve => { transfers.push(resolve); });
 
 	const assets = new AssetLoader({

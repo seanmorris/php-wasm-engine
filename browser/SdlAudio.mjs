@@ -60,7 +60,9 @@ export class SdlAudio
 		const disconnect = node.disconnect.bind(node);
 
 		const target = value => value === node.context.destination ? gain : value;
+
 		node.connect = (destination, ...ports) => connect(target(destination), ...ports);
+
 		node.disconnect = (...args) => disconnect(...args.map(target));
 	}
 

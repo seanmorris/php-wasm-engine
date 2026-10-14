@@ -63,6 +63,7 @@ test(
 			count($engine->entities->query(PhpWasmEngine\\Effects\\ParticleBurst::class))
 		]);`
 			);
+
 			expect(await data(page, 'identity')).toEqual([true, true, scene === 'breakables' ? 3 : 0, 0]);
 
 			if(scene === 'breakables')
@@ -72,6 +73,7 @@ test(
 				$engine->time * 1000, lifetime: 100
 			);`
 				);
+
 				await expect.poll(async () => (await data(page, 'breakables')).pieces).toBeGreaterThan(0);
 			}
 		}
@@ -90,6 +92,7 @@ test(
 		await page.evaluate(() => {
 			window.context = document.querySelector('canvas').getContext('webgl2')
 				.getExtension('WEBGL_lose_context');
+
 			context.loseContext();
 		});
 
@@ -99,6 +102,7 @@ test(
 
 		await expect.poll(async () => Number(await page.locator('canvas').getAttribute('data-frames')))
 			.toBeGreaterThan(frames + 10);
+
 		expect(errors).toEqual([]);
 	}
 );
@@ -116,6 +120,7 @@ test(
 
 		await expect.poll(async () => Number(await page.locator('canvas').getAttribute('data-frames')))
 			.toBeGreaterThan(frames + 5);
+
 		await page.unroute('**/loop.tmj');
 		await select(page, 'loop');
 		await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'loop');
@@ -136,8 +141,10 @@ test('latest level request wins and cancelled assets cannot reappear', async ({p
 
 	await expect.poll(async () => page.evaluate(async () => {
 		const {FS} = await enginePhp.binary;
+
 		return FS.analyzePath('/engine/examples/assets/loop.tmj').exists;
 	})).toBe(false);
+
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'infinite');
 });
 
@@ -153,6 +160,7 @@ test(
 		$pauseMenu->menu->select('settings'); $pauseMenu->menu->activate();
 		$pauseMenu->menu->setValue('name', 'Test player'); $pauseMenu->menu->back();`
 		);
+
 		await select(page, 'movement');
 		await select(page, 'glider');
 		await expect(page.locator('canvas')).toHaveAttribute('data-profile', 'glider');

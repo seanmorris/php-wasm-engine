@@ -40,6 +40,7 @@ async function start(page, intro = false)
 	await page.waitForFunction(() => typeof window.bootEngine === 'function');
 	await page.evaluate(intro => window.bootEngine({intro}), intro);
 	await expect.poll(() => state(page)).not.toBeNull();
+
 	return errors;
 }
 
@@ -48,6 +49,7 @@ async function activate(page, id, startup = false)
 	await run(page, (startup ? '$game->startup->menu' : '$pauseMenu->menu')
 		+ '->select(' + JSON.stringify(id) + ');'
 	);
+
 	await page.keyboard.press('Enter');
 }
 
@@ -146,6 +148,7 @@ test(
 
 		await expect.poll(async () => Number((await state(page)).rows['Maps R/P/E'].split(' / ')[0]))
 			.toBeGreaterThan(0);
+
 		await run(page, '$game->selectScene("isometric");');
 		await expect.poll(async () => (await state(page)).rows.Scene).toBe('isometric');
 		expect((await state(page)).rows.Player).toBe('None (camera)');
@@ -197,6 +200,7 @@ test(
 			await page.evaluate(() => {
 				window.debugLoss = document.querySelector('canvas').getContext('webgl2')
 					.getExtension('WEBGL_lose_context');
+
 				debugLoss.loseContext();
 			});
 

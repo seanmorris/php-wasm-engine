@@ -6,11 +6,11 @@ import {root} from './files.mjs';
 
 export async function runtimeDirectory()
 {
-	const explicit=process.env.PHP_SDL_ROOT;
+	const explicit = process.env.PHP_SDL_ROOT;
 
-	const candidates=explicit?[path.resolve(
+	const candidates = explicit ? [path.resolve(
 		explicit
-	)]:[path.join(
+	)] : [path.join(
 		root
 		, 'node_modules/php-sdl-wasm'
 	)
@@ -25,6 +25,7 @@ export async function runtimeDirectory()
 		try
 		{
 			await fs.access(path.join(dir, 'php8.4-sdl.manifest.json'));
+
 			return dir;
 		}
 		catch
@@ -37,7 +38,7 @@ export async function runtimeDirectory()
 
 	try
 	{
-		lock=JSON.parse(await fs.readFile(path.join(root, 'runtime-lock.json')));
+		lock = JSON.parse(await fs.readFile(path.join(root, 'runtime-lock.json')));
 	}
 	catch
 	{
@@ -45,35 +46,35 @@ export async function runtimeDirectory()
 	}
 
 	console.error('Downloading the pinned php-sdl-wasm demo runtime…');
-	const response=await fetch(lock.url);
+	const response = await fetch(lock.url);
 
 	if(!response.ok) throw Error('Runtime download: '+response.status);
 
-	const bytes=Buffer.from(await response.arrayBuffer());
+	const bytes = Buffer.from(await response.arrayBuffer());
 
 	if(createHash('sha256').update(bytes).digest('hex')!==lock.sha256) throw Error('Runtime archive checksum mismatch');
 
-	const archive=path.join(root, '.runtime-download.tgz');
-	const staging=path.join(root, '.runtime-staging');
+	const archive = path.join(root, '.runtime-download.tgz');
+	const staging = path.join(root, '.runtime-staging');
 	await fs.writeFile(archive, bytes);
 	await fs.mkdir(staging, {recursive: true});
 
 	try
 	{
-		const entries=execFileSync('tar', ['-tzf',archive], {encoding: 'utf8'}).split('\n').filter(Boolean);
+		const entries = execFileSync('tar', ['-tzf',archive], {encoding: 'utf8'}).split('\n').filter(Boolean);
 
 		if(entries.some(
-			name=>name.startsWith('/')||name.split('/').includes('..')
+			name => name.startsWith('/')||name.split('/').includes('..')
 		)) throw Error(
 			'Unsafe runtime archive'
 		);
 
 		execFileSync('tar', ['-xzf',archive,'-C',staging]);
-		const manifest=JSON.parse(await fs.readFile(path.join(staging, 'php8.4-sdl.manifest.json')));
+		const manifest = JSON.parse(await fs.readFile(path.join(staging, 'php8.4-sdl.manifest.json')));
 
 		for(const file of manifest.files)
 		{
-			const data=await fs.readFile(path.join(staging, file.path));
+			const data = await fs.readFile(path.join(staging, file.path));
 
 			if(createHash('sha256').update(data).digest(
 				'hex'

@@ -28,6 +28,7 @@ const server = http.createServer(async (request, response) => {
 		{
 			response.setHeader('Content-Type', 'text/html');
 			response.end('<!doctype html><title>ECS benchmark</title><canvas></canvas>');
+
 			return;
 		}
 
@@ -63,16 +64,19 @@ try
 			)
 		)
 	);
+
 	files['benchmarks/ecs.php'] = await fs.readFile(path.join(root, 'benchmarks/ecs.php'), 'utf8');
 	delete options['engine-root'];
 
 	const result = await page.evaluate(async ({files, options, version}) => {
 		const {PhpSdl} = await import(`/php${version}-sdl.mjs`);
 
-		const php = new PhpSdl({canvas: document.querySelector('canvas')
+		const php = new PhpSdl({
+			canvas: document.querySelector('canvas')
 			, persist: false
 			, ini: 'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr\nmemory_limit=512M'
 		});
+
 		let output = '', errors = '';
 		php.addEventListener('output', event => {output += event.detail.join('');});
 
@@ -104,6 +108,7 @@ try
 			await php.refresh();
 		}
 	}, {files, options, version});
+
 	console.log(JSON.stringify({...result, browser: await browser.version()}, null, 2));
 }
 finally

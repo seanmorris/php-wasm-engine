@@ -26,7 +26,7 @@
     "css-loader": "^7.1.5",
     "eslint": "9.39.5",
     "html-webpack-plugin": "^5.6.8",
-    "sm-no-saccade-style": "github:seanmorris/sm-no-saccade-style#f59fa3a9d5f50ed98e0eac6c1e8b73d1b2588da0",
+    "sm-no-saccade-style": "github:seanmorris/sm-no-saccade-style#4742943bd7bad775c3225e8aa2528644e95c0226",
     "style-loader": "^4.0.0",
     "webpack": "^5.111.1",
     "webpack-cli": "^7.2.3",

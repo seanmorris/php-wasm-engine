@@ -33,10 +33,13 @@ canvas.addEventListener('webglcontextrestored', () => {
 * @returns {Promise<object>} Ready PHP instance, or a rejection on failure/cancellation.
 */
 export function boot(
-	{scene = controls.scene
+	{
+		scene = controls.scene
 		, profile = controls.profile
 		, run = true
-		, zlib = false, version = '8.4', intro = false
+		, zlib = false
+		, version = '8.4'
+		, intro = false
 	} = {}
 ){
 	if(!/^8\.[0-5]$/.test(version)
@@ -82,14 +85,20 @@ export function boot(
 			const {PhpSdl} = await import(/* webpackIgnore: true */
 				new URL('php' + version + '-sdl.mjs', runtimeBase)
 			);
+
 			const sharedLibs = zlib ? [await import(/* webpackIgnore: true */
 				new URL('extensions/zlib/' + version + '.mjs', runtimeBase)
 			)] : [];
+
 			signal.throwIfAborted();
 
-			php = new PhpSdl({canvas, sharedLibs, persist: false
+			php = new PhpSdl({
+				canvas
+				, sharedLibs
+				, persist: false
 				, ini: 'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'
 			});
+
 			window.enginePhp = php;
 			const instance = php;
 
@@ -123,6 +132,7 @@ export function boot(
 				path
 			)
 		);
+
 		let mounted = 0;
 		progress.max = needed.length;
 		progress.value = 0;
@@ -145,6 +155,7 @@ export function boot(
 		if(run)
 		{
 			const assets = new AssetLoader(module.FS, base);
+
 			module.createAssetScope = () => assets.scope();
 
 			const close = () => {
@@ -167,6 +178,7 @@ export function boot(
 			// Stop must settle this wait before its queued PHP cleanup can run.
 
 			const aborted = () => fail(signal.reason);
+
 			module.sceneReady = error => error ? fail(Error(error)) : ready();
 			signal.addEventListener('abort', aborted, {once: true});
 			loaded.catch(() => {});

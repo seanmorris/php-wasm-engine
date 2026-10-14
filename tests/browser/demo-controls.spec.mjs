@@ -17,6 +17,7 @@ async function activate(page, id)
 		await enginePhp.run('<?php $pauseMenu->menu->select(' + JSON.stringify(id) + ');');
 	}, id
 	);
+
 	await page.keyboard.press('Enter');
 }
 
@@ -57,6 +58,7 @@ test(
 
 		await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id))
 			.toBe('game-frame');
+
 		const fullFrame = await page.locator('#game-frame').boundingBox();
 		const fullRun = await page.locator('#start').boundingBox();
 		expect(fullRun.x + fullRun.width / 2).toBeCloseTo(fullFrame.width / 2, 0);
@@ -65,10 +67,12 @@ test(
 
 		await expect(page.getByRole('button', {name: 'Mute audio', exact: true}))
 			.toHaveAttribute('aria-pressed', 'false');
+
 		await page.click('#mute');
 
 		await expect(page.getByRole('button', {name: 'Unmute audio', exact: true}))
 			.toHaveAttribute('aria-pressed', 'true');
+
 		await page.reload();
 		await expect(page.locator('#mute')).toHaveAttribute('aria-pressed', 'true');
 		expect(binaries).toEqual([]);
@@ -92,6 +96,7 @@ test(
 			window.firstRuntime = enginePhp;
 			window.refreshes = 0;
 			const refresh = enginePhp.refresh.bind(enginePhp);
+
 			enginePhp.refresh = (...args) => { refreshes++; return refresh(...args); };
 
 			await enginePhp.run(`<?php
@@ -120,6 +125,7 @@ test(
 		await expect.poll(
 			() => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.world || '{}').draws || 0)
 		).toBeGreaterThan(0);
+
 		await open(page);
 		await activate(page, 'level');
 		await activate(page, 'breakables');
@@ -135,6 +141,7 @@ test(
 			);
 		`
 			);
+
 			return JSON.parse(module.canvas.dataset.profileProbe);
 		});
 
@@ -153,6 +160,7 @@ test(
 			'data-session-probe'
 			, '[true,true,1.25,"playstation",true]'
 		);
+
 		expect(await page.evaluate(() => refreshes)).toBe(0);
 		expect(binaries).toHaveLength(1);
 		expect(errors).toEqual([]);
@@ -165,11 +173,13 @@ test(
 		await page.addInitScript(() => {
 			window.outputGains = [];
 			const NativeAudioContext = window.AudioContext;
+
 			window.AudioContext = class extends NativeAudioContext {
 
 				createGain() {
 					const gain = super.createGain();
 					outputGains.push(gain);
+
 					return gain;
 				}
 			};
@@ -227,6 +237,7 @@ test(
 		const peak = () => page.evaluate(() => {
 			const samples = new Float32Array(outputProbe.fftSize);
 			outputProbe.getFloatTimeDomainData(samples);
+
 			return Math.max(...samples.map(Math.abs));
 		});
 
@@ -282,8 +293,11 @@ test(
 		const frame = await page.evaluate(() => {
 			const target = document.fullscreenElement;
 			const rect = target.getBoundingClientRect();
+
 			return {
-				width: rect.width, height: rect.height, viewport: [innerWidth, innerHeight]
+				width: rect.width
+				, height: rect.height
+				, viewport: [innerWidth, innerHeight]
 				, canvas: target.contains(document.querySelector('canvas'))
 				, shortcuts: target.contains(document.querySelector('.quick-controls'))
 				, start: target.contains(document.querySelector('#start'))
@@ -295,7 +309,11 @@ test(
 		expect([frame.width, frame.height]).toEqual(frame.viewport);
 
 		expect(frame).toMatchObject({
-			canvas: true, shortcuts: true, start: true, status: false, text: false
+			canvas: true
+			, shortcuts: true
+			, start: true
+			, status: false
+			, text: false
 		});
 
 		const mutePoint = await page.locator('canvas').evaluate(canvas => {
@@ -303,6 +321,7 @@ test(
 
 			const [x, y, w, h] = JSON.parse(canvas.dataset.menu).regions
 				.find(row => row.id === 'mute').rect;
+
 			return {
 				x: rect.x + (x + w / 2) / canvas.width * rect.width
 				, y: rect.y + (y + h / 2) / canvas.height * rect.height
@@ -318,6 +337,7 @@ test(
 		await page.evaluate(() => {
 			const demo = document.querySelector('#game-frame');
 			window.requestDemoFullscreen = demo.requestFullscreen;
+
 			demo.requestFullscreen = () => Promise.reject(
 				new DOMException('Denied', 'NotAllowedError')
 			);
@@ -407,6 +427,7 @@ for(const asset of ['engine-files.json', 'examples/assets/platformer.tmj'])
 			await page.route('**/engine/' + asset, route =>
 				route.fulfill({status: 503, body: 'Unavailable'})
 			);
+
 			await page.evaluate(() => window.bootEngine({intro: false}).catch(() => {}));
 
 			await expect(page.locator('#status')).toContainText('503');

@@ -25,6 +25,7 @@ async function activate(page, id, pause = false)
 	await run(page, (pause ? '$pauseMenu->menu' : '$game->startup->menu')
 		+ '->select(' + JSON.stringify(id) + ');'
 	);
+
 	await page.keyboard.press('Enter');
 }
 
@@ -62,6 +63,7 @@ test(
 
 		await expect.poll(async () => (await data(page))?.elapsed, {timeout: 10000})
 			.toBeGreaterThan(2.2);
+
 		expect((await data(page)).card).toBe('title');
 		expect((await data(page)).gameTime).toBe(0);
 		const pan = (await data(page)).pan;
@@ -82,12 +84,14 @@ test(
 			bounds.x + (x + w / 2) * bounds.width / 960
 			, bounds.y + (y + h / 2) * bounds.height / 540
 		);
+
 		await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'platformer');
 		await expect.poll(async () => (await data(page)).phase).toBe('playing');
 
 		await run(page, `vrzno_env('canvas')->dataset->identity = json_encode(
 		$startupIdentity === [$engine, $engine->clock, $game, $pauseMenu]);`
 		);
+
 		await expect(page.locator('canvas')).toHaveAttribute('data-identity', 'true');
 		expect(requests.filter(url => url.endsWith('.wasm'))).toHaveLength(1);
 		expect(errors).toEqual([]);
@@ -129,6 +133,7 @@ test(
 		await run(page, `vrzno_env('canvas')->dataset->retained = json_encode(
 		$retained === [$game->level, $engine->time, $body->x, $body->y]);`
 		);
+
 		await expect(page.locator('canvas')).toHaveAttribute('data-retained', 'true');
 		await activate(page, 'resume');
 		await expect.poll(async () => (await data(page)).phase).toBe('playing');
@@ -180,23 +185,25 @@ test('scripted stop cancels the title download and ignores its late response', a
 			async () => (await enginePhp.binary).FS.analyzePath('/engine/examples/assets/title.tmj').exists
 		)
 	).toBe(false);
+
 	await page.click('#start');
 	await expect.poll(async () => (await data(page))?.card).toBe('engine');
 });
 
 test('a held gamepad Start cannot skip the title or activate the menu after it', async ({page}) => {
 	await page.addInitScript(() => {
-		window.pad = {id: 'Standard Gamepad'
+		window.pad = {
+			id: 'Standard Gamepad'
 			, index: 0
 			, connected: true
 			, mapping: 'standard'
 			, axes: [0, 0, 0, 0]
-			, buttons: Array.from({length: 17}, () =>
-				({pressed: false, touched: false, value: 0})
-			)
+			, buttons: Array.from({length: 17}, () => ({pressed: false, touched: false, value: 0}))
 			, timestamp: 1
 		};
+
 		Object.defineProperty(navigator, 'getGamepads', {value: () => [pad]});
+
 		window.pressStart = pressed => {
 			pad.buttons[9] = {pressed, touched: pressed, value: Number(pressed)};
 			pad.timestamp++;
@@ -235,6 +242,7 @@ test(
 		await page.evaluate(() => {
 			window.lost = document.querySelector('canvas').getContext('webgl2')
 				.getExtension('WEBGL_lose_context');
+
 			lost.loseContext();
 		});
 
