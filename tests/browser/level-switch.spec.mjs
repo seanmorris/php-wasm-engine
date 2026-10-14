@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {waitForMenuFrames} from './menu-frames.mjs';
 
 const data = (page, key) => page.locator('canvas').evaluate(
 	(canvas, key) => JSON.parse(canvas.dataset[key] || 'null')
@@ -9,6 +10,7 @@ const php = (page, code) => page.evaluate(code => enginePhp.run('<?php ' + code)
 
 async function select(page, id)
 {
+	await waitForMenuFrames(page);
 	await php(page, '$pauseMenu->menu->select(' + JSON.stringify(id) + ');');
 	await page.keyboard.press('Enter');
 }

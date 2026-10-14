@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {waitForMenuFrames} from './menu-frames.mjs';
 
 const data = (page, key = 'intro') => page.locator('canvas').evaluate(
 	(canvas, key) => JSON.parse(canvas.dataset[key] || 'null')
@@ -22,6 +23,7 @@ async function mainMenu(page)
 
 async function activate(page, id, pause = false)
 {
+	await waitForMenuFrames(page);
 	await run(page, (pause ? '$pauseMenu->menu' : '$game->startup->menu') + '->select(' + JSON.stringify(id) + ');');
 
 	await page.keyboard.press('Enter');
@@ -103,6 +105,7 @@ test(
 		await mainMenu(page);
 		await activate(page, 'settings');
 		await activate(page, 'name');
+		await expect.poll(async () => (await data(page, 'menu')).editing).toBe(true);
 		await page.keyboard.press('Control+a');
 		await page.keyboard.type('Intro player');
 		await page.keyboard.press('Enter');
@@ -234,6 +237,7 @@ test(
 		await start(page);
 		await mainMenu(page);
 		await activate(page, 'settings');
+		await expect.poll(async () => (await data(page, 'menu')).title).toBe('Settings');
 		await run(page, '$game->startup->menu->select("theme");');
 		await expect.poll(async () => (await data(page, 'menu')).selected).toBe('theme');
 
@@ -271,6 +275,7 @@ test(
 		expect((await data(page)).gameTime).toBe(0);
 		await page.keyboard.press('Escape');
 		await expect.poll(async () => (await data(page, 'menu')).selected).toBe('settings');
+		await waitForMenuFrames(page);
 		await page.keyboard.press('Escape');
 		await expect.poll(async () => (await data(page)).card).toBe('title');
 		await expect.poll(async () => (await data(page)).elapsed).toBeGreaterThan(2);

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {waitForMenuFrames} from './menu-frames.mjs';
 
 async function start(page, {scene = 'platformer',fallback  = false} = {})
 {
@@ -58,6 +59,8 @@ async function open(page)
 
 async function choose(page, id)
 {
+	await waitForMenuFrames(page);
+
 	await page.evaluate(async id => {
 		const code = await enginePhp.run('<?php $pauseMenu->menu->select(' + JSON.stringify(id) + ');');
 
@@ -73,6 +76,7 @@ test('pause menus keep simulation stopped while nested controls apply live', asy
 	await open(page);
 	const time = (await state(page)).time;
 	await page.keyboard.press('ArrowDown');
+	await expect.poll(async() => (await state(page)).selected).toBe('settings');
 	await page.keyboard.press('Enter');
 	await expect.poll(async() => (await state(page)).title).toBe('Settings');
 	await choose(page, 'zoom');
@@ -84,6 +88,7 @@ test('pause menus keep simulation stopped while nested controls apply live', asy
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).selected).toBe('settings');
 	expect((await state(page)).time).toBe(time);
+	await waitForMenuFrames(page);
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).open).toBe(false);
 	await expect.poll(async() => (await state(page)).time).toBeGreaterThan(time);
@@ -145,6 +150,7 @@ for(const recovery of ['visibility','focus','graphics'])
 			await page.keyboard.press('Enter');
 			await choose(page, 'name');
 			await page.keyboard.press('Enter');
+			await expect.poll(async() => (await state(page)).editing).toBe(true);
 			await page.keyboard.press('Control+a');
 			await page.keyboard.insertText('abcdefgh');
 			await expect.poll(async() => (await state(page)).values.name).toBe('abcdefgh');
@@ -231,7 +237,7 @@ test('pad hints switch themes on input and allow an explicit override', async({p
 	await page.keyboard.press('Enter');
 	await choose(page, 'theme');
 	await page.keyboard.press('ArrowRight');
-	await expect.poll(async() => (await state(page)).theme).toBe('keyboard');
+	await expect.poll(async() => (await state(page)).values.theme).toBe('keyboard');
 	await page.evaluate(() => menuPad('Xbox Wireless Controller', [13]));
 	await page.waitForTimeout(100);
 	expect((await state(page)).theme).toBe('keyboard');
@@ -355,6 +361,7 @@ test(
 		await page.keyboard.press('Enter');
 		await choose(page, 'name');
 		await page.keyboard.press('Enter');
+		await expect.poll(async() => (await state(page)).editing).toBe(true);
 		await page.click('#fullscreen');
 		await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('game-frame');
 		await expect.poll(async() => (await state(page)).editing).toBe(true);
@@ -391,6 +398,7 @@ test('streaming-world menu restores graphics and releases held controls before r
 	await page.keyboard.press('Enter');
 	await choose(page, 'zoom');
 	await page.keyboard.press('ArrowRight');
+	await expect.poll(async() => (await state(page)).values.zoom).toBe(1.25);
 	const before = await state(page);
 	expect(before.values.zoom).toBe(1.25);
 
@@ -417,6 +425,7 @@ test('streaming-world menu restores graphics and releases held controls before r
 	await page.waitForTimeout(60);
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).selected).toBe('settings');
+	await waitForMenuFrames(page);
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).open).toBe(false);
 	await expect.poll(async() => (await state(page)).time).toBeGreaterThan(before.time);
