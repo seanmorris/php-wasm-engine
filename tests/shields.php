@@ -14,6 +14,7 @@ use PhpWasmEngine\Gameplay\Shields;
 use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\MapTerrain;
+use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Tiled\Loader;
@@ -87,6 +88,7 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	$monitors = new Monitors($registry, $terrain, $map, shields: $shields);
 	$body = new Body(0, 0);
 	$body->grounded = false;
+	$body->jumping = true;
 	$player = $registry->create($body, new RingCounter, new PlayerCombat);
 	$ids = $monitors->entities();
 
@@ -123,7 +125,9 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	check($shield->bubbleArmed && $body->ability === 'bubble-bounce');
 	$body->grounded = true;
 	$shields->update($registry, 1 / 60);
-	check(!$body->grounded && !$shield->bubbleArmed && $body->ability === 'bubble-rebound');
+	check(!$body->grounded && $body->jumping && !$body->rolling);
+	check(!$shield->bubbleArmed && $body->ability === 'bubble-rebound');
+	near($body->halfHeight, $body->rollingHeight);
 	near($body->vy, -840);
 
 	$shields->grant($player, Shield::STAR, .5);
@@ -137,6 +141,121 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	check(count($registry->query(ShieldAura::class)) === 1);
 	$restored->close();
 	$monitors->close();
+});
+
+test('flight profiles reserve neutral jump and route modified jumps through their shields', function() {
+	foreach([['flyer', 'fly'], ['glider', 'glide']] as [$profile, $ability])
+	{
+		foreach([Shield::ELECTRIC, Shield::WATER] as $type)
+		{
+			$registry = new Registry;
+			$shields = new Shields($registry);
+			$body = new Body(0, -100, $profile);
+			$body->jumping = true;
+			$player = $registry->create($body);
+			$shield = $shields->grant($player, $type);
+			$controls = new Controls;
+			$controls->set([]);
+			$controls->set(['jump' => true]);
+			$consumed = $shields->control($player, $controls, 1 / 60);
+			check(!$consumed);
+			check($shield->electricJumps === 3 && !$shield->bubbleArmed);
+			(new Platformer(new Terrain))->step($body, $controls, 1 / 60, $consumed);
+			check($body->ability === $ability);
+			$shields->close();
+		}
+	}
+
+	$registry = new Registry;
+	$shields = new Shields($registry);
+	$body = new Body(0, -100, 'flyer');
+	$body->jumping = true;
+	$player = $registry->create($body);
+	$shield = $shields->grant($player, Shield::ELECTRIC);
+	$controls = new Controls;
+	$controls->set([]);
+	$controls->set(['up' => true, 'jump' => true]);
+	$consumed = $shields->control($player, $controls, 1 / 60);
+	check($consumed && $shield->electricJumps === 2);
+	(new Platformer(new Terrain))->step($body, $controls, 1 / 60, $consumed);
+	check($body->ability === 'electric-jump');
+
+	$shields->grant($player, Shield::WATER);
+	$body->profile = 'glider';
+	$body->ability = '';
+	$body->rolling = false;
+	$controls = new Controls;
+	$controls->set([]);
+	$controls->set(['down' => true, 'jump' => true]);
+	$consumed = $shields->control($player, $controls, 1 / 60);
+	check($consumed && $shield->bubbleArmed);
+	(new Platformer(new Terrain))->step($body, $controls, 1 / 60, $consumed);
+	check($body->ability === 'bubble-bounce');
+	check($body->jumping && !$body->rolling);
+	$shields->close();
+});
+
+test('plain falls cannot trigger shield jumps, flight, or glide', function() {
+	foreach(['flyer', 'glider'] as $profile)
+	{
+		foreach([Shield::ELECTRIC, Shield::WATER] as $type)
+		{
+			$registry = new Registry;
+			$shields = new Shields($registry);
+			$body = new Body(0, -100, $profile);
+			$player = $registry->create($body);
+			$shield = $shields->grant($player, $type);
+			$controls = new Controls;
+			$controls->set([]);
+			$controls->set(['jump' => true]);
+			$consumed = $shields->control($player, $controls, 1 / 60);
+			check(!$consumed);
+			(new Platformer(new Terrain))->step($body, $controls, 1 / 60, $consumed);
+			check(!$body->jumping && !$body->rolling && $body->ability === '');
+
+			$controls->set([]);
+			$controls->set(['down' => true, 'jump' => true]);
+			$consumed = $shields->control($player, $controls, 1 / 60);
+			check($consumed);
+			(new Platformer(new Terrain))->step($body, $controls, 1 / 60, $consumed);
+			check(!$body->jumping && !$body->rolling && $body->ability === '');
+			check($shield->electricJumps === 3 && !$shield->bubbleArmed);
+			$shields->close();
+		}
+	}
+});
+
+test('fire thrust composes with flight and glide while climbing rejects shield movement', function() {
+	foreach([['flyer', 'fly'], ['glider', 'glide']] as [$profile, $ability])
+	{
+		$registry = new Registry;
+		$shields = new Shields($registry);
+		$body = new Body(0, -100, $profile);
+		$body->jumping = true;
+		$body->ability = $ability;
+		$player = $registry->create($body);
+		$shield = $shields->grant($player, Shield::FIRE);
+		$controls = new Controls;
+		$controls->set([5 => true]);
+		check(!$shields->control($player, $controls, .1));
+		check($body->ability === $ability && $body->vx > 0);
+		near($shield->firePower, .15);
+		(new Platformer(new Terrain))->step($body, $controls, 1 / 60);
+		check($body->ability === $ability);
+		$shields->close();
+	}
+
+	$registry = new Registry;
+	$shields = new Shields($registry);
+	$body = new Body(0, -100, 'glider');
+	$body->ability = 'climb';
+	$player = $registry->create($body);
+	$shield = $shields->grant($player, Shield::ELECTRIC);
+	$controls = new Controls;
+	$controls->set(['down' => true, 'jump' => true]);
+	check(!$shields->control($player, $controls, 1 / 60));
+	check($body->ability === 'climb' && $shield->electricJumps === 3);
+	$shields->close();
 });
 
 test('shield components and effects reject invalid types, durations, recipients, and timing', function() {

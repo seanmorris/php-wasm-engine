@@ -112,6 +112,10 @@ final class DemoDebugOverlay
 		{
 			$state = 'rolling';
 		}
+		elseif($state === '' && $body->jumping)
+		{
+			$state = 'jumping';
+		}
 		elseif($state === '' && $body->crouching)
 		{
 			$state = 'crouching';

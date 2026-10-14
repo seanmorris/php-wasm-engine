@@ -44,11 +44,11 @@ final class PlayerCombat
 	 * Determine whether the current movement pose can pop a contacted badnik.
 	 *
 	 * @param Body $body Player movement body at the contact endpoint.
-	 * @return bool True while rolling or airborne outside the post-hit mercy state.
+	 * @return bool True while rolling or somersaulting outside the post-hit mercy state.
 	 */
 	public function attacking(Body $body): bool
 	{
-		return $this->mercy <= 0 && ($body->rolling || !$body->grounded);
+		return $this->mercy <= 0 && ($body->rolling || $body->jumping);
 	}
 
 	/**
@@ -119,6 +119,7 @@ final class PlayerCombat
 
 		$body->grounded = false;
 		$body->rolling = false;
+		$body->jumping = false;
 		$body->crouching = false;
 		$body->ability = '';
 		$body->charge = 0;

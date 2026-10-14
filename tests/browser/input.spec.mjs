@@ -347,6 +347,26 @@ test(
 	}
 );
 
+test('a jump somersaults without becoming a ground roll on landing', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await pads(page);
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine==='function');
+	await page.evaluate(() => window.bootEngine({profile: 'runner'}));
+
+	const body = async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
+	await expect.poll(async() => (await body()).grounded, {timeout: 60000}).toBe(true);
+	await change(page, {buttons: [0]});
+	await expect.poll(async() => (await body()).jumping, {intervals: [20]}).toBe(true);
+	expect(await body()).toMatchObject({grounded: false,rolling: false,pose: 'jumping'});
+	await change(page, {});
+	await expect.poll(async() => (await body()).grounded, {intervals: [20]}).toBe(true);
+	expect(await body()).toMatchObject({jumping: false,rolling: false,pose: 'ground'});
+	await page.evaluate(() => window.stopEngine());
+	expect(errors).toEqual([]);
+});
+
 test('gamepad crouch and spindash break blocks after releasing Down', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));

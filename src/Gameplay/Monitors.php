@@ -253,7 +253,7 @@ final class Monitors
 		}
 
 		$player = $this->entityForBody($body);
-		$attacking = $body->rolling || !$body->grounded;
+		$attacking = $body->rolling || $body->jumping;
 
 		if($player !== null && $this->registry->has($player, PlayerCombat::class))
 		{

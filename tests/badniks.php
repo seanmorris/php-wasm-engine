@@ -117,6 +117,17 @@ test('badnik contacts damage walking players and pop under swept rolling attacks
 	$rings->close();
 });
 
+test('only a roll or jump somersault counts as a contact attack', function() {
+	$combat = new PlayerCombat;
+	$body = new Body(0, -100);
+	check(!$body->grounded && !$body->jumping && !$combat->attacking($body));
+	$body->jumping = true;
+	check($combat->attacking($body));
+	$body->jumping = false;
+	$body->rolling = true;
+	check($combat->attacking($body));
+});
+
 test('projectiles use continuous terrain casts and become harmless when their owner is gone', function() {
 	$registry = new Registry;
 	$terrain = new Terrain([['points' => [[50,50],[50,-50]]]]);

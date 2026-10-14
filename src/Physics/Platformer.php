@@ -41,9 +41,10 @@ final class Platformer
 	 * @param Body $b Actor to simulate in place.
 	 * @param Controls $input Current logical controls and button edges.
 	 * @param float $dt Finite, positive simulation delta in seconds.
+	 * @param bool $jumpConsumed True when an earlier ability intercepted this step's jump press.
 	 * @return void Mutates pose, momentum, collision layer, and ability state on the supplied body.
 	 */
-	public function step(Body $b, Controls $input, float $dt): void
+	public function step(Body $b, Controls $input, float $dt, bool $jumpConsumed = false): void
 	{
 		if($dt <= 0 || !is_finite($dt))
 		{
@@ -70,7 +71,7 @@ final class Platformer
 		$b->jumpBuffer = max(0, $b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0, $b->coyote - $dt);
 
-		if($input->pressed('jump'))
+		if(!$jumpConsumed && $input->pressed('jump'))
 		{
 			$b->jumpBuffer = .1;
 		}
@@ -79,13 +80,16 @@ final class Platformer
 		{
 			$b->flightRemaining = 5.8;
 			$b->ability = '';
+			$b->jumping = false;
 		}
 
 		if($b->ability === 'climb')
 		{
+			$b->jumping = false;
 			$b->crouching = false;
 			$b->charge = 0;
 			$b->crouchTime = 0;
+			$this->height($b);
 			$this->climb($b, $input, $dt);
 
 			return;
@@ -164,9 +168,11 @@ final class Platformer
 				$b->vy -= cos($b->angle) * $b->jumpSpeed;
 				$b->grounded = false;
 				$b->rolling = false;
+				$b->jumping = true;
 				$b->crouching = false;
 				$b->charge = 0;
 				$b->crouchTime = 0;
+				$this->height($b);
 				$b->x += sin($b->angle) * .05;
 				$b->y -= cos($b->angle) * .05;
 			}
@@ -187,7 +193,7 @@ final class Platformer
 				$b->vy = -240;
 			}
 
-			if(!$jumped && $input->pressed('jump'))
+			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump'))
 			{
 				if($b->profile === 'flyer' && $b->flightRemaining > 0)
 				{
@@ -275,6 +281,7 @@ final class Platformer
 		if(!$wasGrounded && $b->grounded)
 		{
 			$b->groundSpeed = $b->vx * cos($b->angle) + $b->vy * sin($b->angle);
+			$b->jumping = false;
 
 			if($b->dropCharge > 0)
 			{
@@ -285,6 +292,7 @@ final class Platformer
 
 			$b->ability = '';
 			$b->charge = 0;
+			$this->height($b);
 		}
 
 		if(!$b->grounded)
@@ -356,14 +364,15 @@ final class Platformer
 	}
 
 	/**
-	 * Apply rolling or standing height while preserving the contact point along the body normal.
+	 * Apply compact somersault or standing height while preserving the contact point along the body
+	 * normal.
 	 *
-	 * @param Body $b Actor whose rolling flag selects the desired height.
+	 * @param Body $b Actor whose rolling or jumping flag selects the desired height.
 	 * @return void Moves the body center and updates its half-height.
 	 */
 	private function height(Body $b): void
 	{
-		$height = $b->rolling?$b->rollingHeight:$b->standingHeight;
+		$height = $b->rolling || $b->jumping?$b->rollingHeight:$b->standingHeight;
 		$b->y += ($b->halfHeight - $height) * cos($b->angle);
 		$b->x -= ($b->halfHeight - $height) * sin($b->angle);
 		$b->halfHeight = $height;
@@ -464,6 +473,7 @@ final class Platformer
 				if($b->ability === 'glide')
 				{
 					$b->ability = 'climb';
+					$b->jumping = false;
 					$b->wall = (int)-$best->nx;
 					$b->vx = $b->vy = 0;
 
@@ -558,8 +568,10 @@ final class Platformer
 		if($input->pressed('jump'))
 		{
 			$b->ability = '';
+			$b->jumping = true;
 			$b->vx = -$b->wall * 300;
 			$b->vy = -$b->jumpSpeed * .8;
+			$this->height($b);
 			$b->x -= $b->wall * .1;
 
 			return;
@@ -574,9 +586,68 @@ final class Platformer
 
 		if(!$hit)
 		{
+			if($dy < 0 && $this->climbOver($b))
+			{
+				return;
+			}
+
 			$b->ability = '';
 			$b->vx = $b->wall * 120;
 			$b->vy = -180;
 		}
+	}
+
+	/**
+	 * Pull a climber over a wall end when a nearby upper surface has room for the body.
+	 *
+	 * @param Body $b Climbing actor whose side probe just passed the top of its wall.
+	 * @return bool True after placing the actor upright on the ledge; false when no usable top
+	 * surface exists.
+	 */
+	private function climbOver(Body $b): bool
+	{
+		$wall = $b->wall;
+		$x = $b->x + $wall * ($b->radius * 2 + 2);
+		$height = $b->standingHeight;
+		$start = $b->y - $height - 2;
+		$hit = $this->terrain->raycast($x, $start, 0, $height * 2 + 20, false, $b->collisionLayer);
+
+		if($hit === null || $hit->ny >= -.5 || abs($hit->y - $b->y) > $height + 4)
+		{
+			return false;
+		}
+
+		$angle = atan2($hit->nx, -$hit->ny);
+		$ca = cos($angle);
+		$sa = sin($angle);
+		$targetX = $hit->x + $hit->nx * ($height + .001);
+		$targetY = $hit->y + $hit->ny * ($height + .001);
+		$points = [
+			[$targetX, $targetY]
+			, [$targetX + $hit->nx * ($height - .01), $targetY + $hit->ny * ($height - .01)]
+			, [$targetX - $ca * ($b->radius - .01), $targetY - $sa * ($b->radius - .01)]
+			, [$targetX + $ca * ($b->radius - .01), $targetY + $sa * ($b->radius - .01)]
+		];
+
+		foreach($points as [$checkX, $checkY])
+		{
+			if($this->terrain->solidAt($checkX, $checkY, $b->collisionLayer))
+			{
+				return false;
+			}
+		}
+
+		$b->x = $targetX;
+		$b->y = $targetY;
+		$b->vx = $b->vy = $b->groundSpeed = 0;
+		$b->angle = $angle;
+		$b->grounded = true;
+		$b->rolling = false;
+		$b->jumping = false;
+		$b->ability = '';
+		$b->wall = 0;
+		$b->facing = $wall;
+
+		return true;
 	}
 }

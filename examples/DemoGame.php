@@ -197,6 +197,7 @@ final class DemoGame
 			, 'angle'
 			, 'grounded'
 			, 'rolling'
+			, 'jumping'
 			, 'crouching'
 			, 'facing'
 			, 'wall'
@@ -225,8 +226,8 @@ final class DemoGame
 	/**
 	 * Name the player's mutually exclusive visible movement pose.
 	 *
-	 * @param Body $body Player body carrying crouch, charge, roll, and grounded state.
-	 * @return string Spindash, rolling, crouching, ground, or air diagnostic pose.
+	 * @param Body $body Player body carrying crouch, charge, roll, jump, and grounded state.
+	 * @return string Spindash, rolling, jumping, crouching, ground, or air diagnostic pose.
 	 */
 	private function playerPose(Body $body): string
 	{
@@ -238,6 +239,11 @@ final class DemoGame
 		if($body->rolling)
 		{
 			return 'rolling';
+		}
+
+		if($body->jumping)
+		{
+			return 'jumping';
 		}
 
 		if($body->crouching)
@@ -252,12 +258,12 @@ final class DemoGame
 	 * Resolve generated player art for a movement profile and visible pose.
 	 *
 	 * @param string $profile Runner, glider, or flyer artwork family.
-	 * @param string $pose Pose returned by playerPose; air and ground share standing art.
+	 * @param string $pose Pose returned by playerPose; plain air and ground share standing art.
 	 * @return int Global demo tileset ID, including animated rolling art for a spindash.
 	 */
 	private function playerGid(string $profile, string $pose): int
 	{
-		$art = in_array($pose, ['rolling', 'spindash'], true)
+		$art = in_array($pose, ['rolling', 'jumping', 'spindash'], true)
 			? 'rolling'
 			: ($pose === 'crouching' ? 'crouching' : 'standing');
 
@@ -394,8 +400,8 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
-		$this->level->shields?->control($this->entity, $controls, $dt);
-		$this->level->movement->step($this->body, $controls, $dt);
+		$jumpConsumed = $this->level->shields?->control($this->entity, $controls, $dt) ?? false;
+		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
 		$lookDown = $this->body->crouchTime >= .75
 			? min(120, $this->camera->height / $this->camera->zoom / 5)
 			: 0;
@@ -541,6 +547,7 @@ final class DemoGame
 			, 'y' => $body->y
 			, 'grounded' => $body->grounded
 			, 'rolling' => $body->rolling
+			, 'jumping' => $body->jumping
 			, 'crouching' => $body->crouching
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge

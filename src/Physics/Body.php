@@ -6,7 +6,7 @@ final class Body
 {
 	public float $vx = 0,$vy = 0,$groundSpeed = 0,$angle = 0;
 	public float $radius = 8,$halfHeight = 18,$standingHeight = 18,$rollingHeight = 12;
-	public bool $grounded = false,$rolling = false,$crouching = false;
+	public bool $grounded = false,$rolling = false,$jumping = false,$crouching = false;
 	public int $facing = 1,$wall = 0;
 	/** Zero is shared terrain; positive numbers select an additional collision plane. */
 	public int $collisionLayer = 1;

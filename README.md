@@ -76,7 +76,7 @@ independent lower-left diagnostic with no black rectangle behind it.
 
 ## Badniks and CrabMeat
 
-`Gameplay\Badnik` holds the position, contact bounds, points, and optional explosion art shared by enemy types. A species component implements the empty `BadnikBehavior` marker. `Badniks` owns player contacts, mercy damage, scoring, airborne rebound, explosions, and owner-tagged ballistic projectiles. A grounded walking player takes damage and loses held rings. The player sprite flickers during mercy and cannot turn its damage knockback into an attack. A rolling or airborne player outside mercy pops the badnik and receives its point value.
+`Gameplay\Badnik` holds the position, contact bounds, points, and optional explosion art shared by enemy types. A species component implements the empty `BadnikBehavior` marker. `Badniks` owns player contacts, mercy damage, scoring, airborne rebound, explosions, and owner-tagged ballistic projectiles. A grounded walking player takes damage and loses held rings. The player sprite flickers during mercy and cannot turn its damage knockback into an attack. A rolling or jumping player outside mercy pops the badnik and receives its point value. Walking off a ledge produces a plain fall, not a somersault attack.
 
 `Gameplay\CrabMeats` promotes `CrabMeat` objects from Tiled. It recreates the reference schedule in time-based engine units: 65 walking frames, 10 standing frames, 15 firing-pose frames, paired shots on frame 87, and a three-frame launch delay. Each patrol leg alternates direction. Tiled properties keep their familiar frame units; `patrolSpeed`, projectile speeds, and projectile gravity use per-frame units and convert to pixels per second internally.
 
@@ -100,7 +100,7 @@ When `Badniks` receives the level's `Rings` manager, damage scatters up to sixte
 
 ## Monitors and pluggable rewards
 
-`Gameplay\Monitor` describes a solid, bottom-anchored reward box independently of its reward. `Monitors` adds each box to the same removable `Terrain` index used by the platformer. Walking leaves it solid. A roll, jump, or other airborne attack outside mercy removes the contacted shape during the continuous movement sweep, so a fast player breaks the monitor without stopping or tunneling through it. Airborne players rebound after the hit.
+`Gameplay\Monitor` describes a solid, bottom-anchored reward box independently of its reward. `Monitors` adds each box to the same removable `Terrain` index used by the platformer. Walking and plain falling leave it solid. A roll or jump somersault outside mercy removes the contacted shape during the continuous movement sweep, so a fast player breaks the monitor without stopping or tunneling through it. Airborne somersaulting players rebound after the hit.
 
 `MonitorEffect` is the reward API. `RingMonitorEffect` supplies the reference 10-ring reward and accepts any positive amount, including the 30-ring variant. `ShieldMonitorEffect` grants normal, electric, fire, water, or star shields. Implement the interface for lives, information triggers, or game-specific inventory without changing collision and rendering behavior.
 
@@ -121,8 +121,9 @@ $movement = new Platformer(
 $engine->systems->add('monitors', [$monitors, 'update'], after: ['movement']);
 $engine->systems->add('shields', [$shields, 'update'], after: ['monitors']);
 
-// Run before Platformer::step() so shield actions share the same generic controls.
-$shields->control($player, $engine->controls, $dt);
+// Run before Platformer::step() so shield actions can explicitly consume Jump.
+$jumpConsumed = $shields->control($player, $engine->controls, $dt);
+$movement->step($body, $engine->controls, $dt, $jumpConsumed);
 
 // Direct creation accepts any MonitorEffect and atlas-backed casing/screen sprites.
 $monitor = $monitors->create(
@@ -144,6 +145,8 @@ Tiled point objects may use `Monitor`, `RingMonitor`, `TripleRingMonitor`, `Norm
 
 Annotate tiles with `monitor-shell`, `monitor-broken`, `monitor-explosion`, and the appropriate `monitor-screen-*` class. Shield screens use `monitor-screen-shield-normal`, `-electric`, `-fire`, `-water`, and `-star`. Optional `shield-aura-*` tiles give `Shields` animated player art. Tiled animation controls casing static, screen flicker, aura motion, and the explosion.
 
+Runner profiles use Jump directly for electric and water shield actions during a jump somersault. Flyer and glider profiles keep an unmodified Jump for their native flight or glide. Hold Up or Down with Jump to select electric jump, or hold Down with Jump to select water bounce. Plain falling cannot start any of these jump abilities. Fire shoulder thrust is additive and does not cancel active flight or glide. Pass the boolean returned by `Shields::control()` to `Platformer::step()` so a shield-selected jump is not also handled as a profile ability.
+
 The intact entity combines its casing `Sprite` with a screen `SpriteGroup`. On the first pop, the casing switches to its broken tile and stays in the level, while the screen rises and fades on a temporary entity and the reward applies exactly once. `pop()` is also available for scripted damage. Destroying an intact monitor externally releases its collider. Call `close()` during level cleanup to retire casings and effects.
 
 ## Shields
@@ -152,7 +155,7 @@ The intact entity combines its casing `Sprite` with a screen `SpriteGroup`. On t
 
 `PlayerCombat::damage()` accepts an optional shield and damage category. Any active shield prevents ring loss for one otherwise damaging hit, then receives the same mercy knockback as the unshielded player. Electric, fire, and water shields ignore their matching category and generic `projectile` damage without consuming the shield or starting mercy. Star ignores every category. `Badniks` reads the player's component automatically: shielded body contact defeats the badnik, immune projectiles retire harmlessly, and an absorbed hit does not scatter rings.
 
-`Shields` owns only map-specific aura entities, so shield inventory can persist when a level closes. Its fixed-step `update()` advances star time, follows each `Body`, retires consumed auras, and completes water rebounds. Call `control()` before platformer movement to enable the reference abilities through `Controls`: electric gets three airborne jump presses, fire spends a quarter-second thrust budget with buttons 4 and 5, and water converts an airborne jump press into a downward attack and upward rebound. Landing resets electric and fire budgets. Menus and scripts can call `Shield::select()` to switch among acquired types.
+`Shields` owns only map-specific aura entities, so shield inventory can persist when a level closes. Its fixed-step `update()` advances star time, follows each `Body`, retires consumed auras, and completes water rebounds. Call `control()` before platformer movement to enable the reference abilities through `Controls`: electric gets three presses during a jump, fire spends a quarter-second airborne thrust budget with buttons 4 and 5, and water converts a jump into a downward attack and upward rebound. Landing resets electric and fire budgets. Menus and scripts can call `Shield::select()` to switch among acquired types.
 
 Aura rendering is optional. With no annotated map, construct `Shields` without its second argument to update headless `Shield` components and abilities. A `ShieldMonitorEffect` without a manager still grants inventory, which scripts can advance directly through `Shield::update()`. With a map, `Shields` creates a separate `ShieldAura` plus `Sprite`, allowing the ordinary sprite batch to draw it over the player. `Shields::close()` removes those map-specific sprites without erasing inventory. Call `Monitors::close()` as well to retire monitor casings and pop effects.
 
@@ -549,7 +552,8 @@ Platformer is a new PHP implementation informed by the reference projects in [do
 
 - Acceleration, braking, friction, slope gravity, rolling, variable jump height, jump buffering, and coyote time.
 - Surface-tangent ground speed and outward-normal jumps. Sensors follow slopes, walls, ceilings, and loops while momentum remains sufficient.
-- Crouching and tap-charged spindashes, runner drop dashes, glide with wall catching/climbing/jumping, and flight with a finite lift budget.
+- Jump somersault state and compact collision height persist through the full arc, then clear on landing. Plain ledge falls remain standing and do not count as attacks.
+- Crouching and tap-charged spindashes, runner drop dashes, glide with wall catching, climbing, ledge-top transitions and jumping, and flight with a finite lift budget.
 - Solid polygons, tile collision shapes, one-way platforms, and down+jump drop-through.
 - Per-body collision planes and directional Tiled layer switches for open loops, including reversed crown gates and rolling-only gates.
 

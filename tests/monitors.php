@@ -55,6 +55,8 @@ test('Tiled monitors stay solid for walking and reward a continuous rolling impa
 	$walking->grounded = true;
 	$hit = $terrain->castBody($walking, 100, 0);
 	check($hit !== null && !$monitors->impact($walking, $hit));
+	$walking->grounded = false;
+	check(!$monitors->impact($walking, $hit), 'plain falling must not break a monitor');
 	check($terrain->solidAt(288, 430) && !$first->broken);
 
 	$body = new Body(200, 430);

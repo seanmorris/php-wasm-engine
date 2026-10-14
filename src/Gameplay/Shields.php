@@ -73,20 +73,22 @@ final class Shields
 	 *
 	 * Electric shields allow three extra jump presses per airtime. Fire shields use buttons 4 and
 	 * 5 for left and right aerial thrust during a quarter-second fuel budget. Water shields turn an
-	 * airborne jump press into a downward bounce attack.
+	 * airborne jump press into a downward bounce attack. Flight-capable profiles retain an
+	 * unmodified jump for flight or glide. A vertical direction selects electric jump, while Down
+	 * selects water bounce. Fire thrust remains additive to an active flight or glide.
 	 *
 	 * @param int $player Player entity owning Body and Shield components.
 	 * @param Controls $input Device-neutral controls for the current fixed simulation step.
 	 * @param float $dt Positive fixed simulation delta in seconds.
-	 * @return void Mutates only shield-specific body motion and ability budgets.
+	 * @return bool True when a shield consumed the jump press and profile movement must ignore it.
 	 */
-	public function control(int $player, Controls $input, float $dt): void
+	public function control(int $player, Controls $input, float $dt): bool
 	{
 		if($this->closed || !$this->registry->alive($player)
 			|| !$this->registry->has($player, Body::class)
 			|| !$this->registry->has($player, Shield::class)
 		){
-			return;
+			return false;
 		}
 
 		if(!is_finite($dt) || $dt <= 0)
@@ -103,16 +105,36 @@ final class Shields
 			$shield->firePower = .25;
 		}
 
-		if($shield->active === Shield::ELECTRIC && !$body->grounded
-			&& $input->pressed('jump') && $shield->electricJumps > 0
-		){
-			$body->vy = -600;
-			$body->rolling = true;
-			$body->ability = 'electric-jump';
-			$shield->electricJumps--;
+		if($body->grounded || $body->ability === 'climb')
+		{
+			return false;
 		}
 
-		if($shield->active === Shield::FIRE && !$body->grounded && $shield->firePower > 0)
+		$canFly = in_array($body->profile, ['flyer', 'glider'], true);
+		$flightActive = in_array($body->ability, ['fly', 'glide'], true);
+		$vertical = $input->axis('up', 'down');
+
+		if($shield->active === Shield::ELECTRIC && $input->pressed('jump'))
+		{
+			if($canFly && ($flightActive || abs($vertical) < .55))
+			{
+				return false;
+			}
+
+			if($body->jumping && $shield->electricJumps > 0)
+			{
+				$body->vy = -600;
+				$body->rolling = false;
+				$body->ability = 'electric-jump';
+				$shield->electricJumps--;
+
+				return true;
+			}
+
+			return $canFly;
+		}
+
+		if($shield->active === Shield::FIRE && $shield->firePower > 0)
 		{
 			$direction = $input->axis(4, 5);
 
@@ -121,19 +143,35 @@ final class Shields
 				$body->vx += $direction * 1800 * $dt;
 				$body->vx = max(-900, min(900, $body->vx));
 				$body->facing = $direction < 0 ? -1 : 1;
-				$body->ability = 'fire-dash';
+
+				if(!$canFly)
+				{
+					$body->ability = 'fire-dash';
+				}
+
 				$shield->firePower = max(0, $shield->firePower - $dt);
 			}
 		}
 
-		if($shield->active === Shield::WATER && !$body->grounded
-			&& !$shield->bubbleArmed && $input->pressed('jump')
-		){
-			$body->vy = 840;
-			$body->rolling = true;
-			$body->ability = 'bubble-bounce';
-			$shield->bubbleArmed = true;
+		if($shield->active === Shield::WATER && $input->pressed('jump'))
+		{
+			if($canFly && $vertical < .55)
+			{
+				return false;
+			}
+
+			if($body->jumping && !$shield->bubbleArmed)
+			{
+				$body->vy = 840;
+				$body->rolling = false;
+				$body->ability = 'bubble-bounce';
+				$shield->bubbleArmed = true;
+			}
+
+			return $body->jumping || $vertical >= .55;
 		}
+
+		return false;
 	}
 
 	/**
@@ -165,8 +203,13 @@ final class Shields
 
 			if($shield->bubbleArmed && $body->grounded)
 			{
+				$height = $body->rollingHeight;
+				$body->y += ($body->halfHeight - $height) * cos($body->angle);
+				$body->x -= ($body->halfHeight - $height) * sin($body->angle);
+				$body->halfHeight = $height;
 				$body->grounded = false;
-				$body->rolling = true;
+				$body->rolling = false;
+				$body->jumping = true;
 				$body->vy = -840;
 				$body->y -= .05;
 				$body->ability = 'bubble-rebound';
