@@ -862,20 +862,20 @@ $badniks['layers'][] = [
 			, 'class' => 'TripleRingMonitor'
 			, 'point' => true
 			, 'x' => 800
-			, 'y' => 448
+			, 'y' => 288
 		]
 		, [
 			'id' => 6
 			, 'class' => 'NormalShieldMonitor'
 			, 'point' => true
 			, 'x' => 1056
-			, 'y' => 448
+			, 'y' => 288
 		]
 		, [
 			'id' => 7
 			, 'class' => 'ElectricShieldMonitor'
 			, 'point' => true
-			, 'x' => 1216
+			, 'x' => 1312
 			, 'y' => 448
 		]
 		, [
@@ -889,7 +889,7 @@ $badniks['layers'][] = [
 			'id' => 9
 			, 'class' => 'WaterShieldMonitor'
 			, 'point' => true
-			, 'x' => 1856
+			, 'x' => 1936
 			, 'y' => 448
 		]
 		, [

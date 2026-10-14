@@ -18,11 +18,28 @@ use PhpWasmEngine\Tiled\Loader;
 test('Tiled monitors stay solid for walking and reward a continuous rolling impact', function() {
 	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/badniks.tmj');
 	$registry = new Registry;
+	$ground = MapTerrain::build($map);
 	$terrain = MapTerrain::build($map);
 	$monitors = new Monitors($registry, $terrain, $map);
 	$ids = $monitors->entities();
 	check(count($ids) === 7);
 	check($monitors->counts() === ['intact' => 7,'broken' => 0,'popups' => 0,'explosions' => 0]);
+	$expected = [[288, 448], [800, 288], [1056, 288], [1312, 448], [1632, 448], [1936, 448], [2080, 448]];
+
+	foreach($ids as $index => $id)
+	{
+		$placed = $registry->get($id, Monitor::class);
+		near($placed->x, $expected[$index][0]);
+		near($placed->y, $expected[$index][1]);
+
+		foreach([-$placed->width / 2 + 1, 0, $placed->width / 2 - 1] as $offset)
+		{
+			$surface = $ground->raycast($placed->x + $offset, $placed->y - 64, 0, 128);
+			check($surface !== null, 'each monitor must have terrain under its full base');
+			near($surface->y, $placed->y);
+		}
+	}
+
 	$first = $registry->get($ids[0], Monitor::class);
 	near($first->x, 288);
 	near($first->y, 448);
