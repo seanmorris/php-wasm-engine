@@ -415,6 +415,7 @@ test('streaming-world menu restores graphics and releases held controls before r
 	await page.evaluate(() => menuPad('Xbox Wireless Controller'));
 	await page.waitForTimeout(60);
 	await page.keyboard.press('Escape');
+	await expect.poll(async() => (await state(page)).selected).toBe('settings');
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).open).toBe(false);
 	await expect.poll(async() => (await state(page)).time).toBeGreaterThan(before.time);
