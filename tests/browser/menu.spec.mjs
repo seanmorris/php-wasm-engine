@@ -1,23 +1,25 @@
 import {test,expect} from '@playwright/test';
 
-async function start(page, {scene='platformer',fallback=false}={})
+async function start(page, {scene = 'platformer',fallback  = false} = {})
 {
-	const errors=[];
-	page.on('pageerror', e=>errors.push(e.message));
+	const errors = [];
+	page.on('pageerror', e => errors.push(e.message));
 
 	await page.addInitScript(({fallback})=>{
 		if(fallback) Object.defineProperty(window, 'EditContext', {value: undefined});
 
 		window.menuPads=[];
-		Object.defineProperty(navigator, 'getGamepads', {value: ()=>menuPads});
-		window.menuPad=(name, buttons=[])=>{
+		Object.defineProperty(navigator, 'getGamepads', {value: () => menuPads});
+
+		window.menuPad = (name, buttons = []) => {
 			if(!menuPads[0] || menuPads[0].id!==name)
 			{
-				if(menuPads[0]) window.dispatchEvent(Object.assign(new Event(
-					'gamepaddisconnected'
-				), {gamepad: menuPads[0]}));
+				if(menuPads[0]) window.dispatchEvent(
+					Object.assign(new Event('gamepaddisconnected'), {gamepad: menuPads[0]})
+				);
 
-				menuPads[0]={id: name
+				menuPads[0] = {
+					id: name
 					, index: 0
 					, connected: true
 					, mapping: 'standard'
@@ -25,23 +27,24 @@ async function start(page, {scene='platformer',fallback=false}={})
 					, axes: [0,0,0,0]
 					, buttons: Array.from({length: 17}, ()=>({pressed: false,value: 0}))
 				};
+
 				window.dispatchEvent(Object.assign(new Event('gamepadconnected'), {gamepad: menuPads[0]}));
 			}
 
-			menuPads[0].buttons=Array.from({length: 17}, (_, i)=>({pressed: buttons.includes(
-				i
-			)
-			, value: buttons.includes(
-				i
-			)?1:0
+			menuPads[0].buttons=Array.from({length: 17}, (_, i) => ({
+				pressed: buttons.includes(i)
+				, value: buttons.includes(i) ? 1 : 0
 			}));
+
 			menuPads[0].timestamp=performance.now();
 		};
 	}, {fallback});
+
 	await page.goto('/');
 	await page.waitForFunction(()=>typeof window.bootEngine==='function');
 	await page.evaluate(scene=>window.bootEngine({scene}), scene);
 	await expect.poll(()=>state(page)).not.toBeNull();
+
 	return errors;
 }
 
