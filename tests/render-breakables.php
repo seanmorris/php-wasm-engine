@@ -20,15 +20,14 @@ $registry = new Registry;
 $texture = $atlas->texture;
 $checks = [];
 
-$capture =
-	/**
-	 * Read the entire drawing buffer to compare whole sprites and tiled particle regions.
-	 *
-	 * @return string Raw RGBA pixels in framebuffer order.
-	 */
-	static function(): string {
-		return glReadPixels(0, 0, 96, 96, GL_RGBA, GL_UNSIGNED_BYTE);
-	};
+/**
+ * Read the entire drawing buffer to compare whole sprites and tiled particle regions.
+ *
+ * @return string Raw RGBA pixels in framebuffer order.
+ */
+$capture = static function(): string {
+	return glReadPixels(0, 0, 96, 96, GL_RGBA, GL_UNSIGNED_BYTE);
+};
 
 /**
  * Compare rotated quads while allowing subpixel coverage differences at texel boundaries.

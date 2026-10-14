@@ -38,8 +38,11 @@ final class DemoGame
 	 * @param int $entity Registry ID for the persistent player body and sprite.
 	 * @return void Installs one movement system; assets load after selectScene is called.
 	 */
-	public function __construct(public Engine $engine, public Camera $camera,
-		public Body $body, public int $entity
+	public function __construct(
+		public Engine $engine
+		, public Camera $camera
+		, public Body $body
+		, public int $entity
 	){
 		$this->host = vrzno_env('demoControls');
 		$this->canvas = vrzno_env('canvas');
@@ -68,20 +71,22 @@ final class DemoGame
 			}
 		}
 
-		$this->canvas->dataset->sequences = json_encode(
-			['last' => $this->lastSequence, 'count' => $this->sequenceCount
-			, 'konami' => $engine
-				->input->sequences->progress('konami')
-			]
-		);
-		$menu = $this->startup !== null && $this->startup->phase !== 'playing'
-			? $this->startup->menu : $this->menu->menu;
+		$this->canvas->dataset->sequences = json_encode([
+			'last' => $this->lastSequence
+			, 'count' => $this->sequenceCount
+			, 'konami' => $engine->input->sequences->progress('konami')
+		]);
+
+		$menu = $this->startup !== null&& $this->startup->phase !== 'playing'
+			? $this->startup->menu
+			: $this->menu->menu;
 
 		$this->debug?->update(
 			$elapsed, $engine->input->uiFrame($menu->editor !== null, $menu->isOpen)
 		);
 
-		return $this->startup !== null ? $this->startup->update($engine, $elapsed)
+		return $this->startup !== null
+			? $this->startup->update($engine, $elapsed)
 			: $this->menu->update($engine, $elapsed);
 	}
 
@@ -156,8 +161,11 @@ final class DemoGame
 		$this->body->wall = 0;
 		$this->body->charge = $this->body->dropCharge = $this->body->dropTimer = 0;
 		$this->body->flightRemaining = $defaults->flightRemaining;
-		$this->engine->entities->get($this->entity, Sprite::class)->gid =
-			['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile];
+
+		$this->engine->entities->get($this->entity, Sprite::class)->gid = [
+			'runner' => 7, 'glider' => 8, 'flyer' => 9
+		][$profile];
+
 		$this->host->profile = $profile;
 		$this->canvas->dataset->profile = $profile;
 		$this->menu?->menu->close();
@@ -172,15 +180,16 @@ final class DemoGame
 	{
 		$defaults = new Body(80, 100, $this->body->profile);
 
-		foreach(['x'
-		, 'y'
-		, 'vx'
-		, 'vy'
-		, 'groundSpeed'
-		, 'angle'
-		, 'grounded'
-		, 'rolling'
-		, 'facing'
+		foreach([
+			'x'
+			, 'y'
+			, 'vx'
+			, 'vy'
+			, 'groundSpeed'
+			, 'angle'
+			, 'grounded'
+			, 'rolling'
+			, 'facing'
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'
@@ -344,6 +353,7 @@ final class DemoGame
 			$this->canvas->dataset->menu = demoMenuState(
 				$this->menu, $this->engine, $this->startup->menu
 			);
+
 			return;
 		}
 
@@ -363,8 +373,7 @@ final class DemoGame
 
 		if($this->error !== '')
 		{
-			$this->status->textContent = 'Level load failed. Select the level to retry. '.$this
-				->error;
+			$this->status->textContent = 'Level load failed. Select the level to retry. ' . $this->error;
 		}
 		elseif($this->pending !== null)
 		{
@@ -399,18 +408,22 @@ final class DemoGame
 			$loaded = array_map('basename', array_keys($level->stream->loaded()));
 			$pending = array_map('basename', $level->stream->pending());
 
-			$this->canvas->dataset->world = json_encode(
-				['x' => $camera->x
+			$this->canvas->dataset->world = json_encode([
+				'x' => $camera->x
 				, 'y' => $camera->y
 				, 'loaded' => $loaded
 				, 'pending' => $pending
-					, 'errors' => $level->stream->errors, 'draws' => $stats['draws']
-				]
-			);
+				, 'errors' => $level->stream->errors
+				, 'draws' => $stats['draws']
+			]);
 
 			$this->status->textContent = sprintf(
 				'Camera %.0f, %.0f · %d maps ready · %d pending · %d draws · %s'
-				, $camera->x, $camera->y, count($loaded), count($pending), $stats['draws']
+				, $camera->x
+				, $camera->y
+				, count($loaded)
+				, count($pending)
+				, $stats['draws']
 				, implode(', ', $loaded)
 			);
 
@@ -437,16 +450,17 @@ final class DemoGame
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
-		$this->canvas->dataset->body = json_encode(
-			['x' => $body->x, 'y' => $body->y, 'grounded' => $body->grounded
-			, 'rolling' => $body
-				->rolling
-				, 'ability' => $body->ability, 'speed' => $body->groundSpeed
-				, 'angle' =>
-				$body->angle
-				, 'collisionLayer' => $body->collisionLayer
-			]
-		);
+		$this->canvas->dataset->body = json_encode([
+			'x' => $body->x
+			, 'y' => $body->y
+			, 'grounded' => $body->grounded
+			, 'rolling' => $body->rolling
+			, 'ability' => $body->ability
+			, 'speed' => $body->groundSpeed
+			, 'angle' => $body->angle
+			, 'collisionLayer' => $body->collisionLayer
+		]);
+
 		$stats = $level->renderer->stats;
 		$this->renderStats = $stats;
 
@@ -482,8 +496,7 @@ final class DemoGame
 			}
 
 			$this->canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));
-			$this->status
-				->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";
+			$this->status->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";
 		}
 	}
 

@@ -76,10 +76,11 @@ final class DemoLevel
 				$world = new World(
 					$loader
 					, $path
-					, ['maps' => [['fileName' => $this->id.'.tmj'
-					, 'x' => 0
-					, 'y' => 0
-					, 'width' => 1
+					, ['maps' => [[
+						'fileName' => $this->id.'.tmj'
+						, 'x' => 0
+						, 'y' => 0
+						, 'width' => 1
 						, 'height' => 1
 					]]]
 				);
@@ -94,6 +95,7 @@ final class DemoLevel
 				 * @return bool|string True when mounted, false while pending, or an error message.
 				 */
 				fn(string $path, bool $retry): bool|string => $this->assets->request($path, $retry),
+
 				/**
 				 * Release this level's ownership when its last map drops a file.
 				 *

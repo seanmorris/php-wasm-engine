@@ -454,7 +454,8 @@ final class MapRenderer
 					$this->draw($page['texture'], $instances);
 				}
 			}
-		} else
+		}
+		else
 		{
 			// Merge chunk diagonals in world tile order so tall tiles at chunk seams
 			// blend correctly. Matching slices still share an instanced draw.

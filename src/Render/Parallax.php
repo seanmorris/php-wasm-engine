@@ -77,11 +77,13 @@ final class Parallax
 	 * @return array{rect:array{float,float,float,float},uv:array{float,float,float,float}}|null The
 	 * screen x/y/width/height and normalized u/v/width/height, or null for invisible content.
 	 */
-	public static function layout(Layer $layer, TileMap $map, Camera $camera, float $milliseconds =
-		0
+	public static function layout(
+		Layer $layer
+		, TileMap $map
+		, Camera $camera
+		, float $milliseconds = 0
 		, float $stackHeight = 0
-	): ?array
-	{
+	): ?array {
 		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer
 			->imageHeight <= 0
 		){

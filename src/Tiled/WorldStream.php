@@ -24,8 +24,12 @@ final class WorldStream
 	 * @param float $retainMargin Eviction margin in pixels, at least as large as loadMargin.
 	 * @return void Creates an empty streaming state; no files are requested until update.
 	 */
-	public function __construct(public World $world, ?callable $request = null, ?callable $release =
-		null, public float $loadMargin = 256, public float $retainMargin = 768
+	public function __construct(
+		public World $world
+		, ?callable $request = null
+		, ?callable $release = null
+		, public float $loadMargin = 256
+		, public float $retainMargin = 768
 	){
 		if(!is_finite($loadMargin) || !is_finite($retainMargin) || $loadMargin < 0
 			|| $retainMargin < $loadMargin

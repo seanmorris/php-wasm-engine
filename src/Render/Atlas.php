@@ -157,7 +157,8 @@ final class Atlas
 					, GL_UNSIGNED_BYTE
 					, $surface
 				);
-			} finally
+			}
+			finally
 			{
 				SDL_FreeSurface($surface);
 			}
@@ -195,7 +196,8 @@ final class Atlas
 				, GL_FLOAT
 				, $rectBytes .$offsetBytes
 			);
-		} catch(\Throwable $error)
+		}
+		catch(\Throwable $error)
 		{
 			$this->release();
 			throw $error;

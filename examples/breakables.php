@@ -22,68 +22,67 @@ use PhpWasmEngine\Tiled\TileMap;
  */
 function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 	string $prefix = ''
-): BreakableBlocks
-{
+): BreakableBlocks {
 	$blocks = new BreakableBlocks($engine->entities, $terrain, $map);
 	$ids = [];
 
-	$reset =
-		/**
-		 * Recreate the demo's Tiled block objects, retiring intact blocks and remaining debris.
-		 *
-		 * @return void Restores block poses and per-object shatter grids.
-		 */
-		function() use ($engine, $map, $blocks, &$ids): void {
-			foreach($ids as $id)
+	/**
+	 * Recreate the demo's Tiled block objects, retiring intact blocks and remaining debris.
+	 *
+	 * @return void Restores block poses and per-object shatter grids.
+	 */
+	$reset = function() use ($engine, $map, $blocks, &$ids): void {
+		foreach($ids as $id)
+		{
+			if($engine->entities->alive($id))
 			{
-				if($engine->entities->alive($id))
-				{
-					$engine->entities->destroy($id);
-				}
+				$engine->entities->destroy($id);
 			}
+		}
 
-			$ids = [];
+		$ids = [];
 
-			foreach($map->layers as $layer)
+		foreach($map->layers as $layer)
+		{
+			foreach($layer->objects as $object)
 			{
-				foreach($layer->objects as $object)
+				if(($object['class'] ?? $object['type'] ?? '') !== 'breakable')
 				{
-					if(($object['class'] ?? $object['type'] ?? '') !== 'breakable')
-					{
-						continue;
-					}
-
-					$properties = Loader::properties($object['properties'] ?? []);
-					$gid = Gid::from($object['gid']);
-
-					$sprite = new Sprite(
-						$gid->id
-						, $object['x'] + $map->x + $layer->offsetX
-						, $object['y'] + $map->y + $layer->offsetY
-						, 0
-						, 1
-					);
-					$rect = $map->tile($sprite->gid)['rect'];
-					$sprite->scaleX = $object['width'] / $rect[2];
-					$sprite->scaleY = $object['height'] / $rect[3];
-					$sprite->rotation = deg2rad($object['rotation'] ?? 0);
-					$sprite->flipX = (bool)($gid->flags & 8);
-					$sprite->flipY = (bool)($gid->flags & 4);
-
-					if($gid->flags & 2)
-					{
-						// Swap source axes before H/V flips, keeping Tiled's bottom-left pivot.
-						$sprite->originX = 1;
-						$sprite->scaleX = $object['height'] / $rect[2];
-						$sprite->scaleY = $object['width'] / $rect[3];
-						$sprite->rotation += M_PI / 2;
-						[$sprite->flipX, $sprite->flipY] = [$sprite->flipY, !$sprite->flipX];
-					}
-
-					$ids[] = $blocks->create($sprite, $properties['columns'], $properties['rows']);
+					continue;
 				}
+
+				$properties = Loader::properties($object['properties'] ?? []);
+				$gid = Gid::from($object['gid']);
+
+				$sprite = new Sprite(
+					$gid->id
+					, $object['x'] + $map->x + $layer->offsetX
+					, $object['y'] + $map->y + $layer->offsetY
+					, 0
+					, 1
+				);
+
+				$rect = $map->tile($sprite->gid)['rect'];
+				$sprite->scaleX = $object['width'] / $rect[2];
+				$sprite->scaleY = $object['height'] / $rect[3];
+				$sprite->rotation = deg2rad($object['rotation'] ?? 0);
+				$sprite->flipX = (bool)($gid->flags & 8);
+				$sprite->flipY = (bool)($gid->flags & 4);
+
+				if($gid->flags & 2)
+				{
+					// Swap source axes before H/V flips, keeping Tiled's bottom-left pivot.
+					$sprite->originX = 1;
+					$sprite->scaleX = $object['height'] / $rect[2];
+					$sprite->scaleY = $object['width'] / $rect[3];
+					$sprite->rotation += M_PI / 2;
+					[$sprite->flipX, $sprite->flipY] = [$sprite->flipY, !$sprite->flipX];
+				}
+
+				$ids[] = $blocks->create($sprite, $properties['columns'], $properties['rows']);
 			}
-		};
+		}
+	};
 
 	try
 	{
@@ -95,26 +94,22 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 		throw $error;
 	}
 
-	$engine->systems->add($prefix.'breakables',
-		/**
-		 * Restore the scene's intact blocks and retire old debris when reset is pressed.
-		 *
-		 * @param Registry $entities Scene registry, unused because the reset closure owns its IDs.
-		 * @param float $dt Fixed simulation delta in seconds, unused by reset.
-		 * @return void Recreates blocks on the reset edge.
-		 */
-		function(Registry $entities, float $dt) use ($engine, $reset): void {
-			if($engine->controls->pressed('reset'))
-			{
-				$reset();
-			}
-		}, after: ['movement']
-	);
+	/**
+	 * Restore the scene's intact blocks and retire old debris when reset is pressed.
+	 *
+	 * @param Registry $entities Scene registry, unused because the reset closure owns its IDs.
+	 * @param float $dt Fixed simulation delta in seconds, unused by reset.
+	 * @return void Recreates blocks on the reset edge.
+	 */
+	$breakableSystem = function(Registry $entities, float $dt) use ($engine, $reset): void {
+		if($engine->controls->pressed('reset'))
+		{
+			$reset();
+		}
+	};
 
-	$engine->systems->add(
-		$prefix.'particles'
-		, [new ParticleSystem, 'update']
-		, after: [$prefix.'breakables']
-	);
+	$engine->systems->add($prefix.'breakables', $breakableSystem, after: ['movement']);
+	$engine->systems->add($prefix.'particles', [new ParticleSystem, 'update'], after: [$prefix.'breakables']);
+
 	return $blocks;
 }

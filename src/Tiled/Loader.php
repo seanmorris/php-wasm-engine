@@ -248,7 +248,8 @@ final class Loader
 						}
 					}
 				}
-			} elseif($data['type'] === 'objectgroup')
+			}
+			elseif($data['type'] === 'objectgroup')
 			{
 				$layer->objects = $data['objects'] ?? [];
 			}
@@ -336,10 +337,12 @@ final class Loader
 	 * @return string Exactly four little-endian bytes per cell, with unsupported hexagonal rotation
 	 * flags cleared.
 	 */
-	public static function decode($data, int $count, string $encoding = 'csv', string $compression =
-		''
-	): string
-	{
+	public static function decode(
+		$data
+		, int $count
+		, string $encoding = 'csv'
+		, string $compression = ''
+	): string {
 		if($count < 0 || $count > 16777216)
 		{
 			throw new \UnexpectedValueException('Layer exceeds 16M cell limit');

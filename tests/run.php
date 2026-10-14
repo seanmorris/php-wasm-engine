@@ -35,7 +35,8 @@ function rejects(callable $fn): void
 	try
 	{
 		$fn();
-	} catch(Throwable $e)
+	}
+	catch(Throwable $e)
 	{
 		return;
 	}
@@ -431,7 +432,8 @@ foreach($tests as $name => $fn)
 	{
 		$fn();
 		echo "PASS $name\n";
-	} catch(Throwable $e)
+	}
+	catch(Throwable $e)
 	{
 		$failed++;
 		echo "FAIL $name: {$e->getMessage()}\n{$e->getTraceAsString()}\n";

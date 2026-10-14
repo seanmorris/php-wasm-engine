@@ -51,54 +51,54 @@ final class SdlInput
 
 		if($this->canvas)
 		{
-			$this->focusListener =
-				/**
-				 * Mark the canvas focused and discard input held across the transition.
-				 *
-				 * @return null Requests fresh keyboard and controller state.
-				 */
-				fn() => $this->focus(true);
-			$this->blurListener =
-				/**
-				 * Mark the canvas unfocused and release its buffered controls.
-				 *
-				 * @return null Suspends input until a later focus event.
-				 */
-				fn() => $this->switchingText ? null : $this->focus($this->ownsFocus());
+			/**
+			 * Mark the canvas focused and discard input held across the transition.
+			 *
+			 * @return null Requests fresh keyboard and controller state.
+			 */
+			$this->focusListener = fn() => $this->focus(true);
+
+			/**
+			 * Mark the canvas unfocused and release its buffered controls.
+			 *
+			 * @return null Suspends input until a later focus event.
+			 */
+			$this->blurListener = fn() => $this->switchingText ? null : $this->focus($this->ownsFocus());
+
 			$this->canvas->addEventListener('focus', $this->focusListener);
 			$this->canvas->addEventListener('blur', $this->blurListener);
 			$this->focus((bool)$this->canvas->matches(':focus'));
 			$this->keyboardWindow = $this->canvas->ownerDocument->defaultView;
-			$this->keyListener =
-				/**
-				 * Reject browser repeats whose physical press was discarded during recovery.
-				 * SDL can report the first repeat after blur as a new keydown.
-				 *
-				 * @param object $event Keyboard event for the canvas or IME target.
-				 * @return void Filters stale repeats before SDL receives them.
-				 */
-				function(object $event): void {
-					$this->focus($this->ownsFocus());
 
-					if(!$this->focused)
-					{
-						return;
-					}
+			/**
+			 * Reject browser repeats whose physical press was discarded during recovery.
+			 * SDL can report the first repeat after blur as a new keydown.
+			 *
+			 * @param object $event Keyboard event for the canvas or IME target.
+			 * @return void Filters stale repeats before SDL receives them.
+			 */
+			$this->keyListener = function(object $event): void {
+				$this->focus($this->ownsFocus());
 
-					if($event->type === 'keyup')
-					{
-						unset($this->browserKeys[$event->code]);
-					}
-					elseif(!$event->repeat)
-					{
-						$this->browserKeys[$event->code] = true;
-					}
-					elseif(empty($this->browserKeys[$event->code]))
-					{
-						$event->preventDefault();
-						$event->stopImmediatePropagation();
-					}
-				};
+				if(!$this->focused)
+				{
+					return;
+				}
+
+				if($event->type === 'keyup')
+				{
+					unset($this->browserKeys[$event->code]);
+				}
+				elseif(!$event->repeat)
+				{
+					$this->browserKeys[$event->code] = true;
+				}
+				elseif(empty($this->browserKeys[$event->code]))
+				{
+					$event->preventDefault();
+					$event->stopImmediatePropagation();
+				}
+			};
 
 			$this->keyboardWindow->addEventListener('keydown', $this->keyListener, true);
 			$this->keyboardWindow->addEventListener('keyup', $this->keyListener, true);
@@ -141,7 +141,8 @@ final class SdlInput
 		try
 		{
 			$this->poll();
-		} finally
+		}
+		finally
 		{
 			$this->discarding = false;
 		}

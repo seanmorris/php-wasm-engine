@@ -33,31 +33,30 @@ final class BreakableBlocks
 	){
 		$owner = \WeakReference::create($this);
 
-		$this->removed =
-			/**
-			 * Release geometry when its owning marker or completed burst leaves the registry.
-			 *
-			 * @param Registry $entities Registry emitting the component removal.
-			 * @param int $id Entity whose component was removed.
-			 * @param object $component Exact detached component instance.
-			 * @return void Removes only geometry owned by this component, if the manager exists.
-			 */
-			static function(Registry $entities, int $id, object $component) use ($owner): void {
-				$manager = $owner->get();
+		/**
+		 * Release geometry when its owning marker or completed burst leaves the registry.
+		 *
+		 * @param Registry $entities Registry emitting the component removal.
+		 * @param int $id Entity whose component was removed.
+		 * @param object $component Exact detached component instance.
+		 * @return void Removes only geometry owned by this component, if the manager exists.
+		 */
+		$this->removed = static function(Registry $entities, int $id, object $component) use ($owner): void {
+			$manager = $owner->get();
 
-				if($manager !== null && ($manager->owned[$id][0] ?? null) === $component)
+			if($manager !== null && ($manager->owned[$id][0] ?? null) === $component)
+			{
+				$handle = $manager->owned[$id][1];
+
+				if($handle !== null)
 				{
-					$handle = $manager->owned[$id][1];
-
-					if($handle !== null)
-					{
-						$manager->terrain->removeShape($handle);
-						unset($manager->shapes[$handle]);
-					}
-
-					unset($manager->owned[$id]);
+					$manager->terrain->removeShape($handle);
+					unset($manager->shapes[$handle]);
 				}
-			};
+
+				unset($manager->owned[$id]);
+			}
+		};
 
 		$registry->on('removed', $this->removed);
 	}

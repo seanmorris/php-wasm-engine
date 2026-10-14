@@ -18,9 +18,12 @@ final class LayerSwitch
 	 * @param bool $roll Require rolling with a body height of at most 28 pixels.
 	 * @return void Validates the region and normalizes its winding.
 	 */
-	public function __construct(public array $points, public int $fromLayer = 1
-		, public int $toLayer =
-		2, public bool $back = false, public bool $roll = false
+	public function __construct(
+		public array $points
+		, public int $fromLayer = 1
+		, public int $toLayer = 2
+		, public bool $back = false
+		, public bool $roll = false
 	){
 		$count = count($points);
 
@@ -131,7 +134,8 @@ final class LayerSwitch
 			if($velocity < 0)
 			{
 				$near = max($near, $t);
-			} else
+			}
+			else
 			{
 				$far = min($far, $t);
 			}

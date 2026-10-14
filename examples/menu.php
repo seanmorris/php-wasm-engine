@@ -19,23 +19,33 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 	$settings = (object)['name' => 'Player', 'scale' => 2, 'theme' => 'auto', 'hints' => true];
 	$adapter = null;
 	$items = [
-		'name' => ['label' => 'Player name'
-		, 'input' => 'string'
-		, 'default' => 'Player'
+		'name' => [
+			'label' => 'Player name'
+			, 'input' => 'string'
+			, 'default' => 'Player'
 			, 'subtext' => 'Type to edit. Changes apply immediately.'
 			, 'get' => fn() => $settings->name
 			, 'set' => fn($value) => $settings->name = $value
 		]
-		, 'zoom' => ['label' => 'Camera zoom', 'input' => 'number', 'default' => 1
-			, 'min' => .5, 'max' => 3, 'step' => .25
+		, 'zoom' => [
+			'label' => 'Camera zoom'
+			, 'input' => 'number'
+			, 'default' => 1
+			, 'min' => .5
+			, 'max' => 3
+			, 'step' => .25
 			, 'subtext' => 'Left/right adjusts. Select to type a value.'
 			, 'get' => fn() => $camera->zoom
 			, 'set' => fn($value) => $camera->zoom = $value
 		]
-		, 'scale' => ['label' => 'Menu scale'
-		, 'input' => 'number'
-		, 'subType' => 'range'
-			, 'min' => 1, 'max' => 3, 'step' => .25, 'default' => 2
+		, 'scale' => [
+			'label' => 'Menu scale'
+			, 'input' => 'number'
+			, 'subType' => 'range'
+			, 'min' => 1
+			, 'max' => 3
+			, 'step' => .25
+			, 'default' => 2
 			, 'subtext' => 'Adjust with left/right or drag the slider.'
 			, 'get' => fn() => $settings->scale
 			, 'set' => function($value) use ($settings, &$adapter) {
@@ -105,9 +115,14 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 	$host = vrzno_env('demoControls');
 	$levels = [];
 	$profiles = [];
-	$levelNames = ['platformer' => 'Platformer', 'world' => 'Streaming world'
-		, 'loop' => 'Loop-de-loop', 'breakables' => 'Breakable blocks'
-		, 'infinite' => 'Infinite map', 'isometric' => 'Isometric map'
+
+	$levelNames = [
+		'platformer' => 'Platformer'
+		, 'world' => 'Streaming world'
+		, 'loop' => 'Loop-de-loop'
+		, 'breakables' => 'Breakable blocks'
+		, 'infinite' => 'Infinite map'
+		, 'isometric' => 'Isometric map'
 	];
 	$profileNames = [
 		'runner' => 'Runner: dash'
@@ -117,9 +132,10 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 
 	foreach($levelNames as $id => $label)
 	{
-		$levels[$id] = ['label' => $label, 'input' => 'output'
-			, 'get' => fn() => $game->pending?->id === $id ? 'Loading'
-				: ($game->scene === $id ? 'Current' : '')
+		$levels[$id] = [
+			'label' => $label
+			, 'input' => 'output'
+			, 'get' => fn() => $game->pending?->id === $id ? 'Loading' : ($game->scene === $id ? 'Current' : '')
 			, 'callback' => fn() => $game->selectScene($id)
 		];
 	}

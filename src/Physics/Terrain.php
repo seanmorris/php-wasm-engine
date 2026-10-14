@@ -624,7 +624,8 @@ final class Terrain
 			{
 				$cx += $sx;
 				$tx += $dtX;
-			} else
+			}
+			else
 			{
 				$cy += $sy;
 				$ty += $dtY;

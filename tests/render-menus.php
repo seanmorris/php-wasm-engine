@@ -145,8 +145,13 @@ $device->begin([0, 0, 0, 1]);
 $renderer->render($menu, 320, 180);
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $right = $clip[0] + $clip[2] - 4;
-$checks['long preedit scrolls its caret into view'] =
-	menuPixel($pixels, (int)round($right - 2), (int)$top + 11) === 'ffffffff';
+
+$checks['long preedit scrolls its caret into view'] = 'ffffffff' === menuPixel(
+	$pixels
+	, (int)round($right - 2)
+	, (int)$top + 11
+);
+
 $checks['field clips its glyphs'] = true;
 
 for($y = (int)$top; $y < $top + 14; $y++)

@@ -25,9 +25,8 @@ final class Body
 	 * rejected.
 	 * @return void Initializes an airborne actor on collision layer 1.
 	 */
-	public function __construct(public float $x = 0, public float $y = 0, public string $profile =
-		'runner'
-	){
+	public function __construct(public float $x = 0, public float $y = 0, public string $profile = 'runner')
+	{
 		if(!in_array($profile, ['runner','glider','flyer'], true))
 		{
 			throw new \InvalidArgumentException('Unknown movement profile');

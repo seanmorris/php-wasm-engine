@@ -22,10 +22,10 @@ $engine = new Engine(new Device);
 $body = new Body(80, 100, $profile);
 
 // The demo PNG has two transparent rows below the visible soles.
-$entity = $engine->entities->create(
-	$body
-	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
-);
+$entity = $engine->entities->create($body, new Sprite(
+	['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32
+));
+
 $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $entity);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);

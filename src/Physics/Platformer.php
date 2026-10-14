@@ -100,7 +100,8 @@ final class Platformer
 			){
 				$b->charge = min(1, $b->charge + $dt * 1.4);
 				$b->groundSpeed = 0;
-			} elseif($b->charge > 0)
+			}
+			elseif($b->charge > 0)
 			{
 				$b->groundSpeed = $b->facing * (480 + 960 * $b->charge);
 				$b->rolling = true;
@@ -124,7 +125,8 @@ final class Platformer
 							, $accel * $dt
 						);
 					}
-				} else
+				}
+				else
 				{
 					$b->groundSpeed = self::approach(
 						$b->groundSpeed
@@ -229,7 +231,8 @@ final class Platformer
 				{
 					$b->ability = '';
 				}
-			} elseif($b->ability === 'glide')
+			}
+			elseif($b->ability === 'glide')
 			{
 				$gravity *= .125;
 				$b->vx = self::approach($b->vx, $b->facing * 420, 240 * $dt);
@@ -239,7 +242,8 @@ final class Platformer
 				{
 					$b->ability = '';
 				}
-			} elseif(abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
+			}
+			elseif(abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
 			{
 				$b->vx += $axis * $b->airAcceleration * $dt;
 			}
@@ -406,7 +410,8 @@ final class Platformer
 				$distance = ($b->x - $best->x) * $best->nx + ($b->y - $best->y) * $best->ny;
 				$b->x += $best->nx * ($b->halfHeight + .001 - $distance);
 				$b->y += $best->ny * ($b->halfHeight + .001 - $distance);
-			} elseif(abs($best->nx) > .8)
+			}
+			elseif(abs($best->nx) > .8)
 			{
 				if($b->ability === 'glide')
 				{

@@ -131,7 +131,7 @@ for(const fallback of [false,true]) test('live text editing and external focus w
 for(const fallback of [false,true]) for(const recovery of ['visibility','focus','graphics'])
 {
 	test(
-		'editing discards held-key repeats after '+recovery+' recovery with '+(fallback ? 'textarea' : 'EditContext')
+		'editing discards held-key repeats after ' + recovery + ' recovery with ' + (fallback ? 'textarea' : 'EditContext')
 		, async(
 			{page}
 		) => {
@@ -307,7 +307,8 @@ test('wheel pixels, lines and pages each move one menu item', async ({page}) => 
 async function composition(page, fallback, phase, text = 'かな')
 {
 	await page.evaluate(({fallback,phase,text}) => {
-		const target = fallback ? document.querySelector('textarea[aria-label="SDL text input"]')
+		const target = fallback
+			? document.querySelector('textarea[aria-label="SDL text input"]')
 			: document.querySelector('canvas').editContext;
 
 		if(phase==='start')
@@ -344,9 +345,8 @@ async function composition(page, fallback, phase, text = 'かな')
 	}, {fallback,phase,text});
 }
 
-for(const fallback of [false,true]) test('fullscreen IME commits once and cancels on blur with '+(fallback ? 'textarea'
-	: 'EditContext'
-), async({page}) => {
+for(const fallback of [false,true])
+test('fullscreen IME commits once and cancels on blur with ' + (fallback ? 'textarea' : 'EditContext'), async({page}) => {
 	const errors = await start(page, {fallback});
 	await open(page);
 	await choose(page, 'settings');

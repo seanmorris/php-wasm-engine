@@ -61,7 +61,8 @@ final class Program
 			{
 				throw new \RuntimeException(glGetProgramInfoLog($this->id));
 			}
-		} catch(\Throwable $error)
+		}
+		catch(\Throwable $error)
 		{
 			$this->release();
 			throw $error;
