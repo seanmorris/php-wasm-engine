@@ -86,9 +86,11 @@ export function boot(
 				new URL('php' + version + '-sdl.mjs', runtimeBase)
 			);
 
-			const sharedLibs = zlib ? [await import(/* webpackIgnore: true */
-				new URL('extensions/zlib/' + version + '.mjs', runtimeBase)
-			)] : [];
+			const sharedLibs = zlib
+				? [await import(/* webpackIgnore: true */
+					new URL('extensions/zlib/' + version + '.mjs', runtimeBase)
+				)]
+				: [];
 
 			signal.throwIfAborted();
 
@@ -128,9 +130,7 @@ export function boot(
 		const needed = files.filter(
 			path => !run || !path.startsWith(
 				'examples/assets/'
-			) || /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(
-				path
-			)
+			) || /^examples\/assets\/(font|buttons)\.(tsj|png)$/.test(path)
 		);
 
 		let mounted = 0;
@@ -290,8 +290,7 @@ function setState(next)
 	start.hidden = state === 'running';
 	preloader.hidden = state !== 'loading';
 	start.disabled = state === 'loading' || state === 'stopping';
-	start.textContent = state === 'loading' ? 'Loading PHP…'
-		: state === 'stopping' ? 'Stopping…' : 'Run PHP';
+	start.textContent = state === 'loading' ? 'Loading PHP…' : state === 'stopping' ? 'Stopping…' : 'Run PHP';
 }
 
 window.bootEngine = boot;

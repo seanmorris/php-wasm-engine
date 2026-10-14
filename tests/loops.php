@@ -5,17 +5,17 @@ use PhpWasmEngine\Physics\
 };
 use PhpWasmEngine\Tiled\Loader;
 
-function gate(float $x, float $y, float $w, float $h, int $from = 1, int $to = 2, bool $back = false
+function gate(
+	float $x
+	, float $y
+	, float $w
+	, float $h
+	, int $from = 1
+	, int $to = 2
+	, bool $back = false
 	, bool $roll = false
-): LayerSwitch
-{
-	return new LayerSwitch(
-		[[$x,$y],[$x + $w,$y],[$x + $w,$y + $h],[$x,$y + $h]]
-		, $from
-		, $to
-		, $back
-		, $roll
-	);
+): LayerSwitch {
+	return new LayerSwitch([[$x,$y],[$x + $w,$y],[$x + $w,$y + $h],[$x,$y + $h]], $from, $to, $back, $roll);
 }
 
 test('collision planes are per body and always include common terrain', function() {
@@ -150,9 +150,7 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 
 	$data = mapData(
 		[['type' => 'group','offsetx' => 4,'offsety' => -2
-		, 'layers' => [layer(
-			['name' => 'Collision 2','data' => [1,0,0,0]]
-		)
+		, 'layers' => [layer(['name' => 'Collision 2','data' => [1,0,0,0]])
 		, layer(
 			['name' => 'Art','data' => [0,1,0,0]
 			, 'properties' => [['name' => 'collision'
@@ -166,6 +164,7 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 		]
 		]]]
 	);
+
 	$map = fixture(['a' => $data,'tiles.tsj' => tiles()])->map('a');
 	$map->x = -100;
 	$map->y = 200;
@@ -183,7 +182,7 @@ test('map planes and switch objects retain world, group, rotation and tile ancho
 });
 
 test('the tiled loop enters, changes route at the crown, and exits in both directions', function() {
-	$t = MapTerrain::build((new Loader)->map(dirname(__DIR__).'/examples/assets/loop.tmj'));
+	$t = MapTerrain::build((new Loader)->map(dirname(__DIR__) . '/examples/assets/loop.tmj'));
 
 	foreach([1,-1] as $direction)
 	{
@@ -223,8 +222,9 @@ test('the tiled loop enters, changes route at the crown, and exits in both direc
 
 				check(
 					$i < 240 && $minY < 225
-					, "loop traversal: direction=$direction speed=$speed rolling=" .(int)$rolling
+					, "loop traversal: direction=$direction speed=$speed rolling=" . (int)$rolling
 				);
+
 				check($crownLayer === ($direction > 0?1:2));
 				near($turn, -$direction * 2 * M_PI, .01);
 				check($b->grounded && $b->collisionLayer === ($direction > 0?2:1));
@@ -235,7 +235,7 @@ test('the tiled loop enters, changes route at the crown, and exits in both direc
 });
 
 test('the tiled loop releases slow actors and permits a normal jump from its ceiling', function() {
-	$t = MapTerrain::build((new Loader)->map(dirname(__DIR__).'/examples/assets/loop.tmj'));
+	$t = MapTerrain::build((new Loader)->map(dirname(__DIR__) . '/examples/assets/loop.tmj'));
 	$p = new Platformer($t);
 	$b = new Body(896, 210);
 	$b->grounded = true;

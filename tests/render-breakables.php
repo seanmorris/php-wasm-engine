@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
@@ -13,7 +13,7 @@ use PhpWasmEngine\Tiled\Loader;
 
 $device = new Device(96, 96);
 $camera = new Camera(0, 0, 96, 96);
-$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $registry = new Registry;
@@ -62,10 +62,7 @@ function samePartition(string $whole, string $pieces, Sprite $sprite): bool
 		$u = ($x * $cos + $y * $sin) / $sprite->scaleX + $sprite->originX * $width;
 		$v = (-$x * $sin + $y * $cos) / $sprite->scaleY + $sprite->originY * $height;
 
-		$distance = min(
-			abs(($u - round($u)) * $sprite->scaleX)
-			, abs(($v - round($v)) * $sprite->scaleY)
-		);
+		$distance = min(abs(($u - round($u)) * $sprite->scaleX), abs(($v - round($v)) * $sprite->scaleY));
 
 		if($distance > .125)
 		{
@@ -106,9 +103,9 @@ foreach([0, M_PI / 2, .37] as $rotation)
 			$renderer->renderEntities($registry, $camera);
 			$key = "$rotation $scale $flags";
 			$partition = $capture();
-			$checks['image partition '.$key] = samePartition($whole, $partition, $sprite);
+			$checks['image partition ' . $key] = samePartition($whole, $partition, $sprite);
 
-			$checks['one shared batch '.$key] = $renderer->draws === 1
+			$checks['one shared batch ' . $key] = $renderer->draws === 1
 				&& $renderer->instances === 12 && $atlas->texture === $texture;
 
 			$registry->destroy($id);
@@ -140,7 +137,7 @@ $renderer->close();
 $checks['borrowed texture survives close'] = (bool)glIsTexture($atlas->texture);
 $atlas->close();
 
-$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $sprite = $sheet->sprite('run', 40, 40);

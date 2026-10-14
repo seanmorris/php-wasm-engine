@@ -98,7 +98,7 @@ final class Assets
 		}
 
 		$directory = str_replace('\\', '/', dirname($base));
-		$joined = ($directory === '.' ? '' : $directory.'/').$path;
+		$joined = ($directory === '.' ? '' : $directory . '/') . $path;
 		$prefix = '';
 
 		if(preg_match('~^([a-z][a-z0-9+.-]*://[^/]+)(/.*)?$~i', $joined, $match))
@@ -127,6 +127,6 @@ final class Assets
 			}
 		}
 
-		return $prefix.($absolute?'/':'').implode('/', $parts);
+		return $prefix . ($absolute?'/':'') . implode('/', $parts);
 	}
 }

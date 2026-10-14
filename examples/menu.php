@@ -110,6 +110,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		'no' => ['label' => 'No, keep settings', 'callback' => fn(Menu $menu) => $menu->back()]
 		, 'yes' => ['label' => 'Yes, restore defaults', 'callback' => $reset]
 	]];
+
 	$game->settings = $items;
 
 	$host = vrzno_env('demoControls');
@@ -124,6 +125,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		, 'infinite' => 'Infinite map'
 		, 'isometric' => 'Isometric map'
 	];
+
 	$profileNames = [
 		'runner' => 'Runner: dash'
 		, 'glider' => 'Glider: climb'
@@ -145,6 +147,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		, 'hidden' => fn() => $game->error === ''
 		, 'subtext' => 'Select the level again to retry, or choose another level.'
 	];
+
 	$levels['cancel-load'] = ['label' => 'Cancel level change'
 		, 'hidden' => fn() => $game->pending === null && $game->error === ''
 		, 'callback' => fn() => $game->cancelLoad()
@@ -206,8 +209,10 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		]
 		, 'Paused'
 	);
-	$font = new BitmapFont(new Loader, __DIR__.'/assets/font.tsj', [__DIR__.'/assets/buttons.tsj']);
+
+	$font = new BitmapFont(new Loader, __DIR__ . '/assets/font.tsj', [__DIR__ . '/assets/buttons.tsj']);
 	$adapter = new PauseMenu($engine, $menu, $font);
+
 	return $adapter;
 }
 

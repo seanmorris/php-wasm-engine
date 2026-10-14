@@ -17,9 +17,10 @@ final class RectRenderer
 	public function __construct()
 	{
 		$this->program = new Program(
-			file_get_contents(dirname(__DIR__, 2).'/shaders/ui.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/ui.frag')
+			file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.vert')
+			, file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.frag')
 		);
+
 		$this->create();
 	}
 

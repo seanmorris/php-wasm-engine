@@ -1,12 +1,12 @@
 <?php
-require_once dirname(__DIR__).'/autoload.php';
+require_once dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Render\
 {
 	Device,Camera,MapRenderer,Sprite,SpriteRenderer
 };
-$map = (new Loader)->map(dirname(__DIR__).'/examples/assets/platformer.tmj');
+$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/platformer.tmj');
 $device = new Device(320, 180);
 $engine = new Engine($device);
 $renderer = new MapRenderer($map);

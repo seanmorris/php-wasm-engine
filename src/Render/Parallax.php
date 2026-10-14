@@ -24,6 +24,7 @@ final class Parallax
 		$oy = $map->y + ($map->data['parallaxoriginy'] ?? 0);
 		$halfX = $camera->width / $camera->zoom / 2;
 		$halfY = $camera->height / $camera->zoom / 2;
+
 		return [
 			$ox + ($camera->x + $halfX - $ox) * $layer->parallaxX - $halfX
 			, $oy + ($camera->y + $halfY - $oy) * $layer->parallaxY - $halfY
@@ -45,10 +46,7 @@ final class Parallax
 			return $layer->image;
 		}
 
-		$time = fmod(
-			max(0, $milliseconds)
-			, array_sum(array_column($layer->imageFrames, 'duration'))
-		);
+		$time = fmod(max(0, $milliseconds), array_sum(array_column($layer->imageFrames, 'duration')));
 
 		foreach($layer->imageFrames as $frame)
 		{

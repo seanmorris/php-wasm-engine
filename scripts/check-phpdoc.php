@@ -2,6 +2,112 @@
 declare(strict_types=1);
 
 /**
+ * Find the token preceding a function's modifiers and optional attributes.
+ *
+ * @param array $tokens PHP tokens including whitespace and documentation comments.
+ * @param int $index Function or arrow-function keyword index.
+ * @return int Previous token index, or minus one at the start of the source.
+ */
+function phpDocPrefix(array $tokens, int $index): int
+{
+	$modifiers = [T_WHITESPACE, T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT];
+	$index--;
+
+	while($index >= 0)
+	{
+		if(is_array($tokens[$index]) && in_array($tokens[$index][0], $modifiers, true))
+		{
+			$index--;
+			continue;
+		}
+
+		if($tokens[$index] === ']')
+		{
+			$depth = 1;
+
+			for($open = $index - 1; $open >= 0; $open--)
+			{
+				if($tokens[$open] === ']') $depth++;
+
+				if(($tokens[$open] === '[' || is_array($tokens[$open]) && $tokens[$open][0] === T_ATTRIBUTE
+				) && --$depth === 0
+				)
+				break;
+			}
+
+			if($open >= 0 && is_array($tokens[$open]) && $tokens[$open][0] === T_ATTRIBUTE)
+			{
+				$index = $open - 1;
+				continue;
+			}
+		}
+
+		break;
+	}
+
+	return $index;
+}
+
+/**
+ * Find documentation immediately before a closure's assignment target.
+ *
+ * @param array $tokens Parsed PHP tokens containing the assignment.
+ * @param int $equals Index of the assignment operator preceding the closure.
+ * @return string Attached PHPDoc, or an empty string when no direct assignment document exists.
+ */
+function phpDocAssignment(array $tokens, int $equals): string
+{
+	$depth = 0;
+	$variable = false;
+
+	for($index = $equals - 1; $index >= 0; $index--)
+	{
+		$token = $tokens[$index];
+
+		if(is_array($token))
+		{
+			if($token[0] === T_DOC_COMMENT) return $depth === 0 && $variable ? $token[1] : '';
+
+			if($token[0] === T_VARIABLE) $variable = true;
+
+			if($depth || in_array(
+				$token[0]
+				, [T_VARIABLE
+				, T_WHITESPACE
+				, T_STRING
+				, T_NAME_QUALIFIED
+				, T_NAME_FULLY_QUALIFIED
+				, T_OBJECT_OPERATOR
+					, T_DOUBLE_COLON
+				]
+				, true
+			))
+			continue;
+
+			return '';
+		}
+
+		if($token === ']')
+		{
+			$depth++;
+			continue;
+		}
+
+		if($token === '[' && $depth)
+		{
+			$depth--;
+			continue;
+		}
+
+		if($depth) continue;
+
+		return '';
+	}
+
+	return '';
+}
+
+/**
  * Discover named functions, methods, closures, and arrow functions without executing source.
  *
  * @param string $source Complete PHP source to parse with the current interpreter.
@@ -12,7 +118,6 @@ function phpDocFunctions(string $source): array
 {
 	$tokens = token_get_all($source, TOKEN_PARSE);
 	$functions = [];
-	$modifiers = [T_WHITESPACE,T_PUBLIC,T_PROTECTED,T_PRIVATE,T_STATIC,T_FINAL,T_ABSTRACT];
 
 	foreach($tokens as $i => $token)
 	{
@@ -21,19 +126,16 @@ function phpDocFunctions(string $source): array
 			continue;
 		}
 
-		$previous = $i - 1;
-
-		while($previous >= 0 && is_array($tokens[$previous]) && in_array(
-			$tokens[$previous][0]
-			, $modifiers
-			, true
-		)){
-			$previous--;
-		}
+		$previous = phpDocPrefix($tokens, $i);
 
 		$doc = $previous >= 0 && is_array($tokens[$previous]) && $tokens[$previous][
 			0
-		] === T_DOC_COMMENT?$tokens[$previous][1]:'';
+		] === T_DOC_COMMENT
+			? $tokens[$previous][1]
+			: '';
+
+		if($doc === '' && $previous >= 0 && $tokens[$previous] === '=') $doc = phpDocAssignment($tokens, $previous);
+
 		$name = $token[0] === T_FN?'arrow function':'closure';
 		$j = $i + 1;
 
@@ -126,12 +228,7 @@ function phpDocErrors(array $function): array
 		$errors[] = 'missing function description';
 	}
 
-	preg_match_all(
-		'/^\h*@param\h+(.+?)\h+(?:&)?(?:\.\.\.)?\$(\w+)\h+(\S[^\r\n]*)/m'
-		, $clean
-		, $params
-		, PREG_SET_ORDER
-	);
+	preg_match_all('/^\h*@param\h+(.+?)\h+(?:&)?(?:\.\.\.)?\$(\w+)\h+(\S[^\r\n]*)/m', $clean, $params, PREG_SET_ORDER);
 	$names = [];
 
 	foreach($params as $param)
@@ -140,7 +237,7 @@ function phpDocErrors(array $function): array
 
 		if(!preg_match('/[a-z]/i', $param[3]))
 		{
-			$errors[] = 'missing parameter description for $'.$param[2];
+			$errors[] = 'missing parameter description for $' . $param[2];
 		}
 	}
 
@@ -168,7 +265,9 @@ function phpDocErrors(array $function): array
 	return $errors;
 }
 
-$paths = array_slice($argv, 1)?:[dirname(__DIR__).'/src',dirname(__DIR__).'/autoload.php'];
+if(realpath($_SERVER['SCRIPT_FILENAME'] ?? '') !== __FILE__) return;
+
+$paths = array_slice($argv, 1)?:[dirname(__DIR__) . '/src',dirname(__DIR__) . '/autoload.php'];
 $files = [];
 
 foreach($paths as $path)
@@ -214,14 +313,14 @@ foreach($files as $file)
 			foreach(phpDocErrors($function) as $error)
 			{
 				$failures++;
-				fwrite(STDERR, $file.':'.$function['line'].' '.$function['name'].': '.$error."\n");
+				fwrite(STDERR, $file . ':' . $function['line'] . ' ' . $function['name'] . ': ' . $error . "\n");
 			}
 		}
 	}
 	catch(Throwable $error)
 	{
 		$failures++;
-		fwrite(STDERR, $file.': '.$error->getMessage()."\n");
+		fwrite(STDERR, $file . ': ' . $error->getMessage() . "\n");
 	}
 }
 

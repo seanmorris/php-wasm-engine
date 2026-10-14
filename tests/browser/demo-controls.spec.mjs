@@ -1,8 +1,6 @@
 import {test, expect} from '@playwright/test';
 
-const menu = page => page.locator('canvas').evaluate(canvas =>
-	JSON.parse(canvas.dataset.menu || 'null')
-);
+const menu = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.menu || 'null'));
 
 async function open(page)
 {
@@ -338,9 +336,7 @@ test(
 			const demo = document.querySelector('#game-frame');
 			window.requestDemoFullscreen = demo.requestFullscreen;
 
-			demo.requestFullscreen = () => Promise.reject(
-				new DOMException('Denied', 'NotAllowedError')
-			);
+			demo.requestFullscreen = () => Promise.reject(new DOMException('Denied', 'NotAllowedError'));
 		});
 
 		await page.click('#fullscreen');
@@ -424,9 +420,7 @@ for(const asset of ['engine-files.json', 'examples/assets/platformer.tmj'])
 		, async ({page}) => {
 			await page.goto('/');
 
-			await page.route('**/engine/' + asset, route =>
-				route.fulfill({status: 503, body: 'Unavailable'})
-			);
+			await page.route('**/engine/' + asset, route => route.fulfill({status: 503, body: 'Unavailable'}));
 
 			await page.evaluate(() => window.bootEngine({intro: false}).catch(() => {}));
 

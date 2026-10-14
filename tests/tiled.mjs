@@ -22,7 +22,7 @@ function roundTrip(file, kind, check)
 	try
 	{
 		const result = spawnSync(process.env.TILED_BIN??'tiled', [
-			'--export-'+kind,'json',file,exported
+			'--export-' + kind,'json',file,exported
 		], {
 			encoding: 'utf8'
 			, timeout: 30000
@@ -81,7 +81,7 @@ function objects(before, after)
 
 for(const name of readdirSync(assets).filter(name => name.endsWith('.tmj')))
 {
-	test('Tiled imports '+name+' with visible content and intact layers', () => {
+	test('Tiled imports ' + name + ' with visible content and intact layers', () => {
 		const file = join(assets, name);
 
 		roundTrip(file, 'map', (before, after, exported) => {
@@ -94,15 +94,15 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tmj')))
 				const imported = after.layers[index];
 
 				for(const key of ['id','name','type']) assert.equal(imported[key], layer[key]);
-				assert.equal(imported.visible, layer.visible??true, layer.name+' visibility');
-				assert.equal(imported.opacity, layer.opacity??1, layer.name+' opacity');
+				assert.equal(imported.visible, layer.visible??true, layer.name + ' visibility');
+				assert.equal(imported.opacity, layer.opacity??1, layer.name + ' opacity');
 
 				for(const key of ['offsetx','offsety']) assert.equal(imported[key]??0, layer[key]??0);
 				assert.deepEqual(properties(imported.properties), properties(layer.properties));
 
 				if(layer.type==='tilelayer')
 				{
-					assert.deepEqual(cells(imported), cells(layer), layer.name+' cells');
+					assert.deepEqual(cells(imported), cells(layer), layer.name + ' cells');
 
 					if(imported.visible&&imported.opacity>0) visibleTerrain += cells(imported).size;
 				}
@@ -120,7 +120,7 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tmj')))
 					assert.equal(
 						imported.parallaxy??1
 						, layer.parallaxy??(anchored ? 0 : 1)
-						, layer.name+' vertical parallax'
+						, layer.name + ' vertical parallax'
 					);
 				}
 
@@ -148,7 +148,7 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tmj')))
 
 for(const name of readdirSync(assets).filter(name => name.endsWith('.tsj')))
 {
-	test('Tiled preserves '+name+' images, animations and collision shapes', () => {
+	test('Tiled preserves ' + name + ' images, animations and collision shapes', () => {
 		const file = join(assets, name);
 
 		roundTrip(file, 'tileset', (before, after, exported) => {

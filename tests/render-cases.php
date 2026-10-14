@@ -1,12 +1,12 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Render\
 {
 	Device,Camera,MapRenderer,Sprite,SpriteRenderer
 };
 
-$image = dirname(__DIR__).'/examples/assets/test.png';
+$image = dirname(__DIR__) . '/examples/assets/test.png';
 $set = ['firstgid' => 1
 , 'tilewidth' => 16
 , 'tileheight' => 16
@@ -14,6 +14,7 @@ $set = ['firstgid' => 1
 , 'tilecount' => 1
 	, 'image' => $image
 ];
+
 $device = new Device(384, 192);
 $camera = new Camera(-48, -16, 384, 192);
 $data = ['orientation' => 'isometric'
@@ -29,6 +30,7 @@ $data = ['orientation' => 'isometric'
 	, 'height' => 2
 	, 'data' => array_fill(0, 68, 1)]]
 ];
+
 file_put_contents('/iso-test.tmj', json_encode($data));
 $map = (new Loader)->map('/iso-test.tmj');
 $renderer = new MapRenderer($map);
@@ -95,6 +97,7 @@ $data = ['orientation' => 'orthogonal'
 	, ['x' => 10000
 	, 'y' => 0,'width' => 1,'height' => 1,'data' => [1]]]]]
 ];
+
 file_put_contents('/sparse-test.tmj', json_encode($data));
 $map = (new Loader)->map('/sparse-test.tmj');
 $renderer = new MapRenderer($map);

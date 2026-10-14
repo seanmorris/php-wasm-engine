@@ -45,6 +45,7 @@ final class MenuInput
 		if(!isset($this->next[$key]))
 		{
 			$this->next[$key] = .5;
+
 			return 1;
 		}
 
@@ -71,10 +72,13 @@ final class MenuInput
 	 * @param list<array<string,mixed>> $regions Visible row hit regions from MenuRenderer.
 	 * @return bool True when this frame belongs to the menu, including its opening/closing frame.
 	 */
-	public function update(Menu $menu, array $buttons, float $dt, array $events = [],
-		array $regions = []
-	): bool
-	{
+	public function update(
+		Menu $menu
+		, array $buttons
+		, float $dt
+		, array $events = []
+		, array $regions = []
+	): bool {
 		if(!is_finite($dt) || $dt < 0)
 		{
 			throw new \InvalidArgumentException('UI elapsed time must be finite and nonnegative');
@@ -207,6 +211,7 @@ final class MenuInput
 		elseif($event['type'] === 'composition')
 		{
 			$buffer->compose($event['text'], $event['start'] ?? 0, $event['length'] ?? 0);
+
 			return;
 		}
 		else
@@ -240,9 +245,11 @@ final class MenuInput
 					return;
 				case 'return': case 'enter': case 'keypad enter':
 					$menu->finishEdit();
+
 					return;
 				case 'up': case 'down':
 					$menu->move($key === 'up' ? -1 : 1);
+
 					return;
 				case 'left': $buffer->move(-1, $shift);
 					break;
@@ -299,6 +306,7 @@ final class MenuInput
 		if($event['action'] === 'up')
 		{
 			$this->drag = null;
+
 			return;
 		}
 
@@ -347,6 +355,7 @@ final class MenuInput
 		if(($event['button'] ?? 0) === 2)
 		{
 			$menu->revert();
+
 			return;
 		}
 

@@ -21,9 +21,10 @@ final class SpriteRenderer
 	public function __construct(public Atlas $atlas)
 	{
 		$this->program = new Program(
-			file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/sprites.frag')
+			file_get_contents(dirname(__DIR__, 2) . '/shaders/sprites.vert')
+			, file_get_contents(dirname(__DIR__, 2) . '/shaders/sprites.frag')
 		);
+
 		$this->create();
 	}
 
@@ -75,9 +76,7 @@ final class SpriteRenderer
 		{
 			$gid = $sprite->frame($this->atlas->map, $milliseconds);
 
-			$rect = $this->atlas->rects[$gid] ?? throw new \OutOfBoundsException(
-				"Sprite GID $gid is missing"
-			);
+			$rect = $this->atlas->rects[$gid] ?? throw new \OutOfBoundsException("Sprite GID $gid is missing");
 			$rect = $sprite->rectangle($rect);
 
 			$bytes .= pack(
@@ -129,10 +128,12 @@ final class SpriteRenderer
 	 * @param list<int>|null $entityIds Explicit painter order, or null for entity creation order.
 	 * @return void Collects visible components and submits their sprites in one draw.
 	 */
-	public function renderEntities(Registry $registry, Camera $camera, float $milliseconds = 0,
-		?array $entityIds = null
-	): void
-	{
+	public function renderEntities(
+		Registry $registry
+		, Camera $camera
+		, float $milliseconds = 0
+		, ?array $entityIds = null
+	): void {
 		$this->render(SpriteGroup::collect($registry, $entityIds), $camera, $milliseconds);
 	}
 

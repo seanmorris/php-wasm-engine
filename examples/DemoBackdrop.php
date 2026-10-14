@@ -24,23 +24,24 @@ final class DemoBackdrop
 
 		$world = new World(
 			new Loader
-			, __DIR__.'/assets/title.world'
+			, __DIR__ . '/assets/title.world'
 			, ['maps' => [['fileName' => 'title.tmj', 'x' => 0, 'y' => 0, 'width' => 1
 			, 'height' =>
 				1
 			]]]
 		);
 
-		$this->stream = new WorldStream($world,
-			/**
+		$this->stream = new WorldStream(
+			$world
+			, /**
 			 * Poll a dependency through the shared browser transport.
 			 *
 			 * @param string $path Resolved map or image path.
 			 * @param bool $retry Whether to replace a previous failed transfer.
 			 * @return bool|string True when mounted, false while pending, or an error message.
 			 */
-			fn(string $path, bool $retry): bool|string => $this->assets->request($path, $retry),
-			/**
+			fn(string $path, bool $retry): bool|string => $this->assets->request($path, $retry)
+			, /**
 			 * Drop this backdrop's reference without evicting a gameplay map's shared image.
 			 *
 			 * @param string $path Dependency no longer required by this stream.
@@ -100,6 +101,7 @@ final class DemoBackdrop
 	public function progress(): array
 	{
 		$counts = $this->assets->progress();
+
 		return ['ready' => $counts->ready, 'total' => $counts->total, 'failed' => $counts->failed];
 	}
 

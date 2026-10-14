@@ -125,11 +125,13 @@ final class Gamepads
 
 				if($axis < SDL_CONTROLLER_AXIS_TRIGGERLEFT)
 				{
-					$value = abs($value) <= $this->deadZone?0:($value <=> 0) * (abs($value) - $this
+					$value = abs($value) <= $this->deadZone
+						? 0
+						: ($value <=> 0) * (abs($value) - $this
 						->deadZone
-					) / (
-						1 - $this->deadZone
-					);
+						) / (
+							1 - $this->deadZone
+						);
 				}
 				else
 				{

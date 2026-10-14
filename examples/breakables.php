@@ -20,8 +20,11 @@ use PhpWasmEngine\Tiled\TileMap;
  * @param string $prefix Unique prefix for systems owned by this level instance.
  * @return BreakableBlocks Block owner to close when the scene stops.
  */
-function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
-	string $prefix = ''
+function configureBreakables(
+	Engine $engine
+	, Terrain $terrain
+	, TileMap $map
+	, string $prefix = ''
 ): BreakableBlocks {
 	$blocks = new BreakableBlocks($engine->entities, $terrain, $map);
 	$ids = [];
@@ -108,8 +111,8 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 		}
 	};
 
-	$engine->systems->add($prefix.'breakables', $breakableSystem, after: ['movement']);
-	$engine->systems->add($prefix.'particles', [new ParticleSystem, 'update'], after: [$prefix.'breakables']);
+	$engine->systems->add($prefix . 'breakables', $breakableSystem, after: ['movement']);
+	$engine->systems->add($prefix . 'particles', [new ParticleSystem, 'update'], after: [$prefix . 'breakables']);
 
 	return $blocks;
 }

@@ -18,7 +18,7 @@ test('walking hits stay solid while rolling sweeps shatter without losing moment
 	{
 		foreach([-1, 1] as $direction)
 		{
-			$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+			$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 			$r = new Registry;
 			$t = new Terrain;
 			$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -52,7 +52,7 @@ test('walking hits stay solid while rolling sweeps shatter without losing moment
 });
 
 test('down starts a grounded roll and breaks on contact but action alone does not', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$t->add([[-500, 100], [1000, 100], [1000, 120], [-500, 120]]);
@@ -77,9 +77,10 @@ test('down starts a grounded roll and breaks on contact but action alone does no
 	check($body->grounded && $body->x > 70 && $body->groundSpeed > 590);
 });
 
-test('rolling consumes an entire block chain in one sweep and then stops at ordinary terrain'
+test(
+	'rolling consumes an entire block chain in one sweep and then stops at ordinary terrain'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 		$r = new Registry;
 		$t = new Terrain;
 		$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -106,9 +107,10 @@ test('rolling consumes an entire block chain in one sweep and then stops at ordi
 	}
 );
 
-test('rolling respects planes and misses and impact snapshots use the supplied animation clock'
+test(
+	'rolling respects planes and misses and impact snapshots use the supplied animation clock'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 		$r = new Registry;
 		$t = new Terrain;
 		$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -116,10 +118,7 @@ test('rolling respects planes and misses and impact snapshots use the supplied a
 		$miss = $blocks->create(new Sprite(1, 64, 40, 0, 0), 2, 2);
 		$hit = $blocks->create($sheet->sprite('run', 100, 4), 2, 2);
 
-		$movement = new Platformer(
-			$t
-			, fn(Body $body, Hit $contact) => $blocks->impact($body, $contact, 150)
-		);
+		$movement = new Platformer($t, fn(Body $body, Hit $contact) => $blocks->impact($body, $contact, 150));
 		$body = new Body;
 		$body->gravity = 0;
 		$body->rolling = true;
@@ -139,7 +138,7 @@ test('rolling respects planes and misses and impact snapshots use the supplied a
 test(
 	'rolling probes and resting support do not shatter and stale shape hits cannot hit replacements'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 		$r = new Registry;
 		$t = new Terrain;
 		$blocks = new BreakableBlocks($r, $t, $sheet->map);

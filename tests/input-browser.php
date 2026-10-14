@@ -1,5 +1,5 @@
 <?php
-require_once dirname(__DIR__).'/autoload.php';
+require_once dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Render\Device;
 
@@ -27,15 +27,9 @@ $engine->start(function() use ($engine, $probe, &$presses, &$releases, &$ticks, 
 			, 'matches' => $matches, 'progress' => $input->sequences->progress('combo')
 			, 'axis' => $engine
 				->controls->axis('left', 'right')
-				, 'rightStick' => $input->gamepads->axis(
-					SDL_CONTROLLER_AXIS_RIGHTX
-				)
-				, 'trigger' => $input->gamepads->axis(
-					SDL_CONTROLLER_AXIS_TRIGGERLEFT
-				)
-				, 'extra' => $input->gamepads->button(
-					SDL_CONTROLLER_BUTTON_X
-				)
+				, 'rightStick' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_RIGHTX)
+				, 'trigger' => $input->gamepads->axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT)
+				, 'extra' => $input->gamepads->button(SDL_CONTROLLER_BUTTON_X)
 				, 'presses' => $presses, 'releases' => $releases
 				, 'ticks' =>
 				$ticks

@@ -20,8 +20,11 @@ final class ParticleBurst
 	 * @param float $lifetime Positive duration in seconds before all pieces disappear.
 	 * @return void Initializes an unadvanced burst with shared source artwork.
 	 */
-	private function __construct(public SpriteGroup $sprites, private array $motion,
-		private float $gravity, private float $lifetime
+	private function __construct(
+		public SpriteGroup $sprites
+		, private array $motion
+		, private float $gravity
+		, private float $lifetime
 	){
 	}
 
@@ -39,11 +42,17 @@ final class ParticleBurst
 	 * @param float $lifetime Positive duration in seconds, with opacity fading to zero.
 	 * @return self Independent particles covering the source exactly at age zero.
 	 */
-	public static function grid(Sprite $sprite, TileMap $map, int $columns, int $rows,
-		float $milliseconds = 0, float $speed = 240, float $lift = 240, float $gravity = 900,
-		float $lifetime = 1.2
-	): self
-	{
+	public static function grid(
+		Sprite $sprite
+		, TileMap $map
+		, int $columns
+		, int $rows
+		, float $milliseconds = 0
+		, float $speed = 240
+		, float $lift = 240
+		, float $gravity = 900
+		, float $lifetime = 1.2
+	): self {
 		foreach([
 			$milliseconds, $speed, $lift, $gravity, $lifetime
 			, $sprite->x, $sprite->y, $sprite->rotation
@@ -53,9 +62,7 @@ final class ParticleBurst
 		){
 			if(!is_finite($value))
 			{
-				throw new \InvalidArgumentException(
-					'Particle pose, timing, and motion must be finite'
-				);
+				throw new \InvalidArgumentException('Particle pose, timing, and motion must be finite');
 			}
 		}
 
@@ -135,6 +142,7 @@ final class ParticleBurst
 		if($this->finished())
 		{
 			$this->sprites->sprites = $this->motion = [];
+
 			return;
 		}
 

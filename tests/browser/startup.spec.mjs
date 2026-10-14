@@ -22,9 +22,7 @@ async function mainMenu(page)
 
 async function activate(page, id, pause = false)
 {
-	await run(page, (pause ? '$pauseMenu->menu' : '$game->startup->menu')
-		+ '->select(' + JSON.stringify(id) + ');'
-	);
+	await run(page, (pause ? '$pauseMenu->menu' : '$game->startup->menu') + '->select(' + JSON.stringify(id) + ');');
 
 	await page.keyboard.press('Enter');
 }

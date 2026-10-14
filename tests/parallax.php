@@ -10,6 +10,7 @@ test('image layers inherit group state and resolve animated backgrounds', functi
 	, 'value' =>
 		'[{"image":"a.png","duration":100},{"image":"b.png","duration":200}]'
 	]];
+
 	$image = ['type' => 'imagelayer'
 	, 'image' => '../sky.png'
 	, 'imagewidth' => 64
@@ -25,6 +26,7 @@ test('image layers inherit group state and resolve animated backgrounds', functi
 			$image
 		]]]
 	);
+
 	$map = fixture(['/maps/a.tmj' => $data,'/maps/tiles.tsj' => tiles()])->map('/maps/a.tmj');
 	$layer = $map->layers[0];
 	check($layer->image === '/sky.png' && $layer->imageWidth === 64 && $layer->imageHeight === 16);
@@ -45,6 +47,7 @@ test('Tiled parallax uses the view center and the world map origin', function() 
 			tiles()
 		]
 	)->map('a.tmj');
+
 	$map->x = 100;
 	$map->y = 200;
 	$layer = new Layer(1, 'sky', 'imagelayer');
@@ -101,7 +104,8 @@ test('finite images clip while repeated images cover both axes', function() {
 	check(Parallax::layout($layer, $map, $camera)['rect'] === [0.0,0.0,100.0,80.0]);
 });
 
-test('anchored backgrounds keep their phase when their map placement and origin change'
+test(
+	'anchored backgrounds keep their phase when their map placement and origin change'
 	, function() {
 		$map = fixture(['a.tmj' => mapData([]),'tiles.tsj' => tiles()])->map('a.tmj');
 		$layer = new Layer(1, 'clouds', 'imagelayer');
@@ -135,10 +139,7 @@ test('anchored backgrounds keep their phase when their map placement and origin 
 						, 'map placement changed an anchored background'
 					);
 
-					check(
-						$map->x === (float)$x && $map->y === (float)$y
-						, 'layout changed the map placement'
-					);
+					check($map->x === (float)$x && $map->y === (float)$y, 'layout changed the map placement');
 				}
 			}
 		}
@@ -158,6 +159,7 @@ test('background animation and anchors reject invalid definitions', function() {
 			, 'tiles.tsj' => tiles()
 			]
 		);
+
 		rejects(fn() => $loader->map('a.tmj'));
 	}
 
@@ -171,5 +173,6 @@ test('background animation and anchors reject invalid definitions', function() {
 		, 'tiles.tsj' => tiles()
 		]
 	);
+
 	rejects(fn() => $loader->map('a.tmj'));
 });

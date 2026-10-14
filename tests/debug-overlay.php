@@ -3,11 +3,12 @@ use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\BitmapFont;
 use PhpWasmEngine\Tiled\Loader;
 
-require_once dirname(__DIR__).'/examples/DemoDebugOverlay.php';
+require_once dirname(__DIR__) . '/examples/DemoDebugOverlay.php';
 
-test('debug FPS measures browser frames independently of simulation and resets after suspension'
+test(
+	'debug FPS measures browser frames independently of simulation and resets after suspension'
 	, function() {
-		$font = new BitmapFont(new Loader, dirname(__DIR__).'/examples/assets/font.tsj');
+		$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
 		$debug = new DemoDebugOverlay($font);
 		$frame = ['focused' => true, 'events' => []];
 
@@ -34,32 +35,28 @@ test('debug FPS measures browser frames independently of simulation and resets a
 	}
 );
 
-test('debug shortcut accepts fresh focused F9 presses without repeats or modified keys'
+test(
+	'debug shortcut accepts fresh focused F9 presses without repeats or modified keys'
 	, function() {
-		$font = new BitmapFont(new Loader, dirname(__DIR__).'/examples/assets/font.tsj');
+		$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
 		$debug = new DemoDebugOverlay($font);
 		$key = ['type' => 'key', 'key' => 'F9', 'repeat' => false, 'ctrl' => false];
 		check(!$debug->enabled && $debug->showFps);
 		$debug->update(.02, ['focused' => true, 'events' => [$key]]);
 		check($debug->enabled);
 
-		$debug->update(
-			.02
-			, ['focused' => true, 'events' => [array_replace($key, ['repeat' => true])]]
-		);
+		$debug->update(.02, ['focused' => true, 'events' => [array_replace($key, ['repeat' => true])]]);
 		$debug->update(.02, ['focused' => false, 'events' => [$key]]);
 
-		$debug->update(
-			.02
-			, ['focused' => true, 'events' => [array_replace($key, ['ctrl' => true])]]
-		);
+		$debug->update(.02, ['focused' => true, 'events' => [array_replace($key, ['ctrl' => true])]]);
 		check($debug->enabled);
 		$debug->update(.02, ['focused' => true, 'events' => [$key]]);
 		check(!$debug->enabled && $debug->showFps);
 	}
 );
 
-test('debug player values report surface orientation and distinguish camera-only scenes'
+test(
+	'debug player values report surface orientation and distinguish camera-only scenes'
 	, function() {
 		$body = new Body(12.5, -30.25, 'glider');
 		$body->grounded = true;

@@ -19,6 +19,7 @@ function clipLoop(array $points, int $axis, float $bound, bool $greater): array
 			, $previous[1] + $t * (
 				$point[1] - $previous[1]
 			)];
+
 			$intersection[$axis] = $bound;
 			$result[] = $intersection;
 		}
@@ -34,7 +35,7 @@ function clipLoop(array $points, int $axis, float $bound, bool $greater): array
 	return $result;
 }
 
-png(__DIR__.'/assets/loop.png', 256, 256, static function($x, $y) {
+png(__DIR__ . '/assets/loop.png', 256, 256, static function($x, $y) {
 	$distance = hypot($x + .5 - 128, $y + .5 - 128);
 
 	if($distance < 128)
@@ -121,6 +122,7 @@ jsonAsset(
 		, 'tiles' => $loopTiles
 	]
 );
+
 $width = 64;
 $height = 20;
 $planes = array_fill(0, 3, array_fill(0, $width * $height, 0));
@@ -149,7 +151,7 @@ $loopLayers = $background;
 foreach($planes as $plane => $cells)
 {
 	$loopLayers[] = ['id' => $plane + 1
-	, 'name' => 'Collision '.$plane
+	, 'name' => 'Collision ' . $plane
 	, 'type' => 'tilelayer'
 	, 'width' =>
 		$width

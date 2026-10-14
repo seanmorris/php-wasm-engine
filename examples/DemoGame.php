@@ -48,7 +48,7 @@ final class DemoGame
 		$this->canvas = vrzno_env('canvas');
 		$this->status = (new Vrzno)->document->querySelector('#status');
 		$engine->systems->add('movement', [$this, 'update']);
-		(require __DIR__.'/sequences.php')($engine->input->sequences);
+		(require __DIR__ . '/sequences.php')($engine->input->sequences);
 	}
 
 	/**
@@ -77,13 +77,11 @@ final class DemoGame
 			, 'konami' => $engine->input->sequences->progress('konami')
 		]);
 
-		$menu = $this->startup !== null&& $this->startup->phase !== 'playing'
+		$menu = $this->startup !== null && $this->startup->phase !== 'playing'
 			? $this->startup->menu
 			: $this->menu->menu;
 
-		$this->debug?->update(
-			$elapsed, $engine->input->uiFrame($menu->editor !== null, $menu->isOpen)
-		);
+		$this->debug?->update($elapsed, $engine->input->uiFrame($menu->editor !== null, $menu->isOpen));
 
 		return $this->startup !== null
 			? $this->startup->update($engine, $elapsed)
@@ -98,11 +96,8 @@ final class DemoGame
 	 */
 	public function selectScene(string $scene): void
 	{
-		if(!in_array(
-			$scene
-			, ['platformer', 'loop', 'breakables', 'infinite', 'isometric', 'world']
-			, true
-		)){
+		if(!in_array($scene, ['platformer', 'loop', 'breakables', 'infinite', 'isometric', 'world'], true))
+		{
 			throw new InvalidArgumentException('Unknown demo level');
 		}
 
@@ -111,6 +106,7 @@ final class DemoGame
 		if($this->scene === $scene)
 		{
 			$this->menu?->menu->close();
+
 			return;
 		}
 
@@ -350,9 +346,7 @@ final class DemoGame
 			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 			$this->engine->device->present();
 
-			$this->canvas->dataset->menu = demoMenuState(
-				$this->menu, $this->engine, $this->startup->menu
-			);
+			$this->canvas->dataset->menu = demoMenuState($this->menu, $this->engine, $this->startup->menu);
 
 			return;
 		}
@@ -377,7 +371,7 @@ final class DemoGame
 		}
 		elseif($this->pending !== null)
 		{
-			$this->status->textContent = 'Loading '.$this->pending->id.'…';
+			$this->status->textContent = 'Loading ' . $this->pending->id . '…';
 		}
 		elseif($this->menu->menu->isOpen)
 		{
@@ -404,6 +398,7 @@ final class DemoGame
 				, $camera->width / $camera->zoom
 				, $camera->height / $camera->zoom
 			);
+
 			$stats = $this->renderStats = $level->renderer->render($camera, $time, 0);
 			$loaded = array_map('basename', array_keys($level->stream->loaded()));
 			$pending = array_map('basename', $level->stream->pending());
@@ -430,7 +425,7 @@ final class DemoGame
 			if($level->stream->errors)
 			{
 				$this->status->textContent = 'Map download failed. Press X or B / Circle to retry. '
-					.implode('; ', $level->stream->errors);
+					. implode('; ', $level->stream->errors);
 			}
 
 			return;
@@ -473,14 +468,16 @@ final class DemoGame
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
 			, $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'))
-			, $body->groundSpeed, $stats['draws'] + $level->sprites->draws
-			, $stats['instances'] + $level->sprites->instances, $stats['uploads']
+			, $body->groundSpeed
+			, $stats['draws'] + $level->sprites->draws
+			, $stats['instances'] + $level->sprites->instances
+			, $stats['uploads']
 			, $level->terrain->raycasts
 		);
 
 		if($this->scene === 'loop')
 		{
-			$this->status->textContent .= ' · collision layer '.$body->collisionLayer;
+			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
 		}
 
 		if($this->scene === 'breakables')
@@ -490,9 +487,7 @@ final class DemoGame
 
 			foreach($this->engine->entities->query(ParticleBurst::class) as $id)
 			{
-				$pieces += count(
-					$this->engine->entities->get($id, ParticleBurst::class)->sprites->sprites
-				);
+				$pieces += count($this->engine->entities->get($id, ParticleBurst::class)->sprites->sprites);
 			}
 
 			$this->canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));

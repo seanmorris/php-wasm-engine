@@ -168,9 +168,7 @@ final class SdlInput
 	{
 		if($button < 0 || count(array_filter($keys, 'is_int')) !== count($keys))
 		{
-			throw new \InvalidArgumentException(
-				'Button bindings require an index and SDL key symbols'
-			);
+			throw new \InvalidArgumentException('Button bindings require an index and SDL key symbols');
 		}
 
 		$this->reset();
@@ -191,8 +189,7 @@ final class SdlInput
 		}
 
 		$now = (float)SDL_GetTicks64() / 1000;
-		$time = $timestamp === null ? $now
-			: $now - fmod($now * 1000 - $timestamp + 4294967296.0, 4294967296.0) / 1000;
+		$time = $timestamp === null ? $now : $now - fmod($now * 1000 - $timestamp + 4294967296.0, 4294967296.0) / 1000;
 		$this->sequenceTime = max($this->sequenceTime, $time);
 		$values = Buttons::normalize($this->snapshot(false));
 
@@ -331,6 +328,7 @@ final class SdlInput
 	{
 		$snapshot = $this->snapshot();
 		$this->pressedKeys = $this->pressedButtons = [];
+
 		return $snapshot;
 	}
 
@@ -360,6 +358,7 @@ final class SdlInput
 			, 15 => SDL_CONTROLLER_BUTTON_DPAD_RIGHT
 			, 16 => SDL_CONTROLLER_BUTTON_GUIDE
 		];
+
 		$values = [];
 
 		foreach($this->bindings as $id => $keys)
@@ -368,8 +367,7 @@ final class SdlInput
 
 			if($id === 6 || $id === 7)
 			{
-				$axis = $id === 6 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT
-					: SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+				$axis = $id === 6 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT : SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
 				$value = $this->gamepads->axis($axis);
 			}
 
@@ -381,21 +379,18 @@ final class SdlInput
 				}
 			}
 
-			$values['button'.$id] = $value;
+			$values['button' . $id] = $value;
 		}
 
 		foreach([[SDL_CONTROLLER_AXIS_LEFTX, 14, 15], [SDL_CONTROLLER_AXIS_LEFTY, 12, 13]]
 			as [$axis, $negative, $positive]
 		){
 			// D-pad overrides the corresponding stick axis; keyboard still merges at full strength.
-			if(!$this->gamepads->button(
-				$pad[$negative]
-			) && !$this->gamepads->button(
-				$pad[$positive]
-			)){
+			if(!$this->gamepads->button($pad[$negative]) && !$this->gamepads->button($pad[$positive]))
+			{
 				$value = $this->gamepads->axis($axis);
-				$values['button'.$negative] = max($values['button'.$negative], -$value);
-				$values['button'.$positive] = max($values['button'.$positive], $value);
+				$values['button' . $negative] = max($values['button' . $negative], -$value);
+				$values['button' . $positive] = max($values['button' . $positive], $value);
 			}
 		}
 
@@ -403,13 +398,13 @@ final class SdlInput
 		{
 			foreach($this->pressedButtons as $id => $value)
 			{
-				$values['button'.$id] = max($values['button'.$id] ?? 0, $value);
+				$values['button' . $id] = max($values['button' . $id] ?? 0, $value);
 			}
 		}
 
 		foreach(Buttons::ALIASES as $name => $id)
 		{
-			$values[$name] = $id < 12 ? (bool)$values['button'.$id] : $values['button'.$id];
+			$values[$name] = $id < 12 ? (bool)$values['button' . $id] : $values['button' . $id];
 		}
 
 		return $values;
@@ -560,6 +555,7 @@ final class SdlInput
 				$this->uiEvents[] = ['type' => 'composition', 'text' => $event->edit->text
 					, 'start' => $event->edit->start, 'length' => $event->edit->length
 				];
+
 				break;
 			case SDL_KEYDOWN:
 				// Recovery discards the original press; its repeats must not keep editing.
@@ -569,13 +565,12 @@ final class SdlInput
 				}
 
 				$this->uiEvents[] = ['type' => 'key'
-				, 'key' => SDL_GetKeyName(
-					$event->key->keysym->sym
-				)
+				, 'key' => SDL_GetKeyName($event->key->keysym->sym)
 					, 'shift' => (bool)($event->key->keysym->mod & KMOD_SHIFT)
 					, 'ctrl' => (bool)($event->key->keysym->mod & (KMOD_CTRL | KMOD_GUI))
 					, 'repeat' => (bool)$event->key->repeat
 				];
+
 				break;
 			case SDL_MOUSEBUTTONDOWN: case SDL_MOUSEBUTTONUP:
 				$this->inputTheme = 'keyboard';
@@ -585,17 +580,20 @@ final class SdlInput
 					, 'button' => $event->button
 						->button
 				];
+
 				break;
 			case SDL_MOUSEMOTION:
 				$this->uiEvents[] = ['type' => 'pointer', 'action' => 'move'
 					, 'x' => $event->motion->x, 'y' => $event->motion->y
 				];
+
 				break;
 			case SDL_MOUSEWHEEL:
 				$this->uiEvents[] = ['type' => 'wheel'
 				, 'y' => $event->wheel->y
 					* ($event->wheel->direction === SDL_MOUSEWHEEL_FLIPPED ? -1 : 1)
 				];
+
 				break;
 		}
 	}
@@ -671,37 +669,28 @@ final class SdlInput
 				$plus = $this->gamepads->button($padPositive);
 				$value = $minus || $plus ? (int)$plus - (int)$minus : $this->gamepads->axis($axis);
 
-				$buttons[$negative] = max(
-					0
-					, -$value
-					, (int)(!$editing && $this->held($keyA, $keyB))
-				);
+				$buttons[$negative] = max(0, -$value, (int)(!$editing && $this->held($keyA, $keyB)));
 				$buttons[$positive] = max(0, $value, (int)(!$editing && $this->held($keyC, $keyD)));
 			}
 
 			$buttons['confirm'] = (!$editing && $this->held(SDLK_RETURN, SDLK_KP_ENTER, SDLK_SPACE))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_A);
 
-			$buttons['back'] = (!$editing && $this->held(
-				SDLK_ESCAPE
-				, SDLK_x
-				, SDLK_LCTRL
-				, SDLK_RCTRL
-			))
+			$buttons['back'] = (!$editing && $this->held(SDLK_ESCAPE, SDLK_x, SDLK_LCTRL, SDLK_RCTRL))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_B);
 
-			$buttons['pause'] = (!$editing && ($this->held(
-				SDLK_p
-			) || (!$open && $this->held(
-				SDLK_ESCAPE
-			))))
+			$buttons['pause'] = (!$editing && ($this->held(SDLK_p) || (!$open && $this->held(SDLK_ESCAPE))))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_START);
+
 			$buttons['revert'] = (!$editing && $this->held(SDLK_z))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_Y);
+
 			$buttons['pageUp'] = (!$editing && $this->held(SDLK_PAGEUP))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+
 			$buttons['pageDown'] = (!$editing && $this->held(SDLK_PAGEDOWN))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+
 			$buttons['home'] = !$editing && $this->held(SDLK_HOME);
 			$buttons['end'] = !$editing && $this->held(SDLK_END);
 		}

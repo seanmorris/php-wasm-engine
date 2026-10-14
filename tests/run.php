@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 
 use PhpWasmEngine\Asset\Assets;
 use PhpWasmEngine\Tiled\Gid;
@@ -128,6 +128,7 @@ test('external tilesets, inherited group state and relative paths', function() {
 			, '/maps/tiles.tsj' => tiles()
 		]
 	);
+
 	$map = $loader->map('/maps/a.tmj');
 	check($map === $loader->map('/maps/a.tmj'));
 	check($map->layers[0]->offsetX === 7.0);
@@ -135,12 +136,7 @@ test('external tilesets, inherited group state and relative paths', function() {
 	near($map->layers[0]->parallaxX, .5);
 	check($map->tile(1)['image'] === '/maps/tiles.png');
 
-	check(
-		$map->animatedGid(2, 99) === 1 && $map->animatedGid(2, 100) === 2 && $map->animatedGid(
-			2
-			, 300
-		) === 1
-	);
+	check($map->animatedGid(2, 99) === 1 && $map->animatedGid(2, 100) === 2 && $map->animatedGid(2, 300) === 1);
 });
 
 test('base64 and compressed layers reject corrupt lengths', function() {
@@ -150,12 +146,11 @@ test('base64 and compressed layers reject corrupt lengths', function() {
 		$data = base64_encode($compress ? $compress($bytes) : $bytes);
 
 		$loader = fixture(
-			['a.tmj' => mapData(
-				[layer(['data' => $data, 'encoding' => 'base64', 'compression' => $compression])]
-			)
+			['a.tmj' => mapData([layer(['data' => $data, 'encoding' => 'base64', 'compression' => $compression])])
 			, 'tiles.tsj' => tiles()
 			]
 		);
+
 		check($loader->map('a.tmj')->layers[0]->gidAt(0, 0)->flags === 8);
 	}
 
@@ -177,6 +172,7 @@ test('infinite maps keep sparse negative chunks and allow edits', function() {
 		, 'tiles.tsj' => tiles()
 		]
 	);
+
 	$map = $loader->map('a.tmj');
 	$layer = $map->layers[0];
 	check($layer->gidAt(-10000, -4)->id === 1 && $layer->gidAt(0, 0)->id === 0);
@@ -218,6 +214,7 @@ test('world maps load on intersection and reuse assets', function() {
 
 	$loader = new Loader(new Assets(function($path) use (&$reads, $data) {
 		$reads[] = $path;
+
 		return json_encode($data[$path]);
 	}));
 
@@ -343,6 +340,7 @@ test('fast bodies do not tunnel through floors or walls', function() {
 		, [101,100],[100,100]
 		]]]
 	);
+
 	$p = new Platformer($terrain);
 	$b = new Body(0, 0);
 	$b->terminalSpeed = 10000;
@@ -409,20 +407,20 @@ test('flight has a finite budget and glide can catch a wall and jump away', func
 	check($b->vx < 0 && $b->ability !== 'climb');
 });
 
-require __DIR__.'/physics.php';
-require __DIR__.'/loops.php';
-require __DIR__.'/integration.php';
-require __DIR__.'/sprites.php';
-require __DIR__.'/parallax.php';
-require __DIR__.'/world.php';
-require __DIR__.'/input.php';
-require __DIR__.'/sequences.php';
-require __DIR__.'/ecs.php';
-require __DIR__.'/breakables.php';
-require __DIR__.'/rolling-breakables.php';
-require __DIR__.'/menus.php';
-require __DIR__.'/cards.php';
-require __DIR__.'/debug-overlay.php';
+require __DIR__ . '/physics.php';
+require __DIR__ . '/loops.php';
+require __DIR__ . '/integration.php';
+require __DIR__ . '/sprites.php';
+require __DIR__ . '/parallax.php';
+require __DIR__ . '/world.php';
+require __DIR__ . '/input.php';
+require __DIR__ . '/sequences.php';
+require __DIR__ . '/ecs.php';
+require __DIR__ . '/breakables.php';
+require __DIR__ . '/rolling-breakables.php';
+require __DIR__ . '/menus.php';
+require __DIR__ . '/cards.php';
+require __DIR__ . '/debug-overlay.php';
 
 $failed = 0;
 
@@ -440,7 +438,7 @@ foreach($tests as $name => $fn)
 	}
 }
 
-echo count($tests)." tests, $failed failures\n";
+echo count($tests) . " tests, $failed failures\n";
 
 if($failed)
 {

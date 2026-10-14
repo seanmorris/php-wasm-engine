@@ -34,8 +34,11 @@ final class MapTerrain
 					'/^Collision\s*(\d+)$/i'
 					, $layer->name
 					, $match
-				)?$match[1]:0
+				)
+					? $match[1]
+					: 0
 				));
+
 				$ox = $map->x + $layer->offsetX;
 				$oy = $map->y + $layer->offsetY;
 
@@ -150,7 +153,8 @@ final class MapTerrain
 						 * @param array{0:float,1:float} $p Vertex before world translation.
 						 * @return array{0:float,1:float} World-space X and Y in pixels.
 						 */
-						fn($p) => [$p[0] + $ox,$p[1] + $oy], $points
+						fn($p) => [$p[0] + $ox,$p[1] + $oy]
+						, $points
 					);
 
 					if($switch)
@@ -211,9 +215,7 @@ final class MapTerrain
 			for($i = 0; $i < 24; $i++)
 			{
 				$points[] = ['x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
-				, 'y' => $h / 2 + sin(
-					$i * M_PI / 12
-				) * $h / 2
+				, 'y' => $h / 2 + sin($i * M_PI / 12) * $h / 2
 				];
 			}
 		}

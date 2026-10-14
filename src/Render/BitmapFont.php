@@ -30,9 +30,7 @@ final class BitmapFont
 		$properties = Loader::properties($data['properties'] ?? []);
 		$this->lineHeight = self::positive($properties['font.lineHeight'] ?? $data['tileheight']);
 
-		$this->spaceAdvance = self::positive(
-			$properties['font.spaceAdvance'] ?? $data['tilewidth']
-		);
+		$this->spaceAdvance = self::positive($properties['font.spaceAdvance'] ?? $data['tilewidth']);
 		$this->fallback = $properties['font.fallback'] ?? '?';
 		$this->caseFold = $properties['font.caseFold'] ?? false;
 		$this->map = new TileMap($path, ['tilewidth' => 1, 'tileheight' => 1]);
@@ -54,11 +52,8 @@ final class BitmapFont
 
 				foreach(['glyph.offsetX', 'glyph.offsetY'] as $metric)
 				{
-					if(isset($p[$metric]) && (!is_numeric(
-						$p[$metric]
-					) || !is_finite(
-						(float)$p[$metric]
-					))){
+					if(isset($p[$metric]) && (!is_numeric($p[$metric]) || !is_finite((float)$p[$metric])))
+					{
 						throw new \InvalidArgumentException('Glyph offsets must be finite numbers');
 					}
 				}
@@ -67,9 +62,7 @@ final class BitmapFont
 
 				if(count($chars) !== 1)
 				{
-					throw new \InvalidArgumentException(
-						'glyph.char must contain one Unicode character'
-					);
+					throw new \InvalidArgumentException('glyph.char must contain one Unicode character');
 				}
 
 				$width = (int)($p['glyph.width'] ?? $tile['rect'][2]);
@@ -79,6 +72,7 @@ final class BitmapFont
 				, $width
 					, $height
 				];
+
 				$probe = new Sprite($first + $id);
 				$probe->crop = $crop;
 				$probe->rectangle($tile['rect']);
@@ -91,15 +85,14 @@ final class BitmapFont
 					, 'pixelRatio' => $pixelRatio
 					, 'smooth' => (bool)($p['glyph.smooth'] ?? false)
 				];
+
 				$theme = $p['glyph.theme'] ?? '';
 
 				foreach(array_merge($chars, self::characters($p['glyph.aliases'] ?? '')) as $char)
 				{
 					if(isset($this->glyphs[$theme][$char]))
 					{
-						throw new \InvalidArgumentException(
-							"Duplicate glyph $char for theme $theme"
-						);
+						throw new \InvalidArgumentException("Duplicate glyph $char for theme $theme");
 					}
 
 					$this->glyphs[$theme][$char] = $glyph;
@@ -158,6 +151,7 @@ final class BitmapFont
 	public function glyph(string $char): array
 	{
 		$char = $this->caseFold && strlen($char) === 1 ? strtoupper($char) : $char;
+
 		return $this->glyphs[$this->theme][$char] ?? $this->glyphs[''][$char]
 			?? $this->glyphs['generic'][$char] ?? $this->glyphs[''][$this->fallback];
 	}
@@ -176,10 +170,14 @@ final class BitmapFont
 	 * @return array{sprites:list<Sprite>,width:float,height:float,positions:array} Glyph batch,
 	 * measured content dimensions, and aligned codepoint positions including the final caret.
 	 */
-	public function layout(string $text, float $scale = 1, float $maxWidth = INF,
-		array $tint = [1, 1, 1, 1], string $align = 'left', ?float $alignWidth = null
-	): array
-	{
+	public function layout(
+		string $text
+		, float $scale = 1
+		, float $maxWidth = INF
+		, array $tint = [1, 1, 1, 1]
+		, string $align = 'left'
+		, ?float $alignWidth = null
+	): array {
 		self::positive($scale);
 
 		if(is_nan($maxWidth) || $maxWidth <= 0)
@@ -190,9 +188,7 @@ final class BitmapFont
 		$factor = match($align)
 		{
 			'left' => 0.0, 'center' => .5, 'right' => 1.0,
-			default => throw new \InvalidArgumentException(
-				'Alignment must be left, center, or right'
-			)
+			default => throw new \InvalidArgumentException('Alignment must be left, center, or right')
 		};
 
 		if($alignWidth !== null)
@@ -230,13 +226,7 @@ final class BitmapFont
 
 			if($char !== ' ')
 			{
-				$sprite = new Sprite(
-					$glyph['gid']
-					, $x + $glyph['x'] * $scale
-					, $y + $glyph['y'] * $scale
-					, 0
-					, 0
-				);
+				$sprite = new Sprite($glyph['gid'], $x + $glyph['x'] * $scale, $y + $glyph['y'] * $scale, 0, 0);
 				$sprite->crop = $glyph['crop'];
 				$sprite->scaleX = $sprite->scaleY = $scale / $glyph['pixelRatio'];
 				$sprite->outline = $sprite->animated = false;
@@ -286,6 +276,7 @@ final class BitmapFont
 	public function measure(string $text, float $scale = 1, float $maxWidth = INF): array
 	{
 		$layout = $this->layout($text, $scale, $maxWidth);
+
 		return ['width' => $layout['width'], 'height' => $layout['height']];
 	}
 }

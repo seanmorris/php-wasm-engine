@@ -83,15 +83,20 @@ final class MenuRenderer
 	 * @param float|null $alignWidth Alignment width; null uses the clip's right edge minus x.
 	 * @return array Layout including uncropped caret positions relative to the text origin.
 	 */
-	private function text(string $text, float $x, float $y, float $scale, array $color,
-		array $clip, float $wrap = INF, string $align = 'left', ?float $alignWidth = null
-	): array
-	{
+	private function text(
+		string $text
+		, float $x
+		, float $y
+		, float $scale
+		, array $color
+		, array $clip
+		, float $wrap = INF
+		, string $align = 'left'
+		, ?float $alignWidth = null
+	): array {
 		$alignWidth ??= max(1, $clip[0] + $clip[2] - $x);
 
-		$key = serialize(
-			[$text, $x, $y, $scale, $color, $clip, $wrap, $align, $alignWidth, $this->font->theme]
-		);
+		$key = serialize([$text, $x, $y, $scale, $color, $clip, $wrap, $align, $alignWidth, $this->font->theme]);
 		$cached = $this->cache[$key] ?? null;
 
 		if(!$cached)
@@ -125,6 +130,7 @@ final class MenuRenderer
 
 		$this->nextCache[$key] = $cached;
 		array_push($this->batch, ...$cached[1]);
+
 		return $cached[0];
 	}
 
@@ -178,6 +184,7 @@ final class MenuRenderer
 			, [$inner[0], $inner[1], $inner[2], $header]
 			, align: $this->style['titleAlign'] ?? $this->style['align']
 		);
+
 		$line = $inner[1] + $header;
 
 		foreach(array_slice($rows, $menu->scroll, $count, true) as $id => $item)
@@ -188,10 +195,12 @@ final class MenuRenderer
 		}
 
 		$line = $inner[1] + $header + $count * $rowHeight + 4 * $s;
-		$message = $menu->loading ? 'Loading...' : ($menu->error ?? ($rows[$menu->selected][
+		$message = $menu->loading
+			? 'Loading...'
+			: ($menu->error ?? ($rows[$menu->selected][
 			'subtext'
-		] ?? ''
-		));
+			] ?? ''
+			));
 
 		$this->text(
 			$message
@@ -206,11 +215,17 @@ final class MenuRenderer
 
 		if($this->showHints)
 		{
-			$hints = $menu->editor ? 'ENTER / ESC Finish   CTRL+A Select all'
+			$hints = $menu->editor
+				? 'ENTER / ESC Finish   CTRL+A Select all'
 				: '✚ Move   ⓿ Select   ❶ Back   Hold ❸ Reset';
 
 			$this->text(
-				$hints, $inner[0], $line + 18 * $s, $s * .75, $color, $inner
+				$hints
+				, $inner[0]
+				, $line + 18 * $s
+				, $s * .75
+				, $color
+				, $inner
 				, align: $this->style['hintAlign'] ?? $this->style['align']
 			);
 		}
@@ -231,16 +246,18 @@ final class MenuRenderer
 	 * @param float $seconds Unpaused UI time for caret animation.
 	 * @return void Appends row geometry and one pointer region.
 	 */
-	private function row(Menu $menu, string $id, array $item, array $rect, float $scale,
-		float $seconds
-	): void
-	{
+	private function row(
+		Menu $menu
+		, string $id
+		, array $item
+		, array $rect
+		, float $scale
+		, float $seconds
+	): void {
 		[$x, $y, $w, $h] = $rect;
 		$selected = $menu->selected === $id;
 		$type = $item['input'] ?? '';
-		$color = $this->style[$item['disabled'] ? 'disabled' : ($selected ? 'selected'
-			: 'foreground'
-		)];
+		$color = $this->style[$item['disabled'] ? 'disabled' : ($selected ? 'selected' : 'foreground')];
 
 		if($selected)
 		{
@@ -251,7 +268,7 @@ final class MenuRenderer
 		$align = $item['align'] ?? $this->style['align'];
 
 		$this->text(
-			($selected ? '> ' : '  ').$item['label']
+			($selected ? '> ' : '  ') . $item['label']
 			, $x + 2 * $scale
 			, $y + 4 * $scale
 			, $scale
@@ -259,6 +276,7 @@ final class MenuRenderer
 			, [$x, $y, $labelWidth, $h]
 			, align: $align
 		);
+
 		$region = ['id' => $id, 'rect' => $rect];
 
 		if($type !== '')
@@ -273,15 +291,9 @@ final class MenuRenderer
 			){
 				$track = $clip[2] * .6;
 
-				$ratio = max(
-					0
-					, min(1, ($item['value'] - $item['min']) / ($item['max'] - $item['min']))
-				);
+				$ratio = max(0, min(1, ($item['value'] - $item['min']) / ($item['max'] - $item['min'])));
 
-				$this->box(
-					[$clip[0], $y + 9 * $scale, $track, 2 * $scale]
-					, $this->style['disabled']
-				);
+				$this->box([$clip[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled']);
 
 				$this->box(
 					[$clip[0] + $track * $ratio - 2 * $scale, $y + 5 * $scale, 4 * $scale
@@ -289,6 +301,7 @@ final class MenuRenderer
 					]
 					, $color
 				);
+
 				$region['slider'] = [$clip[0], $track];
 				$clip[0] += $track + 6 * $scale;
 				$clip[2] -= $track + 6 * $scale;
@@ -296,17 +309,22 @@ final class MenuRenderer
 
 			if($isEditing)
 			{
-				$region['carets'] = $this->field(
-					$menu->editor, $clip, $scale, $color, $seconds, $valueAlign
-				);
+				$region['carets'] = $this->field($menu->editor, $clip, $scale, $color, $seconds, $valueAlign);
 				$this->editorRect = array_map('intval', $clip);
 			}
 			else
 			{
 				$layout = $this->text(
-					$value, $clip[0], $y + 4 * $scale, $scale, $color, $clip
-					, align: $valueAlign, alignWidth: max(1, $clip[2] - 2 * $scale)
+					$value
+					, $clip[0]
+					, $y + 4 * $scale
+					, $scale
+					, $color
+					, $clip
+					, align: $valueAlign
+					, alignWidth: max(1, $clip[2] - 2 * $scale)
 				);
+
 				$region['carets'] = [];
 
 				foreach($layout['positions'] as $position)
@@ -330,10 +348,14 @@ final class MenuRenderer
 	 * @param string $align Horizontal alignment applied to text, carets, and selection.
 	 * @return list<float> Screen X coordinates of committed-text caret positions.
 	 */
-	private function field(TextBuffer $editor, array $clip, float $scale, array $color,
-		float $seconds, string $align
-	): array
-	{
+	private function field(
+		TextBuffer $editor
+		, array $clip
+		, float $scale
+		, array $color
+		, float $seconds
+		, string $align
+	): array {
 		if($this->lastEditor !== $editor)
 		{
 			$this->lastEditor = $editor;
@@ -370,22 +392,14 @@ final class MenuRenderer
 		$selectionX = $layout['positions'][$selectionStart][0];
 		$selectionWidth = $layout['positions'][$selectionEnd][0] - $selectionX;
 
-		$this->box(
-			[$x + $selectionX, $y, $selectionWidth, 12 * $scale]
-			, $this->style['selection']
-			, $clip
-		);
+		$this->box([$x + $selectionX, $y, $selectionWidth, 12 * $scale], $this->style['selection'], $clip);
 
 		if($composing)
 		{
 			$left = $layout['positions'][$start][0];
 			$length = $layout['positions'][$start + count($preedit)][0] - $left;
 
-			$this->box(
-				[$x + $left, $y + 13 * $scale, $length, $scale]
-				, $color
-				, $clip
-			);
+			$this->box([$x + $left, $y + 13 * $scale, $length, $scale], $color, $clip);
 		}
 
 		$this->text($text, $x, $y, $scale, $color, $clip, align: $align, alignWidth: $alignWidth);

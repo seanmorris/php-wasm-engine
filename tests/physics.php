@@ -28,6 +28,7 @@ test('raycasts return the earliest wall across negative spatial cells', function
 		, [30,20]
 		]]]
 	);
+
 	$hit = $terrain->raycast(-200, 0, 400, 0);
 	check($hit !== null);
 	near($hit->x, -80);
@@ -62,7 +63,7 @@ test('fast upward and diagonal sweeps hit thin ceilings and corners', function()
 
 test('shared tile edges do not form invisible walls', function() {
 	$loader = new Loader;
-	$map = $loader->map(dirname(__DIR__).'/examples/assets/infinite.tmj');
+	$map = $loader->map(dirname(__DIR__) . '/examples/assets/infinite.tmj');
 	$terrain = MapTerrain::build($map);
 	$p = new Platformer($terrain);
 	$body = new Body(80, 100);
@@ -80,9 +81,7 @@ test('surface attachment follows a full loop and releases at low speed', functio
 		$a = M_PI / 2 - $i * M_PI / 64;
 		$b = M_PI / 2 - ($i + 1) * M_PI / 64;
 
-		$terrain->add(
-			[[300 + cos($a) * 160,300 + sin($a) * 160], [300 + cos($b) * 160, 300 + sin($b) * 160]]
-		);
+		$terrain->add([[300 + cos($a) * 160,300 + sin($a) * 160], [300 + cos($b) * 160, 300 + sin($b) * 160]]);
 	}
 
 	$p = new Platformer($terrain);

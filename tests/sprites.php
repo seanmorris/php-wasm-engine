@@ -7,7 +7,7 @@ use PhpWasmEngine\Render\
 use PhpWasmEngine\Tiled\Loader;
 
 test('switching sprite animations preserves the entity component and its appearance', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 	$sprite = $sheet->sprite('idle', 120, 200);
 	$sprite->rotation = .25;
 	$sprite->scaleX = 2;
@@ -33,14 +33,11 @@ test('switching sprite animations preserves the entity component and its appeara
 test(
 	'animation switches and explicit restarts use a per-sprite clock without rewinding repeated requests'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 		$sprite = $sheet->sprite('idle');
 		$other = $sheet->sprite('idle');
 
-		$frame = fn($sprite, $time) => $sheet->map->animatedGid(
-			$sprite->gid
-			, $time + $sprite->time
-		);
+		$frame = fn($sprite, $time) => $sheet->map->animatedGid($sprite->gid, $time + $sprite->time);
 		check($sheet->play($sprite, 'run', 1000.5));
 		check($sheet->play($other, 'run', 1050.5));
 
@@ -68,7 +65,7 @@ test(
 );
 
 test('invalid animation requests leave sprite playback unchanged', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 	$sprite = $sheet->sprite('idle');
 	$sheet->play($sprite, 'run', 1000);
 	$before = get_object_vars($sprite);

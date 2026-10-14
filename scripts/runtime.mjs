@@ -8,17 +8,11 @@ export async function runtimeDirectory()
 {
 	const explicit = process.env.PHP_SDL_ROOT;
 
-	const candidates = explicit ? [path.resolve(
-		explicit
-	)] : [path.join(
-		root
-		, 'node_modules/php-sdl-wasm'
-	)
-	, path.join(
-		root
-		, '.runtime'
-	)
-	];
+	const candidates = explicit
+		? [path.resolve(explicit)]
+		: [path.join(root, 'node_modules/php-sdl-wasm')
+			, path.join(root, '.runtime')
+		];
 
 	for(const dir of candidates)
 	{
@@ -32,7 +26,7 @@ export async function runtimeDirectory()
 		{
 		} }
 
-	if(explicit) throw Error('PHP_SDL_ROOT must name a built php-sdl-wasm package directory: '+explicit);
+	if(explicit) throw Error('PHP_SDL_ROOT must name a built php-sdl-wasm package directory: ' + explicit);
 
 	let lock;
 
@@ -48,7 +42,7 @@ export async function runtimeDirectory()
 	console.error('Downloading the pinned php-sdl-wasm demo runtime…');
 	const response = await fetch(lock.url);
 
-	if(!response.ok) throw Error('Runtime download: '+response.status);
+	if(!response.ok) throw Error('Runtime download: ' + response.status);
 
 	const bytes = Buffer.from(await response.arrayBuffer());
 
@@ -63,11 +57,8 @@ export async function runtimeDirectory()
 	{
 		const entries = execFileSync('tar', ['-tzf',archive], {encoding: 'utf8'}).split('\n').filter(Boolean);
 
-		if(entries.some(
-			name => name.startsWith('/')||name.split('/').includes('..')
-		)) throw Error(
-			'Unsafe runtime archive'
-		);
+		if(entries.some(name => name.startsWith('/')||name.split('/').includes('..')))
+		throw Error('Unsafe runtime archive');
 
 		execFileSync('tar', ['-xzf',archive,'-C',staging]);
 		const manifest = JSON.parse(await fs.readFile(path.join(staging, 'php8.4-sdl.manifest.json')));
@@ -76,12 +67,8 @@ export async function runtimeDirectory()
 		{
 			const data = await fs.readFile(path.join(staging, file.path));
 
-			if(createHash('sha256').update(data).digest(
-				'hex'
-			)!==file.sha256
-			) throw Error(
-				'Runtime checksum mismatch: '+file.path
-			);
+			if(createHash('sha256').update(data).digest('hex')!==file.sha256
+			) throw Error('Runtime checksum mismatch: ' + file.path);
 		}
 
 		await fs.rename(staging, path.join(root, '.runtime'));

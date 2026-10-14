@@ -13,13 +13,12 @@ use PhpWasmEngine\Render\SpriteGroup;
 use PhpWasmEngine\Render\SpriteSheet;
 use PhpWasmEngine\Tiled\Loader;
 
-test('Tiled breakable objects decode unsigned flips and keep their rotated collision bounds'
+test(
+	'Tiled breakable objects decode unsigned flips and keep their rotated collision bounds'
 	, function() {
-		require_once dirname(__DIR__).'/examples/breakables.php';
+		require_once dirname(__DIR__) . '/examples/breakables.php';
 
-		$engine = (new ReflectionClass(
-			PhpWasmEngine\Engine::class
-		))->newInstanceWithoutConstructor();
+		$engine = (new ReflectionClass(PhpWasmEngine\Engine::class))->newInstanceWithoutConstructor();
 		$engine->entities = new Registry;
 		$engine->systems = new PhpWasmEngine\Ecs\Scheduler($engine->entities);
 
@@ -39,11 +38,12 @@ test('Tiled breakable objects decode unsigned flips and keep their rotated colli
 					$object
 				]]]
 			);
+
 			$map = fixture(['blocks.tmj' => $data, 'tiles.tsj' => tiles()])->map('blocks.tmj');
 			$map->x = 7;
 			$map->y = 11;
 			$terrain = new Terrain;
-			$blocks = configureBreakables($engine, $terrain, $map, 'flags-'.$flags.'-');
+			$blocks = configureBreakables($engine, $terrain, $map, 'flags-' . $flags . '-');
 			$ids = $engine->entities->query(Sprite::class);
 			check(count($ids) === 1);
 			$id = $ids[0];
@@ -56,7 +56,7 @@ test('Tiled breakable objects decode unsigned flips and keep their rotated colli
 			] as [$x, $y, $solid]){
 				$worldX = 70 + $x * cos(M_PI / 6) - $y * sin(M_PI / 6);
 				$worldY = 90 + $x * sin(M_PI / 6) + $y * cos(M_PI / 6);
-				check($terrain->solidAt($worldX, $worldY) === $solid, 'object bounds '.$flags);
+				check($terrain->solidAt($worldX, $worldY) === $solid, 'object bounds ' . $flags);
 			}
 
 			check($blocks->shatter($id));
@@ -68,13 +68,14 @@ test('Tiled breakable objects decode unsigned flips and keep their rotated colli
 					, 90 + 24 * sin(M_PI / 6) - 12 * cos(M_PI / 6)
 				)
 			);
+
 			$blocks->close();
 		}
 	}
 );
 
 test('breakable boxes disable outlines and shards inherit their source outline flag', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -100,7 +101,8 @@ test('breakable boxes disable outlines and shards inherit their source outline f
 	$blocks->close();
 });
 
-test('entities retain single sprites and ordered groups without changing component replacement'
+test(
+	'entities retain single sprites and ordered groups without changing component replacement'
 	, function() {
 		$r = new Registry;
 		$a = new Sprite(1);
@@ -127,9 +129,10 @@ test('entities retain single sprites and ordered groups without changing compone
 	}
 );
 
-test('grid particles partition odd crop dimensions and freeze the current animation frame'
+test(
+	'grid particles partition odd crop dimensions and freeze the current animation frame'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 		$sprite = $sheet->sprite('block', 50, 70);
 		$sprite->crop = [1, 2, 13, 11];
 		$sprite->flipX = $sprite->flipY = true;
@@ -164,7 +167,7 @@ test('grid particles partition odd crop dimensions and freeze the current animat
 		check(count($coverage) === 13 * 11);
 		check(get_object_vars($sprite) === $before);
 
-		$animated = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+		$animated = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 		$burst = ParticleBurst::grid($animated->sprite('run'), $animated->map, 2, 2, 150);
 
 		foreach($burst->sprites->sprites as $piece)
@@ -194,7 +197,7 @@ test('removable terrain restores shared edges and never reuses stale handles', f
 });
 
 test('a breakable blocks every side and a fast player until its grid shatters', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -236,7 +239,7 @@ test('a breakable blocks every side and a fast player until its grid shatters', 
 });
 
 test('standing on a broken block releases support on the next physics step', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -255,7 +258,7 @@ test('standing on a broken block releases support on the next physics step', fun
 });
 
 test('block collision planes and entity cleanup release only owned geometry', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$t->add([[-100, 50], [100, 50], [100, 60], [-100, 60]]);
@@ -280,7 +283,7 @@ test('block collision planes and entity cleanup release only owned geometry', fu
 });
 
 test('invalid grids and crops leave an intact block solid and visible', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -305,9 +308,10 @@ test('invalid grids and crops leave an intact block solid and visible', function
 	}
 });
 
-test('particle motion is independent of step partition and expires without stale sprites'
+test(
+	'particle motion is independent of step partition and expires without stale sprites'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 		$a = ParticleBurst::grid(new Sprite(1), $sheet->map, 3, 2);
 		$b = ParticleBurst::grid(new Sprite(1), $sheet->map, 3, 2);
 		$a->step(.2);
@@ -337,7 +341,7 @@ test('particle motion is independent of step partition and expires without stale
 );
 
 test('rotated cropped blocks use the rendered rectangle for scaled collision bounds', function() {
-	$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+	$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 	$r = new Registry;
 	$t = new Terrain;
 	$blocks = new BreakableBlocks($r, $t, $sheet->map);
@@ -359,7 +363,8 @@ test('rotated cropped blocks use the rendered rectangle for scaled collision bou
 	check($t->raycast(0, 90, 200, 0) === null);
 });
 
-test('terrain removals clear negative spatial cells and reveal neighbors on the selected plane'
+test(
+	'terrain removals clear negative spatial cells and reveal neighbors on the selected plane'
 	, function() {
 		$t = new Terrain;
 		$shared = $t->addShape([[-192, -64], [0, -64], [0, 128], [-192, 128]]);
@@ -384,9 +389,10 @@ test('terrain removals clear negative spatial cells and reveal neighbors on the 
 	}
 );
 
-test('queued particle retirement tolerates replacement and duplicate updates before a flush'
+test(
+	'queued particle retirement tolerates replacement and duplicate updates before a flush'
 	, function() {
-		$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/shatter.tsj');
+		$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/shatter.tsj');
 		$r = new Registry;
 		$system = new ParticleSystem;
 		$old = ParticleBurst::grid(new Sprite(1), $sheet->map, 2, 2);

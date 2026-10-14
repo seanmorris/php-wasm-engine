@@ -64,6 +64,7 @@ final class Layer
 			if($chunk->contains($x, $y))
 			{
 				$chunk->set($x, $y, $gid);
+
 				return;
 			}
 		}

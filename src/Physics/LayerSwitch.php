@@ -91,6 +91,7 @@ final class LayerSwitch
 		$forward = ($speed > 0) !== $back;
 		$source = $forward?$this->fromLayer:$this->toLayer;
 		$target = $forward?$this->toLayer:$this->fromLayer;
+
 		return $body->collisionLayer === $source || $body->collisionLayer === 0?$target:null;
 	}
 

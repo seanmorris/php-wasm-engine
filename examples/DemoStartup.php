@@ -89,6 +89,7 @@ final class DemoStartup
 			, 'credits' => ['label' => 'Credits', 'callback' => [$this, 'credits']]
 			, 'replay' => ['label' => 'Replay intro', 'callback' => [$this, 'replay']]
 		];
+
 		return new Menu($items, 'Main menu');
 	}
 
@@ -142,11 +143,9 @@ final class DemoStartup
 	{
 		$this->cards->cancel();
 		$text = "Engine: Sean Morris\nFlow inspired by moving-boxes-2\n"
-			.'Font: tigl. Input art: moving-boxes-2';
+			. 'Font: tigl. Input art: moving-boxes-2';
 
-		$this->cards = new CardSequence(
-			[new Card('credits', 'Credits', $text, duration: 6)]
-		);
+		$this->cards = new CardSequence([new Card('credits', 'Credits', $text, duration: 6)]);
 		$this->transition('intro');
 		$this->cards->start();
 	}
@@ -175,14 +174,9 @@ final class DemoStartup
 		$this->game->selectScene($this->scene);
 
 		$this->cards = new CardSequence(
-			[new Card(
-				'level-loading'
-				, 'Loading level'
-				, $this->scene
-				, duration: null
-				, skippable: false
-			)]
+			[new Card('level-loading', 'Loading level', $this->scene, duration: null, skippable: false)]
 		);
+
 		$this->transition('loading');
 		$this->cards->start();
 	}
@@ -251,8 +245,7 @@ final class DemoStartup
 			$this->generation = $frame['generation'];
 		}
 
-		$adapter->renderer->font->theme = $adapter->theme === 'auto'
-			? $frame['theme'] : $adapter->theme;
+		$adapter->renderer->font->theme = $adapter->theme === 'auto' ? $frame['theme'] : $adapter->theme;
 		$this->prepare();
 
 		if($this->phase === 'menu')
@@ -261,13 +254,7 @@ final class DemoStartup
 			$buttons['confirm'] = ($buttons['confirm'] ?? false) || ($buttons['pause'] ?? false);
 			$buttons['pause'] = false;
 
-			$adapter->controls->update(
-				$this->menu
-				, $buttons
-				, $dt
-				, $frame['events']
-				, $adapter->renderer->regions
-			);
+			$adapter->controls->update($this->menu, $buttons, $dt, $frame['events'], $adapter->renderer->regions);
 
 			if($this->phase === 'menu' && !$this->menu->isOpen)
 			{
@@ -283,6 +270,7 @@ final class DemoStartup
 			$this->phase === 'menu' && $this->menu->editor !== null && $frame['focused']
 			, $adapter->renderer->editorRect
 		);
+
 		return true;
 	}
 
@@ -337,6 +325,7 @@ final class DemoStartup
 		if($this->phase === 'loading' && ($frame['buttons']['back'] ?? false))
 		{
 			$this->showMenu();
+
 			return;
 		}
 
@@ -381,6 +370,7 @@ final class DemoStartup
 		if($this->phase === 'playing')
 		{
 			$this->publish();
+
 			return false;
 		}
 
@@ -398,9 +388,7 @@ final class DemoStartup
 
 		if($this->phase === 'menu')
 		{
-			$this->game->menu->renderer->render(
-				$this->menu, $device->width, $device->height, $this->time
-			);
+			$this->game->menu->renderer->render($this->menu, $device->width, $device->height, $this->time);
 		}
 		else
 		{
@@ -408,6 +396,7 @@ final class DemoStartup
 		}
 
 		$this->publish();
+
 		return true;
 	}
 
@@ -426,35 +415,26 @@ final class DemoStartup
 
 		if($card?->id === 'loading' || $this->phase === 'loading')
 		{
-			$progress = $this->phase === 'loading'
-				? $this->game->pending?->progress() : $this->backdrop->progress();
+			$progress = $this->phase === 'loading' ? $this->game->pending?->progress() : $this->backdrop->progress();
 			$card->title = $error !== '' ? 'Download failed' : 'Loading the demo';
 
-			$card->text = $error !== '' ? 'Check the connection and try again.'
-				: sprintf(
-					'%d / %d discovered files ready'
-					, $progress['ready'] ?? 0
-					, $progress['total'] ?? 0
-				);
+			$card->text = $error !== ''
+				? 'Check the connection and try again.'
+				: sprintf('%d / %d discovered files ready', $progress['ready'] ?? 0, $progress['total'] ?? 0);
+
 			$prompt = $error !== '' ? '⓿ Retry' : '';
 			$prompt .= $this->phase === 'loading' ? '   ❶ Main menu' : '';
 		}
 		elseif($card?->id === 'title')
 		{
 			$prompt = $this->cards->elapsed >= $card->skipAfter && fmod($this->time, 1.2) < .8
-				? 'Press Start / Enter / Click' : '';
+				? 'Press Start / Enter / Click'
+				: '';
 		}
 
 		$device = $this->game->engine->device;
 
-		$this->renderer->render(
-			$this->cards
-			, $device->width
-			, $device->height
-			, $prompt
-			, $progress
-			, $background
-		);
+		$this->renderer->render($this->cards, $device->width, $device->height, $prompt, $progress, $background);
 	}
 
 	/**
@@ -485,7 +465,8 @@ final class DemoStartup
 			$status = (new Vrzno)->document->querySelector('#status');
 			$status->textContent = ($this->error ?: $this->game->error)
 				?: ($this
-					->phase === 'menu' ? 'Choose Play, or adjust Level, Movement, and Settings.'
+					->phase === 'menu'
+					? 'Choose Play, or adjust Level, Movement, and Settings.'
 					: 'Start / Enter selects. Arrow keys or the D-pad move. Escape / B goes back.'
 				);
 		}

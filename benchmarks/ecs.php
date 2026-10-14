@@ -170,11 +170,9 @@ function benchmark(array $options): array
 		, 'all_rare' => Query::all(Position::class, Velocity::class, Rare::class)
 		, 'any' => Query::any(Velocity::class, Health::class)
 		, 'not' => Query::not(Velocity::class, Frozen::class)
-		, 'nested' => Query::all(
-			Query::any(Velocity::class, Health::class)
-			, Query::not(Frozen::class, Rare::class)
-		)
+		, 'nested' => Query::all(Query::any(Velocity::class, Health::class), Query::not(Frozen::class, Rare::class))
 	];
+
 	$cases = [];
 	$counts = [];
 
@@ -213,16 +211,20 @@ function benchmark(array $options): array
 	)
 	, $cases['all_common'][1], 1
 	];
+
 	$cases['all_after_mutation'] = [function() use ($registry, $queries): int {
 		$registry->add(1, new Marker);
 		$registry->remove(1, Marker::class);
+
 		return fingerprint($registry->query($queries['all_common']));
 	}
 	, $cases['all_common'][1], 1
 	];
+
 	$cases['nested_after_mutation'] = [function() use ($registry, $queries): int {
 		$registry->add(1, new Marker);
 		$registry->remove(1, Marker::class);
+
 		return fingerprint($registry->query($queries['nested']));
 	}
 	, $cases['nested'][1], 1
@@ -258,6 +260,7 @@ function benchmark(array $options): array
 	}
 	, 1000, 1000
 	];
+
 	$cases['replace_1000'] = [function() use ($registry): int {
 		for($id = 1; $id <= 1000; $id++)
 		{
@@ -268,6 +271,7 @@ function benchmark(array $options): array
 	}
 	, $size, 1000
 	];
+
 	$cases['create_destroy_1000'] = [function(): int {
 		$registry = scene(1000);
 
@@ -289,19 +293,14 @@ function benchmark(array $options): array
 
 		foreach($registry->query($queries['all_common']) as $id)
 		{
-			$registry->get(
-				$id
-				, Position::class
-			)->x += $registry->get(
-				$id
-				, Velocity::class
-			)->x * $dt;
+			$registry->get($id, Position::class)->x += $registry->get($id, Velocity::class)->x * $dt;
 			$moved++;
 		}
 	});
 
 	$cases['system_update'] = [function() use ($scheduler, &$moved): int {
 		$scheduler->update(1 / 60);
+
 		return $moved;
 	}
 	, $counts['all_common'], 1
@@ -311,12 +310,7 @@ function benchmark(array $options): array
 
 	foreach($cases as $name => [$run, $expected, $units])
 	{
-		$results[$name] = measure(
-			$run
-			, $expected
-			, $iterations
-			, $samples
-		) + ['units_per_call' => $units];
+		$results[$name] = measure($run, $expected, $iterations, $samples) + ['units_per_call' => $units];
 	}
 
 	// Report retained query storage separately from entity/component storage.
@@ -347,5 +341,5 @@ foreach(array_slice($argv ?? [], 1) as $argument)
 	}
 }
 
-require ($benchmarkOptions['engine-root'] ?? dirname(__DIR__)).'/autoload.php';
-echo json_encode(benchmark($benchmarkOptions), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+require ($benchmarkOptions['engine-root'] ?? dirname(__DIR__)) . '/autoload.php';
+echo json_encode(benchmark($benchmarkOptions), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";

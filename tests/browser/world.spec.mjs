@@ -41,11 +41,8 @@ test(
 		const requests = [];
 
 		page.on('request', request => {
-			if(request.url().includes(
-				'/examples/assets/'
-			)) requests.push(
-				new URL(request.url()).pathname.split('/').at(-1)
-			);
+			if(request.url().includes('/examples/assets/'))
+			requests.push(new URL(request.url()).pathname.split('/').at(-1));
 		});
 
 		const errors = await start(page);

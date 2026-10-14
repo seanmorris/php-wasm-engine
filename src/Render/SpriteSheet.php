@@ -43,9 +43,7 @@ final class SpriteSheet
 	public function sprite(string $animation, float $x = 0, float $y = 0): Sprite
 	{
 		return new Sprite(
-			$this->animations[$animation] ?? throw new \OutOfBoundsException(
-				"Unknown animation $animation"
-			)
+			$this->animations[$animation] ?? throw new \OutOfBoundsException("Unknown animation $animation")
 			, $x
 			, $y
 		);
@@ -73,9 +71,7 @@ final class SpriteSheet
 			throw new \InvalidArgumentException('Animation time must be finite');
 		}
 
-		$gid = $this->animations[$animation] ?? throw new \OutOfBoundsException(
-			"Unknown animation $animation"
-		);
+		$gid = $this->animations[$animation] ?? throw new \OutOfBoundsException("Unknown animation $animation");
 
 		if($sprite->gid === $gid && !$restart)
 		{
@@ -84,6 +80,7 @@ final class SpriteSheet
 
 		$sprite->gid = $gid;
 		$sprite->time = -$milliseconds;
+
 		return true;
 	}
 }

@@ -25,7 +25,7 @@ export default async (_env, argv) => {
 					, 'loop-layout.svg'
 				]
 				.map(
-					name => ({from: 'docs/'+name,to: name})
+					name => ({from: 'docs/' + name,to: name})
 				)
 			})
 		]
@@ -47,7 +47,7 @@ export default async (_env, argv) => {
 			, static: [
 				...['src','shaders','examples','tests'].map(directory => ({
 					directory: path.join(root, directory)
-					, publicPath: '/engine/'+directory
+					, publicPath: '/engine/' + directory
 					, serveIndex: false
 				}))
 				, {directory: zlib,publicPath: '/runtime/extensions/zlib',serveIndex: false,watch: false}

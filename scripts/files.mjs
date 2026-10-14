@@ -8,11 +8,9 @@ export async function engineFiles()
 
 	async function walk(dir)
 	{
-		for(const entry of await fs.readdir(path.join(
-			root
-			, dir
-		), {withFileTypes: true})){
-			const name = dir+'/'+entry.name;
+		for(const entry of await fs.readdir(path.join(root, dir), {withFileTypes: true}))
+		{
+			const name = dir + '/' + entry.name;
 
 			if(entry.isDirectory()) await walk(name); else if(!name.endsWith('.mjs')) result.push(name);
 		} }

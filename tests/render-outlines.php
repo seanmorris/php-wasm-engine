@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Render\Atlas;
@@ -17,10 +17,11 @@ $regions = [
 	, [4, 4, 4, 4, [0, 0, 255, 255]], [11, 11, 1, 1, [0, 255, 0, 255]]
 	, [14, 2, 2, 3, [255, 0, 255, 128]]
 ];
+
 $green = [[0, 0, 16, 16, [0, 255, 0, 255]]];
 $device = new Device(96, 96);
 $camera = new Camera(0, 0, 96, 96);
-$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/outline.tsj');
+$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/outline.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $texture = $atlas->texture;
@@ -228,14 +229,13 @@ foreach($cases as $name => $properties)
 		$sprite->$property = $value;
 	}
 
-	$camera->zoom = $name === 'zoomed out' ? .5
-		: (in_array($name, ['zoomed', 'subpixel source'], true) ? 2 : 1);
+	$camera->zoom = $name === 'zoomed out' ? .5 : (in_array($name, ['zoomed', 'subpixel source'], true) ? 2 : 1);
 	$device->begin([1, 1, 1, 1]);
 	$renderer->render([$sprite], $camera);
 	$pixels = glReadPixels(0, 0, 96, 96, GL_RGBA, GL_UNSIGNED_BYTE);
 	$differences[$name] = outlineDifferences($pixels, [[$sprite, $regions]], $camera);
 	$checks[$name] = !$differences[$name];
-	$checks['batch '.$name] = $renderer->draws === 1 && $renderer->instances === 1
+	$checks['batch ' . $name] = $renderer->draws === 1 && $renderer->instances === 1
 		&& $atlas->texture === $texture;
 }
 
@@ -255,9 +255,9 @@ foreach([0, 150] as $time)
 	$renderer->renderEntities($registry, $camera, $time);
 	$pixels = glReadPixels(0, 0, 96, 96, GL_RGBA, GL_UNSIGNED_BYTE);
 	$layers = [[$sprite, $time === 0 ? $regions : $green], [$plain, $regions]];
-	$differences['animation '.$time] = outlineDifferences($pixels, $layers, $camera);
-	$checks['animation '.$time] = !$differences['animation '.$time];
-	$checks['mixed flags '.$time] = $renderer->draws === 1 && $renderer->instances === 2;
+	$differences['animation ' . $time] = outlineDifferences($pixels, $layers, $camera);
+	$checks['animation ' . $time] = !$differences['animation ' . $time];
+	$checks['mixed flags ' . $time] = $renderer->draws === 1 && $renderer->instances === 2;
 }
 
 $atlas->restore();

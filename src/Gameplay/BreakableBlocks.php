@@ -28,8 +28,10 @@ final class BreakableBlocks
 	 * @param TileMap $map Tilesets matching the sprites' renderer atlas.
 	 * @return void Registers cleanup when owned components are removed or entities destroyed.
 	 */
-	public function __construct(private Registry $registry, private Terrain $terrain,
-		private TileMap $map
+	public function __construct(
+		private Registry $registry
+		, private Terrain $terrain
+		, private TileMap $map
 	){
 		$owner = \WeakReference::create($this);
 
@@ -71,10 +73,13 @@ final class BreakableBlocks
 	 * @param float $milliseconds Animation time used to choose the initial collision dimensions.
 	 * @return int New entity ID; its collider remains at this pose until removed or shattered.
 	 */
-	public function create(Sprite $sprite, int $columns, int $rows, int $collisionLayer = 0,
-		float $milliseconds = 0
-	): int
-	{
+	public function create(
+		Sprite $sprite
+		, int $columns
+		, int $rows
+		, int $collisionLayer = 0
+		, float $milliseconds = 0
+	): int {
 		if($this->closed)
 		{
 			throw new \LogicException('Breakable block manager is closed');
@@ -96,6 +101,7 @@ final class BreakableBlocks
 		$gid = $sprite->frame($this->map, $milliseconds);
 		$tile = $this->map->tile($gid)
 			?? throw new \OutOfBoundsException("Sprite GID $gid is missing");
+
 		[, , $width, $height] = $sprite->rectangle($tile['rect']);
 
 		if($columns > $width || $rows > $height || $sprite->scaleX == 0 || $sprite->scaleY == 0)
@@ -162,6 +168,7 @@ final class BreakableBlocks
 		}
 
 		$id = $this->shapes[$hit->shape] ?? null;
+
 		return $id !== null && $this->shatter($id, $milliseconds);
 	}
 
@@ -176,10 +183,14 @@ final class BreakableBlocks
 	 * @param float $lifetime Positive duration of debris in seconds.
 	 * @return bool True on the first break; false for unknown, removed, or already broken blocks.
 	 */
-	public function shatter(int $id, float $milliseconds = 0, float $speed = 240,
-		float $lift = 240, float $gravity = 900, float $lifetime = 1.2
-	): bool
-	{
+	public function shatter(
+		int $id
+		, float $milliseconds = 0
+		, float $speed = 240
+		, float $lift = 240
+		, float $gravity = 900
+		, float $lifetime = 1.2
+	): bool {
 		$block = $this->owned[$id][0] ?? null;
 
 		if(!$block instanceof BreakableBlock)
@@ -191,8 +202,15 @@ final class BreakableBlocks
 		$sprite = $this->registry->get($id, Sprite::class);
 
 		$burst = ParticleBurst::grid(
-			$sprite, $this->map, $block->columns, $block->rows
-			, $milliseconds, $speed, $lift, $gravity, $lifetime
+			$sprite
+			, $this->map
+			, $block->columns
+			, $block->rows
+			, $milliseconds
+			, $speed
+			, $lift
+			, $gravity
+			, $lifetime
 		);
 
 		$this->registry->remove($id, BreakableBlock::class);
@@ -200,6 +218,7 @@ final class BreakableBlocks
 		$this->owned[$id] = [$burst, null];
 		$this->registry->add($id, $burst->sprites);
 		$this->registry->add($id, $burst);
+
 		return true;
 	}
 

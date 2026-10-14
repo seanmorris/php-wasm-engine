@@ -7,7 +7,7 @@ async function pads(page, connected = true)
 
 		window.connectPad = (index = 0) => {
 			const pad = {
-				id: 'Standard Gamepad '+index
+				id: 'Standard Gamepad ' + index
 				, index
 				, connected: true
 				, mapping: 'standard'
@@ -195,7 +195,7 @@ test('individual controller reads, dead-zone changes and closing a second owner 
     `
 		);
 
-		if(status!==0) throw Error('PHP returned '+status);
+		if(status!==0) throw Error('PHP returned ' + status);
 
 		return inputResult;
 	});
@@ -212,19 +212,22 @@ test('individual controller reads, dead-zone changes and closing a second owner 
 	expect(errors).toEqual([]);
 });
 
-for(const suspension of ['visibility','WebGL','focus']) test(
-	suspension+' resume requires releasing held pad inputs'
+for(const suspension of ['visibility','WebGL','focus'])
+test(
+	suspension + ' resume requires releasing held pad inputs'
 	, async({page}) => {
 		const errors = await start(page);
 		await change(page, {axes: [1],buttons: [0,1]});
 		await expect.poll(async() => (await frame(page)).presses).toBe(1);
 
-		if(suspension==='visibility') await page.evaluate(() => {
+		if(suspension==='visibility')
+		await page.evaluate(() => {
 			Object.defineProperty(document, 'hidden', {configurable: true,get: () => true});
 			document.dispatchEvent(new Event('visibilitychange'));
 		});
 
-		if(suspension==='WebGL') await page.evaluate(() => {
+		if(suspension==='WebGL')
+		await page.evaluate(() => {
 			window.inputLoss = document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
 			inputLoss.loseContext();
 		});
@@ -238,7 +241,8 @@ for(const suspension of ['visibility','WebGL','focus']) test(
 		const count = await page.evaluate(() => inputFrames.length);
 		const before = await frame(page);
 
-		if(suspension==='visibility') await page.evaluate(() => {
+		if(suspension==='visibility')
+		await page.evaluate(() => {
 			delete document.hidden;
 			document.dispatchEvent(new Event('visibilitychange'));
 		});
@@ -301,8 +305,9 @@ test('keyboard pause ignores key repeat after resuming', async({page}) => {
 	expect(errors).toEqual([]);
 });
 
-for(const profile of ['runner','glider','flyer']) test(
-	profile+' demo moves and activates abilities with a gamepad'
+for(const profile of ['runner','glider','flyer'])
+test(
+	profile + ' demo moves and activates abilities with a gamepad'
 	, async({page}) => {
 		const errors = [];
 		page.on('pageerror', error => errors.push(error.message));
@@ -487,9 +492,7 @@ test('ordered taps between simulation updates survive and keep their SDL timing'
 		{
 			for(const type of ['keydown', 'keyup'])
 			{
-				document.querySelector(
-					'canvas'
-				).dispatchEvent(new KeyboardEvent(type, {
+				document.querySelector('canvas').dispatchEvent(new KeyboardEvent(type, {
 					key
 					, code
 					, keyCode: key === ' ' ? 32 : 88
@@ -547,7 +550,8 @@ test('Mortal Kombat style motion and held-direction attacks match from pad stick
 	expect(errors).toEqual([]);
 });
 
-for(const recovery of ['focus', 'visibility', 'WebGL']) test('partial combos are discarded across ' + recovery, async (
+for(const recovery of ['focus', 'visibility', 'WebGL'])
+test('partial combos are discarded across ' + recovery, async (
 	{page}
 ) => {
 	const errors = await start(page);
@@ -557,12 +561,14 @@ for(const recovery of ['focus', 'visibility', 'WebGL']) test('partial combos are
 
 	if(recovery === 'focus') await page.locator('#mute').focus();
 
-	if(recovery === 'visibility') await page.evaluate(() => {
+	if(recovery === 'visibility')
+	await page.evaluate(() => {
 		Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
 		document.dispatchEvent(new Event('visibilitychange'));
 	});
 
-	if(recovery === 'WebGL') await page.evaluate(() => {
+	if(recovery === 'WebGL')
+	await page.evaluate(() => {
 		window.comboLoss = document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
 		comboLoss.loseContext();
 	});
@@ -571,7 +577,8 @@ for(const recovery of ['focus', 'visibility', 'WebGL']) test('partial combos are
 
 	if(recovery === 'focus') await page.locator('canvas').focus();
 
-	if(recovery === 'visibility') await page.evaluate(() => {
+	if(recovery === 'visibility')
+	await page.evaluate(() => {
 		delete document.hidden;
 		document.dispatchEvent(new Event('visibilitychange'));
 	});

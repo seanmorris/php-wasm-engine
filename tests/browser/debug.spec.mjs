@@ -1,12 +1,8 @@
 import {test, expect} from '@playwright/test';
 
-const state = page => page.locator('canvas').evaluate(canvas =>
-	JSON.parse(canvas.dataset.debug ?? 'null')
-);
+const state = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.debug ?? 'null'));
 
-const menu = page => page.locator('canvas').evaluate(canvas =>
-	JSON.parse(canvas.dataset.menu ?? 'null')
-);
+const menu = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.menu ?? 'null'));
 
 async function run(page, source)
 {
@@ -46,9 +42,7 @@ async function start(page, intro = false)
 
 async function activate(page, id, startup = false)
 {
-	await run(page, (startup ? '$game->startup->menu' : '$pauseMenu->menu')
-		+ '->select(' + JSON.stringify(id) + ');'
-	);
+	await run(page, (startup ? '$game->startup->menu' : '$pauseMenu->menu') + '->select(' + JSON.stringify(id) + ');');
 
 	await page.keyboard.press('Enter');
 }

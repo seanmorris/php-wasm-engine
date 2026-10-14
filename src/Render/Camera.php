@@ -15,8 +15,12 @@ final class Camera
 	 * @param float $zoom Positive world-to-screen scale factor.
 	 * @return void Stores the camera pose and dimensions.
 	 */
-	public function __construct(public float $x = 0, public float $y = 0, public int $width = 960
-		, public int $height = 540, public float $zoom = 1
+	public function __construct(
+		public float $x = 0
+		, public float $y = 0
+		, public int $width = 960
+		, public int $height = 540
+		, public float $zoom = 1
 	){
 	}
 

@@ -1,18 +1,19 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Render\
 {
 	Device,Camera,MapRenderer
 };
-$path = dirname(__DIR__).'/examples/assets/';
+$path = dirname(__DIR__) . '/examples/assets/';
 $set = ['firstgid' => 1
 , 'tilewidth' => 16
 , 'tileheight' => 16
 , 'columns' => 1
 , 'tilecount' => 1
-	, 'image' => $path.'test.png'
+	, 'image' => $path . 'test.png'
 ];
+
 $values = [];
 
 foreach([0,4,8,12,2,6,10,14] as $flags)
@@ -40,6 +41,7 @@ $map = ['orientation' => 'orthogonal'
 	, 'offsety' => 32
 	, 'data' => [1,0,0,0,0,0,0,0]] ]
 ];
+
 file_put_contents('/test.tmj', json_encode($map));
 $loader = new Loader;
 $map = $loader->map('/test.tmj');
@@ -58,9 +60,7 @@ for($i = 0; $i < 8; $i++)
 
 	foreach([[4,4],[12,4],[4,12],[12,12]] as [$x,$y])
 	{
-		$sample[] = $colors[bin2hex(
-			glReadPixels($i * 16 + $x, 63 - $y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
-		)] ?? -1;
+		$sample[] = $colors[bin2hex(glReadPixels($i * 16 + $x, 63 - $y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE))] ?? -1;
 	}
 
 	$quadrants[] = $sample;
@@ -82,6 +82,4 @@ $renderer->close();
 $live = array_map(fn($id) => glIsTexture($id), $ids);
 $error = glGetError();
 $device->close();
-echo json_encode(
-	compact('quadrants', 'initial', 'clean', 'dirty', 'erased', 'culled', 'live', 'error')
-);
+echo json_encode(compact('quadrants', 'initial', 'clean', 'dirty', 'erased', 'culled', 'live', 'error'));

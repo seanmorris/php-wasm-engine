@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Tiled\
 {
 	Loader,WorldStream
@@ -10,14 +10,15 @@ use PhpWasmEngine\Render\
 };
 
 $device = new Device(64, 48);
-$image = dirname(__DIR__).'/examples/assets/test-parallax.png';
-$other = dirname(__DIR__).'/examples/assets/test.png';
+$image = dirname(__DIR__) . '/examples/assets/test-parallax.png';
+$other = dirname(__DIR__) . '/examples/assets/test.png';
 $properties = [['name' => 'from','value' => 'center']
 , ['name' => 'scrollX','value' => 6]
 , ['name' =>
 	'scrollY'
 	, 'value' => -3
 ]];
+
 $back = ['type' => 'imagelayer'
 , 'image' => $image
 , 'repeatx' => true
@@ -28,15 +29,15 @@ $back = ['type' => 'imagelayer'
 	, 'properties' =>
 	$properties
 ];
+
 $front = $back;
 $front['image'] = $other;
 $front['offsetx'] = -5;
 $front['opacity'] = .3;
 
 $front['properties'][] = ['name' => 'frames'
-, 'value' => json_encode(
-	[['image' => $other, 'duration' => 100], ['image' => $image,'duration' => 200]]
-)];
+, 'value' => json_encode([['image' => $other, 'duration' => 100], ['image' => $image,'duration' => 200]])];
+
 $data = ['orientation' => 'orthogonal'
 , 'width' => 8
 , 'height' => 16
@@ -45,17 +46,15 @@ $data = ['orientation' => 'orthogonal'
 	16
 	, 'layers' => [$back,$front],'tilesets' => []
 ];
+
 $entries = [];
 
 foreach([-128,0,128] as $i => $x)
 {
-	$path = '/phase-'.$i.'.tmj';
+	$path = '/phase-' . $i . '.tmj';
 
 	// Map-local Tiled reference points must not reset viewport-anchored strips.
-	file_put_contents(
-		$path
-		, json_encode($data + ['parallaxoriginx' => $i * 11, 'parallaxoriginy' => $i * -9])
-	);
+	file_put_contents($path, json_encode($data + ['parallaxoriginx' => $i * 11, 'parallaxoriginy' => $i * -9]));
 	$entries[] = ['fileName' => $path,'x' => $x,'y' => -128,'width' => 128,'height' => 256];
 }
 
@@ -65,10 +64,13 @@ $source = (new Loader)->world('/phase.world');
 $reference = new MapRenderer((new Loader)->map('/phase-reference.tmj'));
 $world = new WorldRenderer($source, 1);
 
-function frame(Device $device, MapRenderer|WorldRenderer $renderer, Camera $camera, float $time
+function frame(
+	Device $device
+	, MapRenderer|WorldRenderer $renderer
+	, Camera $camera
+	, float $time
 	, float $margin = 0
-): array
-{
+): array {
 	$device->begin([0,0,0,1]);
 
 	if($renderer instanceof WorldRenderer)
@@ -130,7 +132,7 @@ foreach([[-.25,0],[.25,1],[-.25,0]] as $i => [$focus,$selected])
 	[$expected] = frame($device, $candidates[$selected], $camera, 600);
 	[$different] = frame($device, $candidates[1 - $selected], $camera, 600);
 	[$actual] = frame($device, $world, $camera, 600, 128);
-	$checks['selection '.$i] = $actual === $expected && $actual !== $different;
+	$checks['selection ' . $i] = $actual === $expected && $actual !== $different;
 }
 
 $world->close();
@@ -150,6 +152,7 @@ $stream = new WorldStream((new Loader)->world('/phase.world'), static function($
 	return $path !== '/phase-1.tmj' || $ready;
 }, null, 0, 0
 );
+
 $world = new WorldRenderer($stream, 1);
 
 foreach([[-64,false],[.25,false],[.25,true],[192,true],[-64,true]] as $i => [$focus,$available])
@@ -159,7 +162,7 @@ foreach([[-64,false],[.25,false],[.25,true],[192,true],[-64,true]] as $i => [$fo
 	$stream->update($camera->x, $camera->y, 64, 48);
 	[$expected] = frame($device, $reference, $camera, 725);
 	[$actual,$stats] = frame($device, $world, $camera, 725);
-	$checks['stream '.$i] = $actual === $expected && $stats['draws'] === 2;
+	$checks['stream ' . $i] = $actual === $expected && $stats['draws'] === 2;
 
 	if($i === 1)
 	{

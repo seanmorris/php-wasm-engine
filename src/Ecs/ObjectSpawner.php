@@ -49,9 +49,7 @@ final class ObjectSpawner
 				$object['y'] = ($object['y'] ?? 0) + $map->y + $layer->offsetY;
 				$object['properties'] = Loader::properties($object['properties'] ?? []);
 
-				$entities[$object['id']] = $registry->create(
-					...($this->factories[$class])($object, $map)
-				);
+				$entities[$object['id']] = $registry->create(...($this->factories[$class])($object, $map));
 			}
 		}
 

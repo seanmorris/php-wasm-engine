@@ -19,6 +19,7 @@ function streamFixture(?callable $request = null, ?callable $release = null): Wo
 	])
 		, 'far.tmj' => mapData([layer()]),'tiles.tsj' => tiles()
 	];
+
 	return new WorldStream(fixture($data)->world('world.world'), $request, $release, 20, 100);
 }
 
@@ -32,6 +33,7 @@ test('world metadata queries preserve manifest order without reading map files',
 
 	$world = (new Loader(new Assets(function($path) use (&$reads, $maps) {
 		$reads[] = $path;
+
 		return json_encode(['maps' => $maps]);
 	})))->world('/maps/demo.world');
 
@@ -40,6 +42,7 @@ test('world metadata queries preserve manifest order without reading map files',
 			, 'overlap.tmj'
 		]
 	);
+
 	check(count($world->entries(0, -25, 0, 0, 50)) === 1);
 	check($reads === ['/maps/demo.world']);
 	rejects(fn() => $world->entries(0, 0, -1, 1));
@@ -53,6 +56,7 @@ test('world streaming waits for map, tileset and image dependencies before activ
 
 	$stream = streamFixture(function($path) use (&$ready, &$requests) {
 		$requests[$path] = true;
+
 		return isset($ready[$path]);
 	});
 
@@ -74,7 +78,8 @@ test('world streaming waits for map, tileset and image dependencies before activ
 	check($stream->entered === [] && $stream->exited === []);
 });
 
-test('world streaming retains boundary maps and releases shared files only after their last map'
+test(
+	'world streaming retains boundary maps and releases shared files only after their last map'
 	, function() {
 		$released = [];
 		$stream = streamFixture(null, function($path) use (&$released) { $released[] = $path; });
@@ -164,6 +169,7 @@ test('world bounds index agrees with a flat scan across sparse and overlapping m
 				'height'
 			] >= $y && $m['y'] <= $y + 500
 		);
+
 		check($world->entries($x, $y, 700, 500) === $expected);
 	}
 
@@ -225,13 +231,15 @@ test('stream retries accept error keys relative to the application working direc
 		fixture($data)->world('maps/world.world')
 		, fn($path, $retry = false) => $path === 'maps/a.tmj'?'HTTP 503':true
 	);
+
 	$stream->update(0, 0, 20, 20);
 	check(isset($stream->errors['maps/a.tmj']));
 	$stream->retry('maps/a.tmj');
 	check($stream->errors === []);
 });
 
-test('local world bounds select negative infinite chunks without shifting their origin'
+test(
+	'local world bounds select negative infinite chunks without shifting their origin'
 	, function() {
 		$entry = ['fileName' => 'infinite.tmj'
 		, 'x' => 1000
@@ -240,6 +248,7 @@ test('local world bounds select negative infinite chunks without shifting their 
 		, 'height' => 200
 			, 'bounds' => ['x' => -200,'y' => -100,'width' => 300,'height' => 200]
 		];
+
 		$chunk = ['x' => -12,'y' => -6,'width' => 1,'height' => 1,'data' => [1]];
 
 		$data = ['world.world' => ['maps' => [$entry]]
@@ -250,11 +259,7 @@ test('local world bounds select negative infinite chunks without shifting their 
 			, 'tiles.tsj' => tiles()
 		];
 
-		$stream = new WorldStream(
-			fixture($data)->world('world.world')
-			, loadMargin:0
-			, retainMargin:0
-		);
+		$stream = new WorldStream(fixture($data)->world('world.world'), loadMargin:0, retainMargin:0);
 		$stream->update(801, 401, 10, 10);
 		$map = $stream->loaded()['infinite.tmj'];
 		check($map->x === 1000.0 && $map->y === 500.0);

@@ -86,6 +86,7 @@ final class Engine
 		if(($this->document && $this->document->hidden) || !$this->device->ready())
 		{
 			$this->pause();
+
 			return;
 		}
 
@@ -112,6 +113,7 @@ final class Engine
 		if($this->input->quit)
 		{
 			$this->stop();
+
 			return;
 		}
 
@@ -148,8 +150,9 @@ final class Engine
 			$this->controls->reset();
 		}
 
-		$alpha = $this->clock->advance($elapsed,
-			/**
+		$alpha = $this->clock->advance(
+			$elapsed
+			, /**
 			 * Consume buffered input and advance systems for one fixed simulation step.
 			 *
 			 * @param float $dt Fixed simulation interval in seconds.
@@ -185,9 +188,7 @@ final class Engine
 
 		if(!function_exists('vrzno_env'))
 		{
-			throw new \RuntimeException(
-				'Browser scheduling requires vrzno; native hosts can call tick()'
-			);
+			throw new \RuntimeException('Browser scheduling requires vrzno; native hosts can call tick()');
 		}
 
 		$this->window = new \Vrzno;

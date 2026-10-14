@@ -14,9 +14,8 @@ async function start(page, {scene = 'platformer',fallback  = false} = {})
 		window.menuPad = (name, buttons = []) => {
 			if(!menuPads[0] || menuPads[0].id!==name)
 			{
-				if(menuPads[0]) window.dispatchEvent(
-					Object.assign(new Event('gamepaddisconnected'), {gamepad: menuPads[0]})
-				);
+				if(menuPads[0])
+				window.dispatchEvent(Object.assign(new Event('gamepaddisconnected'), {gamepad: menuPads[0]}));
 
 				menuPads[0] = {
 					id: name
@@ -60,7 +59,7 @@ async function open(page)
 async function choose(page, id)
 {
 	await page.evaluate(async id => {
-		const code = await enginePhp.run('<?php $pauseMenu->menu->select('+JSON.stringify(id)+');');
+		const code = await enginePhp.run('<?php $pauseMenu->menu->select(' + JSON.stringify(id) + ');');
 
 		if(code) throw Error('select failed');
 	}, id
@@ -91,7 +90,9 @@ test('pause menus keep simulation stopped while nested controls apply live', asy
 	expect(errors).toEqual([]);
 });
 
-for(const fallback of [false,true]) test('live text editing and external focus with '+(fallback ? 'textarea'
+for(const fallback of [false,true])
+test('live text editing and external focus with ' + (fallback
+	? 'textarea'
 	: 'EditContext'
 ), async({page}) => {
 	const errors = await start(page, {fallback});
@@ -128,10 +129,12 @@ for(const fallback of [false,true]) test('live text editing and external focus w
 	expect(errors).toEqual([]);
 });
 
-for(const fallback of [false,true]) for(const recovery of ['visibility','focus','graphics'])
+for(const fallback of [false,true])
+for(const recovery of ['visibility','focus','graphics'])
 {
 	test(
-		'editing discards held-key repeats after ' + recovery + ' recovery with ' + (fallback ? 'textarea' : 'EditContext')
+		'editing discards held-key repeats after ' + recovery + ' recovery with '
+			+ (fallback ? 'textarea' : 'EditContext')
 		, async(
 			{page}
 		) => {
@@ -237,7 +240,7 @@ test('pad hints switch themes on input and allow an explicit override', async({p
 async function point(page, id, at = 'center')
 {
 	const region = (await state(page)).regions.find(row => row.id===id);
-	expect(region, 'visible hit region for '+id).toBeDefined();
+	expect(region, 'visible hit region for ' + id).toBeDefined();
 
 	return page.locator('canvas').evaluate((canvas, {region,at}) => {
 		const bounds = canvas.getBoundingClientRect();
@@ -327,13 +330,9 @@ async function composition(page, fallback, phase, text = 'かな')
 			}
 
 			target.dispatchEvent(
-				fallback ? new InputEvent(
-					'input'
-					, {data: text,inputType: 'insertCompositionText',isComposing: true}
-				) : new TextUpdateEvent(
-					'textupdate'
-					, {text,selectionStart: 1,selectionEnd: 2}
-				)
+				fallback
+					? new InputEvent('input', {data: text,inputType: 'insertCompositionText',isComposing: true})
+					: new TextUpdateEvent('textupdate', {text,selectionStart: 1,selectionEnd: 2})
 			);
 		}
 		else
@@ -346,40 +345,43 @@ async function composition(page, fallback, phase, text = 'かな')
 }
 
 for(const fallback of [false,true])
-test('fullscreen IME commits once and cancels on blur with ' + (fallback ? 'textarea' : 'EditContext'), async({page}) => {
-	const errors = await start(page, {fallback});
-	await open(page);
-	await choose(page, 'settings');
-	await page.keyboard.press('Enter');
-	await choose(page, 'name');
-	await page.keyboard.press('Enter');
-	await page.click('#fullscreen');
-	await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('game-frame');
-	await expect.poll(async() => (await state(page)).editing).toBe(true);
+test(
+	'fullscreen IME commits once and cancels on blur with ' + (fallback ? 'textarea' : 'EditContext')
+	, async({page}) => {
+		const errors = await start(page, {fallback});
+		await open(page);
+		await choose(page, 'settings');
+		await page.keyboard.press('Enter');
+		await choose(page, 'name');
+		await page.keyboard.press('Enter');
+		await page.click('#fullscreen');
+		await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('game-frame');
+		await expect.poll(async() => (await state(page)).editing).toBe(true);
 
-	if(fallback) await expect(page.locator('textarea[aria-label="SDL text input"]')).toBeFocused();
+		if(fallback) await expect(page.locator('textarea[aria-label="SDL text input"]')).toBeFocused();
 
-	await page.keyboard.press('Control+a');
-	await composition(page, fallback, 'start');
-	await expect.poll(async() => (await state(page)).composition).toBe('かな');
-	expect((await state(page)).values.name).toBe('Player');
-	await composition(page, fallback, 'end');
-	await expect.poll(async() => (await state(page)).values.name).toBe('かな');
-	await expect.poll(async() => (await state(page)).composition).toBe('');
-	await composition(page, fallback, 'start', '未完');
-	await expect.poll(async() => (await state(page)).composition).toBe('未完');
-	await page.locator('#mute').focus();
-	await expect.poll(async() => (await state(page)).composition).toBe('');
-	expect((await state(page)).values.name).toBe('かな');
-	await page.locator('canvas').focus();
-	await page.keyboard.press('Escape');
-	await expect.poll(async() => (await state(page)).editing).toBe(false);
-	await page.evaluate(() => document.fullscreenElement&&document.exitFullscreen());
-	await page.evaluate(() => window.stopEngine());
-	await expect(page.locator('textarea[aria-label="SDL text input"]')).toHaveCount(0);
-	expect(await page.locator('canvas').evaluate(c => c.editContext)).toBeNull();
-	expect(errors).toEqual([]);
-});
+		await page.keyboard.press('Control+a');
+		await composition(page, fallback, 'start');
+		await expect.poll(async() => (await state(page)).composition).toBe('かな');
+		expect((await state(page)).values.name).toBe('Player');
+		await composition(page, fallback, 'end');
+		await expect.poll(async() => (await state(page)).values.name).toBe('かな');
+		await expect.poll(async() => (await state(page)).composition).toBe('');
+		await composition(page, fallback, 'start', '未完');
+		await expect.poll(async() => (await state(page)).composition).toBe('未完');
+		await page.locator('#mute').focus();
+		await expect.poll(async() => (await state(page)).composition).toBe('');
+		expect((await state(page)).values.name).toBe('かな');
+		await page.locator('canvas').focus();
+		await page.keyboard.press('Escape');
+		await expect.poll(async() => (await state(page)).editing).toBe(false);
+		await page.evaluate(() => document.fullscreenElement&&document.exitFullscreen());
+		await page.evaluate(() => window.stopEngine());
+		await expect(page.locator('textarea[aria-label="SDL text input"]')).toHaveCount(0);
+		expect(await page.locator('canvas').evaluate(c => c.editContext)).toBeNull();
+		expect(errors).toEqual([]);
+	}
+);
 
 test('streaming-world menu restores graphics and releases held controls before resuming', async({page}) => {
 	const errors = await start(page, {scene: 'world'});

@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 
 use PhpWasmEngine\Asset\Assets;
 use PhpWasmEngine\Render\Atlas;
@@ -16,12 +16,13 @@ use PhpWasmEngine\Ui\CardRenderer;
 use PhpWasmEngine\Ui\CardSequence;
 
 // Known solid quadrants let the test check glyph output without sampling the font itself.
-$data = json_decode(file_get_contents(__DIR__.'/assets/sprites.tsj'), true);
+$data = json_decode(file_get_contents(__DIR__ . '/assets/sprites.tsj'), true);
 $data['properties'] = [
 	['name' => 'font.lineHeight', 'value' => 10]
 	, ['name' => 'font.spaceAdvance', 'value' => 4]
 	, ['name' => 'font.caseFold', 'value' => true]
 ];
+
 $data['tiles'] = [];
 
 foreach([
@@ -45,25 +46,21 @@ foreach([
 	$data['tiles'][] = $tile;
 }
 
-$font = new BitmapFont(
-	new Loader(new Assets(fn() => json_encode($data))), __DIR__.'/assets/font.tsj'
-);
+$font = new BitmapFont(new Loader(new Assets(fn() => json_encode($data))), __DIR__ . '/assets/font.tsj');
 $font->theme = 'keyboard';
 $device = new Device(320, 180);
 $atlas = new Atlas($font->map);
 $sprites = new SpriteRenderer($atlas);
 $device->begin([0, 0, 0, 1]);
 
-$sprites->render(
-	$font->layout("aB ⓿?\nAA", 2, 60, [.5, .5, .5, 1])['sprites']
-	, new Camera(0, 0, 320, 180)
-);
+$sprites->render($font->layout("aB ⓿?\nAA", 2, 60, [.5, .5, .5, 1])['sprites'], new Camera(0, 0, 320, 180));
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $expected = [
 	[2, 4, 12, 10, '800000ff'], [14, 0, 16, 16, '008000ff']
 	, [40, 0, 8, 8, 'ffff00ff'], [0, 20, 16, 16, '000080ff']
 	, [2, 44, 12, 10, '800000ff'], [16, 44, 12, 10, '800000ff']
 ];
+
 $checks = [];
 $differences = [];
 
@@ -134,10 +131,13 @@ $left = $clip[0] + $clip[2] * .52;
 $top = $clip[1] + 4;
 $checks['preedit caret'] = menuPixel($pixels, (int)round($left + 25), (int)$top + 11)
 	=== 'ffffffff';
+
 $checks['preedit selection'] = menuPixel($pixels, (int)round($left + 20), (int)$top + 11)
 	=== '00ff00ff';
+
 $checks['preedit underline'] = menuPixel($pixels, (int)round($left + 12), (int)$top + 13)
 	=== 'ffffffff';
+
 $checks['preedit never changes application value'] = $menu->value('name') === 'AAA';
 
 $menu->editor->compose(str_repeat('B', 40), 39, 1);
@@ -172,11 +172,13 @@ $device->begin([0, 0, 0, 1]);
 $renderer->render($menu, 320, 180);
 $checks['restoration preserves UI pixels'] = $pixels
 	=== glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+
 glEnable(GL_SCISSOR_TEST);
 glScissor(3, 4, 100, 80);
 $renderer->render($menu, 320, 180);
 $checks['caller scissor preserved'] = glIsEnabled(GL_SCISSOR_TEST)
 	&& glGetIntegerv(GL_SCISSOR_BOX) === [3, 4, 100, 80];
+
 glDisable(GL_SCISSOR_TEST);
 
 // Change alignment on the same renderer to exercise cached glyphs and pointer coordinates.
@@ -194,13 +196,16 @@ foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
 	$label = $x + 2 + ($w * .49 - 2 - 19) * $factor + 13;
 	$heading = $x + ($w - 9) * $factor;
 	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
-	$checks[$align.' value glyphs'] = menuPixel($pixels, (int)round($origin + 2), (int)$y + 7)
+	$checks[$align . ' value glyphs'] = menuPixel($pixels, (int)round($origin + 2), (int)$y + 7)
 		=== 'ff0000ff';
-	$checks[$align.' label glyphs'] = menuPixel($pixels, (int)round($label + 2), (int)$y + 7)
+
+	$checks[$align . ' label glyphs'] = menuPixel($pixels, (int)round($label + 2), (int)$y + 7)
 		=== 'ff0000ff';
-	$checks[$align.' heading glyphs'] = menuPixel($pixels, (int)round($heading + 2), (int)$y - 22)
+
+	$checks[$align . ' heading glyphs'] = menuPixel($pixels, (int)round($heading + 2), (int)$y - 22)
 		=== '00ff00ff';
-	$checks[$align.' caret hit region'] = abs($region['carets'][1] - ($origin + 7)) < .001;
+
+	$checks[$align . ' caret hit region'] = abs($region['carets'][1] - ($origin + 7)) < .001;
 
 	$input = new MenuInput;
 
@@ -211,10 +216,11 @@ foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
 		, [['type' => 'pointer', 'action' => 'down', 'x' => $origin + 7, 'y' => $y + 10]]
 		, $renderer->regions
 	);
-	$checks[$align.' pointer places caret'] = $menu->editor?->caret === 1;
+
+	$checks[$align . ' pointer places caret'] = $menu->editor?->caret === 1;
 	$device->begin([0, 0, 0, 1]);
 	$renderer->render($menu, 320, 180);
-	$checks[$align.' editing preserves placement'] = $renderer->regions[0]['carets']
+	$checks[$align . ' editing preserves placement'] = $renderer->regions[0]['carets']
 		=== $region['carets'];
 
 	$menu->editor->anchor = 1;
@@ -225,25 +231,13 @@ foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
 	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 	$preview = $x + $w * .52 + ($fieldWidth - 50) * $factor;
 
-	$checks[$align.' composition caret'] = menuPixel(
-		$pixels
-		, (int)round($preview + 25)
-		, (int)$y + 15
-	)
+	$checks[$align . ' composition caret'] = menuPixel($pixels, (int)round($preview + 25), (int)$y + 15)
 		=== 'ffffffff';
 
-	$checks[$align.' composition selection'] = menuPixel(
-		$pixels
-		, (int)round($preview + 20)
-		, (int)$y + 15
-	)
+	$checks[$align . ' composition selection'] = menuPixel($pixels, (int)round($preview + 20), (int)$y + 15)
 		=== '00ff00ff';
 
-	$checks[$align.' composition underline'] = menuPixel(
-		$pixels
-		, (int)round($preview + 12)
-		, (int)$y + 17
-	)
+	$checks[$align . ' composition underline'] = menuPixel($pixels, (int)round($preview + 12), (int)$y + 17)
 		=== 'ffffffff';
 
 	$menu->editor->compose('');
@@ -252,7 +246,7 @@ foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
 	$menu->editor->selectAll();
 	$menu->editor->insert('AAA');
 	$renderer->render($menu, 320, 180);
-	$checks[$align.' short text resets horizontal scrolling'] = $renderer->regions[0]['carets']
+	$checks[$align . ' short text resets horizontal scrolling'] = $renderer->regions[0]['carets']
 		=== $region['carets'];
 }
 
@@ -269,6 +263,7 @@ $menu = new Menu(
 	]]
 	, 'B'
 );
+
 $menu->open();
 $device->begin([0, 0, 0, 1]);
 $renderer->render($menu, 320, 180);
@@ -277,8 +272,10 @@ $region = $renderer->regions[0];
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $checks['item label overrides menu alignment'] = menuPixel($pixels, (int)$x + 17, (int)$y + 7)
 	=== 'ff0000ff';
+
 $checks['item value overrides column alignment'] = abs(end($region['carets']) - ($x + $w - 6))
 	< .001;
+
 $checks['heading alignment override'] = menuPixel($pixels, (int)$x + 2, (int)$y - 22)
 	=== '00ff00ff';
 
@@ -296,16 +293,13 @@ foreach(['center' => .5, 'left' => 0, 'right' => 1] as $align => $factor)
 	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 	$first = 24 + (272 - 9) * $factor;
 	$second = 24 + (272 - 4.5) * $factor;
-	$checks[$align.' card first line'] = menuPixel($pixels, (int)round($first + 1), 86)
-		=== '00ff00ff';
-	$checks[$align.' card second line'] = menuPixel($pixels, (int)round($second + 1), 91)
+	$checks[$align . ' card first line'] = menuPixel($pixels, (int)round($first + 1), 86)
 		=== '00ff00ff';
 
-	$checks[$align.' card previous layout cleared'] = menuPixel(
-		$pixels
-		, $align === 'left' ? 158 : 25
-		, 91
-	)
+	$checks[$align . ' card second line'] = menuPixel($pixels, (int)round($second + 1), 91)
+		=== '00ff00ff';
+
+	$checks[$align . ' card previous layout cleared'] = menuPixel($pixels, $align === 'left' ? 158 : 25, 91)
 		=== '000000ff';
 }
 
@@ -334,7 +328,9 @@ foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
 		$expected = $column < $right ? 'ffff00ff' : '000000ff';
 
 		$checks["dense glyph clipping $title $column"] = menuPixel(
-			$pixels, (int)$x + $column, (int)$y - 23
+			$pixels
+			, (int)$x + $column
+			, (int)$y - 23
 		) === $expected;
 	}
 }

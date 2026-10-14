@@ -28,8 +28,12 @@ final class Sprite
 	 * @param float $originY Vertical anchor fraction of image height; 0 is top and 1 is bottom.
 	 * @return void Initializes unit scale, full opacity, an outline, and no rotation or flips.
 	 */
-	public function __construct(public int $gid, public float $x = 0, public float $y = 0
-		, public float $originX = .5, public float $originY = 1
+	public function __construct(
+		public int $gid
+		, public float $x = 0
+		, public float $y = 0
+		, public float $originX = .5
+		, public float $originY = 1
 	){
 	}
 
@@ -42,8 +46,7 @@ final class Sprite
 	 */
 	public function frame(TileMap $map, float $milliseconds = 0): int
 	{
-		return $this->animated ? $map->animatedGid($this->gid, $milliseconds + $this->time)
-			: $this->gid;
+		return $this->animated ? $map->animatedGid($this->gid, $milliseconds + $this->time) : $this->gid;
 	}
 
 	/**

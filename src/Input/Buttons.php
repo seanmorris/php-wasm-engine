@@ -30,11 +30,10 @@ final class Buttons
 				throw new \InvalidArgumentException('Button indices must be nonnegative');
 			}
 
-			return 'button'.$key;
+			return 'button' . $key;
 		}
 
-		return preg_match('/^(?:button)?([0-9]+)$/i', $key, $match)
-			? 'button'.(int)$match[1] : $key;
+		return preg_match('/^(?:button)?([0-9]+)$/i', $key, $match) ? 'button' . (int)$match[1] : $key;
 	}
 
 	/**

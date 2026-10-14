@@ -119,7 +119,8 @@ test('fighting motions support diagonals, facing, chords and fresh attack presse
 	}
 });
 
-test('charge releases require the full hold and facing changes discard partial motions'
+test(
+	'charge releases require the full hold and facing changes discard partial motions'
 	, function() {
 		$input = new Sequences;
 		$input->add('charge', [['release' => 0, 'minHold' => .5], 1], .3);

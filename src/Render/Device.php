@@ -35,14 +35,7 @@ final class Device
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
-		$this->window = SDL_CreateWindow(
-			$title
-			, 0
-			, 0
-			, $width
-			, $height
-			, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
-		);
+		$this->window = SDL_CreateWindow($title, 0, 0, $width, $height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 		$this->context = SDL_GL_CreateContext($this->window);
 
 		if(!$this->context || SDL_GL_MakeCurrent($this->window, $this->context) !== 0)

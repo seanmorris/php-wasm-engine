@@ -5,10 +5,7 @@ declare(strict_types=1);
 function png(string $path, int $width, int $height, callable $pixel): void
 {
 
-	$chunk = static fn($type, $data) => pack('N', strlen($data)).$type.$data.pack(
-		'N'
-		, crc32($type .$data)
-	);
+	$chunk = static fn($type, $data) => pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data));
 	$data = '';
 
 	for($y = 0; $y < $height; $y++)
@@ -23,24 +20,25 @@ function png(string $path, int $width, int $height, callable $pixel): void
 
 	file_put_contents(
 		$path
-		, "\x89PNG\r\n\x1a\n".$chunk('IHDR', pack('NNC5', $width, $height, 8, 6, 0, 0, 0)) .$chunk(
-			'IDAT', gzcompress($data)
-		).$chunk('IEND', '')
+		, "\x89PNG\r\n\x1a\n" . $chunk('IHDR', pack('NNC5', $width, $height, 8, 6, 0, 0, 0)) . $chunk(
+			'IDAT'
+			, gzcompress($data)
+		) . $chunk('IEND', '')
 	);
 }
 
 function jsonAsset(string $name, array $data): void
 {
 	file_put_contents(
-		__DIR__.'/assets/'.$name
-		, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n"
+		__DIR__ . '/assets/' . $name
+		, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
 	);
 }
 
 // Tiled's JSON importer reads omitted visibility and opacity as false and zero.
 $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
-png(__DIR__.'/assets/tiles.png', 288, 32, static function($x, $y) {
+png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
 	$id = intdiv($x, 32);
 	$x %= 32;
 
@@ -53,11 +51,16 @@ png(__DIR__.'/assets/tiles.png', 288, 32, static function($x, $y) {
 			return [0,0,0,0];
 		}
 
-		return $y < $top + 5?[105,212,157,255]:(($x + $y) % 7 === 0?[71,100,105,255]:[42
+		return $y < $top + 5
+			? [105,212,157,255]
+			: (($x + $y) % 7 === 0
+				? [71,100,105,255]
+				: [42
 		, 63
 		, 77
 			, 255
-		]);
+				]
+			);
 	}
 
 	if($id === 3)
@@ -67,13 +70,15 @@ png(__DIR__.'/assets/tiles.png', 288, 32, static function($x, $y) {
 
 	if($id === 4 || $id === 5)
 	{
-		return hypot($x - 16, $y - 16) < ($id === 4?10:7) && hypot($x - 16, $y - 16) > 4?[255
+		return hypot($x - 16, $y - 16) < ($id === 4?10:7) && hypot($x - 16, $y - 16) > 4
+			? [255
 		, 211
 		, 107
 			, 255
-		]:[0
+			]
+			: [0
 			, 0,0,0
-		];
+			];
 	}
 
 	if($x < 6 || $x > 25 || $y < 3 || $y > 29)
@@ -138,6 +143,7 @@ $tiles = ['type' => 'tileset'
 	'id' => 8,'class' => 'flyer'
 	] ]
 ];
+
 jsonAsset('tiles.tsj', $tiles);
 $width = 96;
 $height = 20;
@@ -212,13 +218,13 @@ $base = ['type' => 'map','version' => '1.10','orientation' => 'orthogonal'
 
 // Repeating coastal strips, drawn entirely by the PHP image renderer.
 png(
-	__DIR__.'/assets/sky.png'
+	__DIR__ . '/assets/sky.png'
 	, 8
 	, 300
 	, static fn($x, $y) => [15 + (int)($y / 18), 30 + (int)($y / 10), 52 + (int)($y / 7),255]
 );
 
-png(__DIR__.'/assets/clouds.png', 512, 96, static function($x, $y) {
+png(__DIR__ . '/assets/clouds.png', 512, 96, static function($x, $y) {
 	foreach([[72,26,62,12],[110,19,29,17],[300,64,88,10],[348,55,42,15]] as [$cx,$cy,$rx,$ry])
 	{
 		if((($x - $cx) / $rx) ** 2 + (($y - $cy) / $ry) ** 2 < 1)
@@ -232,11 +238,12 @@ png(__DIR__.'/assets/clouds.png', 512, 96, static function($x, $y) {
 
 foreach(['far' => [180,48,78,101],'near' => [140,39,67,80]] as $name => [$h,$r,$g,$b])
 {
-	png(__DIR__.'/assets/mountains-'.$name.'.png', 512, $h, static function($x, $y) use ($name, $h
+	png(__DIR__ . '/assets/mountains-' . $name . '.png', 512, $h, static function($x, $y) use ($name, $h
 		, $r, $g
 		, $b
 	) {
-		$ridge = $name === 'far'?45 + 25 * sin($x * M_PI / 128) + 16 * cos($x * M_PI / 64)
+		$ridge = $name === 'far'
+			? 45 + 25 * sin($x * M_PI / 128) + 16 * cos($x * M_PI / 64)
 			: 56 + 27 * cos($x * M_PI / 256) + 13 * sin($x * M_PI / 64);
 
 		if($y < $ridge)
@@ -245,27 +252,31 @@ foreach(['far' => [180,48,78,101],'near' => [140,39,67,80]] as $name => [$h,$r,$
 		}
 
 		$shade = (int)(12 * ($y - $ridge) / $h);
+
 		return [$r - $shade,$g - $shade,$b - $shade,255];
 	}
 	);
 }
 
-png(__DIR__.'/assets/water.png', 128, 256, static function($x, $y) {
+png(__DIR__ . '/assets/water.png', 128, 256, static function($x, $y) {
 	$shine = ($y % 13 === 0 && ($x + intdiv($y, 13) * 19) % 64 < 28)?12:0;
+
 	return [31 + $shine,69 + $shine - (int)($y / 24),89 + $shine - (int)($y / 16),255];
 });
 
 foreach([0,1] as $frame)
 {
 	png(
-		__DIR__.'/assets/shine-'.$frame.'.png'
+		__DIR__ . '/assets/shine-' . $frame . '.png'
 		, 128
 		, 8
-		, static fn($x, $y) => ($x + $frame * 16 + $y * 7) % 48 < 18 && $y % 3 === 0?[124
+		, static fn($x, $y) => ($x + $frame * 16 + $y * 7) % 48 < 18 && $y % 3 === 0
+			? [124
 		, 172
 		, 180
 			, 130
-		]:[0,0,0,0]
+			]
+			: [0,0,0,0]
 	);
 }
 
@@ -301,7 +312,7 @@ foreach($bands as $i => [$name,$offset,$parallax,$scroll,$w,$h])
 	$background[] = ['id' => 10 + $i
 	, 'name' => $name
 	, 'type' => 'imagelayer'
-	, 'image' => $name.'.png'
+	, 'image' => $name . '.png'
 		, 'imagewidth' => $w
 		, 'imageheight' => $h
 		, 'repeatx' => true
@@ -341,6 +352,7 @@ $base['layers'] = [['id' => 1
 	, 'y' => 100
 	]]] + $layerDefaults
 ];
+
 $base['layers'] = array_merge($background, $base['layers']);
 jsonAsset('platformer.tmj', $base);
 $infinite = $base;
@@ -370,10 +382,11 @@ $infinite['layers'] = [['id' => 1
 	$chunks
 ] + $layerDefaults
 ];
+
 $infinite['layers'] = array_merge($background, $infinite['layers']);
 jsonAsset('infinite.tmj', $infinite);
 
-png(__DIR__.'/assets/iso.png', 128, 64, static function($x, $y) {
+png(__DIR__ . '/assets/iso.png', 128, 64, static function($x, $y) {
 	$id = intdiv($x, 64);
 	$x %= 64;
 	$dy = $y - ($id?22:48);
@@ -415,12 +428,10 @@ $iso = ['type' => 'map'
 	, 'width' => 12
 	, 'height' => 12
 	, 'data' =>
-	array_map(
-		fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1
-		, range(0, 143)
-	)] + $layerDefaults
+	array_map(fn($i) => ($i % 13 === 0 || $i === 58 || $i === 59)?2:1, range(0, 143))] + $layerDefaults
 	]
 ];
+
 $iso['layers'] = array_merge($background, $iso['layers']);
 jsonAsset('isometric.tmj', $iso);
 
@@ -441,21 +452,31 @@ jsonAsset(
 
 // Asymmetric four-quadrant image for orientation and flip regressions.
 png(
-	__DIR__.'/assets/test.png'
+	__DIR__ . '/assets/test.png'
 	, 16
 	, 16
-	, static fn($x, $y) => $y < 8?($x < 8?[255,0,0,255]:[0, 255, 0, 255]):($x < 8?[0,0,255,255]:[255
+	, static fn($x, $y) => $y < 8
+		? ($x < 8?[255,0,0,255]:[0, 255, 0, 255])
+		: ($x < 8
+			? [0,0,255,255]
+			: [255
 		, 255,0,255
-	])
+			]
+		)
 );
 
 png(
-	__DIR__.'/assets/test-parallax.png'
+	__DIR__ . '/assets/test-parallax.png'
 	, 7
 	, 5
-	, static fn($x, $y) => $y < 2?($x < 3?[255,0,0,255]:[0, 255, 0,255]):($x < 3?[0,0,255,255]:[255
+	, static fn($x, $y) => $y < 2
+		? ($x < 3?[255,0,0,255]:[0, 255, 0,255])
+		: ($x < 3
+			? [0,0,255,255]
+			: [255
 		, 255,0,255
-	])
+			]
+		)
 );
 
 // Independently downloadable maps with shared tilesets and parallax images.
@@ -487,7 +508,8 @@ foreach(range(-2, 2) as $section)
 	, 'width' => 32
 		, 'height' => 20,'data' => $cells
 	] + $layerDefaults;
-	$name = 'stream-'.($section + 2).'.tmj';
+
+	$name = 'stream-' . ($section + 2) . '.tmj';
 	jsonAsset($name, $streamMap);
 	$worldMaps[] = ['fileName' => $name
 	, 'x' => $section * 1024
@@ -499,4 +521,4 @@ foreach(range(-2, 2) as $section)
 }
 
 jsonAsset('stream.world', ['type' => 'world','maps' => $worldMaps]);
-require __DIR__.'/generate-loop.php';
+require __DIR__ . '/generate-loop.php';

@@ -39,9 +39,7 @@ final class Menu
 		{
 			if(!is_string($id) || $id === '' || $id[0] === '@' || !is_array($item))
 			{
-				throw new \InvalidArgumentException(
-					'Menu items require stable string IDs without @'
-				);
+				throw new \InvalidArgumentException('Menu items require stable string IDs without @');
 			}
 
 			$type = $item['input'] ?? '';
@@ -63,14 +61,9 @@ final class Menu
 			{
 				foreach(['min', 'max', 'step'] as $key)
 				{
-					if(isset($item[$key]) && (!is_numeric(
-						$item[$key]
-					) || !is_finite(
-						(float)$item[$key]
-					))){
-						throw new \InvalidArgumentException(
-							'Numeric menu bounds and steps must be finite'
-						);
+					if(isset($item[$key]) && (!is_numeric($item[$key]) || !is_finite((float)$item[$key])))
+					{
+						throw new \InvalidArgumentException('Numeric menu bounds and steps must be finite');
 					}
 				}
 
@@ -157,6 +150,7 @@ final class Menu
 
 			$item['disabled'] = $this->condition($item['disabled'] ?? false)
 				|| (($item['input'] ?? '') === 'select' && empty($item['options']));
+
 			$rows[$id] = $item;
 		}
 
@@ -245,6 +239,7 @@ final class Menu
 
 		$this->finishEdit();
 		$this->selected = $id;
+
 		return true;
 	}
 
@@ -266,8 +261,7 @@ final class Menu
 
 		$index = (int)array_search($this->selected, $ids, true);
 		$next = $index + $distance;
-		$next = $wrap ? (($next % count($ids)) + count($ids)) % count($ids)
-			: max(0, min(count($ids) - 1, $next));
+		$next = $wrap ? (($next % count($ids)) + count($ids)) % count($ids) : max(0, min(count($ids) - 1, $next));
 		$this->select($ids[$next]);
 	}
 
@@ -281,12 +275,14 @@ final class Menu
 		if($this->editor)
 		{
 			$this->finishEdit();
+
 			return;
 		}
 
 		if($this->selected === '@back')
 		{
 			$this->back();
+
 			return;
 		}
 
@@ -295,6 +291,7 @@ final class Menu
 			$this->error = null;
 			$this->loading = true;
 			$this->refresh();
+
 			return;
 		}
 
@@ -310,12 +307,14 @@ final class Menu
 		if(in_array($type, ['string', 'number'], true))
 		{
 			$this->editor = new TextBuffer((string)$item['value']);
+
 			return;
 		}
 
 		if(in_array($type, ['boolean', 'select'], true))
 		{
 			$this->adjust(1);
+
 			return;
 		}
 
@@ -326,6 +325,7 @@ final class Menu
 				, 'scroll' => $this->scroll
 				, 'loader' => $this->loader
 			];
+
 			$this->title = $item['label'];
 			$this->selected = null;
 			$this->scroll = 0;
@@ -362,12 +362,14 @@ final class Menu
 		if($this->editor)
 		{
 			$this->finishEdit();
+
 			return;
 		}
 
 		if(!$this->stack)
 		{
 			$this->isOpen = false;
+
 			return;
 		}
 
@@ -400,11 +402,8 @@ final class Menu
 		$item = $this->rows()[$id] ?? null;
 		$type = $item['input'] ?? '';
 
-		if(!$item || $item['disabled'] || !in_array(
-			$type
-			, ['string', 'number', 'boolean', 'select']
-			, true
-		)){
+		if(!$item || $item['disabled'] || !in_array($type, ['string', 'number', 'boolean', 'select'], true))
+		{
 			return false;
 		}
 
@@ -451,6 +450,7 @@ final class Menu
 		}
 
 		$this->items[$id]['value'] = $value;
+
 		return true;
 	}
 
@@ -490,11 +490,7 @@ final class Menu
 				$index = array_search($value, $options, true);
 				$index = $index === false ? ($direction > 0 ? -1 : 0) : $index;
 
-				$value = $options[($index + ($direction <=> 0) + count(
-					$options
-				)) % count(
-					$options
-				)];
+				$value = $options[($index + ($direction <=> 0) + count($options)) % count($options)];
 				break;
 			default: return;
 		}

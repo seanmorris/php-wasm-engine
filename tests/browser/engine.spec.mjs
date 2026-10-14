@@ -22,7 +22,7 @@ async function run(page, source)
 
 		try
 		{
-			const code = await enginePhp.run('<?php '+source);
+			const code = await enginePhp.run('<?php ' + source);
 
 			return {output,errors,code};
 		}
@@ -181,8 +181,9 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
 	expect(result.error).toBe(0);
 });
 
-for(const scene of ['platformer','loop','infinite','isometric','breakables']) test(
-	scene+' live PHP demo starts, responds to input and stops'
+for(const scene of ['platformer','loop','infinite','isometric','breakables'])
+test(
+	scene + ' live PHP demo starts, responds to input and stops'
 	, async({page}) => {
 		const errors = [];
 		page.on('pageerror', e => errors.push(e.message));
@@ -193,9 +194,7 @@ for(const scene of ['platformer','loop','infinite','isometric','breakables']) te
 		await expect.poll(
 			async() => Number(await page.locator('canvas').getAttribute('data-frames'))
 			, {timeout: 60000}
-		).toBeGreaterThan(
-			20
-		);
+		).toBeGreaterThan(20);
 
 		await page.evaluate(() => {
 			window.loseExtension = document.querySelector('canvas').getContext('webgl2').getExtension(
@@ -220,9 +219,7 @@ for(const scene of ['platformer','loop','infinite','isometric','breakables']) te
 			await expect.poll(
 				async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}').grounded
 				, {timeout: 15000}
-			).toBe(
-				true
-			);
+			).toBe(true);
 
 			const before = JSON.parse(await page.locator('canvas').getAttribute('data-body'));
 			await page.keyboard.down('ArrowRight');
@@ -234,7 +231,7 @@ for(const scene of ['platformer','loop','infinite','isometric','breakables']) te
 			await page.waitForTimeout(100);
 		}
 
-		await page.screenshot({path: 'test-results/'+scene+'.png',fullPage: true});
+		await page.screenshot({path: 'test-results/' + scene + '.png',fullPage: true});
 		await page.evaluate(() => window.stopEngine());
 		await expect(page.locator('#start')).toBeEnabled();
 		expect(errors).toEqual([]);

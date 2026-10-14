@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "test": "php tests/run.php",
+    "test": ["php tests/run.php", "php tests/phpdoc.php"],
     "bench:ecs": "php benchmarks/ecs.php",
     "lint": [
       "php-cs-fixer fix --dry-run --diff",
