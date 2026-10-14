@@ -3,9 +3,10 @@ import {SdlAudio} from '../browser/SdlAudio.mjs';
 /** Browser actions shared by the PHP pause menu and the two corner shortcuts. */
 export class DemoControls
 {
+
 	/**
-	 * Bind accessible shortcuts without starting PHP or opening an audio device.
-	 */
+* Bind accessible shortcuts without starting PHP or opening an audio device.
+*/
 	constructor()
 	{
 		this.scene = 'platformer';
@@ -32,11 +33,14 @@ export class DemoControls
 			this.setMuted(!this.muted);
 			this.canvas.focus({preventScroll: true});
 		});
+
 		this.fullscreenButton.addEventListener('click', () => this.setFullscreen(!this.fullscreen));
+
 		document.addEventListener('fullscreenchange', () => {
 			this.update();
 			this.canvas.focus({preventScroll: true});
 		});
+
 		this.update();
 	}
 
@@ -53,10 +57,10 @@ export class DemoControls
 	}
 
 	/**
-	 * Install the audio route before PHP can open an SDL output device.
-	 * @param {object} module Fresh php-sdl-wasm module owned by the demo.
-	 * @returns {void} Carries the mute preference across runtime changes.
-	 */
+* Install the audio route before PHP can open an SDL output device.
+* @param {object} module Fresh php-sdl-wasm module owned by the demo.
+* @returns {void} Carries the mute preference across runtime changes.
+*/
 	attach(module)
 	{
 		this.audio?.close();
@@ -64,10 +68,10 @@ export class DemoControls
 	}
 
 	/**
-	 * Store and apply the shared mute preference.
-	 * @param {boolean} muted Whether to silence game audio.
-	 * @returns {void} Updates audio, button state, and optional local persistence.
-	 */
+* Store and apply the shared mute preference.
+* @param {boolean} muted Whether to silence game audio.
+* @returns {void} Updates audio, button state, and optional local persistence.
+*/
 	setMuted(muted)
 	{
 		this.muted = Boolean(muted);
@@ -86,10 +90,10 @@ export class DemoControls
 	}
 
 	/**
-	 * Request browser fullscreen and report gesture/permission failures beside the game.
-	 * @param {boolean} enabled Whether the demo should occupy the fullscreen view.
-	 * @returns {Promise<void>} Settles after success or a visible, recoverable error.
-	 */
+* Request browser fullscreen and report gesture/permission failures beside the game.
+* @param {boolean} enabled Whether the demo should occupy the fullscreen view.
+* @returns {Promise<void>} Settles after success or a visible, recoverable error.
+*/
 	async setFullscreen(enabled)
 	{
 		if(this.fullscreenBusy || !this.fullscreenAvailable || enabled === this.fullscreen)

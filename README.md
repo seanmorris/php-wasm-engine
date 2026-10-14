@@ -465,13 +465,27 @@ composer install
 composer test
 composer lint
 npm ci
+npm run lint:js
 npx playwright install chromium
 npm run test:browser
 ~~~
 
 PHP files use the PHP version of [sm-no-saccade-style](https://github.com/seanmorris/sm-no-saccade-style/tree/fix/readable-block-layout/packages/php). `composer.lock` pins a tested commit of its `fix/readable-block-layout` development branch until these rules have a tagged release. Apply it with `composer lint:fix`.
 
-The preset uses a 100-column limit, tabs, blank lines before declarations and their PHPDoc, and spaces after argument commas and `for` header semicolons. Optional control braces expand to normal blocks. Compact braced constructs must fit entirely on one line and require braces in PHP. Literal contents are preserved.
+Supporting JavaScript uses the JS version of the same package. `package.json` and
+`package-lock.json` pin a GitHub commit containing the readability rules that are
+not yet in the npm release. No sibling checkout is required. `npm run lint:js`
+checks the browser helpers, demo, scripts, tests, and root configuration files;
+`npm run lint:js:fix` formats them. `npm run lint` and `npm run lint:fix` are aliases.
+CI runs the JavaScript check separately from PHP. Generated bundles, downloaded
+runtimes, vendor code, and test reports are excluded.
+
+JavaScript uses a 120-column limit. Parameter and argument listings use one format
+throughout: all inline, or one item per line with leading commas. Existing literal
+contents, including embedded PHP and shaders, are preserved. Runs of more than ten
+unseparated code lines produce advisory warnings.
+
+The engine configures both formatters for 120 columns, tabs, blank lines before declarations and their documentation, and spaces after argument commas and `for` header semicolons. Optional control braces expand to normal blocks. Compact braced constructs must fit entirely on one line and require braces in the language. Literal contents are preserved.
 
 Related statements stay grouped, with blank lines before control flow, after conditionals, and before multiline calls. Long calls wrap around complete arguments. Multiline parentheses, braces, and square brackets close at the indentation where they opened; nested calls that fit stay together.
 
