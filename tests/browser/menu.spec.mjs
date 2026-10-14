@@ -161,12 +161,14 @@ for(const fallback of [false,true]) for(const recovery of ['visibility','focus',
 					delete document.hidden;
 					document.dispatchEvent(new Event('visibilitychange'));
 				});
-			} else if(recovery==='focus')
+			}
+			else if(recovery==='focus')
 			{
 				await page.locator('#mute').focus();
 				await page.waitForTimeout(100);
 				await page.locator('canvas').focus();
-			} else
+			}
+			else
 			{
 				await page.evaluate(()=>{
 					window.menuLoss=document.querySelector('canvas').getContext('webgl2').getExtension(
@@ -321,7 +323,8 @@ async function composition(page, fallback, phase, text='かな')
 				?new InputEvent('input', {data: text,inputType: 'insertCompositionText',isComposing: true})
 				:new TextUpdateEvent('textupdate', {text,selectionStart: 1,selectionEnd: 2})
 			);
-		} else
+		}
+		else
 		{
 			target.dispatchEvent(new CompositionEvent('compositionend', {data: text}));
 

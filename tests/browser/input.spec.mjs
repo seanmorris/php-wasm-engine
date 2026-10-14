@@ -323,7 +323,8 @@ for(const profile of ['runner','glider','flyer']) test(
 			await change(page, {buttons: [1]});
 			await expect.poll(async()=> (await body()).grounded, {intervals: [20]}).toBe(true);
 			expect(Math.abs((await body()).speed)).toBeGreaterThan(100);
-		} else
+		}
+		else
 		{
 			await change(page, {buttons: [0]});
 

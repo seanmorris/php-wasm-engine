@@ -26,7 +26,8 @@ export async function runtimeDirectory()
 		{
 			await fs.access(path.join(dir, 'php8.4-sdl.manifest.json'));
 			return dir;
-		} catch
+		}
+		catch
 		{
 		} }
 
@@ -37,7 +38,8 @@ export async function runtimeDirectory()
 	try
 	{
 		lock=JSON.parse(await fs.readFile(path.join(root, 'runtime-lock.json')));
-	} catch
+	}
+	catch
 	{
 		throw Error('Set PHP_SDL_ROOT to your php-sdl-wasm package directory. No preview runtime lock is available.');
 	}
@@ -82,7 +84,8 @@ export async function runtimeDirectory()
 		}
 
 		await fs.rename(staging, path.join(root, '.runtime'));
-	} finally
+	}
+	finally
 	{
 		await fs.rm(archive, {force: true});
 		await fs.rm(staging, {recursive: true,force: true});

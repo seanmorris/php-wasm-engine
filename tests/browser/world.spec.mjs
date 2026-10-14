@@ -24,7 +24,8 @@ async function pan(page, direction, x)
 			const state=JSON.parse(document.querySelector('canvas').dataset.world);
 			return direction==='ArrowRight'?state.x>=x:state.x<=x;
 		}, {direction,x});
-	} finally
+	}
+	finally
 	{
 		await page.keyboard.up(direction);
 	}

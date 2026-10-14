@@ -31,7 +31,8 @@ function roundTrip(file, kind, check)
 		assert.ifError(result.error);
 		assert.equal(result.status, 0, result.stderr||result.stdout);
 		check(read(file), read(exported), exported);
-	} finally
+	}
+	finally
 	{
 		rmSync(directory, {recursive: true,force: true});
 	}
@@ -125,7 +126,8 @@ for(const name of readdirSync(assets).filter(name=>name.endsWith('.tmj')))
 			if(before.layers.some(layer=>layer.type==='tilelayer'))
 			{
 				assert.ok(visibleTerrain>0, 'the editor must have visible terrain');
-			} else
+			}
+			else
 			{
 				assert.ok(visibleImages>0, 'an image-only map must have visible image layers');
 			}
