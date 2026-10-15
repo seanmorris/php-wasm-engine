@@ -181,7 +181,51 @@ test('anchored backgrounds keep a shared phase across map boundaries and streami
 	expect(result.error).toBe(0);
 });
 
-for(const scene of ['platformer','badniks','grinding','loop','infinite','isometric','breakables'])
+test('water displacement is clipped, animated, tinted and releases its textures', async({page}) => {
+	await boot(page);
+	const result = JSON.parse(await run(page, 'require "/engine/tests/render-water.php";'));
+	expect(result.draws).toEqual([1, 2, 2]);
+	expect(result.outsideExact).toBe(true);
+	expect(result.wetPixels).toBeGreaterThan(1000);
+	expect(result.animatedPixels).toBeGreaterThan(500);
+	expect(result.live).toEqual([true, true]);
+	expect(result.released).toEqual([true, true]);
+	expect(result.error).toBe(0);
+});
+
+test('the live water scene applies buoyancy and draws the visible liquid pass', async({page}) => {
+	const errors = [];
+	const setup = `<?php
+		$body->x = 1500;
+		$body->y = 400;
+		$body->vx = $body->vy = $body->groundSpeed = 0;
+		$body->density = .8;
+		$body->gravity = 300;
+		$body->grounded = false;
+	`;
+
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine === 'function');
+	await page.evaluate(() => window.bootEngine({scene: 'water'}));
+	const canvas = page.locator('canvas');
+
+	await expect(canvas).toHaveAttribute('data-scene', 'water', {timeout: 60000});
+	await page.evaluate(source => enginePhp.run(source), setup);
+
+	const body = async() => JSON.parse(await canvas.getAttribute('data-body') || '{}');
+
+	const water = async() => JSON.parse(await canvas.getAttribute('data-water') || '{}');
+	await expect.poll(async() => (await body()).underwater).toBe(true);
+	expect((await water()).depth).toBeGreaterThan(.5);
+	await expect.poll(async() => (await water()).draws, {timeout: 10000}).toBe(2);
+	const initial = await body();
+	await expect.poll(async() => (await body()).y).toBeLessThan(initial.y - 3);
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.stopEngine());
+});
+
+for(const scene of ['platformer','water','badniks','grinding','loop','infinite','isometric','breakables'])
 test(
 	scene + ' live PHP demo starts, responds to input and stops'
 	, async({page}) => {

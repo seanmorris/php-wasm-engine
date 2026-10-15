@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, water regions, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -73,6 +73,57 @@ The example player HUD renders **SCORE**, **TIME**, and **RINGS** at the upper l
 the annotated menu font, colored labels, and pixel shadows matching moving-boxes-2.
 It has no background panel and hides in camera-only scenes. The FPS meter remains an
 independent lower-left diagnostic with no black rectangle behind it.
+
+## Water regions and displacement
+
+Choose **Level → Water regions** to use the complete example. Build speed or launch a spindash
+to skim across the surface, or enter the pool to see reduced gravity and reduced control. Bodies
+may opt into density-based buoyancy, and Tiled properties can add currents. The world behind each
+visible liquid rectangle is sampled through a
+scrolling displacement texture and then tinted. The HUD and pause menu render afterward and stay
+sharp.
+
+Draw an unrotated rectangle object in Tiled and give it the class `WaterRegion`, `Water`, or
+`water-region`. The boolean `water` property also marks a rectangle; `region` remains available as
+a moving-boxes-2 compatibility alias. `WaterRegions::fromMaps()` applies map and object-layer
+offsets, including Tiled's bottom anchor for tile objects.
+
+~~~php
+use PhpWasmEngine\Physics\{Body,MapTerrain,Platformer,WaterRegions};
+use PhpWasmEngine\Render\WaterRenderer;
+
+$terrain = MapTerrain::build($map);
+$waters = WaterRegions::fromMaps($map);
+$movement = new Platformer($terrain, waters: $waters);
+$body = new Body(80, 100);
+$body->density = .8; // Zero disables buoyancy; values below water density float.
+
+$waterRenderer = new WaterRenderer($device->width, $device->height);
+
+// During world rendering:
+$waterRenderer->begin();
+$mapRenderer->render($camera, $milliseconds);
+$spriteRenderer->render($sprites, $camera, $milliseconds);
+$waterRenderer->compose($waters, $camera, $milliseconds);
+// Draw screen-space HUD and menus here.
+~~~
+
+The physics properties are `gravity` as a gravity multiplier, `drag` as the underwater control and
+jump multiplier, `density`, `skimSpeed` in pixels per second, and `currentX`/`currentY` as
+accelerations in pixels per second squared. Rendering reads Tiled `color` in `#AARRGGBB` form,
+`displacement` in screen pixels, `displacementScale` in world pixels per repeat, and
+`displacementSpeed` in map pixels per second.
+
+`Body::$water`, `underwater`, `waterDepth`, `waterEntered`, `waterExited`, and `skimming` expose the
+result to gameplay code. Point-segment versus rectangle tests retain entry and exit edges when a
+body crosses an entire water volume in one fixed step. Water remains nonsolid; ordinary terrain
+still uses full body casts. Surface skimming tests the complete vertical step and cannot miss a
+thin boundary solely because the actor is moving quickly.
+
+`WaterRenderer` owns one scene framebuffer and one procedural RG displacement texture. It copies
+the scene once, then submits one clipped quad per visible region. Displacement phase uses world
+coordinates, so neighboring regions do not restart their waves. Call `restore()` after the map and
+sprite resources on WebGL recovery, and call `close()` before closing the device.
 
 ## Grinding rails and combos
 

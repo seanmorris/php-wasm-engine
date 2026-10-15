@@ -13,9 +13,11 @@ use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Physics\Terrain;
+use PhpWasmEngine\Physics\WaterRegions;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\MapRenderer;
 use PhpWasmEngine\Render\SpriteRenderer;
+use PhpWasmEngine\Render\WaterRenderer;
 use PhpWasmEngine\Render\WorldRenderer;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Tiled\World;
@@ -29,6 +31,8 @@ final class DemoLevel
 	public ?SpriteRenderer $sprites = null;
 	public ?Terrain $terrain = null;
 	public ?Platformer $movement = null;
+	public ?WaterRegions $waters = null;
+	public ?WaterRenderer $waterRenderer = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
 	public ?Badniks $badniks = null;
@@ -157,9 +161,16 @@ final class DemoLevel
 
 		$map = reset($maps);
 		$this->terrain = MapTerrain::build($map);
+		$this->waters = WaterRegions::fromMaps($map);
 		$this->rings = new Rings($engine->entities, $map, terrain: $this->terrain);
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
+
+		if($this->waters->regions)
+		{
+			$this->waterRenderer = new WaterRenderer($engine->device->width, $engine->device->height);
+		}
+
 		$this->renderer->render($view, $engine->time * 1000);
 		$engine->systems->add($this->systemPrefix . 'rings', [$this->rings, 'update'], after: ['movement']);
 
@@ -202,7 +213,7 @@ final class DemoLevel
 				|| ($this->monitors?->impact($body, $hit, $engine->time * 1000) ?? false);
 		};
 
-		$this->movement = new Platformer($this->terrain, $impact);
+		$this->movement = new Platformer($this->terrain, $impact, $this->waters);
 
 		return true;
 	}
@@ -243,6 +254,7 @@ final class DemoLevel
 	{
 		$this->renderer?->restore();
 		$this->sprites?->restore();
+		$this->waterRenderer?->restore();
 	}
 
 	/**
@@ -271,6 +283,7 @@ final class DemoLevel
 		$this->badniks?->close();
 		$this->monitors?->close();
 		$this->shields?->close();
+		$this->waterRenderer?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();

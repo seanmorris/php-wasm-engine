@@ -818,6 +818,34 @@ for($x = 42; $x <= 50; $x++)
 }
 
 jsonAsset('platformer.tmj', $platformer);
+$water = $base;
+$water['layers'][] = [
+	'id' => 4
+	, 'name' => 'Water regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 1280
+			, 'y' => 320
+			, 'width' => 640
+			, 'height' => 320
+			, 'properties' => [
+				['name' => 'gravity','type' => 'float','value' => .4]
+				, ['name' => 'drag','type' => 'float','value' => .85]
+				, ['name' => 'density','type' => 'float','value' => 1]
+				, ['name' => 'skimSpeed','type' => 'float','value' => 900]
+				, ['name' => 'color','type' => 'color','value' => '#4d147ab8']
+				, ['name' => 'displacement','type' => 'float','value' => 4]
+				, ['name' => 'displacementScale','type' => 'float','value' => 64]
+				, ['name' => 'displacementSpeed','type' => 'float','value' => 42.6666667]
+			]
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water.tmj', $water);
 $badniks = $base;
 $badniks['tilesets'][] = ['firstgid' => 27,'source' => 'monitors.tsj'];
 $badniks['layers'][] = [

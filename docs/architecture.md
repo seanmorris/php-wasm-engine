@@ -13,6 +13,8 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
+- moving-boxes-2/app/region/WaterRegion.js and the viewport waves filter: liquid gravity, drag,
+  density, surface skimming, tinted clipping, and scrolling displacement.
 - moving-boxes-2/app/behavior/Platformer.js, region/GrindingRegion.js, actor/SkateBoard.js,
   actor/PointActor.js, and viewport/Viewport.js: annotated grinding surfaces, retained direction,
   minimum rail speed, airborne combo links, summed reward multipliers, settlement, and top-right HUD.
@@ -54,6 +56,14 @@ Parallax calculates layout without SDL. Normal image and tile layers use Tiled's
 
 WorldRenderer draws image layers before each map's first tile layer in a background pass. Only the ready map containing the camera center contributes its anchored stack; overlaps use manifest order. While that map is pending or the center is in a gap, the previous visible ready stack remains selected, falling back to the first visible ready map. Regular image layers still render for all visible maps. The remaining layers follow in map order. This keeps repeating skies behind terrain and prevents duplicate alpha blending at boundaries. MapRenderer's optional start/end layer indexes describe a half-open range for these passes, and its `anchoredImages` argument suppresses anchored images for unselected backgrounds.
 
+WaterRenderer captures map and sprite output into one RGBA8 framebuffer. Its base pass copies that
+scene to the default framebuffer. Each visible water rectangle then redraws its clipped area with
+a procedural repeating RG displacement texture, a small horizontal blur, and the Tiled tint.
+World-space lookup coordinates keep wave phase continuous across neighboring regions and camera
+movement. HUD and menu passes follow composition, so screen-space text is not displaced. The
+renderer owns its framebuffer, color texture, wave texture, vertex array, and shader program, and
+recreates each one after context restoration.
+
 Format semantics follow the official [Tiled JSON format](https://doc.mapeditor.org/en/stable/reference/json-map-format/), [global tile IDs](https://doc.mapeditor.org/en/stable/reference/global-tile-ids/), and [world format](https://doc.mapeditor.org/en/stable/manual/worlds/).
 
 ## Where raycasting prevents tunneling
@@ -66,6 +76,12 @@ Physics/Terrain.php provides two casts:
 Platformer::sweep uses castBody for horizontal, vertical, and diagonal movement, including dash, fall, flight, glide, and climb. Its optional onImpact callback receives the earliest body hit before collision response. Hit::$shape identifies removable geometry; a null handle means permanent terrain. If the callback removes the contacted shape, the sweep advances to that contact and recasts the remaining displacement without clipping velocity. Removed shapes do not consume the six-contact budget; a separate limit of 1024 removals bounds callbacks that keep creating obstacles. Otherwise, the sweep moves to contact, projects velocity and remaining displacement onto the surface, then repeats for up to six contacts. Unresolved displacement is discarded. Callback return values alone cannot disable a collision.
 
 Platformer::adhere casts two short inward rays for surface height and angle. Platformer::stand checks head clearance. Platformer::climb probes the wall's end. Grounded movement updates its tangent in increments of at most four pixels, capped at 1024 increments per step. Each increment still uses a continuous cast.
+
+WaterRegions uses a slab intersection test over the body's complete center displacement. A body
+that starts and ends outside a liquid rectangle still reports both waterEntered and waterExited
+when it crosses the volume in one step. Surface skimming compares the complete vertical movement
+with the surface and snaps only actors at or above the configured horizontal speed. These regions
+are nonsolid and do not replace Terrain::castBody for walls, floors, or underwater collision.
 
 Badniks stores each player's and badnik's previous center. It performs a relative swept AABB test over both full displacements, which catches fast rolling attacks and normal contacts even when the rectangles do not overlap at either endpoint. Projectile contacts sweep the player and shot relative to one another. Projectile terrain motion constructs a small body and calls `Terrain::castBody()` for the complete ballistic displacement before committing the new position. These checks prevent high-speed actors and shots from tunneling through their targets. CrabMeats uses short downward rays to retain floor contact and `castBody()` to stop horizontal patrol movement at a wall.
 

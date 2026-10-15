@@ -43,9 +43,10 @@ export function boot(
 	} = {}
 ){
 	if(!/^8\.[0-5]$/.test(version)
-		|| !['world', 'platformer', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'].includes(
-			scene
-		)
+		|| ![
+			'world', 'platformer', 'water', 'badniks', 'grinding', 'loop'
+			, 'breakables', 'infinite', 'isometric'
+		].includes(scene)
 		|| !['runner', 'glider', 'flyer'].includes(profile)
 	){
 		return Promise.reject(Error('Unsupported PHP version, scene, or movement profile'));
@@ -74,6 +75,7 @@ export function boot(
 			, 'world'
 			, 'breakables'
 			, 'badniks'
+			, 'water'
 			, 'scene'
 			, 'profile'
 			, 'loading', 'levelError', 'intro', 'hud', 'combo', 'debug', 'sequences'

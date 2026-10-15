@@ -7,6 +7,7 @@ final class Body
 	public float $vx = 0,$vy = 0,$groundSpeed = 0,$angle = 0;
 	public float $radius = 8,$halfHeight = 18,$standingHeight = 18,$rollingHeight = 12;
 	public bool $grounded = false,$rolling = false,$jumping = false,$crouching = false,$grinding = false;
+	public bool $underwater = false,$waterEntered = false,$waterExited = false,$skimming = false;
 	public int $facing = 1,$wall = 0;
 	/** Zero is shared terrain; positive numbers select an additional collision plane. */
 	public int $collisionLayer = 1;
@@ -16,6 +17,8 @@ final class Body
 	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 288
 		,$gravity = 1800,$jumpSpeed = 660,$maxSpeed = 1080,$terminalSpeed = 1800;
 	public float $minGrindSpeed = 360,$maxGrindSpeed = 2400,$grindAcceleration = 360;
+	public float $density = 0,$waterDepth = 0;
+	public ?WaterRegion $water = null;
 
 	/**
 	 * Create a mutable platformer body with default dimensions and movement tuning.

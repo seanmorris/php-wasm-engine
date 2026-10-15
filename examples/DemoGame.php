@@ -102,15 +102,15 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, badniks, grinding, loop, breakables, infinite, isometric,
-	 * or world identifier.
+	 * @param string $scene Platformer, water, badniks, grinding, loop, breakables, infinite,
+	 * isometric, or world identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
 	public function selectScene(string $scene): void
 	{
 		if(!in_array(
 			$scene
-			, ['platformer', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric', 'world']
+			, ['platformer', 'water', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric', 'world']
 			, true
 		)){
 			throw new InvalidArgumentException('Unknown demo level');
@@ -222,6 +222,10 @@ final class DemoGame
 		}
 
 		$this->body->halfHeight = $this->body->standingHeight;
+		$this->body->water = null;
+		$this->body->underwater = $this->body->waterEntered = $this->body->waterExited = false;
+		$this->body->skimming = false;
+		$this->body->waterDepth = 0;
 		$this->combo->reset();
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
@@ -499,6 +503,7 @@ final class DemoGame
 		$level = $this->level;
 		$camera = $this->camera;
 		$time = $this->engine->time * 1000;
+		$level->waterRenderer?->begin();
 
 		if($this->scene === 'world')
 		{
@@ -567,6 +572,8 @@ final class DemoGame
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
+		$level->waterRenderer?->compose($level->waters, $camera, $time);
+
 		$this->canvas->dataset->body = json_encode([
 			'x' => $body->x
 			, 'y' => $body->y
@@ -587,6 +594,11 @@ final class DemoGame
 			, 'shield' => $this->engine->entities->has($this->entity, Shield::class)
 				? $this->engine->entities->get($this->entity, Shield::class)->active
 				: ''
+			, 'underwater' => $body->underwater
+			, 'waterDepth' => $body->waterDepth
+			, 'waterEntered' => $body->waterEntered
+			, 'waterExited' => $body->waterExited
+			, 'skimming' => $body->skimming
 		]);
 
 		$stats = $level->renderer->stats;
@@ -598,12 +610,14 @@ final class DemoGame
 			$this->renderStats['instances'] += $level->sprites->instances;
 		}
 
+		$this->renderStats['draws'] += $level->waterRenderer?->draws ?? 0;
+
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
 			, $body->ability ?: $pose
 			, $body->groundSpeed
-			, $stats['draws'] + $level->sprites->draws
-			, $stats['instances'] + $level->sprites->instances
+			, $this->renderStats['draws']
+			, $this->renderStats['instances']
 			, $stats['uploads']
 			, $level->terrain->raycasts
 		);
@@ -611,6 +625,20 @@ final class DemoGame
 		if(in_array($this->scene, ['grinding', 'loop'], true))
 		{
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
+		}
+
+		if($this->scene === 'water')
+		{
+			$this->canvas->dataset->water = json_encode([
+				'underwater' => $body->underwater
+				, 'depth' => $body->waterDepth
+				, 'skimming' => $body->skimming
+				, 'draws' => $level->waterRenderer?->draws ?? 0
+			]);
+
+			$this->status->textContent .= $body->underwater
+				? sprintf(' · underwater %.0f%%', $body->waterDepth * 100)
+				: ($body->skimming ? ' · skimming' : ' · approach the water at speed');
 		}
 
 		if($this->scene === 'breakables')
@@ -685,6 +713,7 @@ final class DemoGame
 			, $this->canvas->dataset->debug
 			, $this->canvas->dataset->sequences
 			, $this->canvas->dataset->badniks
+			, $this->canvas->dataset->water
 		);
 	}
 }

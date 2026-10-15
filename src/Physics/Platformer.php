@@ -15,10 +15,15 @@ final class Platformer
 	 * casts.
 	 * @param callable(Body,Hit):mixed|null $onImpact Callback before collision response; removing
 	 * the contacted shape allows remaining movement. The callback's return value is ignored.
+	 * @param WaterRegions|null $waters Optional liquid volumes that change movement and expose
+	 * entry, exit, buoyancy, current, and surface-skimming state.
 	 * @return void Creates a controller that can update multiple independent bodies.
 	 */
-	public function __construct(public Terrain $terrain, ?callable $onImpact = null)
-	{
+	public function __construct(
+		public Terrain $terrain
+		, ?callable $onImpact = null
+		, public ?WaterRegions $waters = null
+	){
 		$this->onImpact = $onImpact === null ? null : \Closure::fromCallable($onImpact);
 	}
 
@@ -51,7 +56,19 @@ final class Platformer
 			throw new \InvalidArgumentException('Invalid physics step');
 		}
 
+		$startX = $b->x;
+		$startY = $b->y;
+		$previousWater = $b->water;
+		$water = $this->waters?->at($b->x, $b->y);
+		$this->waterState($b, $water, $previousWater);
+		$drag = $water?->drag ?? 1;
+		$gravityScale = $water?->gravity ?? 1;
 		$axis = $input->axis('left', 'right');
+
+		if($water !== null && $b->density > 0 && $b->density < $water->density && $b->waterDepth > 0)
+		{
+			$b->grounded = false;
+		}
 
 		if($axis && (!$b->grinding || abs($b->groundSpeed) < $b->minGrindSpeed))
 		{
@@ -110,7 +127,7 @@ final class Platformer
 			if(!$b->charge)
 			{
 				$slope = $b->grinding ? .75 : ($b->rolling ? .75 : .35);
-				$b->groundSpeed += sin($b->angle) * $b->gravity * $slope * $dt;
+				$b->groundSpeed += sin($b->angle) * $b->gravity * $gravityScale * $slope * $dt;
 
 				if($b->grinding)
 				{
@@ -143,7 +160,7 @@ final class Platformer
 					// Input cannot erase momentum already above the running cap.
 					if(abs($b->groundSpeed) < $b->maxSpeed || $axis * $b->groundSpeed < 0)
 					{
-						$b->groundSpeed = self::approach($b->groundSpeed, $axis * $b->maxSpeed, $accel * $dt);
+						$b->groundSpeed = self::approach($b->groundSpeed, $axis * $b->maxSpeed, $accel * $drag * $dt);
 					}
 				}
 				else
@@ -197,8 +214,8 @@ final class Platformer
 			}
 			elseif(!$spindashTap)
 			{
-				$b->vx += sin($b->angle) * $b->jumpSpeed;
-				$b->vy -= cos($b->angle) * $b->jumpSpeed;
+				$b->vx += sin($b->angle) * $b->jumpSpeed * $drag;
+				$b->vy -= cos($b->angle) * $b->jumpSpeed * $drag;
 				$b->grounded = false;
 				$b->rolling = false;
 				$b->grinding = false;
@@ -249,7 +266,18 @@ final class Platformer
 				$b->dropCharge = min(1, $b->dropCharge + $dt * 2);
 			}
 
-			$gravity = $b->gravity;
+			$gravity = $b->gravity * $gravityScale;
+
+			if($water !== null)
+			{
+				$b->vx += $water->currentX * $dt;
+				$b->vy += $water->currentY * $dt;
+
+				if($b->density > 0 && $b->density < $water->density)
+				{
+					$gravity -= $b->gravity * ($water->density / $b->density) * $b->waterDepth;
+				}
+			}
 
 			if($b->ability === 'fly')
 			{
@@ -279,10 +307,10 @@ final class Platformer
 			}
 			elseif(abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
 			{
-				$b->vx += $axis * $b->airAcceleration * $dt;
+				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
 			}
 
-			$b->vy = min($b->terminalSpeed, $b->vy + $gravity * $dt);
+			$b->vy = min($b->terminalSpeed * $drag, $b->vy + $gravity * $dt);
 		}
 
 		$wasGrounded = $b->grounded;
@@ -334,6 +362,81 @@ final class Platformer
 		{
 			$b->grinding = false;
 			$b->angle = 0;
+		}
+
+		$this->finishWater($b, $previousWater, $startX, $startY);
+	}
+
+	/**
+	 * Publish current liquid occupancy and one-step entry or exit edges on a body.
+	 *
+	 * @param Body $body Body receiving the active region and overlap fraction.
+	 * @param WaterRegion|null $water Region containing the body's center.
+	 * @param WaterRegion|null $previous Region retained after the preceding physics step.
+	 * @return void Updates water, underwater, transition, depth, and skimming state.
+	 */
+	private function waterState(Body $body, ?WaterRegion $water, ?WaterRegion $previous): void
+	{
+		$body->waterEntered = $water !== null && $water !== $previous;
+		$body->waterExited = $previous !== null && $water !== $previous;
+		$body->water = $water;
+		$body->underwater = $water !== null;
+		$body->waterDepth = $water?->depth($body) ?? 0;
+		$body->skimming = false;
+	}
+
+	/**
+	 * Resolve fast water-surface skimming and retain boundary events after the movement sweep.
+	 * Segment intersection catches complete pass-throughs without treating water as solid terrain.
+	 *
+	 * @param Body $body Body after terrain movement and adhesion.
+	 * @param WaterRegion|null $previous Region active at the end of the preceding step.
+	 * @param float $startX World X coordinate before this step.
+	 * @param float $startY World Y coordinate before this step.
+	 * @return void Snaps eligible runners to the surface and publishes final liquid state.
+	 */
+	private function finishWater(Body $body, ?WaterRegion $previous, float $startX, float $startY): void
+	{
+		if($this->waters === null)
+		{
+			return;
+		}
+
+		$dy = $body->y - $startY;
+		$bottom = $body->y + $body->halfHeight;
+		$tolerance = max(2, abs($dy) + .01);
+		$surface = $this->waters->surfaceAt($body->x, $bottom, $tolerance);
+		$speed = abs($body->grounded ? $body->groundSpeed : $body->vx);
+		$startedAbove = $startY + $body->halfHeight <= ($surface?->y ?? -INF) + 2;
+
+		if($surface !== null && $speed >= $surface->skimSpeed && ($dy >= 0 || $body->skimming)
+			&& $startedAbove
+		){
+			$body->y = $surface->y - $body->halfHeight - .001;
+			$body->groundSpeed = $body->grounded ? $body->groundSpeed : $body->vx;
+			$body->vx = $body->groundSpeed;
+			$body->vy = 0;
+			$body->grounded = true;
+			$body->angle = 0;
+			$body->water = null;
+			$body->underwater = false;
+			$body->waterDepth = 0;
+			$body->skimming = true;
+		}
+		else
+		{
+			$final = $this->waters->at($body->x, $body->y);
+			$entered = $body->waterEntered;
+			$exited = $body->waterExited;
+			$this->waterState($body, $final, $previous);
+			$body->waterEntered = $body->waterEntered || $entered;
+			$body->waterExited = $body->waterExited || $exited;
+		}
+
+		if($this->waters->crossed($startX, $startY, $body->x - $startX, $body->y - $startY)
+			&& $previous === null && $body->water === null && !$body->skimming
+		){
+			$body->waterEntered = $body->waterExited = true;
 		}
 	}
 
