@@ -380,8 +380,8 @@ radians. Camera-only scenes report **None (camera)** instead of stale player val
 The panel also shows camera position and zoom, entity count, ready/pending/failed
 map counts, world draw calls and instances, tile uploads, collision casts per rendered
 frame, and simulation time. World draw counts exclude the overlay and menus. Detailed
-values refresh at 10 Hz; glyph layouts are cached and the overlay adds two batched
-draw calls using the menu's existing font atlas.
+values refresh every rendered frame; glyph layouts are cached and the overlay adds two
+batched draw calls using the menu's existing font atlas.
 
 **Settings → FPS meter** independently controls the unboxed lower-left FPS/frame-interval
 display, enabled by default. FPS measures browser frames, including paused menus,
@@ -397,7 +397,7 @@ $game->debug->enabled = true;
 $game->debug->showFps = false;
 ```
 
-`canvas.dataset.debug` contains the current display state and sampled rows for browser
+`canvas.dataset.debug` contains the current display state and live rows for browser
 inspection. The overlay stays hidden during intro cards and the main menu.
 
 ## A PHP game

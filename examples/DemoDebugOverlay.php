@@ -21,8 +21,7 @@ final class DemoDebugOverlay
 	private ?RectRenderer $rects = null;
 	private bool $ownsAtlas, $closed = false;
 	private int $samples = 0, $previousCasts = 0;
-	private float $seconds = 0, $refresh = 0;
-	private string $sceneKey = '';
+	private float $seconds = 0;
 	private ?Terrain $terrain = null;
 	private array $rows = [], $cache = [], $nextCache = [];
 
@@ -53,14 +52,12 @@ final class DemoDebugOverlay
 		}
 
 		$this->frame++;
-		$this->refresh += $elapsed;
 
 		if($elapsed <= 0)
 		{
 			$this->seconds = 0;
 			$this->samples = 0;
 			$this->fps = $this->frameMilliseconds = null;
-			$this->refresh = .1;
 		}
 		else
 		{
@@ -82,7 +79,6 @@ final class DemoDebugOverlay
 				&& empty($event['repeat']) && empty($event['ctrl'])
 			){
 				$this->enabled = !$this->enabled;
-				$this->refresh = .1;
 			}
 		}
 	}
@@ -146,7 +142,7 @@ final class DemoDebugOverlay
 	}
 
 	/**
-	 * Sample live diagnostics at most ten times per second while keeping GPU draw counts separate.
+	 * Read live diagnostics for the current rendered frame while keeping GPU draw counts separate.
 	 *
 	 * @param DemoGame $game Session supplying world, camera, input, and entity state.
 	 * @param int $casts Collision casts since the previous rendered frame, not a lifetime total.
@@ -223,14 +219,7 @@ final class DemoDebugOverlay
 
 		if($this->enabled)
 		{
-			$key = $game->scene . ':' . $game->body->profile . ':' . (int)$game->engine->userPaused;
-
-			if($this->refresh >= .1 || $this->rows === [] || $this->sceneKey !== $key)
-			{
-				$this->rows = $this->read($game, $casts);
-				$this->refresh = 0;
-				$this->sceneKey = $key;
-			}
+			$this->rows = $this->read($game, $casts);
 
 			$panelWidth = 304 * $scale;
 			$line = ($this->font->lineHeight + 2) * $scale;
@@ -360,7 +349,6 @@ final class DemoDebugOverlay
 		$this->sprites?->restore();
 		$this->rects?->restore();
 		$this->cache = [];
-		$this->refresh = .1;
 	}
 
 	/**
