@@ -331,6 +331,26 @@ test(
 			await page.waitForTimeout(100);
 		}
 
+		if(scene==='water-rail')
+		{
+			await page.evaluate(() => enginePhp.run(`<?php
+				$body->x = 2880;
+				$body->y = 300;
+				$body->vx = $body->vy = $body->groundSpeed = 0;
+				$body->angle = 0;
+				$body->grounded = $body->jumping = false;
+			`
+			));
+
+			await expect.poll(
+				async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}').grounded
+				, {timeout: 5000}
+			).toBe(true);
+
+			const body = JSON.parse(await page.locator('canvas').getAttribute('data-body'));
+			expect(body.supportY).toBeCloseTo(448, 2);
+		}
+
 		await page.screenshot({path: 'test-results/' + scene + '.png',fullPage: true});
 		await page.evaluate(() => window.stopEngine());
 		await expect(page.locator('#start')).toBeEnabled();

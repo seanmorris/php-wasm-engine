@@ -197,6 +197,16 @@ test('the underwater rail retains grinding through water and on exit before retu
 	$body->friction = 0;
 	$body->gravity = 0;
 	$rail = $wet = $exited = $land = false;
+	$tileWidth = (int)$map->data['tilewidth'];
+	$mapRight = (int)$map->data['width'] * $tileWidth;
+
+	for($column = 0; $column < $map->data['width']; $column++)
+	{
+		$surface = $terrain->raycast(($column + .5) * $tileWidth, 400, 0, 80);
+		check($surface !== null, "Water rail column $column has no visible top collision");
+		near($surface->y, 448);
+		check($surface->grinding === ($column >= 14 && $column < 56));
+	}
 
 	for($frame = 0; $frame < 180; $frame++)
 	{
@@ -215,7 +225,7 @@ test('the underwater rail retains grinding through water and on exit before retu
 			check($body->grounded && $body->grinding && !$body->underwater);
 		}
 
-		if($body->x > 1840)
+		if($body->x > $mapRight - 64)
 		{
 			$land = $body->grounded && !$body->grinding;
 

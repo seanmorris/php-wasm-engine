@@ -1071,10 +1071,11 @@ $water['layers'][] = [
 
 jsonAsset('water.tmj', $water);
 $waterRailFloor = array_fill(0, $width * $height, 0);
+$waterRailLandStart = 56;
 
 for($x = 0; $x < $width; $x++)
 {
-	if($x < 14 || $x >= 56)
+	if($x < 14 || $x >= $waterRailLandStart)
 	{
 		for($y = 14; $y < $height; $y++)
 		{
@@ -1100,7 +1101,7 @@ $waterRailArt = array_fill(0, $width * $height, 0);
 
 for($y = 14; $y < $height; $y++)
 {
-	for($x = 56; $x < $width; $x++)
+	for($x = $waterRailLandStart; $x < $width; $x++)
 	{
 		$waterRailFloor[$y * $width + $x] = 0;
 		$waterRailArt[$y * $width + $x] = 1;
@@ -1125,10 +1126,10 @@ $waterRail['layers'][] = [
 	, 'objects' => [
 		[
 			'id' => 3
-			, 'x' => 1792
-			, 'y' => 448
-			, 'width' => 256
-			, 'height' => 192
+			, 'x' => $waterRailLandStart * $base['tilewidth']
+			, 'y' => 14 * $base['tileheight']
+			, 'width' => ($width - $waterRailLandStart) * $base['tilewidth']
+			, 'height' => ($height - 14) * $base['tileheight']
 			, 'properties' => [
 				['name' => 'solid','type' => 'bool','value' => true]
 				, ['name' => 'oneWay','type' => 'bool','value' => true]
