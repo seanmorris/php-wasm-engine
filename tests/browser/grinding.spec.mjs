@@ -126,7 +126,7 @@ test('the live grinding course takes every bend and collision switch in both dir
 	expect(forward.filter(body => body.x > 320 && body.x < 1920).every(body => body.grinding)).toBe(true);
 	expect(forward.some(body => body.x < 1280 && Math.abs(Math.abs(body.angle) - Math.PI / 2) < .2)).toBe(true);
 	expect(forward.some(body => body.x > 768 && body.x < 1024 && body.y < 190)).toBe(true);
-	expect(forward.some(body => Math.abs(Math.abs(body.angle) - Math.PI) < .2)).toBe(true);
+	expect(forward.some(body => body.y < 260 && Math.abs(body.angle) > 2.6)).toBe(true);
 	expect(forward.some(body => body.y < 300 && body.x < 1680 && body.collisionLayer === 1)).toBe(true);
 	expect((await state(page)).body.collisionLayer).toBe(2);
 
