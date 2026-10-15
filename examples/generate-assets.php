@@ -1132,7 +1132,6 @@ $waterRail['layers'][] = [
 			, 'height' => ($height - 14) * $base['tileheight']
 			, 'properties' => [
 				['name' => 'solid','type' => 'bool','value' => true]
-				, ['name' => 'oneWay','type' => 'bool','value' => true]
 			]
 		]
 	]

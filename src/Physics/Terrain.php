@@ -752,7 +752,10 @@ final class Terrain
 
 						if(abs($velocity) < 1e-10)
 						{
-							if($origin < $lo - 1e-8 || $origin > $hi + 1e-8)
+							// Touching an endpoint cap while moving parallel to this axis does not enter
+							// the expanded segment. This lets a body cross from a rail onto a solid top
+							// without the polygon's vertical edge acting as a wall above its endpoint.
+							if($origin <= $lo + 1e-8 || $origin >= $hi - 1e-8)
 							{
 								$far = -INF;
 								break;

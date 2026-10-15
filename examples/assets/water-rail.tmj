@@ -6027,11 +6027,6 @@
                             "name": "solid",
                             "type": "bool",
                             "value": true
-                        },
-                        {
-                            "name": "oneWay",
-                            "type": "bool",
-                            "value": true
                         }
                     ]
                 }

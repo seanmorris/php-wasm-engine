@@ -206,6 +206,7 @@ test('the underwater rail retains grinding through water and on exit before retu
 		check($surface !== null, "Water rail column $column has no visible top collision");
 		near($surface->y, 448);
 		check($surface->grinding === ($column >= 14 && $column < 56));
+		check($surface->oneWay === ($column >= 14 && $column < 56));
 	}
 
 	for($frame = 0; $frame < 180; $frame++)
