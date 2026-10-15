@@ -135,13 +135,15 @@ ground resumes. **Rising water loop** rests the loop on the seabed with the init
 through its center, then uses three pressure switches to drain, restore, or fill the pool.
 
 `WaterFeatures` reads moving-boxes-2-compatible object references from Tiled. A `Switch` or
-`WaterSwitch` uses `water` and `setPoint` object properties plus optional `fillSpeed` and
-`drainSpeed` values. A tile object with `density` becomes a buoyant solid; `hLock` records that its
-horizontal position is fixed. These object-reference `water` properties select a volume; they do
-not turn the control or platform into another water rectangle. The demo retains the reference
-map's object ID 3958 for its 32×160, density 0.8 vertical door block. `activate($switchId)` gives
-scripts and tests the same action as a player standing on a switch, while `snapshot()` exposes
-surfaces, targets, and platform motion.
+`WaterSwitch` uses `water` and `setPoint` object properties plus optional `fillSpeed`,
+`drainSpeed`, and `collisionLayer` values. Its top is a one-way collision edge: a jump passes
+through from below, then the descending player lands on and activates the plate. A tile object with
+`density` becomes a buoyant solid; `hLock` records that its horizontal position is fixed. These
+object-reference `water` properties select a volume; they do not turn the control or platform into
+another water rectangle. The demo retains the reference map's object ID 3958 for its 32×160,
+density 0.8 vertical door block. `activate($switchId)` gives scripts and tests the same action as a
+player standing on a switch, while `snapshot()` exposes switches, surfaces, targets, and platform
+motion.
 
 ~~~php
 $features = new WaterFeatures($engine->entities, $terrain, $map, $waters);

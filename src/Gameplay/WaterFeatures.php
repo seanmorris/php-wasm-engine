@@ -188,6 +188,7 @@ final class WaterFeatures
 	public function snapshot(): array
 	{
 		$levels = [];
+		$switches = [];
 		$platforms = [];
 
 		foreach($this->levels as $id => $level)
@@ -200,7 +201,17 @@ final class WaterFeatures
 			$platforms[$id] = ['y' => $platform->y, 'velocityY' => $platform->velocityY];
 		}
 
-		return ['activeSwitch' => $this->activeSwitch, 'levels' => $levels, 'platforms' => $platforms];
+		foreach($this->switches as $id => $switch)
+		{
+			$switches[$id] = ['active' => $switch->active, 'top' => $switch->top()];
+		}
+
+		return [
+			'activeSwitch' => $this->activeSwitch
+			, 'levels' => $levels
+			, 'switches' => $switches
+			, 'platforms' => $platforms
+		];
 	}
 
 	/**
@@ -216,6 +227,15 @@ final class WaterFeatures
 		}
 
 		$this->closed = true;
+
+		foreach($this->switches as $switch)
+		{
+			if($switch->shape !== null)
+			{
+				$this->terrain->removeShape($switch->shape);
+				$switch->shape = null;
+			}
+		}
 
 		foreach($this->platforms as $platform)
 		{
@@ -306,13 +326,15 @@ final class WaterFeatures
 			, $height
 			, (float)($properties['fillSpeed'] ?? 240)
 			, (float)($properties['drainSpeed'] ?? 480)
+			, (int)($properties['collisionLayer'] ?? 0)
 		);
 
 		$sprite = $this->sprite($object, $x + $width / 2, $y, $width, $height, 4);
 		$sprite->outline = false;
+		$switch->shape = $this->terrain->addShape($switch->points(), true, $switch->collisionLayer);
+		$this->switches[$id] = $switch;
 		$switch->entity = $this->registry->create($switch, $sprite);
 		$this->owned[] = $switch->entity;
-		$this->switches[$id] = $switch;
 	}
 
 	/**

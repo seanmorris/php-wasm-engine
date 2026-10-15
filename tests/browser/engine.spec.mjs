@@ -242,10 +242,32 @@ test('the rising-water loop exposes scriptable switches and object 3958', async(
 	await expect(canvas).toHaveAttribute('data-scene', 'water-loop', {timeout: 60000});
 
 	const water = async() => JSON.parse(await canvas.getAttribute('data-water') || '{}');
+
+	const body = async() => JSON.parse(await canvas.getAttribute('data-body') || '{}');
+	const setup = `<?php
+		$body->x = 176;
+		$body->y = 430;
+		$body->vx = $body->vy = $body->groundSpeed = 0;
+		$body->angle = 0;
+		$body->grounded = true;
+		$body->jumping = $body->rolling = false;
+	`;
+
 	await expect.poll(async() => (await water()).features?.platforms?.['3958']?.y).toBeGreaterThan(400);
 	expect((await water()).draws).toBe(2);
-	await page.evaluate(() => enginePhp.run('<?php $game->level->waterFeatures->activate(103);'));
+	expect((await water()).features?.switches?.['103']).toEqual({active: false, top: 440});
+	await page.evaluate(source => enginePhp.run(source), setup);
+	await page.keyboard.down('Space');
+	await expect.poll(async() => (await body()).supportY).toBeLessThan(430);
+	await page.keyboard.up('Space');
+	await expect.poll(async() => (await water()).features?.activeSwitch, {timeout: 5000}).toBe(101);
+	expect((await body()).grounded).toBe(true);
+	expect((await body()).supportY).toBeCloseTo(440, 2);
+
+	await page.evaluate(() => enginePhp.run('<?php $body->x = 480; $game->level->waterFeatures->activate(103);'));
+
 	await expect.poll(async() => (await water()).features?.activeSwitch).toBe(103);
+	expect((await water()).features?.switches?.['103']?.active).toBe(true);
 	await expect.poll(async() => (await water()).features?.levels?.['10']?.surface).toBe(384);
 	await expect.poll(async() => (await water()).features?.platforms?.['3958']?.y).toBeLessThan(513);
 	expect(errors).toEqual([]);

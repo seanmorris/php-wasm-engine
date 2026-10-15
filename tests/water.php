@@ -242,6 +242,39 @@ test('water levels retain a fixed bottom and use separate fill and drain rates',
 	near($region->y + $region->height, 640);
 });
 
+test('water switches let jumps pass upward and retain a solid top for the landing', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$registry = new Registry;
+	$features = new WaterFeatures($registry, $terrain, $map, $waters);
+	$switch = $features->switches[101];
+	$body = new Body($switch->x + $switch->width / 2, $switch->y - 18);
+	$body->grounded = true;
+	$registry->create($body);
+	$movement = new Platformer($terrain, waters: $waters);
+	$passedAbove = false;
+
+	check($switch->shape !== null && $terrain->hasShape($switch->shape));
+	$features->update($registry, 1 / 60);
+	check($features->activeSwitch === null);
+
+	for($frame = 0; $frame < 180 && !$switch->active; $frame++)
+	{
+		tick($movement, $body, $frame === 0?['jump' => true]:[]);
+		$features->update($registry, 1 / 60);
+		$passedAbove = $passedAbove || $body->supportY() < $switch->top() - 1;
+	}
+
+	check($passedAbove && $switch->active && $features->activeSwitch === 101);
+	check($body->grounded && !$body->jumping);
+	near($body->supportY(), $switch->top(), .01);
+	check($features->snapshot()['switches'][101] === ['active' => true,'top' => 440.0]);
+	$shape = $switch->shape;
+	$features->close();
+	check($shape !== null && !$terrain->hasShape($shape));
+});
+
 test('the rising-water loop retains object 3958 and moves its buoyant solids with switches', function() {
 	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
 	$terrain = MapTerrain::build($map);
@@ -283,7 +316,11 @@ test('the rising-water loop retains object 3958 and moves its buoyant solids wit
 	check(count($features->switches) === 3);
 	check(count($registry->query(PhpWasmEngine\Gameplay\WaterSwitch::class)) === 3);
 	check(count($registry->query(PhpWasmEngine\Gameplay\BuoyantPlatform::class)) === 2);
+	check($terrain->hasShape($features->switches[101]->shape));
+	check($terrain->hasShape($features->switches[102]->shape));
+	check($terrain->hasShape($features->switches[103]->shape));
 	check($terrain->hasShape($door->shape) && $terrain->hasShape($platform->shape));
+	$switchShapes = array_map(fn($switch) => $switch->shape, $features->switches);
 	$doorEntity = $door->entity;
 	$platformEntity = $platform->entity;
 
@@ -302,6 +339,12 @@ test('the rising-water loop retains object 3958 and moves its buoyant solids wit
 	$doorShape = $door->shape;
 	$platformShape = $platform->shape;
 	$features->close();
+
+	foreach($switchShapes as $shape)
+	{
+		check(!$terrain->hasShape($shape));
+	}
+
 	check(!$terrain->hasShape($doorShape) && !$terrain->hasShape($platformShape));
 	check(!$registry->alive($doorEntity) && !$registry->alive($platformEntity));
 });
