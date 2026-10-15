@@ -55,6 +55,7 @@ final class DemoStartup
 			'platformer' => 'Platformer'
 			, 'water' => 'Water regions'
 			, 'water-rail' => 'Underwater rail'
+			, 'water-skim-rail' => 'Surface skim rail'
 			, 'water-loop' => 'Rising water loop'
 			, 'badniks' => 'CrabMeat badniks'
 			, 'world' => 'Streaming world'

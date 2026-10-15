@@ -237,6 +237,75 @@ test('the underwater rail retains grinding through water and on exit before retu
 	check($rail && $wet && $exited && $land);
 });
 
+test('the surface rail transitions through skim grinding in both directions without side entry', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-skim-rail.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$region = $waters->regions[0] ?? null;
+	$tileWidth = (int)$map->data['tilewidth'];
+
+	check($region !== null);
+	near($region->x, 40 * $tileWidth);
+	near($region->y, 14 * (int)$map->data['tileheight']);
+	near($region->x + $region->width, 64 * $tileWidth);
+
+	for($column = 0; $column < $map->data['width']; $column++)
+	{
+		$surface = $terrain->raycast(($column + .5) * $tileWidth, 400, 0, 80);
+		$rail = ($column >= 8 && $column < 48) || ($column >= 56 && $column < 88);
+		$land = $column < 8 || $column >= 88;
+
+		if(!$rail && !$land)
+		{
+			check($surface === null, "Surface rail column $column must be supported only by water");
+
+			continue;
+		}
+
+		check($surface !== null, "Surface rail column $column has no top collision");
+		near($surface->y, $region->y);
+		check($surface->grinding === $rail);
+	}
+
+	foreach([[1100, 960, 2200], [2200, -960, 1100]] as [$x,$speed,$destination])
+	{
+		$movement = new Platformer($terrain, waters: $waters);
+		$body = new Body($x, $region->y - 18);
+		$body->grounded = $body->grinding = true;
+		$body->groundSpeed = $speed;
+		$body->friction = $body->gravity = 0;
+		$railOnly = $skimGrinding = $skimOnly = $railAgain = false;
+
+		for($frame = 0; $frame < 180; $frame++)
+		{
+			tick($movement, $body);
+			check(!$body->underwater && !$body->waterEntered && !$body->waterExited);
+			near($body->supportY(), $region->y, .01);
+
+			$insideWater = $body->x >= $region->x && $body->x <= $region->x + $region->width;
+			$insideOpenWater = $body->x > 48 * $tileWidth && $body->x < 56 * $tileWidth;
+			$insideOverlap = $insideWater && !$insideOpenWater;
+
+			$railOnly = $railOnly || (!$insideWater && $body->grinding && !$body->skimming);
+			$skimGrinding = $skimGrinding || ($insideOverlap && $body->grinding && $body->skimming);
+			$skimOnly = $skimOnly || ($insideOpenWater && !$body->grinding && $body->skimming);
+
+			if(($speed > 0 && $body->x > $region->x + $region->width)
+				|| ($speed < 0 && $body->x < $region->x)
+			){
+				$railAgain = $body->grinding && !$body->skimming;
+			}
+
+			if(($speed > 0 && $body->x >= $destination) || ($speed < 0 && $body->x <= $destination))
+			{
+				break;
+			}
+		}
+
+		check($railOnly && $skimGrinding && $skimOnly && $railAgain);
+	}
+});
+
 test('water levels retain a fixed bottom and use separate fill and drain rates', function() {
 	$region = new WaterRegion(0, 320, 100, 320, sourceId: 10);
 	$level = new WaterLevel($region, 64, 128);

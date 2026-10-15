@@ -92,6 +92,10 @@ that starts and ends outside a liquid rectangle still reports both waterEntered 
 when it crosses the volume in one step. Surface skimming compares the complete vertical movement
 with the surface and snaps only actors at or above the configured horizontal speed. These regions
 are nonsolid and do not replace Terrain::castBody for walls, floors, or underwater collision.
+Because rail contact and surface support are resolved independently, a rail placed at the exact
+waterline can report both `grinding` and `skimming`. Extending each rail into the water rectangle
+creates an overlap zone, so leaving or entering the open surface does not require crossing a
+vertical liquid boundary.
 
 Badniks stores each player's and badnik's previous center. It performs a relative swept AABB test over both full displacements, which catches fast rolling attacks and normal contacts even when the rectangles do not overlap at either endpoint. Projectile contacts sweep the player and shot relative to one another. Projectile terrain motion constructs a small body and calls `Terrain::castBody()` for the complete ballistic displacement before committing the new position. These checks prevent high-speed actors and shots from tunneling through their targets. CrabMeats uses short downward rays to retain floor contact and `castBody()` to stop horizontal patrol movement at a wall.
 

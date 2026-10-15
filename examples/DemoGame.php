@@ -107,8 +107,8 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, water, water-rail, water-loop, badniks, grinding, loop, breakables,
-	 * infinite, isometric, or world identifier.
+	 * @param string $scene Platformer, water, water-rail, water-skim-rail, water-loop, badniks,
+	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
 	public function selectScene(string $scene): void
@@ -119,6 +119,7 @@ final class DemoGame
 				'platformer'
 				, 'water'
 				, 'water-rail'
+				, 'water-skim-rail'
 				, 'water-loop'
 				, 'badniks'
 				, 'grinding'
@@ -683,7 +684,7 @@ final class DemoGame
 			, $level->terrain->raycasts
 		);
 
-		if(in_array($this->scene, ['water-rail', 'water-loop', 'grinding', 'loop'], true))
+		if(in_array($this->scene, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop'], true))
 		{
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
 		}
@@ -701,7 +702,10 @@ final class DemoGame
 
 			$this->status->textContent .= $body->underwater
 				? sprintf(' · underwater %.0f%%', $body->waterDepth * 100)
-				: ($body->skimming ? ' · skimming' : ' · approach the water at speed');
+				: ($body->skimming
+					? ($body->grinding ? ' · skim-grinding' : ' · skimming')
+					: ' · approach the water at speed'
+				);
 		}
 
 		if($this->scene === 'breakables')

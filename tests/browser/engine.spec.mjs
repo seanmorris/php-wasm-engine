@@ -279,7 +279,8 @@ test('the rising-water loop exposes scriptable switches and object 3958', async(
 });
 
 for(const scene of [
-	'platformer', 'water', 'water-rail', 'water-loop', 'badniks', 'grinding'
+	'platformer', 'water', 'water-rail', 'water-skim-rail'
+	, 'water-loop', 'badniks', 'grinding'
 	, 'loop', 'infinite', 'isometric', 'breakables'
 ])
 test(

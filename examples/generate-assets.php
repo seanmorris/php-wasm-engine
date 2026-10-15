@@ -1155,6 +1155,53 @@ $waterRail['layers'][] = [
 ] + $layerDefaults;
 
 jsonAsset('water-rail.tmj', $waterRail);
+$waterSkimRailFloor = array_fill(0, $width * $height, 0);
+
+for($x = 0; $x < $width; $x++)
+{
+	$rail = ($x >= 8 && $x < 48) || ($x >= 56 && $x < 88);
+	$land = $x < 8 || $x >= 88;
+
+	if($rail)
+	{
+		$waterSkimRailFloor[14 * $width + $x] = 4;
+	}
+	elseif($land)
+	{
+		for($y = 14; $y < $height; $y++)
+		{
+			$waterSkimRailFloor[$y * $width + $x] = 1;
+		}
+	}
+
+	for($y = 18; $y < $height; $y++)
+	{
+		$waterSkimRailFloor[$y * $width + $x] = 1;
+	}
+}
+
+$waterSkimRail = $base;
+$waterSkimRail['layers'][count($background)]['name'] = 'Banks, surface rails, and seabed';
+$waterSkimRail['layers'][count($background)]['data'] = $waterSkimRailFloor;
+$waterSkimRail['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
+$waterSkimRail['layers'][] = [
+	'id' => 4
+	, 'name' => 'Surface water'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 40 * $base['tilewidth']
+			, 'y' => 14 * $base['tileheight']
+			, 'width' => 24 * $base['tilewidth']
+			, 'height' => 6 * $base['tileheight']
+			, 'properties' => $waterProperties
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water-skim-rail.tmj', $waterSkimRail);
 $badniks = $base;
 $badniks['tilesets'][] = ['firstgid' => $tiles['tilecount'] + 1,'source' => 'monitors.tsj'];
 $badniks['tilesets'][] = [

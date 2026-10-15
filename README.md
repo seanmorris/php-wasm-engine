@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, flush-bank pool, underwater rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -128,11 +128,15 @@ with `WaterParticle` and `Sprite` components. Annotate the two animations as Til
 schedule `WaterParticles::update()` after movement, and call `splash($x, $y)` when scripts need an
 explicit effect.
 
-The example includes three focused maps. **Water regions** places the pool surface at exactly the
+The example includes four focused maps. **Water regions** places the pool surface at exactly the
 same Y coordinate as both dry banks. **Underwater rail** starts and ends on dry land, retaining the
 grinding state while the rail crosses the water and preserving the exit frame before ordinary
-ground resumes. **Rising water loop** rests the loop on the seabed with the initial waterline
-through its center, then uses three pressure switches to drain, restore, or fill the pool.
+ground resumes. **Surface skim rail** puts two rails at the waterline and overlaps each rail with
+the water surface before an open-water gap. A fast body therefore moves from grinding to
+skim-grinding to skimming, then back through skim-grinding to grinding without entering the liquid
+from a vertical side. `Body::$grinding` and `Body::$skimming` remain independent throughout the
+transition. **Rising water loop** rests the loop on the seabed with the initial waterline through
+its center, then uses three pressure switches to drain, restore, or fill the pool.
 
 `WaterFeatures` reads moving-boxes-2-compatible object references from Tiled. A `Switch` or
 `WaterSwitch` uses `water` and `setPoint` object properties plus optional `fillSpeed`,
