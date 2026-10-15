@@ -64,12 +64,23 @@ test('CrabMeat patrols, fires, damages a walker, and pops under a rolling player
 	expect(hit[4]).toBe(true);
 	await expect.poll(async() => (await state(page)).scatteredRings).toBe(5);
 
+	await run(page, `
+		$combat = $engine->entities->get($game->entity, PhpWasmEngine\\Gameplay\\PlayerCombat::class);
+		$game->menu->menu->open();
+		$engine->userPaused = true;
+		$combat->mercy = .35;
+	`
+	);
+
 	await expect.poll(
 		async() => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.body).opacity)
 		, {intervals: [20], timeout: 1500}
 	).toBe(0);
 
 	const popped = JSON.parse(await run(page, `
+		$game->menu->menu->close();
+		$engine->userPaused = false;
+
 		foreach($engine->entities->query(PhpWasmEngine\\Gameplay\\BadnikProjectile::class) as $shot)
 		{
 			$engine->entities->destroy($shot);
