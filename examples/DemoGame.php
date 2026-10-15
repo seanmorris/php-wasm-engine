@@ -5,6 +5,7 @@ use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
+use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Gameplay\Shield;
@@ -22,6 +23,7 @@ final class DemoGame
 	public ?DemoStartup $startup = null;
 	public ?DemoDebugOverlay $debug = null;
 	public ?DemoPlayerHud $hud = null;
+	public ?DemoComboHud $comboHud = null;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
 	public float $levelStartedAt = 0;
@@ -41,6 +43,7 @@ final class DemoGame
 	 * @param Camera $camera Shared viewport and user zoom setting.
 	 * @param Body $body Persistent player body receiving each destination's spawn pose.
 	 * @param RingCounter $counter Persistent player score and level ring count.
+	 * @param Combo $combo Persistent player movement reward chain and recent result.
 	 * @param int $entity Registry ID for the persistent player body and sprite.
 	 * @return void Installs one movement system; assets load after selectScene is called.
 	 */
@@ -49,6 +52,7 @@ final class DemoGame
 		, public Camera $camera
 		, public Body $body
 		, public RingCounter $counter
+		, public Combo $combo
 		, public int $entity
 	){
 		$this->host = vrzno_env('demoControls');
@@ -98,14 +102,17 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, badniks, loop, breakables, infinite, isometric, or world
-	 * identifier.
+	 * @param string $scene Platformer, badniks, grinding, loop, breakables, infinite, isometric,
+	 * or world identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
 	public function selectScene(string $scene): void
 	{
-		if(!in_array($scene, ['platformer', 'badniks', 'loop', 'breakables', 'infinite', 'isometric', 'world'], true))
-		{
+		if(!in_array(
+			$scene
+			, ['platformer', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric', 'world']
+			, true
+		)){
 			throw new InvalidArgumentException('Unknown demo level');
 		}
 
@@ -198,6 +205,7 @@ final class DemoGame
 			, 'grounded'
 			, 'rolling'
 			, 'jumping'
+			, 'grinding'
 			, 'crouching'
 			, 'facing'
 			, 'wall'
@@ -214,6 +222,7 @@ final class DemoGame
 		}
 
 		$this->body->halfHeight = $this->body->standingHeight;
+		$this->combo->reset();
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
 
@@ -226,8 +235,8 @@ final class DemoGame
 	/**
 	 * Name the player's mutually exclusive visible movement pose.
 	 *
-	 * @param Body $body Player body carrying crouch, charge, roll, jump, and grounded state.
-	 * @return string Spindash, rolling, jumping, crouching, ground, or air diagnostic pose.
+	 * @param Body $body Player body carrying crouch, charge, grind, roll, jump, and grounded state.
+	 * @return string Spindash, grinding, rolling, jumping, crouching, ground, or air pose.
 	 */
 	private function playerPose(Body $body): string
 	{
@@ -239,6 +248,11 @@ final class DemoGame
 		if($body->rolling)
 		{
 			return 'rolling';
+		}
+
+		if($body->grinding)
+		{
+			return $body->crouching ? 'grinding-crouching' : 'grinding';
 		}
 
 		if($body->jumping)
@@ -265,7 +279,7 @@ final class DemoGame
 	{
 		$art = in_array($pose, ['rolling', 'jumping', 'spindash'], true)
 			? 'rolling'
-			: ($pose === 'crouching' ? 'crouching' : 'standing');
+			: (in_array($pose, ['crouching', 'grinding-crouching'], true) ? 'crouching' : 'standing');
 
 		return [
 			'runner' => ['standing' => 7, 'crouching' => 10, 'rolling' => 13]
@@ -402,6 +416,13 @@ final class DemoGame
 
 		$jumpConsumed = $this->level->shields?->control($this->entity, $controls, $dt) ?? false;
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+		$score = $this->combo->update($this->body, $dt);
+
+		if($score !== null)
+		{
+			$this->counter->score += $score;
+		}
+
 		$lookDown = $this->body->crouchTime >= .75
 			? min(120, $this->camera->height / $this->camera->zoom / 5)
 			: 0;
@@ -423,8 +444,10 @@ final class DemoGame
 		if($this->startup?->render())
 		{
 			$this->hud?->render($this, false);
+			$this->comboHud?->render($this, false);
 			$this->debug?->render($this, false);
 			$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
+			$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 			$this->engine->device->present();
 
@@ -441,8 +464,10 @@ final class DemoGame
 
 		$playerVisible = $this->level !== null && !in_array($this->scene, ['world', 'isometric'], true);
 		$this->hud?->render($this, $playerVisible);
+		$this->comboHud?->render($this, $playerVisible);
 		$this->debug?->render($this, $this->level !== null);
 		$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
+		$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 		$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 		$this->menu->render();
 		$this->engine->device->present();
@@ -548,6 +573,7 @@ final class DemoGame
 			, 'grounded' => $body->grounded
 			, 'rolling' => $body->rolling
 			, 'jumping' => $body->jumping
+			, 'grinding' => $body->grinding
 			, 'crouching' => $body->crouching
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
@@ -582,7 +608,7 @@ final class DemoGame
 			, $level->terrain->raycasts
 		);
 
-		if($this->scene === 'loop')
+		if(in_array($this->scene, ['grinding', 'loop'], true))
 		{
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
 		}
@@ -633,6 +659,7 @@ final class DemoGame
 		$this->level?->restore();
 		$this->menu?->restore();
 		$this->hud?->restore();
+		$this->comboHud?->restore();
 		$this->debug?->restore();
 		$this->startup?->restore();
 	}
@@ -646,6 +673,7 @@ final class DemoGame
 	{
 		$this->startup?->close();
 		$this->hud?->close();
+		$this->comboHud?->close();
 		$this->debug?->close();
 		$this->menu?->close();
 		$this->releasePending();
@@ -653,6 +681,7 @@ final class DemoGame
 		$this->level = null;
 		unset(
 			$this->canvas->dataset->hud
+			, $this->canvas->dataset->combo
 			, $this->canvas->dataset->debug
 			, $this->canvas->dataset->sequences
 			, $this->canvas->dataset->badniks

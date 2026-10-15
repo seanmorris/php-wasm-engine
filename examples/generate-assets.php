@@ -249,6 +249,7 @@ $tiles = [
 					'name' => 'oneWay'
 					, 'value' => true
 				]
+				, ['name' => 'grinding','type' => 'bool','value' => true]
 			]
 			, 'objectgroup' => [
 				'objects' => [
@@ -809,7 +810,14 @@ $base['layers'] = [
 ];
 
 $base['layers'] = array_merge($background, $base['layers']);
-jsonAsset('platformer.tmj', $base);
+$platformer = $base;
+
+for($x = 42; $x <= 50; $x++)
+{
+	$platformer['layers'][count($background)]['data'][13 * $width + $x] = 4;
+}
+
+jsonAsset('platformer.tmj', $platformer);
 $badniks = $base;
 $badniks['tilesets'][] = ['firstgid' => 27,'source' => 'monitors.tsj'];
 $badniks['layers'][] = [

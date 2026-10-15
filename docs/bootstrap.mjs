@@ -43,7 +43,9 @@ export function boot(
 	} = {}
 ){
 	if(!/^8\.[0-5]$/.test(version)
-		|| !['world', 'platformer', 'badniks', 'loop', 'breakables', 'infinite', 'isometric'].includes(scene)
+		|| !['world', 'platformer', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'].includes(
+			scene
+		)
 		|| !['runner', 'glider', 'flyer'].includes(profile)
 	){
 		return Promise.reject(Error('Unsupported PHP version, scene, or movement profile'));
@@ -74,7 +76,7 @@ export function boot(
 			, 'badniks'
 			, 'scene'
 			, 'profile'
-			, 'loading', 'levelError', 'intro', 'hud', 'debug', 'sequences'
+			, 'loading', 'levelError', 'intro', 'hud', 'combo', 'debug', 'sequences'
 		]){
 			delete canvas.dataset[key];
 		}

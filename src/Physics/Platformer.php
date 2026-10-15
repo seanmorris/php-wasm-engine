@@ -53,7 +53,7 @@ final class Platformer
 
 		$axis = $input->axis('left', 'right');
 
-		if($axis)
+		if($axis && (!$b->grinding || abs($b->groundSpeed) < $b->minGrindSpeed))
 		{
 			$b->facing = $axis <=> 0;
 		}
@@ -85,6 +85,7 @@ final class Platformer
 
 		if($b->ability === 'climb')
 		{
+			$b->grinding = false;
 			$b->jumping = false;
 			$b->crouching = false;
 			$b->charge = 0;
@@ -97,13 +98,45 @@ final class Platformer
 
 		if($b->grounded)
 		{
-			$this->groundPose($b, $input, $dt);
+			if($b->grinding)
+			{
+				$this->grindPose($b, $input);
+			}
+			else
+			{
+				$this->groundPose($b, $input, $dt);
+			}
 
 			if(!$b->charge)
 			{
-				$b->groundSpeed += sin($b->angle) * $b->gravity * ($b->rolling?.75:.35) * $dt;
+				$slope = $b->grinding ? .75 : ($b->rolling ? .75 : .35);
+				$b->groundSpeed += sin($b->angle) * $b->gravity * $slope * $dt;
 
-				if($axis && !$b->rolling)
+				if($b->grinding)
+				{
+					$direction = $b->groundSpeed <=> 0;
+
+					if($direction === 0)
+					{
+						$direction = $b->facing ?: 1;
+					}
+
+					$speed = abs($b->groundSpeed);
+
+					if($axis && ($axis === $direction || $speed < $b->minGrindSpeed))
+					{
+						$speed += $b->acceleration * abs($axis) * $dt;
+					}
+					elseif(!$b->crouching)
+					{
+						$speed = max(0, $speed - $b->friction * .125 * $dt);
+					}
+
+					$speed += $b->grindAcceleration * $dt;
+					$b->groundSpeed = $direction * max($b->minGrindSpeed, min($b->maxGrindSpeed, $speed));
+					$b->facing = $direction;
+				}
+				elseif($axis && !$b->rolling)
 				{
 					$accel = $axis * $b->groundSpeed < 0?$b->braking:$b->acceleration;
 
@@ -168,6 +201,7 @@ final class Platformer
 				$b->vy -= cos($b->angle) * $b->jumpSpeed;
 				$b->grounded = false;
 				$b->rolling = false;
+				$b->grinding = false;
 				$b->jumping = true;
 				$b->crouching = false;
 				$b->charge = 0;
@@ -184,6 +218,7 @@ final class Platformer
 
 		if(!$b->grounded)
 		{
+			$b->grinding = false;
 			$b->crouching = false;
 			$b->charge = 0;
 			$b->crouchTime = 0;
@@ -297,8 +332,25 @@ final class Platformer
 
 		if(!$b->grounded)
 		{
+			$b->grinding = false;
 			$b->angle = 0;
 		}
+	}
+
+	/**
+	 * Select the visual crouch and clear ground-only actions while attached to a rail.
+	 *
+	 * @param Body $b Grounded body whose collision contact is annotated as grinding.
+	 * @param Controls $input Logical controls used to select the low-friction crouching pose.
+	 * @return void Keeps standing collision bounds and leaves speed changes to the ground solver.
+	 */
+	private function grindPose(Body $b, Controls $input): void
+	{
+		$b->rolling = false;
+		$b->crouching = $input->down('down');
+		$b->charge = 0;
+		$b->crouchTime = 0;
+		$b->dropCharge = 0;
 	}
 
 	/**
@@ -463,6 +515,7 @@ final class Platformer
 			if($floor || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
 			)){
 				$b->grounded = true;
+				$b->grinding = $best->grinding;
 				$b->angle = atan2($best->nx, -$best->ny);
 				$distance = ($b->x - $best->x) * $best->nx + ($b->y - $best->y) * $best->ny;
 				$b->x += $best->nx * ($b->halfHeight + .001 - $distance);
@@ -470,6 +523,8 @@ final class Platformer
 			}
 			elseif(abs($best->nx) > .8)
 			{
+				$b->grinding = false;
+
 				if($b->ability === 'glide')
 				{
 					$b->ability = 'climb';
@@ -527,6 +582,7 @@ final class Platformer
 		if(!$hits)
 		{
 			$b->grounded = false;
+			$b->grinding = false;
 
 			return;
 		}
@@ -544,6 +600,17 @@ final class Platformer
 
 		$b->x -= $sa * $distance;
 		$b->y += $ca * $distance;
+		$b->grinding = false;
+
+		foreach($hits as $hit)
+		{
+			if($hit->grinding && abs($hit->t * 16 - 6 - $distance) < .01)
+			{
+				$b->grinding = true;
+
+				break;
+			}
+		}
 
 		if(count($hits) === 2)
 		{

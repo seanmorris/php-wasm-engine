@@ -13,6 +13,9 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
+- moving-boxes-2/app/behavior/Platformer.js, region/GrindingRegion.js, actor/SkateBoard.js,
+  actor/PointActor.js, and viewport/Viewport.js: annotated grinding surfaces, retained direction,
+  minimum rail speed, airborne combo links, summed reward multipliers, settlement, and top-right HUD.
 - moving-boxes-2/app/actor/CrabMeat.js, behavior/Patrol.js, mixin/CanPop.js, and actor/Projectile.js: reusable badnik contacts, alternating patrol phases, paired delayed shots, ballistic motion, and player attack responses.
 - moving-boxes-2/app/actor/PointActor.js and actor/Ring.js: bounded radial ring loss, a delayed recovery window, reduced collectible sets, ballistic gravity, terrain bounces, and expiry.
 - moving-boxes-2/app/actor/Monitor.js, BrokenMonitor.js, and actor/monitor ring variants: solid reward boxes, attack-triggered popping, separated screen art, one-shot effects, broken casings, and airborne rebounds.
@@ -81,6 +84,28 @@ Shield input follows moving-boxes-2's command routing. `Shields::control` runs b
 Terrain::addShape returns a stable removal handle. Segment and polygon IDs remain monotonic after removals. Terrain::removeShape clears only the affected spatial buckets and opposite-edge links, so surviving neighbors become exposed without rebuilding the map. Permanent Terrain::add calls discard the extra ownership record. BreakableBlocks ties these handles to intact block components. Its impact method shatters only when Body::$rolling is true and the contacted handle belongs to an intact block. Walking, nearby action presses, and resting support leave it solid. Shattering validates and prepares a frozen sprite grid before removing collision, then retains the same entity as a nonsolid particle burst. Entity destruction and scene cleanup release the owned geometry. Blocks have stationary collision rectangles; moving platforms and particle collision are outside this component's behavior.
 
 Each body selects one positive collision layer in addition to shared layer 0. MapTerrain reads layer properties or Collision N names and creates nonsolid LayerSwitch regions from Tiled objects. Platformer compares continuous body casts with continuous gate crossings, processes the earliest event, and recasts remaining motion after changing planes. Gates do not consume the terrain-contact budget. Destination occupancy and oriented-body intersection checks reject newly solid geometry before a switch; blocked gates retry while overlapping. Adhesion, standing, jump-platform and climbing probes all use the body's selected plane. When an upward climber's side probe passes a wall end, a second probe looks beyond the edge for an upward-facing surface and checks standing clearance. A valid result places the body on top facing inward; a missing or blocked surface keeps the ordinary airborne detach path.
+
+Grinding is metadata on the same indexed collision segments. MapTerrain reads `grinding` or
+`grind` from a layer, tile, collision shape, or object. `Rail` and `Grinding` polylines become open
+one-way paths, while `Terrain::addRail()` supplies the equivalent scripting API. `Hit::$grinding`
+carries the tag through body casts and foot rays. Platformer therefore enters a rail on the exact
+continuous landing contact, adheres across ordinary sloped segments, and leaves an endpoint with
+tangent momentum. The system does not sample by speed, so a thin rail remains reachable during a
+large fixed-step displacement.
+
+Combo is a player component rather than renderer state. `ComboReward` retains a live point value,
+an additive multiplier, a label, and optional presentation metadata. `Combo::update()` owns rail
+accrual and safe-landing settlement, returns a score exactly once, and keeps success or failure data
+long enough for any HUD to inspect. DemoComboHud reads that component after world rendering and
+draws it in screen space with the shared annotated font atlas. Badnik damage fails the component
+through the registry; other gameplay systems can call `add()`, `settle()`, or `fail()` directly.
+
+The generated grinding course combines these systems with the three-plane loop layout. Matching
+polygons first switch from rail to ordinary ground and back without changing surface height. Four
+separate quarter-circle boundaries raise and lower the rail before the loop. Entrance, crown, and
+exit gates then switch its active lower half by travel direction. Every loop plane is tagged
+`grinding`, so body casts and adhesion retain the rail state through vertical and inverted contacts
+at normal and extreme speeds.
 
 The [loop guide](loops.md) analyzes moving-boxes-2's big-loop tileset, its shared crown and two selectable halves, and its three directional gates. The PHP implementation uses original procedural tiles with polygon collision metadata, tangent-speed routing at the ceiling, airborne crown-gate behavior, and swept triggers. Rendering remains independent of collision selection. The demo anchors sprites along the rotated body normal so their feet stay on the loop surface.
 

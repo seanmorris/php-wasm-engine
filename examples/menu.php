@@ -132,6 +132,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 	$levelNames = [
 		'platformer' => 'Platformer'
 		, 'badniks' => 'CrabMeat badniks'
+		, 'grinding' => 'Grinding rail'
 		, 'world' => 'Streaming world'
 		, 'loop' => 'Loop-de-loop'
 		, 'breakables' => 'Breakable blocks'

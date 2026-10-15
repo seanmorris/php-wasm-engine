@@ -108,6 +108,10 @@ final class DemoDebugOverlay
 		{
 			$state = 'spindash';
 		}
+		elseif($state === '' && $body->grinding)
+		{
+			$state = $body->crouching ? 'grinding-crouching' : 'grinding';
+		}
 		elseif($state === '' && $body->rolling)
 		{
 			$state = 'rolling';

@@ -373,7 +373,14 @@ final class Badniks
 
 		$direction = $body->x < $sourceX ? -1 : 1;
 
-		return $combat->damage($body, $counter, $direction, $shield, $damageType);
+		$damaged = $combat->damage($body, $counter, $direction, $shield, $damageType);
+
+		if($damaged && $this->registry->has($player, Combo::class))
+		{
+			$this->registry->get($player, Combo::class)->fail();
+		}
+
+		return $damaged;
 	}
 
 	/**

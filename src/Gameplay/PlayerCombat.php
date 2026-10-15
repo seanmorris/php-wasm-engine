@@ -120,6 +120,7 @@ final class PlayerCombat
 		$body->grounded = false;
 		$body->rolling = false;
 		$body->jumping = false;
+		$body->grinding = false;
 		$body->crouching = false;
 		$body->ability = '';
 		$body->charge = 0;

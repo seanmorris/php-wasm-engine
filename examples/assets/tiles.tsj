@@ -75,6 +75,11 @@
                 {
                     "name": "oneWay",
                     "value": true
+                },
+                {
+                    "name": "grinding",
+                    "type": "bool",
+                    "value": true
                 }
             ],
             "objectgroup": {

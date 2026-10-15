@@ -15,6 +15,7 @@ final class Hit
 	 * @param float $ny Y component of the outward unit surface normal.
 	 * @param bool $oneWay Whether the contacted edge belongs to a one-way platform.
 	 * @param int|null $shape Removable terrain handle, or null for permanent geometry.
+	 * @param bool $grinding Whether the surface is an annotated grinding rail.
 	 * @return void Stores the contact data without modifying terrain or a body.
 	 */
 	public function __construct(
@@ -25,6 +26,7 @@ final class Hit
 		, public float $ny
 		, public bool $oneWay = false
 		, public ?int $shape = null
+		, public bool $grinding = false
 	){
 	}
 }

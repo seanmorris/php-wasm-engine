@@ -53,7 +53,7 @@ test(
 		expect(files).not.toContain('stream.world');
 		await php(page, '$originalEngine = $engine; $originalPlayer = $body;');
 
-		for(const scene of ['breakables', 'loop', 'infinite', 'isometric', 'world', 'breakables'])
+		for(const scene of ['breakables', 'grinding', 'loop', 'infinite', 'isometric', 'world', 'breakables'])
 		{
 			await change(page, scene);
 			await expect(page.locator('canvas')).toHaveAttribute('data-scene', scene);

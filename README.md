@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, CrabMeat badniks, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -73,6 +73,53 @@ The example player HUD renders **SCORE**, **TIME**, and **RINGS** at the upper l
 the annotated menu font, colored labels, and pixel shadows matching moving-boxes-2.
 It has no background panel and hides in camera-only scenes. The FPS meter remains an
 independent lower-left diagnostic with no black rectangle behind it.
+
+## Grinding rails and combos
+
+Set the boolean `grinding` property on a Tiled collision layer to make its surfaces
+grindable. An object polyline with class `Rail` or `Grinding` creates an open one-way rail;
+`collisionLayer` selects its collision plane. Scripted levels use the same path by calling
+`Terrain::addRail()` with ordered world-space points.
+
+~~~php
+use PhpWasmEngine\Gameplay\{Combo,ComboReward};
+use PhpWasmEngine\Physics\{Body,Platformer,Terrain};
+
+$terrain = new Terrain;
+$terrain->addRail([[64, 224], [320, 192], [576, 224]]);
+$movement = new Platformer($terrain);
+$combo = new Combo;
+
+// During each fixed update:
+$movement->step($body, $engine->controls, $dt);
+$banked = $combo->update($body, $dt);
+$counter->score += $banked ?? 0;
+
+// Game-specific tricks can join the same chain.
+$combo->add(new ComboReward('Backflip', 250, 2));
+~~~
+
+A rail contact clears rolling, preserves travel direction against opposite input, enforces the
+reference minimum speed, accelerates along its tangent, and permits the lower-friction Down pose.
+Jump leaves along the current surface normal. A rail endpoint retains tangent momentum and becomes
+a plain fall, so a chain can continue onto another rail. The body cast checks the entire movement
+distance before attaching, which prevents fast downward movement from tunneling through a thin rail.
+
+Choose **Level → Grinding rail** for a complete Tiled example. It begins with a level
+rail-to-ground-to-rail transition, then two independent quarter bends lift the track to an upper
+straight and two lower it again before a separate loop. Collision layers 1 and 2 hold the loop's
+alternate lower halves; shared layer 0 holds its crown and straight rail. Directional switches at
+both entrances and a reversed switch at the crown select a passable route in either direction. The
+stop wall after the exit clears tangent motion so opposite input can run the complete course in
+reverse. Open `examples/assets/grinding.tmj` and `grinding.tsj` to inspect the annotations, object
+polygons, and collision planes.
+
+`Combo` adds one live `Rail Grind` reward per rail run and grows its points with speed. `add()`
+accepts game-specific rewards while airborne. An ordinary grounded landing banks
+`ceil(sum(points) * sum(multiplier))`; `fail()` clears the chain and exposes the lost value without
+awarding it. Both results remain available for a configurable duration. The example renders up to
+four recent labels, overflow, chain arithmetic, and the success or failure result in the top-right
+bitmap HUD. Enemy damage fails a player-owned `Combo` automatically.
 
 ## Badniks and CrabMeat
 

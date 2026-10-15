@@ -4,6 +4,16 @@ Select **Loop-de-loop** in the live demo and hold Right from the start. After ex
 
 Open [`examples/assets/loop.tmj`](../examples/assets/loop.tmj) in Tiled. Its external [`loop.tsj`](../examples/assets/loop.tsj) tileset contains original procedural artwork and collision polygons. Run `php examples/generate-assets.php` to regenerate the demo assets.
 
+Select **Grinding rail** for the extended test course. Its
+[`grinding.tmj`](../examples/assets/grinding.tmj) begins with separate grinding, ordinary-ground,
+and grinding polygons sharing a level surface. Four visible quarter bends then raise and lower the
+rail before it reaches the loop. [`grinding.tsj`](../examples/assets/grinding.tsj) retains matching
+curved artwork and the loop's exact collision polygons. The loop layers add `grinding` to shared
+plane 0 and selectable planes 1 and 2. Together they prove that grinding state leaves and resumes on
+ordinary ground, follows both directions through 90-degree bends, survives wall and ceiling
+adhesion, and crosses all three directional switches. The loop crown remains shared, the lower left
+route is on plane 1, and the lower right route is on plane 2.
+
 ![Shared crown and floor, two selectable lower halves, and three directional gates](loop-layout.svg)
 
 ## What moving-boxes-2 does
