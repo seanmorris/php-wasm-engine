@@ -225,6 +225,43 @@ Annotate tiles with `crabmeat-standing`, `crabmeat-walking`, `crabmeat-shooting`
 
 Player-to-badnik and player-to-projectile contacts use relative swept bounds, so either participant can cross the other between fixed updates without tunneling. Projectile-to-terrain movement uses `Terrain::castBody()` over the complete displacement. A projectile whose owning badnik has popped retires without damaging the player.
 
+### Boss arena screen locks
+
+`Gameplay\BossRegions` imports moving-boxes-2-compatible `BossRegion` or `boss-region`
+rectangle objects. The historical editor convention of naming an otherwise untyped object
+`boss-region` is accepted too. Set its `boss` property to a Tiled object reference. The
+application supplies a callback that maps that source object ID to live boss state, so the lock
+works with any ECS boss component or behavior instead of depending on CrabMeat.
+
+Grounded entry engages the arena. The complete movement segment is tested against the rectangle,
+so a body crossing both sides in one fixed step is placed at the entrance instead of tunneling
+through. Once engaged, the body center and camera remain inside the horizontal arena bounds while
+jumps and vertical movement continue normally. Aerial pass-through does not start a fight. Target
+defeat releases the player and camera immediately and completes the region. `cameraAnchorY`
+defaults to `0.72`, matching the reference boss framing, and accepts a value from zero through one.
+
+~~~php
+use PhpWasmEngine\Gameplay\{Badnik,BossRegions};
+
+$locks = BossRegions::fromMaps(
+	function(int $sourceId) use ($crabs, $engine): bool {
+		$boss = $crabs->entityForSourceId($sourceId);
+
+		return $boss !== null && $engine->entities->has($boss, Badnik::class);
+	}
+	, $map
+);
+
+$locks->sync($body); // Call after spawning or teleporting; true releases an old lock.
+$region = $locks->update($body); // Call after movement.
+$camera->follow($body->supportX(), $body->supportY(), $dt, anchorY: $region?->cameraAnchorY ?? .5);
+$locks->constrainCamera($body, $camera);
+~~~
+
+The **CrabMeat badniks** demo uses object 3 as its arena target. Enter from either side, defeat it
+with a roll or jump somersault, and continue beyond the former screen wall. The debug overlay and
+`canvas.dataset.bossLock` expose the active bounds for scripts and browser tests.
+
 When `Badniks` receives the level's `Rings` manager, damage scatters up to sixteen held rings in two radial groups before clearing the counter. The burst keeps moving-boxes-2's reduced recovery set: every third ring is a short-lived visual, while the others become collectible after 48 reference frames. `ScatteredRing` stores velocity, gravity, pickup delay, lifetime, restitution, and collision layer. `Rings` uses full body casts for terrain bounces and relative swept pickup checks for moving rings. Recovered rings return to `RingCounter`; unrecovered rings expire between about 3.7 and 6 seconds.
 
 ## Monitors and pluggable rewards

@@ -1115,6 +1115,27 @@ $badniks['layers'][] = [
 	]
 ] + $layerDefaults;
 
+$badniks['layers'][] = [
+	'id' => 6
+	, 'name' => 'Boss regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 11
+			, 'name' => 'boss-region'
+			, 'class' => 'BossRegion'
+			, 'x' => 960
+			, 'y' => 0
+			, 'width' => 1280
+			, 'height' => 448
+			, 'properties' => [
+				['name' => 'boss', 'type' => 'object', 'value' => 3]
+				, ['name' => 'cameraAnchorY', 'type' => 'float', 'value' => .72]
+			]
+		]
+	]
+] + $layerDefaults;
+
 jsonAsset('badniks.tmj', $badniks);
 $infinite = $base;
 $infinite['infinite'] = true;

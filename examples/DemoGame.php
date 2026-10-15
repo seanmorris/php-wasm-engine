@@ -239,6 +239,7 @@ final class DemoGame
 		$this->combo->reset();
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
+		$this->level?->bossRegions?->sync($this->body);
 
 		if($this->engine->entities->has($this->entity, PlayerCombat::class))
 		{
@@ -363,7 +364,7 @@ final class DemoGame
 			$this->notifyReady();
 		}
 
-		foreach(['world', 'breakables', 'badniks', 'water'] as $key)
+		foreach(['world', 'breakables', 'badniks', 'water', 'bossLock'] as $key)
 		{
 			unset($this->canvas->dataset->$key);
 		}
@@ -430,6 +431,7 @@ final class DemoGame
 
 		$jumpConsumed = $this->level->shields?->control($this->entity, $controls, $dt) ?? false;
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+		$bossRegion = $this->level->bossRegions?->update($this->body);
 		$score = $this->combo->update($this->body, $dt);
 
 		if($score !== null)
@@ -441,7 +443,14 @@ final class DemoGame
 			? min(120, $this->camera->height / $this->camera->zoom / 5)
 			: 0;
 
-		$this->camera->follow($this->body->supportX(), $this->body->supportY() + $lookDown, $dt);
+		$this->camera->follow(
+			$this->body->supportX()
+			, $this->body->supportY() + $lookDown
+			, $dt
+			, anchorY: $bossRegion?->cameraAnchorY ?? .5
+		);
+
+		$this->level->bossRegions?->constrainCamera($this->body, $this->camera);
 		$this->camera->y = min(120, $this->camera->y);
 	}
 
@@ -613,6 +622,18 @@ final class DemoGame
 			, 'skimming' => $body->skimming
 		]);
 
+		$this->canvas->dataset->bossLock = json_encode(
+			$level->bossRegions?->snapshot($body) ?? [
+				'active' => false
+				, 'sourceId' => null
+				, 'bossSourceId' => null
+				, 'x' => null
+				, 'y' => null
+				, 'width' => null
+				, 'height' => null
+			]
+		);
+
 		$stats = $level->renderer->stats;
 		$this->renderStats = $stats;
 
@@ -688,6 +709,11 @@ final class DemoGame
 				, $counts['shields']['active']
 				, $counts['defeats']
 			);
+
+			if($level->bossRegions?->active($body))
+			{
+				$this->status->textContent .= ' · boss arena locked';
+			}
 		}
 	}
 
@@ -727,6 +753,7 @@ final class DemoGame
 			, $this->canvas->dataset->debug
 			, $this->canvas->dataset->sequences
 			, $this->canvas->dataset->badniks
+			, $this->canvas->dataset->bossLock
 			, $this->canvas->dataset->water
 		);
 	}

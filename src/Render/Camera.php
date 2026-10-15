@@ -32,12 +32,21 @@ final class Camera
 	 * @param float $dt Elapsed time in seconds.
 	 * @param float $stiffness Nonnegative response rate per second; larger values follow more
 	 * tightly.
+	 * @param float $anchorX Horizontal target position within the visible world from zero through
+	 * one.
+	 * @param float $anchorY Vertical target position within the visible world from zero through one.
 	 * @return void Updates the camera's top-left position without changing viewport size or zoom.
 	 */
-	public function follow(float $x, float $y, float $dt, float $stiffness = 8): void
-	{
+	public function follow(
+		float $x
+		, float $y
+		, float $dt
+		, float $stiffness = 8
+		, float $anchorX = .5
+		, float $anchorY = .5
+	): void {
 		$blend = 1 - exp(-$stiffness * $dt);
-		$this->x += ($x - $this->width / $this->zoom / 2 - $this->x) * $blend;
-		$this->y += ($y - $this->height / $this->zoom / 2 - $this->y) * $blend;
+		$this->x += ($x - $this->width / $this->zoom * $anchorX - $this->x) * $blend;
+		$this->y += ($y - $this->height / $this->zoom * $anchorY - $this->y) * $blend;
 	}
 }

@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Gameplay\Badnik;
 use PhpWasmEngine\Gameplay\Badniks;
+use PhpWasmEngine\Gameplay\BossRegions;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
 use PhpWasmEngine\Gameplay\Monitors;
@@ -38,6 +40,7 @@ final class DemoLevel
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
 	public ?Badniks $badniks = null;
+	public ?BossRegions $bossRegions = null;
 	public ?CrabMeats $crabs = null;
 	public ?Monitors $monitors = null;
 	public ?Shields $shields = null;
@@ -235,6 +238,26 @@ final class DemoLevel
 		if($this->id === 'breakables')
 		{
 			$this->blocks = configureBreakables($engine, $this->terrain, $map, $this->systemPrefix);
+		}
+
+		$bossRegions = BossRegions::fromMaps(
+			/**
+			 * Resolve a Tiled boss reference through the demo's spawned CrabMeat entities.
+			 *
+			 * @param int $sourceId Referenced Tiled object ID.
+			 * @return bool True while the referenced badnik component remains live.
+			 */
+			function(int $sourceId) use ($engine): bool {
+				$entity = $this->crabs?->entityForSourceId($sourceId);
+
+				return $entity !== null && $engine->entities->has($entity, Badnik::class);
+			}
+			, $map
+		);
+
+		if($bossRegions->regions)
+		{
+			$this->bossRegions = $bossRegions;
 		}
 
 		/**

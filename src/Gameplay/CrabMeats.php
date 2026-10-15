@@ -15,6 +15,8 @@ final class CrabMeats
 {
 	/** @var array<string,int> Global tile IDs keyed by annotated sprite class. */
 	private array $gids;
+	/** @var array<int,int> Spawned entity IDs keyed by their source Tiled object IDs. */
+	private array $sources = [];
 
 	/**
 	 * Promote Tiled CrabMeat objects into generic badniks with species behavior.
@@ -80,7 +82,7 @@ final class CrabMeats
 				$sprite->tint = $layer->tint;
 				$sprite->opacity = $layer->opacity;
 
-				$this->badniks->create(
+				$entity = $this->badniks->create(
 					new Badnik(
 						$x
 						, $y
@@ -92,6 +94,11 @@ final class CrabMeats
 					, $crab
 					, $sprite
 				);
+
+				if(isset($object['id']))
+				{
+					$this->sources[(int)$object['id']] = $entity;
+				}
 			}
 		}
 	}
@@ -133,6 +140,17 @@ final class CrabMeats
 	public function entities(): array
 	{
 		return $this->registry->query(Query::all(Badnik::class, CrabMeat::class));
+	}
+
+	/**
+	 * Resolve a spawned CrabMeat from its source Tiled object ID.
+	 *
+	 * @param int $sourceId Object ID referenced by another Tiled object property.
+	 * @return int|null Entity ID allocated for that object, or null when it was not spawned.
+	 */
+	public function entityForSourceId(int $sourceId): ?int
+	{
+		return $this->sources[$sourceId] ?? null;
 	}
 
 	/**

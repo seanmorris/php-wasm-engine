@@ -2,6 +2,8 @@ import {test, expect} from '@playwright/test';
 
 const state = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.badniks ?? 'null'));
 
+const lockState = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.bossLock ?? 'null'));
+
 async function run(page, source)
 {
 	return page.evaluate(async source => {
@@ -104,5 +106,50 @@ test('CrabMeat patrols, fires, damages a walker, and pops under a rolling player
 
 	expect(popped).toEqual([1, 100, false]);
 	await expect.poll(async() => (await state(page)).badniks).toBe(1);
+	expect(errors).toEqual([]);
+});
+
+test('boss regions stop swept crossings, frame the arena, and release after defeat', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'badniks'}));
+	await expect.poll(() => lockState(page), {timeout: 60000}).not.toBeNull();
+
+	const entered = JSON.parse(await run(page, `
+		$game->menu->menu->open();
+		$engine->userPaused = true;
+		$body->x = 800;
+		$body->y = 430;
+		$body->grounded = true;
+		$game->level->bossRegions->sync($body);
+		$body->x = 2500;
+		$body->vx = 60000;
+		$body->groundSpeed = 60000;
+		$region = $game->level->bossRegions->update($body);
+		$camera->x = -500;
+		$game->level->bossRegions->constrainCamera($body, $camera);
+		echo json_encode([$region?->sourceId, $region?->bossSourceId, $body->x, $body->vx,
+			$body->groundSpeed, $camera->x]);
+	`
+	));
+
+	expect(entered).toEqual([11, 3, 960, 0, 0, 960]);
+	await expect.poll(async() => (await lockState(page)).active).toBe(true);
+	expect((await lockState(page)).bossSourceId).toBe(3);
+
+	const released = JSON.parse(await run(page, `
+		$boss = $game->level->crabs->entityForSourceId(3);
+		$game->level->badniks->pop($boss, $game->entity);
+		$body->x = 2500;
+		$region = $game->level->bossRegions->update($body);
+		$camera->x = 2000;
+		$clamped = $game->level->bossRegions->constrainCamera($body, $camera);
+		echo json_encode([$region === null, $clamped, $body->x, $camera->x]);
+	`
+	));
+
+	expect(released).toEqual([true, false, 2500, 2000]);
+	await expect.poll(async() => (await lockState(page)).active).toBe(false);
 	expect(errors).toEqual([]);
 });

@@ -154,10 +154,14 @@ final class DemoDebugOverlay
 		$camera = $game->camera;
 		$stream = $game->level?->stream;
 		$stats = $game->renderStats;
+		$bossRegion = $player ? $game->level?->bossRegions?->active($player) : null;
 
 		return ['Scene' => $game->scene] + self::playerRows($player) + [
 			'Camera X/Y' => sprintf('%.1f / %.1f', $camera->x, $camera->y)
 			, 'Zoom' => sprintf('%.2f', $camera->zoom)
+			, 'Screen lock' => $bossRegion
+				? sprintf('%.0f..%.0f', $bossRegion->x, $bossRegion->x + $bossRegion->width)
+				: 'Off'
 			, 'Entities' => (string)count($game->engine->entities->query(Query::all()))
 			, 'Maps R/P/E' => sprintf(
 				'%d / %d / %d'
