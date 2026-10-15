@@ -66,6 +66,16 @@ recreates each one after context restoration.
 
 Format semantics follow the official [Tiled JSON format](https://doc.mapeditor.org/en/stable/reference/json-map-format/), [global tile IDs](https://doc.mapeditor.org/en/stable/reference/global-tile-ids/), and [world format](https://doc.mapeditor.org/en/stable/manual/worlds/).
 
+PlatformCamera separates gameplay framing from the render camera. Modes select target viewport
+anchors for ground, wall, ceiling, air, climbing, tubes, bosses, scripted focus points, and the
+other moving-boxes-2 camera contexts. High ground or air speed biases the target along the active
+surface. Anchor changes use the reference frame divisors converted to elapsed-time exponential
+damping. Camera position uses the same conversion with faster panning for scripted focus changes.
+World rectangles and camera-coordinate limits clamp the desired top-left point before damping.
+Consequently, a newly engaged boss arena changes the camera destination without changing its
+current pose, and release pans back through the same path. Direct Camera::follow remains the small
+general-purpose primitive; Camera::panTo accepts a top-left destination for policy controllers.
+
 ## Where raycasting prevents tunneling
 
 Physics/Terrain.php provides two casts:

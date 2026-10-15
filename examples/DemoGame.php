@@ -7,8 +7,10 @@ use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\PlayerCombat;
+use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Gameplay\Shield;
+
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Sprite;
@@ -24,6 +26,7 @@ final class DemoGame
 	public ?DemoDebugOverlay $debug = null;
 	public ?DemoPlayerHud $hud = null;
 	public ?DemoComboHud $comboHud = null;
+	public PlatformCamera $cameraBehavior;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
 	public float $levelStartedAt = 0;
@@ -58,6 +61,8 @@ final class DemoGame
 		$this->host = vrzno_env('demoControls');
 		$this->canvas = vrzno_env('canvas');
 		$this->status = (new Vrzno)->document->querySelector('#status');
+		$this->cameraBehavior = new PlatformCamera;
+		$this->cameraBehavior->setCameraLimits(maxY: 120);
 		$engine->systems->add('movement', [$this, 'update']);
 		(require __DIR__ . '/sequences.php')($engine->input->sequences);
 	}
@@ -240,6 +245,10 @@ final class DemoGame
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
 		$this->level?->bossRegions?->sync($this->body);
+		$this->cameraBehavior->setMode('auto');
+		$this->cameraBehavior->clearFocus();
+		$this->cameraBehavior->clearWorldBounds();
+		$this->cameraBehavior->sync($this->body);
 
 		if($this->engine->entities->has($this->entity, PlayerCombat::class))
 		{
@@ -439,19 +448,28 @@ final class DemoGame
 			$this->counter->score += $score;
 		}
 
-		$lookDown = $this->body->crouchTime >= .75
-			? min(120, $this->camera->height / $this->camera->zoom / 5)
-			: 0;
+		if($bossRegion !== null)
+		{
+			$this->cameraBehavior->setMode('boss');
+			$this->cameraBehavior->bossAnchorY = $bossRegion->cameraAnchorY;
 
-		$this->camera->follow(
-			$this->body->supportX()
-			, $this->body->supportY() + $lookDown
-			, $dt
-			, anchorY: $bossRegion?->cameraAnchorY ?? .5
-		);
+			$this->cameraBehavior->setWorldBounds($bossRegion->x, $bossRegion->x + $bossRegion->width);
+		}
+		else
+		{
+			$this->cameraBehavior->setMode('auto');
+			$this->cameraBehavior->clearWorldBounds();
+		}
 
-		$this->level->bossRegions?->constrainCamera($this->body, $this->camera);
-		$this->camera->y = min(120, $this->camera->y);
+		$look = 0;
+
+		if($this->body->grounded && !$this->body->rolling && !$this->body->grinding
+			&& abs($this->body->groundSpeed) < 1 && $this->body->charge <= 0
+		){
+			$look = $controls->axis('up', 'down');
+		}
+
+		$this->cameraBehavior->update($this->camera, $this->body, $dt, $look);
 	}
 
 	/**

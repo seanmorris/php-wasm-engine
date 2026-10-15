@@ -109,7 +109,7 @@ test('CrabMeat patrols, fires, damages a walker, and pops under a rolling player
 	expect(errors).toEqual([]);
 });
 
-test('boss regions stop swept crossings, frame the arena, and release after defeat', async({page}) => {
+test('boss regions stop crossings, pan into the arena, and release after defeat', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/');
@@ -127,14 +127,26 @@ test('boss regions stop swept crossings, frame the arena, and release after defe
 		$body->vx = 60000;
 		$body->groundSpeed = 60000;
 		$region = $game->level->bossRegions->update($body);
-		$camera->x = -500;
-		$game->level->bossRegions->constrainCamera($body, $camera);
-		echo json_encode([$region?->sourceId, $region?->bossSourceId, $body->x, $body->vx,
-			$body->groundSpeed, $camera->x]);
+		$enteredBodyX = $body->x;
+		$camera->x = 480;
+		$game->update($engine->entities, 1 / 60);
+		$firstCameraX = $camera->x;
+
+		foreach(range(1, 240) as $_)
+		{
+			$game->cameraBehavior->update($camera, $body, 1 / 60);
+		}
+
+		echo json_encode([$region?->sourceId, $region?->bossSourceId, $enteredBodyX, $body->vx,
+			$body->groundSpeed, $firstCameraX, $camera->x, $game->cameraBehavior->mode]);
 	`
 	));
 
-	expect(entered).toEqual([11, 3, 960, 0, 0, 960]);
+	expect(entered.slice(0, 5)).toEqual([11, 3, 960, 0, 0]);
+	expect(entered[5]).toBeGreaterThan(480);
+	expect(entered[5]).toBeLessThan(960);
+	expect(entered[6]).toBeCloseTo(960, 2);
+	expect(entered[7]).toBe('boss');
 	await expect.poll(async() => (await lockState(page)).active).toBe(true);
 	expect((await lockState(page)).bossSourceId).toBe(3);
 

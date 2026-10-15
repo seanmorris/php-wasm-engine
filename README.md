@@ -225,6 +225,41 @@ Annotate tiles with `crabmeat-standing`, `crabmeat-walking`, `crabmeat-shooting`
 
 Player-to-badnik and player-to-projectile contacts use relative swept bounds, so either participant can cross the other between fixed updates without tunneling. Projectile-to-terrain movement uses `Terrain::castBody()` over the complete displacement. A projectile whose owning badnik has popped retires without damaging the player.
 
+### Platform camera
+
+`Gameplay\PlatformCamera` reimplements moving-boxes-2's actor framing as a renderer-independent
+controller. Automatic mode follows ordinary ground movement, waits through short falls before
+switching to aerial framing, tracks climbing, and uses tube framing while rolling on walls and
+ceilings. Speed shifts the actor away from the direction of travel to show more of the route
+ahead. Floor, wall, and ceiling orientations rotate that look-ahead onto the active surface.
+
+The controller also exposes the reference modes for scripted sequences: `panning`, `boss`,
+`perspective`, `bridge`, `cliff`, `walker`, `airplane`, `boost-ring`, `cross-cannon`,
+`cross-cannon-quick`, `cutScene`, `corkscrew`, `popping`, `hooked`, `cinematic`, `draggable`, and
+`locked`. `focus()` and `clearFocus()` pan to and from a world point. `setWorldBounds()` confines
+the visible span, while `setCameraLimits()` applies direct top-left limits such as a level floor.
+Both bounds constrain the destination before damping, so changing a target or screen lock does not
+snap the current view. Anchor and position damping are independent of the simulation step size.
+
+~~~php
+use PhpWasmEngine\Gameplay\PlatformCamera;
+
+$cameraBehavior = new PlatformCamera;
+$cameraBehavior->setCameraLimits(maxY: 120);
+
+// Call after movement. The final argument is a filtered up/down look axis.
+$cameraBehavior->update($camera, $body, $dt, $look);
+
+$cameraBehavior->focus($switchX, $switchY); // Smooth scripted pan.
+$cameraBehavior->clearFocus();              // Smooth return to the actor.
+$cameraBehavior->setMode('cinematic');       // Explicit framing until setMode('auto').
+~~~
+
+Holding Up or Down for 0.75 seconds applies the reference look framing when the application passes
+that input to `update()`. The demo passes it only for a stationary grounded actor, preserving
+crouch, spindash, grinding, and rolling controls. `sync()` clears stale air and look timers after a
+spawn or teleport. The debug overlay reports the resolved mode and smoothed anchor.
+
 ### Boss arena screen locks
 
 `Gameplay\BossRegions` imports moving-boxes-2-compatible `BossRegion` or `boss-region`
@@ -235,13 +270,14 @@ works with any ECS boss component or behavior instead of depending on CrabMeat.
 
 Grounded entry engages the arena. The complete movement segment is tested against the rectangle,
 so a body crossing both sides in one fixed step is placed at the entrance instead of tunneling
-through. Once engaged, the body center and camera remain inside the horizontal arena bounds while
-jumps and vertical movement continue normally. Aerial pass-through does not start a fight. Target
-defeat releases the player and camera immediately and completes the region. `cameraAnchorY`
+through. Once engaged, the body center remains inside the horizontal arena bounds while the camera
+pans toward a destination within those bounds. Aerial pass-through does not start a fight. Target
+defeat releases the player immediately, completes the region, and lets the camera pan back to its
+ordinary follow target. `cameraAnchorY`
 defaults to `0.72`, matching the reference boss framing, and accepts a value from zero through one.
 
 ~~~php
-use PhpWasmEngine\Gameplay\{Badnik,BossRegions};
+use PhpWasmEngine\Gameplay\{Badnik,BossRegions,PlatformCamera};
 
 $locks = BossRegions::fromMaps(
 	function(int $sourceId) use ($crabs, $engine): bool {
@@ -254,9 +290,25 @@ $locks = BossRegions::fromMaps(
 
 $locks->sync($body); // Call after spawning or teleporting; true releases an old lock.
 $region = $locks->update($body); // Call after movement.
-$camera->follow($body->supportX(), $body->supportY(), $dt, anchorY: $region?->cameraAnchorY ?? .5);
-$locks->constrainCamera($body, $camera);
+$cameraBehavior = $cameraBehavior ?? new PlatformCamera;
+
+if($region)
+{
+	$cameraBehavior->setMode('boss');
+	$cameraBehavior->bossAnchorY = $region->cameraAnchorY;
+	$cameraBehavior->setWorldBounds($region->x, $region->x + $region->width);
+}
+else
+{
+	$cameraBehavior->setMode('auto');
+	$cameraBehavior->clearWorldBounds();
+}
+
+$cameraBehavior->update($camera, $body, $dt);
 ~~~
+
+`BossRegions::constrainCamera()` remains available for applications that require an immediate hard
+clamp. The demo uses `PlatformCamera` so arena entry and release are visible pans.
 
 The **CrabMeat badniks** demo uses object 3 as its arena target. Enter from either side, defeat it
 with a roll or jump somersault, and continue beyond the former screen wall. The debug overlay and

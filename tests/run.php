@@ -545,6 +545,7 @@ require __DIR__ . '/debug-overlay.php';
 require __DIR__ . '/rings.php';
 require __DIR__ . '/badniks.php';
 require __DIR__ . '/boss-regions.php';
+require __DIR__ . '/platform-camera.php';
 require __DIR__ . '/monitors.php';
 require __DIR__ . '/shields.php';
 require __DIR__ . '/grinding.php';

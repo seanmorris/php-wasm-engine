@@ -156,8 +156,19 @@ final class DemoDebugOverlay
 		$stats = $game->renderStats;
 		$bossRegion = $player ? $game->level?->bossRegions?->active($player) : null;
 
+		$cameraState = $player
+			? sprintf(
+				'%.1f / %.1f · %s %.2f/%.2f'
+				, $camera->x
+				, $camera->y
+				, $game->cameraBehavior->mode
+				, $game->cameraBehavior->anchorX
+				, $game->cameraBehavior->anchorY
+			)
+			: sprintf('%.1f / %.1f · manual', $camera->x, $camera->y);
+
 		return ['Scene' => $game->scene] + self::playerRows($player) + [
-			'Camera X/Y' => sprintf('%.1f / %.1f', $camera->x, $camera->y)
+			'Camera X/Y' => $cameraState
 			, 'Zoom' => sprintf('%.2f', $camera->zoom)
 			, 'Screen lock' => $bossRegion
 				? sprintf('%.0f..%.0f', $bossRegion->x, $bossRegion->x + $bossRegion->width)
