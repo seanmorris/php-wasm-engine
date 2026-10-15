@@ -52,7 +52,7 @@ test('live monitors animate, award rings once, rebound the player, and retain a 
 	`
 	));
 
-	expect(result).toEqual([true, false, 10, 10, -600, true, 30]);
+	expect(result).toEqual([true, false, 10, 10, -600, true, 41]);
 	await expect.poll(async() => (await state(page)).monitors.broken).toBe(1);
 	await expect.poll(async() => (await state(page)).monitors.intact).toBe(6);
 
@@ -71,7 +71,7 @@ test('live monitors animate, award rings once, rebound the player, and retain a 
 	`
 	));
 
-	expect(shield).toEqual(['normal', 36, 41]);
+	expect(shield).toEqual(['normal', 47, 52]);
 	await expect.poll(async() => (await state(page)).shields.types.normal).toBe(1);
 	await expect.poll(async() => (await state(page)).monitors.intact).toBe(5);
 	expect(errors).toEqual([]);

@@ -25,6 +25,8 @@ final class WaterRegions
 
 	/**
 	 * Load Water, WaterRegion, water-region, and legacy region rectangle objects from Tiled maps.
+	 * A boolean `water` property is also accepted for legacy untyped rectangles; object-reference
+	 * properties named `water` belong to switches and buoyant platforms and are not volumes.
 	 *
 	 * @param TileMap ...$maps Loaded maps whose placement and inherited layer offsets are applied.
 	 * @return self Query collection containing every recognized water object.
@@ -43,7 +45,7 @@ final class WaterRegions
 					$class = strtolower((string)(($object['class'] ?? '')?:($object['type'] ?? '')));
 
 					if(!in_array($class, ['water','waterregion','water-region','region'], true)
-						&& !($properties['water'] ?? false)
+						&& ($properties['water'] ?? null) !== true
 					){
 						continue;
 					}
@@ -79,12 +81,34 @@ final class WaterRegions
 						, (float)($properties['displacement'] ?? 4)
 						, (float)($properties['displacementScale'] ?? 64)
 						, (float)($properties['displacementSpeed'] ?? 42.6666667)
+						, isset($object['id']) ? (int)$object['id'] : null
 					);
 				}
 			}
 		}
 
 		return new self(...$regions);
+	}
+
+	/**
+	 * Find a region by its source Tiled object ID.
+	 *
+	 * @param int $sourceId Tiled object ID referenced by a switch or buoyant object property.
+	 * @return WaterRegion|null Last region with the supplied ID, or null when it is absent.
+	 */
+	public function bySourceId(int $sourceId): ?WaterRegion
+	{
+		$result = null;
+
+		foreach($this->regions as $region)
+		{
+			if($region->sourceId === $sourceId)
+			{
+				$result = $region;
+			}
+		}
+
+		return $result;
 	}
 
 	/**

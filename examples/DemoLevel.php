@@ -8,6 +8,8 @@ use PhpWasmEngine\Gameplay\CrabMeats;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
+use PhpWasmEngine\Gameplay\WaterFeatures;
+use PhpWasmEngine\Gameplay\WaterParticles;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\MapTerrain;
@@ -39,6 +41,8 @@ final class DemoLevel
 	public ?CrabMeats $crabs = null;
 	public ?Monitors $monitors = null;
 	public ?Shields $shields = null;
+	public ?WaterFeatures $waterFeatures = null;
+	public ?WaterParticles $waterParticles = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -165,10 +169,42 @@ final class DemoLevel
 		$this->rings = new Rings($engine->entities, $map, terrain: $this->terrain);
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
+		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
+
+		if($this->waterFeatures->isEmpty())
+		{
+			$this->waterFeatures->close();
+			$this->waterFeatures = null;
+		}
+		else
+		{
+			$engine->systems->add(
+				$this->systemPrefix . 'water-features'
+				, [$this->waterFeatures, 'update']
+				, after: ['movement']
+			);
+		}
 
 		if($this->waters->regions)
 		{
 			$this->waterRenderer = new WaterRenderer($engine->device->width, $engine->device->height);
+
+			$this->waterParticles = new WaterParticles(
+				$engine->entities
+				, $map
+				, $this->waters
+				, milliseconds: $engine->time * 1000
+			);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'water-particles'
+				, [$this->waterParticles, 'update']
+				, after: [
+					$this->waterFeatures === null
+						? 'movement'
+						: $this->systemPrefix . 'water-features'
+				]
+			);
 		}
 
 		$this->renderer->render($view, $engine->time * 1000);
@@ -278,11 +314,15 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'crabs');
 		$engine->systems->remove($this->systemPrefix . 'monitors');
 		$engine->systems->remove($this->systemPrefix . 'shields');
+		$engine->systems->remove($this->systemPrefix . 'water-features');
+		$engine->systems->remove($this->systemPrefix . 'water-particles');
 		$this->blocks?->close();
 		$this->rings?->close();
 		$this->badniks?->close();
 		$this->monitors?->close();
 		$this->shields?->close();
+		$this->waterFeatures?->close();
+		$this->waterParticles?->close();
 		$this->waterRenderer?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();

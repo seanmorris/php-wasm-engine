@@ -24,6 +24,7 @@ final class WaterRegion
 	 * @param float $displacement Maximum texture displacement in screen pixels.
 	 * @param float $displacementScale World pixels covered by one displacement-map repeat.
 	 * @param float $displacementSpeed Vertical displacement-map scroll in pixels per second.
+	 * @param int|null $sourceId Tiled object ID used by water switches and buoyant objects.
 	 * @return void Stores validated physics and rendering settings.
 	 */
 	public function __construct(
@@ -41,6 +42,7 @@ final class WaterRegion
 		, public float $displacement = 4
 		, public float $displacementScale = 64
 		, public float $displacementSpeed = 42.6666667
+		, public ?int $sourceId = null
 	){
 		foreach([
 			$x,$y,$width,$height,$gravity,$drag,$density,$skimSpeed,$currentX,$currentY
@@ -73,6 +75,25 @@ final class WaterRegion
 		}
 
 		$this->tint = array_map('floatval', $tint);
+	}
+
+	/**
+	 * Move the liquid surface while retaining the fixed bottom of the volume.
+	 *
+	 * @param float $y New world-space surface position above the current bottom.
+	 * @return void Updates y and height atomically; an empty or inverted volume is rejected.
+	 */
+	public function setSurface(float $y): void
+	{
+		$bottom = $this->y + $this->height;
+
+		if(!is_finite($y) || $y >= $bottom)
+		{
+			throw new \InvalidArgumentException('Water surface must remain above its bottom');
+		}
+
+		$this->y = $y;
+		$this->height = $bottom - $y;
 	}
 
 	/**

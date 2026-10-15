@@ -102,15 +102,25 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, water, badniks, grinding, loop, breakables, infinite,
-	 * isometric, or world identifier.
+	 * @param string $scene Platformer, water, water-rail, water-loop, badniks, grinding, loop, breakables,
+	 * infinite, isometric, or world identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
 	public function selectScene(string $scene): void
 	{
 		if(!in_array(
 			$scene
-			, ['platformer', 'water', 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric', 'world']
+			, [
+				'platformer'
+				, 'water'
+				, 'water-rail'
+				, 'water-loop'
+				, 'badniks'
+				, 'grinding'
+				, 'loop'
+				, 'breakables'
+				, 'infinite', 'isometric', 'world'
+			]
 			, true
 		)){
 			throw new InvalidArgumentException('Unknown demo level');
@@ -353,7 +363,7 @@ final class DemoGame
 			$this->notifyReady();
 		}
 
-		foreach(['world', 'breakables', 'badniks'] as $key)
+		foreach(['world', 'breakables', 'badniks', 'water'] as $key)
 		{
 			unset($this->canvas->dataset->$key);
 		}
@@ -431,7 +441,7 @@ final class DemoGame
 			? min(120, $this->camera->height / $this->camera->zoom / 5)
 			: 0;
 
-		$this->camera->follow($this->body->x, $this->body->y + $lookDown, $dt);
+		$this->camera->follow($this->body->supportX(), $this->body->supportY() + $lookDown, $dt);
 		$this->camera->y = min(120, $this->camera->y);
 	}
 
@@ -563,8 +573,8 @@ final class DemoGame
 				$sprite->time = -$time;
 			}
 
-			$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
-			$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
+			$sprite->x = $body->supportX();
+			$sprite->y = $body->supportY();
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
@@ -577,6 +587,8 @@ final class DemoGame
 		$this->canvas->dataset->body = json_encode([
 			'x' => $body->x
 			, 'y' => $body->y
+			, 'supportX' => $body->supportX()
+			, 'supportY' => $body->supportY()
 			, 'grounded' => $body->grounded
 			, 'rolling' => $body->rolling
 			, 'jumping' => $body->jumping
@@ -622,18 +634,20 @@ final class DemoGame
 			, $level->terrain->raycasts
 		);
 
-		if(in_array($this->scene, ['grinding', 'loop'], true))
+		if(in_array($this->scene, ['water-rail', 'water-loop', 'grinding', 'loop'], true))
 		{
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
 		}
 
-		if($this->scene === 'water')
+		if($level->waters?->regions)
 		{
 			$this->canvas->dataset->water = json_encode([
 				'underwater' => $body->underwater
 				, 'depth' => $body->waterDepth
 				, 'skimming' => $body->skimming
 				, 'draws' => $level->waterRenderer?->draws ?? 0
+				, 'features' => $level->waterFeatures?->snapshot()
+				, 'particles' => $level->waterParticles?->snapshot()
 			]);
 
 			$this->status->textContent .= $body->underwater

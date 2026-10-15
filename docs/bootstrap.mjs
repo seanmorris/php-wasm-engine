@@ -44,8 +44,8 @@ export function boot(
 ){
 	if(!/^8\.[0-5]$/.test(version)
 		|| ![
-			'world', 'platformer', 'water', 'badniks', 'grinding', 'loop'
-			, 'breakables', 'infinite', 'isometric'
+			'world', 'platformer', 'water', 'water-rail', 'water-loop'
+			, 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'
 		].includes(scene)
 		|| !['runner', 'glider', 'flyer'].includes(profile)
 	){

@@ -46,10 +46,10 @@ test('Tiled monitors stay solid for walking and reward a continuous rolling impa
 	check($terrain->solidAt(288, 430));
 	check($registry->has($ids[0], SpriteGroup::class));
 	$screen = $registry->get($ids[0], SpriteGroup::class)->sprites[0];
-	check($screen->gid === 30);
-	check($screen->frame($map, 0) === 31);
-	check($screen->frame($map, 200) === 30);
-	check($screen->frame($map, 700) === 31);
+	check($screen->gid === 41);
+	check($screen->frame($map, 0) === 42);
+	check($screen->frame($map, 200) === 41);
+	check($screen->frame($map, 700) === 42);
 
 	$walking = new Body(250, 430);
 	$walking->grounded = true;
@@ -88,7 +88,7 @@ test('Tiled monitors stay solid for walking and reward a continuous rolling impa
 	check($body->x > 303 + $body->radius, 'removed monitor geometry must not stop the remaining sweep');
 	check($counter->rings === 10 && $counter->score === 10);
 	check(!$registry->has($ids[0], SpriteGroup::class));
-	check($registry->get($ids[0], Sprite::class)->gid === 29);
+	check($registry->get($ids[0], Sprite::class)->gid === 40);
 	check($monitors->counts() === ['intact' => 6,'broken' => 1,'popups' => 1,'explosions' => 1]);
 
 	$popupId = $registry->query(MonitorPopup::class)[0];

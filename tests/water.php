@@ -1,8 +1,16 @@
 <?php
+use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Gameplay\WaterFeatures;
+use PhpWasmEngine\Gameplay\WaterParticle;
+use PhpWasmEngine\Gameplay\WaterParticles;
 use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Physics\Platformer;
+use PhpWasmEngine\Physics\WaterLevel;
 use PhpWasmEngine\Physics\WaterRegion;
 use PhpWasmEngine\Physics\WaterRegions;
+use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Tiled\Loader;
 
 test('Tiled water rectangles retain map offsets, legacy anchors, physics, and render settings', function() {
 	$loader = fixture([
@@ -40,6 +48,17 @@ test('Tiled water rectangles retain map offsets, legacy anchors, physics, and re
 							, 'y' => 300
 							, 'width' => 64
 							, 'height' => 96
+						]
+						, [
+							'id' => 3
+							, 'class' => 'Block'
+							, 'x' => 300
+							, 'y' => 300
+							, 'width' => 32
+							, 'height' => 32
+							, 'properties' => [
+								['name' => 'water','type' => 'object','value' => 1]
+							]
 						]
 					]
 				]
@@ -115,19 +134,206 @@ test('water currents and segment queries retain fast pass-through entry and exit
 	check($waters->crossed(-100, 50, 500, 0) === [$water]);
 });
 
-test('fast horizontal movement skims a water surface and slow falls enter it', function() {
+test('ground contact remains normal through water and on the exit frame', function() {
+	$water = new WaterRegion(0, 0, 100, 100);
+	$movement = new Platformer(ground(), waters: new WaterRegions($water));
+	$body = new Body(-20, 82);
+	$body->grounded = true;
+	$body->groundSpeed = 600;
+	$body->friction = 0;
+	$body->gravity = 0;
+	$wet = $exited = false;
+
+	for($frame = 0; $frame < 30; $frame++)
+	{
+		tick($movement, $body);
+
+		if($body->underwater)
+		{
+			$wet = true;
+			check($body->grounded && !$body->grinding);
+		}
+
+		if($body->waterExited)
+		{
+			$exited = true;
+			check($body->grounded && !$body->grinding && !$body->underwater);
+		}
+	}
+
+	check($wet && $exited && $body->grounded && !$body->grinding);
+});
+
+test('the water demo aligns a deep pool surface with both dry land banks', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$registry = new Registry;
+	$features = new WaterFeatures($registry, $terrain, $map, $waters);
+	$region = $waters->regions[0] ?? null;
+	$left = $terrain->raycast(800, 400, 0, 100);
+	$bottom = $terrain->raycast(1000, 400, 0, 220);
+	$right = $terrain->raycast(1880, 400, 0, 100);
+
+	check($region !== null && $left !== null && $bottom !== null && $right !== null);
+	near($region->x, 896);
+	near($region->y, 448);
+	near($region->x + $region->width, 1792);
+	near($left->y, $region->y);
+	near($right->y, $region->y);
+	near($bottom->y, 576);
+	check($features->isEmpty() && $registry->query(PhpWasmEngine\Render\Sprite::class) === []);
+	$features->close();
+});
+
+test('the underwater rail retains grinding through water and on exit before returning to land', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-rail.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$movement = new Platformer($terrain, waters: $waters);
+	$body = new Body(400, 430);
+	$body->grounded = true;
+	$body->groundSpeed = 960;
+	$body->friction = 0;
+	$body->gravity = 0;
+	$rail = $wet = $exited = $land = false;
+
+	for($frame = 0; $frame < 180; $frame++)
+	{
+		tick($movement, $body);
+		$rail = $rail || ($body->x < 640 && $body->grinding);
+
+		if($body->underwater)
+		{
+			$wet = true;
+			check($body->grounded && $body->grinding);
+		}
+
+		if($body->waterExited)
+		{
+			$exited = true;
+			check($body->grounded && $body->grinding && !$body->underwater);
+		}
+
+		if($body->x > 1840)
+		{
+			$land = $body->grounded && !$body->grinding;
+
+			break;
+		}
+	}
+
+	check($rail && $wet && $exited && $land);
+});
+
+test('water levels retain a fixed bottom and use separate fill and drain rates', function() {
+	$region = new WaterRegion(0, 320, 100, 320, sourceId: 10);
+	$level = new WaterLevel($region, 64, 128);
+	$level->setTarget(256);
+	check($level->update(.5));
+	near($region->y, 288);
+	near($region->height, 352);
+	$level->update(.5);
+	near($region->y, 256);
+	near($region->y + $region->height, 640);
+	$level->setTarget(384);
+	$level->update(.5);
+	near($region->y, 320);
+	near($region->y + $region->height, 640);
+});
+
+test('the rising-water loop retains object 3958 and moves its buoyant solids with switches', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$registry = new Registry;
+	$features = new WaterFeatures($registry, $terrain, $map, $waters);
+	$region = $waters->bySourceId(10);
+	$door = $features->platforms[3958] ?? null;
+	$platform = $features->platforms[120] ?? null;
+	$data = json_decode(file_get_contents(dirname(__DIR__) . '/examples/assets/water-loop.tmj'), true);
+	$firstLoopGid = $data['tilesets'][1]['firstgid'];
+	$loopRows = [];
+
+	foreach($data['layers'] as $layer)
+	{
+		if($layer['type'] !== 'tilelayer')
+		{
+			continue;
+		}
+
+		foreach($layer['data'] as $index => $gid)
+		{
+			if($gid >= $firstLoopGid)
+			{
+				$loopRows[] = intdiv($index, $data['width']);
+			}
+		}
+	}
+
+	check($region !== null && $door !== null && $platform !== null);
+	check(count($waters->regions) === 1);
+	near($region->y, 448);
+	near($region->y + $region->height, 640);
+	check(min($loopRows) === 10 && max($loopRows) === 17);
+	near($door->width, 32);
+	near($door->height, 160);
+	near($door->density, .8);
+	check($door->horizontalLock);
+	check(count($features->switches) === 3);
+	check(count($registry->query(PhpWasmEngine\Gameplay\WaterSwitch::class)) === 3);
+	check(count($registry->query(PhpWasmEngine\Gameplay\BuoyantPlatform::class)) === 2);
+	check($terrain->hasShape($door->shape) && $terrain->hasShape($platform->shape));
+	$doorEntity = $door->entity;
+	$platformEntity = $platform->entity;
+
+	$features->activate(103);
+
+	for($frame = 0; $frame < 240; $frame++)
+	{
+		$features->update($registry, 1 / 60);
+	}
+
+	near($region->y, 384);
+	near($region->y + $region->height, 640);
+	near($door->y, 512, .05);
+	near($platform->y, 400, .05);
+	check($features->snapshot()['activeSwitch'] === 103);
+	$doorShape = $door->shape;
+	$platformShape = $platform->shape;
+	$features->close();
+	check(!$terrain->hasShape($doorShape) && !$terrain->hasShape($platformShape));
+	check(!$registry->alive($doorEntity) && !$registry->alive($platformEntity));
+});
+
+test('only grounded fast movement starts skimming while airborne and slow falls enter water', function() {
 	$waters = new WaterRegions(new WaterRegion(0, 100, 500, 300, skimSpeed: 900));
 	$movement = new Platformer(new PhpWasmEngine\Physics\Terrain, waters: $waters);
-	$fast = new Body(50, 81);
+	$fast = new Body(50, 82);
 	$fast->gravity = 0;
+	$fast->grounded = true;
+	$fast->groundSpeed = 1000;
 	$fast->vx = 1000;
-	$fast->vy = 120;
+	$supportY = $fast->supportY();
 	tick($movement, $fast);
 	check($fast->skimming && $fast->grounded && !$fast->underwater);
 	near($fast->y + $fast->halfHeight, 100, .01);
+	near($fast->supportY(), $supportY, .01);
 	near($fast->vy, 0);
 	tick($movement, $fast);
 	check($fast->skimming && $fast->grounded);
+	near($fast->supportY(), $supportY, .01);
+	$fast->groundSpeed = $fast->vx = 800;
+	tick($movement, $fast);
+	check(!$fast->skimming && !$fast->grounded);
+	near($fast->supportY(), $supportY, .01);
+
+	$airborne = new Body(50, 81);
+	$airborne->gravity = 0;
+	$airborne->vx = 1000;
+	$airborne->vy = 120;
+	tick($movement, $airborne);
+	check(!$airborne->skimming && !$airborne->grounded && $airborne->y > 82);
 
 	$slow = new Body(50, 81);
 	$slow->gravity = 0;
@@ -137,6 +343,69 @@ test('fast horizontal movement skims a water surface and slow falls enter it', f
 	check(!$slow->skimming && !$slow->grounded && $slow->y > 82);
 	tick($movement, $slow, [], 10);
 	check($slow->underwater);
+});
+
+test('water particles animate surface crossings and retain one directional skim spray per body', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water.tmj');
+	$waters = WaterRegions::fromMaps($map);
+	$region = $waters->regions[0];
+	$registry = new Registry;
+	$body = new Body(1000, 400);
+	$bodyId = $registry->create($body);
+	$particles = new WaterParticles($registry, $map, $waters);
+	$particles->update($registry, 1 / 60);
+	$body->y = 500;
+	$body->water = $region;
+	$body->underwater = $body->waterEntered = true;
+	$particles->update($registry, 1 / 60);
+	$ids = $registry->query(WaterParticle::class);
+
+	check(count($ids) === 1);
+	$splashId = $ids[0];
+	$splash = $registry->get($splashId, WaterParticle::class);
+	$splashSprite = $registry->get($splashId, Sprite::class);
+	check($splash->kind === WaterParticle::SPLASH && $splash->body === $bodyId);
+	near($splashSprite->x, 1000);
+	near($splashSprite->y, $region->y + 2);
+	check(!$splashSprite->outline && $map->tile($splashSprite->gid)['class'] === 'water-splash');
+
+	$body->waterEntered = $body->underwater = false;
+	$body->water = null;
+	$body->y = $region->y - $body->halfHeight - .001;
+	$body->grounded = $body->skimming = true;
+	$body->groundSpeed = 1000;
+	$particles->update($registry, 1 / 60);
+	$snapshot = $particles->snapshot();
+	check($snapshot === ['splashes' => 1,'skims' => 1,'total' => 2]);
+
+	$skimId = array_values(
+		array_filter(
+			$registry->query(WaterParticle::class)
+			, fn($id) => $registry->get($id, WaterParticle::class)->kind === WaterParticle::SKIM
+		)
+	)[0];
+
+	$skimSprite = $registry->get($skimId, Sprite::class);
+	near($skimSprite->x, $body->x - 24);
+	near($skimSprite->y, $region->y + 2);
+	check(!$skimSprite->flipX && !$skimSprite->outline && $skimSprite->scaleX === 1.5);
+
+	$body->x = 1100;
+	$body->groundSpeed = -1000;
+	$particles->update($registry, 1 / 60);
+	check($registry->query(WaterParticle::class) === [$splashId,$skimId]);
+	near($skimSprite->x, $body->x + 24);
+	check($skimSprite->flipX);
+
+	$body->skimming = false;
+	$particles->update($registry, 1 / 60);
+	check(!$registry->alive($skimId));
+	$particles->update($registry, .4);
+	check(!$registry->alive($splashId) && $particles->snapshot()['total'] === 0);
+	$scripted = $particles->splash(1000, $region->y);
+	check($registry->alive($scripted));
+	$particles->close();
+	check(!$registry->alive($scripted));
 });
 
 test('water regions reject shapes and invalid physical or shader parameters', function() {

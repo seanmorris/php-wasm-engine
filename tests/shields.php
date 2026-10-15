@@ -99,7 +99,7 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	check($shield->active === Shield::NORMAL);
 	check(count($registry->query(ShieldAura::class)) === 1);
 	$aura = $registry->query(ShieldAura::class)[0];
-	check($registry->get($aura, Sprite::class)->gid === 41);
+	check($registry->get($aura, Sprite::class)->gid === 52);
 
 	$controls = new Controls;
 	$shields->grant($player, Shield::ELECTRIC);
@@ -133,7 +133,7 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	$shields->grant($player, Shield::STAR, .5);
 	$shields->update($registry, .5);
 	check($shield->active === Shield::WATER);
-	check($registry->get($aura, Sprite::class)->gid === 47);
+	check($registry->get($aura, Sprite::class)->gid === 58);
 	$shields->close();
 	check($registry->query(ShieldAura::class) === [] && $registry->has($player, Shield::class));
 	$restored = new Shields($registry, $map);

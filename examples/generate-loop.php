@@ -236,6 +236,192 @@ jsonAsset(
 	]
 );
 
+// A half-submerged loop resting on the seabed, switch-controlled pool, floating platform, and
+// the reference map's object 3958 vertical door block. The pool bottom remains fixed while its
+// surface moves.
+$waterLoopPlanes = $planes;
+
+// Remove the dry level's loop and lower its bottom from y=448 to the seabed at y=576.
+for($plane = 0; $plane < 3; $plane++)
+{
+	for($y = 6; $y < 14; $y++)
+	{
+		for($x = 24; $x < 32; $x++)
+		{
+			$waterLoopPlanes[$plane][$y * $width + $x] = 0;
+		}
+	}
+}
+
+for($y = 0; $y < 8; $y++)
+{
+	for($x = 0; $x < 8; $x++)
+	{
+		$plane = $y < 2?0:($x < 4?1:2);
+		$waterLoopPlanes[$plane][($y + 10) * $width + $x + 24] = $loopFirstGid + $y * 8 + $x;
+	}
+}
+
+for($y = 14; $y < 18; $y++)
+{
+	for($x = 16; $x < 48; $x++)
+	{
+		$gid = $waterLoopPlanes[0][$y * $width + $x];
+
+		if($gid < $loopFirstGid)
+		{
+			$waterLoopPlanes[0][$y * $width + $x] = 0;
+		}
+	}
+}
+
+$waterLoopLayers = $background;
+
+foreach($waterLoopPlanes as $plane => $cells)
+{
+	$waterLoopLayers[] = [
+		'id' => $plane + 1
+		, 'name' => 'Collision ' . $plane
+		, 'type' => 'tilelayer'
+		, 'width' => $width
+		, 'height' => $height
+		, 'data' => $cells
+		, 'properties' => [
+			[
+				'name' => 'collisionLayer'
+				, 'type' => 'int'
+				, 'value' => $plane
+			]
+		]
+	] + $layerDefaults;
+}
+
+$waterLoopLayers[] = [
+	'id' => 4
+	, 'name' => 'Layer switches'
+	, 'type' => 'objectgroup'
+	, 'objects' => array_map(static fn($gate) => array_replace($gate, ['y' => $gate['y'] + 128]), $gates)
+] + $layerDefaults;
+
+$waterLoopLayers[] = [
+	'id' => 5
+	, 'name' => 'Water controls'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 10
+			, 'name' => 'Loop pool'
+			, 'class' => 'WaterRegion'
+			, 'x' => 512
+			, 'y' => 448
+			, 'width' => 1024
+			, 'height' => 192
+			, 'properties' => $waterProperties
+		]
+		, ['id' => 111,'name' => 'Low water','point' => true,'x' => 0,'y' => 512]
+		, ['id' => 112,'name' => 'Half loop','point' => true,'x' => 0,'y' => 448]
+		, ['id' => 113,'name' => 'High water','point' => true,'x' => 0,'y' => 384]
+		, [
+			'id' => 101
+			, 'name' => 'Drain'
+			, 'class' => 'Switch'
+			, 'gid' => 4
+			, 'x' => 160
+			, 'y' => 448
+			, 'width' => 32
+			, 'height' => 8
+			, 'properties' => [
+				['name' => 'water','type' => 'object','value' => 10]
+				, ['name' => 'setPoint','type' => 'object','value' => 111]
+				, ['name' => 'fillSpeed','type' => 'float','value' => 96]
+				, ['name' => 'drainSpeed','type' => 'float','value' => 128]
+			]
+		]
+		, [
+			'id' => 102
+			, 'name' => 'Half'
+			, 'class' => 'Switch'
+			, 'gid' => 4
+			, 'x' => 256
+			, 'y' => 448
+			, 'width' => 32
+			, 'height' => 8
+			, 'properties' => [
+				['name' => 'water','type' => 'object','value' => 10]
+				, ['name' => 'setPoint','type' => 'object','value' => 112]
+				, ['name' => 'fillSpeed','type' => 'float','value' => 96]
+				, ['name' => 'drainSpeed','type' => 'float','value' => 128]
+			]
+		]
+		, [
+			'id' => 103
+			, 'name' => 'Fill'
+			, 'class' => 'Switch'
+			, 'gid' => 4
+			, 'x' => 352
+			, 'y' => 448
+			, 'width' => 32
+			, 'height' => 8
+			, 'properties' => [
+				['name' => 'water','type' => 'object','value' => 10]
+				, ['name' => 'setPoint','type' => 'object','value' => 113]
+				, ['name' => 'fillSpeed','type' => 'float','value' => 96]
+				, ['name' => 'drainSpeed','type' => 'float','value' => 128]
+			]
+		]
+		, [
+			'id' => 120
+			, 'name' => 'Floating platform'
+			, 'class' => 'Block'
+			, 'gid' => 1
+			, 'x' => 608
+			, 'y' => 464
+			, 'width' => 128
+			, 'height' => 32
+			, 'properties' => [
+				['name' => 'water','type' => 'object','value' => 10]
+				, ['name' => 'density','type' => 'float','value' => .5]
+				, ['name' => 'hLock','type' => 'bool','value' => true]
+			]
+		]
+		, [
+			'id' => 3958
+			, 'name' => 'Buoyant door block'
+			, 'class' => 'Block'
+			, 'gid' => 1
+			, 'x' => 1312
+			, 'y' => 570
+			, 'width' => 32
+			, 'height' => 160
+			, 'properties' => [
+				['name' => 'water','type' => 'object','value' => 10]
+				, ['name' => 'density','type' => 'float','value' => .8]
+				, ['name' => 'hLock','type' => 'bool','value' => true]
+			]
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset(
+	'water-loop.tmj'
+	, [
+		'type' => 'map'
+		, 'version' => '1.10'
+		, 'orientation' => 'orthogonal'
+		, 'renderorder' => 'right-down'
+		, 'width' => $width
+		, 'height' => $height
+		, 'tilewidth' => 32
+		, 'tileheight' => 32
+		, 'infinite' => false
+		, 'tilesets' => [
+			['firstgid' => 1,'source' => 'tiles.tsj']
+			, ['firstgid' => $loopFirstGid,'source' => 'loop.tsj']
+		]
+		, 'layers' => $waterLoopLayers
+	]
+);
+
 // The grinding course uses the same collision curve with rail-only artwork. Each quarter-circle
 // is a 90-degree bend; the three collision planes and gates make the circle traversable both ways.
 png(__DIR__ . '/assets/grinding.png', 256, 256, static function($x, $y) {

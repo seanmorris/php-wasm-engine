@@ -41,4 +41,24 @@ final class Body
 			$this->jumpSpeed = 570;
 		}
 	}
+
+	/**
+	 * Resolve the world X coordinate where the body meets its current support plane.
+	 *
+	 * @return float Foot or surface-contact X coordinate after applying body angle and height.
+	 */
+	public function supportX(): float
+	{
+		return $this->x - sin($this->angle) * $this->halfHeight;
+	}
+
+	/**
+	 * Resolve the world Y coordinate where the body meets its current support plane.
+	 *
+	 * @return float Foot or surface-contact Y coordinate after applying body angle and height.
+	 */
+	public function supportY(): float
+	{
+		return $this->y + cos($this->angle) * $this->halfHeight;
+	}
 }

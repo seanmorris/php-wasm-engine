@@ -197,7 +197,7 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 	const errors = [];
 	const setup = `<?php
 		$body->x = 1500;
-		$body->y = 400;
+		$body->y = 500;
 		$body->vx = $body->vy = $body->groundSpeed = 0;
 		$body->density = .8;
 		$body->gravity = 300;
@@ -218,14 +218,44 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 	const water = async() => JSON.parse(await canvas.getAttribute('data-water') || '{}');
 	await expect.poll(async() => (await body()).underwater).toBe(true);
 	expect((await water()).depth).toBeGreaterThan(.5);
+	expect((await water()).features).toBeNull();
 	await expect.poll(async() => (await water()).draws, {timeout: 10000}).toBe(2);
+
+	const splash = '<?php $game->level->waterParticles->splash($body->x, $body->water->y);';
+	await page.evaluate(source => enginePhp.run(source), splash);
+
+	await expect.poll(async() => (await water()).particles?.splashes).toBe(1);
 	const initial = await body();
 	await expect.poll(async() => (await body()).y).toBeLessThan(initial.y - 3);
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.stopEngine());
 });
 
-for(const scene of ['platformer','water','badniks','grinding','loop','infinite','isometric','breakables'])
+test('the rising-water loop exposes scriptable switches and object 3958', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine === 'function');
+	await page.evaluate(() => window.bootEngine({scene: 'water-loop'}));
+	const canvas = page.locator('canvas');
+
+	await expect(canvas).toHaveAttribute('data-scene', 'water-loop', {timeout: 60000});
+
+	const water = async() => JSON.parse(await canvas.getAttribute('data-water') || '{}');
+	await expect.poll(async() => (await water()).features?.platforms?.['3958']?.y).toBeGreaterThan(400);
+	expect((await water()).draws).toBe(2);
+	await page.evaluate(() => enginePhp.run('<?php $game->level->waterFeatures->activate(103);'));
+	await expect.poll(async() => (await water()).features?.activeSwitch).toBe(103);
+	await expect.poll(async() => (await water()).features?.levels?.['10']?.surface).toBe(384);
+	await expect.poll(async() => (await water()).features?.platforms?.['3958']?.y).toBeLessThan(513);
+	expect(errors).toEqual([]);
+	await page.evaluate(() => window.stopEngine());
+});
+
+for(const scene of [
+	'platformer', 'water', 'water-rail', 'water-loop', 'badniks', 'grinding'
+	, 'loop', 'infinite', 'isometric', 'breakables'
+])
 test(
 	scene + ' live PHP demo starts, responds to input and stops'
 	, async({page}) => {

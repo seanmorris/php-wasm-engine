@@ -40,7 +40,7 @@ $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
 $playerColors = [[86,167,245,255],[242,120,114,255],[246,189,83,255]];
 
-png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerColors) {
+png(__DIR__ . '/assets/tiles.png', 1184, 32, static function($x, $y) use($playerColors) {
 	$id = intdiv($x, 32);
 	$x %= 32;
 
@@ -165,7 +165,7 @@ png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerC
 		return $stripe && hypot($dx, $dy) < 8 ? [240,247,255,255] : $playerColors[$profile];
 	}
 
-	if($id >= 9)
+	if($id >= 9 && $id < 12)
 	{
 		if($x < 5 || $x > 26 || $y < 14 || $y > 29 || (($x < 9 || $x > 23) && $y < 23))
 		{
@@ -178,6 +178,59 @@ png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerC
 		}
 
 		return $y > 26 ? [222,238,247,255] : $playerColors[$id - 9];
+	}
+
+	if($id >= 26 && $id <= 32)
+	{
+		$frame = $id - 26;
+		$progress = $frame / 6;
+		$radiusX = 4 + $frame * 1.75;
+		$radiusY = max(1, 3.5 - $frame * .35);
+		$ellipse = hypot(($x - 16) / $radiusX, ($y - 27) / $radiusY);
+		$alpha = (int)round(230 * (1 - $progress * .6));
+
+		if(abs($ellipse - 1) < .24)
+		{
+			return [116,224,239,$alpha];
+		}
+
+		foreach([-1,1] as $side)
+		{
+			$dropX = 16 + $side * (3 + $frame * 1.6);
+			$dropY = 25 - sin($progress * M_PI) * 15;
+
+			if(hypot($x - $dropX, $y - $dropY) <= max(1, 2.4 - $progress))
+			{
+				return [153,238,247,$alpha];
+			}
+		}
+
+		return [0,0,0,0];
+	}
+
+	if($id >= 33 && $id <= 36)
+	{
+		$frame = $id - 33;
+		$crestX = 24 - $frame * 2;
+		$crestY = 25 - $frame % 2;
+		$alpha = 190 - $frame * 12;
+
+		if($x <= $crestX && $x >= 2 + $frame
+			&& (($y === 27 && ($x + $frame) % 3 !== 0)
+				|| ($y === 23 + $frame % 2 && $x >= 8 && ($x + $frame) % 4 < 2)
+			)
+		){
+			return [128,225,239,$alpha];
+		}
+
+		if(hypot(($x - $crestX) / 5, ($y - $crestY) / 7) >= .72
+			&& hypot(($x - $crestX) / 5, ($y - $crestY) / 7) <= 1.12
+			&& $x >= $crestX
+		){
+			return [174,242,248,$alpha];
+		}
+
+		return [0,0,0,0];
 	}
 
 	if($x < 6 || $x > 25 || $y < 3 || $y > 29)
@@ -204,10 +257,10 @@ $tiles = [
 	, 'name' => 'demo'
 	, 'tilewidth' => 32
 	, 'tileheight' => 32
-	, 'columns' => 26
-	, 'tilecount' => 26
+	, 'columns' => 37
+	, 'tilecount' => 37
 	, 'image' => 'tiles.png'
-	, 'imagewidth' => 832
+	, 'imagewidth' => 1184
 	, 'imageheight' => 32
 	, 'tiles' => [
 		['id' => 0,'properties' => $solid]
@@ -333,6 +386,29 @@ $tiles = [
 			, 'animation' => [
 				['tileid' => 24,'duration' => 80]
 				, ['tileid' => 25,'duration' => 80]
+			]
+		]
+		, [
+			'id' => 26
+			, 'class' => 'water-splash'
+			, 'animation' => [
+				['tileid' => 26,'duration' => 46]
+				, ['tileid' => 27,'duration' => 46]
+				, ['tileid' => 28,'duration' => 46]
+				, ['tileid' => 29,'duration' => 46]
+				, ['tileid' => 30,'duration' => 46]
+				, ['tileid' => 31,'duration' => 46]
+				, ['tileid' => 32,'duration' => 44]
+			]
+		]
+		, [
+			'id' => 33
+			, 'class' => 'water-skim'
+			, 'animation' => [
+				['tileid' => 33,'duration' => 48]
+				, ['tileid' => 34,'duration' => 48]
+				, ['tileid' => 35,'duration' => 48]
+				, ['tileid' => 36,'duration' => 48]
 			]
 		]
 	]
@@ -818,7 +894,32 @@ for($x = 42; $x <= 50; $x++)
 }
 
 jsonAsset('platformer.tmj', $platformer);
+$waterProperties = [
+	['name' => 'gravity','type' => 'float','value' => .4]
+	, ['name' => 'drag','type' => 'float','value' => .85]
+	, ['name' => 'density','type' => 'float','value' => 1]
+	, ['name' => 'skimSpeed','type' => 'float','value' => 900]
+	, ['name' => 'color','type' => 'color','value' => '#4d147ab8']
+	, ['name' => 'displacement','type' => 'float','value' => 4]
+	, ['name' => 'displacementScale','type' => 'float','value' => 64]
+	, ['name' => 'displacementSpeed','type' => 'float','value' => 42.6666667]
+];
+
+$waterFloor = array_fill(0, $width * $height, 0);
+
+for($x = 0; $x < $width; $x++)
+{
+	$top = $x >= 28 && $x < 56 ? 18 : 14;
+
+	for($y = $top; $y < $height; $y++)
+	{
+		$waterFloor[$y * $width + $x] = 1;
+	}
+}
+
 $water = $base;
+$water['layers'][count($background)]['data'] = $waterFloor;
+$water['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
 $water['layers'][] = [
 	'id' => 4
 	, 'name' => 'Water regions'
@@ -827,27 +928,103 @@ $water['layers'][] = [
 		[
 			'id' => 2
 			, 'class' => 'WaterRegion'
-			, 'x' => 1280
-			, 'y' => 320
-			, 'width' => 640
-			, 'height' => 320
-			, 'properties' => [
-				['name' => 'gravity','type' => 'float','value' => .4]
-				, ['name' => 'drag','type' => 'float','value' => .85]
-				, ['name' => 'density','type' => 'float','value' => 1]
-				, ['name' => 'skimSpeed','type' => 'float','value' => 900]
-				, ['name' => 'color','type' => 'color','value' => '#4d147ab8']
-				, ['name' => 'displacement','type' => 'float','value' => 4]
-				, ['name' => 'displacementScale','type' => 'float','value' => 64]
-				, ['name' => 'displacementSpeed','type' => 'float','value' => 42.6666667]
-			]
+			, 'x' => 896
+			, 'y' => 448
+			, 'width' => 896
+			, 'height' => 192
+			, 'properties' => $waterProperties
 		]
 	]
 ] + $layerDefaults;
 
 jsonAsset('water.tmj', $water);
+$waterRailFloor = array_fill(0, $width * $height, 0);
+
+for($x = 0; $x < $width; $x++)
+{
+	if($x < 14 || $x >= 56)
+	{
+		for($y = 14; $y < $height; $y++)
+		{
+			$waterRailFloor[$y * $width + $x] = 1;
+		}
+	}
+	else
+	{
+		$waterRailFloor[14 * $width + $x] = 4;
+
+		for($y = 18; $y < $height; $y++)
+		{
+			$waterRailFloor[$y * $width + $x] = 1;
+		}
+	}
+}
+
+$waterRail = $base;
+$waterRail['layers'][count($background)]['name'] = 'Land and rail';
+$waterRail['layers'][count($background)]['data'] = $waterRailFloor;
+$waterRail['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
+$waterRailArt = array_fill(0, $width * $height, 0);
+
+for($y = 14; $y < $height; $y++)
+{
+	for($x = 56; $x < $width; $x++)
+	{
+		$waterRailFloor[$y * $width + $x] = 0;
+		$waterRailArt[$y * $width + $x] = 1;
+	}
+}
+
+$waterRail['layers'][count($background)]['data'] = $waterRailFloor;
+$waterRail['layers'][] = [
+	'id' => 4
+	, 'name' => 'Dry land art'
+	, 'type' => 'tilelayer'
+	, 'width' => $width
+	, 'height' => $height
+	, 'data' => $waterRailArt
+	, 'properties' => [['name' => 'collision','type' => 'bool','value' => false]]
+] + $layerDefaults;
+
+$waterRail['layers'][] = [
+	'id' => 5
+	, 'name' => 'Dry land surface'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 3
+			, 'x' => 1792
+			, 'y' => 448
+			, 'width' => 256
+			, 'height' => 192
+			, 'properties' => [
+				['name' => 'solid','type' => 'bool','value' => true]
+				, ['name' => 'oneWay','type' => 'bool','value' => true]
+			]
+		]
+	]
+] + $layerDefaults;
+
+$waterRail['layers'][] = [
+	'id' => 6
+	, 'name' => 'Water regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 640
+			, 'y' => 352
+			, 'width' => 960
+			, 'height' => 288
+			, 'properties' => $waterProperties
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water-rail.tmj', $waterRail);
 $badniks = $base;
-$badniks['tilesets'][] = ['firstgid' => 27,'source' => 'monitors.tsj'];
+$badniks['tilesets'][] = ['firstgid' => $tiles['tilecount'] + 1,'source' => 'monitors.tsj'];
 $badniks['layers'][] = [
 	'id' => 4
 	, 'name' => 'Badniks'

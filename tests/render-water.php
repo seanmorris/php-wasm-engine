@@ -27,9 +27,9 @@ for($y = 0; $y < $height; $y += 4)
 
 $water = new WaterRegion(
 	0
-	, 16
+	, 8
 	, 64
-	, 32
+	, 24
 	, tint: [.08, .48, .72, .24]
 	, displacement: 4
 	, displacementScale: 64
@@ -63,7 +63,7 @@ for($y = 0; $y < $height; $y++)
 		$initial = substr($frames[1], $offset, 4);
 		$moved = substr($frames[2], $offset, 4);
 
-		if($y < 16 || $y >= 48)
+		if($y < 8 || $y >= 32)
 		{
 			$outsideExact = $outsideExact && $baseline === $initial && $initial === $moved;
 		}

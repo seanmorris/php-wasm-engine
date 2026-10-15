@@ -364,7 +364,7 @@ final class Platformer
 			$b->angle = 0;
 		}
 
-		$this->finishWater($b, $previousWater, $startX, $startY);
+		$this->finishWater($b, $previousWater, $startX, $startY, $wasGrounded);
 	}
 
 	/**
@@ -393,10 +393,16 @@ final class Platformer
 	 * @param WaterRegion|null $previous Region active at the end of the preceding step.
 	 * @param float $startX World X coordinate before this step.
 	 * @param float $startY World Y coordinate before this step.
+	 * @param bool $skimEligible Whether the body remained grounded after processing input.
 	 * @return void Snaps eligible runners to the surface and publishes final liquid state.
 	 */
-	private function finishWater(Body $body, ?WaterRegion $previous, float $startX, float $startY): void
-	{
+	private function finishWater(
+		Body $body
+		, ?WaterRegion $previous
+		, float $startX
+		, float $startY
+		, bool $skimEligible
+	): void {
 		if($this->waters === null)
 		{
 			return;
@@ -409,7 +415,7 @@ final class Platformer
 		$speed = abs($body->grounded ? $body->groundSpeed : $body->vx);
 		$startedAbove = $startY + $body->halfHeight <= ($surface?->y ?? -INF) + 2;
 
-		if($surface !== null && $speed >= $surface->skimSpeed && ($dy >= 0 || $body->skimming)
+		if($skimEligible && $surface !== null && $speed >= $surface->skimSpeed && ($dy >= 0 || $body->skimming)
 			&& $startedAbove
 		){
 			$body->y = $surface->y - $body->halfHeight - .001;

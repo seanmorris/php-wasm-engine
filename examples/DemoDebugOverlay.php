@@ -133,8 +133,8 @@ final class DemoDebugOverlay
 			'Player' => $body->profile
 			, 'Grounded' => $body->grounded ? 'Yes' : 'No'
 			, 'Surface' => $body->grounded ? $surface : 'Air'
-			, 'X px' => sprintf('%.3f', $body->x)
-			, 'Y px' => sprintf('%.3f', $body->y)
+			, 'X px' => sprintf('%.3f', $body->supportX())
+			, 'Y px' => sprintf('%.3f', $body->supportY())
 			, 'Collision layer' => (string)$body->collisionLayer
 			, 'Gnd px/s' => sprintf('%.3f', $body->groundSpeed)
 			, 'X px/s' => sprintf('%.3f', $body->vx)

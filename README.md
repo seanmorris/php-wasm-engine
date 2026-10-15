@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, water regions, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, flush-bank pool, underwater rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -77,7 +77,8 @@ independent lower-left diagnostic with no black rectangle behind it.
 ## Water regions and displacement
 
 Choose **Level → Water regions** to use the complete example. Build speed or launch a spindash
-to skim across the surface, or enter the pool to see reduced gravity and reduced control. Bodies
+from the bank to skim across the surface, or enter the pool to see reduced gravity and reduced control. Skimming can
+only begin while grounded; jumping or falling onto the surface enters the water instead. Bodies
 may opt into density-based buoyancy, and Tiled properties can add currents. The world behind each
 visible liquid rectangle is sampled through a
 scrolling displacement texture and then tinted. The HUD and pause menu render afterward and stay
@@ -119,6 +120,36 @@ result to gameplay code. Point-segment versus rectangle tests retain entry and e
 body crosses an entire water volume in one fixed step. Water remains nonsolid; ordinary terrain
 still uses full body casts. Surface skimming tests the complete vertical step and cannot miss a
 thin boundary solely because the actor is moving quickly.
+
+`WaterParticles` observes those same body edges after movement. Crossing the top surface creates a
+one-shot `water-splash` sprite, while an active grounded skim retains one looping `water-skim`
+sprite behind the body and flips it with travel direction. Both effects are ordinary ECS entities
+with `WaterParticle` and `Sprite` components. Annotate the two animations as Tiled tile classes,
+schedule `WaterParticles::update()` after movement, and call `splash($x, $y)` when scripts need an
+explicit effect.
+
+The example includes three focused maps. **Water regions** places the pool surface at exactly the
+same Y coordinate as both dry banks. **Underwater rail** starts and ends on dry land, retaining the
+grinding state while the rail crosses the water and preserving the exit frame before ordinary
+ground resumes. **Rising water loop** rests the loop on the seabed with the initial waterline
+through its center, then uses three pressure switches to drain, restore, or fill the pool.
+
+`WaterFeatures` reads moving-boxes-2-compatible object references from Tiled. A `Switch` or
+`WaterSwitch` uses `water` and `setPoint` object properties plus optional `fillSpeed` and
+`drainSpeed` values. A tile object with `density` becomes a buoyant solid; `hLock` records that its
+horizontal position is fixed. These object-reference `water` properties select a volume; they do
+not turn the control or platform into another water rectangle. The demo retains the reference
+map's object ID 3958 for its 32×160, density 0.8 vertical door block. `activate($switchId)` gives
+scripts and tests the same action as a player standing on a switch, while `snapshot()` exposes
+surfaces, targets, and platform motion.
+
+~~~php
+$features = new WaterFeatures($engine->entities, $terrain, $map, $waters);
+$particles = new WaterParticles($engine->entities, $map, $waters);
+$features->activate(103);
+$engine->systems->add('water-features', [$features, 'update'], after: ['movement']);
+$engine->systems->add('water-particles', [$particles, 'update'], after: ['water-features']);
+~~~
 
 `WaterRenderer` owns one scene framebuffer and one procedural RG displacement texture. It copies
 the scene once, then submits one clipped quad per visible region. Displacement phase uses world

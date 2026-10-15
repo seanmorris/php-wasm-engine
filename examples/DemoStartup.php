@@ -53,6 +53,9 @@ final class DemoStartup
 
 		foreach([
 			'platformer' => 'Platformer'
+			, 'water' => 'Water regions'
+			, 'water-rail' => 'Underwater rail'
+			, 'water-loop' => 'Rising water loop'
 			, 'badniks' => 'CrabMeat badniks'
 			, 'world' => 'Streaming world'
 			, 'loop' => 'Loop-de-loop'
