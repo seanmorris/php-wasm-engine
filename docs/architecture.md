@@ -119,6 +119,13 @@ continuous landing contact, adheres across ordinary sloped segments, and leaves 
 tangent momentum. The system does not sample by speed, so a thin rail remains reachable during a
 large fixed-step displacement.
 
+`Body::$facing` is the visual look direction, while `Body::$direction` is the retained surface and
+action orientation; `Body::$vx` remains the actual horizontal air movement. Opposite input during a
+grind turns the sprite without reversing rail travel, and the rail solver keeps `direction` aligned
+with tangent speed until the actor can actually reverse. Tails-style flight keeps its takeoff look
+direction while ordinary horizontal air acceleration remains active, allowing velocity to pass
+through zero and reverse without turning the airborne sprite.
+
 Combo is a player component rather than renderer state. `ComboReward` retains a live point value,
 an additive multiplier, a label, and optional presentation metadata. `Combo::update()` owns rail
 accrual and safe-landing settlement, returns a score exactly once, and keeps success or failure data

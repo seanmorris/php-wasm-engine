@@ -70,9 +70,14 @@ final class Platformer
 			$b->grounded = false;
 		}
 
-		if($axis && (!$b->grinding || abs($b->groundSpeed) < $b->minGrindSpeed))
+		if($axis && $b->grounded)
 		{
 			$b->facing = $axis <=> 0;
+
+			if(!$b->grinding || abs($b->groundSpeed) < $b->minGrindSpeed)
+			{
+				$b->direction = $b->facing;
+			}
 		}
 
 		// Retry blocked gates while overlapping, including actors at rest.
@@ -135,7 +140,7 @@ final class Platformer
 
 					if($direction === 0)
 					{
-						$direction = $b->facing ?: 1;
+						$direction = $b->direction ?: $b->facing ?: 1;
 					}
 
 					$speed = abs($b->groundSpeed);
@@ -151,7 +156,7 @@ final class Platformer
 
 					$speed += $b->grindAcceleration * $dt;
 					$b->groundSpeed = $direction * max($b->minGrindSpeed, min($b->maxGrindSpeed, $speed));
-					$b->facing = $direction;
+					$b->direction = $direction;
 				}
 				elseif($axis && !$b->rolling)
 				{
@@ -305,7 +310,8 @@ final class Platformer
 					$b->ability = '';
 				}
 			}
-			elseif(abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
+
+			if($b->ability !== 'glide' && (abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0))
 			{
 				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
 			}
@@ -362,6 +368,10 @@ final class Platformer
 		{
 			$b->grinding = false;
 			$b->angle = 0;
+		}
+		elseif($b->grinding && abs($b->groundSpeed) > 1e-8)
+		{
+			$b->direction = $b->groundSpeed <=> 0;
 		}
 
 		$this->finishWater($b, $previousWater, $startX, $startY, $wasGrounded);
@@ -834,6 +844,7 @@ final class Platformer
 		$b->ability = '';
 		$b->wall = 0;
 		$b->facing = $wall;
+		$b->direction = $wall;
 
 		return true;
 	}

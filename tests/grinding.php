@@ -21,7 +21,7 @@ test('continuous rail contacts enter grinding without high-speed tunneling', fun
 	near($body->y + $body->halfHeight, 100, .01);
 });
 
-test('grinding retains direction, has a minimum speed, crouches, and jumps free', function() {
+test('grinding locks travel direction independently of visual facing', function() {
 	$terrain = new Terrain;
 	$terrain->addRail([[-1000,100],[1000,100]]);
 	$movement = new Platformer($terrain);
@@ -32,7 +32,9 @@ test('grinding retains direction, has a minimum speed, crouches, and jumps free'
 	$body->friction = 0;
 	$body->gravity = 0;
 	tick($movement, $body, ['left' => true]);
-	check($body->grinding && $body->groundSpeed >= 360 && $body->facing === 1);
+	check($body->grinding && $body->groundSpeed >= 360);
+	check($body->facing === -1, 'opposite input must turn the grinding sprite');
+	check(property_exists($body, 'direction') && $body->direction === 1);
 	tick($movement, $body, ['down' => true]);
 	check($body->crouching && !$body->rolling);
 	tick($movement, $body, ['jump' => true]);

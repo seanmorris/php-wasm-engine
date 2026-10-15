@@ -183,8 +183,9 @@ $counter->score += $banked ?? 0;
 $combo->add(new ComboReward('Backflip', 250, 2));
 ~~~
 
-A rail contact clears rolling, preserves travel direction against opposite input, enforces the
-reference minimum speed, accelerates along its tangent, and permits the lower-friction Down pose.
+A rail contact clears rolling, preserves `Body::$direction` against opposite input, lets that input
+change the independently rendered `Body::$facing`, enforces the reference minimum speed, accelerates
+along its tangent, and permits the lower-friction Down pose.
 Jump leaves along the current surface normal. A rail endpoint retains tangent momentum and becomes
 a plain fall, so a chain can continue onto another rail. The body cast checks the entire movement
 distance before attaching, which prevents fast downward movement from tunneling through a thin rail.
@@ -813,7 +814,7 @@ Platformer is a new PHP implementation informed by the reference projects in [do
 - Acceleration, braking, friction, slope gravity, rolling, variable jump height, jump buffering, and coyote time.
 - Surface-tangent ground speed and outward-normal jumps. Sensors follow slopes, walls, ceilings, and loops while momentum remains sufficient.
 - Jump somersault state and compact collision height persist through the full arc, then clear on landing. Plain ledge falls remain standing and do not count as attacks.
-- Crouching and tap-charged spindashes, runner drop dashes, glide with wall catching, climbing, ledge-top transitions and jumping, and flight with a finite lift budget.
+- Crouching and tap-charged spindashes, runner drop dashes, glide with wall catching, climbing, ledge-top transitions and jumping, and horizontally steerable flight with a locked airborne look direction and finite lift budget.
 - Solid polygons, tile collision shapes, one-way platforms, and down+jump drop-through.
 - Per-body collision planes and directional Tiled layer switches for open loops, including reversed crown gates and rolling-only gates.
 

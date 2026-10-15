@@ -8,7 +8,11 @@ final class Body
 	public float $radius = 8,$halfHeight = 18,$standingHeight = 18,$rollingHeight = 12;
 	public bool $grounded = false,$rolling = false,$jumping = false,$crouching = false,$grinding = false;
 	public bool $underwater = false,$waterEntered = false,$waterExited = false,$skimming = false;
-	public int $facing = 1,$wall = 0;
+	/** Horizontal look direction used by sprite rendering and facing-relative controls. */
+	public int $facing = 1;
+	/** Retained movement orientation used by surface travel and facing-relative actions. */
+	public int $direction = 1;
+	public int $wall = 0;
 	/** Zero is shared terrain; positive numbers select an additional collision plane. */
 	public int $collisionLayer = 1;
 	public string $ability = '';

@@ -142,7 +142,6 @@ final class Shields
 			{
 				$body->vx += $direction * 1800 * $dt;
 				$body->vx = max(-900, min(900, $body->vx));
-				$body->facing = $direction < 0 ? -1 : 1;
 
 				if(!$canFly)
 				{

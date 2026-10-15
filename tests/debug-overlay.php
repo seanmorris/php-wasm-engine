@@ -80,6 +80,7 @@ test(
 
 		check($rows['X px'] === '12.500' && $rows['Y px'] === '-12.250');
 		check($rows['Gnd px/s'] === '-240.000' && $rows['Collision layer'] === '2');
+		check($rows['Facing / direction'] === '1 / 1');
 		check($rows['X px/s'] === '-180.000' && $rows['Y px/s'] === '240.000');
 		near((float)$rows['Air rad'], atan2(240, -180));
 		$body->grounded = false;

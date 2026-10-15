@@ -63,7 +63,7 @@ Create rectangle objects with class **layer-switch** (or **LayerSwitch**). Conve
 
 The two layer IDs must be distinct positive integers. A gate only switches from the expected source; unrelated planes remain selected. A body on layer 0 may enter either route. Rectangles use Tiled's top-left origin, while tile objects use their bottom-left anchor. Object rotation, group offsets, map placement, and isometric object projection are applied before collision queries.
 
-PHP gates use the **body center**. Give entrance gates enough height to include grounded and jumping bodies, place them outside the walls, and place the crown gate in shared terrain where either destination is clear. Grounded direction uses tangent speed, then horizontal velocity or facing when stopped. Airborne direction uses horizontal velocity, then facing. Rolling restrictions leave an ineligible body on its current layer.
+PHP gates use the **body center**. Give entrance gates enough height to include grounded and jumping bodies, place them outside the walls, and place the crown gate in shared terrain where either destination is clear. Grounded direction uses tangent speed, then horizontal velocity or the retained movement direction when stopped. Airborne direction uses horizontal velocity, then retained movement direction. Rolling restrictions leave an ineligible body on its current layer.
 
 ## Continuous switching and collision
 

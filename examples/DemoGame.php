@@ -223,6 +223,7 @@ final class DemoGame
 			, 'grinding'
 			, 'crouching'
 			, 'facing'
+			, 'direction'
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'
@@ -630,6 +631,8 @@ final class DemoGame
 			, 'crouching' => $body->crouching
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
+			, 'facing' => $body->facing
+			, 'direction' => $body->direction
 			, 'pose' => $pose
 			, 'ability' => $body->ability
 			, 'speed' => $body->groundSpeed

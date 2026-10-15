@@ -21,12 +21,26 @@ test('controls retain proportional input and button edges across fixed steps', f
 	check(!$input->released('jump'));
 });
 
-test('partial stick movement preserves integer facing and proportional acceleration', function() {
+test('partial air steering preserves look direction and proportional acceleration', function() {
 	$movement = new Platformer(new Terrain);
 	$body = new Body(0, 0);
 	$input = new Controls;
 	$input->set(['left' => .5]);
 	$movement->step($body, $input, 1 / 60);
-	check($body->facing === -1);
+	check($body->facing === 1 && $body->direction === 1);
 	near($body->vx, -$body->airAcceleration * .5 / 60);
+});
+
+test('flyers retain horizontal air steering while flight is active', function() {
+	$movement = new Platformer(new Terrain);
+	$body = new Body(0, 0, 'flyer');
+	$body->jumping = true;
+	$body->vx = 120;
+	tick($movement, $body, ['jump' => true]);
+	check($body->ability === 'fly');
+	tick($movement, $body, ['left' => true], 60);
+	check($body->ability === 'fly');
+	check($body->facing === 1, 'flight steering must retain the takeoff look direction');
+	check(property_exists($body, 'direction') && $body->direction === 1);
+	check($body->vx < 0, 'flight input must be able to reverse horizontal travel');
 });

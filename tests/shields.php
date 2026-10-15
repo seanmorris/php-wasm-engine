@@ -236,9 +236,10 @@ test('fire thrust composes with flight and glide while climbing rejects shield m
 		$player = $registry->create($body);
 		$shield = $shields->grant($player, Shield::FIRE);
 		$controls = new Controls;
-		$controls->set([5 => true]);
+		$controls->set([4 => true]);
 		check(!$shields->control($player, $controls, .1));
-		check($body->ability === $ability && $body->vx > 0);
+		check($body->ability === $ability && $body->vx < 0);
+		check($body->facing === 1 && $body->direction === 1);
 		near($shield->firePower, .15);
 		(new Platformer(new Terrain))->step($body, $controls, 1 / 60);
 		check($body->ability === $ability);

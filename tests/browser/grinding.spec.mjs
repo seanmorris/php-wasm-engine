@@ -34,6 +34,61 @@ test.afterEach(async({page}) => {
 	await page.evaluate(() => window.enginePhp?.refresh()).catch(() => {});
 });
 
+test('live flight and grinding use independent look and travel locks', async({page}) => {
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
+	await expect.poll(async() => (await state(page)).body).not.toBeNull();
+
+	const result = JSON.parse(await run(page, `
+		$engine->userPaused = true;
+		$body->x = 1360;
+		$body->y = 350;
+		$body->vx = 0;
+		$body->vy = 3000;
+		$body->terminalSpeed = 3000;
+		$body->gravity = 0;
+		$body->grounded = false;
+		$body->grinding = false;
+		$engine->controls->reset();
+		$engine->controls->set([]);
+		$game->level->movement->step($body, $engine->controls, 1 / 60);
+		$body->groundSpeed = 600;
+		$body->facing = $body->direction = 1;
+		$engine->controls->set(['left' => true]);
+		$game->level->movement->step($body, $engine->controls, 1 / 60);
+		$rail = [$body->facing, $body->direction, $body->groundSpeed];
+
+		$body->x = 0;
+		$body->y = -500;
+		$body->vx = 120;
+		$body->vy = 0;
+		$body->profile = 'flyer';
+		$body->grounded = false;
+		$body->grinding = false;
+		$body->jumping = true;
+		$body->ability = 'fly';
+		$body->facing = $body->direction = 1;
+		$body->flightRemaining = 5.8;
+
+		foreach(range(1, 60) as $frame)
+		{
+			$engine->controls->set(['left' => true]);
+			$game->level->movement->step($body, $engine->controls, 1 / 60);
+		}
+
+		echo json_encode([$rail, [$body->facing, $body->direction, $body->vx, $body->ability]]);
+	`
+	));
+
+	expect(result[0][0]).toBe(-1);
+	expect(result[0][1]).toBe(1);
+	expect(result[0][2]).toBeGreaterThan(0);
+	expect(result[1][0]).toBe(1);
+	expect(result[1][1]).toBe(1);
+	expect(result[1][2]).toBeLessThan(0);
+	expect(result[1][3]).toBe('fly');
+});
+
 test('Tiled rail contact drives the top-right combo HUD and banks into score', async({page}) => {
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
