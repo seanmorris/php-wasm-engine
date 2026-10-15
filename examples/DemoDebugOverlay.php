@@ -230,13 +230,19 @@ final class DemoDebugOverlay
 		$width = $game->engine->device->width;
 		$height = $game->engine->device->height;
 		$scale = min(1, $width / 720, $height / 540);
+
+		if($this->enabled)
+		{
+			$this->rows = $this->read($game, $casts);
+			$fullHeight = (count($this->rows) + 1) * ($this->font->lineHeight + 2) + 32;
+			$scale = min($scale, $height / $fullHeight);
+		}
+
 		$pad = 8 * $scale;
 		$batch = $boxes = $this->nextCache = [];
 
 		if($this->enabled)
 		{
-			$this->rows = $this->read($game, $casts);
-
 			$panelWidth = 304 * $scale;
 			$line = ($this->font->lineHeight + 2) * $scale;
 			$x = $width - $panelWidth - $pad;
