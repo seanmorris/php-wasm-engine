@@ -245,7 +245,7 @@ test('the rising-water loop exposes scriptable switches and object 3958', async(
 
 	const body = async() => JSON.parse(await canvas.getAttribute('data-body') || '{}');
 	const setup = `<?php
-		$body->x = 176;
+		$body->x = 156;
 		$body->y = 430;
 		$body->vx = $body->vy = $body->groundSpeed = 0;
 		$body->angle = 0;
@@ -261,8 +261,12 @@ test('the rising-water loop exposes scriptable switches and object 3958', async(
 	await expect.poll(async() => (await body()).supportY).toBeLessThan(430);
 	await page.keyboard.up('Space');
 	await expect.poll(async() => (await water()).features?.activeSwitch, {timeout: 5000}).toBe(101);
+	const landedFrame = Number(await canvas.getAttribute('data-frames'));
+
+	await expect.poll(async() => Number(await canvas.getAttribute('data-frames'))).toBeGreaterThan(landedFrame + 3);
 	expect((await body()).grounded).toBe(true);
 	expect((await body()).supportY).toBeCloseTo(440, 2);
+	expect((await body()).angle).toBeCloseTo(0, 3);
 
 	await page.evaluate(() => enginePhp.run('<?php $body->x = 480; $game->level->waterFeatures->activate(103);'));
 

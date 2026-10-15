@@ -707,13 +707,24 @@ final class Platformer
 			, $hits
 		));
 
+		// A lower neighboring ledge is not a second point on the nearest support surface.
+		$supports = [];
+
+		foreach($hits as $hit)
+		{
+			if(abs($hit->t * 16 - 6 - $distance) < .01)
+			{
+				$supports[] = $hit;
+			}
+		}
+
 		$b->x -= $sa * $distance;
 		$b->y += $ca * $distance;
 		$b->grinding = false;
 
-		foreach($hits as $hit)
+		foreach($supports as $hit)
 		{
-			if($hit->grinding && abs($hit->t * 16 - 6 - $distance) < .01)
+			if($hit->grinding)
 			{
 				$b->grinding = true;
 
@@ -721,13 +732,13 @@ final class Platformer
 			}
 		}
 
-		if(count($hits) === 2)
+		if(count($supports) === 2)
 		{
-			$b->angle = atan2($hits[1]->y - $hits[0]->y, $hits[1]->x - $hits[0]->x);
+			$b->angle = atan2($supports[1]->y - $supports[0]->y, $supports[1]->x - $supports[0]->x);
 		}
 		else
 		{
-			$b->angle = atan2($hits[0]->nx, -$hits[0]->ny);
+			$b->angle = atan2($supports[0]->nx, -$supports[0]->ny);
 		}
 	}
 

@@ -242,14 +242,14 @@ test('water levels retain a fixed bottom and use separate fill and drain rates',
 	near($region->y + $region->height, 640);
 });
 
-test('water switches let jumps pass upward and retain a solid top for the landing', function() {
+test('water switches let jumps pass upward and retain a level solid top at the edge', function() {
 	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
 	$terrain = MapTerrain::build($map);
 	$waters = WaterRegions::fromMaps($map);
 	$registry = new Registry;
 	$features = new WaterFeatures($registry, $terrain, $map, $waters);
 	$switch = $features->switches[101];
-	$body = new Body($switch->x + $switch->width / 2, $switch->y - 18);
+	$body = new Body($switch->x - 4, $switch->y - 18);
 	$body->grounded = true;
 	$registry->create($body);
 	$movement = new Platformer($terrain, waters: $waters);
@@ -268,6 +268,17 @@ test('water switches let jumps pass upward and retain a solid top for the landin
 
 	check($passedAbove && $switch->active && $features->activeSwitch === 101);
 	check($body->grounded && !$body->jumping);
+	near($body->supportY(), $switch->top(), .01);
+
+	for($frame = 0; $frame < 3; $frame++)
+	{
+		tick($movement, $body);
+		$features->update($registry, 1 / 60);
+	}
+
+	check($body->grounded);
+	near($body->angle, 0, .001);
+	near($body->x, $switch->x - 4, .001);
 	near($body->supportY(), $switch->top(), .01);
 	check($features->snapshot()['switches'][101] === ['active' => true,'top' => 440.0]);
 	$shape = $switch->shape;
