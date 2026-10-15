@@ -280,6 +280,18 @@ test('water switches let jumps pass upward and retain a level solid top at the e
 	near($body->angle, 0, .001);
 	near($body->x, $switch->x - 4, .001);
 	near($body->supportY(), $switch->top(), .01);
+	$maxAngle = 0;
+
+	for($frame = 0; $frame < 30; $frame++)
+	{
+		tick($movement, $body, ['left' => true]);
+		$features->update($registry, 1 / 60);
+		$maxAngle = max($maxAngle, abs($body->angle));
+	}
+
+	near($maxAngle, 0, .001);
+	check($body->grounded && $body->x + $body->radius < $switch->x);
+	near($body->supportY(), $switch->y, .01);
 	check($features->snapshot()['switches'][101] === ['active' => true,'top' => 440.0]);
 	$shape = $switch->shape;
 	$features->close();
