@@ -7,6 +7,7 @@ use PhpWasmEngine\Gameplay\Badniks;
 use PhpWasmEngine\Gameplay\BossRegions;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
+use PhpWasmEngine\Gameplay\MiniBosses;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
@@ -42,6 +43,7 @@ final class DemoLevel
 	public ?Badniks $badniks = null;
 	public ?BossRegions $bossRegions = null;
 	public ?CrabMeats $crabs = null;
+	public ?MiniBosses $miniBosses = null;
 	public ?Monitors $monitors = null;
 	public ?Shields $shields = null;
 	public ?WaterFeatures $waterFeatures = null;
@@ -217,6 +219,15 @@ final class DemoLevel
 		{
 			$this->badniks = new Badniks($engine->entities, $this->terrain, $this->rings);
 			$this->crabs = new CrabMeats($engine->entities, $this->terrain, $map, $this->badniks);
+
+			$this->miniBosses = new MiniBosses(
+				$engine->entities
+				, $this->terrain
+				, $map
+				, $this->rings
+				, advanceCombat: false
+			);
+
 			$this->shields = new Shields($engine->entities, $map);
 			$this->monitors = new Monitors($engine->entities, $this->terrain, $map, shields: $this->shields);
 			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
@@ -229,9 +240,15 @@ final class DemoLevel
 			);
 
 			$engine->systems->add(
+				$this->systemPrefix . 'mini-bosses'
+				, [$this->miniBosses, 'update']
+				, after: [$this->systemPrefix . 'badniks']
+			);
+
+			$engine->systems->add(
 				$this->systemPrefix . 'shields'
 				, [$this->shields, 'update']
-				, after: [$this->systemPrefix . 'badniks']
+				, after: [$this->systemPrefix . 'mini-bosses']
 			);
 		}
 
@@ -242,12 +259,17 @@ final class DemoLevel
 
 		$bossRegions = BossRegions::fromMaps(
 			/**
-			 * Resolve a Tiled boss reference through the demo's spawned CrabMeat entities.
+			 * Resolve a Tiled boss reference through the demo's spawned encounter entities.
 			 *
 			 * @param int $sourceId Referenced Tiled object ID.
-			 * @return bool True while the referenced badnik component remains live.
+			 * @return bool True while a referenced multi-hit boss or legacy badnik remains live.
 			 */
 			function(int $sourceId) use ($engine): bool {
+				if($this->miniBosses?->aliveSource($sourceId))
+				{
+					return true;
+				}
+
 				$entity = $this->crabs?->entityForSourceId($sourceId);
 
 				return $entity !== null && $engine->entities->has($entity, Badnik::class);
@@ -335,6 +357,7 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'rings');
 		$engine->systems->remove($this->systemPrefix . 'badniks');
 		$engine->systems->remove($this->systemPrefix . 'crabs');
+		$engine->systems->remove($this->systemPrefix . 'mini-bosses');
 		$engine->systems->remove($this->systemPrefix . 'monitors');
 		$engine->systems->remove($this->systemPrefix . 'shields');
 		$engine->systems->remove($this->systemPrefix . 'water-features');
@@ -342,6 +365,7 @@ final class DemoLevel
 		$this->blocks?->close();
 		$this->rings?->close();
 		$this->badniks?->close();
+		$this->miniBosses?->close();
 		$this->monitors?->close();
 		$this->shields?->close();
 		$this->waterFeatures?->close();

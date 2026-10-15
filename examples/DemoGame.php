@@ -244,6 +244,7 @@ final class DemoGame
 		$this->combo->reset();
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
+		$this->level?->miniBosses?->sync($this->entity, $this->body);
 		$this->level?->bossRegions?->sync($this->body);
 		$this->cameraBehavior->setMode('auto');
 		$this->cameraBehavior->clearFocus();
@@ -373,7 +374,7 @@ final class DemoGame
 			$this->notifyReady();
 		}
 
-		foreach(['world', 'breakables', 'badniks', 'water', 'bossLock'] as $key)
+		foreach(['world', 'breakables', 'badniks', 'boss', 'water', 'bossLock'] as $key)
 		{
 			unset($this->canvas->dataset->$key);
 		}
@@ -441,6 +442,12 @@ final class DemoGame
 		$jumpConsumed = $this->level->shields?->control($this->entity, $controls, $dt) ?? false;
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
 		$bossRegion = $this->level->bossRegions?->update($this->body);
+
+		if($bossRegion !== null)
+		{
+			$this->level->miniBosses?->wakeSource($bossRegion->bossSourceId);
+		}
+
 		$score = $this->combo->update($this->body, $dt);
 
 		if($score !== null)
@@ -711,6 +718,7 @@ final class DemoGame
 		if($this->scene === 'badniks')
 		{
 			$counts = $level->badniks->counts();
+			$boss = $level->miniBosses->snapshot();
 			$counts['monitors'] = $level->monitors->counts();
 			$counts['shields'] = $level->shields->counts();
 			$combat = $this->engine->entities->get($this->entity, PlayerCombat::class);
@@ -718,6 +726,7 @@ final class DemoGame
 			$counts['defeats'] = $combat->defeats;
 			$counts['scatteredRings'] = $level->rings->scatteredCount();
 			$this->canvas->dataset->badniks = json_encode($counts);
+			$this->canvas->dataset->boss = json_encode($boss);
 
 			$this->status->textContent .= sprintf(
 				' · %d badniks · %d shots · %d monitors · %d shields · %d defeated'
@@ -730,7 +739,21 @@ final class DemoGame
 
 			if($level->bossRegions?->active($body))
 			{
-				$this->status->textContent .= ' · boss arena locked';
+				$this->status->textContent .= sprintf(
+					' · boss %d/%d HP · %s · arena locked'
+					, $boss['hitPoints']
+					, $boss['maxHitPoints']
+					, $boss['phase']
+				);
+			}
+			elseif($boss['present'])
+			{
+				$this->status->textContent .= sprintf(
+					' · boss %d/%d HP · %s'
+					, $boss['hitPoints']
+					, $boss['maxHitPoints']
+					, $boss['phase']
+				);
 			}
 		}
 	}
@@ -771,6 +794,7 @@ final class DemoGame
 			, $this->canvas->dataset->debug
 			, $this->canvas->dataset->sequences
 			, $this->canvas->dataset->badniks
+			, $this->canvas->dataset->boss
 			, $this->canvas->dataset->bossLock
 			, $this->canvas->dataset->water
 		);

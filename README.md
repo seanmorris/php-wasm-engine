@@ -225,6 +225,46 @@ Annotate tiles with `crabmeat-standing`, `crabmeat-walking`, `crabmeat-shooting`
 
 Player-to-badnik and player-to-projectile contacts use relative swept bounds, so either participant can cross the other between fixed updates without tunneling. Projectile-to-terrain movement uses `Terrain::castBody()` over the complete displacement. A projectile whose owning badnik has popped retires without damaging the player.
 
+## Multi-hit bosses and the floating mini boss
+
+`Gameplay\Boss` holds reusable position, bounds, health, score, collision layer, velocity, and phase
+state without inheriting ordinary one-hit badnik behavior. `MiniBosses` promotes `MiniBoss` or
+`mini-boss` Tiled objects and runs the moving-boxes-2 encounter: the idle boss wakes when its arena
+activates, stalks the player horizontally, and drops a spike bomb every 60 reference frames. A
+landed bomb splits into two outward fragments. Main bombs use complete body casts against terrain,
+and every boss, bomb, and fragment contact uses relative swept bounds so high speeds cannot tunnel.
+
+Rolling and jump somersaults damage the top or sides. An underside attack produces the reference dud
+rebound without removing health. Per-attacker hit cooldowns preserve the eight-hit fight while the
+damaged pose recovers. Zero health releases `BossRegions` immediately, but leaves a dead shell for a
+final attack. The finisher starts a 90-frame stream of explosion entities before the boss escapes
+upward. Player damage reuses rings, shields, mercy, combo failure, and knockback behavior. The final
+hit awards the configured points and increments `PlayerCombat::$defeats` once.
+
+~~~php
+use PhpWasmEngine\Gameplay\{MiniBosses,PlayerCombat};
+
+$player = $engine->entities->create($body, $counter, new PlayerCombat, $sprite);
+$bosses = new MiniBosses($engine->entities, $terrain, $map, $rings);
+$bosses->sync($player, $body); // Also call after teleports.
+
+$engine->systems->add('mini-bosses', [$bosses, 'update'], after: ['movement']);
+
+// Wake the object referenced by the active BossRegion.
+$bosses->wakeSource($region->bossSourceId);
+~~~
+
+The manager advances `PlayerCombat` mercy clocks by default. Pass `advanceCombat: false` when a
+`Badniks` manager already advances the same players, as the combined demo does.
+
+Annotate tiles with `mini-boss-idle`, `mini-boss-damaged`, `mini-boss-dead`, `spike-bomb`,
+`spike-fragment`, and `boss-explosion` classes. Place a point or tile object with class `MiniBoss`.
+Its properties can override `hitPoints`, `points`, `collisionLayer`, stalking speed, bomb timing and
+gravity, hit and recovery frames, explosion timing, and escape behavior. These editor properties use
+reference frames and pixels per frame; the manager converts them to seconds and pixels per second.
+`snapshot()`, `entityForSourceId()`, `aliveSource()`, and `wakeSource()` provide stable scripting
+verbs. Call `close()` with the rest of the level cleanup.
+
 ### Platform camera
 
 `Gameplay\PlatformCamera` reimplements moving-boxes-2's actor framing as a renderer-independent
@@ -277,14 +317,12 @@ ordinary follow target. `cameraAnchorY`
 defaults to `0.72`, matching the reference boss framing, and accepts a value from zero through one.
 
 ~~~php
-use PhpWasmEngine\Gameplay\{Badnik,BossRegions,PlatformCamera};
+use PhpWasmEngine\Gameplay\{BossRegions,MiniBosses,PlatformCamera};
+
+$bosses = new MiniBosses($engine->entities, $terrain, $map, $rings);
 
 $locks = BossRegions::fromMaps(
-	function(int $sourceId) use ($crabs, $engine): bool {
-		$boss = $crabs->entityForSourceId($sourceId);
-
-		return $boss !== null && $engine->entities->has($boss, Badnik::class);
-	}
+	fn(int $sourceId): bool => $bosses->aliveSource($sourceId)
 	, $map
 );
 
@@ -294,6 +332,7 @@ $cameraBehavior = $cameraBehavior ?? new PlatformCamera;
 
 if($region)
 {
+	$bosses->wakeSource($region->bossSourceId);
 	$cameraBehavior->setMode('boss');
 	$cameraBehavior->bossAnchorY = $region->cameraAnchorY;
 	$cameraBehavior->setWorldBounds($region->x, $region->x + $region->width);
@@ -310,9 +349,10 @@ $cameraBehavior->update($camera, $body, $dt);
 `BossRegions::constrainCamera()` remains available for applications that require an immediate hard
 clamp. The demo uses `PlatformCamera` so arena entry and release are visible pans.
 
-The **CrabMeat badniks** demo uses object 3 as its arena target. Enter from either side, defeat it
-with a roll or jump somersault, and continue beyond the former screen wall. The debug overlay and
-`canvas.dataset.bossLock` expose the active bounds for scripts and browser tests.
+The **CrabMeat badniks** demo uses an eight-hit `MiniBoss` as object 3. Enter from either side,
+survive its spike bombs, attack the top or sides, then strike the dead shell to start its escape.
+The arena releases on the eighth hit. `canvas.dataset.boss` exposes health, phase, position, attacks,
+and effects; `canvas.dataset.bossLock` exposes the active bounds for scripts and browser tests.
 
 When `Badniks` receives the level's `Rings` manager, damage scatters up to sixteen held rings in two radial groups before clearing the counter. The burst keeps moving-boxes-2's reduced recovery set: every third ring is a short-lived visual, while the others become collectible after 48 reference frames. `ScatteredRing` stores velocity, gravity, pickup delay, lifetime, restitution, and collision layer. `Rings` uses full body casts for terrain bounces and relative swept pickup checks for moving rings. Recovered rings return to `RingCounter`; unrecovered rings expire between about 3.7 and 6 seconds.
 

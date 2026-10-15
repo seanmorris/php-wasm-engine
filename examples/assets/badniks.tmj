@@ -16,6 +16,10 @@
         {
             "firstgid": 38,
             "source": "monitors.tsj"
+        },
+        {
+            "firstgid": 62,
+            "source": "bosses.tsj"
         }
     ],
     "layers": [
@@ -4116,20 +4120,25 @@
                 },
                 {
                     "id": 3,
-                    "class": "CrabMeat",
+                    "class": "MiniBoss",
                     "point": true,
-                    "x": 1408,
-                    "y": 448,
+                    "x": 1728,
+                    "y": 352,
                     "properties": [
                         {
-                            "name": "direction",
+                            "name": "hitPoints",
                             "type": "int",
-                            "value": 1
+                            "value": 8
                         },
                         {
-                            "name": "patrolOffset",
+                            "name": "points",
+                            "type": "int",
+                            "value": 1000
+                        },
+                        {
+                            "name": "bombInterval",
                             "type": "float",
-                            "value": 45
+                            "value": 60
                         }
                     ]
                 }

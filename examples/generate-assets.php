@@ -656,6 +656,138 @@ $monitors = [
 ];
 
 jsonAsset('monitors.tsj', $monitors);
+
+png(__DIR__ . '/assets/bosses.png', 480, 48, static function($x, $y) {
+	$id = intdiv($x, 48);
+	$x %= 48;
+	$transparent = [0,0,0,0];
+	$dx = $x - 24;
+	$dy = $y - 24;
+	$distance = hypot($dx, $dy);
+
+	if($id <= 4)
+	{
+		$damaged = $id === 2 || $id === 3;
+		$dead = $id === 4;
+		$alternate = $id % 2;
+		$outer = $damaged ? [255,111,60,255] : ($dead ? [85,94,112,255] : [119,211,224,255]);
+		$middle = $damaged ? [188,44,56,255] : ($dead ? [45,51,67,255] : [38,91,121,255]);
+		$core = $damaged ? [255,224,117,255] : ($dead ? [20,25,36,255] : [248,218,103,255]);
+
+		if($distance > 22)
+		{
+			return $transparent;
+		}
+
+		if($distance >= 18 || abs($dx) <= 2 || abs($dy) <= 2)
+		{
+			return $outer;
+		}
+
+		if($distance >= 10)
+		{
+			return (($x + $y + $alternate * 3) % 7 === 0) ? $outer : $middle;
+		}
+
+		if($dead && (abs($dx + $dy) <= 1 || ($dy > 0 && abs($dx - 4) <= 1)))
+		{
+			return [238,240,242,255];
+		}
+
+		if($dy >= -4 && $dy <= 3 && $dx >= -7 && $dx <= 7)
+		{
+			if($dx >= 2 - $alternate && $dx <= 5 - $alternate && !$dead)
+			{
+				return [250,251,247,255];
+			}
+
+			return $dead ? [12,15,22,255] : $core;
+		}
+
+		return $middle;
+	}
+
+	if($id === 5 || $id === 6)
+	{
+		$angle = atan2($dy, $dx) + ($id - 5) * M_PI / 8;
+		$spoke = abs(sin($angle * 4)) < .28 && $distance <= 15;
+
+		if($distance <= 9 || $spoke && $distance >= 7)
+		{
+			return $distance <= 4 ? [255,208,75,255] : [191,53,72,255];
+		}
+
+		return $transparent;
+	}
+
+	if($id === 7)
+	{
+		return abs($dx) + abs($dy) <= 6
+			? (abs($dx) + abs($dy) <= 2 ? [255,239,148,255] : [209,54,67,255])
+			: $transparent;
+	}
+
+	$outer = $id === 8 ? 19 : 23;
+	$inner = $id === 8 ? 7 : 11;
+	$ray = abs($dx) <= 2 || abs($dy) <= 2 || abs($dx - $dy) <= 2 || abs($dx + $dy) <= 2;
+
+	if($distance <= $inner || $ray && $distance <= $outer)
+	{
+		return $distance <= $inner ? [255,244,174,255] : [255,116,50,255];
+	}
+
+	return $transparent;
+});
+
+$bosses = [
+	'type' => 'tileset'
+	, 'name' => 'bosses'
+	, 'tilewidth' => 48
+	, 'tileheight' => 48
+	, 'columns' => 10
+	, 'tilecount' => 10
+	, 'image' => 'bosses.png'
+	, 'imagewidth' => 480
+	, 'imageheight' => 48
+	, 'tiles' => [
+		[
+			'id' => 0
+			, 'class' => 'mini-boss-idle'
+			, 'animation' => [
+				['tileid' => 0,'duration' => 160]
+				, ['tileid' => 1,'duration' => 160]
+			]
+		]
+		, [
+			'id' => 2
+			, 'class' => 'mini-boss-damaged'
+			, 'animation' => [
+				['tileid' => 2,'duration' => 45]
+				, ['tileid' => 3,'duration' => 45]
+			]
+		]
+		, ['id' => 4,'class' => 'mini-boss-dead']
+		, [
+			'id' => 5
+			, 'class' => 'spike-bomb'
+			, 'animation' => [
+				['tileid' => 5,'duration' => 90]
+				, ['tileid' => 6,'duration' => 90]
+			]
+		]
+		, ['id' => 7,'class' => 'spike-fragment']
+		, [
+			'id' => 8
+			, 'class' => 'boss-explosion'
+			, 'animation' => [
+				['tileid' => 8,'duration' => 80]
+				, ['tileid' => 9,'duration' => 80]
+			]
+		]
+	]
+];
+
+jsonAsset('bosses.tsj', $bosses);
 $width = 96;
 $height = 20;
 $floor = array_fill(0, $width * $height, 0);
@@ -1025,6 +1157,11 @@ $waterRail['layers'][] = [
 jsonAsset('water-rail.tmj', $waterRail);
 $badniks = $base;
 $badniks['tilesets'][] = ['firstgid' => $tiles['tilecount'] + 1,'source' => 'monitors.tsj'];
+$badniks['tilesets'][] = [
+	'firstgid' => $tiles['tilecount'] + $monitors['tilecount'] + 1
+	, 'source' => 'bosses.tsj'
+];
+
 $badniks['layers'][] = [
 	'id' => 4
 	, 'name' => 'Badniks'
@@ -1046,13 +1183,14 @@ $badniks['layers'][] = [
 		]
 		, [
 			'id' => 3
-			, 'class' => 'CrabMeat'
+			, 'class' => 'MiniBoss'
 			, 'point' => true
-			, 'x' => 1408
-			, 'y' => 448
+			, 'x' => 1728
+			, 'y' => 352
 			, 'properties' => [
-				['name' => 'direction','type' => 'int','value' => 1]
-				, ['name' => 'patrolOffset','type' => 'float','value' => 45]
+				['name' => 'hitPoints','type' => 'int','value' => 8]
+				, ['name' => 'points','type' => 'int','value' => 1000]
+				, ['name' => 'bombInterval','type' => 'float','value' => 60]
 			]
 		]
 	]

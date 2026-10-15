@@ -25,7 +25,7 @@ test('Tiled CrabMeat objects retain their timed patrol, poses, and paired delaye
 	$badniks = new Badniks($registry, $terrain);
 	$crabs = new CrabMeats($registry, $terrain, $map, $badniks);
 	$ids = $crabs->entities();
-	check(count($ids) === 2);
+	check(count($ids) === 1);
 	$entity = $ids[0];
 	$badnik = $registry->get($entity, Badnik::class);
 	$crab = $registry->get($entity, CrabMeat::class);

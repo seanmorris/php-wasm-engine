@@ -75,6 +75,7 @@ export function boot(
 			, 'world'
 			, 'breakables'
 			, 'badniks'
+			, 'boss'
 			, 'water'
 			, 'scene'
 			, 'profile'

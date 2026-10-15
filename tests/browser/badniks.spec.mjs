@@ -4,6 +4,8 @@ const state = page => page.locator('canvas').evaluate(canvas => JSON.parse(canva
 
 const lockState = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.bossLock ?? 'null'));
 
+const bossState = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.boss ?? 'null'));
+
 async function run(page, source)
 {
 	return page.evaluate(async source => {
@@ -38,7 +40,7 @@ test('CrabMeat patrols, fires, damages a walker, and pops under a rolling player
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false, scene: 'badniks'}));
 	await expect.poll(() => state(page), {timeout: 60000}).not.toBeNull();
-	await expect.poll(async() => (await state(page)).badniks).toBe(2);
+	await expect.poll(async() => (await state(page)).badniks).toBe(1);
 	await expect.poll(async() => (await state(page)).projectiles, {timeout: 10000}).toBeGreaterThanOrEqual(2);
 
 	const hit = JSON.parse(await run(page, `
@@ -105,7 +107,7 @@ test('CrabMeat patrols, fires, damages a walker, and pops under a rolling player
 	));
 
 	expect(popped).toEqual([1, 100, false]);
-	await expect.poll(async() => (await state(page)).badniks).toBe(1);
+	await expect.poll(async() => (await state(page)).badniks).toBe(0);
 	expect(errors).toEqual([]);
 });
 
@@ -137,6 +139,11 @@ test('boss regions stop crossings, pan into the arena, and release after defeat'
 			$game->cameraBehavior->update($camera, $body, 1 / 60);
 		}
 
+		foreach(range(1, 60) as $_)
+		{
+			$game->level->miniBosses->update($engine->entities, 1 / 60);
+		}
+
 		echo json_encode([$region?->sourceId, $region?->bossSourceId, $enteredBodyX, $body->vx,
 			$body->groundSpeed, $firstCameraX, $camera->x, $game->cameraBehavior->mode]);
 	`
@@ -149,19 +156,64 @@ test('boss regions stop crossings, pan into the arena, and release after defeat'
 	expect(entered[7]).toBe('boss');
 	await expect.poll(async() => (await lockState(page)).active).toBe(true);
 	expect((await lockState(page)).bossSourceId).toBe(3);
+	await expect.poll(async() => (await bossState(page)).phase).toBe('stalking');
+	await expect.poll(async() => (await bossState(page)).bombsDropped, {timeout: 5000}).toBeGreaterThanOrEqual(1);
 
 	const released = JSON.parse(await run(page, `
-		$boss = $game->level->crabs->entityForSourceId(3);
-		$game->level->badniks->pop($boss, $game->entity);
+		$bossEntity = $game->level->miniBosses->entityForSourceId(3);
+		$boss = $engine->entities->get($bossEntity, PhpWasmEngine\\Gameplay\\Boss::class);
+		$behavior = $engine->entities->get($bossEntity, PhpWasmEngine\\Gameplay\\MiniBoss::class);
+		$combat = $engine->entities->get($game->entity, PhpWasmEngine\\Gameplay\\PlayerCombat::class);
+
+		foreach(range(1, 8) as $_)
+		{
+			$behavior->age += 1;
+			$boss->phase = 'stalking';
+			$body->x = $boss->x - 100;
+			$body->y = $boss->y - $boss->height / 2;
+			$body->grounded = true;
+			$body->jumping = false;
+			$body->rolling = true;
+			$combat->mercy = 0;
+			$game->level->miniBosses->sync($game->entity, $body);
+			$body->x = $boss->x + 100;
+			$game->level->miniBosses->update($engine->entities, 1 / 60);
+		}
+
 		$body->x = 2500;
 		$region = $game->level->bossRegions->update($body);
 		$camera->x = 2000;
 		$clamped = $game->level->bossRegions->constrainCamera($body, $camera);
-		echo json_encode([$region === null, $clamped, $body->x, $camera->x]);
+		echo json_encode([$region === null, $clamped, $body->x, $camera->x, $boss->hitPoints,
+			$boss->phase, $behavior->hits, $combat->defeats, $game->counter->score]);
 	`
 	));
 
-	expect(released).toEqual([true, false, 2500, 2000]);
+	expect(released).toEqual([true, false, 2500, 2000, 0, 'damaged', 8, 1, 1000]);
 	await expect.poll(async() => (await lockState(page)).active).toBe(false);
+
+	const escaped = JSON.parse(await run(page, `
+		$bossEntity = $game->level->miniBosses->entityForSourceId(3);
+		$boss = $engine->entities->get($bossEntity, PhpWasmEngine\\Gameplay\\Boss::class);
+		$behavior = $engine->entities->get($bossEntity, PhpWasmEngine\\Gameplay\\MiniBoss::class);
+		$body->x = 0;
+		$body->y = 0;
+		$body->rolling = false;
+		$game->level->miniBosses->sync($game->entity, $body);
+		$game->level->miniBosses->update($engine->entities, $behavior->deathDelay + .001);
+		$dead = $boss->phase;
+		$body->x = $boss->x - 100;
+		$body->y = $boss->y - $boss->height / 2;
+		$body->rolling = true;
+		$game->level->miniBosses->sync($game->entity, $body);
+		$body->x = $boss->x + 100;
+		$game->level->miniBosses->update($engine->entities, 1 / 60);
+		$finisher = $boss->phase;
+		$game->level->miniBosses->update($engine->entities, $behavior->explosionDuration);
+		echo json_encode([$dead, $finisher, $boss->phase, $behavior->explosions]);
+	`
+	));
+
+	expect(escaped).toEqual(['dead', 'exploding', 'escaped', 30]);
 	expect(errors).toEqual([]);
 });
