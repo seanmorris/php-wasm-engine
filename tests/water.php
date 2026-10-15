@@ -298,6 +298,46 @@ test('water switches let jumps pass upward and retain a level solid top at the e
 	check($shape !== null && !$terrain->hasShape($shape));
 });
 
+test('off-center switch landings preserve horizontal momentum across the edge', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
+	$terrain = MapTerrain::build($map);
+	$waters = WaterRegions::fromMaps($map);
+	$registry = new Registry;
+	$features = new WaterFeatures($registry, $terrain, $map, $waters);
+	$switch = $features->switches[101];
+	$body = new Body($switch->x - 20, $switch->top() - 60);
+	$body->vx = 180;
+	$body->vy = 120;
+	$registry->create($body);
+	$movement = new Platformer($terrain, waters: $waters);
+
+	for($frame = 0; $frame < 120 && !$body->grounded; $frame++)
+	{
+		tick($movement, $body);
+		$features->update($registry, 1 / 60);
+	}
+
+	check($switch->active && $body->grounded);
+	check(abs($body->x - ($switch->x + $switch->width / 2)) > 4);
+	near($body->groundSpeed, 180, .01);
+	near($body->vx, 180, .01);
+	near($body->angle, 0, .001);
+	near($body->supportY(), $switch->top(), .01);
+	$maxAngle = 0;
+
+	for($frame = 0; $frame < 30; $frame++)
+	{
+		tick($movement, $body, ['right' => true]);
+		$features->update($registry, 1 / 60);
+		$maxAngle = max($maxAngle, abs($body->angle));
+	}
+
+	near($maxAngle, 0, .001);
+	check($body->grounded && $body->x - $body->radius > $switch->x + $switch->width);
+	near($body->supportY(), $switch->y, .01);
+	$features->close();
+});
+
 test('the rising-water loop retains object 3958 and moves its buoyant solids with switches', function() {
 	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
 	$terrain = MapTerrain::build($map);
