@@ -632,6 +632,7 @@ final class DemoGame
 			, 'crouching' => $body->crouching
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
+			, 'dropCharge' => $body->dropCharge
 			, 'facing' => $body->facing
 			, 'direction' => $body->direction
 			, 'pose' => $pose

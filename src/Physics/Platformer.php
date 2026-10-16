@@ -266,9 +266,13 @@ final class Platformer
 				}
 			}
 
-			if($b->profile === 'runner' && $input->down('action'))
+			if($b->profile === 'runner' && $b->jumping && $input->down('action'))
 			{
 				$b->dropCharge = min(1, $b->dropCharge + $dt * 2);
+			}
+			elseif($b->dropCharge > 0)
+			{
+				$b->dropCharge = 0;
 			}
 
 			$gravity = $b->gravity * $gravityScale;
@@ -354,7 +358,7 @@ final class Platformer
 
 			if($b->dropCharge > 0)
 			{
-				$b->groundSpeed += $b->facing * (360 + 480 * $b->dropCharge);
+				$b->groundSpeed += $b->direction * (360 + 480 * $b->dropCharge);
 				$b->rolling = true;
 				$b->dropCharge = 0;
 			}

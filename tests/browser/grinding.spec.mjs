@@ -89,6 +89,55 @@ test('live flight and grinding use independent look and travel locks', async({pa
 	expect(result[1][3]).toBe('fly');
 });
 
+test('live rail jump drop dash follows travel direction while facing backward', async({page}) => {
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
+	await expect.poll(async() => (await state(page)).body).not.toBeNull();
+
+	const result = JSON.parse(await run(page, `
+		$engine->userPaused = true;
+		$body->x = 1360;
+		$body->y = 350;
+		$body->vx = 0;
+		$body->vy = 3000;
+		$body->terminalSpeed = 3000;
+		$body->gravity = 0;
+		$body->profile = 'runner';
+		$body->grounded = false;
+		$body->grinding = false;
+		$engine->controls->reset();
+		$engine->controls->set([]);
+		$game->level->movement->step($body, $engine->controls, 1 / 60);
+
+		$body->groundSpeed = $body->minGrindSpeed;
+		$body->gravity = 1800;
+		$body->facing = $body->direction = 1;
+		$engine->controls->set(['left' => true,'jump' => true]);
+		$game->level->movement->step($body, $engine->controls, 1 / 60);
+		$launch = [$body->facing, $body->direction, $body->jumping, $body->grinding];
+
+		for($frame = 0; !$body->grounded && $frame < 120; $frame++)
+		{
+			$engine->controls->set(['action' => true]);
+			$game->level->movement->step($body, $engine->controls, 1 / 60);
+		}
+
+		echo json_encode([$launch, [
+			$body->grounded
+			, $body->rolling
+			, $body->groundSpeed
+			, $body->dropCharge
+		]]);
+	`
+	));
+
+	expect(result[0]).toEqual([-1,1,true,false]);
+	expect(result[1][0]).toBe(true);
+	expect(result[1][1]).toBe(true);
+	expect(result[1][2]).toBeGreaterThan(0);
+	expect(result[1][3]).toBe(0);
+});
+
 test('Tiled rail contact drives the top-right combo HUD and banks into score', async({page}) => {
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));

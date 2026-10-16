@@ -41,6 +41,34 @@ test('grinding locks travel direction independently of visual facing', function(
 	check(!$body->grounded && !$body->grinding && $body->jumping && $body->vy < 0);
 });
 
+test('rail jump drop dashes follow retained travel direction rather than facing', function() {
+	foreach([-1, 1] as $direction)
+	{
+		$terrain = new Terrain;
+		$terrain->addRail([[-2000,100],[2000,100]]);
+		$movement = new Platformer($terrain);
+		$body = new Body(0, 82, 'runner');
+		$body->grounded = true;
+		$body->grinding = true;
+		$body->groundSpeed = $direction * $body->minGrindSpeed;
+		$body->facing = $body->direction = $direction;
+		$body->friction = 0;
+
+		$opposite = $direction > 0 ? 'left' : 'right';
+		tick($movement, $body, [$opposite => true,'jump' => true]);
+		check($body->jumping && !$body->grinding);
+		check($body->facing === -$direction && $body->direction === $direction);
+
+		for($frame = 0; !$body->grounded && $frame < 120; $frame++)
+		{
+			tick($movement, $body, ['action' => true]);
+		}
+
+		check($body->grounded && $body->rolling, 'charged rail jump must land in a roll');
+		check($body->groundSpeed * $direction > 0, 'drop boost must preserve rail travel direction');
+	}
+});
+
 test('rail endpoints release tangent momentum into an ordinary fall', function() {
 	$terrain = new Terrain;
 	$terrain->addRail([[0,100],[80,100]]);

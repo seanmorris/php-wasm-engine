@@ -463,11 +463,19 @@ test('down plus jump taps or held action build a decaying spindash charge', func
 	check(!$b->crouching && $b->rolling && $b->groundSpeed > 500);
 });
 
-test('drop dash charges in air and releases on landing', function() {
+test('drop dash requires a held action during a jump', function() {
 	$p = new Platformer(ground());
+	$falling = new Body(0, 0, 'runner');
+	tick($p, $falling, ['action' => true], 8);
+	check($falling->dropCharge === 0.0, 'plain falling must not charge a drop dash');
+
 	$b = new Body(0, 60, 'runner');
 	tick($p, $b, [], 10);
 	tick($p, $b, ['jump' => true]);
+	tick($p, $b, ['action' => true], 6);
+	check($b->dropCharge > 0, 'holding action during a jump must build charge');
+	tick($p, $b);
+	check($b->dropCharge === 0.0, 'releasing action before landing must cancel the charge');
 	tick($p, $b, ['action' => true], 70);
 	check($b->grounded && $b->rolling);
 });
