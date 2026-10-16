@@ -316,6 +316,29 @@ final class DemoGame
 	}
 
 	/**
+	 * Calculate the signed tangential sprite displacement used by charged and braking poses.
+	 *
+	 * @param Body $body Player body carrying charge, direction, surface, and tangent speed state.
+	 * @return float Shader twist strength matching the reference effect's 120 charge and 256 brake
+	 * limits.
+	 */
+	private function playerTwist(Body $body): float
+	{
+		if($body->charge > 0)
+		{
+			return 120 * $body->charge * $body->direction;
+		}
+
+		if(!$body->grounded || $body->rolling || $body->grinding
+			|| $body->direction * $body->groundSpeed >= 0
+		){
+			return 0;
+		}
+
+		return max(-256, min(256, -$body->groundSpeed * 22 / 60));
+	}
+
+	/**
 	 * Poll staging at a frame boundary and commit only a fully prepared destination.
 	 *
 	 * @return void Keeps failures local to the request, with the old scene still usable.
@@ -596,6 +619,7 @@ final class DemoGame
 		$level->renderer->render($camera, $time);
 		$pose = $this->playerPose($body);
 		$playerOpacity = 1.0;
+		$playerTwist = 0.0;
 
 		if($this->scene !== 'isometric')
 		{
@@ -614,6 +638,7 @@ final class DemoGame
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
+			$playerTwist = $sprite->twist = $this->playerTwist($body);
 			$playerOpacity = $sprite->opacity = $combat->flickerOpacity();
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
@@ -633,6 +658,7 @@ final class DemoGame
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
 			, 'dropCharge' => $body->dropCharge
+			, 'twist' => $playerTwist
 			, 'facing' => $body->facing
 			, 'direction' => $body->direction
 			, 'pose' => $pose

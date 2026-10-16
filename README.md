@@ -694,7 +694,7 @@ $sprites->close();
 $atlas->close();
 ~~~
 
-Sprites support anchors, rotation, scaling, flips, tint, opacity, animation offsets, and black outlines. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
+Sprites support anchors, rotation, scaling, flips, tint, opacity, animation offsets, tangential displacement, and black outlines. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
 Set `$sprite->crop = [$x, $y, $width, $height]` to draw an integer pixel region relative to the current tile frame. The crop must fit inside that frame; `null` draws the whole image. Cropped dimensions determine the sprite's size and anchor. Set `animated = false` to treat `gid` as a concrete frame, even when that tile also defines an animation.
 
@@ -712,6 +712,16 @@ $sprites->render([$sprite],$camera,$now);
 A changed animation starts at its first frame. Repeated requests for the current animation keep its playback position, so calling `play()` every update does not freeze it. `play($sprite,'jump',$now,restart: true)` explicitly restarts it. The method returns `true` when playback starts or restarts, and `false` when unchanged. It preserves the sprite object, position, transform, tint, and opacity, and reuses its atlas.
 
 Tiled frame durations control looping; static tiles also work. Each sprite has its own clock offset. An animation created by `sprite()` initially follows the renderer's clock; use `restart: true` to start that same animation at a later time. Unknown names or non-finite times throw without changing the sprite. Use animations from the tileset backing the renderer's atlas.
+
+### Sprite displacement
+
+Set `$sprite->twist` to a signed radial twist strength. Zero leaves the source unchanged; changing the sign reverses the tangential field. The renderer expands the quad enough for displaced pixels and keeps every sample inside the current frame or crop. Displaced and ordinary sprites remain in one instanced batch, and context restoration preserves the effect.
+
+The demo reimplements moving-boxes-2's visual response without moving the collision body. Braking against retained ground momentum scales twist from tangent speed and clamps it to ±256. A held spindash charge scales it to ±120 using the retained movement direction. Releasing the charge returns the sprite to its ordinary render pose before the rolling launch.
+
+~~~php
+$sprite->twist = 120 * $charge * $direction;
+~~~
 
 ### Sprite outlines
 

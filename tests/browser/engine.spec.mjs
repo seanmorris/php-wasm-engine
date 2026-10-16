@@ -116,6 +116,14 @@ test('sprite animations switch by name, restart independently and reuse their at
 	expect(result.error).toBe(0);
 });
 
+test('sprite twist displacement batches signed effects and survives restoration', async({page}) => {
+	await boot(page);
+	const result = JSON.parse(await run(page, 'require "/engine/tests/render-displacement.php";'));
+
+	for(const [name, passed] of Object.entries(result.checks)) expect(passed, name).toBe(true);
+	expect(result.error).toBe(0);
+});
+
 test('sprite groups reproduce whole images, freeze animation and restore cropped debris', async({page}) => {
 	await boot(page);
 	const result = JSON.parse(await run(page, 'require "/engine/tests/render-breakables.php";'));

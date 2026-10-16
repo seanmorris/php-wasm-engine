@@ -7,6 +7,8 @@ use PhpWasmEngine\Tiled\TileMap;
 final class Sprite
 {
 	public float $rotation = 0,$scaleX = 1,$scaleY = 1,$opacity = 1,$time = 0;
+	/** @var float Signed radial tangential displacement strength; zero leaves pixels unchanged. */
+	public float $twist = 0;
 	public bool $flipX = false,$flipY = false;
 	public array $tint = [1,1,1,1];
 	/** @var array{int,int,int,int}|null Tile-relative pixel crop, or null for the whole frame. */
@@ -26,7 +28,8 @@ final class Sprite
 	 * @param float $y World Y coordinate of the sprite anchor in pixels.
 	 * @param float $originX Horizontal anchor fraction of image width; 0 is left and 1 is right.
 	 * @param float $originY Vertical anchor fraction of image height; 0 is top and 1 is bottom.
-	 * @return void Initializes unit scale, full opacity, an outline, and no rotation or flips.
+	 * @return void Initializes unit scale, full opacity, an outline, and no rotation, flips, or
+	 * displacement.
 	 */
 	public function __construct(
 		public int $gid

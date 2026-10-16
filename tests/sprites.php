@@ -14,6 +14,7 @@ test('switching sprite animations preserves the entity component and its appeara
 	$sprite->scaleY = .5;
 	$sprite->flipX = $sprite->flipY = true;
 	$sprite->opacity = .6;
+	$sprite->twist = 72;
 	$sprite->tint = [.2,.3,.4,.5];
 	$sprite->originX = .25;
 	$sprite->originY = .75;

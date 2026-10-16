@@ -6,6 +6,9 @@ flat in vec4 color;
 flat in vec4 rect;
 flat in vec2 outlinePixels;
 flat in int smoothSampling;
+in vec2 effectUv;
+flat in vec2 sampleDirection;
+flat in float twist;
 out vec4 outputColor;
 
 // Interpolation can put an exact texel edge a few ulps below its integer coordinate.
@@ -56,10 +59,19 @@ float outlineAlpha(vec2 point) {
     return alpha;
 }
 
+// Reimplement moving-boxes-2's radial tangential SVG displacement as an atlas-local field.
+vec2 twistPoint(vec2 point) {
+    float radius=max(rect.z,rect.w)*.5;
+    vec2 centered=(effectUv-.5)*rect.zw;
+    float falloff=pow(max(0.,1.-length(centered)/radius),3.);
+    vec2 offset=vec2(centered.y,-centered.x)*(4./255.)*falloff*twist;
+    return point+offset*sampleDirection;
+}
+
 void main() {
     if(color.a<=0.) discard;
 
-    vec2 point=snapTexel(uv*rect.zw);
+    vec2 point=snapTexel(twistPoint(uv*rect.zw));
     vec4 pixel=spritePixel(point);
     outputColor=pixel*color;
 

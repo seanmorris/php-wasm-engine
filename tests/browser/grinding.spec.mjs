@@ -138,6 +138,69 @@ test('live rail jump drop dash follows travel direction while facing backward', 
 	expect(result[1][3]).toBe(0);
 });
 
+test('live braking and spindash charge drive signed sprite displacement without moving the body', async({page}) => {
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
+	await expect.poll(async() => (await state(page)).body?.grounded).toBe(true);
+
+	const braking = JSON.parse(await run(page, `
+		$game->menu->menu->open();
+		$engine->userPaused = true;
+		$body->rolling = false;
+		$body->grinding = false;
+		$body->groundSpeed = 600;
+		$body->direction = -1;
+		$body->charge = 0;
+		$game->render();
+		echo json_encode([
+			$body->grounded
+			, $body->rolling
+			, $body->grinding
+			, $body->groundSpeed
+			, $body->direction
+			, $engine->entities->get($entity, PhpWasmEngine\\Render\\Sprite::class)->twist
+			, $body->x
+			, $body->y
+		]);
+	`
+	));
+
+	expect(braking.slice(0, 6)).toEqual([true,false,false,600,-1,-220]);
+
+	const charged = JSON.parse(await run(page, `
+		$body->groundSpeed = 0;
+		$body->direction = -1;
+		$body->charge = .5;
+		$game->render();
+		echo json_encode([
+			$engine->entities->get($entity, PhpWasmEngine\\Render\\Sprite::class)->twist
+			, $body->x
+			, $body->y
+		]);
+	`
+	));
+
+	expect(charged[0]).toBeCloseTo(-60);
+	expect(charged[1]).toBe(braking[6]);
+	expect(charged[2]).toBe(braking[7]);
+
+	const full = await run(
+		page
+		, '$body->direction = 1; $body->charge = 1; $game->render(); '
+			+ 'echo $engine->entities->get($entity, PhpWasmEngine\\Render\\Sprite::class)->twist;'
+	);
+
+	expect(Number(full)).toBeCloseTo(120);
+
+	const cleared = await run(
+		page
+		, '$body->charge = 0; $game->render(); '
+			+ 'echo $engine->entities->get($entity, PhpWasmEngine\\Render\\Sprite::class)->twist;'
+	);
+
+	expect(Number(cleared)).toBe(0);
+});
+
 test('Tiled rail contact drives the top-right combo HUD and banks into score', async({page}) => {
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
