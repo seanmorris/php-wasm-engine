@@ -159,7 +159,14 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tsj')))
 				assert.equal(after[key], before[key], key);
 			}
 
-			assert.equal(sourcePath(exported, after.image), sourcePath(file, before.image));
+			if(before.image)
+			{
+				assert.equal(sourcePath(exported, after.image), sourcePath(file, before.image));
+			}
+			else
+			{
+				assert.equal(after.image, undefined);
+			}
 
 			for(const tile of before.tiles??[])
 			{
@@ -168,6 +175,13 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tsj')))
 				assert.equal(imported.type??imported.class??'', tile.type??tile.class??'');
 				assert.deepEqual(properties(imported.properties), properties(tile.properties));
 				assert.deepEqual(imported.animation, tile.animation);
+
+				if(tile.image)
+				{
+					assert.equal(sourcePath(exported, imported.image), sourcePath(file, tile.image));
+					assert.equal(imported.imagewidth, tile.imagewidth);
+					assert.equal(imported.imageheight, tile.imageheight);
+				}
 
 				if(tile.objectgroup) objects(tile.objectgroup.objects, imported.objectgroup.objects);
 			}

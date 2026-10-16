@@ -218,6 +218,11 @@ final class PlatformCamera
 			return $this->requestedMode;
 		}
 
+		if($body->ability === 'hanging')
+		{
+			return 'hooked';
+		}
+
 		if($body->ability === 'climb')
 		{
 			return 'climbing';

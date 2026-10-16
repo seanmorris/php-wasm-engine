@@ -61,6 +61,12 @@ final class Platformer
 		$previousWater = $b->water;
 		$water = $this->waters?->at($b->x, $b->y);
 		$this->waterState($b, $water, $previousWater);
+
+		if($b->ability === 'hanging')
+		{
+			return;
+		}
+
 		$drag = $water?->drag ?? 1;
 		$gravityScale = $water?->gravity ?? 1;
 		$axis = $input->axis('left', 'right');

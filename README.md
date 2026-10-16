@@ -124,6 +124,72 @@ boost on an ordinary moving landing. Neutral input retains the previous orientat
 adds to existing momentum, so opposite input can reverse a slow landing or brake a faster one.
 Fast grinding keeps its travel-direction lock.
 
+## Grapple points and ropes
+
+Choose **Level → Grapple ropes** in either menu. Jump into a gold handle to grab it automatically,
+hold Left or Right to pump the swing, and press Jump again to release. The course includes two
+fixed suspensions, a horizontal squine shuttle with `noSwing`, and a suspension following a linked
+path. All three player profiles can hang. Space / Z and controller A / Cross use logical button 0.
+
+`GrappleGrip` opts a player into contact. Each handle entity owns `GrapplePoint` and `Rope`;
+`RopeAnchor` supplies its fixed or moving suspension. `SpriteGroup` repeats atlas tiles along the
+rope, so the existing sprite renderer and context-restoration path handle the artwork.
+
+```php
+use PhpWasmEngine\Gameplay\{GrappleGrip, GrapplePoint, Grapples, Rope, RopeAnchor};
+
+$registry->add($player, new GrappleGrip);
+$grapples = new Grapples($registry, $terrain);
+$anchor = $grapples->anchor(new RopeAnchor(200, 80));
+$handle = $grapples->add(new GrapplePoint, new Rope($anchor, 200, 240, 160));
+
+// In the player movement update, before shields, flight, or ordinary jumping:
+$jumpConsumed = $grapples->control($player, $controls, $dt);
+$movement->step($body, $controls, $dt, $jumpConsumed);
+
+// After player movement and any moving-anchor systems:
+$engine->systems->add('grapples', [$grapples, 'update'], after: ['movement', 'platforms']);
+
+$grapples->release($player);       // Detach with inherited momentum.
+$grapples->sync($player, $body);   // Call after teleporting the player.
+$grapples->remove($handle);       // Releases riders and removes the handle and rope sprites.
+$grapples->close();               // Retires owned handles and anchor proxies when unloading.
+```
+
+While `Body::$ability` is `hanging`, the rope controls position and ordinary platformer movement
+pauses. Skip other movement abilities while hanging or when `control()` consumes Jump. Release
+adds three quarters of the profile's jump speed, uses moving-anchor velocity when present and
+rope velocity otherwise, and prevents regrabbing the same handle for 0.25 seconds. The first rider
+controls a shared swing. Damage can replace the ability and velocity; detachment preserves that
+knockback. `PlatformCamera` selects its `hooked` framing automatically.
+
+Pass a loaded map as the third `Grapples` constructor argument to load `GrapplePoint` or
+`grapple-point` objects. The `tiedTo` property is a Tiled object reference. `ropeLength` is a
+positive maximum distance in world pixels, read from the handle, then its anchor, then defaulting
+to 64. `noSwing` keeps the handle horizontally below its anchor. Optional `collisionLayer`
+restricts contact to a plane; zero is shared. Points use their exact coordinates, ordinary
+rectangles use their bottom center, and tile objects use Tiled's bottom-left image placement.
+Map and inherited layer offsets are applied once. Rotated object rectangles are rejected.
+
+An optional fourth constructor argument, `resolveAnchor($sourceId): ?int`, resolves a suspension
+object to an existing `Body`, `MovingPlatform`, or `BuoyantPlatform` entity. Unresolved objects
+become fixed anchors. Removing or disabling an anchor releases its riders. The optional fifth
+argument, `onChange($player, $handle, $attached)`, lets application code activate a carrier or
+observe attachment. Followed entities remain owned by their original systems.
+
+Tiles annotated `grapple-handle`, `rope-segment`, and `rope-anchor` supply fallback art; an explicit
+object GID overrides the handle or anchor image and preserves Tiled flips. Layers retain tint,
+opacity, and visibility. Scripted handles accept a `Sprite`, a repeated segment GID, and its world
+height through `add()`. `snapshot()` exposes handle and anchor positions, velocity, source IDs,
+length, `noSwing`, availability, and riders. The demo publishes it as `canvas.dataset.grapples`.
+
+Contact uses relative swept bounds. Handle motion, passenger transport, and attachment alignment
+cast their complete displacement through terrain to prevent high-speed tunneling. Standing
+bounds must fit beneath a handle before attachment succeeds. If an obstructed passenger cannot
+follow a moving anchor within the rope length, the passenger releases. The rope is a constrained
+endpoint with a straight visual span; it does not wrap around terrain corners. Regenerate the
+course and original handle/chain artwork with `php examples/generate-grapples.php`.
+
 ## Floating and moving platforms
 
 Choose **Level → Moving platforms** in the main or pause menu. The course includes a green

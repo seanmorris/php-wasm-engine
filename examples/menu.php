@@ -133,6 +133,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		'platformer' => 'Platformer'
 		, 'platforms' => 'Moving platforms'
 		, 'light-dash' => 'Light dash'
+		, 'grapples' => 'Grapple ropes'
 		, 'water' => 'Water regions'
 		, 'water-rail' => 'Underwater rail'
 		, 'water-skim-rail' => 'Surface skim rail'

@@ -11,6 +11,7 @@ use PhpWasmEngine\Gameplay\MiniBosses;
 use PhpWasmEngine\Gameplay\LightDashes;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Platforms;
+use PhpWasmEngine\Gameplay\Grapples;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
 use PhpWasmEngine\Gameplay\WaterFeatures;
@@ -53,6 +54,7 @@ final class DemoLevel
 	public ?Shields $shields = null;
 	public ?WaterFeatures $waterFeatures = null;
 	public ?Platforms $platforms = null;
+	public ?Grapples $grapples = null;
 	public ?WaterParticles $waterParticles = null;
 	private string $systemPrefix;
 	private bool $closed = false;
@@ -212,6 +214,38 @@ final class DemoLevel
 			);
 		}
 
+		$this->grapples = new Grapples(
+			$engine->entities
+			, $this->terrain
+			, $map
+			, /**
+			 * Resolve a rope suspension reference to an existing moving platform entity.
+			 *
+			 * @param int $sourceId Original Tiled object ID shared by platform and rope loaders.
+			 * @return int|null Live platform entity, or null for a fixed map anchor.
+			 */
+			function(int $sourceId): ?int {
+				foreach($this->platforms->platforms as $platform)
+				{
+					if($platform->sourceId === $sourceId)
+					{
+						return $platform->entity;
+					}
+				}
+
+				return $this->waterFeatures?->platforms[$sourceId]->entity ?? null;
+			}
+		);
+
+		$after = [$this->systemPrefix . 'platforms'];
+
+		if($this->waterFeatures !== null)
+		{
+			$after[] = $this->systemPrefix . 'water-features';
+		}
+
+		$engine->systems->add($this->systemPrefix . 'grapples', [$this->grapples, 'update'], after: $after);
+
 		if($this->waters->regions)
 		{
 			$this->waterRenderer = new WaterRenderer($engine->device->width, $engine->device->height);
@@ -235,7 +269,12 @@ final class DemoLevel
 		}
 
 		$this->renderer->render($view, $engine->time * 1000);
-		$engine->systems->add($this->systemPrefix . 'rings', [$this->rings, 'update'], after: ['movement']);
+
+		$engine->systems->add(
+			$this->systemPrefix . 'rings'
+			, [$this->rings, 'update']
+			, after: [$this->systemPrefix . 'grapples']
+		);
 
 		if($this->id === 'badniks')
 		{
@@ -385,7 +424,9 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'shields');
 		$engine->systems->remove($this->systemPrefix . 'water-features');
 		$engine->systems->remove($this->systemPrefix . 'platforms');
+		$engine->systems->remove($this->systemPrefix . 'grapples');
 		$engine->systems->remove($this->systemPrefix . 'water-particles');
+		$this->grapples?->close();
 		$this->blocks?->close();
 		$this->rings?->close();
 		$this->badniks?->close();

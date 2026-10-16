@@ -489,14 +489,26 @@ final class Terrain
 	}
 
 	/**
+	 * Test whether the complete oriented body fits its current collision plane.
+	 *
+	 * @param Body $body Proposed center, orientation, dimensions, and collision plane.
+	 * @return bool True when its interior is free of solid terrain; one-way edges permit overlap.
+	 */
+	public function canPlace(Body $body): bool
+	{
+		return $this->canSwitch($body, $body->collisionLayer, true);
+	}
+
+	/**
 	 * Check destination occupancy and new solid edges against the oriented body interior.
 	 *
 	 * @param Body $body Actor whose center, bounds, orientation, and current plane are inspected.
 	 * @param int $target Destination collision plane to test together with common terrain.
+	 * @param bool $all Include existing solid edges when testing a placement without a plane change.
 	 * @return bool True when changing planes will not embed the actor in newly active solid
 	 * geometry.
 	 */
-	private function canSwitch(Body $body, int $target): bool
+	private function canSwitch(Body $body, int $target, bool $all = false): bool
 	{
 		if($this->solidAt($body->x, $body->y, $target))
 		{
@@ -525,7 +537,7 @@ final class Terrain
 
 					$seen[$id] = true;
 
-					if(!$this->active($id, $target) || $this->active($id, $body->collisionLayer))
+					if(!$this->active($id, $target) || (!$all && $this->active($id, $body->collisionLayer)))
 					{
 						continue;
 					}

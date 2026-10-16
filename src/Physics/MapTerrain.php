@@ -111,8 +111,12 @@ final class MapTerrain
 
 				foreach($layer->objects as $object)
 				{
-					if(\PhpWasmEngine\Gameplay\Platforms::matches($object))
-					{
+					if(\PhpWasmEngine\Gameplay\Platforms::matches($object)
+						|| in_array(strtolower(($object['class'] ?? '') ?: ($object['type'] ?? '')), [
+							'grapple-point', 'grapplepoint', 'rope-anchor', 'ropeanchor'
+						], true
+						)
+					){
 						continue;
 					}
 

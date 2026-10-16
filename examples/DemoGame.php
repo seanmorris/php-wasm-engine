@@ -7,6 +7,7 @@ use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\LightDash;
+use PhpWasmEngine\Gameplay\GrappleGrip;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Gameplay\RingCounter;
@@ -108,7 +109,8 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, platforms, light-dash, water, water-rail, water-skim-rail, water-loop, badniks,
+	 * @param string $scene Platformer, platforms, grapples, light-dash, water, water-rail,
+	 * water-skim-rail, water-loop, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
@@ -125,6 +127,7 @@ final class DemoGame
 				, 'water-loop'
 				, 'platforms'
 				, 'light-dash'
+				, 'grapples'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -199,6 +202,7 @@ final class DemoGame
 	public function selectProfile(string $profile): void
 	{
 		$defaults = new Body(profile: $profile);
+		$this->level?->grapples?->release($this->entity);
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
 		$this->body->ability = '';
@@ -228,6 +232,8 @@ final class DemoGame
 	 */
 	private function resetPlayer(): void
 	{
+		$this->level?->grapples?->release($this->entity, inherit: false);
+		$this->engine->entities->get($this->entity, GrappleGrip::class)->reset();
 		$defaults = new Body(80, 100, $this->body->profile);
 
 		foreach([
@@ -265,6 +271,7 @@ final class DemoGame
 		$this->body->waterDepth = 0;
 		$this->combo->reset();
 		$this->engine->entities->get($this->entity, LightDash::class)->reset();
+		$this->level?->grapples?->sync($this->entity, $this->body);
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
 		$this->level?->miniBosses?->sync($this->entity, $this->body);
@@ -284,13 +291,13 @@ final class DemoGame
 	 * Name the player's mutually exclusive visible movement pose.
 	 *
 	 * @param Body $body Player body carrying crouch, charge, grind, roll, jump, and grounded state.
-	 * @return string Lightdash, spindash, grinding, rolling, jumping, crouching, ground, or air pose.
+	 * @return string Lightdash, hanging, spindash, grinding, rolling, jumping, crouching, ground, or air pose.
 	 */
 	private function playerPose(Body $body): string
 	{
-		if($body->ability === 'lightdash')
+		if(in_array($body->ability, ['lightdash', 'hanging'], true))
 		{
-			return 'lightdash';
+			return $body->ability;
 		}
 
 		if($body->charge > 0)
@@ -506,8 +513,14 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
-		$lightDashing = $this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false;
-		$jumpConsumed = $lightDashing || ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
+		$released = $this->level->grapples?->control($this->entity, $controls, $dt) ?? false;
+		$hanging = $this->body->ability === 'hanging';
+		$lightDashing = !$released && !$hanging
+			&& ($this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false);
+
+		$jumpConsumed = $released || $hanging || $lightDashing
+			|| ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
+
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
 		$bossRegion = $this->level->bossRegions?->update($this->body);
 
@@ -617,6 +630,7 @@ final class DemoGame
 		$time = $this->engine->time * 1000;
 		$level->waterRenderer?->begin();
 		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
+		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
 
 		if($this->scene === 'world')
 		{
@@ -731,6 +745,7 @@ final class DemoGame
 			, 'direction' => $body->direction
 			, 'pose' => $pose
 			, 'ability' => $body->ability
+			, 'grapple' => $this->engine->entities->get($this->entity, GrappleGrip::class)->point
 			, 'lightDashed' => $body->lightDashed
 			, 'lightDashTarget' => $this->engine->entities->get($this->entity, LightDash::class)->target
 			, 'speed' => $body->groundSpeed
@@ -902,6 +917,7 @@ final class DemoGame
 			, $this->canvas->dataset->boss
 			, $this->canvas->dataset->bossLock
 			, $this->canvas->dataset->water
+			, $this->canvas->dataset->grapples
 			, $this->canvas->dataset->platforms
 		);
 	}

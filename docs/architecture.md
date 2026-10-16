@@ -191,3 +191,27 @@ The atlas packs each map's source images and reports GPU capacity errors. Dense 
 DemoGame retains one Engine, registry, clock, camera, player, and pause menu. DemoLevel stages a destination using WorldStream, including a one-map manifest for standalone maps. Its renderer and collision data are prepared at a frame boundary before the old level is closed. The player keeps its identity and profile but moves to the new level's spawn. Menu zoom, player name, hint settings, audio, and fullscreen persist.
 
 Failures close only staged resources. The previous scene remains usable, and another selection retries or replaces the request. Leaving breakables removes that level's systems, colliders, intact blocks, debris, and ECS listener. Registry::off detaches the exact callback previously passed to Registry::on. World streaming remains a camera-navigation demo; its proximity loading continues after the scene swap.
+
+## Grapple constraints and riders
+
+`GrappleGrip` opts a `Body` into automatic swept contact with a `GrapplePoint`. `Grapples` owns
+handle and anchor entities; each handle also has a `Rope` and optional `Sprite`/`SpriteGroup`.
+`GrappleLoader` resolves `tiedTo` across flattened layers, translates world offsets, and chooses
+annotated atlas art. An application resolver can link anchor proxies to existing body, suspended
+platform, or buoyant platform entities without transferring their ownership.
+
+The movement update records swing input and consumes a fresh Jump to detach. `Platformer` retains
+water-state updates but skips ordinary motion while the ability is `hanging`. After moving-anchor
+systems run, `Grapples` interpolates anchor movement and advances the rope through short curvature
+increments. Each increment uses full-distance terrain casts for the hook and every rider. The
+rope clamps its maximum length and removes outward relative velocity while retaining tangential
+momentum and slack. Contact also sweeps relative player/handle bounds; alignment requires free
+standing bounds and a clear cast. Obstructed transport releases riders if the anchor pulls out of
+reach. Ropes do not wrap around terrain.
+
+The first rider pumps the shared rope; release uses anchor velocity when available, endpoint
+velocity otherwise, and a three-quarter jump impulse for button 0. Per-handle cooldowns prevent
+reattachment for fifteen reference frames. Damage detaches without replacing knockback. Reset,
+level retirement, missing anchors, and handle removal clear attachments and grouped rope sprites.
+`PlatformCamera` derives its existing `hooked` preset from the hanging ability. Ring pickup runs
+after grapple transport so collections see the carried position.
