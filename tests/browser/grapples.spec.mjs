@@ -132,6 +132,12 @@ test('grapple course follows moving anchors and releases riders when changing le
 		$system = $game->level->grapples;
 		$points = array_keys($system->points);
 		$rope = $engine->entities->get($points[2], PhpWasmEngine\\Gameplay\\Rope::class);
+		$anchor = $engine->entities->get($rope->anchor, PhpWasmEngine\\Gameplay\\RopeAnchor::class);
+		$motion = $engine->entities->get($anchor->followEntity, PhpWasmEngine\\Gameplay\\PlatformOscillation::class);
+		// Start on the moving part of the squine curve, independent of browser startup timing.
+		$motion->time = $motion->period / 4 - $motion->phase - 1/60;
+		$game->level->platforms->update($engine->entities, 1/60);
+		$system->update($engine->entities, 1/60);
 		$body->x = $rope->x;
 		$body->y = $rope->y - 8;
 		$body->vx = $body->vy = 0;
@@ -144,7 +150,6 @@ test('grapple course follows moving anchors and releases riders when changing le
 			$game->level->platforms->update($engine->entities, 1/60);
 			$system->update($engine->entities, 1/60);
 		}
-		$anchor = $engine->entities->get($rope->anchor, PhpWasmEngine\\Gameplay\\RopeAnchor::class);
 		echo json_encode([$attached, abs($body->x-$x) > 5, abs($body->x-$anchor->x) < .01]);
 		$oldGrappleLevel = $game->level;
 		$game->restartLevel();
