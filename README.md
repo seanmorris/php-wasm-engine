@@ -1016,6 +1016,7 @@ Platformer is a new PHP implementation informed by the reference projects in [do
 - Acceleration, braking, friction, slope gravity, rolling, variable jump height, jump buffering, and coyote time.
 - Surface-tangent ground speed and outward-normal jumps. Sensors follow slopes, walls, ceilings, and loops while momentum remains sufficient.
 - Jump somersault state and compact collision height persist through the full arc, then clear on landing. Plain ledge falls remain standing and do not count as attacks.
+- Ground and rail departures share MB2-style air steering: 1,080 px/s² acceleration below the running-speed limit, jump-only apex drag, and halved upward velocity on Jump release. Ordinary air steering retains the takeoff look direction.
 - Crouching and tap-charged spindashes, runner drop dashes, reversible glide with wall catching, climbing, ledge-top transitions and jumping, and horizontally steerable flight with a locked airborne look direction and finite lift budget.
 - Solid polygons, tile collision shapes, one-way platforms, and down+jump drop-through.
 - Per-body collision planes and directional Tiled layer switches for open loops, including reversed crown gates and rolling-only gates.

@@ -162,6 +162,75 @@ test(device + ' reverses a live glide and turns the sprite with its travel', asy
 	}
 });
 
+for(const device of ['keyboard', 'gamepad'])
+test(device + ' respects the air speed gate and reverses slower falls without turning', async({page}) => {
+	await page.addInitScript(() => {
+		window.airPad = {
+			id: 'Standard Gamepad'
+			, index: 0
+			, connected: true
+			, mapping: 'standard'
+			, timestamp: 1
+			, axes: [0, 0, 0, 0]
+			, buttons: Array.from({length: 17}, () => ({pressed: false, touched: false, value: 0}))
+		};
+
+		Object.defineProperty(navigator, 'getGamepads', {value: () => [airPad]});
+	});
+
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'platformer'}));
+	await expect.poll(async() => (await state(page)).body).not.toBeNull();
+	await page.locator('canvas').focus();
+	const focusedFrame = Number(await page.locator('canvas').getAttribute('data-frames'));
+
+	await expect.poll(async() => Number(await page.locator('canvas').getAttribute('data-frames')))
+		.toBeGreaterThan(focusedFrame + 3);
+
+	await run(page, `
+		$body->x = 0;
+		$body->y = -2000;
+		$body->grounded = $body->grinding = $body->jumping = false;
+		$body->ability = '';
+		$body->gravity = $body->vy = 0;
+		$body->vx = 1440;
+		$body->facing = $body->direction = 1;
+	`
+	);
+
+	if(device === 'keyboard') await page.keyboard.down('ArrowLeft');
+	else
+	await page.evaluate(() => {
+		airPad.axes[0] = -.6;
+		airPad.timestamp++;
+	});
+
+	await expect.poll(async() => Number(await run(page, `echo $engine->controls->axis('left', 'right');`)))
+		.toBeLessThan(-.49);
+
+	const inputFrame = Number(await page.locator('canvas').getAttribute('data-frames'));
+
+	await expect.poll(async() => Number(await page.locator('canvas').getAttribute('data-frames')))
+		.toBeGreaterThan(inputFrame + 20);
+
+	expect(Number(await run(page, 'echo $body->vx;'))).toBe(1440);
+
+	await run(page, '$body->vx = 240;');
+	await expect.poll(async() => Number(await run(page, 'echo $body->vx;'))).toBeLessThan(0);
+	const before = (await state(page)).body.x;
+	await expect.poll(async() => (await state(page)).body.x).toBeLessThan(before - 10);
+	expect((await state(page)).body.facing).toBe(1);
+	expect((await state(page)).body.direction).toBe(1);
+	expect((await state(page)).body.jumping).toBe(false);
+
+	if(device === 'keyboard') await page.keyboard.up('ArrowLeft');
+	else
+	await page.evaluate(() => {
+		airPad.axes[0] = 0;
+		airPad.timestamp++;
+	});
+});
+
 test('live rail jump drop dash follows travel direction while facing backward', async({page}) => {
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));

@@ -257,9 +257,9 @@ final class Platformer
 			$b->charge = 0;
 			$b->crouchTime = 0;
 
-			if($input->released('jump') && $b->vy < -240 && $b->ability === '' && !$b->lightDashed)
+			if($input->released('jump') && $b->jumping && $b->vy < 0 && $b->ability === '' && !$b->lightDashed)
 			{
-				$b->vy = -240;
+				$b->vy *= .5;
 			}
 
 			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump') && $b->ability !== 'lightdash')
@@ -343,9 +343,15 @@ final class Platformer
 				}
 			}
 
-			if(!in_array($b->ability, ['glide', 'lightdash'], true)
-				&& (abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
-			){
+			if($b->jumping && $b->vy > -240 && $b->vy < 0)
+			{
+				// MB2 loses 1/32 of horizontal speed per reference frame near a jump's apex.
+				$b->vx *= (31 / 32) ** (60 * $dt);
+			}
+
+			// The speed gate also rejects braking; apex drag can bring a jump back below it.
+			if(!in_array($b->ability, ['glide', 'lightdash'], true) && abs($b->vx) < $b->maxSpeed)
+			{
 				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
 			}
 

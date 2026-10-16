@@ -22,7 +22,7 @@ final class Body
 	public bool $lightDashed = false;
 	public float $charge = 0,$crouchTime = 0,$dropCharge = 0,$flightRemaining = 5.8,$dropTimer = 0
 		,$coyote = 0,$jumpBuffer = 0;
-	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 288
+	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 1080
 		,$gravity = 1800,$jumpSpeed = 660,$maxSpeed = 1080,$terminalSpeed = 1800;
 	public float $minGrindSpeed = 360,$maxGrindSpeed = 2400,$grindAcceleration = 360;
 	public float $density = 0,$waterDepth = 0;

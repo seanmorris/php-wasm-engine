@@ -143,7 +143,7 @@ test('light-dash timeout, cooldown, and jump-release suppression use seconds and
 	$body->grounded = false;
 	$body->vy = -600;
 	$movement->step($body, $input, 1 / 60);
-	near($body->vy, -210);
+	near($body->vy, -270);
 });
 
 test('active light-dash ignores directional and drop-dash input while preserving gravity', function() {

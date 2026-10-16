@@ -158,6 +158,23 @@ input retains the earlier direction. A held opposite direction subtracts its boo
 landing momentum; it does not force the entire velocity to reverse. Fast grinding retains its
 separate travel-direction lock.
 
+Ordinary air control follows MB2 after both jumps and edge falls from normal ground or rails.
+`Body::$airAcceleration` defaults to 1,080 px/s², converting 0.3 px/frame² at 60 Hz. Analog strength
+and water drag scale this acceleration. Input applies only below `Body::$maxSpeed` in absolute
+horizontal speed, including opposing input: fast departures retain their momentum until another
+force or collision lowers their speed. Facing and retained direction do not turn with ordinary
+air steering. Flight shares that steering; glide and light-dash keep their own horizontal control.
+
+A jumping body with `-240 < vy < 0` loses 1/32 of horizontal speed per reference frame before the
+input speed check. The multiplier `(31 / 32) ** (60 * dt)` gives the same decay over elapsed time
+at different simulation rates. Plain falls and descending jumps receive no apex drag. Because
+damping precedes the speed check, it can bring a fast jump back into the steerable range. This
+jump-state effect also applies during abilities when their vertical velocity enters that interval.
+
+Releasing Jump halves an ordinary jump's remaining upward velocity once, before apex damping
+and gravity. Plain falls are unaffected; active abilities and the retained light-dash suppression
+continue to own their jump-release behavior.
+
 `LightDash` is per-player ECS state. `LightDashes` reads live `Ring` components and receives the
 generic `Rings` post-pickup notification. Initial acquisition requires a forward pair within 48
 pixels; chaining searches within 128 pixels after all same-step pickups retire. World-space

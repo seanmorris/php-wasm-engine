@@ -95,7 +95,7 @@ test('water scales gravity, control, jump force, and optional buoyancy without s
 	$body->gravity = 1800;
 	tick($movement, $body, ['right' => true]);
 	check($body->underwater && $body->waterEntered && !$body->waterExited);
-	near($body->vx, 288 * .85 / 60, .01);
+	near($body->vx, 1080 * .85 / 60, .01);
 	near($body->vy, 1800 * .4 / 60, .01);
 	tick($movement, $body, ['right' => true]);
 	check(!$body->waterEntered && !$body->waterExited);
