@@ -74,6 +74,70 @@ the annotated menu font, colored labels, and pixel shadows matching moving-boxes
 It has no background panel and hides in camera-only scenes. The FPS meter remains an
 independent lower-left diagnostic with no black rectangle behind it.
 
+## Floating and moving platforms
+
+Choose **Level → Moving platforms** in the main or pause menu. The course includes a green
+floating support that sinks eight pixels under a rider, blue horizontal and vertical squine
+shuttles, an elliptical float, and two gold platforms following linked routes. The last route
+waits for a rider. The ground below provides a return route after a missed jump.
+
+```php
+use PhpWasmEngine\Gameplay\{MovingPlatform, PlatformOscillation, PlatformPath, Platforms};
+
+$platforms = new Platforms($engine->entities, $terrain, $map);
+$engine->systems->add('platforms', [$platforms, 'update'], after: ['movement']);
+
+// Components can also be supplied directly. Positions are centered bottom anchors.
+$id = $platforms->add(
+    new MovingPlatform(300, 320, width: 96, height: 16, settle: 8)
+    , motion: new PlatformOscillation(x: 160)
+);
+
+// Preserve each corner and spend remaining travel on the next segment.
+$route = new PlatformPath([[600, 320], [800, 320], [800, 160]], speed: 120, loop: 0);
+$platforms->add(new MovingPlatform(600, 320), motion: $route);
+
+$platforms->remove($id); // Removes its entity and collision shape.
+$platforms->close();    // Call when retiring the level.
+```
+
+`MovingPlatform`, `PlatformOscillation`, and `PlatformPath` are ECS components. Attach an
+optional centered, bottom-anchored `Sprite` as the second argument to `add()`. `snapshot()`
+reports object IDs, positions, velocities, settlement, and whether a rider is present.
+`PlatformPath` uses pixels per second; oscillator times use seconds. A null `loop` stops at the
+last point; an index links the last point back to that point. `rideOnly: true` pauses an empty route.
+
+In Tiled, use `FloatingPlatform`, `MovingPlatform`, or `PathPlatform`. Legacy `block` objects
+with nonzero `float` also load. Tile objects use Tiled's bottom-left anchor; ordinary rectangles
+use their top-left anchor. Both become centered bottom anchors internally. Object and inherited
+layer offsets are included. Rotated collision rectangles are rejected; GID flips remain supported.
+
+| Property | Meaning |
+| --- | --- |
+| `oneWay` / `platform` | Pass upward through the top; defaults to true. False makes all sides solid; legacy `block` defaults to solid. |
+| `settle` | Signed pixel displacement under a rider, recovered after the rider leaves. |
+| `oscillateX`, `oscillateY` | Signed pixel excursions. One axis uses the reference squine curve; two use sine/cosine. |
+| `squinePeriod` | Single-axis squine cycle in seconds; defaults to `1.5 * pi`. |
+| `timeX`, `timeY` | Two-axis divisors in reference frames; defaults to 90 frames each. |
+| `offset` | Oscillator phase in reference frames. |
+| `path` | Tiled object reference to the first route point. |
+| `ridePath` | Same route reference, activated while a rider stands on the platform. |
+| `next` | On each route point: reference to its successor. Missing/zero ends the route; cycles loop. |
+| `pathSpeed` | Reference pixels per frame (60 Hz), converted to pixels per second; defaults to 8. |
+| `collisionLayer` | Shared plane 0 or a positive selected plane. |
+| `outline` | Optional sprite outline; defaults to false. |
+
+Platforms update after body movement, so jumping, walking off, and dropping through release the
+rider before transport. Foot rays verify the actual support shape. Full-displacement body casts
+carry riders and detect platforms pushing stationary bodies, including fast crossings. A passenger
+blocked by a wall or ceiling stops the platform instead of being pushed through terrain. Path
+segments are swept separately, preserving corners even when one update passes several nodes.
+Platforms move on their authored routes; route geometry itself does not stop against map tiles.
+
+This is the suspended-block behavior from moving-boxes-2. Water-density platforms remain handled
+by `WaterFeatures`. Regenerate only this course and its original artwork with
+`php examples/generate-platforms.php`.
+
 ## Water regions and displacement
 
 Choose **Level → Water regions** to use the complete example. Build speed or launch a spindash
@@ -856,7 +920,7 @@ MapRenderer uploads 32×32 tile-ID planes into GL_TEXTURE_2D_ARRAY. Unsigned RGB
 
 Orthogonal chunks/layers use glDrawArraysInstanced with per-instance placement, parallax, opacity, and tint. IDs upload initially and after edits. Isometric rendering merges diagonals across chunk boundaries in painter order, using additional draws to preserve overlapping tall tiles. Sprite batches are instanced. MapRenderer::stats reports draws, instances, and uploads.
 
-Atlas images and metadata must fit GPU texture limits; capacity errors are explicit. Sampling is nearest-neighbor. Close resources explicitly. Atlas paging, moving-platform physics, lighting, audio abstractions, and editor integration are not included.
+Atlas images and metadata must fit GPU texture limits; capacity errors are explicit. Sampling is nearest-neighbor. Close resources explicitly. Atlas paging, lighting, audio abstractions, and editor integration are not included.
 
 ## Tests and style
 

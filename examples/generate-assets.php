@@ -1509,3 +1509,5 @@ foreach(range(-2, 2) as $section)
 
 jsonAsset('stream.world', ['type' => 'world','maps' => $worldMaps]);
 require __DIR__ . '/generate-loop.php';
+
+require __DIR__ . '/generate-platforms.php';

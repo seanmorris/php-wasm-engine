@@ -44,7 +44,13 @@ export function boot(
 ){
 	if(!/^8\.[0-5]$/.test(version)
 		|| ![
-			'world', 'platformer', 'water', 'water-rail', 'water-skim-rail', 'water-loop'
+			'world'
+			, 'platformer'
+			, 'platforms'
+			, 'water'
+			, 'water-rail'
+			, 'water-skim-rail'
+			, 'water-loop'
 			, 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'
 		].includes(scene)
 		|| !['runner', 'glider', 'flyer'].includes(profile)
@@ -77,6 +83,7 @@ export function boot(
 			, 'badniks'
 			, 'boss'
 			, 'water'
+			, 'platforms'
 			, 'scene'
 			, 'profile'
 			, 'loading', 'levelError', 'intro', 'hud', 'combo', 'debug', 'sequences'

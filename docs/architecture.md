@@ -7,6 +7,11 @@ The initial design was informed by Sean Morris's local projects:
 - tigl/app/world/World.js, TileMap.js, and sprite/SpriteBoard.js: manifest bounds, spatial queries, deferred map initialization, cached requests, and visibility-driven renderer lifetimes.
 - tigl/app/sprite/Parallax.js: repeating image strips, independent scroll factors, and viewport anchors.
 - moving-boxes-2/app/backdrop/Backdrop.js: stacked strips, automatic drift, and animated image frames.
+- moving-boxes-2/app/actor/Block.js: rider-weighted settling, single-axis squine and two-axis
+  elliptical oscillation, and linked `path`/`next` route nodes. `Platforms` separates collision
+  supports, oscillators, and path cursors into ECS components. `PlatformTransport` casts the full
+  relative motion to detect pushes, then casts passengers against world geometry before moving
+  the support. Each path segment is processed separately so corners remain intact.
 - soop: object components, boolean queries, systems, and deferred structural commands.
 - moving-boxes-2/app/behavior/Platformer.js: surface modes, ground/air velocity, terrain sensors, tangent momentum, and normal-directed jumps.
 - moving-boxes-2/app/behavior/Crouch.js and Spindash.js: grounded crouch state, Down + tap 0 or hold 1 charging, passive charge decay, and Down-release launch.

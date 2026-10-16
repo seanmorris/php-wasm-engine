@@ -107,7 +107,7 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, water, water-rail, water-skim-rail, water-loop, badniks,
+	 * @param string $scene Platformer, platforms, water, water-rail, water-skim-rail, water-loop, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
@@ -121,6 +121,7 @@ final class DemoGame
 				, 'water-rail'
 				, 'water-skim-rail'
 				, 'water-loop'
+				, 'platforms'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -582,6 +583,7 @@ final class DemoGame
 		$camera = $this->camera;
 		$time = $this->engine->time * 1000;
 		$level->waterRenderer?->begin();
+		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
 
 		if($this->scene === 'world')
 		{
@@ -865,6 +867,7 @@ final class DemoGame
 			, $this->canvas->dataset->boss
 			, $this->canvas->dataset->bossLock
 			, $this->canvas->dataset->water
+			, $this->canvas->dataset->platforms
 		);
 	}
 }

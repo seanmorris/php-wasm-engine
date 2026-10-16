@@ -111,6 +111,11 @@ final class MapTerrain
 
 				foreach($layer->objects as $object)
 				{
+					if(\PhpWasmEngine\Gameplay\Platforms::matches($object))
+					{
+						continue;
+					}
+
 					$props = Loader::properties($object['properties'] ?? []);
 
 					$class = ($object['class'] ?? '')?:($object['type'] ?? '');

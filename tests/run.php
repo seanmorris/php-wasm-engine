@@ -559,6 +559,7 @@ require __DIR__ . '/monitors.php';
 require __DIR__ . '/shields.php';
 require __DIR__ . '/grinding.php';
 require __DIR__ . '/water.php';
+require __DIR__ . '/platforms.php';
 
 $failed = 0;
 

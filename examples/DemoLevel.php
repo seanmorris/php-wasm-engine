@@ -9,6 +9,7 @@ use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
 use PhpWasmEngine\Gameplay\MiniBosses;
 use PhpWasmEngine\Gameplay\Monitors;
+use PhpWasmEngine\Gameplay\Platforms;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
 use PhpWasmEngine\Gameplay\WaterFeatures;
@@ -49,6 +50,7 @@ final class DemoLevel
 	public ?Monitors $monitors = null;
 	public ?Shields $shields = null;
 	public ?WaterFeatures $waterFeatures = null;
+	public ?Platforms $platforms = null;
 	public ?WaterParticles $waterParticles = null;
 	private string $systemPrefix;
 	private bool $closed = false;
@@ -177,6 +179,9 @@ final class DemoLevel
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
+		$this->platforms = new Platforms($engine->entities, $this->terrain, $map);
+
+		$engine->systems->add($this->systemPrefix . 'platforms', [$this->platforms, 'update'], after: ['movement']);
 
 		if($this->id !== 'isometric')
 		{
@@ -369,6 +374,7 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'monitors');
 		$engine->systems->remove($this->systemPrefix . 'shields');
 		$engine->systems->remove($this->systemPrefix . 'water-features');
+		$engine->systems->remove($this->systemPrefix . 'platforms');
 		$engine->systems->remove($this->systemPrefix . 'water-particles');
 		$this->blocks?->close();
 		$this->rings?->close();
@@ -377,6 +383,7 @@ final class DemoLevel
 		$this->monitors?->close();
 		$this->shields?->close();
 		$this->waterFeatures?->close();
+		$this->platforms?->close();
 		$this->waterParticles?->close();
 		$this->waterRenderer?->close();
 		$this->backdropTwist?->close();
