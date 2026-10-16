@@ -69,6 +69,58 @@ test('rail jump drop dashes follow retained travel direction rather than facing'
 	}
 });
 
+test('held landing input chooses drop-dash direction while neutral input retains orientation', function() {
+	foreach([-1, 1] as $direction)
+	{
+		foreach([-1, 0, 1] as $axis)
+		{
+			foreach([360, 1200] as $speed)
+			{
+				$movement = new Platformer(ground());
+				$body = new Body(0, 86);
+				$body->halfHeight = $body->rollingHeight;
+				$body->jumping = true;
+				$body->dropCharge = 1;
+				$body->vy = 240;
+				$body->vx = $direction * $speed;
+				$body->direction = $direction;
+				$body->facing = -$direction;
+				$body->airAcceleration = 0;
+				tick($movement, $body, ['action' => true, 'left' => max(0, -$axis), 'right' => max(0, $axis)]);
+				$boostDirection = $axis ?: $direction;
+				check($body->grounded && $body->rolling);
+				check($body->direction === $boostDirection);
+				near($body->groundSpeed, $direction * $speed + $boostDirection * 840);
+			}
+		}
+	}
+});
+
+test('drop-dash preserves neutral and fast-rail direction locks at the landing boundary', function() {
+	foreach([false, true] as $rail)
+	{
+		$terrain = $rail ? new Terrain : ground();
+
+		if($rail)
+		{
+			$terrain->addRail([[-2000, 100], [2000, 100]]);
+		}
+
+		$body = new Body(0, 86);
+		$body->halfHeight = 12;
+		$body->jumping = true;
+		$body->dropCharge = 1;
+		$body->vy = 240;
+		$body->vx = $rail ? 600 : 0;
+		$body->airAcceleration = 0;
+		$body->direction = 1;
+		tick(new Platformer($terrain), $body, ['action' => true, 'left' => true]);
+		check($body->grounded && $body->rolling);
+		check($body->direction === 1);
+		near($body->groundSpeed, ($rail ? 600 : 0) + 840);
+	}
+});
+
 test('rail endpoints release tangent momentum into an ordinary fall', function() {
 	$terrain = new Terrain;
 	$terrain->addRail([[0,100],[80,100]]);

@@ -1511,3 +1511,4 @@ jsonAsset('stream.world', ['type' => 'world','maps' => $worldMaps]);
 require __DIR__ . '/generate-loop.php';
 
 require __DIR__ . '/generate-platforms.php';
+require __DIR__ . '/generate-light-dash.php';

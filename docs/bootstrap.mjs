@@ -47,6 +47,7 @@ export function boot(
 			'world'
 			, 'platformer'
 			, 'platforms'
+			, 'light-dash'
 			, 'water'
 			, 'water-rail'
 			, 'water-skim-rail'

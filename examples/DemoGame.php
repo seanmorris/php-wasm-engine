@@ -6,6 +6,7 @@ use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\Combo;
+use PhpWasmEngine\Gameplay\LightDash;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Gameplay\RingCounter;
@@ -107,11 +108,12 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, platforms, water, water-rail, water-skim-rail, water-loop, badniks,
+	 * @param string $scene Platformer, platforms, light-dash, water, water-rail, water-skim-rail, water-loop, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
+	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
-	public function selectScene(string $scene): void
+	public function selectScene(string $scene, bool $restart = false): void
 	{
 		if(!in_array(
 			$scene
@@ -122,6 +124,7 @@ final class DemoGame
 				, 'water-skim-rail'
 				, 'water-loop'
 				, 'platforms'
+				, 'light-dash'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -135,7 +138,7 @@ final class DemoGame
 
 		$this->releasePending();
 
-		if($this->scene === $scene)
+		if($this->scene === $scene && !$restart)
 		{
 			$this->menu?->menu->close();
 
@@ -144,6 +147,19 @@ final class DemoGame
 
 		$scope = (vrzno_env('createAssetScope'))();
 		$this->pending = new DemoLevel($scene, $scope);
+	}
+
+	/**
+	 * Reload the active level with fresh rings, enemies, platforms, and other level-owned objects.
+	 *
+	 * @return void Stages the same scene while retaining PHP, player profile, score, and menu settings.
+	 */
+	public function restartLevel(): void
+	{
+		if($this->level !== null)
+		{
+			$this->selectScene($this->scene, true);
+		}
 	}
 
 	/**
@@ -186,6 +202,8 @@ final class DemoGame
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
 		$this->body->ability = '';
+		$this->body->lightDashed = false;
+		$this->engine->entities->get($this->entity, LightDash::class)->reset();
 		$this->body->crouching = false;
 		$this->body->crouchTime = 0;
 		$this->body->wall = 0;
@@ -229,6 +247,7 @@ final class DemoGame
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'
+			, 'lightDashed'
 			, 'charge'
 			, 'crouchTime'
 			, 'dropCharge'
@@ -245,6 +264,7 @@ final class DemoGame
 		$this->body->skimming = false;
 		$this->body->waterDepth = 0;
 		$this->combo->reset();
+		$this->engine->entities->get($this->entity, LightDash::class)->reset();
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
 		$this->level?->miniBosses?->sync($this->entity, $this->body);
@@ -264,10 +284,15 @@ final class DemoGame
 	 * Name the player's mutually exclusive visible movement pose.
 	 *
 	 * @param Body $body Player body carrying crouch, charge, grind, roll, jump, and grounded state.
-	 * @return string Spindash, grinding, rolling, jumping, crouching, ground, or air pose.
+	 * @return string Lightdash, spindash, grinding, rolling, jumping, crouching, ground, or air pose.
 	 */
 	private function playerPose(Body $body): string
 	{
+		if($body->ability === 'lightdash')
+		{
+			return 'lightdash';
+		}
+
 		if($body->charge > 0)
 		{
 			return 'spindash';
@@ -447,6 +472,13 @@ final class DemoGame
 
 		$controls = $this->engine->controls;
 
+		if($controls->pressed('reset') && $controls->down('action'))
+		{
+			$this->restartLevel();
+
+			return;
+		}
+
 		if($this->scene === 'world' || $this->scene === 'isometric')
 		{
 			$speed = $this->scene === 'world' ? 900 : 300;
@@ -474,7 +506,8 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
-		$jumpConsumed = $this->level->shields?->control($this->entity, $controls, $dt) ?? false;
+		$lightDashing = $this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false;
+		$jumpConsumed = $lightDashing || ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
 		$bossRegion = $this->level->bossRegions?->update($this->body);
 
@@ -698,6 +731,8 @@ final class DemoGame
 			, 'direction' => $body->direction
 			, 'pose' => $pose
 			, 'ability' => $body->ability
+			, 'lightDashed' => $body->lightDashed
+			, 'lightDashTarget' => $this->engine->entities->get($this->entity, LightDash::class)->target
 			, 'speed' => $body->groundSpeed
 			, 'angle' => $body->angle
 			, 'collisionLayer' => $body->collisionLayer

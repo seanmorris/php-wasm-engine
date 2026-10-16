@@ -15,6 +15,7 @@ require_once __DIR__ . '/DemoStartup.php';
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\Combo;
+use PhpWasmEngine\Gameplay\LightDash;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
@@ -33,6 +34,7 @@ $entity = $engine->entities->create(
 	$body
 	, $counter
 	, $combo
+	, new LightDash
 	, new PlayerCombat
 	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
 );

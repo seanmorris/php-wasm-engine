@@ -16,7 +16,8 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/behavior/Platformer.js: surface modes, ground/air velocity, terrain sensors, tangent momentum, and normal-directed jumps.
 - moving-boxes-2/app/behavior/Crouch.js and Spindash.js: grounded crouch state, Down + tap 0 or hold 1 charging, passive charge decay, and Down-release launch.
 - moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash, braking and spindash visual
-  displacement triggers, and signed effect strengths.
+  displacement triggers, signed effect strengths, and button-2 ring acquisition, light-dash
+  chaining, nine-frame timers, and combo accrual.
 - moving-boxes-2/app/actor/PointActor.js, app/effects/Twist.js, and the viewport background-filter
   layer: the radial tangential field placed between the map and actor artwork.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
@@ -139,6 +140,23 @@ grind turns the sprite without reversing rail travel, and the rail solver keeps 
 with tangent speed until the actor can actually reverse. Tails-style flight keeps its takeoff look
 direction while ordinary horizontal air acceleration remains active, allowing velocity to pass
 through zero and reverse without turning the airborne sprite.
+
+Dropdash applies held landing input before choosing the boost direction, matching
+`PointActor::processInputDirect()` followed by `Platformer::checkDropDash()` in MB2. Neutral
+input retains the earlier direction. A held opposite direction subtracts its boost from existing
+landing momentum; it does not force the entire velocity to reverse. Fast grinding retains its
+separate travel-direction lock.
+
+`LightDash` is per-player ECS state. `LightDashes` reads live `Ring` components and receives the
+generic `Rings` post-pickup notification. Initial acquisition requires a forward pair within 48
+pixels; chaining searches within 128 pixels after all same-step pickups retire. World-space
+centers replace MB2's bottom-anchored actor offsets. Angular comparisons use a dot product or
+wrapped difference so leftward trails work across the minus/plus-pi boundary. The reference speed
+formula is converted to pixels per second with a 1,650 cap, and nine reference frames become .15
+seconds. No teleport or collision bypass is used: `Platformer` retains gravity and full-motion
+body casts while suppressing directional input. Solid impacts release the active ability, and
+the next control step retires its target. The demo clears route state on respawn, profile changes,
+and level changes, and gates shield controls while the dash owns input.
 
 Combo is a player component rather than renderer state. `ComboReward` retains a live point value,
 an additive multiplier, a label, and optional presentation metadata. `Combo::update()` owns rail

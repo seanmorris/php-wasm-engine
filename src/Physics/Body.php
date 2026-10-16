@@ -16,6 +16,8 @@ final class Body
 	/** Zero is shared terrain; positive numbers select an additional collision plane. */
 	public int $collisionLayer = 1;
 	public string $ability = '';
+	/** Retains light-dash jump-release suppression until landing or an explicit player reset. */
+	public bool $lightDashed = false;
 	public float $charge = 0,$crouchTime = 0,$dropCharge = 0,$flightRemaining = 5.8,$dropTimer = 0
 		,$coyote = 0,$jumpBuffer = 0;
 	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 288

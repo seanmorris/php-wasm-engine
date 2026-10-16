@@ -132,6 +132,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 	$levelNames = [
 		'platformer' => 'Platformer'
 		, 'platforms' => 'Moving platforms'
+		, 'light-dash' => 'Light dash'
 		, 'water' => 'Water regions'
 		, 'water-rail' => 'Underwater rail'
 		, 'water-skim-rail' => 'Surface skim rail'
@@ -209,6 +210,12 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 				, 'get' => fn() => $profileNames[$host->profile]
 				, 'children' => $profiles
 				, 'subtext' => 'Change the current player without restarting the level.'
+			]
+			, 'restart' => [
+				'label' => 'Restart level'
+				, 'callback' => fn() => $game->restartLevel()
+				, 'subtext' =>
+					'Restore level objects and return to spawn. Shortcut: Shift + R or B / Circle + Back / Select.'
 			]
 			, 'mute' => [
 				'label' => 'Mute audio'

@@ -8,6 +8,7 @@ use PhpWasmEngine\Gameplay\BossRegions;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
 use PhpWasmEngine\Gameplay\MiniBosses;
+use PhpWasmEngine\Gameplay\LightDashes;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Platforms;
 use PhpWasmEngine\Gameplay\Rings;
@@ -43,6 +44,7 @@ final class DemoLevel
 	public ?BackdropTwistRenderer $backdropTwist = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
+	public ?LightDashes $lightDashes = null;
 	public ?Badniks $badniks = null;
 	public ?BossRegions $bossRegions = null;
 	public ?CrabMeats $crabs = null;
@@ -175,7 +177,15 @@ final class DemoLevel
 		$map = reset($maps);
 		$this->terrain = MapTerrain::build($map);
 		$this->waters = WaterRegions::fromMaps($map);
-		$this->rings = new Rings($engine->entities, $map, terrain: $this->terrain);
+		$this->lightDashes = new LightDashes($engine->entities);
+
+		$this->rings = new Rings(
+			$engine->entities
+			, $map
+			, terrain: $this->terrain
+			, onCollect: [$this->lightDashes, 'collected']
+		);
+
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);

@@ -54,7 +54,12 @@ test(
 		await php(page, '$originalEngine = $engine; $originalPlayer = $body;');
 
 		for(const scene of [
-			'breakables', 'platforms', 'water', 'water-rail', 'water-skim-rail'
+			'breakables'
+			, 'platforms'
+			, 'light-dash'
+			, 'water'
+			, 'water-rail'
+			, 'water-skim-rail'
 			, 'water-loop', 'grinding', 'loop'
 			, 'infinite', 'isometric', 'world', 'breakables'
 		]) {

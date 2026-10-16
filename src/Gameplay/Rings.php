@@ -15,6 +15,7 @@ final class Rings
 	private array $entities = [], $previous = [], $ringPrevious = [];
 	private ?int $ringGid = null;
 	private bool $closed = false;
+	private ?\Closure $onCollect;
 
 	/**
 	 * Promote tiles annotated with a ring class into collectible sprite entities.
@@ -23,6 +24,8 @@ final class Rings
 	 * @param TileMap $map Loaded map whose matching tile cells become entities and are cleared.
 	 * @param string $tileClass Nonempty Tiled tile class identifying collectible rings.
 	 * @param Terrain|null $terrain Optional collision source for scattered ring bounces.
+	 * @param callable(int,int,Ring):void|null $onCollect Optional collector, removed entity, and
+	 * pickup notification after rewards are granted and the ring is removed.
 	 * @return void Spawns every visible matching tile with metadata-defined radius and rewards.
 	 */
 	public function __construct(
@@ -30,7 +33,10 @@ final class Rings
 		, TileMap $map
 		, string $tileClass = 'ring'
 		, private ?Terrain $terrain = null
+		, ?callable $onCollect = null
 	){
+		$this->onCollect = $onCollect === null ? null : \Closure::fromCallable($onCollect);
+
 		if($tileClass === '')
 		{
 			throw new \InvalidArgumentException('Ring tile class cannot be empty');
@@ -173,6 +179,11 @@ final class Rings
 				$counter->collect($ring);
 				$registry->destroy($entity);
 				unset($rings[$key]);
+
+				if($this->onCollect !== null)
+				{
+					($this->onCollect)($collector, $entity, $ring);
+				}
 			}
 		}
 
@@ -436,6 +447,7 @@ final class Rings
 		}
 
 		$this->closed = true;
+		$this->onCollect = null;
 
 		foreach($this->entities as $entity)
 		{

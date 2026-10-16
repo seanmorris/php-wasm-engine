@@ -54,6 +54,7 @@ final class DemoStartup
 		foreach([
 			'platformer' => 'Platformer'
 			, 'platforms' => 'Moving platforms'
+			, 'light-dash' => 'Light dash'
 			, 'water' => 'Water regions'
 			, 'water-rail' => 'Underwater rail'
 			, 'water-skim-rail' => 'Surface skim rail'

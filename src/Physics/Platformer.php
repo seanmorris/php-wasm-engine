@@ -103,6 +103,7 @@ final class Platformer
 			$b->flightRemaining = 5.8;
 			$b->ability = '';
 			$b->jumping = false;
+			$b->lightDashed = false;
 		}
 
 		if($b->ability === 'climb')
@@ -245,12 +246,12 @@ final class Platformer
 			$b->charge = 0;
 			$b->crouchTime = 0;
 
-			if($input->released('jump') && $b->vy < -240 && $b->ability === '')
+			if($input->released('jump') && $b->vy < -240 && $b->ability === '' && !$b->lightDashed)
 			{
 				$b->vy = -240;
 			}
 
-			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump'))
+			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump') && $b->ability !== 'lightdash')
 			{
 				if($b->profile === 'flyer' && $b->flightRemaining > 0)
 				{
@@ -266,7 +267,7 @@ final class Platformer
 				}
 			}
 
-			if($b->profile === 'runner' && $b->jumping && $input->down('action'))
+			if($b->profile === 'runner' && $b->jumping && $input->down('action') && $b->ability !== 'lightdash')
 			{
 				$b->dropCharge = min(1, $b->dropCharge + $dt * 2);
 			}
@@ -315,8 +316,9 @@ final class Platformer
 				}
 			}
 
-			if($b->ability !== 'glide' && (abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0))
-			{
+			if(!in_array($b->ability, ['glide', 'lightdash'], true)
+				&& (abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
+			){
 				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
 			}
 
@@ -355,9 +357,16 @@ final class Platformer
 		{
 			$b->groundSpeed = $b->vx * cos($b->angle) + $b->vy * sin($b->angle);
 			$b->jumping = false;
+			$b->lightDashed = false;
 
 			if($b->dropCharge > 0)
 			{
+				// MB2 processes landing input before checkDropDash, after air speed becomes ground speed.
+				if($axis && abs($b->groundSpeed) > 1e-8 && (!$b->grinding || abs($b->groundSpeed) < 180))
+				{
+					$b->facing = $b->direction = $axis <=> 0;
+				}
+
 				$b->groundSpeed += $b->direction * (360 + 480 * $b->dropCharge);
 				$b->rolling = true;
 				$b->dropCharge = 0;
@@ -628,6 +637,11 @@ final class Platformer
 					$removed++;
 					continue;
 				}
+			}
+
+			if($b->ability === 'lightdash')
+			{
+				$b->ability = '';
 			}
 
 			$contacts++;
