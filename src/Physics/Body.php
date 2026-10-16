@@ -12,6 +12,8 @@ final class Body
 	public int $facing = 1;
 	/** Retained movement orientation used by surface travel and facing-relative actions. */
 	public int $direction = 1;
+	/** Requested glide steering, retained through neutral input independently of current travel. */
+	public int $glideDirection = 0;
 	public int $wall = 0;
 	/** Zero is shared terrain; positive numbers select an additional collision plane. */
 	public int $collisionLayer = 1;

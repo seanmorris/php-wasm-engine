@@ -139,7 +139,18 @@ action orientation; `Body::$vx` remains the actual horizontal air movement. Oppo
 grind turns the sprite without reversing rail travel, and the rail solver keeps `direction` aligned
 with tangent speed until the actor can actually reverse. Tails-style flight keeps its takeoff look
 direction while ordinary horizontal air acceleration remains active, allowing velocity to pass
-through zero and reverse without turning the airborne sprite.
+through zero and reverse without turning the airborne sprite. Gliding keeps a separate
+`Body::$glideDirection` for the last horizontal steering request. Opposite input brakes at four
+times the normal glide acceleration; neutral input retains that request, and `facing`/`direction`
+follow actual horizontal velocity after it crosses zero. Starting a glide keeps existing travel
+direction, falling back to facing only at rest. Landing, climbing, cancellation, and demo resets
+clear the requested turn. The existing 420 px/s glide target remains unchanged, with 240 px/s²
+acceleration and 960 px/s² reversal braking.
+
+MB2's `Knuckles.js` uses a stick-dependent limit of `16 + 8 * abs(xAxis)` pixels per frame,
+halved underwater, and separate flying, turning, and stalled animations. This change carries over
+its steering state and reversal rules while retaining the PHP controller's speed tuning and the
+demo's existing glide artwork.
 
 Dropdash applies held landing input before choosing the boost direction, matching
 `PointActor::processInputDirect()` followed by `Platformer::checkDropDash()` in MB2. Neutral

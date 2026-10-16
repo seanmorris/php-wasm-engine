@@ -56,6 +56,11 @@ final class Platformer
 			throw new \InvalidArgumentException('Invalid physics step');
 		}
 
+		if($b->ability !== 'glide')
+		{
+			$b->glideDirection = 0;
+		}
+
 		$startX = $b->x;
 		$startY = $b->y;
 		$previousWater = $b->water;
@@ -268,7 +273,8 @@ final class Platformer
 				if($b->profile === 'glider')
 				{
 					$b->ability = 'glide';
-					$b->vx = $b->facing * max(240, abs($b->vx));
+					$b->glideDirection = ($b->vx <=> 0) ?: $b->facing;
+					$b->vx = $b->glideDirection * max(240, abs($b->vx));
 					$b->vy = max(0, $b->vy);
 				}
 			}
@@ -313,7 +319,22 @@ final class Platformer
 			elseif($b->ability === 'glide')
 			{
 				$gravity *= .125;
-				$b->vx = self::approach($b->vx, $b->facing * 420, 240 * $dt);
+
+				if($axis)
+				{
+					$b->glideDirection = $axis <=> 0;
+				}
+
+				$b->glideDirection = $b->glideDirection ?: (($b->vx <=> 0) ?: $b->facing);
+				// MB2 retains requested steering and brakes four times faster during a reversal.
+				$turning = $b->vx * $b->glideDirection < 0;
+				$b->vx = self::approach($b->vx, $b->glideDirection * 420, 240 * ($turning ? 4 : 1) * $dt);
+
+				if($b->vx != 0)
+				{
+					$b->facing = $b->direction = $b->vx <=> 0;
+				}
+
 				$b->vy = min(100, $b->vy);
 
 				if($input->down('down'))
@@ -391,6 +412,11 @@ final class Platformer
 		elseif($b->grinding && abs($b->groundSpeed) > 1e-8)
 		{
 			$b->direction = $b->groundSpeed <=> 0;
+		}
+
+		if($b->ability !== 'glide')
+		{
+			$b->glideDirection = 0;
 		}
 
 		$this->finishWater($b, $previousWater, $startX, $startY, $wasGrounded);

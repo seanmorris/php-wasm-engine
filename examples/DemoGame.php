@@ -206,6 +206,7 @@ final class DemoGame
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
 		$this->body->ability = '';
+		$this->body->glideDirection = 0;
 		$this->body->lightDashed = false;
 		$this->engine->entities->get($this->entity, LightDash::class)->reset();
 		$this->body->crouching = false;
@@ -250,6 +251,7 @@ final class DemoGame
 			, 'crouching'
 			, 'facing'
 			, 'direction'
+			, 'glideDirection'
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'

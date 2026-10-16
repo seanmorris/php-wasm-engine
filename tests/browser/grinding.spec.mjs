@@ -89,6 +89,79 @@ test('live flight and grinding use independent look and travel locks', async({pa
 	expect(result[1][3]).toBe('fly');
 });
 
+for(const device of ['keyboard', 'gamepad'])
+test(device + ' reverses a live glide and turns the sprite with its travel', async({page}) => {
+	await page.addInitScript(() => {
+		window.glidePad = {
+			id: 'Standard Gamepad'
+			, index: 0
+			, connected: true
+			, mapping: 'standard'
+			, timestamp: 1
+			, axes: [0, 0, 0, 0]
+			, buttons: Array.from({length: 17}, () => ({pressed: false, touched: false, value: 0}))
+		};
+
+		Object.defineProperty(navigator, 'getGamepads', {value: () => [glidePad]});
+	});
+
+	await page.goto('/');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'platformer', profile: 'glider'}));
+	await expect.poll(async() => (await state(page)).body).not.toBeNull();
+
+	await run(page, `
+		$body->x = 0;
+		$body->y = -2000;
+		$body->grounded = false;
+		$body->jumping = true;
+		$body->ability = 'glide';
+		$body->vx = 300;
+		$body->vy = 0;
+		$body->facing = $body->direction = 1;
+	`
+	);
+
+	await page.locator('canvas').focus();
+	const focusedFrame = Number(await page.locator('canvas').getAttribute('data-frames'));
+
+	await expect.poll(async() => Number(await page.locator('canvas').getAttribute('data-frames')))
+		.toBeGreaterThan(focusedFrame + 3);
+
+	for(const direction of [-1, 1])
+	{
+		const key = direction < 0 ? 'ArrowLeft' : 'ArrowRight';
+
+		if(device === 'keyboard') await page.keyboard.down(key);
+		else
+		await page.evaluate(direction => {
+			glidePad.axes[0] = direction * .6;
+			glidePad.timestamp++;
+		}, direction
+		);
+
+		await expect.poll(async() => (await state(page)).body?.facing).toBe(direction);
+		const before = (await state(page)).body.x;
+		await expect.poll(async() => ((await state(page)).body.x - before) * direction).toBeGreaterThan(10);
+		expect((await state(page)).body.ability).toBe('glide');
+		expect((await state(page)).body.direction).toBe(direction);
+
+		if(device === 'keyboard') await page.keyboard.up(key);
+		else
+		await page.evaluate(() => {
+			glidePad.axes[0] = 0;
+			glidePad.timestamp++;
+		});
+
+		const flipped = await run(page, `
+			$sprite = $engine->entities->get($entity, PhpWasmEngine\\Render\\Sprite::class);
+			echo $sprite->flipX ? 'yes' : 'no';
+		`
+		);
+
+		expect(flipped).toBe(direction < 0 ? 'yes' : 'no');
+	}
+});
+
 test('live rail jump drop dash follows travel direction while facing backward', async({page}) => {
 	await page.goto('/');
 	await page.evaluate(() => window.bootEngine({intro: false,scene: 'platformer'}));
