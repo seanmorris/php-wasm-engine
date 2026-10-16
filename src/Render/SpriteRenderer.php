@@ -6,7 +6,6 @@ use PhpWasmEngine\Ecs\Registry;
 
 final class SpriteRenderer
 {
-	private const INSTANCE_BYTES = 80;
 	private Program $program;
 	private array $vao = [],$buffers = [];
 	private bool $closed = false;
@@ -32,8 +31,7 @@ final class SpriteRenderer
 	/**
 	 * Allocate the vertex array and per-instance buffer used by sprite draws.
 	 *
-	 * @return void Configures position, rectangle, transform, sprite flags, tint, and displacement
-	 * attributes.
+	 * @return void Configures position, rectangle, transform, sprite flags, and tint attributes.
 	 */
 	private function create(): void
 	{
@@ -42,9 +40,9 @@ final class SpriteRenderer
 		glGenBuffers(1, $this->buffers);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
 
-		for($i = 0; $i < 5; $i++)
+		for($i = 0; $i < 4; $i++)
 		{
-			glVertexAttribPointer($i, 4, GL_FLOAT, false, self::INSTANCE_BYTES, $i * 16);
+			glVertexAttribPointer($i, 4, GL_FLOAT, false, 64, $i * 16);
 			glEnableVertexAttribArray($i);
 			glVertexAttribDivisor($i, 1);
 		}
@@ -102,8 +100,6 @@ final class SpriteRenderer
 				, $sprite->tint[2]
 				, $sprite->tint[3] * $sprite->opacity
 			);
-
-			$bytes .= pack('f*', $sprite->twist, 0, 0, 0);
 		}
 
 		$p = $this->program;

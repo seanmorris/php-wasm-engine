@@ -116,9 +116,9 @@ test('sprite animations switch by name, restart independently and reuse their at
 	expect(result.error).toBe(0);
 });
 
-test('sprite twist displacement batches signed effects and survives restoration', async({page}) => {
+test('backdrop twist displaces tiles before foreground sprites and survives restoration', async({page}) => {
 	await boot(page);
-	const result = JSON.parse(await run(page, 'require "/engine/tests/render-displacement.php";'));
+	const result = JSON.parse(await run(page, 'require "/engine/tests/render-backdrop-twist.php";'));
 
 	for(const [name, passed] of Object.entries(result.checks)) expect(passed, name).toBe(true);
 	expect(result.error).toBe(0);

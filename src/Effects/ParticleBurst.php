@@ -57,7 +57,7 @@ final class ParticleBurst
 			$milliseconds, $speed, $lift, $gravity, $lifetime
 			, $sprite->x, $sprite->y, $sprite->rotation
 			, $sprite->scaleX, $sprite->scaleY, $sprite->originX, $sprite->originY
-			, $sprite->opacity, $sprite->time, $sprite->twist
+			, $sprite->opacity, $sprite->time
 		] as $value)
 		{
 			if(!is_finite($value))

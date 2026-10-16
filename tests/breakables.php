@@ -155,7 +155,6 @@ test(
 		$sprite->rotation = .3;
 		$sprite->scaleX = -2;
 		$sprite->scaleY = 1.5;
-		$sprite->twist = 72;
 		$sprite->tint = [.5, .7, .9, .8];
 
 		$before = get_object_vars($sprite);
@@ -167,7 +166,6 @@ test(
 		{
 			check($piece !== $sprite && !$piece->animated);
 			check($piece->tint === $sprite->tint && $piece->flipX && $piece->flipY);
-			near($piece->twist, 72);
 			near($piece->rotation, .3);
 			[$x, $y, $width, $height] = $piece->crop;
 

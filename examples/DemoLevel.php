@@ -19,6 +19,7 @@ use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Physics\WaterRegions;
+use PhpWasmEngine\Render\BackdropTwistRenderer;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\MapRenderer;
 use PhpWasmEngine\Render\SpriteRenderer;
@@ -38,6 +39,7 @@ final class DemoLevel
 	public ?Platformer $movement = null;
 	public ?WaterRegions $waters = null;
 	public ?WaterRenderer $waterRenderer = null;
+	public ?BackdropTwistRenderer $backdropTwist = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
 	public ?Badniks $badniks = null;
@@ -175,6 +177,11 @@ final class DemoLevel
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
+
+		if($this->id !== 'isometric')
+		{
+			$this->backdropTwist = new BackdropTwistRenderer($engine->device->width, $engine->device->height);
+		}
 
 		if($this->waterFeatures->isEmpty())
 		{
@@ -334,6 +341,7 @@ final class DemoLevel
 	public function restore(): void
 	{
 		$this->renderer?->restore();
+		$this->backdropTwist?->restore();
 		$this->sprites?->restore();
 		$this->waterRenderer?->restore();
 	}
@@ -371,6 +379,7 @@ final class DemoLevel
 		$this->waterFeatures?->close();
 		$this->waterParticles?->close();
 		$this->waterRenderer?->close();
+		$this->backdropTwist?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();

@@ -316,26 +316,35 @@ final class DemoGame
 	}
 
 	/**
-	 * Calculate the signed tangential sprite displacement used by charged and braking poses.
+	 * Calculate the localized background displacement used by charged and braking poses.
 	 *
 	 * @param Body $body Player body carrying charge, direction, surface, and tangent speed state.
-	 * @return float Shader twist strength matching the reference effect's 120 charge and 256 brake
-	 * limits.
+	 * @return array{strength:float,x:float,y:float} Signed strength and field center matching the
+	 * reference effect's distinct charge and braking offsets.
 	 */
-	private function playerTwist(Body $body): float
+	private function playerBackdropTwist(Body $body): array
 	{
+		$strength = 0.0;
+		$offset = 0.0;
+
 		if($body->charge > 0)
 		{
-			return 120 * $body->charge * $body->direction;
+			$strength = 120 * $body->charge * $body->direction;
+			$offset = -13 * $body->direction;
 		}
 
-		if(!$body->grounded || $body->rolling || $body->grinding
-			|| $body->direction * $body->groundSpeed >= 0
+		if($strength == 0 && $body->grounded && !$body->rolling && !$body->grinding
+			&& $body->direction * $body->groundSpeed < 0
 		){
-			return 0;
+			$strength = max(-256, min(256, -$body->groundSpeed * 22 / 60));
+			$offset = -16 * $body->direction;
 		}
 
-		return max(-256, min(256, -$body->groundSpeed * 22 / 60));
+		return [
+			'strength' => $strength
+			, 'x' => $body->supportX() + $offset
+			, 'y' => $body->supportY()
+		];
 	}
 
 	/**
@@ -616,10 +625,33 @@ final class DemoGame
 		}
 
 		$body = $this->body;
+		$backdropTwist = $this->playerBackdropTwist($body);
+		$twistingBackdrop = $level->backdropTwist !== null && $backdropTwist['strength'] != 0;
+
+		if($level->backdropTwist !== null)
+		{
+			$level->backdropTwist->draws = 0;
+		}
+
+		if($twistingBackdrop)
+		{
+			$level->backdropTwist->begin();
+		}
+
 		$level->renderer->render($camera, $time);
+
+		if($twistingBackdrop)
+		{
+			$level->backdropTwist->compose(
+				$camera
+				, $backdropTwist['x']
+				, $backdropTwist['y']
+				, $backdropTwist['strength']
+			);
+		}
+
 		$pose = $this->playerPose($body);
 		$playerOpacity = 1.0;
-		$playerTwist = 0.0;
 
 		if($this->scene !== 'isometric')
 		{
@@ -638,7 +670,6 @@ final class DemoGame
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
-			$playerTwist = $sprite->twist = $this->playerTwist($body);
 			$playerOpacity = $sprite->opacity = $combat->flickerOpacity();
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
@@ -658,7 +689,9 @@ final class DemoGame
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
 			, 'dropCharge' => $body->dropCharge
-			, 'twist' => $playerTwist
+			, 'backdropTwist' => $backdropTwist['strength']
+			, 'backdropTwistX' => $backdropTwist['x']
+			, 'backdropTwistY' => $backdropTwist['y']
 			, 'facing' => $body->facing
 			, 'direction' => $body->direction
 			, 'pose' => $pose
@@ -700,6 +733,7 @@ final class DemoGame
 		}
 
 		$this->renderStats['draws'] += $level->waterRenderer?->draws ?? 0;
+		$this->renderStats['draws'] += $level->backdropTwist?->draws ?? 0;
 
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'

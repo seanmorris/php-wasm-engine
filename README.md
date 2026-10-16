@@ -694,7 +694,7 @@ $sprites->close();
 $atlas->close();
 ~~~
 
-Sprites support anchors, rotation, scaling, flips, tint, opacity, animation offsets, tangential displacement, and black outlines. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
+Sprites support anchors, rotation, scaling, flips, tint, opacity, animation offsets, and black outlines. A batch shares one atlas and one instanced draw. The caller supplies painter order, for example sorting by feet Y in an isometric scene. Atlas ownership stays with its creator.
 
 Set `$sprite->crop = [$x, $y, $width, $height]` to draw an integer pixel region relative to the current tile frame. The crop must fit inside that frame; `null` draws the whole image. Cropped dimensions determine the sprite's size and anchor. Set `animated = false` to treat `gid` as a concrete frame, even when that tile also defines an animation.
 
@@ -713,15 +713,23 @@ A changed animation starts at its first frame. Repeated requests for the current
 
 Tiled frame durations control looping; static tiles also work. Each sprite has its own clock offset. An animation created by `sprite()` initially follows the renderer's clock; use `restart: true` to start that same animation at a later time. Unknown names or non-finite times throw without changing the sprite. Use animations from the tileset backing the renderer's atlas.
 
-### Sprite displacement
+### Backdrop displacement
 
-Set `$sprite->twist` to a signed radial twist strength. Zero leaves the source unchanged; changing the sign reverses the tangential field. The renderer expands the quad enough for displaced pixels and keeps every sample inside the current frame or crop. Displaced and ordinary sprites remain in one instanced batch, and context restoration preserves the effect.
+`BackdropTwistRenderer` displaces a localized 64-world-pixel region of the map while leaving player, entity, particle, and HUD sprites intact. Call `begin()` before rendering the background, `compose()` with the field's world center and signed strength, then render foreground sprites. Changing the sign reverses the tangential field.
 
-The demo reimplements moving-boxes-2's visual response without moving the collision body. Braking against retained ground momentum scales twist from tangent speed and clamps it to ±256. A held spindash charge scales it to ±120 using the retained movement direction. Releasing the charge returns the sprite to its ordinary render pose before the rolling launch.
+The demo follows moving-boxes-2's background-filter ordering and placement. Braking against retained ground momentum scales twist from tangent speed and clamps it to ±256. A held spindash charge scales it to ±120 using the retained movement direction. The field follows the player's support point with the reference effect's separate braking and spindash offsets; it never changes the body or sprite pose.
 
 ~~~php
-$sprite->twist = 120 * $charge * $direction;
+use PhpWasmEngine\Render\BackdropTwistRenderer;
+
+$twist = new BackdropTwistRenderer($device->width, $device->height);
+$twist->begin();
+$mapRenderer->render($camera, $milliseconds);
+$twist->compose($camera, $centerX, $centerY, 120 * $charge * $direction);
+$spriteRenderer->render($sprites, $camera, $milliseconds);
 ~~~
+
+An active effect adds one full-background copy and one clipped effect draw. Skip capture when strength is zero. `begin()` remembers the current framebuffer, so the pass can nest inside `WaterRenderer`: begin water, begin the twist, draw the map, compose the twist, draw sprites, then compose water. `restore()` rebuilds all owned GPU resources after context loss.
 
 ### Sprite outlines
 
