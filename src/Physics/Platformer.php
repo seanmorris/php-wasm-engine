@@ -359,6 +359,9 @@ final class Platformer
 		}
 
 		$wasGrounded = $b->grounded;
+		// MB2 permits skimming only in floor mode, within 45 degrees of upright.
+		// Retain the starting orientation: losing adhesion resets the angle below.
+		$skimEligible = $wasGrounded && cos($b->angle) >= M_SQRT1_2;
 
 		if($wasGrounded)
 		{
@@ -425,7 +428,7 @@ final class Platformer
 			$b->glideDirection = 0;
 		}
 
-		$this->finishWater($b, $previousWater, $startX, $startY, $wasGrounded);
+		$this->finishWater($b, $previousWater, $startX, $startY, $skimEligible);
 	}
 
 	/**
@@ -454,7 +457,7 @@ final class Platformer
 	 * @param WaterRegion|null $previous Region active at the end of the preceding step.
 	 * @param float $startX World X coordinate before this step.
 	 * @param float $startY World Y coordinate before this step.
-	 * @param bool $skimEligible Whether the body remained grounded after processing input.
+	 * @param bool $skimEligible Whether the body began its sweep grounded and facing a floor.
 	 * @return void Snaps eligible runners to the surface and publishes final liquid state.
 	 */
 	private function finishWater(
@@ -475,8 +478,10 @@ final class Platformer
 		$surface = $this->waters->surfaceAt($body->x, $bottom, $tolerance);
 		$speed = abs($body->grounded ? $body->groundSpeed : $body->vx);
 		$startedAbove = $startY + $body->halfHeight <= ($surface?->y ?? -INF) + 2;
+		$floorContact = cos($body->angle) >= M_SQRT1_2;
 
-		if($skimEligible && $surface !== null && $speed >= $surface->skimSpeed && ($dy >= 0 || $body->skimming)
+		if($skimEligible && $floorContact && $surface !== null && $speed >= $surface->skimSpeed
+			&& ($dy >= 0 || $body->skimming)
 			&& $startedAbove
 		){
 			$body->y = $surface->y - $body->halfHeight - .001;

@@ -286,6 +286,84 @@ test('the rising-water loop exposes scriptable switches and object 3958', async(
 	await page.evaluate(() => window.stopEngine());
 });
 
+for(const direction of [1, -1])
+test('charged spindash follows the submerged loop in direction ' + direction, async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine === 'function');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'water-loop'}));
+	const canvas = page.locator('canvas');
+
+	await expect(canvas).toHaveAttribute('data-scene', 'water-loop', {timeout: 60000});
+
+	const body = async() => JSON.parse(await canvas.getAttribute('data-body') || '{}');
+
+	await run(page, `
+		$engine->userPaused = true;
+		$body->x = ${direction > 0 ? 736 : 1056};
+		$body->y = 558;
+		$body->vx = $body->vy = $body->groundSpeed = $body->angle = 0;
+		$body->grounded = true;
+		$body->jumping = $body->rolling = false;
+		$body->halfHeight = 18;
+		$body->facing = $body->direction = ${direction};
+		$body->collisionLayer = ${direction > 0 ? 1 : 2};
+		$engine->controls->reset();
+		$loopTrace = [];
+		$loopDone = false;
+		$engine->systems->add('submerged-loop-trace', static function() use ($body, $engine) {
+			global $loopTrace, $loopDone;
+
+			if(!$body->rolling || $loopDone)
+			{
+				return;
+			}
+
+			$loopTrace[] = [
+				'angle' => $body->angle, 'grounded' => $body->grounded, 'skimming' => $body->skimming,
+				'underwater' => $body->underwater, 'entered' => $body->waterEntered,
+				'exited' => $body->waterExited, 'layer' => $body->collisionLayer,
+				'x' => $body->x, 'supportY' => $body->supportY()
+			];
+
+			if($body->skimming || ${direction > 0 ? '$body->x > 1100' : '$body->x < 700'})
+			{
+				$loopDone = true;
+				$engine->userPaused = true;
+			}
+		}, after: ['movement']);
+		$engine->userPaused = false;
+	`
+	);
+
+	await canvas.focus();
+	await page.keyboard.down('ArrowDown');
+	await page.keyboard.down('x');
+	await expect.poll(async() => (await body()).charge).toBeGreaterThan(.99);
+	await page.keyboard.up('x');
+	await page.keyboard.up('ArrowDown');
+
+	await expect.poll(async() => {
+		const current = await body();
+
+		return current.skimming || (direction > 0 ? current.x > 1100 : current.x < 700);
+	}).toBe(true);
+
+	const trace = JSON.parse(await run(page, 'echo json_encode($loopTrace);'));
+	expect(trace.length).toBeGreaterThan(30);
+	expect(trace.every(frame => frame.grounded && !frame.skimming)).toBe(true);
+	expect(trace.some(frame => frame.exited)).toBe(true);
+	expect(trace.some(frame => frame.entered)).toBe(true);
+	expect(trace.some(frame => Math.abs(frame.angle) > 3)).toBe(true);
+
+	const final = trace.at(-1);
+	expect(final.underwater).toBe(true);
+	expect(final.layer).toBe(direction > 0 ? 2 : 1);
+	expect(final.supportY).toBeCloseTo(576, 2);
+	expect(errors).toEqual([]);
+});
+
 for(const scene of [
 	'platformer', 'water', 'water-rail', 'water-skim-rail'
 	, 'water-loop', 'badniks', 'grinding'

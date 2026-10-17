@@ -3,6 +3,7 @@ use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Gameplay\WaterFeatures;
 use PhpWasmEngine\Gameplay\WaterParticle;
 use PhpWasmEngine\Gameplay\WaterParticles;
+use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Physics\Platformer;
@@ -490,6 +491,89 @@ test('the rising-water loop retains object 3958 and moves its buoyant solids wit
 
 	check(!$terrain->hasShape($doorShape) && !$terrain->hasShape($platformShape));
 	check(!$registry->alive($doorEntity) && !$registry->alive($platformEntity));
+});
+
+test('charged spindashes traverse the submerged loop without skimming off its walls', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/water-loop.tmj');
+	$terrain = MapTerrain::build($map);
+
+	foreach([60, 120] as $frequency)
+	foreach([384, 448, 512] as $surface)
+	foreach([1, -1] as $direction)
+	{
+		$waters = WaterRegions::fromMaps($map);
+		$waters->regions[0]->setSurface($surface);
+		$movement = new Platformer($terrain, waters: $waters);
+
+		$body = new Body($direction > 0 ? 736 : 1056, 558);
+		$body->grounded = true;
+		$body->facing = $body->direction = $direction;
+		$body->collisionLayer = $direction > 0 ? 1 : 2;
+		$controls = new Controls;
+		$context = "frequency=$frequency surface=$surface direction=$direction";
+
+		for($frame = 0; $frame < $frequency; $frame++)
+		{
+			$controls->set(['down' => true, 'action' => true]);
+			$movement->step($body, $controls, 1 / $frequency);
+		}
+
+		check($body->charge > .99 && $body->underwater, $context);
+		$turn = $previousAngle = 0;
+		$exited = $entered = false;
+		$crownLayer = null;
+
+		for($frame = 0; $frame < $frequency * 2; $frame++)
+		{
+			$controls->set([]);
+			$movement->step($body, $controls, 1 / $frequency);
+			$delta = atan2(sin($body->angle - $previousAngle), cos($body->angle - $previousAngle));
+			$turn += $delta;
+			$previousAngle = $body->angle;
+
+			check(!$body->skimming, "Wall contact became a water skim: $context frame=$frame");
+			check($body->grounded && $body->rolling, "Lost rolling contact: $context frame=$frame");
+			check(abs($delta) < .35, "Surface angle snapped: $context frame=$frame");
+			$exited = $exited || $body->waterExited;
+			$entered = $entered || ($exited && $body->waterEntered);
+
+			if(($direction > 0 ? $body->x < 880 : $body->x > 912) && $body->y < 378)
+			{
+				$crownLayer = $body->collisionLayer;
+			}
+
+			if($direction > 0 ? $body->x > 1100 : $body->x < 700)
+			{
+				break;
+			}
+		}
+
+		check($frame < $frequency * 2 && $exited && $entered && $body->underwater, $context);
+		check($crownLayer === ($direction > 0 ? 1 : 2), $context);
+		check($body->collisionLayer === ($direction > 0 ? 2 : 1), $context);
+		check($body->groundSpeed * $direction > 900, $context);
+		near($turn, -$direction * 2 * M_PI, .01);
+		near($body->supportY(), 576, .01);
+	}
+});
+
+test('losing wall or ceiling support near water does not become a floor skim', function() {
+	$waters = new WaterRegions(new WaterRegion(0, 100, 500, 300));
+	$movement = new Platformer(new PhpWasmEngine\Physics\Terrain, waters: $waters);
+
+	foreach([[M_PI / 2, 1000], [-M_PI / 2, -1000], [M_PI, 1000]] as [$angle, $speed])
+	{
+		$body = new Body(50, 82);
+		$body->angle = $angle;
+		$body->groundSpeed = $speed;
+		$body->grounded = true;
+		$body->gravity = $body->friction = 0;
+		tick($movement, $body);
+
+		check(!$body->grounded && !$body->skimming);
+		near($body->vx, cos($angle) * $speed);
+		near($body->vy, sin($angle) * $speed);
+	}
 });
 
 test('only grounded fast movement starts skimming while airborne and slow falls enter water', function() {
