@@ -1026,6 +1026,90 @@ for($x = 42; $x <= 50; $x++)
 }
 
 jsonAsset('platformer.tmj', $platformer);
+$gravity = $base;
+$gravityTerrain = array_fill(0, $width * $height, 0);
+$gravityMarkers = array_fill(0, $width * $height, 0);
+
+for($y = 2; $y <= 17; $y++)
+{
+	for($x = 2; $x <= 27; $x++)
+	{
+		if($x === 2 || $x === 27 || $y === 2 || $y === 17)
+		{
+			$gravityTerrain[$y * $width + $x] = 1;
+		}
+	}
+}
+
+$gravity['layers'][count($background)]['data'] = $gravityTerrain;
+$gravity['layers'][count($background) + 1]['data'] = $gravityMarkers;
+$gravity['layers'][count($background) + 2]['objects'] = [
+	[
+		'id' => 1
+		, 'class' => 'Player'
+		, 'x' => 140
+		, 'y' => 400
+	]
+];
+
+/**
+ * Build one annotated point object for the gravity and spring demonstration.
+ *
+ * @param int $id Stable Tiled object ID.
+ * @param string $class GravitySwitch or Spring component class.
+ * @param float $x Contact center X coordinate in map pixels.
+ * @param float $y Contact center Y coordinate in map pixels.
+ * @param float $rotation Contact tangent rotation in clockwise degrees.
+ * @param array<string,int|float|string> $values Custom scalar properties.
+ * @return array<string,mixed> Tiled point object with typed custom properties.
+ */
+$gravityFeature = static function(
+	int $id
+	, string $class
+	, float $x
+	, float $y
+	, float $rotation
+	, array $values
+): array {
+	$properties = [];
+
+	foreach($values as $name => $value)
+	{
+		$properties[] = [
+			'name' => $name
+			, 'type' => is_int($value) ? 'int' : (is_float($value) ? 'float' : 'string')
+			, 'value' => $value
+		];
+	}
+
+	return [
+		'id' => $id
+		, 'class' => $class
+		, 'point' => true
+		, 'x' => $x
+		, 'y' => $y
+		, 'rotation' => $rotation
+		, 'properties' => $properties
+	];
+};
+
+$gravity['layers'][] = [
+	'id' => 40
+	, 'name' => 'Gravity features'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		$gravityFeature(401, 'GravitySwitch', 140, 544, 0, ['gravity' => 'right', 'length' => 120.0])
+		, $gravityFeature(402, 'GravitySwitch', 864, 510, 270, ['gravity' => 'up', 'length' => 64.0])
+		, $gravityFeature(403, 'GravitySwitch', 820, 96, 180, ['gravity' => 'left', 'length' => 120.0])
+		, $gravityFeature(404, 'GravitySwitch', 96, 140, 90, ['gravity' => 'down', 'length' => 120.0])
+		, $gravityFeature(411, 'Spring', 430, 544, 0, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(412, 'Spring', 864, 250, 270, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(413, 'Spring', 550, 96, 180, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(414, 'Spring', 96, 330, 90, ['power' => 1100.0, 'length' => 64.0])
+	]
+] + $layerDefaults;
+
+jsonAsset('gravity.tmj', $gravity);
 $waterProperties = [
 	['name' => 'gravity','type' => 'float','value' => .4]
 	, ['name' => 'drag','type' => 'float','value' => .85]

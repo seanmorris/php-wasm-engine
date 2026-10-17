@@ -19,6 +19,20 @@ final class Shields
 	private bool $closed = false;
 
 	/**
+	 * Replace velocity components along a body's logical tangent and gravity axes.
+	 *
+	 * @param Body $body Body receiving reconstructed world velocity.
+	 * @param float $tangent Signed logical-right velocity.
+	 * @param float $gravity Signed velocity in the active gravity direction.
+	 * @return void Updates world X and Y velocity without changing gravity orientation.
+	 */
+	private static function velocity(Body $body, float $tangent, float $gravity): void
+	{
+		$body->vx = $body->tangentX() * $tangent + $body->gravityX * $gravity;
+		$body->vy = $body->tangentY() * $tangent + $body->gravityY * $gravity;
+	}
+
+	/**
 	 * Bind shield state to a registry and discover optional annotated aura art.
 	 *
 	 * @param Registry $registry Registry containing players, shield components, and aura entities.
@@ -123,7 +137,7 @@ final class Shields
 
 			if($body->jumping && $shield->electricJumps > 0)
 			{
-				$body->vy = -600;
+				self::velocity($body, $body->tangentVelocity(), -600);
 				$body->rolling = false;
 				$body->ability = 'electric-jump';
 				$shield->electricJumps--;
@@ -140,8 +154,8 @@ final class Shields
 
 			if($direction !== 0.0)
 			{
-				$body->vx += $direction * 1800 * $dt;
-				$body->vx = max(-900, min(900, $body->vx));
+				$tangent = $body->tangentVelocity() + $direction * 1800 * $dt;
+				self::velocity($body, max(-900, min(900, $tangent)), $body->gravityVelocity());
 
 				if(!$canFly)
 				{
@@ -161,7 +175,7 @@ final class Shields
 
 			if($body->jumping && !$shield->bubbleArmed)
 			{
-				$body->vy = 840;
+				self::velocity($body, $body->tangentVelocity(), 840);
 				$body->rolling = false;
 				$body->ability = 'bubble-bounce';
 				$shield->bubbleArmed = true;
@@ -209,8 +223,9 @@ final class Shields
 				$body->grounded = false;
 				$body->rolling = false;
 				$body->jumping = true;
-				$body->vy = -840;
-				$body->y -= .05;
+				self::velocity($body, $body->tangentVelocity(), -840);
+				$body->x -= $body->gravityX * .05;
+				$body->y -= $body->gravityY * .05;
 				$body->ability = 'bubble-rebound';
 				$shield->bubbleArmed = false;
 			}

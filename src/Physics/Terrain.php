@@ -111,6 +111,8 @@ final class Terrain
 	 * @param bool $oneWay Keep only upward-facing edges and permit passage from below.
 	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
 	 * @param bool $grinding Mark contacts on the shape as grinding rails.
+	 * @param bool $directedOneWay Retain the authored normal for wall and ceiling contact edges;
+	 * ordinary map one-way shapes remain upward-only.
 	 * @return int Shape handle, never reused, accepted by removeShape.
 	 */
 	public function addShape(
@@ -118,7 +120,13 @@ final class Terrain
 		, bool $oneWay = false
 		, int $collisionLayer = 0
 		, bool $grinding = false
+		, bool $directedOneWay = false
 	): int {
+		if($directedOneWay && (!$oneWay || count($points) !== 2))
+		{
+			throw new \InvalidArgumentException('Directed one-way shapes require exactly one edge');
+		}
+
 		if($collisionLayer < 0)
 		{
 			throw new \InvalidArgumentException('Collision layers must be nonnegative');
@@ -195,7 +203,7 @@ final class Terrain
 			$nx = $dy / $length;
 			$ny = -$dx / $length;
 
-			if($oneWay && $ny >= -.1)
+			if($oneWay && !$directedOneWay && $ny >= -.1)
 			{
 				continue;
 			}

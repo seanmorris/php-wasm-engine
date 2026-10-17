@@ -259,6 +259,38 @@ test('fire thrust composes with flight and glide while climbing rejects shield m
 	$shields->close();
 });
 
+test('shield movement and damage knockback follow alternate gravity axes', function() {
+	$registry = new Registry;
+	$shields = new Shields($registry);
+	$body = new Body;
+	$body->setGravityDirection(1, 0);
+	$body->jumping = true;
+	$player = $registry->create($body);
+	$shields->grant($player, Shield::ELECTRIC);
+	$controls = new Controls;
+	$controls->set([]);
+	$controls->set(['jump' => true]);
+	check($shields->control($player, $controls, 1 / 60));
+	near($body->vx, -600);
+	near($body->vy, 0);
+
+	$shields->grant($player, Shield::FIRE);
+	$body->vx = $body->vy = 0;
+	$controls = new Controls;
+	$controls->set([4 => true]);
+	$shields->control($player, $controls, .1);
+	near($body->vx, 0);
+	check($body->vy > 0);
+
+	$combat = new PlayerCombat;
+	$shield = $registry->get($player, Shield::class);
+	$shield->active = '';
+	check($combat->damage($body, null, 1, $shield));
+	near($body->vx, -360);
+	near($body->vy, -240);
+	$shields->close();
+});
+
 test('shield components and effects reject invalid types, durations, recipients, and timing', function() {
 	rejects(fn() => new Shield('unknown'));
 	rejects(fn() => new Shield(Shield::STAR, 0));

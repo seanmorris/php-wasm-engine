@@ -546,6 +546,7 @@ require __DIR__ . '/parallax.php';
 require __DIR__ . '/world.php';
 require __DIR__ . '/input.php';
 require __DIR__ . '/air-control.php';
+require __DIR__ . '/gravity.php';
 require __DIR__ . '/sequences.php';
 require __DIR__ . '/ecs.php';
 require __DIR__ . '/breakables.php';

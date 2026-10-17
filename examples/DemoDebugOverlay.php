@@ -132,6 +132,7 @@ final class DemoDebugOverlay
 			, 'X px' => sprintf('%.3f', $body->supportX())
 			, 'Y px' => sprintf('%.3f', $body->supportY())
 			, 'Collision layer' => (string)$body->collisionLayer
+			, 'Gravity' => "$body->gravityX / $body->gravityY"
 			, 'Facing / direction' => "$body->facing / $body->direction"
 			, 'Drop charge' => sprintf('%.3f', $body->dropCharge)
 			, 'Gnd px/s' => sprintf('%.3f', $body->groundSpeed)

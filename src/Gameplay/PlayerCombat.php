@@ -126,8 +126,9 @@ final class PlayerCombat
 		$body->charge = 0;
 		$body->crouchTime = 0;
 		$body->groundSpeed = 0;
-		$body->vx = ($direction < 0 ? -1 : 1) * 240;
-		$body->vy = -360;
+		$tangent = ($direction < 0 ? -1 : 1) * 240;
+		$body->vx = $body->tangentX() * $tangent - $body->gravityX * 360;
+		$body->vy = $body->tangentY() * $tangent - $body->gravityY * 360;
 
 		return true;
 	}

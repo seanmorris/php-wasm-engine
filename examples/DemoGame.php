@@ -115,7 +115,7 @@ final class DemoGame
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
 	 * @param string $scene Platformer, platforms, grapples, vehicles, light-dash, water, water-rail,
-	 * water-skim-rail, water-loop, badniks,
+	 * water-skim-rail, water-loop, gravity, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
@@ -130,6 +130,7 @@ final class DemoGame
 				, 'water-rail'
 				, 'water-skim-rail'
 				, 'water-loop'
+				, 'gravity'
 				, 'platforms'
 				, 'light-dash'
 				, 'grapples'
@@ -257,7 +258,8 @@ final class DemoGame
 		$this->engine->entities->get($this->entity, Rider::class)->cooldowns = [];
 		$this->level?->grapples?->release($this->entity, inherit: false);
 		$this->engine->entities->get($this->entity, GrappleGrip::class)->reset();
-		$defaults = new Body(80, 100, $this->body->profile);
+		$spawn = $this->level?->spawn ?? [80.0, 100.0];
+		$defaults = new Body($spawn[0], $spawn[1], $this->body->profile);
 
 		foreach([
 			'x'
@@ -276,6 +278,8 @@ final class DemoGame
 			, 'glideDirection'
 			, 'wall'
 			, 'collisionLayer'
+			, 'gravityX'
+			, 'gravityY'
 			, 'ability'
 			, 'lightDashed'
 			, 'charge'
@@ -681,6 +685,7 @@ final class DemoGame
 		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
 		$this->canvas->dataset->vehicles = json_encode($level->vehicles?->snapshot() ?? []);
 		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
+		$this->canvas->dataset->gravity = json_encode($level->gravityFeatures?->snapshot() ?? []);
 
 		if($this->scene === 'world')
 		{
@@ -828,6 +833,8 @@ final class DemoGame
 			, 'speed' => $body->groundSpeed
 			, 'angle' => $body->angle
 			, 'collisionLayer' => $body->collisionLayer
+			, 'gravityX' => $body->gravityX
+			, 'gravityY' => $body->gravityY
 			, 'mercy' => $this->engine->entities->get($this->entity, PlayerCombat::class)->mercy
 			, 'opacity' => $playerOpacity
 			, 'shield' => $this->engine->entities->has($this->entity, Shield::class)

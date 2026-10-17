@@ -41,6 +41,20 @@ final class Platformer
 	}
 
 	/**
+	 * Replace velocity components expressed along the body's logical tangent and gravity axes.
+	 *
+	 * @param Body $body Body receiving reconstructed world velocity.
+	 * @param float $tangent Signed velocity toward logical right.
+	 * @param float $gravity Signed velocity in the active gravity direction.
+	 * @return void Updates world X and Y velocity without changing gravity orientation.
+	 */
+	private static function velocity(Body $body, float $tangent, float $gravity): void
+	{
+		$body->vx = $body->tangentX() * $tangent + $body->gravityX * $gravity;
+		$body->vy = $body->tangentY() * $tangent + $body->gravityY * $gravity;
+	}
+
+	/**
 	 * Advance one actor through controls, abilities, continuous collision, and surface adhesion.
 	 *
 	 * @param Body $b Actor to simulate in place.
@@ -144,7 +158,8 @@ final class Platformer
 			if(!$b->charge)
 			{
 				$slope = $b->grinding ? .75 : ($b->rolling ? .75 : .35);
-				$b->groundSpeed += sin($b->angle) * $b->gravity * $gravityScale * $slope * $dt;
+				$gravitySlope = $b->gravityX * cos($b->angle) + $b->gravityY * sin($b->angle);
+				$b->groundSpeed += $gravitySlope * $b->gravity * $gravityScale * $slope * $dt;
 
 				if($b->grinding)
 				{
@@ -200,7 +215,9 @@ final class Platformer
 			$b->vy = sin($b->angle) * $b->groundSpeed;
 
 			// Slow actors lose adhesion on walls/ceilings. Fast actors retain tangent motion.
-			if(cos($b->angle) < .5 && abs($b->groundSpeed) < 180)
+			$supportGravity = -sin($b->angle) * $b->gravityX + cos($b->angle) * $b->gravityY;
+
+			if($supportGravity < .5 && abs($b->groundSpeed) < 180)
 			{
 				$b->grounded = false;
 				$b->coyote = 0;
@@ -227,7 +244,8 @@ final class Platformer
 			{
 				$b->dropTimer = .25;
 				$b->grounded = false;
-				$b->y += .2;
+				$b->x += $b->gravityX * .2;
+				$b->y += $b->gravityY * .2;
 			}
 			elseif(!$spindashTap)
 			{
@@ -257,9 +275,12 @@ final class Platformer
 			$b->charge = 0;
 			$b->crouchTime = 0;
 
-			if($input->released('jump') && $b->jumping && $b->vy < 0 && $b->ability === '' && !$b->lightDashed)
-			{
-				$b->vy *= .5;
+			$gravityVelocity = $b->gravityVelocity();
+
+			if($input->released('jump') && $b->jumping && $gravityVelocity < 0 && $b->ability === ''
+				&& !$b->lightDashed
+			){
+				self::velocity($b, $b->tangentVelocity(), $gravityVelocity * .5);
 			}
 
 			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump') && $b->ability !== 'lightdash')
@@ -267,15 +288,20 @@ final class Platformer
 				if($b->profile === 'flyer' && $b->flightRemaining > 0)
 				{
 					$b->ability = 'fly';
-					$b->vy = -120;
+					self::velocity($b, $b->tangentVelocity(), -120);
 				}
 
 				if($b->profile === 'glider')
 				{
 					$b->ability = 'glide';
-					$b->glideDirection = ($b->vx <=> 0) ?: $b->facing;
-					$b->vx = $b->glideDirection * max(240, abs($b->vx));
-					$b->vy = max(0, $b->vy);
+					$tangentVelocity = $b->tangentVelocity();
+					$b->glideDirection = ($tangentVelocity <=> 0) ?: $b->facing;
+
+					self::velocity(
+						$b
+						, $b->glideDirection * max(240, abs($tangentVelocity))
+						, max(0, $b->gravityVelocity())
+					);
 				}
 			}
 
@@ -308,7 +334,7 @@ final class Platformer
 
 				if($input->down('jump') && $b->flightRemaining > 0)
 				{
-					$b->vy = max(-180, $b->vy - 600 * $dt);
+					self::velocity($b, $b->tangentVelocity(), max(-180, $b->gravityVelocity() - 600 * $dt));
 				}
 
 				if($b->flightRemaining <= 0 || $input->down('down'))
@@ -319,23 +345,29 @@ final class Platformer
 			elseif($b->ability === 'glide')
 			{
 				$gravity *= .125;
+				$tangentVelocity = $b->tangentVelocity();
 
 				if($axis)
 				{
 					$b->glideDirection = $axis <=> 0;
 				}
 
-				$b->glideDirection = $b->glideDirection ?: (($b->vx <=> 0) ?: $b->facing);
+				$b->glideDirection = $b->glideDirection ?: (($tangentVelocity <=> 0) ?: $b->facing);
 				// MB2 retains requested steering and brakes four times faster during a reversal.
-				$turning = $b->vx * $b->glideDirection < 0;
-				$b->vx = self::approach($b->vx, $b->glideDirection * 420, 240 * ($turning ? 4 : 1) * $dt);
+				$turning = $tangentVelocity * $b->glideDirection < 0;
 
-				if($b->vx != 0)
+				$tangentVelocity = self::approach(
+					$tangentVelocity
+					, $b->glideDirection * 420
+					, 240 * ($turning ? 4 : 1) * $dt
+				);
+
+				self::velocity($b, $tangentVelocity, min(100, $b->gravityVelocity()));
+
+				if($tangentVelocity != 0)
 				{
-					$b->facing = $b->direction = $b->vx <=> 0;
+					$b->facing = $b->direction = $tangentVelocity <=> 0;
 				}
-
-				$b->vy = min(100, $b->vy);
 
 				if($input->down('down'))
 				{
@@ -343,25 +375,36 @@ final class Platformer
 				}
 			}
 
-			if($b->jumping && $b->vy > -240 && $b->vy < 0)
+			$gravityVelocity = $b->gravityVelocity();
+
+			if($b->jumping && $gravityVelocity > -240 && $gravityVelocity < 0)
 			{
 				// MB2 loses 1/32 of horizontal speed per reference frame near a jump's apex.
-				$b->vx *= (31 / 32) ** (60 * $dt);
+				self::velocity($b, $b->tangentVelocity() * (31 / 32) ** (60 * $dt), $gravityVelocity);
 			}
 
 			// The speed gate also rejects braking; apex drag can bring a jump back below it.
-			if(!in_array($b->ability, ['glide', 'lightdash'], true) && abs($b->vx) < $b->maxSpeed)
+			if(!in_array($b->ability, ['glide', 'lightdash'], true) && abs($b->tangentVelocity()) < $b->maxSpeed)
 			{
-				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
+				self::velocity(
+					$b
+					, $b->tangentVelocity() + $axis * $b->airAcceleration * $drag * $dt
+					, $b->gravityVelocity()
+				);
 			}
 
-			$b->vy = min($b->terminalSpeed * $drag, $b->vy + $gravity * $dt);
+			self::velocity(
+				$b
+				, $b->tangentVelocity()
+				, min($b->terminalSpeed * $drag, $b->gravityVelocity() + $gravity * $dt)
+			);
 		}
 
 		$wasGrounded = $b->grounded;
 		// MB2 permits skimming only in floor mode, within 45 degrees of upright.
 		// Retain the starting orientation: losing adhesion resets the angle below.
-		$skimEligible = $wasGrounded && cos($b->angle) >= M_SQRT1_2;
+		$skimEligible = $wasGrounded && $b->gravityX === 0 && $b->gravityY === 1
+			&& cos($b->angle) >= M_SQRT1_2;
 
 		if($wasGrounded)
 		{
@@ -416,7 +459,7 @@ final class Platformer
 		if(!$b->grounded)
 		{
 			$b->grinding = false;
-			$b->angle = 0;
+			$b->angle = $b->uprightAngle();
 		}
 		elseif($b->grinding && abs($b->groundSpeed) > 1e-8)
 		{
@@ -614,9 +657,17 @@ final class Platformer
 	private function stand(Body $b): void
 	{
 		$extra = ($b->standingHeight - $b->halfHeight) * 2;
+		$nx = sin($b->angle);
+		$ny = -cos($b->angle);
 
-		if(!$this->terrain->raycast($b->x, $b->y - $b->halfHeight, 0, -$extra, true, $b->collisionLayer))
-		{
+		if(!$this->terrain->raycast(
+			$b->x + $nx * $b->halfHeight
+			, $b->y + $ny * $b->halfHeight
+			, $nx * $extra
+			, $ny * $extra
+			, true
+			, $b->collisionLayer
+		)){
 			$b->rolling = false;
 		}
 	}
@@ -690,9 +741,9 @@ final class Platformer
 			$contacts++;
 			$b->x += $dx * $best->t + $best->nx * .001;
 			$b->y += $dy * $best->t + $best->ny * .001;
-			$floor = $best->ny < -.25;
+			$support = $best->nx * $b->gravityX + $best->ny * $b->gravityY < -.25;
 
-			if($floor || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
+			if($support || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
 			)){
 				$b->grounded = true;
 				$b->grinding = $best->grinding;
@@ -701,11 +752,11 @@ final class Platformer
 				$b->x += $best->nx * ($b->halfHeight + .001 - $distance);
 				$b->y += $best->ny * ($b->halfHeight + .001 - $distance);
 			}
-			elseif(abs($best->nx) > .8)
+			elseif(abs($best->nx * $b->tangentX() + $best->ny * $b->tangentY()) > .8)
 			{
 				$b->grinding = false;
 
-				if($b->ability === 'glide')
+				if($b->ability === 'glide' && $b->gravityX === 0 && $b->gravityY === 1)
 				{
 					$b->ability = 'climb';
 					$b->jumping = false;

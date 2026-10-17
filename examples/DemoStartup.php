@@ -61,6 +61,7 @@ final class DemoStartup
 			, 'water-rail' => 'Underwater rail'
 			, 'water-skim-rail' => 'Surface skim rail'
 			, 'water-loop' => 'Rising water loop'
+			, 'gravity' => 'Gravity switches & springs'
 			, 'badniks' => 'CrabMeat badniks'
 			, 'world' => 'Streaming world'
 			, 'loop' => 'Loop-de-loop'

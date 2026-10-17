@@ -12,6 +12,7 @@ use PhpWasmEngine\Gameplay\LightDashes;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Platforms;
 use PhpWasmEngine\Gameplay\Grapples;
+use PhpWasmEngine\Gameplay\GravityFeatures;
 use PhpWasmEngine\Gameplay\Vehicles;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
@@ -61,7 +62,10 @@ final class DemoLevel
 	public ?Platforms $platforms = null;
 	public ?Grapples $grapples = null;
 	public ?Vehicles $vehicles = null;
+	public ?GravityFeatures $gravityFeatures = null;
 	public ?WaterParticles $waterParticles = null;
+	/** @var array{float,float} Player center loaded from the map's Player point object. */
+	public array $spawn = [80.0, 100.0];
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -186,6 +190,7 @@ final class DemoLevel
 		}
 
 		$map = reset($maps);
+		$this->spawn = $this->playerSpawn($map);
 		$this->terrain = MapTerrain::build($map);
 		$this->waters = WaterRegions::fromMaps($map);
 		$this->lightDashes = new LightDashes($engine->entities);
@@ -201,8 +206,23 @@ final class DemoLevel
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
 		$this->platforms = new Platforms($engine->entities, $this->terrain, $map);
+		$this->gravityFeatures = new GravityFeatures($engine->entities, $this->terrain, $map);
 
 		$engine->systems->add($this->systemPrefix . 'platforms', [$this->platforms, 'update'], after: ['movement']);
+
+		if($this->gravityFeatures->isEmpty())
+		{
+			$this->gravityFeatures->close();
+			$this->gravityFeatures = null;
+		}
+		else
+		{
+			$engine->systems->add(
+				$this->systemPrefix . 'gravity-features'
+				, [$this->gravityFeatures, 'update']
+				, after: ['movement']
+			);
+		}
 
 		if($this->id !== 'isometric')
 		{
@@ -377,6 +397,33 @@ final class DemoLevel
 	}
 
 	/**
+	 * Resolve a map-authored player point with inherited world and layer placement.
+	 *
+	 * @param \PhpWasmEngine\Tiled\TileMap $map Loaded destination map containing object layers.
+	 * @return array{float,float} First Player object's world position, or the demo's legacy spawn.
+	 */
+	private function playerSpawn(\PhpWasmEngine\Tiled\TileMap $map): array
+	{
+		foreach($map->layers as $layer)
+		{
+			foreach($layer->objects as $object)
+			{
+				$class = strtolower((string)(($object['class'] ?? '') ?: ($object['type'] ?? '')));
+
+				if($class === 'player')
+				{
+					return [
+						(float)($object['x'] ?? 80) + $map->x + $layer->offsetX
+						, (float)($object['y'] ?? 100) + $map->y + $layer->offsetY
+					];
+				}
+			}
+		}
+
+		return [80.0, 100.0];
+	}
+
+	/**
 	 * Select the initial camera position for the destination demo.
 	 *
 	 * @return array{float,float} Top-left camera coordinates in world pixels.
@@ -442,6 +489,7 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'shields');
 		$engine->systems->remove($this->systemPrefix . 'water-features');
 		$engine->systems->remove($this->systemPrefix . 'platforms');
+		$engine->systems->remove($this->systemPrefix . 'gravity-features');
 		$engine->systems->remove($this->systemPrefix . 'grapples');
 		$engine->systems->remove($this->systemPrefix . 'vehicle-seats');
 		$engine->systems->remove($this->systemPrefix . 'water-particles');
@@ -455,6 +503,7 @@ final class DemoLevel
 		$this->shields?->close();
 		$this->waterFeatures?->close();
 		$this->platforms?->close();
+		$this->gravityFeatures?->close();
 		$this->waterParticles?->close();
 		$this->waterRenderer?->close();
 		$this->backdropTwist?->close();
