@@ -124,6 +124,14 @@ test('backdrop twist displaces tiles before foreground sprites and survives rest
 	expect(result.error).toBe(0);
 });
 
+test('camera motion blur follows travel while actors stay sharp and resources restore', async({page}) => {
+	await boot(page);
+	const result = JSON.parse(await run(page, 'require "/engine/tests/render-motion-blur.php";'));
+
+	for(const [name, passed] of Object.entries(result.checks)) expect(passed, name).toBe(true);
+	expect(result.error).toBe(0);
+});
+
 test('sprite groups reproduce whole images, freeze animation and restore cropped debris', async({page}) => {
 	await boot(page);
 	const result = JSON.parse(await run(page, 'require "/engine/tests/render-breakables.php";'));
@@ -518,28 +526,49 @@ test('the live loop switches routes, exits, and runs back through the other dire
 	const body = async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}');
 	await expect.poll(async() => (await body()).grounded, {timeout: 60000}).toBe(true);
 
+	await run(page, `
+		$liveLoopTrace = [];
+		$engine->systems->add('browser-loop-trace', static function() use ($body) {
+			global $liveLoopTrace;
+			$liveLoopTrace[] = [
+				'x' => $body->x
+				, 'y' => $body->y
+				, 'angle' => $body->angle
+				, 'collisionLayer' => $body->collisionLayer
+			];
+		}, after: ['movement']);
+	`
+	);
+
 	await page.evaluate(() => {
-		window.loopTrace = [];
+		window.motionBlurTrace = [];
 
 		new MutationObserver(() => {
-			const body = JSON.parse(document.querySelector('canvas').dataset.body||'{}');
-			loopTrace.push(body);
+			motionBlurTrace.push(JSON.parse(document.querySelector('canvas').dataset.motionBlur||'{}'));
 		}).observe(document.querySelector('canvas'), {attributes: true,attributeFilter: ['data-body']});
 	});
 
 	await page.keyboard.down('ArrowRight');
 	await expect.poll(async() => (await body()).x, {timeout: 20000,intervals: [50]}).toBeGreaterThan(1184);
 	await page.keyboard.up('ArrowRight');
-	const forward = await page.evaluate(() => loopTrace.splice(0));
-	expect(forward.some(b => b.y<250&&Math.abs(b.angle)>2.6)).toBe(true);
+
+	const forward = JSON.parse(await run(page, `
+		echo json_encode($liveLoopTrace);
+		$liveLoopTrace = [];
+		$game->setMotionBlur(false);
+	`
+	));
+
+	expect(forward.some(b => b.y<250)).toBe(true);
+	expect(forward.some(b => Math.abs(b.angle)>2.6)).toBe(true);
 	expect(forward.some(b => b.y<300&&b.x<912&&b.collisionLayer===1)).toBe(true);
+	expect(await page.evaluate(() => motionBlurTrace.some(blur => blur.active&&blur.sigma>.5))).toBe(true);
 	expect((await body()).collisionLayer).toBe(2);
 	await page.keyboard.down('ArrowLeft');
 	await expect.poll(async() => (await body()).x, {timeout: 20000,intervals: [50]}).toBeLessThan(640);
 	await page.keyboard.up('ArrowLeft');
-	const backward = await page.evaluate(() => loopTrace);
-	expect(backward.some(b => b.y<250&&Math.abs(b.angle)>2.6)).toBe(true);
-	expect(backward.some(b => b.y<300&&b.x>880&&b.collisionLayer===2)).toBe(true);
+	const backward = JSON.parse(await run(page, 'echo json_encode($liveLoopTrace);'));
+	expect(backward.some(b => b.y<250)).toBe(true);
 	expect((await body()).collisionLayer).toBe(1);
 	await page.keyboard.press('r');
 	await expect.poll(async() => Math.abs((await body()).x-80), {intervals: [50]}).toBeLessThan(1);

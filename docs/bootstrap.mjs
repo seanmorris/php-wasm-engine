@@ -29,7 +29,7 @@ canvas.addEventListener('webglcontextrestored', () => {
 
 /**
 * Load one demo, reusing its WASM runtime when the PHP version/extensions match.
-* @param {object} options Scene, movement profile, PHP version, and fixture options.
+* @param {object} options Scene, movement profile, PHP version, graphics, and fixture options.
 * @returns {Promise<object>} Ready PHP instance, or a rejection on failure/cancellation.
 */
 export function boot(
@@ -40,6 +40,7 @@ export function boot(
 		, zlib = false
 		, version = '8.4'
 		, intro = false
+		, motionBlur = true
 	} = {}
 ){
 	if(!/^8\.[0-5]$/.test(version)
@@ -57,8 +58,9 @@ export function boot(
 			, 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'
 		].includes(scene)
 		|| !['runner', 'glider', 'flyer'].includes(profile)
+		|| typeof motionBlur !== 'boolean'
 	){
-		return Promise.reject(Error('Unsupported PHP version, scene, or movement profile'));
+		return Promise.reject(Error('Unsupported PHP version, scene, movement profile, or graphics setting'));
 	}
 
 	pending?.abort();
@@ -91,7 +93,14 @@ export function boot(
 			, 'vehicles'
 			, 'scene'
 			, 'profile'
-			, 'loading', 'levelError', 'intro', 'hud', 'combo', 'debug', 'sequences'
+			, 'loading'
+			, 'levelError'
+			, 'intro'
+			, 'hud'
+			, 'combo'
+			, 'debug'
+			, 'sequences'
+			, 'motionBlur'
 		]){
 			delete canvas.dataset[key];
 		}
@@ -138,7 +147,7 @@ export function boot(
 
 		const module = await php.binary;
 		signal.throwIfAborted();
-		Object.assign(module, {scene, profile, demoControls: controls});
+		Object.assign(module, {scene, profile, motionBlur, demoControls: controls});
 		const response = await fetch(new URL('engine-files.json', base), {signal});
 
 		if(!response.ok) throw Error('Engine manifest: ' + response.status);

@@ -37,10 +37,12 @@ final class DemoGame
 	public int $sequenceCount = 0;
 	public string $scene = '';
 	public string $error = '';
+	public bool $motionBlur = true;
 	private object $host;
 	private object $canvas;
 	private object $status;
 	private int $frames = 0;
+	private float $frameElapsed = 0;
 
 	/**
 	 * Attach persistent movement and browser diagnostics to the running session.
@@ -79,6 +81,8 @@ final class DemoGame
 	 */
 	public function input(Engine $engine, float $elapsed): bool
 	{
+		$this->frameElapsed = $elapsed;
+
 		foreach($engine->input->sequences->drain() as $match)
 		{
 			$this->lastSequence = $match['name'];
@@ -168,6 +172,18 @@ final class DemoGame
 	}
 
 	/**
+	 * Enable or disable camera motion blur without retaining movement from the old setting.
+	 *
+	 * @param bool $enabled Whether terrain should blur along camera travel.
+	 * @return void Applies the setting immediately and resets the active camera baseline.
+	 */
+	public function setMotionBlur(bool $enabled): void
+	{
+		$this->motionBlur = $enabled;
+		$this->level?->motionBlur?->reset();
+	}
+
+	/**
 	 * Cancel staged resources while leaving the active level and session untouched.
 	 *
 	 * @return void Releases the pending level and clears the previous load error.
@@ -236,6 +252,7 @@ final class DemoGame
 	 */
 	private function resetPlayer(): void
 	{
+		$this->level?->motionBlur?->reset();
 		$this->level?->vehicles?->dismount($this->entity, 'reset');
 		$this->engine->entities->get($this->entity, Rider::class)->cooldowns = [];
 		$this->level?->grapples?->release($this->entity, inherit: false);
@@ -646,7 +663,21 @@ final class DemoGame
 		$level = $this->level;
 		$camera = $this->camera;
 		$time = $this->engine->time * 1000;
+
+		$motionBlur = $level->motionBlur->sample(
+			$camera
+			, $this->frameElapsed
+			, $this->motionBlur && !$this->engine->userPaused && !$this->menu->menu->isOpen
+		);
+
+		$this->canvas->dataset->motionBlur = json_encode($motionBlur);
 		$level->waterRenderer?->begin();
+
+		if($motionBlur['active'])
+		{
+			$level->motionBlurRenderer->begin();
+		}
+
 		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
 		$this->canvas->dataset->vehicles = json_encode($level->vehicles?->snapshot() ?? []);
 		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
@@ -661,6 +692,15 @@ final class DemoGame
 			);
 
 			$stats = $this->renderStats = $level->renderer->render($camera, $time, 0);
+
+			if($motionBlur['active'])
+			{
+				$level->motionBlurRenderer->compose($motionBlur['sigma'], $motionBlur['x'], $motionBlur['y']);
+
+				$stats['draws'] += $level->motionBlurRenderer->draws;
+				$this->renderStats = $stats;
+			}
+
 			$loaded = array_map('basename', array_keys($level->stream->loaded()));
 			$pending = array_map('basename', $level->stream->pending());
 
@@ -716,6 +756,11 @@ final class DemoGame
 				, $backdropTwist['y']
 				, $backdropTwist['strength']
 			);
+		}
+
+		if($motionBlur['active'])
+		{
+			$level->motionBlurRenderer->compose($motionBlur['sigma'], $motionBlur['x'], $motionBlur['y']);
 		}
 
 		$pose = $this->playerPose($body);
@@ -818,6 +863,7 @@ final class DemoGame
 
 		$this->renderStats['draws'] += $level->waterRenderer?->draws ?? 0;
 		$this->renderStats['draws'] += $level->backdropTwist?->draws ?? 0;
+		$this->renderStats['draws'] += $motionBlur['active'] ? $level->motionBlurRenderer->draws : 0;
 
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
@@ -955,6 +1001,7 @@ final class DemoGame
 			, $this->canvas->dataset->vehicles
 			, $this->canvas->dataset->grapples
 			, $this->canvas->dataset->platforms
+			, $this->canvas->dataset->motionBlur
 		);
 	}
 }

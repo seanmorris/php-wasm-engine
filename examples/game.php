@@ -45,6 +45,7 @@ $entity = $engine->entities->create(
 
 $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $counter, $combo, $entity);
+$game->setMotionBlur(vrzno_env('motionBlur') !== false);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);
 $game->hud = new DemoPlayerHud($pauseMenu->renderer->font, $counter, $pauseMenu->renderer->atlas);
 $game->comboHud = new DemoComboHud($pauseMenu->renderer->font, $combo, $pauseMenu->renderer->atlas);

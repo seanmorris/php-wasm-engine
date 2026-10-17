@@ -26,6 +26,8 @@ use PhpWasmEngine\Physics\WaterRegions;
 use PhpWasmEngine\Render\BackdropTwistRenderer;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\MapRenderer;
+use PhpWasmEngine\Render\MotionBlur;
+use PhpWasmEngine\Render\MotionBlurRenderer;
 use PhpWasmEngine\Render\SpriteRenderer;
 use PhpWasmEngine\Render\WaterRenderer;
 use PhpWasmEngine\Render\WorldRenderer;
@@ -44,6 +46,8 @@ final class DemoLevel
 	public ?WaterRegions $waters = null;
 	public ?WaterRenderer $waterRenderer = null;
 	public ?BackdropTwistRenderer $backdropTwist = null;
+	public ?MotionBlur $motionBlur = null;
+	public ?MotionBlurRenderer $motionBlurRenderer = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
 	public ?LightDashes $lightDashes = null;
@@ -168,6 +172,9 @@ final class DemoLevel
 
 			return false;
 		}
+
+		$this->motionBlur = new MotionBlur;
+		$this->motionBlurRenderer = new MotionBlurRenderer($engine->device->width, $engine->device->height);
 
 		if($this->id === 'world')
 		{
@@ -405,6 +412,8 @@ final class DemoLevel
 	{
 		$this->renderer?->restore();
 		$this->backdropTwist?->restore();
+		$this->motionBlurRenderer?->restore();
+		$this->motionBlur?->reset();
 		$this->sprites?->restore();
 		$this->waterRenderer?->restore();
 	}
@@ -449,6 +458,7 @@ final class DemoLevel
 		$this->waterParticles?->close();
 		$this->waterRenderer?->close();
 		$this->backdropTwist?->close();
+		$this->motionBlurRenderer?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();

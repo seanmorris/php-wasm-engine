@@ -561,6 +561,7 @@ require __DIR__ . '/badniks.php';
 require __DIR__ . '/mini-bosses.php';
 require __DIR__ . '/boss-regions.php';
 require __DIR__ . '/platform-camera.php';
+require __DIR__ . '/motion-blur.php';
 require __DIR__ . '/monitors.php';
 require __DIR__ . '/shields.php';
 require __DIR__ . '/grinding.php';
