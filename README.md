@@ -53,6 +53,7 @@ $horizontal = $engine->controls->axis('left','right'); // -1..1
 $jumped = $engine->controls->pressed('jump');
 $jumpHeld = $engine->controls->down('jump');
 $jumpReleased = $engine->controls->released('jump');
+$sameJump = $engine->controls->pressed(0); // Space, Xbox A, or PlayStation Cross.
 
 // For custom bindings or separate players, read an individual SDL instance ID.
 foreach($engine->input->gamepads->ids() as $id)
@@ -62,11 +63,33 @@ foreach($engine->input->gamepads->ids() as $id)
 }
 ~~~
 
-SDL supplies device mappings. `axis()` returns stick values in -1..1 and trigger values in 0..1; `button()` returns a boolean. Omitting the instance ID combines buttons from all pads and selects the strongest magnitude for each axis. IDs change on reconnect, even when the browser reuses a slot. X/Y, shoulders, triggers and the right stick are available for custom bindings; the demo only maps the abilities listed above.
+SDL supplies device mappings. `axis()` returns stick values in -1..1 and trigger values in 0..1; `button()` returns a boolean. Omitting the instance ID combines buttons from all pads and selects the strongest magnitude for each axis. IDs change on reconnect, even when the browser reuses a slot. `Controls` exposes standard button numbers 0–16, including shoulders, triggers and stick clicks, alongside the existing named actions. The right stick remains available through `Gamepads::axis()`.
 
 `Engine` buffers keyboard presses and sampled gamepad action presses until the next simulation step, so short taps survive frames without an update. Custom loops should call `SdlInput::poll()` each frame and pass `SdlInput::consume()` to `Controls::set()` once per simulation step. `snapshot()` previews the pending input without consuming it.
 
 Start pauses simulation while rendering and controller polling continue. `Engine::$userPaused` reports this state. Losing canvas focus clears input. After focus, tab visibility or WebGL recovery, held gamepad buttons and axes must return to neutral before they can act again. This prevents an idle tab from replaying a jump or dash. `Engine::stop()` closes controller handles before shutting down SDL. Native hosts that drive `tick()` themselves should call `$engine->input->close()` before `$device->close()`.
+
+Observe timed codes and fighting-game inputs through the same logical surface:
+
+~~~php
+$codes = $engine->input->sequences;
+$codes->add('konami', [12, 12, 13, 13, 14, 15, 14, 15, 1, 0], .75);
+$codes->add('special', ['down', 'forward', 1], .25);
+$codes->add('uppercut', [['press' => 2, 'held' => ['down']]]);
+
+// In a frame callback, independently of simulation stepping:
+foreach($codes->drain() as $match)
+{
+	// Dispatch $match['name'] to your gameplay code.
+}
+~~~
+
+Sequences retain ordered keyboard taps, support chords, diagonals, charged
+releases, facing-relative directions, overlapping prefixes and timing limits.
+Text editing and input recovery clear partial history. The demo's Konami and
+moving-boxes debug codes enable its debug panel, which also reports example
+fighting inputs. See [logical input and sequences](docs/input.md) for default
+bindings, remapping, timing semantics, replay input and runnable examples.
 
 ## Intro cards and startup
 
@@ -454,7 +477,7 @@ Related statements stay grouped, with blank lines before control flow, after con
 
 `composer lint` also runs `composer lint:readability`. This reports remaining long lines and warns about more than 10 consecutive code lines without a blank line, suggesting separation into semantic blocks. These warnings are advisory; they do not insert blank lines automatically.
 
-Every engine method, constructor, closure, and arrow function has PHPDoc describing its behavior, parameters, return type, and return value. Array shapes and callback signatures describe structured inputs and outputs. `composer lint` also runs `composer lint:docs`, which checks all 323 functions in `src/` and the autoloader without executing them. The check rejects missing function descriptions, undocumented or out-of-order parameters, and missing return types or descriptions. To inspect a specific file or directory, run `php scripts/check-phpdoc.php path/to/source`.
+Every engine method, constructor, closure, and arrow function has PHPDoc describing its behavior, parameters, return type, and return value. Array shapes and callback signatures describe structured inputs and outputs. `composer lint` also runs `composer lint:docs`, which checks all functions in `src/` and the autoloader without executing them. The check rejects missing function descriptions, undocumented or out-of-order parameters, and missing return types or descriptions. To inspect a specific file or directory, run `php scripts/check-phpdoc.php path/to/source`.
 
 Tests run the same logic in CLI PHP and real 32-bit PHP WASM. Browser tests read GPU pixels and exercise live scenes. Collision regressions include thin floors/walls/ceilings at high speed, subpixel obstacles, tile seams, and entry/crown/exit traversal of the Tiled loop in both directions, walking and rolling.
 

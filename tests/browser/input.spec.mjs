@@ -276,3 +276,184 @@ test('gamepad dash breaks blocks on rolling contact after releasing the charge',
   await page.evaluate(() => window.stopEngine());
   expect(errors).toEqual([]);
 });
+
+async function configureSequence(page, code) {
+  const status = await page.evaluate(code => enginePhp.run('<?php ' + code), code);
+  expect(status).toBe(0);
+}
+
+async function padTap(page, button) {
+  await change(page, {buttons: [button]});
+  await expect.poll(async () => (await frame(page)).keys['button' + button]).toBe(1);
+  await change(page, {});
+  await expect.poll(async () => (await frame(page)).keys['button' + button]).toBe(0);
+}
+
+test('logical button zero combines Space and A without duplicate presses or releases', async ({page}) => {
+  const errors = await start(page);
+  await configureSequence(page, "$engine->input->sequences->add('zero', [0]);");
+  await page.keyboard.down('Space');
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(1);
+  await change(page, {buttons: [0]});
+  await page.keyboard.up('Space');
+  await page.waitForTimeout(100);
+  expect((await frame(page)).matches).toHaveLength(1);
+  expect((await frame(page)).keys).toMatchObject({button0: 1, jump: true});
+  await change(page, {});
+  await expect.poll(async () => (await frame(page)).keys.button0).toBe(0);
+  await padTap(page, 0);
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(2);
+  await configureSequence(page, "$engine->input->bindButton(0, [SDLK_b]);");
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(80);
+  expect((await frame(page)).matches).toHaveLength(2);
+  await page.keyboard.press('b');
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(3);
+  expect(errors).toEqual([]);
+});
+
+test('standard SDL mapping includes all face buttons, shoulders, triggers and stick clicks', async ({page}) => {
+  const errors = await start(page);
+  const buttons = [2, 3, 4, 5, 6, 7, 10, 11, 16];
+  await configureSequence(page, "$engine->input->sequences->add('chord', [[2,3,4,5,6,7,10,11,16]]);");
+  await change(page, {buttons});
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(1);
+  for(const button of buttons) expect((await frame(page)).keys['button' + button]).toBe(1);
+  expect((await frame(page)).keys).toMatchObject({button0: 0, button1: 0, reset: false, pause: false});
+  await change(page, {});
+  await expect.poll(async () => (await frame(page)).keys.button16).toBe(0);
+  for(const [key, button] of [['c', 2], ['v', 3], ['q', 4], ['e', 5], ['1', 6], ['3', 7]]) {
+    await page.keyboard.down(key);
+    await expect.poll(async () => (await frame(page)).keys['button' + button]).toBe(1);
+    await page.keyboard.up(key);
+    await expect.poll(async () => (await frame(page)).keys['button' + button]).toBe(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('Konami uses keyboard, D-pad and mixed devices on the same observer', async ({page}) => {
+  const errors = await start(page);
+  const keys = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','x','Space'];
+  const buttons = [12,12,13,13,14,15,14,15,1,0];
+  await configureSequence(page, "$engine->input->sequences->add('combo', [12,12,13,13,14,15,14,15,1,0]);");
+  for(const key of keys) await page.keyboard.press(key);
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(1);
+  for(const button of buttons) await padTap(page, button);
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(2);
+  for(let index = 0; index < keys.length; index++) {
+    if(index % 2) await padTap(page, buttons[index]);
+    else {
+      // Device handoffs without a sampled neutral state are one logical hold.
+      await page.keyboard.down(keys[index]);
+      await expect.poll(async () => (await frame(page)).keys['button' + buttons[index]]).toBe(1);
+      await page.keyboard.up(keys[index]);
+      await expect.poll(async () => (await frame(page)).keys['button' + buttons[index]]).toBe(0);
+    }
+  }
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(3);
+  expect((await frame(page)).matches.every(match => match.name === 'combo')).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('ordered taps between simulation updates survive and keep their SDL timing', async ({page}) => {
+  const errors = await start(page, true, 10);
+  await configureSequence(page, "$engine->input->sequences->add('combo', [0,0,1], .1);");
+  const ticks = (await frame(page)).ticks;
+  await page.evaluate(() => {
+    for(const [key, code] of [[' ', 'Space'], [' ', 'Space'], ['x', 'KeyX']]) {
+      for(const type of ['keydown', 'keyup']) {
+        document.querySelector('canvas').dispatchEvent(new KeyboardEvent(type, {key, code, keyCode: key === ' ' ? 32 : 88, which: key === ' ' ? 32 : 88, bubbles: true}));
+      }
+    }
+  });
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(1);
+  expect((await frame(page)).ticks).toBe(ticks);
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(140);
+  await page.keyboard.press('Space');
+  await page.keyboard.press('x');
+  await page.waitForTimeout(50);
+  expect((await frame(page)).matches).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+test('Mortal Kombat style motion and held-direction attacks match from pad sticks or keys', async ({page}) => {
+  const errors = await start(page);
+  await configureSequence(page, `
+    $engine->input->sequences->add('motion', ['down','down-forward','forward',1], .5);
+    $engine->input->sequences->add('uppercut', [['press'=>2, 'held'=>['down']]]);
+  `);
+  for(const axes of [[0,1], [1,1], [1,0]]) {
+    await change(page, {axes});
+    await page.waitForTimeout(60);
+  }
+  await change(page, {axes: [1,0], buttons: [1]});
+  await expect.poll(async () => (await frame(page)).matches.map(match => match.name)).toEqual(['motion']);
+  await change(page, {});
+  await page.waitForTimeout(50);
+  await configureSequence(page, "$engine->input->sequences->setFacing(-1);");
+  await page.keyboard.down('ArrowDown');
+  await page.keyboard.down('ArrowLeft');
+  await page.keyboard.up('ArrowDown');
+  await page.keyboard.press('x');
+  await page.keyboard.up('ArrowLeft');
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(2);
+  await change(page, {buttons: [13]});
+  await page.waitForTimeout(50);
+  await change(page, {buttons: [13, 2]});
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(3);
+  expect((await frame(page)).matches.at(-1).name).toBe('uppercut');
+  await page.waitForTimeout(120);
+  expect((await frame(page)).matches).toHaveLength(3);
+  expect(errors).toEqual([]);
+});
+
+for(const recovery of ['focus', 'visibility', 'WebGL']) test('partial combos are discarded across ' + recovery, async ({page}) => {
+  const errors = await start(page);
+  await configureSequence(page, "$engine->input->sequences->add('combo', [0,1], 5);");
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await frame(page)).progress).toBe(1);
+  if(recovery === 'focus') await page.locator('#mute').focus();
+  if(recovery === 'visibility') await page.evaluate(() => {Object.defineProperty(document, 'hidden', {configurable: true, get: () => true}); document.dispatchEvent(new Event('visibilitychange'));});
+  if(recovery === 'WebGL') await page.evaluate(() => {window.comboLoss = document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context'); comboLoss.loseContext();});
+  await page.waitForTimeout(100);
+  if(recovery === 'focus') await page.locator('canvas').focus();
+  if(recovery === 'visibility') await page.evaluate(() => {delete document.hidden; document.dispatchEvent(new Event('visibilitychange'));});
+  if(recovery === 'WebGL') await page.evaluate(() => comboLoss.restoreContext());
+  await expect.poll(async () => (await frame(page)).progress).toBe(0);
+  await page.keyboard.press('x');
+  await page.waitForTimeout(80);
+  expect((await frame(page)).matches).toEqual([]);
+  await page.keyboard.press('Space');
+  await page.keyboard.press('x');
+  await expect.poll(async () => (await frame(page)).matches.length).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('text entry cannot trigger input sequences or carry progress back into play', async ({page}) => {
+  const errors = await start(page);
+  await configureSequence(page, "$engine->input->sequences->add('combo', [0,1]);");
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await frame(page)).progress).toBe(1);
+  await configureSequence(page, "$engine->input->setTextInput(true);");
+  await page.keyboard.press('x');
+  await page.keyboard.press('Space');
+  await page.keyboard.press('x');
+  await page.waitForTimeout(100);
+  expect((await frame(page)).matches).toEqual([]);
+  await configureSequence(page, "$engine->input->setTextInput(false);");
+  await page.locator('canvas').focus();
+  await page.keyboard.press('x');
+  await page.waitForTimeout(80);
+  expect((await frame(page)).matches).toEqual([]);
+  await configureSequence(page, "$engine->input->sequences->add('single', [0]); $engine->input->setTextInput(true);");
+  await page.keyboard.down('Space');
+  await expect.poll(async () => (await frame(page)).keys.button0).toBe(1);
+  await configureSequence(page, "$engine->input->setTextInput(false);");
+  await page.waitForTimeout(80);
+  expect((await frame(page)).matches).toEqual([]);
+  await page.keyboard.up('Space');
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await frame(page)).matches.map(match => match.name)).toEqual(['single']);
+  expect(errors).toEqual([]);
+});

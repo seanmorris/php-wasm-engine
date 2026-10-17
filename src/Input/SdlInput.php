@@ -7,6 +7,11 @@ final class SdlInput
 	public bool $quit = false;
 	private array $keys = [], $pressedKeys = [], $pressedButtons = [];
 	public Gamepads $gamepads;
+	public Sequences $sequences;
+	private array $bindings = [];
+	private bool $discarding = false;
+	private float $sequenceTime = 0;
+	private array $sequenceBlocked = [];
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
 	private $canvas = null, $focusListener = null, $blurListener = null;
@@ -28,6 +33,16 @@ final class SdlInput
 	public function __construct()
 	{
 		$this->gamepads = new Gamepads;
+		$this->sequences = new Sequences;
+		$this->bindings = [
+			0 => [SDLK_SPACE, SDLK_z, SDLK_RETURN, SDLK_KP_ENTER]
+			, 1 => [SDLK_x, SDLK_LSHIFT, SDLK_LCTRL, SDLK_RCTRL]
+			, 2 => [SDLK_c], 3 => [SDLK_v], 4 => [SDLK_q], 5 => [SDLK_e]
+			, 6 => [SDLK_1], 7 => [SDLK_3], 8 => [SDLK_r], 9 => [SDLK_p, SDLK_ESCAPE]
+			, 10 => [SDLK_TAB], 11 => [SDLK_BACKSPACE]
+			, 12 => [SDLK_UP, SDLK_w], 13 => [SDLK_DOWN, SDLK_s]
+			, 14 => [SDLK_LEFT, SDLK_a], 15 => [SDLK_RIGHT, SDLK_d], 16 => []
+		];
 
 		if(function_exists('vrzno_env'))
 		{
@@ -110,6 +125,8 @@ final class SdlInput
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		$this->browserKeys = [];
 		$this->resetPads = true;
+		$this->sequenceBlocked = [];
+		$this->sequences->reset();
 	}
 
 	/**
@@ -119,13 +136,78 @@ final class SdlInput
 	 */
 	public function reset(): void
 	{
-		$this->poll();
+		$this->discarding = true;
+
+		try
+		{
+			$this->poll();
+		} finally
+		{
+			$this->discarding = false;
+		}
+
 		$this->keys = $this->pressedKeys = $this->pressedButtons = [];
 		$this->browserKeys = [];
 		$this->gamepads->reset();
 		$this->uiEvents = [];
 		$this->generation++;
 		$this->uiBlocked = [];
+		$this->sequences->reset();
+		$this->sequenceBlocked = [];
+	}
+
+	/**
+	 * Replace the keyboard alternatives for a logical gamepad button.
+	 *
+	 * @param int $button Nonnegative standard button number, or a custom number above 16.
+	 * @param list<int> $keys SDL key symbols; an empty list removes keyboard bindings.
+	 * @return void Preserves SDL pad mappings and discards held input and partial sequences.
+	 */
+	public function bindButton(int $button, array $keys): void
+	{
+		if($button < 0 || count(array_filter($keys, 'is_int')) !== count($keys))
+		{
+			throw new \InvalidArgumentException(
+				'Button bindings require an index and SDL key symbols'
+			);
+		}
+
+		$this->reset();
+		$this->bindings[$button] = array_values(array_unique($keys));
+	}
+
+	/**
+	 * Feed physical input into the observer without consuming the simulation's buffered taps.
+	 *
+	 * @param float|null $timestamp SDL event timestamp in wrapping milliseconds, or null for now.
+	 * @return void Preserves event order and suppresses editing and discarded inputs.
+	 */
+	private function observeSequences(?float $timestamp = null): void
+	{
+		if($this->discarding || !$this->focused || $this->textInput || $this->resetPads)
+		{
+			return;
+		}
+
+		$now = (float)SDL_GetTicks64() / 1000;
+		$time = $timestamp === null ? $now
+			: $now - fmod($now * 1000 - $timestamp + 4294967296.0, 4294967296.0) / 1000;
+		$this->sequenceTime = max($this->sequenceTime, $time);
+		$values = Buttons::normalize($this->snapshot(false));
+
+		foreach($this->sequenceBlocked as $key => $value)
+		{
+			if(($values[$key] ?? 0) < .5)
+			{
+				unset($this->sequenceBlocked[$key]);
+			}
+			else
+			{
+				$values[$key] = 0;
+			}
+		}
+
+		$this->sequences->update($values, $this->sequenceTime);
 	}
 
 	/**
@@ -145,6 +227,29 @@ final class SdlInput
 		if($this->canvas)
 		{
 			$this->focus($this->ownsFocus());
+		}
+
+		// Sample pads before keyboard releases so a device handoff stays one logical hold.
+		$activity = $this->gamepads->activity;
+
+		if($this->resetPads || !$this->focused)
+		{
+			$this->gamepads->reset();
+		}
+		else
+		{
+			$this->gamepads->poll();
+		}
+
+		$this->resetPads = false;
+
+		if($activity !== $this->gamepads->activity && $this->focused)
+		{
+			$this->inputTheme = self::padTheme($this->gamepads->activeName());
+		}
+		elseif($this->inputTheme !== 'keyboard' && !$this->gamepads->ids())
+		{
+			$this->inputTheme = 'keyboard';
 		}
 
 		$event = new \SDL_Event;
@@ -184,43 +289,33 @@ final class SdlInput
 				] = true;
 			}
 
+			if($event->type === SDL_KEYUP
+				|| ($event->type === SDL_KEYDOWN && !$event->key->repeat)
+			){
+				$this->observeSequences((float)$event->key->timestamp);
+			}
+
 			if($this->focused)
 			{
 				$this->uiEvent($event);
 			}
 		}
 
-		$activity = $this->gamepads->activity;
-
+		// Native focus events can arrive after the initial controller sample.
 		if($this->resetPads || !$this->focused)
 		{
 			$this->gamepads->reset();
-		}
-		else
-		{
-			$this->gamepads->poll();
+			$this->resetPads = false;
 		}
 
-		$this->resetPads = false;
+		$this->observeSequences();
 
-		if($activity !== $this->gamepads->activity && $this->focused)
+		foreach($this->snapshot(false) as $key => $value)
 		{
-			$this->inputTheme = self::padTheme($this->gamepads->activeName());
-		}
-		elseif($this->inputTheme !== 'keyboard' && !$this->gamepads->ids())
-		{
-			$this->inputTheme = 'keyboard';
-		}
-
-		foreach([SDL_CONTROLLER_BUTTON_A
-		, SDL_CONTROLLER_BUTTON_B
-		, SDL_CONTROLLER_BUTTON_BACK
-			, SDL_CONTROLLER_BUTTON_START
-		] as $button
-		){
-			if($this->gamepads->button($button))
+			if(strncmp($key, 'button', 6) === 0)
 			{
-				$this->pressedButtons[$button] = true;
+				$button = (int)substr($key, 6);
+				$this->pressedButtons[$button] = max($this->pressedButtons[$button] ?? 0, $value);
 			}
 		}
 	}
@@ -241,85 +336,82 @@ final class SdlInput
 	/**
 	 * Merge keyboard keys, the strongest stick, and D-pad/button states.
 	 *
-	 * @return array<string,bool|int|float> Current logical controls without consuming buffered
-	 * short presses.
+	 * @param bool $buffered Include short presses retained for the next simulation step.
+	 * @return array<string,bool|int|float> Standard buttonN strengths plus existing named actions.
 	 */
-	public function snapshot(): array
+	public function snapshot(bool $buffered = true): array
 	{
 		if($this->closed || !$this->focused)
 		{
 			return [];
 		}
 
-		$down =
-			/**
-			 * Check whether any alternative keyboard binding is held or buffered.
-			 *
-			 * @param int ...$codes Alternative SDL key symbols for one logical action.
-			 * @return bool True if any supplied SDL key code is active.
-			 */
-			fn(...$codes) => count(array_filter($codes,
-				/**
-				 * Check a single SDL key against held state and buffered short presses.
-				 *
-				 * @param int $code SDL key symbol to inspect.
-				 * @return bool Whether the key contributes an active binding.
-				 */
-				fn($code) => !empty($this->keys[$code]) || !empty($this->pressedKeys[$code])
-			)) > 0;
-
-		$button =
-			/**
-			 * Merge a held controller button with its buffered short press.
-			 *
-			 * @param int $id SDL controller button identifier.
-			 * @return bool Whether any controller activates the requested button.
-			 */
-			fn($id) => $this->gamepads->button($id) || !empty($this->pressedButtons[$id]);
-		$x = $this->gamepads->axis(SDL_CONTROLLER_AXIS_LEFTX);
-		$y = $this->gamepads->axis(SDL_CONTROLLER_AXIS_LEFTY);
-		$left = $button(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-		$right = $button(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-		$up = $button(SDL_CONTROLLER_BUTTON_DPAD_UP);
-		$downPad = $button(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-
-		if($left || $right)
-		{
-			$x = (int)$right - (int)$left;
-		}
-
-		if($up || $downPad)
-		{
-			$y = (int)$downPad - (int)$up;
-		}
-
-		return ['left' => max((int)$down(SDLK_LEFT, SDLK_a), -$x, 0)
-		, 'right' => max((int)$down(
-			SDLK_RIGHT
-			, SDLK_d
-		), $x, 0
-		)
-			, 'up' => max((int)$down(SDLK_UP, SDLK_w), -$y, 0)
-			, 'down' => max(
-				(int)$down(SDLK_DOWN, SDLK_s)
-				, $y
-				, 0
-			)
-				, 'jump' => $down(SDLK_SPACE, SDLK_z, SDLK_RETURN)
-			|| $button(SDL_CONTROLLER_BUTTON_A)
-			, 'action' => $down(
-				SDLK_x
-				, SDLK_LSHIFT
-				, SDLK_LCTRL
-				, SDLK_RCTRL
-			) || $button(SDL_CONTROLLER_BUTTON_B)
-				, 'reset' => $down(SDLK_r) || $button(
-					SDL_CONTROLLER_BUTTON_BACK
-				)
-					, 'pause' => $down(SDLK_p, SDLK_ESCAPE) || $button(
-						SDL_CONTROLLER_BUTTON_START
-					)
+		$pad = [
+			0 => SDL_CONTROLLER_BUTTON_A, 1 => SDL_CONTROLLER_BUTTON_B
+			, 2 => SDL_CONTROLLER_BUTTON_X, 3 => SDL_CONTROLLER_BUTTON_Y
+			, 4 => SDL_CONTROLLER_BUTTON_LEFTSHOULDER
+			, 5 => SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+			, 8 => SDL_CONTROLLER_BUTTON_BACK, 9 => SDL_CONTROLLER_BUTTON_START
+			, 10 => SDL_CONTROLLER_BUTTON_LEFTSTICK
+			, 11 => SDL_CONTROLLER_BUTTON_RIGHTSTICK
+			, 12 => SDL_CONTROLLER_BUTTON_DPAD_UP, 13 => SDL_CONTROLLER_BUTTON_DPAD_DOWN
+			, 14 => SDL_CONTROLLER_BUTTON_DPAD_LEFT
+			, 15 => SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+			, 16 => SDL_CONTROLLER_BUTTON_GUIDE
 		];
+		$values = [];
+
+		foreach($this->bindings as $id => $keys)
+		{
+			$value = isset($pad[$id]) ? (float)$this->gamepads->button($pad[$id]) : 0;
+
+			if($id === 6 || $id === 7)
+			{
+				$axis = $id === 6 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT
+					: SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+				$value = $this->gamepads->axis($axis);
+			}
+
+			foreach($keys as $key)
+			{
+				if(!empty($this->keys[$key]) || ($buffered && !empty($this->pressedKeys[$key])))
+				{
+					$value = 1;
+				}
+			}
+
+			$values['button'.$id] = $value;
+		}
+
+		foreach([[SDL_CONTROLLER_AXIS_LEFTX, 14, 15], [SDL_CONTROLLER_AXIS_LEFTY, 12, 13]]
+			as [$axis, $negative, $positive]
+		){
+			// D-pad overrides the corresponding stick axis; keyboard still merges at full strength.
+			if(!$this->gamepads->button(
+				$pad[$negative]
+			) && !$this->gamepads->button(
+				$pad[$positive]
+			)){
+				$value = $this->gamepads->axis($axis);
+				$values['button'.$negative] = max($values['button'.$negative], -$value);
+				$values['button'.$positive] = max($values['button'.$positive], $value);
+			}
+		}
+
+		if($buffered)
+		{
+			foreach($this->pressedButtons as $id => $value)
+			{
+				$values['button'.$id] = max($values['button'.$id] ?? 0, $value);
+			}
+		}
+
+		foreach(Buttons::ALIASES as $name => $id)
+		{
+			$values[$name] = $id < 12 ? (bool)$values['button'.$id] : $values['button'.$id];
+		}
+
+		return $values;
 	}
 
 	/**
@@ -350,6 +442,7 @@ final class SdlInput
 		$this->canvas = $this->focusListener = $this->blurListener = null;
 		$this->keyboardWindow = $this->keyListener = null;
 		$this->gamepads->close();
+		$this->sequences->reset();
 	}
 
 	/**
@@ -393,6 +486,12 @@ final class SdlInput
 	 */
 	public function setTextInput(bool $enabled, ?array $rect = null): void
 	{
+		if($enabled !== $this->textInput)
+		{
+			$this->sequences->reset();
+			$this->sequenceBlocked = array_filter(Buttons::normalize($this->snapshot(false)));
+		}
+
 		if($rect && $enabled)
 		{
 			SDL_SetTextInputRect(new \SDL_Rect(...$rect));

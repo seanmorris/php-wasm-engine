@@ -20,6 +20,8 @@ final class DemoGame
 	public ?DemoDebugOverlay $debug = null;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
+	public string $lastSequence = '';
+	public int $sequenceCount = 0;
 	public string $scene = '';
 	public string $error = '';
 	private object $host;
@@ -43,6 +45,7 @@ final class DemoGame
 		$this->canvas = vrzno_env('canvas');
 		$this->status = (new Vrzno)->document->querySelector('#status');
 		$engine->systems->add('movement', [$this, 'update']);
+		(require __DIR__.'/sequences.php')($engine->input->sequences);
 	}
 
 	/**
@@ -54,6 +57,23 @@ final class DemoGame
 	 */
 	public function input(Engine $engine, float $elapsed): bool
 	{
+		foreach($engine->input->sequences->drain() as $match)
+		{
+			$this->lastSequence = $match['name'];
+			$this->sequenceCount++;
+
+			if($this->debug && in_array($match['name'], ['konami', 'debug'], true))
+			{
+				$this->debug->enabled = true;
+			}
+		}
+
+		$this->canvas->dataset->sequences = json_encode(
+			['last' => $this->lastSequence, 'count' => $this->sequenceCount
+			, 'konami' => $engine
+				->input->sequences->progress('konami')
+			]
+		);
 		$menu = $this->startup !== null && $this->startup->phase !== 'playing'
 			? $this->startup->menu : $this->menu->menu;
 
@@ -493,6 +513,6 @@ final class DemoGame
 		$this->releasePending();
 		$this->level?->close($this->engine);
 		$this->level = null;
-		unset($this->canvas->dataset->debug);
+		unset($this->canvas->dataset->debug, $this->canvas->dataset->sequences);
 	}
 }

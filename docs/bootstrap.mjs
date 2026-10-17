@@ -57,7 +57,7 @@ export function boot({scene = controls.scene, profile = controls.profile, run = 
 		signal.throwIfAborted();
 
 		for(const key of ['frames', 'body', 'menu', 'world', 'breakables', 'scene', 'profile',
-			'loading', 'levelError', 'intro', 'debug'])
+			'loading', 'levelError', 'intro', 'debug', 'sequences'])
 		{
 			delete canvas.dataset[key];
 		}
