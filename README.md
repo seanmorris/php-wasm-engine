@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, gravity and spring course, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -1159,6 +1159,27 @@ Select **Loop-de-loop** and hold Right to run the loop, then Left to return thro
 `Body::$collisionLayer` defaults to 1. `MapTerrain::build` reads the integer `collisionLayer` property, or names such as `Collision 0`, `Collision 1`, and `Collision 2`. Zero is common terrain, always included. Set `collision=false` on decorative layers that reuse collision tiles. Rendering remains independent of collision selection. `Terrain::add($points, $oneWay, $collisionLayer)` supports the same planes for geometry created in PHP; `raycast(..., collisionLayer: $body->collisionLayer)` selects the plane for custom probes, and `castBody` reads it from the body.
 
 Gate crossings are swept over the full displacement and processed before later terrain impacts. After each switch, the remaining movement is recast against the destination. Blocked switches retry while overlapping; neither thin gates nor newly solid obstacles are skipped at high speed. The [layout and authoring guide](docs/loops.md) includes the reference map analysis, a diagram, and all switch properties.
+
+## Gravity switches and springs
+
+Each `Body` has a cardinal gravity unit vector in `gravityX` and `gravityY`; gravity magnitude remains in `gravity`. `setGravityDirection()` rejects zero and diagonal vectors. Ground acceleration, air steering, terminal speed, jump release, flight, glide, drop-through, support loss, and landing all project through the active gravity and logical-right tangent axes. Existing down-gravity behavior keeps the same tuning.
+
+Landing compares the terrain contact normal with the active gravity vector. A ceiling whose normal points down therefore becomes ground when gravity points up, and either wall becomes ground for horizontal gravity. `Terrain::castBody()` still resolves the whole displacement, so a fast body cannot tunnel through a ceiling before regrounding. Ordinary loop adhesion remains angle-based and can retain walls or ceilings while momentum is high.
+
+Annotate Tiled point objects with class `GravitySwitch` or `Spring`. Object rotation defines the contact edge: zero faces up, 90 faces right, 180 faces down, and 270 faces left. Both accept `length`, `collisionLayer`, and `spriteGid`. A gravity switch accepts `gravity=down|right|up|left`, or explicit `gravityX` and `gravityY`; a spring accepts positive `power` in pixels per second.
+
+~~~php
+$features = new GravityFeatures($entities, $terrain, $map);
+$systems->add('gravity-features', [$features, 'update'], after: ['movement']);
+
+$features->activate($switchObjectId, $body);
+$features->launch($springObjectId, $body);
+$state = $features->snapshot();
+~~~
+
+Both features are ECS components with atlas-backed sprites and stable Tiled object IDs. Their directed one-way collision edges preserve authored wall and ceiling normals. Springs launch along that normal, clear ground speed, and leave `jumping=false`, matching a forced airborne bounce rather than a player jump. `GravityFeatures::close()` removes every owned entity and collision edge.
+
+Choose **Gravity switches & springs** in either menu. The wide chamber gives the player room to land and explore before reaching each deliberately spaced pressure plate. The four plates cover floor, right-wall, ceiling, and left-wall gravity, while a spring faces inward from each surface. [`examples/assets/gravity.tmj`](examples/assets/gravity.tmj) is the complete authoring example.
 
 ## Rendering
 

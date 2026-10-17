@@ -261,7 +261,7 @@ final class PlatformCamera
 			'climbing' => [[.5, .33, .5, .66][$surface], .5, 24.0],
 
 			'airplane' => [.5 - max(abs($body->vx) / 6000, .45) * self::sign($body->vx), .5, 20.0],
-			'aerial' => [.5, !$body->jumping ? .5 : ($body->vy < 0 ? .75 : .35), 24.0],
+			'aerial' => $this->aerialPreset($body),
 
 			'popping' => [.5, .25, 6.0],
 			'hooked' => [.5, .6, 25.0],
@@ -275,6 +275,32 @@ final class PlatformCamera
 			'draggable' => [.5, .5, 3.0],
 			'locked' => [.5, .25, 16.0]
 		};
+	}
+
+	/**
+	 * Frame a jump along the actor's active gravity axis.
+	 *
+	 * Rising jumps leave more viewport space opposite gravity; falls leave more space in the
+	 * gravity direction. Wall gravity therefore changes only the horizontal anchor, while ceiling
+	 * gravity mirrors the ordinary floor-mode vertical framing.
+	 *
+	 * @param Body $body Airborne actor supplying gravity-relative velocity and jump state.
+	 * @return array{float,float,float} Horizontal anchor, vertical anchor, and reference frames.
+	 */
+	private function aerialPreset(Body $body): array
+	{
+		if(!$body->jumping)
+		{
+			return [.5, .5, 24.0];
+		}
+
+		$offset = $body->gravityVelocity() < 0 ? .25 : -.15;
+
+		return [
+			.5 + $body->gravityX * $offset
+			, .5 + $body->gravityY * $offset
+			, 24.0
+		];
 	}
 
 	/**
@@ -328,7 +354,7 @@ final class PlatformCamera
 			return [$x, $y];
 		}
 
-		$speed = $body->grounded ? $body->groundSpeed : $body->vx;
+		$speed = $body->grounded ? $body->groundSpeed : $body->tangentVelocity();
 		$bias = -self::sign($speed) * min(abs($speed) / 1020, 1) * .4;
 
 		return match($surface)

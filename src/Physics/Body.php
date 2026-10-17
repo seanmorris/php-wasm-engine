@@ -24,6 +24,8 @@ final class Body
 		,$coyote = 0,$jumpBuffer = 0;
 	public float $acceleration = 432,$braking = 1440,$friction = 360,$airAcceleration = 1080
 		,$gravity = 1800,$jumpSpeed = 660,$maxSpeed = 1080,$terminalSpeed = 1800;
+	/** Cardinal unit vector defining the direction in which gravity accelerates this body. */
+	public int $gravityX = 0,$gravityY = 1;
 	public float $minGrindSpeed = 360,$maxGrindSpeed = 2400,$grindAcceleration = 360;
 	public float $density = 0,$waterDepth = 0;
 	public ?WaterRegion $water = null;
@@ -68,5 +70,73 @@ final class Body
 	public function supportY(): float
 	{
 		return $this->y + cos($this->angle) * $this->halfHeight;
+	}
+
+	/**
+	 * Select one of the four cardinal gravity directions.
+	 *
+	 * @param int $x Horizontal gravity component: negative one, zero, or positive one.
+	 * @param int $y Vertical gravity component: negative one, zero, or positive one.
+	 * @return void Replaces the active direction while retaining gravity magnitude and momentum.
+	 */
+	public function setGravityDirection(int $x, int $y): void
+	{
+		if(abs($x) + abs($y) !== 1)
+		{
+			throw new \InvalidArgumentException('Gravity direction must be cardinal');
+		}
+
+		$this->gravityX = $x;
+		$this->gravityY = $y;
+	}
+
+	/**
+	 * Resolve the world X component of the body's input-relative right tangent.
+	 *
+	 * @return int Horizontal component perpendicular to the active gravity direction.
+	 */
+	public function tangentX(): int
+	{
+		return $this->gravityY;
+	}
+
+	/**
+	 * Resolve the world Y component of the body's input-relative right tangent.
+	 *
+	 * @return int Vertical component perpendicular to the active gravity direction.
+	 */
+	public function tangentY(): int
+	{
+		return -$this->gravityX;
+	}
+
+	/**
+	 * Project current world velocity onto the active gravity direction.
+	 *
+	 * @return float Signed velocity; positive values travel with gravity.
+	 */
+	public function gravityVelocity(): float
+	{
+		return $this->vx * $this->gravityX + $this->vy * $this->gravityY;
+	}
+
+	/**
+	 * Project current world velocity onto the input-relative right tangent.
+	 *
+	 * @return float Signed velocity; positive values travel toward logical right.
+	 */
+	public function tangentVelocity(): float
+	{
+		return $this->vx * $this->tangentX() + $this->vy * $this->tangentY();
+	}
+
+	/**
+	 * Resolve the surface angle that leaves the body's sole facing with gravity.
+	 *
+	 * @return float World-space radians used while the actor is airborne and upright.
+	 */
+	public function uprightAngle(): float
+	{
+		return atan2($this->tangentY(), $this->tangentX());
 	}
 }

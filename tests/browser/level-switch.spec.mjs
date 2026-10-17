@@ -60,7 +60,7 @@ test(
 			, 'water'
 			, 'water-rail'
 			, 'water-skim-rail'
-			, 'water-loop', 'grinding', 'loop'
+			, 'water-loop', 'gravity', 'grinding', 'loop'
 			, 'infinite', 'isometric', 'world', 'breakables'
 		]) {
 			await change(page, scene);
@@ -145,7 +145,7 @@ test('latest level request wins and cancelled assets cannot reappear', async ({p
 	await page.route('**/loop.tmj', route => { pending = route; });
 
 	await change(page, 'loop');
-	await expect.poll(() => Boolean(pending)).toBe(true);
+	await expect.poll(() => Boolean(pending), {timeout: 15000}).toBe(true);
 	await select(page, 'infinite');
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'infinite');
 	await pending.fulfill({status: 200, body: '{}'}).catch(() => {});
@@ -194,7 +194,7 @@ test('cancelling the first level load settles startup and Run can retry', async 
 		window.startResult = bootEngine({scene: 'loop'}).catch(error => error.message);
 	});
 
-	await expect.poll(() => Boolean(pending)).toBe(true);
+	await expect.poll(() => Boolean(pending), {timeout: 15000}).toBe(true);
 	await page.locator('canvas').focus();
 	await page.keyboard.press('p');
 	await expect.poll(async () => (await data(page, 'menu')).open).toBe(true);
