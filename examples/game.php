@@ -4,6 +4,7 @@ require_once dirname(__DIR__).'/autoload.php';
 require_once __DIR__.'/breakables.php';
 require_once __DIR__.'/DemoLevel.php';
 require_once __DIR__.'/DemoGame.php';
+require_once __DIR__.'/DemoDebugOverlay.php';
 require_once __DIR__.'/menu.php';
 require_once __DIR__.'/cards.php';
 require_once __DIR__.'/DemoBackdrop.php';
@@ -28,6 +29,7 @@ $entity = $engine->entities->create(
 $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $entity);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);
+$game->debug = new DemoDebugOverlay($pauseMenu->renderer->font, $pauseMenu->renderer->atlas);
 
 if($intro ?? false)
 {
@@ -38,6 +40,7 @@ else
 	$game->selectScene($scene);
 }
 
+$engine->setInputHandler([$game, 'input']);
 $engine->start([$game, 'render'], [$game, 'close'], [$game, 'restore']);
 
 if($game->startup !== null)

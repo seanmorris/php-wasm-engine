@@ -17,6 +17,8 @@ final class DemoGame
 	public ?DemoLevel $pending = null;
 	public ?PauseMenu $menu = null;
 	public ?DemoStartup $startup = null;
+	public ?DemoDebugOverlay $debug = null;
+	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
 	public string $scene = '';
 	public string $error = '';
@@ -41,6 +43,26 @@ final class DemoGame
 		$this->canvas = vrzno_env('canvas');
 		$this->status = (new Vrzno)->document->querySelector('#status');
 		$engine->systems->add('movement', [$this, 'update']);
+	}
+
+	/**
+	 * Handle diagnostics before delegating the frame to the active startup or pause menu.
+	 *
+	 * @param Engine $engine Session whose SDL events have already been polled.
+	 * @param float $elapsed Active browser frame seconds, unaffected by simulation pause.
+	 * @return bool Whether the active menu captures gameplay input for this frame.
+	 */
+	public function input(Engine $engine, float $elapsed): bool
+	{
+		$menu = $this->startup !== null && $this->startup->phase !== 'playing'
+			? $this->startup->menu : $this->menu->menu;
+
+		$this->debug?->update(
+			$elapsed, $engine->input->uiFrame($menu->editor !== null, $menu->isOpen)
+		);
+
+		return $this->startup !== null ? $this->startup->update($engine, $elapsed)
+			: $this->menu->update($engine, $elapsed);
 	}
 
 	/**
@@ -295,6 +317,8 @@ final class DemoGame
 
 		if($this->startup?->render())
 		{
+			$this->debug?->render($this, false);
+			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 			$this->engine->device->present();
 
 			$this->canvas->dataset->menu = demoMenuState(
@@ -309,6 +333,8 @@ final class DemoGame
 			$this->canvas->dataset->frames = (string)++$this->frames;
 		}
 
+		$this->debug?->render($this, $this->level !== null);
+		$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 		$this->menu->render();
 		$this->engine->device->present();
 		$this->canvas->dataset->menu = demoMenuState($this->menu, $this->engine);
@@ -349,7 +375,7 @@ final class DemoGame
 				, $camera->width / $camera->zoom
 				, $camera->height / $camera->zoom
 			);
-			$stats = $level->renderer->render($camera, $time, 0);
+			$stats = $this->renderStats = $level->renderer->render($camera, $time, 0);
 			$loaded = array_map('basename', array_keys($level->stream->loaded()));
 			$pending = array_map('basename', $level->stream->pending());
 
@@ -402,6 +428,13 @@ final class DemoGame
 			]
 		);
 		$stats = $level->renderer->stats;
+		$this->renderStats = $stats;
+
+		if($this->scene !== 'isometric')
+		{
+			$this->renderStats['draws'] += $level->sprites->draws;
+			$this->renderStats['instances'] += $level->sprites->instances;
+		}
 
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
@@ -443,6 +476,7 @@ final class DemoGame
 	{
 		$this->level?->restore();
 		$this->menu?->restore();
+		$this->debug?->restore();
 		$this->startup?->restore();
 	}
 
@@ -454,9 +488,11 @@ final class DemoGame
 	public function close(): void
 	{
 		$this->startup?->close();
+		$this->debug?->close();
 		$this->menu?->close();
 		$this->releasePending();
 		$this->level?->close($this->engine);
 		$this->level = null;
+		unset($this->canvas->dataset->debug);
 	}
 }
