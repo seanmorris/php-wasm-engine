@@ -1,22 +1,31 @@
 <?php
 declare(strict_types=1);
 namespace PhpWasmEngine\Tiled;
+
 final class TileMap
 {
 	public array $layers = [], $tilesets = [];
 	public float $x = 0, $y = 0;
 	public Projection $projection;
+
 	/**
 	 * Create a map model and its coordinate projection from decoded Tiled metadata.
 	 *
 	 * @param string $path Map source path used to resolve dependent assets.
-	 * @param array<string,mixed> $data Decoded Tiled map containing tile dimensions and optional orientation/bounds.
+	 * @param array<string,mixed> $data Decoded Tiled map containing tile dimensions and optional
+	 * orientation/bounds.
 	 * @return void Initializes projection and empty flattened layer and tileset collections.
 	 */
-	public function __construct(public string $path,public array $data)
+	public function __construct(public string $path, public array $data)
 	{
-		$this->projection = new Projection($data['orientation'] ?? 'orthogonal',(int)$data['tilewidth'],(int)$data['tileheight'],!empty($data['infinite'])?0:(int)($data['height'] ?? 0));
+		$this->projection = new Projection(
+			$data['orientation'] ?? 'orthogonal'
+			, (int)$data['tilewidth']
+			, (int)$data['tileheight']
+			, !empty($data['infinite'])?0:(int)($data['height'] ?? 0)
+		);
 	}
+
 	/**
 	 * Resolve a global tile ID against the map's sorted tilesets.
 	 *
@@ -26,30 +35,50 @@ final class TileMap
 	public function tile(int $gid): ?array
 	{
 		foreach(array_reverse($this->tilesets) as $set)
-		{ if($gid >= $set['firstgid'])
-		{ return $set['definitions'][$gid - $set['firstgid']] ?? null; } }
+		{
+			if($gid >= $set['firstgid'])
+			{
+				return $set['definitions'][$gid - $set['firstgid']] ?? null;
+			}
+		}
+
 		return null;
 	}
+
 	/**
 	 * Select the current looping frame for an animated tile.
 	 *
 	 * @param int $gid Global animation tile identifier without flip flags.
-	 * @param float $milliseconds Playback time in milliseconds; negative values select the initial frame.
+	 * @param float $milliseconds Playback time in milliseconds; negative values select the initial
+	 * frame.
 	 * @return int Frame GID, or the supplied GID when the tile has no animation.
 	 */
-	public function animatedGid(int $gid,float $milliseconds): int
+	public function animatedGid(int $gid, float $milliseconds): int
 	{
 		$tile = $this->tile($gid);
 		$animation = $tile['animation'] ?? [];
+
 		if(!$animation)
-		{ return $gid; }
-		$total = array_sum(array_column($animation,'duration'));
-		$time = fmod(max(0,$milliseconds),$total);
+		{
+			return $gid;
+		}
+
+		$total = array_sum(array_column($animation, 'duration'));
+		$time = fmod(max(0, $milliseconds), $total);
+
 		foreach($animation as $frame)
-		{ if($time < $frame['duration'])
-		{ return $tile['firstgid'] + $frame['tileid']; } $time -= $frame['duration']; }
+		{
+			if($time < $frame['duration'])
+			{
+				return $tile['firstgid'] + $frame['tileid'];
+			}
+
+			$time -= $frame['duration'];
+		}
+
 		return $gid;
 	}
+
 	/**
 	 * Find the first flattened layer with the requested editor name.
 	 *
@@ -57,7 +86,15 @@ final class TileMap
 	 * @return Layer Matching layer; a missing name raises OutOfBoundsException.
 	 */
 	public function layer(string $name): Layer
-	{ foreach($this->layers as $layer)
-	{ if($layer->name === $name)
-	{ return $layer; } } throw new \OutOfBoundsException("No layer $name"); }
+	{
+		foreach($this->layers as $layer)
+		{
+			if($layer->name === $name)
+			{
+				return $layer;
+			}
+		}
+
+		throw new \OutOfBoundsException("No layer $name");
+	}
 }

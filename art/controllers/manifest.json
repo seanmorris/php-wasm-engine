@@ -1,0 +1,770 @@
+[
+  {
+    "theme": "keyboard",
+    "char": "✚",
+    "file": "arrow-keys-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "⓿",
+    "file": "space.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❶",
+    "file": "ctrl.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❷",
+    "file": "shift.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❸",
+    "file": "z-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❹",
+    "file": "q-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❺",
+    "file": "e-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❻",
+    "file": "1-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❼",
+    "file": "3-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❽",
+    "file": "o-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❾",
+    "file": "p-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "❿",
+    "file": "backslash-key-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "⓫",
+    "file": "tab.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "←",
+    "file": "arrow-keys-beveled-left.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "→",
+    "file": "arrow-keys-beveled-right.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "↑",
+    "file": "arrow-keys-beveled-up.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "↓",
+    "file": "arrow-keys-beveled-down.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "⬲",
+    "file": "wasd-keys-beveled.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡨",
+    "file": "wasd-keys-beveled-left.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡪",
+    "file": "wasd-keys-beveled-right.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡩",
+    "file": "wasd-keys-beveled-up.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡫",
+    "file": "wasd-keys-beveled-down.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "▦",
+    "file": "numpad-beveled-directions.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "⟴",
+    "file": "numpad-beveled-directions.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡰",
+    "file": "numpad-beveled-left.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡠",
+    "file": "numpad-beveled-left.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡲",
+    "file": "numpad-beveled-right.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡢",
+    "file": "numpad-beveled-right.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡱",
+    "file": "numpad-beveled-up.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡡",
+    "file": "numpad-beveled-up.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡳",
+    "file": "numpad-beveled-down.svg",
+    "width": 24
+  },
+  {
+    "theme": "keyboard",
+    "char": "🡣",
+    "file": "numpad-beveled-down.svg",
+    "width": 24
+  },
+  {
+    "theme": "xbox",
+    "char": "✚",
+    "file": "xbox-dpad.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "⓿",
+    "file": "xbox-button-a.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❶",
+    "file": "xbox-button-b.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❷",
+    "file": "xbox-button-x.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❸",
+    "file": "xbox-button-y.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❹",
+    "file": "xbox-button-lb.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❺",
+    "file": "xbox-button-rb.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❻",
+    "file": "xbox-button-lt.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❼",
+    "file": "xbox-button-rt.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❽",
+    "file": "xbox-button-back.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❾",
+    "file": "xbox-button-start.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "❿",
+    "file": "xbox-button-lsb.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "⓫",
+    "file": "xbox-button-rsb.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "←",
+    "file": "xbox-button-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "→",
+    "file": "xbox-button-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "↑",
+    "file": "xbox-button-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "↓",
+    "file": "xbox-button-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "⬲",
+    "file": "xbox-button-ls.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡨",
+    "file": "xbox-button-ls-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡪",
+    "file": "xbox-button-ls-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡩",
+    "file": "xbox-button-ls-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡫",
+    "file": "xbox-button-ls-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "▦",
+    "file": "xbox-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "⟴",
+    "file": "xbox-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡰",
+    "file": "xbox-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡠",
+    "file": "xbox-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡲",
+    "file": "xbox-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡢",
+    "file": "xbox-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡱",
+    "file": "xbox-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡡",
+    "file": "xbox-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡳",
+    "file": "xbox-button-rs-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "xbox",
+    "char": "🡣",
+    "file": "xbox-button-rs-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "✚",
+    "file": "playstation-dpad.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "⓿",
+    "file": "playstation-button-x.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❶",
+    "file": "playstation-button-circle.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❷",
+    "file": "playstation-button-square.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❸",
+    "file": "playstation-button-triangle.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❹",
+    "file": "playstation-button-l1.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❺",
+    "file": "playstation-button-r1.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❻",
+    "file": "playstation-button-l2.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❼",
+    "file": "playstation-button-r2.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❽",
+    "file": "playstation-button-select.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❾",
+    "file": "playstation-button-start.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "❿",
+    "file": "playstation-button-l3.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "⓫",
+    "file": "playstation-button-r3.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "←",
+    "file": "playstation-button-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "→",
+    "file": "playstation-button-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "↑",
+    "file": "playstation-button-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "↓",
+    "file": "playstation-button-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "⬲",
+    "file": "playstation-button-ls.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡨",
+    "file": "playstation-button-ls-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡪",
+    "file": "playstation-button-ls-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡩",
+    "file": "playstation-button-ls-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡫",
+    "file": "playstation-button-ls-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "▦",
+    "file": "playstation-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "⟴",
+    "file": "playstation-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡰",
+    "file": "playstation-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡠",
+    "file": "playstation-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡲",
+    "file": "playstation-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡢",
+    "file": "playstation-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡱",
+    "file": "playstation-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡡",
+    "file": "playstation-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡳",
+    "file": "playstation-button-rs-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "playstation",
+    "char": "🡣",
+    "file": "playstation-button-rs-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "✚",
+    "file": "generic-button-dpad.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "⓿",
+    "file": "generic-button-0.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❶",
+    "file": "generic-button-1.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❷",
+    "file": "generic-button-2.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❸",
+    "file": "generic-button-3.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❹",
+    "file": "generic-button-4.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❺",
+    "file": "generic-button-5.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❻",
+    "file": "generic-button-6.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❼",
+    "file": "generic-button-7.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❽",
+    "file": "generic-button-8.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❾",
+    "file": "generic-button-9.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "❿",
+    "file": "generic-button-10.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "⓫",
+    "file": "generic-button-11.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "←",
+    "file": "generic-button-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "→",
+    "file": "generic-button-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "↑",
+    "file": "generic-button-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "↓",
+    "file": "generic-button-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "⬲",
+    "file": "generic-button-ls.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡨",
+    "file": "generic-button-ls-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡪",
+    "file": "generic-button-ls-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡩",
+    "file": "generic-button-ls-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡫",
+    "file": "generic-button-ls-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "▦",
+    "file": "generic-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "⟴",
+    "file": "generic-button-rs.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡰",
+    "file": "generic-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡠",
+    "file": "generic-button-rs-left.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡲",
+    "file": "generic-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡢",
+    "file": "generic-button-rs-right.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡱",
+    "file": "generic-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡡",
+    "file": "generic-button-rs-up.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡳",
+    "file": "generic-button-rs-down.svg",
+    "width": 16
+  },
+  {
+    "theme": "generic",
+    "char": "🡣",
+    "file": "generic-button-rs-down.svg",
+    "width": 16
+  }
+]
