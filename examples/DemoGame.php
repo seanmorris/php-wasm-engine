@@ -5,6 +5,7 @@ use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
+use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
@@ -96,12 +97,13 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, loop, breakables, infinite, isometric, or world identifier.
+	 * @param string $scene Platformer, badniks, loop, breakables, infinite, isometric, or world
+	 * identifier.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
 	public function selectScene(string $scene): void
 	{
-		if(!in_array($scene, ['platformer', 'loop', 'breakables', 'infinite', 'isometric', 'world'], true))
+		if(!in_array($scene, ['platformer', 'badniks', 'loop', 'breakables', 'infinite', 'isometric', 'world'], true))
 		{
 			throw new InvalidArgumentException('Unknown demo level');
 		}
@@ -211,6 +213,12 @@ final class DemoGame
 
 		$this->body->halfHeight = $this->body->standingHeight;
 		$this->level?->rings?->sync($this->entity, $this->body);
+		$this->level?->badniks?->sync($this->entity, $this->body);
+
+		if($this->engine->entities->has($this->entity, PlayerCombat::class))
+		{
+			$this->engine->entities->get($this->entity, PlayerCombat::class)->mercy = 0;
+		}
 	}
 
 	/**
@@ -320,7 +328,7 @@ final class DemoGame
 			$this->notifyReady();
 		}
 
-		foreach(['world', 'breakables'] as $key)
+		foreach(['world', 'breakables', 'badniks'] as $key)
 		{
 			unset($this->canvas->dataset->$key);
 		}
@@ -503,10 +511,12 @@ final class DemoGame
 		$body = $this->body;
 		$level->renderer->render($camera, $time);
 		$pose = $this->playerPose($body);
+		$playerOpacity = 1.0;
 
 		if($this->scene !== 'isometric')
 		{
 			$sprite = $this->engine->entities->get($this->entity, Sprite::class);
+			$combat = $this->engine->entities->get($this->entity, PlayerCombat::class);
 			$gid = $this->playerGid($body->profile, $pose);
 
 			if($sprite->gid !== $gid)
@@ -520,6 +530,7 @@ final class DemoGame
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
+			$playerOpacity = $sprite->opacity = $combat->flickerOpacity();
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
@@ -536,6 +547,8 @@ final class DemoGame
 			, 'speed' => $body->groundSpeed
 			, 'angle' => $body->angle
 			, 'collisionLayer' => $body->collisionLayer
+			, 'mercy' => $this->engine->entities->get($this->entity, PlayerCombat::class)->mercy
+			, 'opacity' => $playerOpacity
 		]);
 
 		$stats = $level->renderer->stats;
@@ -575,6 +588,23 @@ final class DemoGame
 			$this->canvas->dataset->breakables = json_encode(compact('intact', 'pieces'));
 			$this->status->textContent .= " · $intact intact blocks · $pieces shards · Roll into blocks";
 		}
+
+		if($this->scene === 'badniks')
+		{
+			$counts = $level->badniks->counts();
+			$combat = $this->engine->entities->get($this->entity, PlayerCombat::class);
+			$counts['hits'] = $combat->hits;
+			$counts['defeats'] = $combat->defeats;
+			$counts['scatteredRings'] = $level->rings->scatteredCount();
+			$this->canvas->dataset->badniks = json_encode($counts);
+
+			$this->status->textContent .= sprintf(
+				' · %d badniks · %d shots · %d defeated'
+				, $counts['badniks']
+				, $counts['projectiles']
+				, $counts['defeats']
+			);
+		}
 	}
 
 	/**
@@ -605,6 +635,11 @@ final class DemoGame
 		$this->releasePending();
 		$this->level?->close($this->engine);
 		$this->level = null;
-		unset($this->canvas->dataset->hud, $this->canvas->dataset->debug, $this->canvas->dataset->sequences);
+		unset(
+			$this->canvas->dataset->hud
+			, $this->canvas->dataset->debug
+			, $this->canvas->dataset->sequences
+			, $this->canvas->dataset->badniks
+		);
 	}
 }

@@ -12,6 +12,7 @@ require_once __DIR__ . '/DemoBackdrop.php';
 require_once __DIR__ . '/DemoStartup.php';
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
@@ -28,6 +29,7 @@ $counter = new RingCounter;
 $entity = $engine->entities->create(
 	$body
 	, $counter
+	, new PlayerCombat
 	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
 );
 

@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Gameplay\Badniks;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
+use PhpWasmEngine\Gameplay\CrabMeats;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
@@ -27,6 +29,8 @@ final class DemoLevel
 	public ?Platformer $movement = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
+	public ?Badniks $badniks = null;
+	public ?CrabMeats $crabs = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -149,11 +153,24 @@ final class DemoLevel
 
 		$map = reset($maps);
 		$this->terrain = MapTerrain::build($map);
-		$this->rings = new Rings($engine->entities, $map);
+		$this->rings = new Rings($engine->entities, $map, terrain: $this->terrain);
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->renderer->render($view, $engine->time * 1000);
 		$engine->systems->add($this->systemPrefix . 'rings', [$this->rings, 'update'], after: ['movement']);
+
+		if($this->id === 'badniks')
+		{
+			$this->badniks = new Badniks($engine->entities, $this->terrain, $this->rings);
+			$this->crabs = new CrabMeats($engine->entities, $this->terrain, $map, $this->badniks);
+			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'badniks'
+				, [$this->badniks, 'update']
+				, after: [$this->systemPrefix . 'crabs']
+			);
+		}
 
 		if($this->id === 'breakables')
 		{
@@ -231,8 +248,11 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'particles');
 		$engine->systems->remove($this->systemPrefix . 'breakables');
 		$engine->systems->remove($this->systemPrefix . 'rings');
+		$engine->systems->remove($this->systemPrefix . 'badniks');
+		$engine->systems->remove($this->systemPrefix . 'crabs');
 		$this->blocks?->close();
 		$this->rings?->close();
+		$this->badniks?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();
