@@ -375,7 +375,7 @@ test('charged spindash follows the submerged loop in direction ' + direction, as
 for(const scene of [
 	'platformer', 'water', 'water-rail', 'water-skim-rail'
 	, 'water-loop', 'badniks', 'grinding'
-	, 'loop', 'infinite', 'isometric', 'breakables'
+	, 'loop', 'infinite', 'isometric', 'breakables', 'bridges'
 ])
 test(
 	scene + ' live PHP demo starts, responds to input and stops'

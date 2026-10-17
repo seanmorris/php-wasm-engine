@@ -113,6 +113,7 @@ final class Terrain
 	 * @param bool $grinding Mark contacts on the shape as grinding rails.
 	 * @param bool $directedOneWay Retain the authored normal for wall and ceiling contact edges;
 	 * ordinary map one-way shapes remain upward-only.
+	 * @param bool $open Treat three or more vertices as an open path instead of a closed polygon.
 	 * @return int Shape handle, never reused, accepted by removeShape.
 	 */
 	public function addShape(
@@ -121,6 +122,7 @@ final class Terrain
 		, int $collisionLayer = 0
 		, bool $grinding = false
 		, bool $directedOneWay = false
+		, bool $open = false
 	): int {
 		if($directedOneWay && (!$oneWay || count($points) !== 2))
 		{
@@ -162,12 +164,12 @@ final class Terrain
 			$area += $x * $v - $u * $y;
 		}
 
-		if($count > 2 && $area < 0)
+		if(!$open && $count > 2 && $area < 0)
 		{
 			$points = array_reverse($points);
 		}
 
-		if($count > 2 && !$oneWay)
+		if(!$open && $count > 2 && !$oneWay)
 		{
 			$id = $this->nextPolygon++;
 			$this->polygons[$id] = [$points,$collisionLayer];
@@ -185,7 +187,7 @@ final class Terrain
 			}
 		}
 
-		$edges = $count === 2?1:$count;
+		$edges = $open ? $count - 1 : ($count === 2 ? 1 : $count);
 
 		for($i = 0; $i < $edges; $i++)
 		{
@@ -239,6 +241,29 @@ final class Terrain
 		}
 
 		return $shape;
+	}
+
+	/**
+	 * Add an open polyline and retain one handle for all of its consecutive segments.
+	 *
+	 * @param list<array{0:float|int,1:float|int}> $points Finite ordered path vertices.
+	 * @param bool $oneWay Keep only upward-facing path segments.
+	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @param bool $grinding Mark contacts on the path as grinding rails.
+	 * @return int Shape handle shared by every path segment and accepted by removeShape.
+	 */
+	public function addPathShape(
+		array $points
+		, bool $oneWay = true
+		, int $collisionLayer = 0
+		, bool $grinding = false
+	): int {
+		if(count($points) < 2)
+		{
+			throw new \InvalidArgumentException('Paths require at least two vertices');
+		}
+
+		return $this->addShape($points, $oneWay, $collisionLayer, $grinding, false, true);
 	}
 
 	/**

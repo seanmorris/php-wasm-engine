@@ -114,7 +114,7 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, platforms, grapples, vehicles, light-dash, water, water-rail,
+	 * @param string $scene Platformer, platforms, bridges, grapples, vehicles, light-dash, water, water-rail,
 	 * water-skim-rail, water-loop, gravity, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
@@ -132,6 +132,7 @@ final class DemoGame
 				, 'water-loop'
 				, 'gravity'
 				, 'platforms'
+				, 'bridges'
 				, 'light-dash'
 				, 'grapples'
 				, 'vehicles'
@@ -683,6 +684,7 @@ final class DemoGame
 		}
 
 		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
+		$this->canvas->dataset->bridges = json_encode($level->bridges?->snapshot() ?? []);
 		$this->canvas->dataset->vehicles = json_encode($level->vehicles?->snapshot() ?? []);
 		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
 		$this->canvas->dataset->gravity = json_encode($level->gravityFeatures?->snapshot() ?? []);
@@ -1008,6 +1010,7 @@ final class DemoGame
 			, $this->canvas->dataset->vehicles
 			, $this->canvas->dataset->grapples
 			, $this->canvas->dataset->platforms
+			, $this->canvas->dataset->bridges
 			, $this->canvas->dataset->motionBlur
 		);
 	}

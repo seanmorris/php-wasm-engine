@@ -4,6 +4,7 @@ declare(strict_types=1);
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Gameplay\Badnik;
 use PhpWasmEngine\Gameplay\Badniks;
+use PhpWasmEngine\Gameplay\BendableBridges;
 use PhpWasmEngine\Gameplay\BossRegions;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
@@ -60,6 +61,7 @@ final class DemoLevel
 	public ?Shields $shields = null;
 	public ?WaterFeatures $waterFeatures = null;
 	public ?Platforms $platforms = null;
+	public ?BendableBridges $bridges = null;
 	public ?Grapples $grapples = null;
 	public ?Vehicles $vehicles = null;
 	public ?GravityFeatures $gravityFeatures = null;
@@ -206,9 +208,11 @@ final class DemoLevel
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
 		$this->platforms = new Platforms($engine->entities, $this->terrain, $map);
+		$this->bridges = new BendableBridges($engine->entities, $this->terrain, $map);
 		$this->gravityFeatures = new GravityFeatures($engine->entities, $this->terrain, $map);
 
 		$engine->systems->add($this->systemPrefix . 'platforms', [$this->platforms, 'update'], after: ['movement']);
+		$engine->systems->add($this->systemPrefix . 'bridges', [$this->bridges, 'update'], after: ['movement']);
 
 		if($this->gravityFeatures->isEmpty())
 		{
@@ -489,6 +493,7 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'shields');
 		$engine->systems->remove($this->systemPrefix . 'water-features');
 		$engine->systems->remove($this->systemPrefix . 'platforms');
+		$engine->systems->remove($this->systemPrefix . 'bridges');
 		$engine->systems->remove($this->systemPrefix . 'gravity-features');
 		$engine->systems->remove($this->systemPrefix . 'grapples');
 		$engine->systems->remove($this->systemPrefix . 'vehicle-seats');
@@ -503,6 +508,7 @@ final class DemoLevel
 		$this->shields?->close();
 		$this->waterFeatures?->close();
 		$this->platforms?->close();
+		$this->bridges?->close();
 		$this->gravityFeatures?->close();
 		$this->waterParticles?->close();
 		$this->waterRenderer?->close();

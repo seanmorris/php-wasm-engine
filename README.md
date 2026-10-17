@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, gravity and spring course, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, moving and bendable platforms, gravity and spring course, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -337,6 +337,48 @@ Platforms move on their authored routes; route geometry itself does not stop aga
 This is the suspended-block behavior from moving-boxes-2. Water-density platforms remain handled
 by `WaterFeatures`. Regenerate only this course and its original artwork with
 `php examples/generate-platforms.php`.
+
+## Bendable bridges and rails
+
+Choose **Level → Bendable bridges & rails** for two flexible decks and a deforming grind rail.
+`BendableBridge` stores a sampled surface, while `BendableBridges` owns its removable collision
+path and repeated tile sprites. Each grounded `Body` contributes a smooth load at its own contact
+point. Loads add, so several actors can make several low points instead of fighting over one global
+offset. `maxLoads` caps their combined displacement.
+
+```php
+use PhpWasmEngine\Gameplay\{BendableBridge, BendableBridges};
+
+$bridges = new BendableBridges($engine->entities, $terrain, $map);
+$engine->systems->add('bridges', [$bridges, 'update'], after: ['movement']);
+
+$bridge = new BendableBridge(
+    x: 256
+    , y: 320
+    , width: 384
+    , droop: 48
+    , segmentWidth: 16
+);
+
+$id = $bridges->add($bridge);
+$state = $bridges->snapshot();
+$bridges->remove($id);
+```
+
+Use Tiled class `BendableBridge` or `BendableRail`. The latter marks every changing surface segment
+as grindable. A legacy moving-boxes-2 `block` with a `droop` property loads as a bridge as well.
+Tile objects use their bottom edge as the anchor; rectangle objects use their top edge. `droop`
+sets the centered per-body depth, `segmentWidth` controls collision and visual sampling, `response`
+sets spring speed, `maxLoads` caps summed loads, and `collisionLayer` selects the collision plane.
+The optional `grinding` property turns either class into a rail.
+
+The first and last collision segments remain flat at the authored Y coordinate. Adjacent ordinary
+terrain can therefore share both endpoint height and tangent, avoiding a lip or vertical crack as
+a body walks, rolls, or grinds on and off. The manager replaces one open-path terrain handle after
+movement and places every supported body on the new curve. Surface casts still cover the complete
+movement distance, so high-speed entries cannot tunnel through a bent span. Call `close()` when the
+level unloads. Regenerate the course and its plank and rail tiles with
+`php examples/generate-bridges.php`.
 
 ## Water regions and displacement
 
