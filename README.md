@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, moving and bendable platforms, gravity and spring courses, flush-bank pool, underwater rail, surface skim rail, rising-water loop, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, moving and bendable platforms, gravity and spring courses, skateboard and Tornado courses, water courses, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -207,6 +207,47 @@ collision plane. The demo publishes this as `canvas.dataset.vehicles`, with the 
 in `canvas.dataset.body.vehicle`. Restarting a level rebuilds the boards; changing level or movement
 profile releases the old seat. Graphics restoration keeps the same PHP entities and associations.
 Regenerate the example and its original board artwork with `php examples/generate-vehicles.php`.
+
+## Tornado flight
+
+Choose **Level → Tornado flight course** and fall into the aircraft's seat. Space / Z or controller
+A / Cross makes a conventional jump takeoff. Hold C or X / Square to retract the gear and fire the
+rocket engine. While airborne, Up and Down pitch the aircraft; X or B / Circle toggles landing gear.
+Fuel drains at six units per second under thrust, waits half a second after release, then refills at
+fifteen units per second. The upper-left HUD and `Vehicles::snapshot()` expose the current fuel.
+
+The 10,240 × 3,072 pixel course has a long runway, a climb gate, a broad ceiling-and-floor tunnel,
+alternating slalom walls, an elevated landing shelf, and a final runway. Ring trails mark routes at
+several heights without limiting free flight. Low unpowered airspeed stalls; thrusting from rest
+starts a rocket takeoff; a stopped high-speed impact enters a short crash recovery. Flight selects
+the `airplane` camera mode, which pans toward the aircraft's travel direction instead of snapping.
+The aircraft, rider seat, and camera retain one association across ground, takeoff, collision, and
+landing. Swept chassis and passenger casts prevent the wide aircraft from crossing thin terrain at
+high speed.
+
+Tiled objects use class `Tornado`. Annotated `tornado`, `tornado-flight`, `tornado-gear`,
+`tornado-thrust`, and `tornado-crashed` tiles select artwork without positional tile assumptions.
+The usual `seatHeight`, `seatForward`, `lockedIn`, `direction`, and `collisionLayer` properties apply.
+`Tornado::body()` supplies the reference dimensions and speeds; a scripted vehicle uses the same
+API as the skateboard:
+
+```php
+use PhpWasmEngine\Gameplay\{Tornado, Vehicle};
+
+$aircraft = new Vehicle(
+	Tornado::body(320, 442)
+	, seatHeight: 19
+	, seatForward: -12
+	, lockedIn: true
+);
+
+$aircraftEntity = $vehicles->add($aircraft, new Tornado($stateGids), new Sprite($stateGids['tornado']));
+```
+
+The snapshot adds `type`, `flying`, `thrusting`, `landingGear`, `fuel`, `pitch`, and `crashed` for
+Tornado entities. This gives scripts stable verbs and nouns for input playback, assertions, and
+batch test drivers. Generate the map and original aircraft art with
+`php examples/generate-tornado.php`.
 
 ## Grapple points and ropes
 

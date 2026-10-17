@@ -15,6 +15,8 @@ final class Vehicle
 	public string $pose = 'standing';
 	public string $cameraMode = 'auto';
 	public bool $holdCombo = false, $scoreGrinding = true;
+	public float $visualAngle = 0;
+	public ?int $spriteGid = null;
 	public Controls $drive;
 	public float $previousX, $previousY;
 
@@ -80,7 +82,7 @@ final class Vehicle
 	 */
 	public function seat(Body $rider): array
 	{
-		$angle = $this->body->angle;
+		$angle = $this->body->angle + $this->visualAngle;
 		$forward = $this->seatForward * $this->body->facing;
 		$rotation = $angle + $this->seatAngle;
 

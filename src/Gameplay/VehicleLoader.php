@@ -8,7 +8,7 @@ use PhpWasmEngine\Tiled\
 	Gid, Layer, Loader, TileMap
 };
 
-/** Tiled skateboard objects and supply/drop regions sharing the level's sprite atlas. */
+/** Tiled vehicle objects and supply/drop regions sharing the level's sprite atlas. */
 final class VehicleLoader
 {
 
@@ -16,7 +16,7 @@ final class VehicleLoader
 	 * Identify dynamic vehicle objects before building static map collision.
 	 *
 	 * @param array<string,mixed> $object Raw Tiled object definition.
-	 * @return bool True for skateboard, supply-region, and drop-region objects.
+	 * @return bool True for Tornado, skateboard, supply-region, and drop-region objects.
 	 */
 	public static function matches(array $object): bool
 	{
@@ -25,6 +25,7 @@ final class VehicleLoader
 			, [
 				'skateboard'
 				, 'skate-board'
+				, 'tornado'
 				, 'vehicleregion'
 				, 'vehicle-region'
 				, 'dropvehicleregion'
@@ -44,11 +45,16 @@ final class VehicleLoader
 	public function load(Vehicles $system, TileMap $map): void
 	{
 		$fallback = null;
+		$tornado = [];
 
 		foreach($map->tilesets as $set)
 		foreach($set['definitions'] as $local => $tile)
 		{
-			if(($tile['class'] ?? $tile['type'] ?? '') === 'skateboard') $fallback = $set['firstgid'] + $local;
+			$class = strtolower((string)($tile['class'] ?? $tile['type'] ?? ''));
+
+			if($class === 'skateboard') $fallback = $set['firstgid'] + $local;
+
+			if(str_starts_with($class, 'tornado')) $tornado[$class] = $set['firstgid'] + $local;
 		}
 
 		foreach($map->layers as $layer)
@@ -64,9 +70,10 @@ final class VehicleLoader
 			$plane = (int)($p['collisionLayer'] ?? $layer->properties['collisionLayer'] ?? 1);
 			$x = (float)$object['x'] + $map->x + $layer->offsetX;
 			$y = (float)$object['y'] + $map->y + $layer->offsetY;
-			$sprite = $this->sprite($map, $object, $layer, $fallback);
+			$isTornado = $class === 'tornado';
+			$sprite = $this->sprite($map, $object, $layer, $isTornado ? ($tornado['tornado'] ?? null) : $fallback);
 
-			if(!in_array($class, ['skateboard', 'skate-board'], true))
+			if(!in_array($class, ['skateboard', 'skate-board', 'tornado'], true))
 			{
 				$drop = str_starts_with($class, 'drop');
 
@@ -93,21 +100,21 @@ final class VehicleLoader
 
 			$x += (float)($object['width'] ?? 0) / 2;
 			$y += isset($object['gid']) ? 0 : (float)($object['height'] ?? 0);
-			$body = Skateboard::body($x, $y - 6);
+			$body = $isTornado ? Tornado::body($x, $y - 18) : Skateboard::body($x, $y - 6);
 			$body->collisionLayer = $plane;
 			$body->facing = $body->direction = (int)($p['direction'] ?? 1) < 0 ? -1 : 1;
 
 			$vehicle = new Vehicle(
 				$body
-				, (float)($p['seatHeight'] ?? 12)
-				, (float)($p['seatForward'] ?? 0)
+				, (float)($p['seatHeight'] ?? ($isTornado ? 20 : 12))
+				, (float)($p['seatForward'] ?? ($isTornado ? -18 : 0))
 				, (float)($p['seatAngle'] ?? 0)
 				, (bool)($p['lockedIn'] ?? false)
 				, (bool)($p['quickDrop'] ?? false)
 				, (int)$object['id']
 			);
 
-			$system->add($vehicle, new Skateboard, $sprite);
+			$system->add($vehicle, $isTornado ? new Tornado($tornado) : new Skateboard, $sprite);
 		}
 	}
 

@@ -2,7 +2,7 @@
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Gameplay\
 {
-	Vehicle, Vehicles, Rider, Skateboard, Combo, ComboReward, RingCounter, PlayerCombat
+	Vehicle, Vehicles, Rider, Skateboard, Tornado, Combo, ComboReward, RingCounter, PlayerCombat
 };
 use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\
@@ -467,4 +467,115 @@ test('vehicle mount callbacks receive the rider association and failed callbacks
 		check($body->ability === ($fail ? '' : 'riding'));
 		$system->close();
 	}
+});
+
+test('Tornado rocket takeoff, pitch, landing gear, stall and fuel use reference controls', function() {
+	$vehicle = new Vehicle(Tornado::body(0, 82));
+	$vehicle->occupant = 1;
+	$vehicle->body->grounded = true;
+
+	$tornado = new Tornado([
+		'tornado' => 10
+		, 'tornado-flight' => 11
+		, 'tornado-gear' => 12
+		, 'tornado-thrust' => 13
+		, 'tornado-crashed' => 14
+	]);
+
+	$tornado->mounted($vehicle, new Body);
+	$input = new Controls;
+	$input->set([2 => true]);
+	$tornado->control($vehicle, $input, null, .1);
+	check(!$vehicle->body->grounded && $tornado->flying && $tornado->thrusting);
+	check(!$tornado->landingGear && $tornado->fuel < 100);
+	check($vehicle->body->vx >= 240 && $vehicle->body->vy < 0);
+	check($vehicle->cameraMode === 'airplane' && $vehicle->spriteGid === 13);
+
+	$input->set([]);
+	$tornado->control($vehicle, $input, null, .1);
+	$input->set([1 => true, 'up' => true]);
+	$before = $tornado->pitch;
+	$tornado->control($vehicle, $input, null, .1);
+	check($tornado->landingGear && $tornado->pitch < $before);
+	check($vehicle->spriteGid === 12);
+
+	$vehicle->body->vx = 120;
+	$input->set([]);
+	$tornado->control($vehicle, $input, null, .1);
+	check($vehicle->body->gravity === 1800.0, 'an unpowered slow aircraft should stall');
+	$fuel = $tornado->fuel;
+
+	for($i = 0; $i < 8; $i++) $tornado->control($vehicle, $input, null, .1);
+
+	check($tornado->fuel > $fuel, 'fuel should replenish after its half-second delay');
+	$vehicle->body->grounded = true;
+	$tornado->updated($vehicle, null, 1 / 60);
+	check(!$tornado->flying && $tornado->landingGear && $vehicle->cameraMode === 'auto');
+	check($vehicle->spriteGid === 10 && $vehicle->visualAngle === 0.0);
+});
+
+test('Tornado uses visual pitch for its rider without changing the terrain collision angle', function() {
+	$body = Tornado::body(100, 100);
+	$vehicle = new Vehicle($body, seatHeight: 20, seatForward: -12);
+	$rider = new Body;
+	[$flatX, $flatY, $flatAngle] = $vehicle->seat($rider);
+	$vehicle->visualAngle = -.5;
+	[$pitchedX, $pitchedY, $pitchedAngle] = $vehicle->seat($rider);
+	near($body->angle, 0);
+	near($flatAngle, 0);
+	near($pitchedAngle, -.5);
+	check(abs($pitchedX - $flatX) > 1 && abs($pitchedY - $flatY) > 1);
+});
+
+test('Tornado course loads annotated flight art and leaves its aircraft out of static collision', function() {
+	$map = (new PhpWasmEngine\Tiled\Loader)->map(dirname(__DIR__) . '/examples/assets/tornado.tmj');
+	check($map->data['width'] === 320 && $map->data['height'] === 96);
+	$registry = new Registry;
+	$terrain = PhpWasmEngine\Physics\MapTerrain::build($map);
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain), $map);
+	check(count($system->vehicles) === 1);
+	$vehicle = array_values($system->vehicles)[0];
+	check($registry->has($vehicle->entity, Tornado::class));
+	check($registry->get($vehicle->entity, Sprite::class)->gid === 38);
+	check(!$terrain->solidAt($vehicle->body->x, $vehicle->body->y));
+	check($terrain->solidAt(16, 2800));
+	check($terrain->solidAt(2128, 2000));
+	check($terrain->solidAt(6400, 1000));
+	$system->close();
+});
+
+test('Tornado high-speed flight cannot tunnel through a thin wall', function() {
+	$terrain = new Terrain;
+	$terrain->add([[100, -200], [101, -200], [101, 200], [100, 200]]);
+	$body = Tornado::body(0, 0);
+	$body->gravity = 0;
+	$body->vx = 600;
+	(new Platformer($terrain))->step($body, new Controls, .2);
+	check($body->x + $body->radius <= 100.001);
+	near($body->vx, 0);
+});
+
+test('Tornado pitch waits for runway clearance without detaching its rider', function() {
+	$registry = new Registry;
+	$terrain = new Terrain;
+	$terrain->add([[-1000, 100], [2000, 100], [2000, 500], [-1000, 500]]);
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain));
+	$vehicle = new Vehicle(Tornado::body(0, 82), seatHeight: 19, seatForward: -12, lockedIn: true);
+	$vehicle->body->grounded = true;
+	$id = $system->add($vehicle, new Tornado);
+	$rider = new Body(-12, 63);
+	$player = $registry->create($rider, new Rider);
+	check($system->mount($player, $id));
+	$input = new Controls;
+
+	for($frame = 0; $frame < 120; $frame++)
+	{
+		$input->set([2 => true, 'up' => true]);
+		$system->control($player, $input, 1 / 60);
+		$system->update($registry, 1 / 60);
+		check($system->ridden($player) === $vehicle, 'pitch cannot eject a seated rider near terrain');
+	}
+
+	check($vehicle->body->x > 200 && $vehicle->body->y < 82);
+	check(abs($vehicle->visualAngle) > .1);
 });

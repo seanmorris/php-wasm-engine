@@ -63,6 +63,13 @@ final class DemoPlayerHud
 	{
 		$seconds = max(0, $game->engine->time - $game->levelStartedAt);
 		$rows = self::rows($this->counter, $seconds);
+		$vehicle = $game->level?->vehicles?->ridden($game->entity);
+
+		if($vehicle !== null && $game->engine->entities->has($vehicle->entity, \PhpWasmEngine\Gameplay\Tornado::class))
+		{
+			$tornado = $game->engine->entities->get($vehicle->entity, \PhpWasmEngine\Gameplay\Tornado::class);
+			$rows['FUEL:'] = str_pad((string)(int)round($tornado->fuel), 3, ' ', STR_PAD_LEFT) . '%';
+		}
 
 		$this->snapshot = [
 			'visible' => $visible && !$this->closed
