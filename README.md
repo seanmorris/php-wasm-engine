@@ -1179,7 +1179,7 @@ $state = $features->snapshot();
 
 Both features are ECS components with atlas-backed sprites and stable Tiled object IDs. Their directed one-way collision edges preserve authored wall and ceiling normals. Springs launch along that normal, clear ground speed, and leave `jumping=false`, matching a forced airborne bounce rather than a player jump. `GravityFeatures::close()` removes every owned entity and collision edge.
 
-Choose **Gravity switches & springs** in either menu. Four pressure plates carry the player around a closed floor, right-wall, ceiling, and left-wall route. A spring faces inward from each surface, covering all four launch orientations. [`examples/assets/gravity.tmj`](examples/assets/gravity.tmj) is the complete authoring example.
+Choose **Gravity switches & springs** in either menu. The wide chamber gives the player room to land and explore before reaching each deliberately spaced pressure plate. The four plates cover floor, right-wall, ceiling, and left-wall gravity, while a spring faces inward from each surface. [`examples/assets/gravity.tmj`](examples/assets/gravity.tmj) is the complete authoring example.
 
 ## Rendering
 

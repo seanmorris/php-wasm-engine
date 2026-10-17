@@ -254,28 +254,47 @@ test('Tiled gravity features become ECS sprites, collision edges, and scriptable
 	check(count($registry->query(Spring::class)) === 0);
 });
 
-test('the gravity course reaches floor, wall, ceiling, and opposite-wall switches in sequence', function() {
+test('the gravity course leaves room to settle between its four oriented controls', function() {
 	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/gravity.tmj');
 	$terrain = MapTerrain::build($map);
 	$registry = new Registry;
 	$features = new GravityFeatures($registry, $terrain, $map);
-	$body = new Body(140, 400);
+	$body = new Body(240, 400);
 	$registry->create($body);
 	$movement = new Platformer($terrain);
 	$input = new Controls;
-	$directions = [];
 
-	for($frame = 0; $frame < 240 && count($directions) < 4; $frame++)
+	for($frame = 0; $frame < 120; $frame++)
 	{
 		$movement->step($body, $input, 1 / 60);
-		$before = [$body->gravityX, $body->gravityY];
 		$features->update($registry, 1 / 60);
-		$after = [$body->gravityX, $body->gravityY];
+	}
 
-		if($after !== $before)
-		{
-			$directions[] = $after;
-		}
+	check($body->grounded);
+	check([$body->gravityX, $body->gravityY] === [0, 1]);
+	near($body->x, 240);
+	near($body->y, 526);
+	check($features->switches[402]->x - $features->switches[404]->x > 2300);
+
+	$landingClearances = [
+		abs(240 - $features->switches[401]->x)
+		, abs(526 - $features->switches[402]->y)
+		, abs(2446 - $features->switches[403]->x)
+		, abs(114 - $features->switches[404]->y)
+		, abs(114 - $features->switches[401]->x)
+	];
+
+	foreach($landingClearances as $clearance)
+	{
+		check($clearance > 200, 'each landing needs an exploration stretch before the next switch');
+	}
+
+	$directions = [];
+
+	foreach([401, 402, 403, 404] as $id)
+	{
+		check($features->activate($id, $body));
+		$directions[] = [$body->gravityX, $body->gravityY];
 	}
 
 	check($directions === [[1, 0], [0, -1], [-1, 0], [0, 1]]);

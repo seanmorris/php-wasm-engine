@@ -1030,12 +1030,21 @@ $gravity = $base;
 $gravityTerrain = array_fill(0, $width * $height, 0);
 $gravityMarkers = array_fill(0, $width * $height, 0);
 
-for($y = 2; $y <= 17; $y++)
+$gravityLeft = 2;
+$gravityRight = 77;
+$gravityTop = 2;
+$gravityBottom = 17;
+
+for($y = $gravityTop; $y <= $gravityBottom; $y++)
 {
-	for($x = 2; $x <= 27; $x++)
+	for($x = $gravityLeft; $x <= $gravityRight; $x++)
 	{
-		if($x === 2 || $x === 27 || $y === 2 || $y === 17)
-		{
+		if(
+			$x === $gravityLeft
+			|| $x === $gravityRight
+			|| $y === $gravityTop
+			|| $y === $gravityBottom
+		){
 			$gravityTerrain[$y * $width + $x] = 1;
 		}
 	}
@@ -1047,7 +1056,7 @@ $gravity['layers'][count($background) + 2]['objects'] = [
 	[
 		'id' => 1
 		, 'class' => 'Player'
-		, 'x' => 140
+		, 'x' => 240
 		, 'y' => 400
 	]
 ];
@@ -1098,14 +1107,14 @@ $gravity['layers'][] = [
 	, 'name' => 'Gravity features'
 	, 'type' => 'objectgroup'
 	, 'objects' => [
-		$gravityFeature(401, 'GravitySwitch', 140, 544, 0, ['gravity' => 'right', 'length' => 120.0])
-		, $gravityFeature(402, 'GravitySwitch', 864, 510, 270, ['gravity' => 'up', 'length' => 64.0])
-		, $gravityFeature(403, 'GravitySwitch', 820, 96, 180, ['gravity' => 'left', 'length' => 120.0])
-		, $gravityFeature(404, 'GravitySwitch', 96, 140, 90, ['gravity' => 'down', 'length' => 120.0])
-		, $gravityFeature(411, 'Spring', 430, 544, 0, ['power' => 1100.0, 'length' => 64.0])
-		, $gravityFeature(412, 'Spring', 864, 250, 270, ['power' => 1100.0, 'length' => 64.0])
-		, $gravityFeature(413, 'Spring', 550, 96, 180, ['power' => 1100.0, 'length' => 64.0])
-		, $gravityFeature(414, 'Spring', 96, 330, 90, ['power' => 1100.0, 'length' => 64.0])
+		$gravityFeature(401, 'GravitySwitch', 640, 544, 0, ['gravity' => 'right', 'length' => 96.0])
+		, $gravityFeature(402, 'GravitySwitch', 2464, 280, 270, ['gravity' => 'up', 'length' => 64.0])
+		, $gravityFeature(403, 'GravitySwitch', 1800, 96, 180, ['gravity' => 'left', 'length' => 96.0])
+		, $gravityFeature(404, 'GravitySwitch', 96, 400, 90, ['gravity' => 'down', 'length' => 96.0])
+		, $gravityFeature(411, 'Spring', 1200, 544, 0, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(412, 'Spring', 2464, 140, 270, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(413, 'Spring', 1050, 96, 180, ['power' => 1100.0, 'length' => 64.0])
+		, $gravityFeature(414, 'Spring', 96, 500, 90, ['power' => 1100.0, 'length' => 64.0])
 	]
 ] + $layerDefaults;
 

@@ -38,7 +38,7 @@ async function run(page, source)
 	return result.output;
 }
 
-test('gravity course cycles all surfaces and oriented springs launch through the live ECS', async({page}) => {
+test('gravity course permits settling and exposes every control through the live ECS', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/');
@@ -50,27 +50,47 @@ test('gravity course cycles all surfaces and oriented springs launch through the
 	expect(Object.keys(features.switches)).toHaveLength(4);
 	expect(Object.keys(features.springs)).toHaveLength(4);
 
-	const directions = await page.evaluate(async() => {
+	const settled = await page.evaluate(async() => {
 		const canvas = document.querySelector('canvas');
-		const seen = [];
 		const started = performance.now();
 
-		while(performance.now() - started < 5000 && seen.length < 4)
+		while(performance.now() - started < 3000)
 		{
 			await new Promise(resolve => requestAnimationFrame(resolve));
 			const body = JSON.parse(canvas.dataset.body || '{}');
-			const direction = body.gravityX + ',' + body.gravityY;
 
-			if(direction !== 'undefined,undefined' && !seen.includes(direction)) seen.push(direction);
+			if(body.grounded)
+			{
+				await new Promise(resolve => setTimeout(resolve, 500));
+
+				return JSON.parse(canvas.dataset.body || '{}');
+			}
 		}
 
-		return seen;
+		return {};
 	});
 
-	expect(directions).toEqual(expect.arrayContaining(['1,0', '0,-1', '-1,0', '0,1']));
+	expect([settled.gravityX, settled.gravityY]).toEqual([0, 1]);
+	expect(settled.grounded).toBe(true);
+	expect(settled.x).toBeCloseTo(240, 0);
+
+	const directions = JSON.parse(await run(page, `
+		$directions = [];
+
+		foreach([401, 402, 403, 404] as $id)
+		{
+			$game->level->gravityFeatures->activate($id, $body);
+			$directions[] = [$body->gravityX, $body->gravityY];
+		}
+
+		echo json_encode($directions);
+	`
+	));
+
+	expect(directions).toEqual([[1, 0], [0, -1], [-1, 0], [0, 1]]);
 
 	const launch = JSON.parse(await run(page, `
-		$body->x = 430;
+		$body->x = 1200;
 		$body->y = 526;
 		$body->vx = $body->vy = $body->groundSpeed = 0;
 		$body->setGravityDirection(0, 1);
