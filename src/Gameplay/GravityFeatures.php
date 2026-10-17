@@ -63,6 +63,7 @@ final class GravityFeatures
 					$length = array_key_exists('length', $properties)
 						? (float)$properties['length']
 						: max(32, (float)($object['width'] ?? 0));
+
 					$layerId = (int)($properties['collisionLayer'] ?? 0);
 
 					if($class === 'spring')
