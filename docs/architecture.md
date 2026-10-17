@@ -9,7 +9,8 @@ The initial design was informed by Sean Morris's local projects:
 - moving-boxes-2/app/backdrop/Backdrop.js: stacked strips, automatic drift, and animated image frames.
 - soop: object components, boolean queries, systems, and deferred structural commands.
 - moving-boxes-2/app/behavior/Platformer.js: surface modes, ground/air velocity, terrain sensors, tangent momentum, and normal-directed jumps.
-- moving-boxes-2/app/actor/Sonic.js: charge dash and landing-triggered drop dash.
+- moving-boxes-2/app/behavior/Crouch.js and Spindash.js: grounded crouch state, Down + tap 0 or hold 1 charging, passive charge decay, and Down-release launch.
+- moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
 - moving-boxes-2/app/controller/Controller.js, Axis.js, and GamepadConfig.js: left-stick/D-pad movement, A jump, B dash actions, Start pause, and a proportional 20% stick dead zone.

@@ -3,10 +3,10 @@
     "name": "demo",
     "tilewidth": 32,
     "tileheight": 32,
-    "columns": 9,
-    "tilecount": 9,
+    "columns": 18,
+    "tilecount": 18,
     "image": "tiles.png",
-    "imagewidth": 288,
+    "imagewidth": 576,
     "imageheight": 32,
     "tiles": [
         {
@@ -125,6 +125,60 @@
         {
             "id": 8,
             "class": "flyer"
+        },
+        {
+            "id": 9,
+            "class": "runner-crouching"
+        },
+        {
+            "id": 10,
+            "class": "glider-crouching"
+        },
+        {
+            "id": 11,
+            "class": "flyer-crouching"
+        },
+        {
+            "id": 12,
+            "class": "runner-rolling",
+            "animation": [
+                {
+                    "tileid": 12,
+                    "duration": 80
+                },
+                {
+                    "tileid": 13,
+                    "duration": 80
+                }
+            ]
+        },
+        {
+            "id": 14,
+            "class": "glider-rolling",
+            "animation": [
+                {
+                    "tileid": 14,
+                    "duration": 80
+                },
+                {
+                    "tileid": 15,
+                    "duration": 80
+                }
+            ]
+        },
+        {
+            "id": 16,
+            "class": "flyer-rolling",
+            "animation": [
+                {
+                    "tileid": 16,
+                    "duration": 80
+                },
+                {
+                    "tileid": 17,
+                    "duration": 80
+                }
+            ]
         }
     ]
 }

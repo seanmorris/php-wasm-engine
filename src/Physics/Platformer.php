@@ -83,6 +83,9 @@ final class Platformer
 
 		if($b->ability === 'climb')
 		{
+			$b->crouching = false;
+			$b->charge = 0;
+			$b->crouchTime = 0;
 			$this->climb($b, $input, $dt);
 
 			return;
@@ -90,22 +93,7 @@ final class Platformer
 
 		if($b->grounded)
 		{
-			if($input->down('down') && abs($b->groundSpeed) > 100)
-			{
-				$b->rolling = true;
-			}
-
-			if($b->profile === 'runner' && $input->down('down') && $input->down('action') && abs($b->groundSpeed) < 120
-			){
-				$b->charge = min(1, $b->charge + $dt * 1.4);
-				$b->groundSpeed = 0;
-			}
-			elseif($b->charge > 0)
-			{
-				$b->groundSpeed = $b->facing * (480 + 960 * $b->charge);
-				$b->rolling = true;
-				$b->charge = 0;
-			}
+			$this->groundPose($b, $input, $dt);
 
 			if(!$b->charge)
 			{
@@ -161,29 +149,39 @@ final class Platformer
 				, $b->collisionLayer
 			);
 
+			$spindashTap = $input->down('down') && $input->pressed('jump') && $b->crouching
+				&& !($platform?->oneWay ?? false);
+
 			if($input->down('down') && $platform?->oneWay)
 			{
 				$b->dropTimer = .25;
 				$b->grounded = false;
 				$b->y += .2;
 			}
-			else
+			elseif(!$spindashTap)
 			{
 				$b->vx += sin($b->angle) * $b->jumpSpeed;
 				$b->vy -= cos($b->angle) * $b->jumpSpeed;
 				$b->grounded = false;
 				$b->rolling = false;
+				$b->crouching = false;
+				$b->charge = 0;
+				$b->crouchTime = 0;
 				$b->x += sin($b->angle) * .05;
 				$b->y -= cos($b->angle) * .05;
 			}
 
 			$b->jumpBuffer = 0;
 			$b->coyote = 0;
-			$jumped = true;
+			$jumped = !$spindashTap;
 		}
 
 		if(!$b->grounded)
 		{
+			$b->crouching = false;
+			$b->charge = 0;
+			$b->crouchTime = 0;
+
 			if($input->released('jump') && $b->vy < -240 && $b->ability === '')
 			{
 				$b->vy = -240;
@@ -293,6 +291,68 @@ final class Platformer
 		{
 			$b->angle = 0;
 		}
+	}
+
+	/**
+	 * Select standing, crouching, rolling, or charged-spindash state on a surface.
+	 *
+	 * @param Body $b Grounded actor whose pose and tangent speed are updated.
+	 * @param Controls $input Logical directions plus jump taps and held action input.
+	 * @param float $dt Simulation delta in seconds used for passive charge decay.
+	 * @return void Retains charge while Down stays held and launches it when Down is released.
+	 */
+	private function groundPose(Body $b, Controls $input, float $dt): void
+	{
+		$down = $input->down('down');
+		$b->crouching = false;
+
+		if($down && abs($b->groundSpeed) > 100)
+		{
+			$b->rolling = true;
+			$b->charge = 0;
+			$b->crouchTime = 0;
+
+			return;
+		}
+
+		if(!$down)
+		{
+			$b->crouchTime = 0;
+
+			if($b->charge > 0)
+			{
+				$power = max(.375, min(1, $b->charge));
+				$b->groundSpeed = $b->facing * (480 + 960 * $power);
+				$b->rolling = true;
+				$b->charge = 0;
+			}
+
+			return;
+		}
+
+		if($b->rolling || abs($b->groundSpeed) >= 1)
+		{
+			$b->charge = 0;
+			$b->crouchTime = 0;
+
+			return;
+		}
+
+		$b->crouching = true;
+		$b->groundSpeed = 0;
+
+		if($input->pressed('jump') || $input->pressed('action'))
+		{
+			$b->charge = min(1, $b->charge + .25);
+		}
+
+		if($input->down('action'))
+		{
+			$b->charge = min(1, $b->charge + 1.5 * $dt);
+		}
+
+		$b->charge = max(0, $b->charge - .3 * $dt);
+		$b->crouchTime = $b->charge > 0 ? 0 : $b->crouchTime + $dt;
 	}
 
 	/**

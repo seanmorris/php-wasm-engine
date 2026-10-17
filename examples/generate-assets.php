@@ -38,7 +38,9 @@ function jsonAsset(string $name, array $data): void
 // Tiled's JSON importer reads omitted visibility and opacity as false and zero.
 $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
-png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
+$playerColors = [[86,167,245,255],[242,120,114,255],[246,189,83,255]];
+
+png(__DIR__ . '/assets/tiles.png', 576, 32, static function($x, $y) use($playerColors) {
 	$id = intdiv($x, 32);
 	$x %= 32;
 
@@ -84,6 +86,37 @@ png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
 			];
 	}
 
+	if($id >= 12)
+	{
+		$profile = intdiv($id - 12, 2);
+		$dx = $x - 16;
+		$dy = $y - 18;
+
+		if(hypot($dx, $dy) > 11)
+		{
+			return [0,0,0,0];
+		}
+
+		$stripe = ($id - 12) % 2 === 0 ? abs($dx - $dy) <= 1 : abs($dx + $dy) <= 1;
+
+		return $stripe && hypot($dx, $dy) < 8 ? [240,247,255,255] : $playerColors[$profile];
+	}
+
+	if($id >= 9)
+	{
+		if($x < 5 || $x > 26 || $y < 14 || $y > 29 || (($x < 9 || $x > 23) && $y < 23))
+		{
+			return [0,0,0,0];
+		}
+
+		if($x >= 18 && $x <= 22 && $y >= 16 && $y <= 19)
+		{
+			return [240,247,255,255];
+		}
+
+		return $y > 26 ? [222,238,247,255] : $playerColors[$id - 9];
+	}
+
 	if($x < 6 || $x > 25 || $y < 3 || $y > 29)
 	{
 		return [0,0,0,0];
@@ -99,7 +132,7 @@ png(__DIR__ . '/assets/tiles.png', 288, 32, static function($x, $y) {
 		return [222,238,247,255];
 	}
 
-	return [[86,167,245,255],[242,120,114,255],[246,189,83,255]][$id - 6];
+	return $playerColors[$id - 6];
 });
 
 $solid = [['name' => 'solid','type' => 'bool','value' => true]];
@@ -108,10 +141,10 @@ $tiles = [
 	, 'name' => 'demo'
 	, 'tilewidth' => 32
 	, 'tileheight' => 32
-	, 'columns' => 9
-	, 'tilecount' => 9
+	, 'columns' => 18
+	, 'tilecount' => 18
 	, 'image' => 'tiles.png'
-	, 'imagewidth' => 288
+	, 'imagewidth' => 576
 	, 'imageheight' => 32
 	, 'tiles' => [
 		['id' => 0,'properties' => $solid]
@@ -184,6 +217,33 @@ $tiles = [
 		, [
 			'id' => 8
 			, 'class' => 'flyer'
+		]
+		, ['id' => 9,'class' => 'runner-crouching']
+		, ['id' => 10,'class' => 'glider-crouching']
+		, ['id' => 11,'class' => 'flyer-crouching']
+		, [
+			'id' => 12
+			, 'class' => 'runner-rolling'
+			, 'animation' => [
+				['tileid' => 12,'duration' => 80]
+				, ['tileid' => 13,'duration' => 80]
+			]
+		]
+		, [
+			'id' => 14
+			, 'class' => 'glider-rolling'
+			, 'animation' => [
+				['tileid' => 14,'duration' => 80]
+				, ['tileid' => 15,'duration' => 80]
+			]
+		]
+		, [
+			'id' => 16
+			, 'class' => 'flyer-rolling'
+			, 'animation' => [
+				['tileid' => 16,'duration' => 80]
+				, ['tileid' => 17,'duration' => 80]
+			]
 		]
 	]
 ];

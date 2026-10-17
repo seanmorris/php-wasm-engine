@@ -347,7 +347,7 @@ test(
 	}
 );
 
-test('gamepad dash breaks blocks on rolling contact after releasing the charge', async({page}) => {
+test('gamepad crouch and spindash break blocks after releasing Down', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await pads(page);
@@ -364,13 +364,26 @@ test('gamepad dash breaks blocks on rolling contact after releasing the charge',
 	await page.waitForTimeout(100);
 	expect((await body()).x).toBeLessThanOrEqual(296.001);
 	expect(await blocks()).toEqual({intact: 3,pieces: 0});
+	await change(page, {buttons: [13]});
+	await expect.poll(async() => (await body()).pose, {intervals: [16]}).toBe('crouching');
+	await expect.poll(async() => (await body()).crouchTime, {timeout: 1500}).toBeGreaterThanOrEqual(.75);
+	await change(page, {buttons: [0,13]});
+	await expect.poll(async() => (await body()).pose, {intervals: [16]}).toBe('spindash');
+	expect((await body()).grounded).toBe(true);
+	await change(page, {buttons: [13]});
+	const tappedCharge = (await body()).charge;
 	await change(page, {buttons: [1,13]});
 	await page.waitForTimeout(250);
 	expect(await blocks()).toEqual({intact: 3,pieces: 0});
-	expect((await body()).rolling).toBe(false);
+	expect(await body()).toMatchObject({crouching: true,crouchTime: 0,rolling: false,pose: 'spindash'});
+	expect((await body()).charge).toBeGreaterThan(tappedCharge);
 	await change(page, {buttons: [13]});
+	await page.waitForTimeout(50);
+	expect((await body()).charge).toBeGreaterThan(0);
+	expect((await body()).rolling).toBe(false);
+	await change(page, {});
 	await expect.poll(async() => (await blocks()).intact, {intervals: [16]}).toBe(2);
-	expect((await body()).rolling).toBe(true);
+	expect(await body()).toMatchObject({crouching: false,rolling: true,pose: 'rolling'});
 	expect((await body()).speed).toBeGreaterThan(480);
 	await expect.poll(async() => (await body()).x, {intervals: [16]}).toBeGreaterThan(410);
 	await change(page, {buttons: [8]});
