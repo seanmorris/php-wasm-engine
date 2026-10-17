@@ -5,6 +5,7 @@ use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
+use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Sprite;
@@ -18,8 +19,10 @@ final class DemoGame
 	public ?PauseMenu $menu = null;
 	public ?DemoStartup $startup = null;
 	public ?DemoDebugOverlay $debug = null;
+	public ?DemoPlayerHud $hud = null;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
+	public float $levelStartedAt = 0;
 	public string $lastSequence = '';
 	public int $sequenceCount = 0;
 	public string $scene = '';
@@ -35,6 +38,7 @@ final class DemoGame
 	 * @param Engine $engine Engine retained across every level selection.
 	 * @param Camera $camera Shared viewport and user zoom setting.
 	 * @param Body $body Persistent player body receiving each destination's spawn pose.
+	 * @param RingCounter $counter Persistent player score and level ring count.
 	 * @param int $entity Registry ID for the persistent player body and sprite.
 	 * @return void Installs one movement system; assets load after selectScene is called.
 	 */
@@ -42,6 +46,7 @@ final class DemoGame
 		public Engine $engine
 		, public Camera $camera
 		, public Body $body
+		, public RingCounter $counter
 		, public int $entity
 	){
 		$this->host = vrzno_env('demoControls');
@@ -201,6 +206,7 @@ final class DemoGame
 		}
 
 		$this->body->halfHeight = $this->body->standingHeight;
+		$this->level?->rings?->sync($this->entity, $this->body);
 	}
 
 	/**
@@ -249,6 +255,8 @@ final class DemoGame
 		$this->pending = null;
 		$this->scene = $this->level->id;
 		$previous?->close($this->engine);
+		$this->counter->rings = 0;
+		$this->levelStartedAt = $this->engine->time;
 		$this->resetPlayer();
 		[$this->camera->x, $this->camera->y] = $this->level->origin();
 		$this->engine->input->reset();
@@ -344,7 +352,9 @@ final class DemoGame
 
 		if($this->startup?->render())
 		{
+			$this->hud?->render($this, false);
 			$this->debug?->render($this, false);
+			$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
 			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 			$this->engine->device->present();
 
@@ -359,7 +369,10 @@ final class DemoGame
 			$this->canvas->dataset->frames = (string)++$this->frames;
 		}
 
+		$playerVisible = $this->level !== null && !in_array($this->scene, ['world', 'isometric'], true);
+		$this->hud?->render($this, $playerVisible);
 		$this->debug?->render($this, $this->level !== null);
+		$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
 		$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 		$this->menu->render();
 		$this->engine->device->present();
@@ -506,6 +519,7 @@ final class DemoGame
 	{
 		$this->level?->restore();
 		$this->menu?->restore();
+		$this->hud?->restore();
 		$this->debug?->restore();
 		$this->startup?->restore();
 	}
@@ -518,11 +532,12 @@ final class DemoGame
 	public function close(): void
 	{
 		$this->startup?->close();
+		$this->hud?->close();
 		$this->debug?->close();
 		$this->menu?->close();
 		$this->releasePending();
 		$this->level?->close($this->engine);
 		$this->level = null;
-		unset($this->canvas->dataset->debug, $this->canvas->dataset->sequences);
+		unset($this->canvas->dataset->hud, $this->canvas->dataset->debug, $this->canvas->dataset->sequences);
 	}
 }

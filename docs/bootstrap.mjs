@@ -73,7 +73,7 @@ export function boot(
 			, 'breakables'
 			, 'scene'
 			, 'profile'
-			, 'loading', 'levelError', 'intro', 'debug', 'sequences'
+			, 'loading', 'levelError', 'intro', 'hud', 'debug', 'sequences'
 		]){
 			delete canvas.dataset[key];
 		}

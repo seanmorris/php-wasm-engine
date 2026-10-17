@@ -167,6 +167,11 @@ $tiles = [
 		]
 		, [
 			'id' => 4
+			, 'class' => 'ring'
+			, 'properties' => [
+				['name' => 'ring.radius', 'type' => 'float', 'value' => 12]
+				, ['name' => 'ring.value', 'type' => 'int', 'value' => 1]
+			]
 			, 'animation' => [
 				['tileid' => 4,'duration' => 180]
 				, [

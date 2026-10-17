@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
+use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\MapTerrain;
@@ -25,6 +26,7 @@ final class DemoLevel
 	public ?Terrain $terrain = null;
 	public ?Platformer $movement = null;
 	public ?BreakableBlocks $blocks = null;
+	public ?Rings $rings = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -147,9 +149,11 @@ final class DemoLevel
 
 		$map = reset($maps);
 		$this->terrain = MapTerrain::build($map);
+		$this->rings = new Rings($engine->entities, $map);
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
 		$this->renderer->render($view, $engine->time * 1000);
+		$engine->systems->add($this->systemPrefix . 'rings', [$this->rings, 'update'], after: ['movement']);
 
 		if($this->id === 'breakables')
 		{
@@ -226,7 +230,9 @@ final class DemoLevel
 		$this->closed = true;
 		$engine->systems->remove($this->systemPrefix . 'particles');
 		$engine->systems->remove($this->systemPrefix . 'breakables');
+		$engine->systems->remove($this->systemPrefix . 'rings');
 		$this->blocks?->close();
+		$this->rings?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();
