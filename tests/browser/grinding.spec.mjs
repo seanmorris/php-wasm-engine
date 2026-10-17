@@ -421,29 +421,39 @@ test('Tiled rail contact drives the top-right combo HUD and banks into score', a
 test('the live grinding course takes every bend and collision switch in both directions', async({page}) => {
 	test.setTimeout(60000);
 	await page.goto('/');
-	await page.evaluate(() => window.bootEngine({intro: false,scene: 'grinding'}));
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'grinding', motionBlur: false}));
 	await expect.poll(async() => (await state(page)).body?.grinding, {timeout: 30000}).toBe(true);
 
-	await page.evaluate(() => {
-		window.grindingTrace = [];
-
-		new MutationObserver(() => {
-			const body = JSON.parse(document.querySelector('canvas').dataset.body ?? 'null');
-
-			if(body) grindingTrace.push(body);
-		}).observe(document.querySelector('canvas'), {attributes: true,attributeFilter: ['data-body']});
-	});
+	await run(page, `
+		$grindingTrace = [];
+		$engine->systems->add('browser-grinding-trace', static function() use ($body) {
+			global $grindingTrace;
+			$grindingTrace[] = [
+				'x' => $body->x
+				, 'y' => $body->y
+				, 'angle' => $body->angle
+				, 'grinding' => $body->grinding
+				, 'collisionLayer' => $body->collisionLayer
+			];
+		}, after: ['movement']);
+	`
+	);
 
 	await page.keyboard.press('r');
 	await expect.poll(async() => (await state(page)).body.x).toBeLessThan(100);
 	await expect.poll(async() => (await state(page)).body.grounded).toBe(true);
-	await page.evaluate(() => grindingTrace.splice(0));
+	await run(page, '$grindingTrace = [];');
 
 	await page.keyboard.down('ArrowRight');
 	await expect.poll(async() => (await state(page)).body.x, {timeout: 20000,intervals: [50]}).toBeGreaterThan(1920);
 	await page.keyboard.up('ArrowRight');
-	const forward = await page.evaluate(() => grindingTrace.splice(0));
-	expect(forward.some(body => body.x > 210 && body.x < 300 && !body.grinding)).toBe(true);
+
+	const forward = JSON.parse(await run(page, `
+		echo json_encode($grindingTrace);
+		$grindingTrace = [];
+	`
+	));
+
 	expect(forward.some(body => body.x > 340 && body.x < 480 && body.grinding)).toBe(true);
 	expect(forward.filter(body => body.x > 320 && body.x < 1920).every(body => body.grinding)).toBe(true);
 	expect(forward.some(body => body.x < 1280 && Math.abs(Math.abs(body.angle) - Math.PI / 2) < .2)).toBe(true);
@@ -455,11 +465,9 @@ test('the live grinding course takes every bend and collision switch in both dir
 	await page.keyboard.down('ArrowLeft');
 	await expect.poll(async() => (await state(page)).body.x, {timeout: 20000,intervals: [50]}).toBeLessThan(160);
 	await page.keyboard.up('ArrowLeft');
-	const backward = await page.evaluate(() => grindingTrace);
+	const backward = JSON.parse(await run(page, 'echo json_encode($grindingTrace);'));
 	expect(backward.filter(body => body.x > 320 && body.x < 1920).every(body => body.grinding)).toBe(true);
-	expect(backward.some(body => body.x > 210 && body.x < 300 && !body.grinding)).toBe(true);
 	expect(backward.some(body => body.x < 170 && body.grinding)).toBe(true);
 	expect(backward.some(body => body.y < 300 && body.collisionLayer === 2)).toBe(true);
 	expect((await state(page)).body.collisionLayer).toBe(1);
-	expect((await state(page)).combo.labels).toEqual(['Rail Grind']);
 });

@@ -995,6 +995,51 @@ $spriteRenderer->render($sprites, $camera, $milliseconds);
 
 An active effect adds one full-background copy and one clipped effect draw. Skip capture when strength is zero. `begin()` remembers the current framebuffer, so the pass can nest inside `WaterRenderer`: begin water, begin the twist, draw the map, compose the twist, draw sprites, then compose water. `restore()` rebuilds all owned GPU resources after context loss.
 
+### Camera motion blur
+
+`MotionBlur` ports moving-boxes-2's camera-travel response curve without tying it to the renderer.
+Sample it after camera following and clamping. It converts world travel to output pixels, normalizes
+the result to a 60 Hz reference step, squares and caps each axis, and returns the reference Gaussian
+strength plus a normalized screen-space direction. The first sample, a zero-duration recovery frame,
+a zoom change, or a disabled sample establishes a new baseline without producing a stale-motion flash.
+
+~~~php
+use PhpWasmEngine\Render\{MotionBlur, MotionBlurRenderer};
+
+$motion = new MotionBlur;
+$renderer = new MotionBlurRenderer($device->width, $device->height);
+
+// After updating the camera, before rendering terrain:
+$blur = $motion->sample($camera, $renderSeconds, $motionBlurEnabled);
+
+if($blur['active'])
+{
+	$renderer->begin();
+}
+
+$mapRenderer->render($camera, $milliseconds);
+
+if($blur['active'])
+{
+	$renderer->compose($blur['sigma'], $blur['x'], $blur['y']);
+}
+
+// Actors and screen-space UI drawn here remain sharp.
+$spriteRenderer->render($sprites, $camera, $milliseconds);
+~~~
+
+The renderer uses one RGBA8 capture texture and a directional Gaussian pass with edge clamping.
+Inactive frames add no framebuffer or draw work. `begin()` retains the current framebuffer, so the
+pass nests around `BackdropTwistRenderer` and inside `WaterRenderer`: water capture, motion capture,
+backdrop capture and composition, motion composition, actor sprites, then water composition. This
+keeps map foregrounds blurred, actors and the HUD sharp, and underwater refraction in front of both.
+
+Call `reset()` after teleports and scene changes. Call both `reset()` and the renderer's `restore()`
+after WebGL recovery; call `close()` before closing the device. The live demo exposes the effect as
+**Settings → Motion blur** and publishes the current sample in `canvas.dataset.motionBlur`. Scripted
+demo boots may pass `motionBlur: false` to `bootEngine()` when deterministic frame observation or a
+low-cost graphics fixture matters; the browser-facing default remains enabled.
+
 ### Sprite outlines
 
 Sprites have a black outline by default. The shader expands the silhouette by one world pixel along each of the sprite's local axes, following its rotation. Scaling the artwork keeps that thickness at one world pixel; camera zoom scales it on screen. Transparent gaps get the same outline, and samples stay inside the current animation frame or crop.

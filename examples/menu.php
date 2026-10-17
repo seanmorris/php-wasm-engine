@@ -90,6 +90,14 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 			, 'get' => fn() => $game->debug->showFps
 			, 'set' => fn($value) => $game->debug->showFps = $value
 		]
+		, 'motion-blur' => [
+			'label' => 'Motion blur'
+			, 'input' => 'boolean'
+			, 'default' => true
+			, 'subtext' => 'Blur terrain along fast camera movement while keeping actors and the HUD sharp.'
+			, 'get' => fn() => $game->motionBlur
+			, 'set' => fn($value) => $game->setMotionBlur($value)
+		]
 		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
 		, 'time' => [
 			'label' => 'Game time'
@@ -111,6 +119,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		$settings->hints = $adapter->renderer->showHints = true;
 		$game->debug->enabled = false;
 		$game->debug->showFps = true;
+		$game->setMotionBlur(true);
 		$camera->zoom = 1;
 		$menu->back();
 	};

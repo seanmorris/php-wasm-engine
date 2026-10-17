@@ -85,6 +85,9 @@ test('pause menus keep simulation stopped while nested controls apply live', asy
 	await choose(page, 'hints');
 	await page.keyboard.press('Space');
 	await expect.poll(async() => (await state(page)).values.hints).toBe(false);
+	await choose(page, 'motion-blur');
+	await page.keyboard.press('Space');
+	await expect.poll(async() => (await state(page)).values['motion-blur']).toBe(false);
 	await page.keyboard.press('Escape');
 	await expect.poll(async() => (await state(page)).selected).toBe('settings');
 	expect((await state(page)).time).toBe(time);

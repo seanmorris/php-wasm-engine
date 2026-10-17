@@ -20,6 +20,8 @@ The initial design was informed by Sean Morris's local projects:
   chaining, nine-frame timers, and combo accrual.
 - moving-boxes-2/app/actor/PointActor.js, app/effects/Twist.js, and the viewport background-filter
   layer: the radial tangential field placed between the map and actor artwork.
+- moving-boxes-2/app/viewport/Viewport.js and viewport.html: camera-delta motion strength,
+  directional Gaussian map-layer blur, and sharp actor and overlay composition.
 - moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
 - moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
 - moving-boxes-2/app/region/WaterRegion.js and the viewport waves filter: liquid gravity, drag,
@@ -58,6 +60,17 @@ SpriteGroup stores several world-positioned sprites on one entity while preservi
 Sprite::$outline defaults to true and occupies a transform flag in the instance record. The vertex shader expands the quad by one world unit along each local axis before rotation. It keeps the artwork's original anchor and computes the outline radius in source pixels from the absolute sprite scale. The fragment shader preserves visible artwork and fills transparent pixels with black using the largest alpha in that source neighborhood. It clamps every lookup to the current frame or crop. Checking intermediate texels keeps outlines continuous when source pixels shrink below one world pixel. Fully opaque neighbors end the search early; opt-outs skip expansion and the neighborhood scan. Integer texel fetches and stabilization at texel boundaries keep cropped artwork consistent. Camera zoom applies after world-space expansion. Outlines add no textures or draw passes and do not alter physics bounds. BreakableBlocks disables the flag, which ParticleBurst copies to every shard.
 
 BackdropTwistRenderer captures map output in an RGBA8 texture, restores that texture to the caller's framebuffer, and redraws a clipped 64-world-pixel square through a cubic radial tangential field. Sprites render after composition, matching the reference background-filter layer and keeping actor and particle pixels unchanged. The renderer remembers its parent framebuffer, so it can capture and compose inside WaterRenderer before sprites enter the water pass. It owns one texture, framebuffer, vertex array, and shader program and recreates them after context restoration. The demo applies the reference braking and spindash offsets at the player's support point, derives braking strength from opposing tangent speed with a ±256 clamp, and derives spindash strength from retained direction and normalized charge up to ±120. Inactive frames skip capture and both extra draws.
+
+MotionBlur separates camera measurement from GPU composition. Its model uses final camera travel,
+output zoom, and elapsed render time to reproduce the moving-boxes-2 response at a 60 Hz reference
+rate while avoiding strength changes caused by browser frame rate. Disabled, paused, recovered,
+teleported, and zoom-changing frames replace the baseline so stale travel cannot flash on the next
+draw. MotionBlurRenderer captures the complete map pass in an RGBA8 texture and applies a
+one-dimensional Gaussian along the measured screen direction. Clamp-to-edge sampling matches the
+reference filter's duplicate edge mode. Actor, entity, and HUD batches follow the composite and
+stay sharp. The capture retains its parent framebuffer, allowing backdrop displacement inside it
+and water capture outside it. It owns and restores one texture, framebuffer, vertex array, and
+shader program; inactive samples allocate no per-frame resources and submit no extra draw.
 
 ParticleBurst partitions a sprite's current frame into an integer grid. It maps each cell through the original anchor, scale, rotation, and flips, then gives each piece an independent center, velocity, spin, and fade. Odd dimensions distribute all source pixels exactly. Motion uses constant-acceleration integration and clamps at the configured lifetime. ParticleSystem retires the owning entity through the registry's deferred queue. A burst uses one SpriteGroup and one entity regardless of its piece count.
 

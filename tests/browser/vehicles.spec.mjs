@@ -78,7 +78,12 @@ test(profile + ' boards, drives, jumps, tricks and exits a skateboard with ' + d
 	});
 
 	await page.goto('/');
-	await page.evaluate(profile => window.bootEngine({intro: false, scene: 'vehicles', profile}), profile);
+
+	await page.evaluate(
+		profile => window.bootEngine({intro: false, scene: 'vehicles', profile, motionBlur: false})
+		, profile
+	);
+
 	await expect.poll(async() => (await state(page)).body?.ability, {timeout: 60000}).toBe('riding');
 	await page.locator('canvas').focus();
 	const initial = await state(page);
