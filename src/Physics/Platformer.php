@@ -741,10 +741,20 @@ final class Platformer
 			$contacts++;
 			$b->x += $dx * $best->t + $best->nx * .001;
 			$b->y += $dy * $best->t + $best->ny * .001;
-			$support = $best->nx * $b->gravityX + $best->ny * $b->gravityY < -.25;
+			$normalGravity = $best->nx * $b->gravityX + $best->ny * $b->gravityY;
+			$normalTangent = $best->nx * $b->tangentX() + $best->ny * $b->tangentY();
+			$support = $normalGravity < -.25;
+			// MB2 distinguishes a flat head bump from an angled upper collision. An actor moving
+			// against gravity may acquire an angled wall-to-ceiling surface, then ordinary grounded
+			// adhesion carries it around the rest of the curve. Both tests use gravity-local axes so
+			// rotated worlds behave identically.
+			$ceilingReground = !$b->grounded && $b->gravityVelocity() < -180 && $normalGravity > .25
+				&& abs($normalTangent) > .25;
 
-			if($support || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
-			)){
+			if($support || $ceilingReground
+				|| ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
+				)
+			){
 				$b->grounded = true;
 				$b->grinding = $best->grinding;
 				$b->angle = atan2($best->nx, -$best->ny);
@@ -752,7 +762,7 @@ final class Platformer
 				$b->x += $best->nx * ($b->halfHeight + .001 - $distance);
 				$b->y += $best->ny * ($b->halfHeight + .001 - $distance);
 			}
-			elseif(abs($best->nx * $b->tangentX() + $best->ny * $b->tangentY()) > .8)
+			elseif(abs($normalTangent) > .8)
 			{
 				$b->grinding = false;
 

@@ -110,6 +110,58 @@ test('gravity course permits settling and exposes every control through the live
 
 	expect(launch).toEqual([0, -1100, false, false, 'spring', true]);
 
+	const curvedCeilings = JSON.parse(await run(page, `
+		$results = [];
+
+		foreach([[0, 1], [1, 0], [0, -1], [-1, 0]] as [$gravityX, $gravityY])
+		{
+			$world = static fn($tangent, $gravity) => [
+				$gravityY * $tangent + $gravityX * $gravity,
+				-$gravityX * $tangent + $gravityY * $gravity
+			];
+			$points = [];
+
+			foreach(range(0, 24) as $segment)
+			{
+				$angle = $segment / 24 * M_PI_2;
+				$points[] = $world(96 * cos($angle), -96 * sin($angle));
+			}
+
+			$points[] = $world(-240, -96);
+			$terrain = new \\PhpWasmEngine\\Physics\\Terrain;
+			$terrain->addShape($points, false, 0, false, false, true);
+			[$x, $y] = $world(77.999, 28);
+			$testBody = new \\PhpWasmEngine\\Physics\\Body($x, $y);
+			$testBody->setGravityDirection($gravityX, $gravityY);
+			$testBody->terminalSpeed = 4000;
+			(new \\PhpWasmEngine\\Gameplay\\Spring(
+				1, $x, $y, -$gravityX, -$gravityY, 32, 1100
+			))->launch($testBody);
+			$testMovement = new \\PhpWasmEngine\\Physics\\Platformer($terrain);
+
+			foreach(range(1, 24) as $_)
+			{
+				$testMovement->step($testBody, new \\PhpWasmEngine\\Input\\Controls, 1 / 60);
+			}
+
+			$results[] = [
+				$testBody->grounded,
+				round(sin($testBody->angle) * $gravityX - cos($testBody->angle) * $gravityY, 3),
+				round($testBody->x * $gravityX + $testBody->y * $gravityY, 3)
+			];
+		}
+
+		echo json_encode($results);
+	`
+	));
+
+	expect(curvedCeilings).toEqual([
+		[true, 1, -78]
+		, [true, 1, -78]
+		, [true, 1, -78]
+		, [true, 1, -78]
+	]);
+
 	const camera = JSON.parse(await run(page, `
 		$game->cameraBehavior->setMode('auto');
 		$game->cameraBehavior->setCameraLimits();
@@ -172,5 +224,59 @@ test('gravity course permits settling and exposes every control through the live
 	expect(camera[2]).toBe(.25);
 	expect(camera[3]).toBe(true);
 	expect(camera[4]).toBeGreaterThan(500);
+	expect(errors).toEqual([]);
+});
+
+test('the visible curved-ceiling course cycles through all four gravity directions', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine === 'function');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'ceiling-curves', motionBlur: false}));
+	const canvas = page.locator('canvas');
+	await expect(canvas).toHaveAttribute('data-scene', 'ceiling-curves', {timeout: 60000});
+
+	const features = JSON.parse(await canvas.getAttribute('data-gravity'));
+	expect(Object.keys(features.switches)).toHaveLength(4);
+	expect(Object.keys(features.springs)).toHaveLength(4);
+
+	const initialView = JSON.parse(await run(page, `echo json_encode([
+		$body->x - $camera->x,
+		$body->y - $camera->y,
+		$camera->x,
+		$camera->y
+	]);`
+	));
+
+	expect(initialView[0]).toBeGreaterThan(0);
+	expect(initialView[0]).toBeLessThan(1000);
+	expect(initialView[1]).toBeGreaterThan(0);
+	expect(initialView[1]).toBeLessThan(566);
+	expect(initialView[2]).toBeGreaterThan(1000);
+	expect(initialView[3]).toBeGreaterThan(1800);
+
+	const directions = await page.evaluate(async() => {
+		const canvas = document.querySelector('canvas');
+		const seen = [];
+		const started = performance.now();
+		let previous = '';
+
+		while(seen.length < 5 && performance.now() - started < 10000)
+		{
+			await new Promise(resolve => requestAnimationFrame(resolve));
+			const body = JSON.parse(canvas.dataset.body || '{}');
+			const direction = JSON.stringify([body.gravityX, body.gravityY]);
+
+			if(direction !== previous)
+			{
+				seen.push(JSON.parse(direction));
+				previous = direction;
+			}
+		}
+
+		return seen;
+	});
+
+	expect(directions.slice(0, 5)).toEqual([[0, 1], [-1, 0], [0, -1], [1, 0], [0, 1]]);
 	expect(errors).toEqual([]);
 });

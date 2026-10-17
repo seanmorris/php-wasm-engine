@@ -193,6 +193,10 @@ final class MapTerrain
 						{
 							$terrain->addRail($points, $plane);
 						}
+						elseif(isset($object['polyline']))
+						{
+							$terrain->addPathShape($points, (bool)($props['oneWay'] ?? false), $plane);
+						}
 						else
 						{
 							$terrain->add($points, (bool)($props['oneWay'] ?? $grinding), $plane, $grinding);

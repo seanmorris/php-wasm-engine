@@ -115,7 +115,7 @@ final class DemoGame
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
 	 * @param string $scene Platformer, platforms, bridges, grapples, vehicles, light-dash, water, water-rail,
-	 * water-skim-rail, water-loop, gravity, badniks,
+	 * water-skim-rail, water-loop, gravity, ceiling-curves, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
@@ -131,6 +131,7 @@ final class DemoGame
 				, 'water-skim-rail'
 				, 'water-loop'
 				, 'gravity'
+				, 'ceiling-curves'
 				, 'platforms'
 				, 'bridges'
 				, 'light-dash'
@@ -466,6 +467,7 @@ final class DemoGame
 		$previous?->close($this->engine);
 		$this->counter->rings = 0;
 		$this->levelStartedAt = $this->engine->time;
+		$this->cameraBehavior->setCameraLimits(maxY: $this->scene === 'ceiling-curves' ? null : 120);
 		$this->resetPlayer();
 		[$this->camera->x, $this->camera->y] = $this->level->origin();
 		$this->engine->input->reset();
@@ -546,7 +548,7 @@ final class DemoGame
 			return;
 		}
 
-		if($this->body->y > 1200 || $controls->pressed('reset'))
+		if($this->level->escaped($this->body) || $controls->pressed('reset'))
 		{
 			$this->resetPlayer();
 		}

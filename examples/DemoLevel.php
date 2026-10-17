@@ -68,6 +68,8 @@ final class DemoLevel
 	public ?WaterParticles $waterParticles = null;
 	/** @var array{float,float} Player center loaded from the map's Player point object. */
 	public array $spawn = [80.0, 100.0];
+	/** @var array{float,float,float,float}|null Optional player reset bounds in world pixels. */
+	public ?array $resetBounds = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -193,6 +195,18 @@ final class DemoLevel
 
 		$map = reset($maps);
 		$this->spawn = $this->playerSpawn($map);
+
+		if($this->id === 'ceiling-curves')
+		{
+			$padding = 256.0;
+			$this->resetBounds = [
+				$map->x - $padding
+				, $map->y - $padding
+				, $map->x + (float)$map->data['width'] * (float)$map->data['tilewidth'] + $padding
+				, $map->y + (float)$map->data['height'] * (float)$map->data['tileheight'] + $padding
+			];
+		}
+
 		$this->terrain = MapTerrain::build($map);
 		$this->waters = WaterRegions::fromMaps($map);
 		$this->lightDashes = new LightDashes($engine->entities);
@@ -428,6 +442,24 @@ final class DemoLevel
 	}
 
 	/**
+	 * Decide whether a player has escaped the playable reset region.
+	 *
+	 * @param Body $body Player position to compare with this level's authored world bounds.
+	 * @return bool True when gameplay should place the player back at the level spawn.
+	 */
+	public function escaped(Body $body): bool
+	{
+		if($this->resetBounds === null)
+		{
+			return $body->y > 1200;
+		}
+
+		[$left, $top, $right, $bottom] = $this->resetBounds;
+
+		return $body->x < $left || $body->x > $right || $body->y < $top || $body->y > $bottom;
+	}
+
+	/**
 	 * Select the initial camera position for the destination demo.
 	 *
 	 * @return array{float,float} Top-left camera coordinates in world pixels.
@@ -438,6 +470,7 @@ final class DemoLevel
 		{
 			'world' => [32.0, 0.0],
 			'isometric' => [-160.0, -80.0],
+			'ceiling-curves' => [$this->spawn[0] - 500, $this->spawn[1] - 280],
 			default => [0.0, 0.0]
 		};
 	}

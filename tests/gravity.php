@@ -88,6 +88,103 @@ test('ceiling regrounding uses its terrain normal and catches high-speed travel'
 	near(abs($body->angle), M_PI, .001);
 });
 
+test('upward spring travel follows curved walls onto ceilings for every gravity direction', function() {
+	$directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+	$radius = 96;
+
+	foreach($directions as [$gravityX, $gravityY])
+	{
+		foreach([-1, 1] as $side)
+		{
+
+			/**
+			 * Transform gravity-local tangent and down coordinates into world coordinates.
+			 *
+			 * @param float $tangent Coordinate toward the body's logical right.
+			 * @param float $gravity Coordinate in the active gravity direction.
+			 * @return array{float,float} Corresponding world X and Y coordinates.
+			 */
+			$world = static fn(float $tangent, float $gravity): array => [
+				$gravityY * $tangent + $gravityX * $gravity
+				, -$gravityX * $tangent + $gravityY * $gravity
+			];
+
+			$points = [];
+
+			for($segment = 0; $segment <= 24; $segment++)
+			{
+				$angle = $segment / 24 * M_PI_2;
+				$points[] = $world($side * $radius * cos($angle), -$radius * sin($angle));
+			}
+
+			$points[] = $world(-$side * 240, -$radius);
+
+			if($side < 0)
+			{
+				// Open paths are authored so their normals face the playable inside of the curve.
+				$points = array_reverse($points);
+			}
+
+			$terrain = new Terrain;
+			$terrain->addShape($points, false, 0, false, false, true);
+			[$x, $y] = $world($side * ($radius - 18.001), 28);
+			$body = new Body($x, $y);
+			$body->setGravityDirection($gravityX, $gravityY);
+			$body->terminalSpeed = 4000;
+			(new Spring(1, $x, $y, -$gravityX, -$gravityY, 32, 1100))->launch($body);
+			$movement = new Platformer($terrain);
+			$attached = false;
+
+			for($frame = 0; $frame < 24; $frame++)
+			{
+				$movement->step($body, new Controls, 1 / 60);
+				$attached = $attached || $body->grounded;
+			}
+
+			$tangent = $body->x * $gravityY - $body->y * $gravityX;
+			$down = $body->x * $gravityX + $body->y * $gravityY;
+			$supportGravity = sin($body->angle) * $gravityX - cos($body->angle) * $gravityY;
+
+			check($attached, "gravity $gravityX,$gravityY side $side never acquired the curve");
+			check($body->grounded, "gravity $gravityX,$gravityY side $side left the ceiling");
+			check($tangent * $side < -80, "gravity $gravityX,$gravityY side $side did not cross onto the ceiling");
+			near($down, -$radius + $body->halfHeight + .001, .02);
+			near($supportGravity, 1, .001);
+		}
+	}
+});
+
+test('straight upward impacts remain head bumps instead of attaching to flat ceilings', function() {
+	foreach([[0, 1], [1, 0], [0, -1], [-1, 0]] as [$gravityX, $gravityY])
+	{
+
+		/**
+		 * Transform gravity-local coordinates for one cardinal-gravity head-bump case.
+		 *
+		 * @param float $tangent Coordinate toward logical right.
+		 * @param float $gravity Coordinate toward gravity.
+		 * @return array{float,float} Corresponding world position.
+		 */
+		$world = static fn(float $tangent, float $gravity): array => [
+			$gravityY * $tangent + $gravityX * $gravity
+			, -$gravityX * $tangent + $gravityY * $gravity
+		];
+
+		$terrain = new Terrain;
+		$terrain->add([$world(100, -100), $world(-100, -100)]);
+		[$x, $y] = $world(0, 20);
+		$body = new Body($x, $y);
+		$body->setGravityDirection($gravityX, $gravityY);
+		$body->gravity = 0;
+		$body->terminalSpeed = 4000;
+		(new Spring(1, $x, $y, -$gravityX, -$gravityY, 32, 1200))->launch($body);
+		(new Platformer($terrain))->step($body, new Controls, .1);
+
+		check(!$body->grounded, "gravity $gravityX,$gravityY attached to a flat ceiling");
+		near($body->gravityVelocity(), 0, .001);
+	}
+});
+
 test('air steering, jump release, and gravity caps follow the selected local axes', function() {
 	$body = new Body;
 	$body->setGravityDirection(1, 0);
@@ -299,4 +396,67 @@ test('the gravity course leaves room to settle between its four oriented control
 
 	check($directions === [[1, 0], [0, -1], [-1, 0], [0, 1]]);
 	check(count($features->springs) === 4);
+});
+
+test('solid Tiled polylines remain open collision paths', function() {
+	$map = fixture([
+		'/map.tmj' => mapData([
+			[
+				'id' => 2
+				, 'name' => 'Open solid path'
+				, 'type' => 'objectgroup'
+				, 'objects' => [
+					[
+						'id' => 1
+						, 'x' => 0
+						, 'y' => 0
+						, 'polyline' => [
+							['x' => 0, 'y' => 0]
+							, ['x' => 100, 'y' => 0]
+							, ['x' => 100, 'y' => 100]
+						]
+						, 'properties' => [['name' => 'solid', 'type' => 'bool', 'value' => true]]
+					]
+				]
+			]
+		])
+		, '/tiles.tsj' => tiles()
+	])->map('/map.tmj');
+
+	$terrain = MapTerrain::build($map);
+
+	check($terrain->raycast(50, -20, 0, 40) !== null, 'the authored horizontal segment must collide');
+	check($terrain->raycast(120, 50, -40, 0) !== null, 'the authored vertical segment must collide');
+	check($terrain->raycast(40, 60, 0, -40) === null, 'the final point must not close back to the first');
+});
+
+test('the visible ceiling course cycles springs and curved regrounding through every gravity direction', function() {
+	$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/ceiling-curves.tmj');
+	$terrain = MapTerrain::build($map);
+	$registry = new Registry;
+	$features = new GravityFeatures($registry, $terrain, $map);
+	$body = new Body(1878, 2582);
+	$registry->create($body);
+	$movement = new Platformer($terrain);
+	$input = new Controls;
+	$directions = [];
+	$previous = [$body->gravityX, $body->gravityY];
+
+	for($frame = 0; $frame < 430; $frame++)
+	{
+		$movement->step($body, $input, 1 / 60);
+		$features->update($registry, 1 / 60);
+		$current = [$body->gravityX, $body->gravityY];
+
+		if($current !== $previous)
+		{
+			$directions[] = $current;
+			$previous = $current;
+		}
+	}
+
+	check(count($features->springs) === 4);
+	check(count($features->switches) === 4);
+	check($directions === [[-1, 0], [0, -1], [1, 0], [0, 1]]);
+	check($body->x > 1800 && $body->y > 2400, 'the cycle must return toward its starting spring');
 });
