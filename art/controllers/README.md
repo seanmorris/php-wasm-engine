@@ -12,6 +12,10 @@ keyboard D-pad mapping uses arrow keys. The reference's missing
 Run `node scripts/build-menu-icons.mjs` from the repository root to rasterize
 these SVGs into `examples/assets/buttons.png` and write its annotated TSJ.
 Playwright and Chromium are build-time tools; the game loads only the PNG/TSJ.
+The SVG viewport is set to four times the logical glyph size before decoding,
+producing 64-pixel-high source crops for 16-pixel-high icons. `glyph.pixelRatio`
+preserves their layout size and `glyph.smooth` enables crop-bounded interpolation.
+Bitmap letters keep their original resolution and nearest-pixel sampling.
 The original artwork is preserved here for attribution and regeneration.
 Imported SVG line endings and trailing whitespace are normalized.
 

@@ -41,6 +41,7 @@ function configureBreakables(Engine $engine, Terrain $terrain, TileMap $map,
 					$engine->entities->destroy($id);
 				}
 			}
+
 			$ids = [];
 
 			foreach($map->layers as $layer)

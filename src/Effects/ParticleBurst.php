@@ -112,6 +112,7 @@ final class ParticleBurst
 				];
 			}
 		}
+
 		return new self(new SpriteGroup(...$pieces), $motion, $gravity, $lifetime);
 	}
 

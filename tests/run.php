@@ -39,6 +39,7 @@ function rejects(callable $fn): void
 	{
 		return;
 	}
+
 	throw new RuntimeException('expected exception');
 }
 
@@ -110,6 +111,7 @@ test('unsigned GIDs preserve all flips on wasm32 and clear the hex flag', functi
 		near($u, .2);
 		near($v, .7);
 	}
+
 	rejects(fn() => Gid::from(-1));
 	rejects(fn() => Gid::from(4294967296.0));
 });
@@ -155,6 +157,7 @@ test('base64 and compressed layers reject corrupt lengths', function() {
 		);
 		check($loader->map('a.tmj')->layers[0]->gidAt(0, 0)->flags === 8);
 	}
+
 	$loader = fixture(['a.tmj' => mapData([layer(['data' => [1]])]),'tiles.tsj' => tiles()]);
 	rejects(fn() => $loader->map('a.tmj'));
 });
@@ -216,6 +219,7 @@ test('world maps load on intersection and reuse assets', function() {
 		$reads[] = $path;
 		return json_encode($data[$path]);
 	}));
+
 	$world = $loader->world('world.world');
 	check($reads === ['world.world']);
 	check(count($world->visible(0, 0, 64, 64)) === 1);
@@ -268,6 +272,7 @@ test('systems order dependencies and defer structural changes', function() {
 		$order[] = 'a';
 		$r->defer(fn($r) => $r->destroy($e));
 	});
+
 	$s->update(1 / 60);
 	check($order === ['a','b'] && !$r->alive($e));
 	$s->add('c', fn() => null, ['d']);
@@ -283,6 +288,7 @@ test('fixed step is deterministic and limits catch-up', function() {
 		$n++;
 		near($dt, 1 / 60);
 	};
+
 	$clock->advance(1 / 120, $step);
 	check($n === 0);
 	$clock->advance(1 / 120, $step);
@@ -429,6 +435,7 @@ foreach($tests as $name => $fn)
 		echo "FAIL $name: {$e->getMessage()}\n{$e->getTraceAsString()}\n";
 	}
 }
+
 echo count($tests)." tests, $failed failures\n";
 
 if($failed)

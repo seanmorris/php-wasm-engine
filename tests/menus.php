@@ -12,6 +12,7 @@ test('each wheel event moves one visible row regardless of HID line count', func
 	{
 		$items['item'.$i] = ['hidden' => $i === 6];
 	}
+
 	$menu = new Menu($items);
 	$menu->open();
 	$input = new MenuInput;
@@ -163,6 +164,7 @@ test('leaving a pending submenu cancels polling and keeps the parent usable', fu
 		$polls++;
 		return null;
 	}]]);
+
 	$menu->open();
 	$menu->activate();
 	check($menu->loading && $menu->selected === '@back');
@@ -182,6 +184,7 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 			$sets++;
 		}
 	]]);
+
 	$menu->open();
 	$menu->activate();
 	$input = new MenuInput;
@@ -262,6 +265,7 @@ test('invalid numeric definitions and malformed font annotations are rejected', 
 	{
 		rejects(fn() => new Menu(['bad' => ['input' => 'number'] + $invalid]));
 	}
+
 	$path = dirname(__DIR__).'/examples/assets/font.tsj';
 	$original = json_decode(file_get_contents($path), true);
 
@@ -293,6 +297,38 @@ test('invalid numeric definitions and malformed font annotations are rejected', 
 	}
 });
 
+test('glyph texture density preserves layout, default advances and text filtering', function() {
+	$path = dirname(__DIR__).'/examples/assets/font.tsj';
+	$data = json_decode(file_get_contents($path), true);
+	$data['tiles'][0]['properties'] = [
+		['name' => 'glyph.char', 'value' => '0']
+		, ['name' => 'glyph.width', 'value' => 8]
+		, ['name' => 'glyph.height', 'value' => 12]
+		, ['name' => 'glyph.pixelRatio', 'value' => 2]
+		, ['name' => 'glyph.smooth', 'value' => true]
+		, ['name' => 'glyph.offsetX', 'value' => 1]
+		, ['name' => 'glyph.offsetY', 'value' => -2]
+	];
+	$font = new BitmapFont(fixture(['dense.tsj' => $data]), 'dense.tsj');
+	$layout = $font->layout('0A', 3);
+	[$icon, $letter] = $layout['sprites'];
+	near($icon->scaleX, 1.5);
+	near($icon->scaleY, 1.5);
+	near($icon->x, 3);
+	near($icon->y, -6);
+	near($letter->x, 12);
+	near($letter->scaleX, 3);
+	near($layout['width'], 36);
+	check($icon->smooth && !$letter->smooth);
+	check($icon->crop === [0, 0, 8, 12]);
+
+	foreach([0, -1, 'NaN', INF] as $invalid)
+	{
+		$data['tiles'][0]['properties'][3]['value'] = $invalid;
+		rejects(fn() => new BitmapFont(fixture(['bad.tsj' => $data]), 'bad.tsj'));
+	}
+});
+
 test('button glyphs select annotated themes and retain their original colors', function() {
 	$font = new BitmapFont(
 		new Loader
@@ -307,7 +343,11 @@ test('button glyphs select annotated themes and retain their original colors', f
 		$glyph = $font->layout('⓿', tint: [1, 0, 0, .5])['sprites'][0];
 		$ids[] = $glyph->gid;
 		check($glyph->tint === [1, 1, 1, .5]);
+		check($glyph->smooth && $glyph->crop[3] >= 64);
+		near($glyph->crop[3] * $glyph->scaleY, 16);
+		near($font->measure('⓿')['width'], $theme === 'keyboard' ? 26 : 18);
 	}
+
 	check(count(array_unique($ids)) === 4);
 	$font->theme = 'unknown';
 	check($font->layout('⓿')['sprites'][0]->gid === $ids[3]);
@@ -436,6 +476,7 @@ test('lazy menus poll only while active and recover from errors with retry', fun
 
 		return ['ready' => ['label' => 'Ready']];
 	}]]);
+
 	$menu->open();
 	$menu->activate();
 	check($menu->loading);
@@ -478,6 +519,7 @@ test('menu repeat uses elapsed time, page jumps clamp and reset fires once per h
 			$resets++;
 		}];
 	}
+
 	$menu = new Menu($items);
 	$menu->open();
 	$input = new MenuInput;
@@ -526,6 +568,7 @@ test('font annotations own the character map independently of tile positions', f
 			$tile['id'] = 26;
 		}
 	}
+
 	unset($tile);
 	$font = new BitmapFont(fixture(['reordered.tsj' => $data]), 'reordered.tsj');
 	check($font->layout('A')['sprites'][0]->gid === 78);

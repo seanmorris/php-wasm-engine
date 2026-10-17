@@ -30,6 +30,7 @@ function phpDocFunctions(string $source): array
 		)){
 			$previous--;
 		}
+
 		$doc = $previous >= 0 && is_array($tokens[$previous]) && $tokens[$previous][
 			0
 		] === T_DOC_COMMENT?$tokens[$previous][1]:'';
@@ -45,6 +46,7 @@ function phpDocFunctions(string $source): array
 				$name = $part[1];
 			}
 		}
+
 		$params = [];
 		$depth = 1;
 
@@ -65,8 +67,10 @@ function phpDocFunctions(string $source): array
 				$params[] = substr($part[1], 1);
 			}
 		}
+
 		$functions[] = ['name' => $name,'line' => $token[2],'doc' => $doc,'params' => $params];
 	}
+
 	return $functions;
 }
 
@@ -96,6 +100,7 @@ function phpDocTypeDescription(string $tag): array
 			return [substr($tag, 0, $i),trim(substr($tag, $i))];
 		}
 	}
+
 	return [$tag,''];
 }
 
@@ -185,6 +190,7 @@ foreach($paths as $path)
 		$files[] = $path;
 	}
 }
+
 $files = array_unique($files);
 sort($files);
 $count = 0;
@@ -218,5 +224,6 @@ foreach($files as $file)
 		fwrite(STDERR, $file.': '.$error->getMessage()."\n");
 	}
 }
+
 echo "PHPDoc: $count functions, $failures failures\n";
 exit($failures?1:0);

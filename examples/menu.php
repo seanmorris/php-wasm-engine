@@ -80,6 +80,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		$camera->zoom = 1;
 		$menu->back();
 	};
+
 	$items['defaults'] = ['label' => 'Reset settings'
 	, 'children' => [
 		'no' => ['label' => 'No, keep settings', 'callback' => fn(Menu $menu) => $menu->back()]

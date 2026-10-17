@@ -53,6 +53,7 @@ final class Terrain
 		{
 			unset($this->segmentShapes[$id]);
 		}
+
 		unset($this->shapes[$handle]);
 	}
 
@@ -166,6 +167,7 @@ final class Terrain
 					$this->opposites[$id][] = $other;
 					$this->opposites[$other][] = $id;
 				}
+
 				$this->edges[$key][] = $id;
 			}
 
@@ -181,6 +183,7 @@ final class Terrain
 				}
 			}
 		}
+
 		return $shape;
 	}
 
@@ -226,6 +229,7 @@ final class Terrain
 			{
 				$this->removeIndex($this->opposites, $other, $id);
 			}
+
 			unset($this->segments[$id], $this->opposites[$id], $this->segmentShapes[$id]);
 		}
 
@@ -240,6 +244,7 @@ final class Terrain
 			{
 				$this->removeIndex($this->polygonGrid, $cell, $id);
 			}
+
 			unset($this->polygons[$id]);
 		}
 
@@ -324,6 +329,7 @@ final class Terrain
 				return false;
 			}
 		}
+
 		return true;
 	}
 
@@ -368,6 +374,7 @@ final class Terrain
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -408,6 +415,7 @@ final class Terrain
 				$best = ['id' => $id,'t' => $t,'switch' => $switch];
 			}
 		}
+
 		return $best;
 	}
 
@@ -515,6 +523,7 @@ final class Terrain
 				}
 			}
 		}
+
 		return true;
 	}
 
@@ -621,6 +630,7 @@ final class Terrain
 				$ty += $dtY;
 			}
 		}
+
 		return $best;
 	}
 
@@ -750,6 +760,7 @@ final class Terrain
 				}
 			}
 		}
+
 		return $best;
 	}
 }

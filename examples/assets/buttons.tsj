@@ -4,10 +4,10 @@
   "tiledversion": "1.10.1",
   "name": "buttons",
   "image": "buttons.png",
-  "imagewidth": 384,
-  "imageheight": 220,
-  "tilewidth": 32,
-  "tileheight": 20,
+  "imagewidth": 1536,
+  "imageheight": 880,
+  "tilewidth": 128,
+  "tileheight": 80,
   "columns": 12,
   "tilecount": 132,
   "margin": 0,
@@ -29,12 +29,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -69,12 +79,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -109,12 +129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -149,12 +179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -189,12 +229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -229,12 +279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -269,12 +329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -309,12 +379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -349,12 +429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -389,12 +479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -429,12 +529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -469,12 +579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -509,12 +629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -549,12 +679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -589,12 +729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -629,12 +779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -669,12 +829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -709,12 +879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -749,12 +929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -789,12 +979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -829,12 +1029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -869,12 +1079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -909,12 +1129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -949,12 +1179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -989,12 +1229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1029,12 +1279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1069,12 +1329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1109,12 +1379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1149,12 +1429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1189,12 +1479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1229,12 +1529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1269,12 +1579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 24
+          "value": 96
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1309,12 +1629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1349,12 +1679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1389,12 +1729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1429,12 +1779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1469,12 +1829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1509,12 +1879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1549,12 +1929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1589,12 +1979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1629,12 +2029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1669,12 +2079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1709,12 +2129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1749,12 +2179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1789,12 +2229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1829,12 +2279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1869,12 +2329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1909,12 +2379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1949,12 +2429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -1989,12 +2479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2029,12 +2529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2069,12 +2579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2109,12 +2629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2149,12 +2679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2189,12 +2729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2229,12 +2779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2269,12 +2829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2309,12 +2879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2349,12 +2929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2389,12 +2979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2429,12 +3029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2469,12 +3079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2509,12 +3129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2549,12 +3179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2589,12 +3229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2629,12 +3279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2669,12 +3329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2709,12 +3379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2749,12 +3429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2789,12 +3479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2829,12 +3529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2869,12 +3579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2909,12 +3629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2949,12 +3679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -2989,12 +3729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3029,12 +3779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3069,12 +3829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3109,12 +3879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3149,12 +3929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3189,12 +3979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3229,12 +4029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3269,12 +4079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3309,12 +4129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3349,12 +4179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3389,12 +4229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3429,12 +4279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3469,12 +4329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3509,12 +4379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3549,12 +4429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3589,12 +4479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3629,12 +4529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3669,12 +4579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3709,12 +4629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3749,12 +4679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3789,12 +4729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3829,12 +4779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3869,12 +4829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3909,12 +4879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3949,12 +4929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -3989,12 +4979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4029,12 +5029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4069,12 +5079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4109,12 +5129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4149,12 +5179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4189,12 +5229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4229,12 +5279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4269,12 +5329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4309,12 +5379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4349,12 +5429,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4389,12 +5479,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4429,12 +5529,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4469,12 +5579,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4509,12 +5629,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4549,12 +5679,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4589,12 +5729,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4629,12 +5779,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4669,12 +5829,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4709,12 +5879,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4749,12 +5929,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4789,12 +5979,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4829,12 +6029,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4869,12 +6079,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4909,12 +6129,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4949,12 +6179,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -4989,12 +6229,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -5029,12 +6279,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -5069,12 +6329,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",
@@ -5109,12 +6379,22 @@
         {
           "name": "glyph.width",
           "type": "int",
-          "value": 16
+          "value": 64
         },
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 16
+          "value": 64
+        },
+        {
+          "name": "glyph.pixelRatio",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "glyph.smooth",
+          "type": "bool",
+          "value": true
         },
         {
           "name": "glyph.advance",

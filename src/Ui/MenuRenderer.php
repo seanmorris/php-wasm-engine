@@ -104,10 +104,10 @@ final class MenuRenderer
 				$sprite->x += $x;
 				$sprite->y += $y;
 				[$u, $v, $w, $h] = $sprite->crop;
-				$left = max(0, (int)ceil(($clip[0] - $sprite->x) / $scale));
-				$top = max(0, (int)ceil(($clip[1] - $sprite->y) / $scale));
-				$right = min($w, (int)floor(($clip[0] + $clip[2] - $sprite->x) / $scale));
-				$bottom = min($h, (int)floor(($clip[1] + $clip[3] - $sprite->y) / $scale));
+				$left = max(0, (int)ceil(($clip[0] - $sprite->x) / $sprite->scaleX));
+				$top = max(0, (int)ceil(($clip[1] - $sprite->y) / $sprite->scaleY));
+				$right = min($w, (int)floor(($clip[0] + $clip[2] - $sprite->x) / $sprite->scaleX));
+				$bottom = min($h, (int)floor(($clip[1] + $clip[3] - $sprite->y) / $sprite->scaleY));
 
 				if($right <= $left || $bottom <= $top)
 				{
@@ -115,10 +115,11 @@ final class MenuRenderer
 				}
 
 				$sprite->crop = [$u + $left, $v + $top, $right - $left, $bottom - $top];
-				$sprite->x += $left * $scale;
-				$sprite->y += $top * $scale;
+				$sprite->x += $left * $sprite->scaleX;
+				$sprite->y += $top * $sprite->scaleY;
 				$visible[] = $sprite;
 			}
+
 			$cached = [$layout, $visible];
 		}
 
@@ -185,6 +186,7 @@ final class MenuRenderer
 			$this->row($menu, $id, $item, $rect, $s, $seconds);
 			$line += $rowHeight;
 		}
+
 		$line = $inner[1] + $header + $count * $rowHeight + 4 * $s;
 		$message = $menu->loading ? 'Loading...' : ($menu->error ?? ($rows[$menu->selected][
 			'subtext'
@@ -399,6 +401,7 @@ final class MenuRenderer
 		{
 			$positions[] = $x + $position[0];
 		}
+
 		return $positions;
 	}
 

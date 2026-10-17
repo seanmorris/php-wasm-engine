@@ -19,6 +19,7 @@ foreach([0,4,8,12,2,6,10,14] as $flags)
 {
 	$values[] = 1 + $flags * 268435456.0;
 }
+
 $map = ['orientation' => 'orthogonal'
 , 'width' => 8
 , 'height' => 1
@@ -61,8 +62,10 @@ for($i = 0; $i < 8; $i++)
 			glReadPixels($i * 16 + $x, 63 - $y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
 		)] ?? -1;
 	}
+
 	$quadrants[] = $sample;
 }
+
 $renderer->render($camera);
 $clean = $renderer->stats;
 $map->layers[0]->set(0, 0, 0);

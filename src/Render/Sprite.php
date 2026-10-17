@@ -14,6 +14,8 @@ final class Sprite
 	public bool $animated = true;
 	/** @var bool Expand the rendered silhouette by one world pixel with a black shader outline. */
 	public bool $outline = true;
+	/** @var bool Interpolate texels within this crop; false keeps pixel artwork sharp. */
+	public bool $smooth = false;
 
 	/**
 	 * Create an atlas-backed sprite positioned by a normalized image anchor.

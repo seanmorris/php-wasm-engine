@@ -41,6 +41,7 @@ final class RectRenderer
 			glEnableVertexAttribArray($i);
 			glVertexAttribDivisor($i, 1);
 		}
+
 		glBindVertexArray(0);
 	}
 
@@ -66,6 +67,7 @@ final class RectRenderer
 		{
 			$bytes .= pack('f*', ...$rectangle);
 		}
+
 		$this->program->use();
 		glUniform2f($this->program->location('viewport'), $width, $height);
 		glBindVertexArray($this->vao[0]);

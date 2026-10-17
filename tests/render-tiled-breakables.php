@@ -84,6 +84,7 @@ foreach([0, 90] as $rotation)
 		$atlas->close();
 	}
 }
+
 $error = glGetError();
 $engine->input->close();
 $device->close();

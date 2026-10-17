@@ -54,6 +54,7 @@ final class ObjectSpawner
 				);
 			}
 		}
+
 		return $entities;
 	}
 }

@@ -69,6 +69,7 @@ final class Query
 				return false;
 			}
 		}
+
 		return $this->operation !== 'any';
 	}
 }

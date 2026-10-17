@@ -34,6 +34,7 @@ final class CardSequence
 
 			$ids[$card->id] = true;
 		}
+
 		$this->cards = array_values($cards);
 	}
 

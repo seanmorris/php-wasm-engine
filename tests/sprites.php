@@ -49,6 +49,7 @@ test(
 			check(!$sheet->play($sprite, 'run', $time));
 			check($frame($sprite, $time) === $gid);
 		}
+
 		check($frame($other, 1300.5) === 2, 'sprites sharing an animation need independent phases');
 		check($sheet->play($sprite, 'jump', 1320.5));
 		check($frame($sprite, 1320.5) === 3 && $frame($sprite, 1370.5) === 4);

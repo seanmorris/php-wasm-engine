@@ -77,6 +77,7 @@ final class WorldStream
 				, 'ready' => false,'failed' => null
 			];
 		}
+
 		$retained = [];
 
 		foreach($keep as $entry)
@@ -107,6 +108,7 @@ final class WorldStream
 				$this->errors[$path] = $error->getMessage();
 			}
 		}
+
 		unset($state);
 
 		foreach(array_keys($this->states) as $path)
@@ -225,6 +227,7 @@ final class WorldStream
 		{
 			$ready = $this->available($state, $image) && $ready;
 		}
+
 		return $ready;
 	}
 
@@ -256,6 +259,7 @@ final class WorldStream
 				$maps[$path] = $state['map'];
 			}
 		}
+
 		return $maps;
 	}
 
@@ -301,6 +305,7 @@ final class WorldStream
 				$maps[] = $this->states[$path]['map'];
 			}
 		}
+
 		return $maps;
 	}
 
@@ -326,6 +331,7 @@ final class WorldStream
 				return false;
 			}
 		}
+
 		return true;
 	}
 
@@ -401,6 +407,7 @@ final class WorldStream
 				($this->release)($file);
 			}
 		}
+
 		unset($this->states[$path], $this->errors[$path]);
 	}
 
@@ -423,6 +430,7 @@ final class WorldStream
 		{
 			$this->evict($path);
 		}
+
 		$this->exited = [];
 	}
 }

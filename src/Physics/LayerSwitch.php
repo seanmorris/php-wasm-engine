@@ -141,6 +141,7 @@ final class LayerSwitch
 				return null;
 			}
 		}
+
 		return $near;
 	}
 }

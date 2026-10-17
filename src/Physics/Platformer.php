@@ -65,6 +65,7 @@ final class Platformer
 			$seen[$gate['id']] = true;
 			$this->terrain->applySwitch($b, $gate['switch']);
 		}
+
 		$b->dropTimer = max(0, $b->dropTimer - $dt);
 		$b->jumpBuffer = max(0, $b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0, $b->coyote - $dt);

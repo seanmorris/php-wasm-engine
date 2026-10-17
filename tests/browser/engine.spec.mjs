@@ -92,6 +92,16 @@ test('Tiled breakable objects render every flip and preserve the image when shat
   expect(result.error).toBe(0);
 });
 
+test('smooth and pixel sprites share a batch without crop bleeding or alpha fringes',async({page})=>{
+  await boot(page);
+  const result=JSON.parse(await run(page,'require "/engine/tests/render-filtering.php";'));
+  expect(Object.keys(result.checks)).toHaveLength(18);
+  for(const [name,passed] of Object.entries(result.checks)) {
+    expect.soft(passed,JSON.stringify({name,differences:result.differences[name]})).toBe(true);
+  }
+  expect(result.error).toBe(0);
+});
+
 test('bitmap fonts align exact pixels and menu editing survives graphics rebuilding',async({page})=>{
   await boot(page);
   const result=JSON.parse(await run(page,'require "/engine/tests/render-menus.php";'));

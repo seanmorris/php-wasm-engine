@@ -88,6 +88,7 @@ final class DemoBackdrop
 			$renderer->close();
 			throw $error;
 		}
+
 		return true;
 	}
 

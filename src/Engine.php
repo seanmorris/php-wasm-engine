@@ -161,6 +161,7 @@ final class Engine
 				$this->time += $dt;
 			}
 		);
+
 		$render($this, $alpha);
 	}
 
@@ -242,6 +243,7 @@ final class Engine
 					$this->raf = $this->window->requestAnimationFrame($this->frame);
 				}
 			};
+
 		$this->refresh = vrzno_env('onRefresh');
 		$this->refreshCleanup =
 			/**

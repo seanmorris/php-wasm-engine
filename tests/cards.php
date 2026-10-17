@@ -2,6 +2,39 @@
 use PhpWasmEngine\Ui\Card;
 use PhpWasmEngine\Ui\CardSequence;
 
+require_once dirname(__DIR__).'/examples/cards.php';
+
+test('demo preload is readable but leaves promptly after cached or delayed assets are ready'
+	, function() {
+		foreach([0, 5] as $delay)
+		{
+			$ready = $delay === 0;
+			$sequence = demoCards(function() use (&$ready): bool { return $ready; });
+
+			$sequence->start();
+
+			if($delay)
+			{
+				$sequence->update($delay, true);
+				check($sequence->current()->id === 'loading');
+				check(!$sequence->advance());
+			}
+
+			$ready = true;
+			$sequence->update(.6);
+			check($sequence->current()->id === 'loading' && $sequence->state === 'shown');
+			near($sequence->opacity(), 1);
+			$sequence->update(.5);
+			$sequence->update(.3);
+			check($sequence->current()->id === 'engine');
+			$sequence->update(.5);
+			near($sequence->opacity(), 1);
+			$sequence->update(3.9);
+			check($sequence->current()->id === 'engine' && $sequence->state === 'shown');
+		}
+	}
+);
+
 test('cards wait for readiness before timing out or accepting a skip', function() {
 	$ready = false;
 
@@ -10,6 +43,7 @@ test('cards wait for readiness before timing out or accepting a skip', function(
 			ready: function() use (&$ready) { return $ready; }
 		)
 	]);
+
 	$sequence->start();
 	$sequence->update(.5);
 	near($sequence->opacity(), 1);
@@ -61,6 +95,7 @@ test('card callbacks run once on completion, cancellation, and replay', function
 			$events[] = $cancelled ? 'cancel' : 'leave';
 		}
 	);
+
 	$sequence = new CardSequence([$card]);
 	$sequence->start();
 	$sequence->update(.5);

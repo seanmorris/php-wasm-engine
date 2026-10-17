@@ -137,6 +137,7 @@ function outlineColorMatches(array $expected, array $actual): bool
 			return false;
 		}
 	}
+
 	return true;
 }
 
@@ -191,6 +192,7 @@ function outlineDifferences(string $pixels, array $layers, Camera $camera): arra
 			}
 		}
 	}
+
 	return $differences;
 }
 

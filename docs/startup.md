@@ -9,10 +9,10 @@ Press **Run PHP** in the [live demo](./) to try the complete startup sequence:
    a fresh Start, Enter, or click after two seconds.
 5. The main menu offers Play, Level, Movement, Settings, Credits, and Replay intro.
 
-The loading card keeps its completed file count fully visible for at least two
-seconds before fading out, including when the assets are already loaded. The
-following engine credit card stays fully visible for four seconds. Both use
-half-second entrance and exit fades.
+The loading card fades out one second after its assets are ready and uses
+quarter-second entrance and exit fades. Cached assets still get a readable
+completed file count before the transition. The following engine credit card
+stays fully visible for four seconds, with half-second entrance and exit fades.
 
 The title's background keeps its offset and animation clock when the main menu
 opens. Gameplay time stays paused throughout startup. Level assets download when

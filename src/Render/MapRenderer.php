@@ -107,6 +107,7 @@ final class MapRenderer
 				$vertex++;
 			}
 		}
+
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
 		glBufferData(GL_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STATIC_DRAW);
 		glVertexAttribPointer(0, 4, GL_FLOAT, false, 16, 0);
@@ -151,6 +152,7 @@ final class MapRenderer
 				);
 			}
 		}
+
 		return $bytes;
 	}
 
@@ -190,6 +192,7 @@ final class MapRenderer
 			{
 				glDeleteTextures(1, [$page['texture']]);
 			}
+
 			$this->pages = [];
 			$limit = min(256, glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS));
 
@@ -199,6 +202,7 @@ final class MapRenderer
 				glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGBA8UI, 32, 32, count($group));
 				$this->pages[] = ['texture' => $texture,'entries' => $group,'revisions' => []];
 			}
+
 			$this->layout = $layout;
 		}
 
@@ -228,6 +232,7 @@ final class MapRenderer
 				}
 			}
 		}
+
 		unset($page);
 	}
 
@@ -260,6 +265,7 @@ final class MapRenderer
 		){
 			$points[] = $this->map->projection->project($x, $y);
 		}
+
 		$xs = array_column($points, 0);
 		$ys = array_column($points, 1);
 		[$cx,$cy] = Parallax::camera($layer, $this->map, $camera);
@@ -376,6 +382,7 @@ final class MapRenderer
 
 			$start = $order + 1;
 		}
+
 		$this->renderTiles($camera, $start, $endLayer);
 	}
 

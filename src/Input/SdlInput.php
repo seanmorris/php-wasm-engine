@@ -84,6 +84,7 @@ final class SdlInput
 						$event->stopImmediatePropagation();
 					}
 				};
+
 			$this->keyboardWindow->addEventListener('keydown', $this->keyListener, true);
 			$this->keyboardWindow->addEventListener('keyup', $this->keyListener, true);
 		}
@@ -515,6 +516,7 @@ final class SdlInput
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -540,6 +542,7 @@ final class SdlInput
 					$this->uiBlocked[$code] = true;
 				}
 			}
+
 			$this->uiEditing = $editing;
 		}
 
@@ -555,13 +558,13 @@ final class SdlInput
 					, SDLK_UP, SDLK_w, SDLK_DOWN, SDLK_s
 				]
 			] as [$negative
-			, $positive
-			, $axis
-			, $padNegative
-			, $padPositive
-			, $keyA
-			, $keyB
-			, $keyC
+				, $positive
+				, $axis
+				, $padNegative
+				, $padPositive
+				, $keyA
+				, $keyB
+				, $keyC
 				, $keyD
 			]){
 				$minus = $this->gamepads->button($padNegative);

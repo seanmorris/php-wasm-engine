@@ -85,6 +85,7 @@ final class MapTerrain
 									[$u,$v] = $gid->uv($u / $w, $v / $h);
 									$transformed[] = [$ox + $px + $u * $w,$oy + $py + $v * $h];
 								}
+
 								$props = Loader::properties($shape['properties'] ?? []);
 
 								$terrain->add(
@@ -175,6 +176,7 @@ final class MapTerrain
 				}
 			}
 		}
+
 		return $terrain;
 	}
 

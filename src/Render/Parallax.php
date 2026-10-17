@@ -59,6 +59,7 @@ final class Parallax
 
 			$time -= $frame['duration'];
 		}
+
 		return $layer->imageFrames[0]['image'];
 	}
 

@@ -42,6 +42,7 @@ final class Layer
 				return $chunk->gidAt($x, $y);
 			}
 		}
+
 		return new Gid(0);
 	}
 
@@ -66,6 +67,7 @@ final class Layer
 				return;
 			}
 		}
+
 		$cx = (int)floor($x / 32) * 32;
 		$cy = (int)floor($y / 32) * 32;
 		$chunk = new Chunk($cx, $cy, 32, 32, str_repeat("\0", 4096));

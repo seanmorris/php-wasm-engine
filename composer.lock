@@ -1314,12 +1314,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/seanmorris/sm-no-saccade-style.git",
-                "reference": "bb3250022ef3a7aca66a8ae5335170a91bf34f10"
+                "reference": "1f6c861fe680c32a07d174e16dda1406b740dcb1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/seanmorris/sm-no-saccade-style/zipball/bb3250022ef3a7aca66a8ae5335170a91bf34f10",
-                "reference": "bb3250022ef3a7aca66a8ae5335170a91bf34f10",
+                "url": "https://api.github.com/repos/seanmorris/sm-no-saccade-style/zipball/1f6c861fe680c32a07d174e16dda1406b740dcb1",
+                "reference": "1f6c861fe680c32a07d174e16dda1406b740dcb1",
                 "shasum": ""
             },
             "require": {
@@ -1398,7 +1398,7 @@
                 "source": "https://github.com/seanmorris/sm-no-saccade-style/tree/fix/readable-block-layout",
                 "issues": "https://github.com/seanmorris/sm-no-saccade-style/issues"
             },
-            "time": "2026-10-12T18:02:01+00:00"
+            "time": "2026-10-13T20:00:07+00:00"
         },
         {
             "name": "sebastian/diff",

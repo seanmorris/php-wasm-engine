@@ -66,6 +66,7 @@ function scene(int $size): Registry
 
 		$registry->create(...$components);
 	}
+
 	return $registry;
 }
 
@@ -98,6 +99,7 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 			throw new \RuntimeException('Warmup checksum mismatch');
 		}
 	}
+
 	$start = hrtime(true);
 
 	for($probe = 0; $probe < $iterations; $probe++)
@@ -119,6 +121,7 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 		{
 			$checksum += $run();
 		}
+
 		$times[] = (hrtime(true) - $start) / $iterations / 1000;
 
 		if($checksum !== $expected * $iterations)
@@ -126,6 +129,7 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 			throw new \RuntimeException('Timed workload checksum mismatch');
 		}
 	}
+
 	$sorted = $times;
 	sort($sorted);
 	$middle = intdiv(count($sorted), 2);
@@ -233,6 +237,7 @@ function benchmark(array $options): array
 			{
 				$found += $registry->get($id, $type) instanceof Position ? 1 : 0;
 			}
+
 			return $found;
 		}
 		, $size, $size
@@ -248,6 +253,7 @@ function benchmark(array $options): array
 			$found += $registry->has($id, Marker::class) ? 1 : 0;
 			$registry->remove($id, Marker::class);
 		}
+
 		return $found;
 	}
 	, 1000, 1000
@@ -257,6 +263,7 @@ function benchmark(array $options): array
 		{
 			$registry->add($id, new Position);
 		}
+
 		return count($registry->query(Position::class));
 	}
 	, $size, 1000
@@ -268,6 +275,7 @@ function benchmark(array $options): array
 		{
 			$registry->destroy($id);
 		}
+
 		return count($registry->query(Query::all()));
 	}
 	, 0, 1000
@@ -291,6 +299,7 @@ function benchmark(array $options): array
 			$moved++;
 		}
 	});
+
 	$cases['system_update'] = [function() use ($scheduler, &$moved): int {
 		$scheduler->update(1 / 60);
 		return $moved;

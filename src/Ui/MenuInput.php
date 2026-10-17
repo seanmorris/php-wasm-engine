@@ -55,6 +55,7 @@ final class MenuInput
 			$count++;
 			$this->next[$key] += $this->next[$key] < 1.5 - 1e-9 ? .25 : .05;
 		}
+
 		return $count;
 	}
 
@@ -90,6 +91,7 @@ final class MenuInput
 				unset($this->held[$key], $this->next[$key]);
 			}
 		}
+
 		$wasOpen = $menu->isOpen;
 
 		if($this->pulses('pause'))
@@ -380,6 +382,7 @@ final class MenuInput
 						$nearest = $index;
 					}
 				}
+
 				$menu->editor->caret = $nearest;
 
 				if(!$this->drag)

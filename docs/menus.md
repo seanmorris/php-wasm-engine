@@ -267,7 +267,7 @@ move, use different column counts, or live in image collections without PHP edit
 
 | Location | Property | Meaning |
 | --- | --- | --- |
-| Font tileset | `font.lineHeight` | Line advance in source pixels |
+| Font tileset | `font.lineHeight` | Line advance in logical font pixels |
 | Font tileset | `font.spaceAdvance` | Space width without a drawn glyph |
 | Font tileset | `font.fallback` | Annotated replacement character, default `?` |
 | Font tileset | `font.caseFold` | Resolve ASCII lowercase through uppercase glyphs |
@@ -277,6 +277,8 @@ move, use different column counts, or live in image collections without PHP edit
 | Tile | `glyph.advance` | Horizontal cursor advance |
 | Tile | `glyph.width`, `glyph.height` | Visible source crop dimensions |
 | Tile | `glyph.cropX`, `glyph.cropY` | Crop origin inside the tile |
+| Tile | `glyph.pixelRatio` | Source pixels per logical font pixel; positive, default 1 |
+| Tile | `glyph.smooth` | Interpolate within the crop; default false for pixel art |
 | Tile | `glyph.offsetX`, `glyph.offsetY` | Placement relative to the text origin |
 | Tile | `glyph.tint` | False preserves colored keycap/button artwork |
 
@@ -284,6 +286,16 @@ Unannotated tiles are ignored. Duplicate characters within a theme, invalid
 metrics/crops, and missing fallback glyphs are rejected. `BitmapFont::layout()`
 returns sprites, dimensions, and caret positions; `measure()` returns the same
 dimensions. Both work without SDL or GPU allocation.
+
+Controller and keyboard SVGs are rasterized at four times their logical size.
+Their annotations keep advances, offsets, wrapping, and menu clipping in logical
+pixels. Only the image crop uses source pixels. When `glyph.advance` is omitted,
+it defaults to the crop width divided by `glyph.pixelRatio`.
+
+The button glyphs enable `glyph.smooth`; the bitmap letters keep nearest-pixel
+sampling. Both share an atlas and an instanced draw. Filtering clamps to each
+sprite's crop and interpolates premultiplied colors to avoid neighboring tiles
+and dark transparent edges. Other sprites can opt in with `$sprite->smooth = true`.
 
 The font comes from Tigl, annotated using moving-boxes-2's character mapping
 and CSS spacing. Button artwork and its regeneration recipe are recorded in

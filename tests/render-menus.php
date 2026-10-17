@@ -31,7 +31,7 @@ foreach([
 	, ['glyph.char' => 'B', 'glyph.advance' => 9]
 	, ['glyph.char' => '?']
 	, ['glyph.char' => '⓿', 'glyph.theme' => 'keyboard', 'glyph.advance' => 10
-		, 'glyph.tint' => false
+		, 'glyph.tint' => false, 'glyph.pixelRatio' => 2, 'glyph.smooth' => true
 	]
 ] as $id => $properties
 ){
@@ -41,6 +41,7 @@ foreach([
 	{
 		$tile['properties'][] = compact('name', 'value');
 	}
+
 	$data['tiles'][] = $tile;
 }
 
@@ -60,7 +61,7 @@ $sprites->render(
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $expected = [
 	[2, 4, 12, 10, '800000ff'], [14, 0, 16, 16, '008000ff']
-	, [40, 0, 16, 16, 'ffff00ff'], [0, 20, 16, 16, '000080ff']
+	, [40, 0, 8, 8, 'ffff00ff'], [0, 20, 16, 16, '000080ff']
 	, [2, 44, 12, 10, '800000ff'], [16, 44, 12, 10, '800000ff']
 ];
 $checks = [];
@@ -92,6 +93,7 @@ for($y = 0; $y < 180; $y++)
 				$color = $rgba;
 			}
 		}
+
 		$actual = menuPixel($pixels, $x, $y);
 
 		if($actual !== $color && count($differences) < 8)
@@ -100,6 +102,7 @@ for($y = 0; $y < 180; $y++)
 		}
 	}
 }
+
 $checks['glyph crops offsets wrapping scale and tint'] = !$differences;
 $checks['one glyph batch'] = $sprites->draws === 1 && $sprites->instances === 6;
 $sprites->close();
@@ -114,6 +117,7 @@ foreach(['panel', 'dimmer', 'highlight'] as $key)
 {
 	$renderer->style[$key] = [0, 0, 0, 0];
 }
+
 $renderer->showHints = false;
 $menu = new Menu(['name' => ['label' => '', 'input' => 'string', 'value' => 'AAA']], '');
 $menu->open();
@@ -152,6 +156,7 @@ for($y = (int)$top; $y < $top + 14; $y++)
 		$checks['field clips its glyphs'] &= menuPixel($pixels, $x, $y) === '000000ff';
 	}
 }
+
 $checks['field clips its glyphs'] = (bool)$checks['field clips its glyphs'];
 $texture = $renderer->atlas->texture;
 $font->theme = 'generic';
@@ -305,6 +310,30 @@ $cards->render($sequence, 320, 180);
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 $checks['card overrides renderer alignment'] = menuPixel($pixels, 25, 91) === '00ff00ff';
 $cards->close();
+
+$font->theme = 'keyboard';
+$renderer->style['width'] = 36;
+$renderer->style['titleAlign'] = 'left';
+
+foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
+{
+	$menu = new Menu(['button' => ['label' => '']], $title);
+	$menu->open();
+	$device->begin([0, 0, 0, 1]);
+	$renderer->render($menu, 320, 180);
+	$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+	[$x, $y] = $renderer->regions[0]['rect'];
+
+	for($column = $left; $column <= $right; $column++)
+	{
+		$expected = $column < $right ? 'ffff00ff' : '000000ff';
+
+		$checks["dense glyph clipping $title $column"] = menuPixel(
+			$pixels, (int)$x + $column, (int)$y - 23
+		) === $expected;
+	}
+}
+
 $renderer->close();
 $checks['atlas released'] = !glIsTexture($renderer->atlas->texture);
 $error = glGetError();
