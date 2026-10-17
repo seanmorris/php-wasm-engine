@@ -568,6 +568,7 @@ require __DIR__ . '/shields.php';
 require __DIR__ . '/grinding.php';
 require __DIR__ . '/water.php';
 require __DIR__ . '/platforms.php';
+require __DIR__ . '/bridges.php';
 
 $failed = 0;
 

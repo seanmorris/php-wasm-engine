@@ -54,6 +54,7 @@ final class DemoStartup
 		foreach([
 			'platformer' => 'Platformer'
 			, 'platforms' => 'Moving platforms'
+			, 'bridges' => 'Bendable bridges & rails'
 			, 'light-dash' => 'Light dash'
 			, 'grapples' => 'Grapple ropes'
 			, 'vehicles' => 'Skateboard course'

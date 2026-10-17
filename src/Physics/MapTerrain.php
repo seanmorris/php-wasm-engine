@@ -113,6 +113,7 @@ final class MapTerrain
 				{
 					if(\PhpWasmEngine\Gameplay\VehicleLoader::matches($object)
 						|| \PhpWasmEngine\Gameplay\Platforms::matches($object)
+						|| \PhpWasmEngine\Gameplay\BendableBridges::matches($object)
 						|| in_array(strtolower(($object['class'] ?? '') ?: ($object['type'] ?? '')), [
 							'grapple-point', 'grapplepoint', 'rope-anchor', 'ropeanchor'
 						], true

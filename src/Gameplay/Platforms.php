@@ -55,7 +55,7 @@ final class Platforms
 		$class = strtolower(($object['class'] ?? '') ?: ($object['type'] ?? ''));
 		$properties = Loader::properties($object['properties'] ?? []);
 
-		return !isset($properties['density']) && (
+		return !isset($properties['density']) && !isset($properties['droop']) && (
 			in_array($class, ['floatingplatform', 'movingplatform', 'pathplatform'], true)
 			|| ($class === 'block' && !empty($properties['float']))
 		);
