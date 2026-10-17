@@ -109,5 +109,68 @@ test('gravity course permits settling and exposes every control through the live
 	));
 
 	expect(launch).toEqual([0, -1100, false, false, 'spring', true]);
+
+	const camera = JSON.parse(await run(page, `
+		$game->cameraBehavior->setMode('auto');
+		$game->cameraBehavior->setCameraLimits();
+		$body->x = 1200;
+		$body->y = 320;
+		$body->setGravityDirection(1, 0);
+		$body->angle = $body->uprightAngle();
+		$body->grounded = false;
+		$body->jumping = true;
+		$body->vx = -660;
+		$body->vy = 0;
+		$camera->x = 690;
+		$camera->y = 50;
+		$game->cameraBehavior->sync($body);
+
+		foreach(range(1, 60) as $_)
+		{
+			$body->x += $body->vx / 60;
+			$game->cameraBehavior->update($camera, $body, 1 / 60);
+		}
+
+		$wall = [
+			$game->cameraBehavior->targetAnchorX
+			, $game->cameraBehavior->targetAnchorY
+			, $camera->y
+		];
+
+		$body->x = 1000;
+		$body->y = 180;
+		$body->setGravityDirection(0, -1);
+		$body->angle = $body->uprightAngle();
+		$body->vx = 600;
+		$body->vy = 300;
+		$camera->x = 500;
+		$camera->y = -150;
+		$game->cameraBehavior->sync($body);
+		$ceilingFollows = true;
+
+		foreach(range(1, 60) as $_)
+		{
+			$previousX = $camera->x;
+			$body->x += $body->vx / 60;
+			$body->y += $body->vy / 60;
+			$game->cameraBehavior->update($camera, $body, 1 / 60);
+			$ceilingFollows = $ceilingFollows && $camera->x >= $previousX;
+		}
+
+		echo json_encode([
+			$wall
+			, $game->cameraBehavior->targetAnchorX
+			, $game->cameraBehavior->targetAnchorY
+			, $ceilingFollows
+			, $camera->x
+		]);
+	`
+	));
+
+	expect(camera[0]).toEqual([.75, .5, 50]);
+	expect(camera[1]).toBeLessThan(.5);
+	expect(camera[2]).toBe(.25);
+	expect(camera[3]).toBe(true);
+	expect(camera[4]).toBeGreaterThan(500);
 	expect(errors).toEqual([]);
 });

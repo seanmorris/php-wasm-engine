@@ -82,6 +82,61 @@ test('platform camera derives movement modes and directional framing', function(
 	check($behavior->mode === 'aerial');
 });
 
+test('wall-gravity jumps pan only along their horizontal motion', function() {
+	$behavior = new PlatformCamera;
+	$camera = new Camera(690, 50, 960, 540);
+	$body = new Body(1200, 320);
+	$body->setGravityDirection(1, 0);
+	$body->angle = $body->uprightAngle();
+	$body->grounded = false;
+	$body->jumping = true;
+	$body->vx = -660;
+
+	$behavior->sync($body);
+	$startY = $camera->y;
+
+	foreach(range(1, 60) as $_)
+	{
+		$body->x += $body->vx / 60;
+		$behavior->update($camera, $body, 1 / 60);
+	}
+
+	check($behavior->mode === 'aerial');
+	near($behavior->targetAnchorX, .75);
+	near($behavior->targetAnchorY, .5);
+	near($camera->y, $startY);
+	check($camera->x < 690);
+});
+
+test('ceiling-gravity jumps retain world-direction look ahead while airborne', function() {
+	$behavior = new PlatformCamera;
+	$camera = new Camera(500, -150, 960, 540);
+	$body = new Body(1000, 180);
+	$body->setGravityDirection(0, -1);
+	$body->angle = $body->uprightAngle();
+	$body->grounded = false;
+	$body->jumping = true;
+	$body->vx = 600;
+	$body->vy = 300;
+
+	$behavior->sync($body);
+	$previousX = $camera->x;
+
+	foreach(range(1, 60) as $_)
+	{
+		$body->x += $body->vx / 60;
+		$body->y += $body->vy / 60;
+		$behavior->update($camera, $body, 1 / 60);
+		check($camera->x >= $previousX, 'camera must keep following positive world motion');
+		$previousX = $camera->x;
+	}
+
+	check($behavior->mode === 'aerial');
+	check($behavior->targetAnchorX < .5);
+	near($behavior->targetAnchorY, .25);
+	check($camera->x > 500);
+});
+
 test('platform camera delays look framing and supports scripted focus', function() {
 	$behavior = new PlatformCamera;
 	$camera = new Camera(0, 0, 200, 100);
