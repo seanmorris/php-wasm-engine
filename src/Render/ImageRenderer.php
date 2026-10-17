@@ -23,9 +23,10 @@ final class ImageRenderer
 	public function __construct(public TileMap $map)
 	{
 		$this->program = new Program(
-			file_get_contents(dirname(__DIR__, 2).'/shaders/images.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/images.frag')
+			file_get_contents(dirname(__DIR__, 2) . '/shaders/images.vert')
+			, file_get_contents(dirname(__DIR__, 2) . '/shaders/images.frag')
 		);
+
 		$this->create();
 	}
 
@@ -56,7 +57,7 @@ final class ImageRenderer
 
 		if(!$source)
 		{
-			throw new \RuntimeException('Cannot load '.$path.': '.SDL_GetError());
+			throw new \RuntimeException('Cannot load ' . $path . ': ' . SDL_GetError());
 		}
 
 		$surface = null;
@@ -84,18 +85,9 @@ final class ImageRenderer
 			$texture = Atlas::texture(GL_TEXTURE_2D);
 			$this->textures[$path] = [$texture,$width,$height];
 
-			glTexImage2D(
-				GL_TEXTURE_2D
-				, 0
-				, GL_RGBA8
-				, $width
-				, $height
-				, 0
-				, GL_RGBA
-				, GL_UNSIGNED_BYTE
-				, $surface
-			);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, $width, $height, 0, GL_RGBA, GL_UNSIGNED_BYTE, $surface);
 			$this->uploads++;
+
 			return $this->textures[$path];
 		}
 		finally
@@ -138,10 +130,7 @@ final class ImageRenderer
 			{
 				$from = $layer->properties['from'];
 
-				$this->heights[$from] = max(
-					$this->heights[$from] ?? 0
-					, $layer->offsetY + $layer->imageHeight
-				);
+				$this->heights[$from] = max($this->heights[$from] ?? 0, $layer->offsetY + $layer->imageHeight);
 			}
 		}
 	}
@@ -164,6 +153,7 @@ final class ImageRenderer
 			, $milliseconds
 			, $this->heights[$layer->properties['from'] ?? ''] ?? 0
 		);
+
 		$path = Parallax::image($layer, $milliseconds);
 
 		if($layout === null || $path === null)
@@ -189,11 +179,13 @@ final class ImageRenderer
 			, $layer->tint[2]
 			, $layer->tint[3] * $layer->opacity
 		);
+
 		glUniform4f($p->location('colorKey'), ...($layer->transparentColor ?? [0,0,0,0]));
 		glUniform2i($p->location('repeatAxes'), $layer->repeatX?1:0, $layer->repeatY?1:0);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 		glBindVertexArray(0);
 		$this->draws++;
+
 		return true;
 	}
 

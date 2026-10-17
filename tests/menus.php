@@ -10,7 +10,7 @@ test('each wheel event moves one visible row regardless of HID line count', func
 
 	for($i = 0; $i < 12; $i++)
 	{
-		$items['item'.$i] = ['hidden' => $i === 6];
+		$items['item' . $i] = ['hidden' => $i === 6];
 	}
 
 	$menu = new Menu($items);
@@ -32,6 +32,7 @@ test('each wheel event moves one visible row regardless of HID line count', func
 	$input->update($menu, [], 0, [
 		['type' => 'wheel', 'y' => -4], ['type' => 'wheel', 'y' => -4]
 	]);
+
 	check($menu->selected === 'item8');
 
 	foreach(['item0' => 4, 'item11' => -4] as $id => $amount)
@@ -43,7 +44,7 @@ test('each wheel event moves one visible row regardless of HID line count', func
 });
 
 test('bitmap alignment places each wrapped line and its carets within the line box', function() {
-	$font = new BitmapFont(new Loader, dirname(__DIR__).'/examples/assets/font.tsj');
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
 
 	foreach(['left' => 0, 'center' => .5, 'right' => 1] as $align => $factor)
 	{
@@ -64,17 +65,19 @@ test('bitmap alignment places each wrapped line and its carets within the line b
 		near($wrapped['positions'][2][1], 32);
 
 		check(
-			$font->measure('AAI', 2, 36) === ['width' => $wrapped['width']
-			, 'height' => $wrapped[
+			$font->measure('AAI', 2, 36) === [
+				'width' => $wrapped['width']
+				, 'height' => $wrapped[
 				'height'
-			]]
+				]
+			]
 		);
 	}
 });
 
 test('unwrapped alignment supports fields, empty lines, themed symbols and overflow', function() {
-	$path = dirname(__DIR__).'/examples/assets/';
-	$font = new BitmapFont(new Loader, $path.'font.tsj', [$path.'buttons.tsj']);
+	$path = dirname(__DIR__) . '/examples/assets/';
+	$font = new BitmapFont(new Loader, $path . 'font.tsj', [$path . 'buttons.tsj']);
 	$layout = $font->layout("AA\nI", align: 'center');
 	near($layout['sprites'][2]->x, 5);
 	$layout = $font->layout("I\n\n", align: 'right', alignWidth: 40);
@@ -128,15 +131,21 @@ test('menu conditions repair focus and block all ways of changing disabled value
 	$calls = 0;
 
 	$menu = new Menu([
-		'first' => ['input' => 'string', 'value' => 'kept'
+		'first' => [
+			'input' => 'string'
+			, 'value' => 'kept'
 			, 'hidden' => function() use (&$hidden) { return $hidden; }
 		]
-		, 'locked' => ['input' => 'boolean', 'value' => false, 'disabled' => true
+		, 'locked' => [
+			'input' => 'boolean'
+			, 'value' => false
+			, 'disabled' => true
 			, 'set' => function() use (&$calls) { $calls++; }
 			, 'revert' => function() use (&$calls) { $calls++; }
 		]
 		, 'empty' => ['input' => 'select', 'options' => []]
 	]);
+
 	$menu->open();
 	$menu->activate();
 	$hidden = true;
@@ -160,10 +169,15 @@ test('menu conditions repair focus and block all ways of changing disabled value
 test('leaving a pending submenu cancels polling and keeps the parent usable', function() {
 	$polls = 0;
 
-	$menu = new Menu(['remote' => ['children' => function() use (&$polls) {
-		$polls++;
-		return null;
-	}]]);
+	$menu = new Menu([
+		'remote' => [
+			'children' => function() use (&$polls) {
+				$polls++;
+
+				return null;
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -177,24 +191,22 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 	$value = 'before';
 	$sets = 0;
 
-	$menu = new Menu(['text' => ['input' => 'string'
-		, 'get' => function() use (&$value) { return $value; }
-		, 'set' => function($text) use (&$value, &$sets) {
-			$value = $text;
-			$sets++;
-		}
-	]]);
+	$menu = new Menu([
+		'text' => [
+			'input' => 'string'
+			, 'get' => function() use (&$value) { return $value; }
+			, 'set' => function($text) use (&$value, &$sets) {
+				$value = $text;
+				$sets++;
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
 	$input = new MenuInput;
 
-	$input->update(
-		$menu
-		, []
-		, 0
-		, [['type' => 'composition', 'text' => 'かな', 'start' => 1, 'length' => 1]]
-	);
+	$input->update($menu, [], 0, [['type' => 'composition', 'text' => 'かな', 'start' => 1, 'length' => 1]]);
 	check($sets === 0 && $value === 'before');
 	$input->update($menu, [], 0, [['type' => 'text', 'text' => '字']]);
 	check($sets === 1 && $value === 'before字');
@@ -208,6 +220,7 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 		, 0
 		, [['type' => 'key', 'key' => 'a', 'ctrl' => true], ['type' => 'key', 'key' => 'Delete']]
 	);
+
 	check($sets === 2 && $value === '');
 	$menu->back();
 	$menu->refresh();
@@ -215,15 +228,17 @@ test('menu snapshots do not invoke setters and editor composition stays private'
 });
 
 test('slider dragging clamps outside its track instead of entering text editing', function() {
-	$menu = new Menu(
-		['slider' => ['input' => 'number'
-		, 'min' => 0
-		, 'max' => 10
-		, 'step' => .5
-		, 'value' => 5
+	$menu = new Menu([
+		'slider' => [
+			'input' => 'number'
+			, 'min' => 0
+			, 'max' => 10
+			, 'step' => .5
+			, 'value' => 5
 			, 'subType' => 'range'
-		]]
-	);
+		]
+	]);
+
 	$menu->open();
 	$input = new MenuInput;
 	$regions = [['id' => 'slider', 'rect' => [0, 0, 150, 30], 'slider' => [50, 100]]];
@@ -236,22 +251,10 @@ test('slider dragging clamps outside its track instead of entering text editing'
 		, $regions
 	);
 
-	$input->update(
-		$menu
-		, []
-		, 0
-		, [['type' => 'pointer', 'action' => 'move', 'x' => 0, 'y' => 10]]
-		, $regions
-	);
+	$input->update($menu, [], 0, [['type' => 'pointer', 'action' => 'move', 'x' => 0, 'y' => 10]], $regions);
 	check($menu->value('slider') == 0 && $menu->editor === null);
 
-	$input->update(
-		$menu
-		, []
-		, 0
-		, [['type' => 'pointer', 'action' => 'move', 'x' => 200, 'y' => 10]]
-		, $regions
-	);
+	$input->update($menu, [], 0, [['type' => 'pointer', 'action' => 'move', 'x' => 200, 'y' => 10]], $regions);
 	check($menu->value('slider') == 10 && $menu->editor === null);
 });
 
@@ -266,7 +269,7 @@ test('invalid numeric definitions and malformed font annotations are rejected', 
 		rejects(fn() => new Menu(['bad' => ['input' => 'number'] + $invalid]));
 	}
 
-	$path = dirname(__DIR__).'/examples/assets/font.tsj';
+	$path = dirname(__DIR__) . '/examples/assets/font.tsj';
 	$original = json_decode(file_get_contents($path), true);
 
 	foreach(['duplicate', 'crop', 'advance', 'offset'] as $invalid)
@@ -298,7 +301,7 @@ test('invalid numeric definitions and malformed font annotations are rejected', 
 });
 
 test('glyph texture density preserves layout, default advances and text filtering', function() {
-	$path = dirname(__DIR__).'/examples/assets/font.tsj';
+	$path = dirname(__DIR__) . '/examples/assets/font.tsj';
 	$data = json_decode(file_get_contents($path), true);
 	$data['tiles'][0]['properties'] = [
 		['name' => 'glyph.char', 'value' => '0']
@@ -309,6 +312,7 @@ test('glyph texture density preserves layout, default advances and text filterin
 		, ['name' => 'glyph.offsetX', 'value' => 1]
 		, ['name' => 'glyph.offsetY', 'value' => -2]
 	];
+
 	$font = new BitmapFont(fixture(['dense.tsj' => $data]), 'dense.tsj');
 	$layout = $font->layout('0A', 3);
 	[$icon, $letter] = $layout['sprites'];
@@ -332,9 +336,10 @@ test('glyph texture density preserves layout, default advances and text filterin
 test('button glyphs select annotated themes and retain their original colors', function() {
 	$font = new BitmapFont(
 		new Loader
-		, dirname(__DIR__).'/examples/assets/font.tsj'
-		, [dirname(__DIR__).'/examples/assets/buttons.tsj']
+		, dirname(__DIR__) . '/examples/assets/font.tsj'
+		, [dirname(__DIR__) . '/examples/assets/buttons.tsj']
 	);
+
 	$ids = [];
 
 	foreach(['keyboard', 'xbox', 'playstation', 'generic'] as $theme)
@@ -355,16 +360,20 @@ test('button glyphs select annotated themes and retain their original colors', f
 
 test('menu pages restore selection and scroll, wrap rows and skip hidden entries', function() {
 	$menu = new Menu(
-		['first' => ['label' => 'First'], 'hidden' => ['hidden' => true]
-		, 'settings' => [
-			'children' => ['flag' => ['input' => 'boolean', 'value' => false]]
-		]
-		, 'locked' => [
-			'disabled' => true, 'callback' => fn() => throw new Exception('disabled')
-		]
+		[
+			'first' => ['label' => 'First']
+			, 'hidden' => ['hidden' => true]
+			, 'settings' => [
+				'children' => ['flag' => ['input' => 'boolean', 'value' => false]]
+			]
+			, 'locked' => [
+				'disabled' => true
+				, 'callback' => fn() => throw new Exception('disabled')
+			]
 		]
 		, 'Pause'
 	);
+
 	$menu->open();
 	check($menu->selected === 'first');
 	$menu->move(-1);
@@ -392,7 +401,11 @@ test('menu live bindings change once, clamp steps, cycle choices and reset defau
 	$calls = 0;
 
 	$menu = new Menu([
-		'amount' => ['input' => 'number', 'min' => 0, 'max' => 1, 'step' => .1
+		'amount' => [
+			'input' => 'number'
+			, 'min' => 0
+			, 'max' => 1
+			, 'step' => .1
 			, 'get' => function() use (&$value) { return $value; }
 			, 'set' => function($next) use (&$value, &$calls) {
 				$value = $next;
@@ -404,6 +417,7 @@ test('menu live bindings change once, clamp steps, cycle choices and reset defau
 		, 'flag' => ['input' => 'boolean', 'value' => false]
 		, 'output' => ['input' => 'output', 'value' => 'read only']
 	]);
+
 	$menu->open();
 	$menu->refresh();
 	check($calls === 0);
@@ -429,12 +443,16 @@ test('menu live bindings change once, clamp steps, cycle choices and reset defau
 });
 
 test('editing retains live values and discards only incomplete numeric drafts', function() {
-	$menu = new Menu(
-		['name' => ['input' => 'string', 'value' => 'Ada']
-		, 'number' => ['input' => 'number'
-			, 'value' => 3, 'min' => -10, 'max' => 10
-		]]
-	);
+	$menu = new Menu([
+		'name' => ['input' => 'string', 'value' => 'Ada']
+		, 'number' => [
+			'input' => 'number'
+			, 'value' => 3
+			, 'min' => -10
+			, 'max' => 10
+		]
+	]);
+
 	$menu->open();
 	$menu->activate();
 	$menu->editor->selectAll();
@@ -461,21 +479,25 @@ test('editing retains live values and discards only incomplete numeric drafts', 
 test('lazy menus poll only while active and recover from errors with retry', function() {
 	$count = 0;
 
-	$menu = new Menu(['load' => ['children' => function() use (&$count) {
-		$count++;
+	$menu = new Menu([
+		'load' => [
+			'children' => function() use (&$count) {
+				$count++;
 
-		if($count === 1)
-		{
-			return null;
-		}
+				if($count === 1)
+				{
+					return null;
+				}
 
-		if($count === 2)
-		{
-			throw new RuntimeException('offline');
-		}
+				if($count === 2)
+				{
+					throw new RuntimeException('offline');
+				}
 
-		return ['ready' => ['label' => 'Ready']];
-	}]]);
+				return ['ready' => ['label' => 'Ready']];
+			}
+		]
+	]);
 
 	$menu->open();
 	$menu->activate();
@@ -515,9 +537,11 @@ test('menu repeat uses elapsed time, page jumps clamp and reset fires once per h
 
 	for($i = 0; $i < 20; $i++)
 	{
-		$items['item'.$i] = ['revert' => function() use (&$resets) {
-			$resets++;
-		}];
+		$items['item' . $i] = [
+			'revert' => function() use (&$resets) {
+				$resets++;
+			}
+		];
 	}
 
 	$menu = new Menu($items);
@@ -543,7 +567,7 @@ test('menu repeat uses elapsed time, page jumps clamp and reset fires once per h
 });
 
 test('font annotations own the character map independently of tile positions', function() {
-	$path = dirname(__DIR__).'/examples/assets/font.tsj';
+	$path = dirname(__DIR__) . '/examples/assets/font.tsj';
 	$font = new BitmapFont(new Loader, $path);
 	$layout = $font->layout('aI, @?🙂');
 	check(array_map(fn($s) => $s->gid, $layout['sprites']) === [27, 35, 15, 18, 16, 16]);

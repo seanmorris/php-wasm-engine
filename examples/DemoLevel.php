@@ -37,7 +37,7 @@ final class DemoLevel
 	 */
 	public function __construct(public string $id, private object $assets)
 	{
-		$this->systemPrefix = 'level:'.spl_object_id($this).':';
+		$this->systemPrefix = 'level:' . spl_object_id($this) . ':';
 	}
 
 	/**
@@ -52,7 +52,7 @@ final class DemoLevel
 		if($this->stream === null)
 		{
 			$loader = new Loader;
-			$path = __DIR__.'/assets/stream.world';
+			$path = __DIR__ . '/assets/stream.world';
 
 			if($this->id === 'world')
 			{
@@ -76,25 +76,31 @@ final class DemoLevel
 				$world = new World(
 					$loader
 					, $path
-					, ['maps' => [['fileName' => $this->id.'.tmj'
-					, 'x' => 0
-					, 'y' => 0
-					, 'width' => 1
-						, 'height' => 1
-					]]]
+					, [
+						'maps' => [
+							[
+								'fileName' => $this->id . '.tmj'
+								, 'x' => 0
+								, 'y' => 0
+								, 'width' => 1
+								, 'height' => 1
+							]
+						]
+					]
 				);
 			}
 
-			$this->stream = new WorldStream($world,
-				/**
+			$this->stream = new WorldStream(
+				$world
+				, /**
 				 * Poll a file using the shared host transport.
 				 *
 				 * @param string $path Resolved dependency path in the mounted engine directory.
 				 * @param bool $retry Whether to retry a failed transfer.
 				 * @return bool|string True when mounted, false while pending, or an error message.
 				 */
-				fn(string $path, bool $retry): bool|string => $this->assets->request($path, $retry),
-				/**
+				fn(string $path, bool $retry): bool|string => $this->assets->request($path, $retry)
+				, /**
 				 * Release this level's ownership when its last map drops a file.
 				 *
 				 * @param string $path Resolved dependency path no longer needed by this stream.
@@ -109,12 +115,7 @@ final class DemoLevel
 
 		if($this->id === 'world')
 		{
-			$this->stream->update(
-				$view->x
-				, $view->y
-				, $view->width / $view->zoom
-				, $view->height / $view->zoom
-			);
+			$this->stream->update($view->x, $view->y, $view->width / $view->zoom, $view->height / $view->zoom);
 		}
 		else
 		{
@@ -129,9 +130,7 @@ final class DemoLevel
 
 			if(!$pending)
 			{
-				throw new RuntimeException(
-					implode('; ', $this->stream->errors) ?: 'No starting map'
-				);
+				throw new RuntimeException(implode('; ', $this->stream->errors) ?: 'No starting map');
 			}
 
 			return false;
@@ -142,6 +141,7 @@ final class DemoLevel
 			$this->renderer = new WorldRenderer($this->stream);
 			// Warm visible GPU resources before the old scene is released.
 			$this->renderer->render($view, $engine->time * 1000, 0);
+
 			return true;
 		}
 
@@ -156,8 +156,9 @@ final class DemoLevel
 			$this->blocks = configureBreakables($engine, $this->terrain, $map, $this->systemPrefix);
 		}
 
-		$this->movement = new Platformer($this->terrain,
-			/**
+		$this->movement = new Platformer(
+			$this->terrain
+			, /**
 			 * Shatter rolling contacts against blocks owned by this level.
 			 *
 			 * @param Body $body Actor at the beginning of the collision sweep.
@@ -167,6 +168,7 @@ final class DemoLevel
 			fn(Body $body, Hit $hit): bool =>
 				$this->blocks?->impact($body, $hit, $engine->time * 1000) ?? false
 		);
+
 		return true;
 	}
 
@@ -193,6 +195,7 @@ final class DemoLevel
 	public function progress(): array
 	{
 		$counts = $this->assets->progress();
+
 		return ['ready' => $counts->ready, 'total' => $counts->total, 'failed' => $counts->failed];
 	}
 
@@ -221,8 +224,8 @@ final class DemoLevel
 		}
 
 		$this->closed = true;
-		$engine->systems->remove($this->systemPrefix.'particles');
-		$engine->systems->remove($this->systemPrefix.'breakables');
+		$engine->systems->remove($this->systemPrefix . 'particles');
+		$engine->systems->remove($this->systemPrefix . 'breakables');
 		$this->blocks?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();

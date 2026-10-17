@@ -16,7 +16,11 @@ final class Chunk
 	 * @param string $data Row-major GID bytes; length must equal width times height times four.
 	 * @return void Creates an unmodified chunk with revision zero.
 	 */
-	public function __construct(public int $x, public int $y, public int $width, public int $height
+	public function __construct(
+		public int $x
+		, public int $y
+		, public int $width
+		, public int $height
 		, public string $data
 	){
 		if($width < 1 || $height < 1 || strlen($data) !== $width * $height * 4)
@@ -34,9 +38,7 @@ final class Chunk
 	 */
 	public function contains(int $x, int $y): bool
 	{
-		return $x >= $this->x && $y >= $this->y && $x < $this->x + $this->width && $y < $this
-			->y + $this
-			->height;
+		return $x >= $this->x && $y >= $this->y && $x < $this->x + $this->width && $y < $this->y + $this->height;
 	}
 
 	/**
@@ -48,9 +50,9 @@ final class Chunk
 	 */
 	public function gidAt(int $x, int $y): Gid
 	{
-		return $this->contains($x, $y) ? Gid::fromBytes(
-			substr($this->data, (($y - $this->y) * $this->width + $x - $this->x) * 4, 4)
-		) : new Gid(0);
+		return $this->contains($x, $y)
+			? Gid::fromBytes(substr($this->data, (($y - $this->y) * $this->width + $x - $this->x) * 4, 4))
+			: new Gid(0);
 	}
 
 	/**
@@ -75,6 +77,7 @@ final class Chunk
 			, (($y - $this->y) * $this->width + $x - $this->x) * 4
 			, 4
 		);
+
 		$this->revision++;
 	}
 }

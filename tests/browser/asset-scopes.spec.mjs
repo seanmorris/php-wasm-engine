@@ -4,9 +4,21 @@ import {AssetLoader} from '../../browser/AssetLoader.mjs';
 test('scope progress counts failures and resets a retried dependency to pending', async () => {
 	const originalFetch = globalThis.fetch;
 	const transfers = [];
+
 	globalThis.fetch = () => new Promise(resolve => transfers.push(resolve));
-	const assets = new AssetLoader({mkdirTree() {}, writeFile() {}, unlink() {}},
-		'https://example.test/engine/');
+
+	const assets = new AssetLoader(
+		{
+
+			mkdirTree() {}
+
+			, writeFile() {}
+
+			, unlink() {}
+		}
+		, 'https://example.test/engine/'
+	);
+
 	try
 	{
 		const scope = assets.scope(), path = '/engine/title.tmj';
@@ -29,58 +41,73 @@ test('scope progress counts failures and resets a retried dependency to pending'
 	}
 });
 
-test('asset scopes share pending files and retain mounted files until their last owner closes',
-async () => {
-	const mounted = new Map(), transfers = [];
-	const originalFetch = globalThis.fetch;
-	globalThis.fetch = (_url, {signal}) => new Promise(resolve => {
-		transfers.push({signal, resolve});
-	});
-	const assets = new AssetLoader({
-		mkdirTree() {}, writeFile: (path, bytes) => mounted.set(path, bytes),
-		unlink: path => mounted.delete(path)
-	}, 'https://example.test/engine/');
-	try
-	{
-		const first = assets.scope(), second = assets.scope();
-		const path = '/engine/tiles.png';
-		expect(first.progress()).toEqual({ready: 0, total: 0, failed: 0});
-		expect(first.request(path)).toBe(false);
-		expect(second.request(path)).toBe(false);
-		expect(transfers).toHaveLength(1);
-		expect(second.progress()).toEqual({ready: 0, total: 1, failed: 0});
-		first.close();
-		expect(transfers[0].signal.aborted).toBe(false);
-		transfers[0].resolve(new Response('image'));
-		await assets.files.get(path).promise;
-		expect(second.request(path)).toBe(true);
-		expect(second.progress()).toEqual({ready: 1, total: 1, failed: 0});
-		expect(mounted.has(path)).toBe(true);
-		second.release(path);
-		expect(second.progress()).toEqual({ready: 0, total: 0, failed: 0});
-		expect(mounted.has(path)).toBe(false);
-		second.close();
-		expect(first.request(path)).toBe('Asset scope is closed');
+test(
+	'asset scopes share pending files and retain mounted files until their last owner closes'
+	, async () => {
+		const mounted = new Map(), transfers = [];
+		const originalFetch = globalThis.fetch;
+
+		globalThis.fetch = (_url, {signal}) => new Promise(resolve => {
+			transfers.push({signal, resolve});
+		});
+
+		const assets = new AssetLoader({
+
+			mkdirTree() {}
+			, writeFile: (path, bytes) => mounted.set(path, bytes)
+			, unlink: path => mounted.delete(path)
+		}, 'https://example.test/engine/'
+		);
+
+		try
+		{
+			const first = assets.scope(), second = assets.scope();
+			const path = '/engine/tiles.png';
+			expect(first.progress()).toEqual({ready: 0, total: 0, failed: 0});
+			expect(first.request(path)).toBe(false);
+			expect(second.request(path)).toBe(false);
+			expect(transfers).toHaveLength(1);
+			expect(second.progress()).toEqual({ready: 0, total: 1, failed: 0});
+			first.close();
+			expect(transfers[0].signal.aborted).toBe(false);
+			transfers[0].resolve(new Response('image'));
+			await assets.files.get(path).promise;
+			expect(second.request(path)).toBe(true);
+			expect(second.progress()).toEqual({ready: 1, total: 1, failed: 0});
+			expect(mounted.has(path)).toBe(true);
+			second.release(path);
+			expect(second.progress()).toEqual({ready: 0, total: 0, failed: 0});
+			expect(mounted.has(path)).toBe(false);
+			second.close();
+			expect(first.request(path)).toBe('Asset scope is closed');
+		}
+		finally
+		{
+			assets.close();
+			globalThis.fetch = originalFetch;
+		}
 	}
-	finally
-	{
-		assets.close();
-		globalThis.fetch = originalFetch;
-	}
-});
+);
 
 test('closing an asset scope cancels unshared downloads and rejects late responses', async () => {
 	const mounted = new Map();
 	const originalFetch = globalThis.fetch;
 	let resolve, signal;
+
 	globalThis.fetch = (_url, options) => {
 		signal = options.signal;
+
 		return new Promise(done => { resolve = done; });
 	};
+
 	const assets = new AssetLoader({
-		mkdirTree() {}, writeFile: (path, bytes) => mounted.set(path, bytes),
-		unlink: path => mounted.delete(path)
-	}, 'https://example.test/engine/');
+
+		mkdirTree() {}
+		, writeFile: (path, bytes) => mounted.set(path, bytes)
+		, unlink: path => mounted.delete(path)
+	}, 'https://example.test/engine/'
+	);
+
 	try
 	{
 		const scope = assets.scope();
@@ -102,11 +129,17 @@ test('closing an asset scope cancels unshared downloads and rejects late respons
 test('an explicit retry replaces malformed mounted data without unlinking another scope', async () => {
 	const mounted = new Map(), transfers = [];
 	const originalFetch = globalThis.fetch;
+
 	globalThis.fetch = () => new Promise(resolve => { transfers.push(resolve); });
+
 	const assets = new AssetLoader({
-		mkdirTree() {}, writeFile: (path, bytes) => mounted.set(path, new TextDecoder().decode(bytes)),
-		unlink: path => mounted.delete(path)
-	}, 'https://example.test/engine/');
+
+		mkdirTree() {}
+		, writeFile: (path, bytes) => mounted.set(path, new TextDecoder().decode(bytes))
+		, unlink: path => mounted.delete(path)
+	}, 'https://example.test/engine/'
+	);
+
 	try
 	{
 		const first = assets.scope(), second = assets.scope(), path = '/engine/map.tmj';

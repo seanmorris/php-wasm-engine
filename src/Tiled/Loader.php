@@ -43,8 +43,9 @@ final class Loader
 			$map->tilesets[] = $set;
 		}
 
-		usort($map->tilesets,
-			/**
+		usort(
+			$map->tilesets
+			, /**
 			 * Order tilesets by their first global tile identifier.
 			 *
 			 * @param array<string,mixed> $a First tileset record.
@@ -53,7 +54,9 @@ final class Loader
 			 */
 			fn($a, $b) => $a['firstgid'] <=> $b['firstgid']
 		);
+
 		$this->layers($map, $data['layers'] ?? [], null);
+
 		return $this->maps[$path] = $map;
 	}
 
@@ -92,6 +95,7 @@ final class Loader
 	{
 		$set = $this->assets->json($path);
 		$set['firstgid'] = 1;
+
 		return $this->definitions($set, $path);
 	}
 
@@ -112,9 +116,7 @@ final class Loader
 			$specific[$tile['id']] = $tile;
 		}
 
-		$ids = isset($set['image'])?range(0, max(0, ($set['tilecount'] ?? 0) - 1)):array_keys(
-			$specific
-		);
+		$ids = isset($set['image'])?range(0, max(0, ($set['tilecount'] ?? 0) - 1)):array_keys($specific);
 
 		foreach($ids as $id)
 		{
@@ -124,13 +126,16 @@ final class Loader
 			$columns = max(1, (int)($set['columns'] ?? 1));
 			$margin = $set['margin'] ?? 0;
 			$spacing = $set['spacing'] ?? 0;
-			$rect = isset($tile['image'])?[0,0,$width,$height]:[$margin + ($id % $columns) * (
-				$width + $spacing
-			)
-				, $margin + intdiv($id, $columns) * ($height + $spacing)
-				, $width
-				, $height
-			];
+			$rect = isset($tile['image'])
+				? [0,0,$width,$height]
+				: [
+					$margin + ($id % $columns) * (
+						$width + $spacing
+					)
+					, $margin + intdiv($id, $columns) * ($height + $spacing)
+					, $width
+					, $height
+				];
 
 			foreach($tile['animation'] ?? [] as $frame)
 			{
@@ -140,18 +145,18 @@ final class Loader
 				}
 			}
 
-			$definitions[$id] = $tile + ['id' => $id
-			, 'firstgid' => $set['firstgid']
-			, 'rect' => $rect
+			$definitions[$id] = $tile + [
+				'id' => $id
+				, 'firstgid' => $set['firstgid']
+				, 'rect' => $rect
 				, 'offset' => [$set['tileoffset']['x'] ?? 0,$set['tileoffset']['y'] ?? 0]
 			];
 
 			$definitions[$id]['image'] = Assets::relative(
 				$path
-				, $tile['image'] ?? $set['image'] ?? throw new \UnexpectedValueException(
-					'Tile has no image'
-				)
+				, $tile['image'] ?? $set['image'] ?? throw new \UnexpectedValueException('Tile has no image')
 			);
+
 			$definitions[$id]['properties'] = self::properties($tile['properties'] ?? []);
 		}
 
@@ -201,11 +206,15 @@ final class Loader
 
 			if($data['type'] === 'tilelayer')
 			{
-				$chunks = $data['chunks'] ?? [['x' => $data['x'] ?? 0,'y' => $data['y'] ?? 0
-					, 'width' => $data['width'],'height' => $data['height']
-					, 'data' => $data['data']
-					?? []
-				]];
+				$chunks = $data['chunks'] ?? [
+					[
+						'x' => $data['x'] ?? 0
+						, 'y' => $data['y'] ?? 0
+						, 'width' => $data['width']
+						, 'height' => $data['height']
+						, 'data' => $data['data'] ?? []
+					]
+				];
 
 				foreach($chunks as $chunk)
 				{
@@ -238,40 +247,30 @@ final class Loader
 								$slice .= substr($bytes, (($y + $row) * $w + $x) * 4, $cw * 4);
 							}
 
-							$layer->chunks[] = new Chunk(
-								$chunk['x'] + $x
-								, $chunk['y'] + $y
-								, $cw
-								, $ch
-								, $slice
-							);
+							$layer->chunks[] = new Chunk($chunk['x'] + $x, $chunk['y'] + $y, $cw, $ch, $slice);
 						}
 					}
 				}
-			} elseif($data['type'] === 'objectgroup')
+			}
+			elseif($data['type'] === 'objectgroup')
 			{
 				$layer->objects = $data['objects'] ?? [];
 			}
 			elseif($data['type'] === 'imagelayer')
 			{
-				$layer->image = isset($data['image'])?Assets::relative($map->path, $data['image'])
-					: null;
+				$layer->image = isset($data['image'])?Assets::relative($map->path, $data['image']) : null;
 				$layer->imageWidth = (int)($data['imagewidth'] ?? 0);
 				$layer->imageHeight = (int)($data['imageheight'] ?? 0);
 				$layer->repeatX = (bool)($data['repeatx'] ?? isset($layer->properties['from']));
 				$layer->repeatY = (bool)($data['repeaty'] ?? false);
 
-				$layer->transparentColor = isset($data['transparentcolor'])?self::color(
-					$data['transparentcolor']
-				):null;
+				$layer->transparentColor = isset($data['transparentcolor'])?self::color($data['transparentcolor']):null;
 
 				if(isset($layer->properties['from']))
 				{
 					if(!in_array($layer->properties['from'], ['top','center','bottom'], true))
 					{
-						throw new \UnexpectedValueException(
-							'Image anchor must be top, center or bottom'
-						);
+						throw new \UnexpectedValueException('Image anchor must be top, center or bottom');
 					}
 
 					// Anchored strips stay at the horizon unless vertical parallax is requested.
@@ -287,10 +286,8 @@ final class Loader
 						$frames = json_decode($frames, true, 512, JSON_THROW_ON_ERROR);
 					}
 
-					if(!is_array($frames) || !$frames || array_keys($frames) !== range(
-						0
-						, count($frames) - 1
-					)){
+					if(!is_array($frames) || !$frames || array_keys($frames) !== range(0, count($frames) - 1))
+					{
 						throw new \UnexpectedValueException('Image frames must be a nonempty list');
 					}
 
@@ -301,15 +298,11 @@ final class Loader
 						] === '' || !is_numeric($frame['duration'] ?? null)
 							|| !is_finite((float)$frame['duration']) || $frame['duration'] <= 0
 						){
-							throw new \UnexpectedValueException(
-								'Image frames require an image and positive duration'
-							);
+							throw new \UnexpectedValueException('Image frames require an image and positive duration');
 						}
 
-						$layer->imageFrames[] = ['image' => Assets::relative(
-							$map->path
-							, $frame['image']
-						)
+						$layer->imageFrames[] = [
+							'image' => Assets::relative($map->path, $frame['image'])
 							, 'duration' => (float)$frame['duration']
 						];
 					}
@@ -317,7 +310,7 @@ final class Loader
 			}
 			else
 			{
-				throw new \UnexpectedValueException('Unsupported layer type '.$data['type']);
+				throw new \UnexpectedValueException('Unsupported layer type ' . $data['type']);
 			}
 
 			$map->layers[] = $layer;
@@ -336,10 +329,12 @@ final class Loader
 	 * @return string Exactly four little-endian bytes per cell, with unsupported hexagonal rotation
 	 * flags cleared.
 	 */
-	public static function decode($data, int $count, string $encoding = 'csv', string $compression =
-		''
-	): string
-	{
+	public static function decode(
+		$data
+		, int $count
+		, string $encoding = 'csv'
+		, string $compression = ''
+	): string {
 		if($count < 0 || $count > 16777216)
 		{
 			throw new \UnexpectedValueException('Layer exceeds 16M cell limit');
@@ -435,7 +430,7 @@ final class Loader
 
 		if(strlen($hex) === 6)
 		{
-			$hex = 'ff'.$hex;
+			$hex = 'ff' . $hex;
 		}
 
 		if(!preg_match('/^[0-9a-f]{8}$/i', $hex))
@@ -450,8 +445,10 @@ final class Loader
 			 * @param string $v Two hexadecimal digits for one color channel.
 			 * @return float Channel intensity in [0,1].
 			 */
-			fn($v) => hexdec($v) / 255, str_split($hex, 2)
+			fn($v) => hexdec($v) / 255
+			, str_split($hex, 2)
 		);
+
 		return [$v[1],$v[2],$v[3],$v[0]];
 	}
 }

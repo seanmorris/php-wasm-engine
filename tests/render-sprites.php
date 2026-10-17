@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Render\
 {
 	Atlas,Camera,Device,SpriteSheet,SpriteRenderer
@@ -8,7 +8,7 @@ use PhpWasmEngine\Tiled\Loader;
 
 $device = new Device(48, 32);
 $camera = new Camera(0, 0, 48, 32);
-$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $left = $sheet->sprite('idle', 12, 16);
@@ -22,10 +22,10 @@ $capture = function($time) use ($device, $camera, $renderer, $left, $right) {
 	$device->begin([0,0,0,1]);
 	$renderer->render([$left,$right], $camera, $time);
 
-	return [bin2hex(glReadPixels(12, 19, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE))
-	, bin2hex(glReadPixels(28, 19, 1, 1
-		, GL_RGBA, GL_UNSIGNED_BYTE
-	))];
+	return [
+		bin2hex(glReadPixels(12, 19, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE))
+		, bin2hex(glReadPixels(28, 19, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE))
+	];
 };
 
 foreach([
@@ -38,12 +38,13 @@ foreach([
 	, [1500,'jump','run',false]
 	, [1550,'jump','run',false]
 	, [1750,'run','run',false]
-] as [$time,$a,$b,$restart]){
+] as [$time,$a,$b,$restart])
+{
 	$sheet->play($left, $a, $time, restart: $restart);
 	$sheet->play($right, $b, $time);
 	$frames[] = $capture($time);
-	$checks['single batch '.$time] = $renderer->draws === 1;
-	$checks['same atlas '.$time] = $atlas->texture === $texture && $atlas->metadata === $metadata;
+	$checks['single batch ' . $time] = $renderer->draws === 1;
+	$checks['same atlas ' . $time] = $atlas->texture === $texture && $atlas->metadata === $metadata;
 }
 
 $before = $capture(1875);

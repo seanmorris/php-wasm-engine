@@ -44,6 +44,7 @@ final class TextBuffer
 	public function selectedText(): string
 	{
 		[$start, $end] = $this->selection();
+
 		return implode('', array_slice(BitmapFont::characters($this->text), $start, $end - $start));
 	}
 
@@ -75,15 +76,11 @@ final class TextBuffer
 	{
 		if(!$extend && $this->caret !== $this->anchor)
 		{
-			$this->caret = $delta < 0 ? min($this->caret, $this->anchor)
-				: max($this->caret, $this->anchor);
+			$this->caret = $delta < 0 ? min($this->caret, $this->anchor) : max($this->caret, $this->anchor);
 		}
 		else
 		{
-			$this->caret = max(
-				0
-				, min(count(BitmapFont::characters($this->text)), $this->caret + $delta)
-			);
+			$this->caret = max(0, min(count(BitmapFont::characters($this->text)), $this->caret + $delta));
 		}
 
 		if(!$extend)

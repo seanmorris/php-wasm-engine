@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "test": "php tests/run.php",
+    "test": ["php tests/run.php", "php tests/phpdoc.php"],
     "bench:ecs": "php benchmarks/ecs.php",
     "lint": [
       "php-cs-fixer fix --dry-run --diff",
@@ -22,7 +22,7 @@
     ],
     "lint:docs": "php scripts/check-phpdoc.php",
     "lint:fix": "php-cs-fixer fix",
-    "lint:readability": "sm-no-saccade-style src tests examples benchmarks autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
+    "lint:readability": "sm-no-saccade-style --max-line-length=120 src tests examples benchmarks autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
   },
   "require-dev": {
     "seanmorris/sm-no-saccade-style": "dev-fix/readable-block-layout"

@@ -104,8 +104,7 @@ final class CardSequence
 
 		$this->ready = $this->ready || $card->ready();
 		$this->readyTime += $this->ready ? $seconds : 0;
-		$this->state = $this->elapsed < $card->fadeIn ? 'opening'
-			: ($this->ready ? 'shown' : 'waiting');
+		$this->state = $this->elapsed < $card->fadeIn ? 'opening' : ($this->ready ? 'shown' : 'waiting');
 
 		if($this->ready && $card->duration !== null && $this->readyTime >= $card->duration)
 		{
@@ -133,6 +132,7 @@ final class CardSequence
 		}
 
 		$this->dismiss();
+
 		return true;
 	}
 
@@ -152,8 +152,7 @@ final class CardSequence
 
 		if($this->state === 'closing')
 		{
-			return $card->fadeOut > 0
-				? $this->exitOpacity * max(0, 1 - $this->closingTime / $card->fadeOut) : 0;
+			return $card->fadeOut > 0 ? $this->exitOpacity * max(0, 1 - $this->closingTime / $card->fadeOut) : 0;
 		}
 
 		return $card->fadeIn > 0 ? min(1, $this->elapsed / $card->fadeIn) : 1;

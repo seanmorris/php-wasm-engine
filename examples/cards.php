@@ -26,8 +26,8 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 		return new CardSequence([$title]);
 	}
 
-	return new CardSequence(
-		[new Card(
+	return new CardSequence([
+		new Card(
 			'loading'
 			, 'Loading the demo'
 			, 'Discovering title assets...'
@@ -52,6 +52,5 @@ function demoCards(callable $ready, bool $titleOnly = false): CardSequence
 			, duration: 3
 		)
 		, $title
-		]
-	);
+	]);
 }

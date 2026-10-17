@@ -12,10 +12,12 @@ use PhpWasmEngine\Render\SpriteRenderer;
 final class CardRenderer
 {
 	public Atlas $atlas;
-	public array $style = ['scale' => 2
-	, 'align' => 'center'
-	, 'heading' => [1, .85, .25, 1]
-		, 'foreground' => [1, 1, 1, 1], 'backdropDim' => .25
+	public array $style = [
+		'scale' => 2
+		, 'align' => 'center'
+		, 'heading' => [1, .85, .25, 1]
+		, 'foreground' => [1, 1, 1, 1]
+		, 'backdropDim' => .25
 	];
 
 	private SpriteRenderer $sprites;
@@ -50,10 +52,14 @@ final class CardRenderer
 	 * @param bool $backdrop Whether a scene was drawn underneath this card.
 	 * @return void Renders batched rectangles and glyphs in screen space.
 	 */
-	public function render(CardSequence $sequence, int $width, int $height, string $prompt = '',
-		?array $progress = null, bool $backdrop = false
-	): void
-	{
+	public function render(
+		CardSequence $sequence
+		, int $width
+		, int $height
+		, string $prompt = ''
+		, ?array $progress = null
+		, bool $backdrop = false
+	): void {
 		$card = $sequence->current();
 
 		if($this->closed || $card === null)
@@ -63,9 +69,13 @@ final class CardRenderer
 
 		$opacity = $sequence->opacity();
 		$scale = min($this->style['scale'], $width / 420, $height / 240);
-		$boxes = [[0, 0, $width, $height, 0, 0, 0
-			, $backdrop ? $this->style['backdropDim'] : 1
-		]];
+		$boxes = [
+			[
+				0, 0, $width, $height, 0, 0, 0
+				, $backdrop ? $this->style['backdropDim'] : 1
+			]
+		];
+
 		$batch = [];
 		$this->nextCache = [];
 		$align = $card->align ?? $this->style['align'];
@@ -74,7 +84,8 @@ final class CardRenderer
 			[$card->title, .3, $scale * 1.6, $this->style['heading']]
 			, [$card->text, .5, $scale, $this->style['foreground']]
 			, [$prompt, .8, $scale, $this->style['foreground']]
-		] as [$text, $y, $size, $color]){
+		] as [$text, $y, $size, $color])
+		{
 			$glyphs = $this->text($text, $width, $height * $y, $size, $color, $align);
 
 			foreach($glyphs as $original)
@@ -90,8 +101,7 @@ final class CardRenderer
 			$track = min($width * .65, 480 * $scale);
 			$x = ($width - $track) / 2;
 			$y = $height * .68;
-			$ratio = $progress['total'] > 0
-				? min(1, max(0, $progress['ready'] / $progress['total'])) : 0;
+			$ratio = $progress['total'] > 0 ? min(1, max(0, $progress['ready'] / $progress['total'])) : 0;
 			$boxes[] = [$x, $y, $track, 4 * $scale, .2, .25, .3, $opacity];
 			$boxes[] = [$x, $y, $track * $ratio, 4 * $scale, 1, .85, .25, $opacity];
 		}
@@ -112,10 +122,14 @@ final class CardRenderer
 	 * @param string $align Left, center, or right alignment for each wrapped line.
 	 * @return list<\PhpWasmEngine\Render\Sprite> Cached glyphs; callers must not mutate them.
 	 */
-	private function text(string $text, int $width, float $y, float $scale, array $color,
-		string $align
-	): array
-	{
+	private function text(
+		string $text
+		, int $width
+		, float $y
+		, float $scale
+		, array $color
+		, string $align
+	): array {
 		$key = serialize([$text, $width, $y, $scale, $color, $align, $this->font->theme]);
 		$glyphs = $this->cache[$key] ?? null;
 
@@ -132,6 +146,7 @@ final class CardRenderer
 		}
 
 		$this->nextCache[$key] = $glyphs;
+
 		return $glyphs;
 	}
 

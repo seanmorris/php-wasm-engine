@@ -1,12 +1,12 @@
 <?php
-require_once dirname(__DIR__).'/autoload.php';
+require_once dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Render\
 {
 	Device,Camera,MapRenderer,Sprite,SpriteRenderer
 };
-$map = (new Loader)->map(dirname(__DIR__).'/examples/assets/platformer.tmj');
+$map = (new Loader)->map(dirname(__DIR__) . '/examples/assets/platformer.tmj');
 $device = new Device(320, 180);
 $engine = new Engine($device);
 $renderer = new MapRenderer($map);
@@ -42,20 +42,19 @@ $engine->start(function() use ($engine, $device, $renderer, $sprites, $sprite, $
 	$device->present();
 
 	$probe(
-		json_encode(
-			['time' => $engine->time, 'ticks' => $ticks, 'restores' => $restores
-			, 'pixels' =>
-				$pixels
-				, 'atlas' => spl_object_id($renderer->atlas)
-				, 'uploads' => $renderer->stats[
+		json_encode([
+			'time' => $engine->time
+			, 'ticks' => $ticks
+			, 'restores' => $restores
+			, 'pixels' => $pixels
+			, 'atlas' => spl_object_id($renderer->atlas)
+			, 'uploads' => $renderer->stats[
 				'uploads'
-				]
-				, 'images' => $renderer->images->uploads
-				, 'right' => $engine->controls
-				->down('right')
-				, 'error' => glGetError()
 			]
-		)
+			, 'images' => $renderer->images->uploads
+			, 'right' => $engine->controls->down('right')
+			, 'error' => glGetError()
+		])
 	);
 }, function() use ($renderer, $sprites) {
 	$sprites->close();

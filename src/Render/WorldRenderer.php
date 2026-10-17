@@ -110,8 +110,9 @@ final class WorldRenderer
 			}
 		}
 
-		uasort($this->resident,
-			/**
+		uasort(
+			$this->resident
+			, /**
 			 * Order resident renderers from least to most recently used.
 			 *
 			 * @param array{0:MapRenderer,1:int} $a First renderer and its last-visible frame.
@@ -166,9 +167,7 @@ final class WorldRenderer
 		}
 
 		// Keep a visible ready background while crossing a gap or waiting on a map.
-		return isset($active[$this->backgroundMap ?? ''])?$this->backgroundMap:array_key_first(
-			$active
-		);
+		return isset($active[$this->backgroundMap ?? ''])?$this->backgroundMap:array_key_first($active);
 	}
 
 	/**

@@ -6,8 +6,14 @@ namespace PhpWasmEngine\Input;
 final class Buttons
 {
 	public const ALIASES = [
-		'jump' => 0, 'action' => 1, 'reset' => 8, 'pause' => 9
-		, 'up' => 12, 'down' => 13, 'left' => 14, 'right' => 15
+		'jump' => 0
+		, 'action' => 1
+		, 'reset' => 8
+		, 'pause' => 9
+		, 'up' => 12
+		, 'down' => 13
+		, 'left' => 14
+		, 'right' => 15
 	];
 
 	/**
@@ -30,11 +36,10 @@ final class Buttons
 				throw new \InvalidArgumentException('Button indices must be nonnegative');
 			}
 
-			return 'button'.$key;
+			return 'button' . $key;
 		}
 
-		return preg_match('/^(?:button)?([0-9]+)$/i', $key, $match)
-			? 'button'.(int)$match[1] : $key;
+		return preg_match('/^(?:button)?([0-9]+)$/i', $key, $match) ? 'button' . (int)$match[1] : $key;
 	}
 
 	/**

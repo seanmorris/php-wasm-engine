@@ -19,9 +19,8 @@ final class Device
 	 * @param string $title Native SDL window title.
 	 * @return void Acquires video/event resources and configures two-dimensional alpha blending.
 	 */
-	public function __construct(public int $width = 960, public int $height = 540, string $title =
-		'PHP WASM Engine'
-	){
+	public function __construct(public int $width = 960, public int $height = 540, string $title = 'PHP WASM Engine')
+	{
 		if(!function_exists('glDrawArraysInstanced'))
 		{
 			throw new \RuntimeException('Use a php-sdl-wasm build with the GLES 3 engine bindings');
@@ -36,14 +35,7 @@ final class Device
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
-		$this->window = SDL_CreateWindow(
-			$title
-			, 0
-			, 0
-			, $width
-			, $height
-			, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
-		);
+		$this->window = SDL_CreateWindow($title, 0, 0, $width, $height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 		$this->context = SDL_GL_CreateContext($this->window);
 
 		if(!$this->context || SDL_GL_MakeCurrent($this->window, $this->context) !== 0)
@@ -59,26 +51,25 @@ final class Device
 			if($this->canvas)
 			{
 				$this->webgl = $this->canvas->getContext('webgl2');
-				$this->lostListener =
-					/**
-					 * Allow browser context restoration and mark graphics unavailable.
-					 *
-					 * @param object $event Browser WebGL context-loss event proxy exposing
-					 * preventDefault.
-					 * @return void Records that base GL state must be restored before drawing.
-					 */
-					function($event) {
-						$event->preventDefault();
-						$this->lost = $this->pendingRestore = true;
-					};
 
-				$this->restoredListener =
-					/**
-					 * Record the browser's restored-context notification.
-					 *
-					 * @return void Clears the loss flag while leaving resource restoration pending.
-					 */
-					function() { $this->lost = false; };
+				/**
+				 * Allow browser context restoration and mark graphics unavailable.
+				 *
+				 * @param object $event Browser WebGL context-loss event proxy exposing
+				 * preventDefault.
+				 * @return void Records that base GL state must be restored before drawing.
+				 */
+				$this->lostListener = function($event) {
+					$event->preventDefault();
+					$this->lost = $this->pendingRestore = true;
+				};
+
+				/**
+				 * Record the browser's restored-context notification.
+				 *
+				 * @return void Clears the loss flag while leaving resource restoration pending.
+				 */
+				$this->restoredListener = function() { $this->lost = false; };
 
 				$this->canvas->addEventListener('webglcontextlost', $this->lostListener);
 				$this->canvas->addEventListener('webglcontextrestored', $this->restoredListener);

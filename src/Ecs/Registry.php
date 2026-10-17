@@ -211,9 +211,7 @@ final class Registry
 		}
 
 		// Intersect in the original candidate order, even when a nested set is more selective.
-		$ids = $candidates ? array_keys(
-			array_intersect_key($candidates, $this->matchingSet($query))
-		) : [];
+		$ids = $candidates ? array_keys(array_intersect_key($candidates, $this->matchingSet($query))) : [];
 		$count = count($ids);
 
 		if($count > self::QUERY_CACHE_IDS)
@@ -229,6 +227,7 @@ final class Registry
 
 		$this->cachedIds += $count;
 		$this->queryCache[$key] = $ids;
+
 		return $ids;
 	}
 

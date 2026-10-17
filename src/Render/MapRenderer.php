@@ -28,9 +28,10 @@ final class MapRenderer
 		$this->atlas = new Atlas($map);
 
 		$this->program = new Program(
-			file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.vert')
-			, file_get_contents(dirname(__DIR__, 2).'/shaders/tiles.frag')
+			file_get_contents(dirname(__DIR__, 2) . '/shaders/tiles.vert')
+			, file_get_contents(dirname(__DIR__, 2) . '/shaders/tiles.frag')
 		);
+
 		$this->create();
 	}
 
@@ -58,8 +59,9 @@ final class MapRenderer
 
 		if($map->projection->orientation === 'isometric')
 		{
-			usort($cells,
-				/**
+			usort(
+				$cells
+				, /**
 				 * Order isometric cells by diagonal and then descending column.
 				 *
 				 * @param array{0:int,1:int} $a First local tile column and row.
@@ -73,8 +75,9 @@ final class MapRenderer
 		{
 			$order = $map->data['renderorder'] ?? 'right-down';
 
-			usort($cells,
-				/**
+			usort(
+				$cells
+				, /**
 				 * Order orthogonal cells according to Tiled's configured render direction.
 				 *
 				 * @param array{0:int,1:int} $a First local tile column and row.
@@ -144,12 +147,7 @@ final class MapRenderer
 					throw new \UnexpectedValueException("Unknown tile GID {$gid->id}");
 				}
 
-				$bytes = substr_replace(
-					$bytes
-					, (new Gid($index, $gid->flags))->bytes()
-					, ($y * 32 + $x) * 4
-					, 4
-				);
+				$bytes = substr_replace($bytes, (new Gid($index, $gid->flags))->bytes(), ($y * 32 + $x) * 4, 4);
 			}
 		}
 
@@ -227,6 +225,7 @@ final class MapRenderer
 						, GL_UNSIGNED_BYTE
 						, $this->encoded($chunk)
 					);
+
 					$page['revisions'][$slice] = $chunk->revision;
 					$this->stats['uploads']++;
 				}
@@ -253,13 +252,15 @@ final class MapRenderer
 
 		$points = [];
 
-		foreach([[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
-		, [$chunk->x
-		, $chunk
-			->y + $chunk->height
-		]
+		foreach([
+			[$chunk->x,$chunk->y],[$chunk->x + $chunk->width,$chunk->y]
+			, [
+				$chunk->x
+				, $chunk->y + $chunk->height
+			]
 			, [$chunk->x + $chunk->width,$chunk->y + $chunk->height]
-		] as [$x
+		] as [
+			$x
 			, $y
 		]
 		){
@@ -273,9 +274,9 @@ final class MapRenderer
 		$cy -= $this->map->y + $layer->offsetY;
 		// Atlas extent is conservative for oversized tiles and tileset offsets.
 		$margin = max($this->atlas->width, $this->atlas->height);
+
 		return max($xs) + $margin >= $cx && min($xs) - $margin <= $cx + $camera->width / $camera
-			->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera
-			->height / $camera->zoom;
+			->zoom && max($ys) + $margin >= $cy && min($ys) - $margin <= $cy + $camera->height / $camera->zoom;
 	}
 
 	/**
@@ -337,10 +338,13 @@ final class MapRenderer
 	 * range.
 	 * @return void Updates this call's draw, instance, and tile-upload statistics.
 	 */
-	public function render(Camera $camera, float $milliseconds = 0, int $startLayer = 0
-		, ?int $endLayer = null, bool $anchoredImages = true
-	): void
-	{
+	public function render(
+		Camera $camera
+		, float $milliseconds = 0
+		, int $startLayer = 0
+		, ?int $endLayer = null
+		, bool $anchoredImages = true
+	): void {
 		$endLayer ??= count($this->map->layers);
 		$this->stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
 		$this->sync();
@@ -412,11 +416,7 @@ final class MapRenderer
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, $this->atlas->texture);
 
-		glUniform2f(
-			$p->location('tileSize')
-			, $this->map->projection->tileWidth
-			, $this->map->projection->tileHeight
-		);
+		glUniform2f($p->location('tileSize'), $this->map->projection->tileWidth, $this->map->projection->tileHeight);
 		glUniform2f($p->location('mapOrigin'), $this->map->x, $this->map->y);
 		glUniform2f($p->location('camera'), $camera->x, $camera->y);
 		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
@@ -427,6 +427,7 @@ final class MapRenderer
 			, $this->map->x + ($this->map->data['parallaxoriginx'] ?? 0)
 			, $this->map->y + ($this->map->data['parallaxoriginy'] ?? 0)
 		);
+
 		$iso = $this->map->projection->orientation === 'isometric';
 		glUniform1i($p->location('isometric'), $iso?1:0);
 
@@ -454,7 +455,8 @@ final class MapRenderer
 					$this->draw($page['texture'], $instances);
 				}
 			}
-		} else
+		}
+		else
 		{
 			// Merge chunk diagonals in world tile order so tall tiles at chunk seams
 			// blend correctly. Matching slices still share an instanced draw.
@@ -473,10 +475,11 @@ final class MapRenderer
 								continue;
 							}
 
-							$commands[] = [$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x
-							, $page[
+							$commands[] = [
+								$order,$chunk->x + $chunk->y + $diagonal,-$chunk->x
+								, $page[
 								'texture'
-							]
+								]
 								, $first,$count,$this->instance($layer, $chunk, $slice)
 							];
 						}
@@ -484,8 +487,9 @@ final class MapRenderer
 				}
 			}
 
-			usort($commands,
-				/**
+			usort(
+				$commands
+				, /**
 				 * Sort isometric draw commands by layer, world diagonal, and horizontal tie-break.
 				 *
 				 * @param array{int,int,int,int,int,int,string} $a First
@@ -497,6 +501,7 @@ final class MapRenderer
 				 */
 				fn($a, $b) => [$a[0],$a[1],$a[2]] <=> [$b[0],$b[1],$b[2]]
 			);
+
 			$key = null;
 			$instances = '';
 

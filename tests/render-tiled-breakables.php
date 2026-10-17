@@ -1,6 +1,6 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
-require dirname(__DIR__).'/examples/breakables.php';
+require dirname(__DIR__) . '/autoload.php';
+require dirname(__DIR__) . '/examples/breakables.php';
 
 use PhpWasmEngine\Asset\Assets;
 use PhpWasmEngine\Engine;
@@ -16,37 +16,58 @@ $device = new Device(160, 160);
 $engine = new Engine($device);
 $camera = new Camera(0, 0, 160, 160);
 $colors = ['ff0000ff', '00ff00ff', '0000ffff', 'ffff00ff'];
-$expected = [[0, 1, 2, 3], [2, 3, 0, 1], [1, 0, 3, 2], [3, 2, 1, 0]
+$expected = [
+	[0, 1, 2, 3], [2, 3, 0, 1], [1, 0, 3, 2], [3, 2, 1, 0]
 	, [0, 2, 1, 3], [1, 3, 0, 2], [2, 0, 3, 1], [3, 1, 2, 0]
 ];
+
 $checks = [];
 
 foreach([0, 90] as $rotation)
 {
 	foreach([0, 4, 8, 12, 2, 6, 10, 14] as $index => $flags)
 	{
-		$data = ['orientation' => 'orthogonal', 'width' => 1, 'height' => 1
-			, 'tilewidth' => 16, 'tileheight' => 16
-			, 'tilesets' => [['firstgid' => 1, 'tilewidth' => 16, 'tileheight' => 16
-				, 'columns' => 1, 'tilecount' => 1
-				, 'image' => dirname(__DIR__).'/examples/assets/test.png'
-			]]
-			, 'layers' => [['id' => 1
-			, 'type' => 'objectgroup'
-			, 'offsetx' => 3
-			, 'offsety' => 5
-				, 'objects' => [['class' => 'breakable', 'gid' => 1 + $flags * 268435456.0
-					, 'x' => 60
-					, 'y' => 74
-					, 'width' => 48
-					, 'height' => 32
-					, 'rotation' => $rotation
-					, 'properties' => [['name' => 'columns', 'value' => 3]
-						, ['name' => 'rows', 'value' => 4]
+		$data = [
+			'orientation' => 'orthogonal'
+			, 'width' => 1
+			, 'height' => 1
+			, 'tilewidth' => 16
+			, 'tileheight' => 16
+			, 'tilesets' => [
+				[
+					'firstgid' => 1
+					, 'tilewidth' => 16
+					, 'tileheight' => 16
+					, 'columns' => 1
+					, 'tilecount' => 1
+					, 'image' => dirname(__DIR__) . '/examples/assets/test.png'
+				]
+			]
+			, 'layers' => [
+				[
+					'id' => 1
+					, 'type' => 'objectgroup'
+					, 'offsetx' => 3
+					, 'offsety' => 5
+					, 'objects' => [
+						[
+							'class' => 'breakable'
+							, 'gid' => 1 + $flags * 268435456.0
+							, 'x' => 60
+							, 'y' => 74
+							, 'width' => 48
+							, 'height' => 32
+							, 'rotation' => $rotation
+							, 'properties' => [
+								['name' => 'columns', 'value' => 3]
+								, ['name' => 'rows', 'value' => 4]
+							]
+						]
 					]
-				]]
-			]]
+				]
+			]
 		];
+
 		$loader = new Loader(new Assets(static fn($path) => json_encode($data)));
 		$map = $loader->map('blocks.tmj');
 		$map->x = 7;
@@ -75,9 +96,7 @@ foreach([0, 90] as $rotation)
 		$device->begin([0, 0, 0, 1]);
 		$renderer->renderEntities($engine->entities, $camera);
 
-		$checks["partition $rotation $flags"] = $whole === glReadPixels(
-			0, 0, 160, 160, GL_RGBA, GL_UNSIGNED_BYTE
-		);
+		$checks["partition $rotation $flags"] = $whole === glReadPixels(0, 0, 160, 160, GL_RGBA, GL_UNSIGNED_BYTE);
 		$checks["batch $rotation $flags"] = $renderer->instances === 12 && $renderer->draws === 1;
 		$blocks->close();
 		$renderer->close();

@@ -26,10 +26,9 @@ final class SpriteSheet
 
 		foreach($tiles as $id => $tile)
 		{
-			$this->animations[$tile['class'] ?? $tile['type'] ?? $tile['properties']['name']
-				?? (string)$id
-			] =
-				$id + 1;
+			$this->animations[
+				$tile['class'] ?? $tile['type'] ?? $tile['properties']['name'] ?? (string)$id
+			] = $id + 1;
 		}
 	}
 
@@ -44,9 +43,7 @@ final class SpriteSheet
 	public function sprite(string $animation, float $x = 0, float $y = 0): Sprite
 	{
 		return new Sprite(
-			$this->animations[$animation] ?? throw new \OutOfBoundsException(
-				"Unknown animation $animation"
-			)
+			$this->animations[$animation] ?? throw new \OutOfBoundsException("Unknown animation $animation")
 			, $x
 			, $y
 		);
@@ -63,18 +60,18 @@ final class SpriteSheet
 	 * @return bool True when playback changed or restarted; false when the current animation was
 	 * preserved.
 	 */
-	public function play(Sprite $sprite, string $animation, float $milliseconds, bool $restart =
-		false
-	): bool
-	{
+	public function play(
+		Sprite $sprite
+		, string $animation
+		, float $milliseconds
+		, bool $restart = false
+	): bool {
 		if(!is_finite($milliseconds))
 		{
 			throw new \InvalidArgumentException('Animation time must be finite');
 		}
 
-		$gid = $this->animations[$animation] ?? throw new \OutOfBoundsException(
-			"Unknown animation $animation"
-		);
+		$gid = $this->animations[$animation] ?? throw new \OutOfBoundsException("Unknown animation $animation");
 
 		if($sprite->gid === $gid && !$restart)
 		{
@@ -83,6 +80,7 @@ final class SpriteSheet
 
 		$sprite->gid = $gid;
 		$sprite->time = -$milliseconds;
+
 		return true;
 	}
 }

@@ -2,9 +2,10 @@
 use PhpWasmEngine\Ui\Card;
 use PhpWasmEngine\Ui\CardSequence;
 
-require_once dirname(__DIR__).'/examples/cards.php';
+require_once dirname(__DIR__) . '/examples/cards.php';
 
-test('demo preload is readable but leaves promptly after cached or delayed assets are ready'
+test(
+	'demo preload is readable but leaves promptly after cached or delayed assets are ready'
 	, function() {
 		foreach([0, 5] as $delay)
 		{
@@ -39,8 +40,12 @@ test('cards wait for readiness before timing out or accepting a skip', function(
 	$ready = false;
 
 	$sequence = new CardSequence([
-		new Card('loading', duration: 1, fadeIn: .2, fadeOut: .2,
-			ready: function() use (&$ready) { return $ready; }
+		new Card(
+			'loading'
+			, duration: 1
+			, fadeIn: .2
+			, fadeOut: .2
+			, ready: function() use (&$ready) { return $ready; }
 		)
 	]);
 
@@ -62,15 +67,11 @@ test('cards wait for readiness before timing out or accepting a skip', function(
 });
 
 test('card input requires a fresh press after the guard and between cards', function() {
-	$sequence = new CardSequence(
-		[new Card('one', duration: null, skipAfter: .5, fadeOut: 0)
-		, new Card(
-			'two'
-			, duration: null
-			, skipAfter: .5
-			, fadeOut: 0
-		)]
-	);
+	$sequence = new CardSequence([
+		new Card('one', duration: null, skipAfter: .5, fadeOut: 0)
+		, new Card('two', duration: null, skipAfter: .5, fadeOut: 0)
+	]);
+
 	$sequence->start();
 	$sequence->update(.1);
 	$sequence->update(.1, true);
@@ -89,9 +90,12 @@ test('card input requires a fresh press after the guard and between cards', func
 test('card callbacks run once on completion, cancellation, and replay', function() {
 	$events = [];
 
-	$card = new Card('credit', duration: .5, fadeOut: 0,
-		onEnter: function(Card $card) use (&$events) { $events[] = 'enter:'.$card->id; },
-		onLeave: function(Card $card, bool $cancelled) use (&$events) {
+	$card = new Card(
+		'credit'
+		, duration: .5
+		, fadeOut: 0
+		, onEnter: function(Card $card) use (&$events) { $events[] = 'enter:' . $card->id; }
+		, onLeave: function(Card $card, bool $cancelled) use (&$events) {
 			$events[] = $cancelled ? 'cancel' : 'leave';
 		}
 	);
@@ -108,9 +112,7 @@ test('card callbacks run once on completion, cancellation, and replay', function
 });
 
 test('unskippable and indefinite cards expose guarded scripting verbs', function() {
-	$sequence = new CardSequence(
-		[new Card('legal', duration: 1, skippable: false, fadeIn: .4, fadeOut: 0)]
-	);
+	$sequence = new CardSequence([new Card('legal', duration: 1, skippable: false, fadeIn: .4, fadeOut: 0)]);
 	$sequence->start();
 	$sequence->update(.2);
 	near($sequence->opacity(), .5);
@@ -137,11 +139,10 @@ test('card timing and sequence definitions reject invalid values', function() {
 	rejects(fn() => $sequence->update(INF));
 });
 
-test('dismissing a partly revealed card fades from its current opacity without flashing'
+test(
+	'dismissing a partly revealed card fades from its current opacity without flashing'
 	, function() {
-		$sequence = new CardSequence(
-			[new Card('quick', duration: null, skipAfter: 0, fadeIn: 1, fadeOut: 1)]
-		);
+		$sequence = new CardSequence([new Card('quick', duration: null, skipAfter: 0, fadeIn: 1, fadeOut: 1)]);
 		$sequence->start();
 		$sequence->update(.2);
 		near($sequence->opacity(), .2);

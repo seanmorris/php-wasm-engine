@@ -18,14 +18,16 @@ final class Assets
 	 */
 	public function __construct(?callable $reader = null)
 	{
-		$this->reader = $reader ??
-				/**
-				 * Read an asset through PHP filesystem and stream support.
-				 *
-				 * @param string $path File or stream-wrapper URL requested by the asset cache.
-				 * @return string|false Complete bytes, or false when the source cannot be read.
-				 */
-				static fn($path) => file_get_contents($path);
+
+		/**
+		 * Read an asset through PHP filesystem and stream support.
+		 *
+		 * @param string $path File or stream-wrapper URL requested by the asset cache.
+		 * @return string|false Complete bytes, or false when the source cannot be read.
+		 */
+		$defaultReader = static fn($path) => file_get_contents($path);
+
+		$this->reader = $reader ?? $defaultReader;
 	}
 
 	/**
@@ -98,7 +100,7 @@ final class Assets
 		}
 
 		$directory = str_replace('\\', '/', dirname($base));
-		$joined = ($directory === '.' ? '' : $directory.'/').$path;
+		$joined = ($directory === '.' ? '' : $directory . '/') . $path;
 		$prefix = '';
 
 		if(preg_match('~^([a-z][a-z0-9+.-]*://[^/]+)(/.*)?$~i', $joined, $match))
@@ -127,6 +129,6 @@ final class Assets
 			}
 		}
 
-		return $prefix.($absolute?'/':'').implode('/', $parts);
+		return $prefix . ($absolute?'/':'') . implode('/', $parts);
 	}
 }

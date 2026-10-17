@@ -115,13 +115,9 @@ final class Terrain
 			$xs = array_column($points, 0);
 			$ys = array_column($points, 1);
 
-			for($cy = (int)floor(min($ys) / $this->cellSize); $cy <= (int)floor(
-				max($ys) / $this->cellSize
-			); $cy++
+			for($cy = (int)floor(min($ys) / $this->cellSize); $cy <= (int)floor(max($ys) / $this->cellSize); $cy++
 			){
-				for($cx = (int)floor(min($xs) / $this->cellSize); $cx <= (int)floor(
-					max($xs) / $this->cellSize
-				);
+				for($cx = (int)floor(min($xs) / $this->cellSize); $cx <= (int)floor(max($xs) / $this->cellSize);
 					$cx++
 				){
 					$this->polygonGrid["$cx,$cy"][] = $id;
@@ -171,9 +167,7 @@ final class Terrain
 				$this->edges[$key][] = $id;
 			}
 
-			for($cy = (int)floor(min($y, $v) / $this->cellSize); $cy <= (int)floor(
-				max($y, $v) / $this->cellSize
-			); $cy++
+			for($cy = (int)floor(min($y, $v) / $this->cellSize); $cy <= (int)floor(max($y, $v) / $this->cellSize); $cy++
 			){
 				for($cx = (int)floor(min($x, $u) / $this->cellSize); $cx <= (int)floor(
 					max($x, $u) / $this->cellSize
@@ -249,6 +243,7 @@ final class Terrain
 		}
 
 		unset($this->shapes[$handle]);
+
 		return true;
 	}
 
@@ -437,6 +432,7 @@ final class Terrain
 		}
 
 		$body->collisionLayer = $target;
+
 		return true;
 	}
 
@@ -492,7 +488,8 @@ final class Terrain
 					$near = 0;
 					$far = 1;
 
-					foreach([[$ca,$sa,$body->radius],[-$sa,$ca,$body->halfHeight]] as [$ux,$uy
+					foreach([[$ca,$sa,$body->radius],[-$sa,$ca,$body->halfHeight]] as [
+						$ux,$uy
 						, $radius
 					]){
 						$radius = max(0, $radius - .001);
@@ -540,10 +537,14 @@ final class Terrain
 	 * @param int $collisionLayer Additional collision plane included with shared terrain.
 	 * @return Hit|null Earliest eligible contact, or null when the ray misses terrain.
 	 */
-	public function raycast(float $x, float $y, float $dx, float $dy, bool $ignoreOneWay = false
+	public function raycast(
+		float $x
+		, float $y
+		, float $dx
+		, float $dy
+		, bool $ignoreOneWay = false
 		, int $collisionLayer = 1
-	): ?Hit
-	{
+	): ?Hit {
 		$this->raycasts++;
 
 		if(abs($dx) + abs($dy) < 1e-12)
@@ -624,7 +625,8 @@ final class Terrain
 			{
 				$cx += $sx;
 				$tx += $dtX;
-			} else
+			}
+			else
 			{
 				$cy += $sy;
 				$ty += $dtY;
@@ -687,6 +689,7 @@ final class Terrain
 						$radius = abs($ux * $ca + $uy * $sa) * $body->radius + abs(
 							-$ux * $sa + $uy * $ca
 						) * $body->halfHeight;
+
 						$a = $ax * $ux + $ay * $uy;
 						$b = $bx * $ux + $by * $uy;
 						$lo = min($a, $b) - $radius;
@@ -717,8 +720,7 @@ final class Terrain
 						$far = min($far, max($t0, $t1));
 					}
 
-					if($near < -1e-7 || $near > 1 || $near > $far + 1e-8 || ($best && $near >= $best
-						->t
+					if($near < -1e-7 || $near > 1 || $near > $far + 1e-8 || ($best && $near >= $best->t
 					)){
 						continue;
 					}
@@ -738,15 +740,7 @@ final class Terrain
 					$cy = $body->y + $dy * $near;
 					$segmentLength = ($bx - $ax) ** 2 + ($by - $ay) ** 2;
 
-					$along = max(
-						0
-						, min(
-							1
-							, (($cx - $ax) * ($bx - $ax) + ($cy - $ay) * (
-								$by - $ay
-							)) / $segmentLength
-						)
-					);
+					$along = max(0, min(1, (($cx - $ax) * ($bx - $ax) + ($cy - $ay) * ($by - $ay)) / $segmentLength));
 
 					$best = new Hit(
 						max(0, $near)

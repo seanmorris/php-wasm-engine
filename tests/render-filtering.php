@@ -1,5 +1,5 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 
 use PhpWasmEngine\Render\Atlas;
 use PhpWasmEngine\Render\Camera;
@@ -11,7 +11,7 @@ use PhpWasmEngine\Tiled\Loader;
 
 $device = new Device(64, 32);
 $camera = new Camera(0, 0, 64, 32);
-$sheet = new SpriteSheet(new Loader, __DIR__.'/assets/sprites.tsj');
+$sheet = new SpriteSheet(new Loader, __DIR__ . '/assets/sprites.tsj');
 $atlas = new Atlas($sheet->map);
 $renderer = new SpriteRenderer($atlas);
 $checks = $differences = [];
@@ -22,7 +22,14 @@ glBindTexture(GL_TEXTURE_2D, $atlas->texture);
 [$u, $v] = $atlas->rects[1];
 
 glTexSubImage2D(
-	GL_TEXTURE_2D, 0, $u + 2, $v + 3, 2, 2, GL_RGBA, GL_UNSIGNED_BYTE
+	GL_TEXTURE_2D
+	, 0
+	, $u + 2
+	, $v + 3
+	, 2
+	, 2
+	, GL_RGBA
+	, GL_UNSIGNED_BYTE
 	, pack('C*', ...array_merge(...$source))
 );
 
@@ -46,12 +53,12 @@ foreach([8, 1.75, .75] as $scale)
 		$device->begin([16 / 255, 24 / 255, 40 / 255, 1]);
 		$renderer->render($sprites, $camera);
 		$pixels = glReadPixels(0, 0, 64, 32, GL_RGBA, GL_UNSIGNED_BYTE);
-		$key = "$scale ".($flip ? 'flipped' : 'normal');
-		$checks[$key.' single mixed batch'] = $renderer->draws === 1 && $renderer->instances === 2;
+		$key = "$scale " . ($flip ? 'flipped' : 'normal');
+		$checks[$key . ' single mixed batch'] = $renderer->draws === 1 && $renderer->instances === 2;
 
 		foreach($sprites as $sprite)
 		{
-			$name = $key.($sprite->smooth ? ' smooth' : ' nearest');
+			$name = $key . ($sprite->smooth ? ' smooth' : ' nearest');
 			$checks[$name] = true;
 
 			for($y = 3; $y < 22; $y++)
@@ -100,9 +107,7 @@ foreach([8, 1.75, .75] as $scale)
 						}
 					}
 
-					$actual = array_values(
-						unpack('C*', substr($pixels, ((31 - $y) * 64 + $x) * 4, 4))
-					);
+					$actual = array_values(unpack('C*', substr($pixels, ((31 - $y) * 64 + $x) * 4, 4)));
 
 					for($channel = 0; $channel < 3; $channel++)
 					{

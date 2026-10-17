@@ -19,8 +19,7 @@ final class Scheduler
 	 * Register or replace a named system and invalidate the dependency order.
 	 *
 	 * @param string $name Unique system name.
-	 * @param callable(Registry,float):void $system Receives the registry and simulation delta in
-	 * seconds.
+	 * @param callable(Registry,float):void $system Receives the registry and simulation delta in seconds.
 	 * @param list<string> $after Names of systems that must execute before this one.
 	 * @return void Stores the callback and its ordering constraints.
 	 */
@@ -57,40 +56,39 @@ final class Scheduler
 			$active = [];
 			$done = [];
 
-			$visit =
-				/**
-				 * Visit system dependencies and append the system in topological order.
-				 *
-				 * @param string $name Registered system name to visit.
-				 * @return void Updates traversal state, rejecting missing dependencies and cycles.
-				 */
-				function($name) use (&$visit, &$result, &$active, &$done) {
-					if(isset($done[$name]))
-					{
-						return;
-					}
+			/**
+			 * Visit system dependencies and append the system in topological order.
+			 *
+			 * @param string $name Registered system name to visit.
+			 * @return void Updates traversal state, rejecting missing dependencies and cycles.
+			 */
+			$visit = function($name) use (&$visit, &$result, &$active, &$done) {
+				if(isset($done[$name]))
+				{
+					return;
+				}
 
-					if(isset($active[$name]))
-					{
-						throw new \LogicException("System dependency cycle at $name");
-					}
+				if(isset($active[$name]))
+				{
+					throw new \LogicException("System dependency cycle at $name");
+				}
 
-					if(!isset($this->systems[$name]))
-					{
-						throw new \LogicException("Unknown system dependency $name");
-					}
+				if(!isset($this->systems[$name]))
+				{
+					throw new \LogicException("Unknown system dependency $name");
+				}
 
-					$active[$name] = true;
+				$active[$name] = true;
 
-					foreach($this->systems[$name][1] as $dependency)
-					{
-						$visit($dependency);
-					}
+				foreach($this->systems[$name][1] as $dependency)
+				{
+					$visit($dependency);
+				}
 
-					unset($active[$name]);
-					$done[$name] = true;
-					$result[] = $name;
-				};
+				unset($active[$name]);
+				$done[$name] = true;
+				$result[] = $name;
+			};
 
 			foreach(array_keys($this->systems) as $name)
 			{

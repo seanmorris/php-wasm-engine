@@ -135,10 +135,13 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 	$middle = intdiv(count($sorted), 2);
 	$median = count($sorted) % 2 ? $sorted[$middle] : ($sorted[$middle - 1] + $sorted[$middle]) / 2;
 
-	return ['median_us' => $median
-	, 'min_us' => min($times)
-	, 'max_us' => max($times)
-		, 'samples_us' => $times, 'checksum' => $expected, 'iterations' => $iterations
+	return [
+		'median_us' => $median
+		, 'min_us' => min($times)
+		, 'max_us' => max($times)
+		, 'samples_us' => $times
+		, 'checksum' => $expected
+		, 'iterations' => $iterations
 	];
 }
 
@@ -170,11 +173,9 @@ function benchmark(array $options): array
 		, 'all_rare' => Query::all(Position::class, Velocity::class, Rare::class)
 		, 'any' => Query::any(Velocity::class, Health::class)
 		, 'not' => Query::not(Velocity::class, Frozen::class)
-		, 'nested' => Query::all(
-			Query::any(Velocity::class, Health::class)
-			, Query::not(Frozen::class, Rare::class)
-		)
+		, 'nested' => Query::all(Query::any(Velocity::class, Health::class), Query::not(Frozen::class, Rare::class))
 	];
+
 	$cases = [];
 	$counts = [];
 
@@ -208,77 +209,88 @@ function benchmark(array $options): array
 		$counts[$name] = count($expected);
 	}
 
-	$cases['all_fresh_description'] = [fn() => fingerprint(
-		$registry->query(Query::all(Position::class, Velocity::class, Query::not(Frozen::class)))
-	)
-	, $cases['all_common'][1], 1
+	$cases['all_fresh_description'] = [
+		fn() => fingerprint($registry->query(Query::all(Position::class, Velocity::class, Query::not(Frozen::class))))
+		, $cases['all_common'][1], 1
 	];
-	$cases['all_after_mutation'] = [function() use ($registry, $queries): int {
-		$registry->add(1, new Marker);
-		$registry->remove(1, Marker::class);
-		return fingerprint($registry->query($queries['all_common']));
-	}
-	, $cases['all_common'][1], 1
+
+	$cases['all_after_mutation'] = [
+		function() use ($registry, $queries): int {
+			$registry->add(1, new Marker);
+			$registry->remove(1, Marker::class);
+
+			return fingerprint($registry->query($queries['all_common']));
+		}
+		, $cases['all_common'][1], 1
 	];
-	$cases['nested_after_mutation'] = [function() use ($registry, $queries): int {
-		$registry->add(1, new Marker);
-		$registry->remove(1, Marker::class);
-		return fingerprint($registry->query($queries['nested']));
-	}
-	, $cases['nested'][1], 1
+
+	$cases['nested_after_mutation'] = [
+		function() use ($registry, $queries): int {
+			$registry->add(1, new Marker);
+			$registry->remove(1, Marker::class);
+
+			return fingerprint($registry->query($queries['nested']));
+		}
+		, $cases['nested'][1], 1
 	];
 
 	foreach(['get_exact' => Position::class, 'get_interface' => Located::class] as $name => $type)
 	{
-		$cases[$name] = [function() use ($registry, $size, $type): int {
+		$cases[$name] = [
+			function() use ($registry, $size, $type): int {
+				$found = 0;
+
+				for($id = 1; $id <= $size; $id++)
+				{
+					$found += $registry->get($id, $type) instanceof Position ? 1 : 0;
+				}
+
+				return $found;
+			}
+			, $size, $size
+		];
+	}
+
+	$cases['add_remove_1000'] = [
+		function() use ($registry): int {
 			$found = 0;
 
-			for($id = 1; $id <= $size; $id++)
+			for($id = 1; $id <= 1000; $id++)
 			{
-				$found += $registry->get($id, $type) instanceof Position ? 1 : 0;
+				$registry->add($id, new Marker);
+				$found += $registry->has($id, Marker::class) ? 1 : 0;
+				$registry->remove($id, Marker::class);
 			}
 
 			return $found;
 		}
-		, $size, $size
-		];
-	}
-
-	$cases['add_remove_1000'] = [function() use ($registry): int {
-		$found = 0;
-
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->add($id, new Marker);
-			$found += $registry->has($id, Marker::class) ? 1 : 0;
-			$registry->remove($id, Marker::class);
-		}
-
-		return $found;
-	}
-	, 1000, 1000
+		, 1000, 1000
 	];
-	$cases['replace_1000'] = [function() use ($registry): int {
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->add($id, new Position);
-		}
 
-		return count($registry->query(Position::class));
-	}
-	, $size, 1000
+	$cases['replace_1000'] = [
+		function() use ($registry): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->add($id, new Position);
+			}
+
+			return count($registry->query(Position::class));
+		}
+		, $size, 1000
 	];
-	$cases['create_destroy_1000'] = [function(): int {
-		$registry = scene(1000);
 
-		for($id = 1; $id <= 1000; $id++)
-		{
-			$registry->destroy($id);
+	$cases['create_destroy_1000'] = [
+		function(): int {
+			$registry = scene(1000);
+
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->destroy($id);
+			}
+
+			return count($registry->query(Query::all()));
 		}
-
-		return count($registry->query(Query::all()));
-	}
-	, 0, 1000
+		, 0, 1000
 	];
 
 	$scheduler = new Scheduler($registry);
@@ -289,34 +301,25 @@ function benchmark(array $options): array
 
 		foreach($registry->query($queries['all_common']) as $id)
 		{
-			$registry->get(
-				$id
-				, Position::class
-			)->x += $registry->get(
-				$id
-				, Velocity::class
-			)->x * $dt;
+			$registry->get($id, Position::class)->x += $registry->get($id, Velocity::class)->x * $dt;
 			$moved++;
 		}
 	});
 
-	$cases['system_update'] = [function() use ($scheduler, &$moved): int {
-		$scheduler->update(1 / 60);
-		return $moved;
-	}
-	, $counts['all_common'], 1
+	$cases['system_update'] = [
+		function() use ($scheduler, &$moved): int {
+			$scheduler->update(1 / 60);
+
+			return $moved;
+		}
+		, $counts['all_common'], 1
 	];
 
 	$results = [];
 
 	foreach($cases as $name => [$run, $expected, $units])
 	{
-		$results[$name] = measure(
-			$run
-			, $expected
-			, $iterations
-			, $samples
-		) + ['units_per_call' => $units];
+		$results[$name] = measure($run, $expected, $iterations, $samples) + ['units_per_call' => $units];
 	}
 
 	// Report retained query storage separately from entity/component storage.
@@ -329,8 +332,13 @@ function benchmark(array $options): array
 		$registry->query($query);
 	}
 
-	return ['php' => PHP_VERSION, 'int_bytes' => PHP_INT_SIZE, 'sapi' => PHP_SAPI
-		, 'jit' => ini_get('opcache.jit'), 'entities' => $size, 'samples' => $samples
+	return [
+		'php' => PHP_VERSION
+		, 'int_bytes' => PHP_INT_SIZE
+		, 'sapi' => PHP_SAPI
+		, 'jit' => ini_get('opcache.jit')
+		, 'entities' => $size
+		, 'samples' => $samples
 		, 'registry_bytes' => $before ? $resident : null
 		, 'query_cache_bytes' => $before ? memory_get_usage() - $before : null
 		, 'results' => $results
@@ -347,5 +355,5 @@ foreach(array_slice($argv ?? [], 1) as $argument)
 	}
 }
 
-require ($benchmarkOptions['engine-root'] ?? dirname(__DIR__)).'/autoload.php';
-echo json_encode(benchmark($benchmarkOptions), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)."\n";
+require ($benchmarkOptions['engine-root'] ?? dirname(__DIR__)) . '/autoload.php';
+echo json_encode(benchmark($benchmarkOptions), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";

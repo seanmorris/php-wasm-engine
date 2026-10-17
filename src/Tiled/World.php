@@ -74,12 +74,9 @@ final class World
 			{
 				foreach(['x','y','width','height'] as $key)
 				{
-					if(!is_numeric($entry['bounds'][$key] ?? null) || !is_finite(
-						(float)$entry['bounds'][$key]
-					)){
-						throw new \UnexpectedValueException(
-							'Local map bounds must be finite numbers'
-						);
+					if(!is_numeric($entry['bounds'][$key] ?? null) || !is_finite((float)$entry['bounds'][$key]))
+					{
+						throw new \UnexpectedValueException('Local map bounds must be finite numbers');
 					}
 				}
 
@@ -110,8 +107,7 @@ final class World
 	 * @return array<int,array<string,mixed>> Original manifest entries keyed by their manifest
 	 * index; map contents remain unloaded.
 	 */
-	public function entries(float $x, float $y, float $width, float $height, float $margin = 0):
-	array
+	public function entries(float $x, float $y, float $width, float $height, float $margin = 0): array
 	{
 		foreach([$x,$y,$width,$height,$margin] as $value)
 		{
@@ -123,9 +119,7 @@ final class World
 
 		if($width < 0 || $height < 0 || $margin < 0)
 		{
-			throw new \InvalidArgumentException(
-				'World query dimensions and margin must be nonnegative'
-			);
+			throw new \InvalidArgumentException('World query dimensions and margin must be nonnegative');
 		}
 
 		$result = [];
@@ -155,6 +149,7 @@ final class World
 		$map = $this->loader->map(Assets::relative($this->path, $entry['fileName']));
 		$map->x = (float)$entry['x'];
 		$map->y = (float)$entry['y'];
+
 		return $map;
 	}
 
@@ -168,8 +163,7 @@ final class World
 	 * @param float $margin Nonnegative expansion on every side in pixels.
 	 * @return list<TileMap> Intersecting maps in manifest painter order.
 	 */
-	public function visible(float $x, float $y, float $width, float $height, float $margin = 0):
-	array
+	public function visible(float $x, float $y, float $width, float $height, float $margin = 0): array
 	{
 		return array_values(array_map(
 			/**

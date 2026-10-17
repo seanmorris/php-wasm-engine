@@ -24,15 +24,17 @@ final class WorldStream
 	 * @param float $retainMargin Eviction margin in pixels, at least as large as loadMargin.
 	 * @return void Creates an empty streaming state; no files are requested until update.
 	 */
-	public function __construct(public World $world, ?callable $request = null, ?callable $release =
-		null, public float $loadMargin = 256, public float $retainMargin = 768
+	public function __construct(
+		public World $world
+		, ?callable $request = null
+		, ?callable $release = null
+		, public float $loadMargin = 256
+		, public float $retainMargin = 768
 	){
 		if(!is_finite($loadMargin) || !is_finite($retainMargin) || $loadMargin < 0
 			|| $retainMargin < $loadMargin
 		){
-			throw new \InvalidArgumentException(
-				'Retention margin must be at least the nonnegative load margin'
-			);
+			throw new \InvalidArgumentException('Retention margin must be at least the nonnegative load margin');
 		}
 
 		$this->request = $request ??
@@ -45,6 +47,7 @@ final class WorldStream
 			 * @return bool Always true for the synchronous filesystem fallback.
 			 */
 			static fn($path, $retry = false) => true;
+
 		$this->release = $release;
 	}
 
@@ -71,10 +74,13 @@ final class WorldStream
 		foreach($near as $order => $entry)
 		{
 			$path = Assets::relative($this->world->path, $entry['fileName']);
-			$this->states[$path] ??= ['entry' => $entry,'order' => $order,'files' => []
-			, 'map' =>
-				null
-				, 'ready' => false,'failed' => null
+			$this->states[$path] ??= [
+				'entry' => $entry
+				, 'order' => $order
+				, 'files' => []
+				, 'map' => null
+				, 'ready' => false
+				, 'failed' => null
 			];
 		}
 
@@ -142,16 +148,18 @@ final class WorldStream
 		if($result === true)
 		{
 			$state['failed'] = null;
+
 			return true;
 		}
 
 		if($result === false)
 		{
 			$state['failed'] = null;
+
 			return false;
 		}
 
-		throw new \RuntimeException($path.': '.(string)$result);
+		throw new \RuntimeException($path . ': ' . (string)$result);
 	}
 
 	/**
@@ -240,8 +248,9 @@ final class WorldStream
 	{
 		$states = $this->states;
 
-		uasort($states,
-			/**
+		uasort(
+			$states
+			, /**
 			 * Order streaming states by their original world manifest position.
 			 *
 			 * @param array<string,mixed> $a First map lifecycle record with an order field.
@@ -250,6 +259,7 @@ final class WorldStream
 			 */
 			fn($a, $b) => $a['order'] <=> $b['order']
 		);
+
 		$maps = [];
 
 		foreach($states as $path => $state)
@@ -270,8 +280,9 @@ final class WorldStream
 	 */
 	public function pending(): array
 	{
-		return array_keys(array_filter($this->states,
-			/**
+		return array_keys(array_filter(
+			$this->states
+			, /**
 			 * Identify a tracked map that is not ready for activation.
 			 *
 			 * @param array<string,mixed> $state Map lifecycle record containing its ready flag.
@@ -291,8 +302,7 @@ final class WorldStream
 	 * @param float $margin Nonnegative expansion on every side in pixels.
 	 * @return list<TileMap> Ready maps in manifest painter order.
 	 */
-	public function visible(float $x, float $y, float $width, float $height, float $margin = 0):
-	array
+	public function visible(float $x, float $y, float $width, float $height, float $margin = 0): array
 	{
 		$maps = [];
 
@@ -320,8 +330,7 @@ final class WorldStream
 	 * @return bool True when all intersecting maps are loaded; space outside the manifest also
 	 * counts as ready.
 	 */
-	public function isReady(float $x, float $y, float $width, float $height, float $margin = 0):
-	bool
+	public function isReady(float $x, float $y, float $width, float $height, float $margin = 0): bool
 	{
 		foreach($this->world->entries($x, $y, $width, $height, $margin) as $entry)
 		{
@@ -343,10 +352,7 @@ final class WorldStream
 	 */
 	public function retry(string $fileName): void
 	{
-		$path = isset($this->states[$fileName])?$fileName:Assets::relative(
-			$this->world->path
-			, $fileName
-		);
+		$path = isset($this->states[$fileName])?$fileName:Assets::relative($this->world->path, $fileName);
 
 		if(!isset($this->errors[$path]))
 		{

@@ -67,7 +67,7 @@ test('ECS snapshots remain correct when many query descriptions exceed cache cap
 
 	for($i = 0; $i < 100; $i++)
 	{
-		$query = Query::all(EcsBase::class, Query::not('MissingEcsComponent'.$i));
+		$query = Query::all(EcsBase::class, Query::not('MissingEcsComponent' . $i));
 		check($r->query($query) === $ids);
 	}
 
@@ -131,7 +131,8 @@ test('ECS lifecycle listeners see fresh queries during replacement and destructi
 	foreach(['added', 'removed'] as $event)
 	{
 		$r->on($event, function($registry, $entity, $component) use (&$events, $query, $event) {
-			$events[] = [$event, get_class($component), $registry->query($query)
+			$events[] = [
+				$event, get_class($component), $registry->query($query)
 				, $registry->query(EcsBase::class), $registry->alive($entity)
 			];
 		});
@@ -141,18 +142,22 @@ test('ECS lifecycle listeners see fresh queries during replacement and destructi
 	$r->destroy($id);
 
 	check(
-		$events === [['removed', EcsBase::class, [$id], [], true]
-		, ['added'
-		, EcsBase::class
-		, [$id]
-			, [$id], true
-		]
-		, ['removed', EcsOther::class, [$id], [$id], true]
-		, ['removed'
-			, EcsBase::class, [], [], true
-		]
+		$events === [
+			['removed', EcsBase::class, [$id], [], true]
+			, [
+				'added'
+				, EcsBase::class
+				, [$id]
+				, [$id], true
+			]
+			, ['removed', EcsOther::class, [$id], [$id], true]
+			, [
+				'removed'
+				, EcsBase::class, [], [], true
+			]
 		]
 	);
+
 	check($r->query(Query::all()) === [] && $r->query($query) === []);
 });
 
@@ -243,23 +248,19 @@ function ecsReferenceMatch(array $components, $query): bool
 	};
 }
 
-test('ECS nested boolean queries agree with object membership through structural churn'
+test(
+	'ECS nested boolean queries agree with object membership through structural churn'
 	, function() {
 		$r = new Registry;
 		$model = [];
 		$types = [EcsBase::class, EcsChild::class, EcsSibling::class, EcsOther::class];
 
-		$queries = [Query::all(), Query::any(), Query::not()
-		, Query::not(
-			EcsBase::class
-			, EcsOther::class
-		)
+		$queries = [
+			Query::all(), Query::any(), Query::not()
+			, Query::not(EcsBase::class, EcsOther::class)
 			, Query::all(EcsTagged::class, Query::not(EcsOther::class))
 			, Query::any(Query::all(EcsTagged::class, EcsOther::class), Query::not(EcsBase::class))
-			, Query::not(
-				Query::any(EcsOther::class, EcsSibling::class)
-				, Query::not(EcsTagged::class)
-			)
+			, Query::not(Query::any(EcsOther::class, EcsSibling::class), Query::not(EcsTagged::class))
 			, Query::all(Query::not(), Query::any(EcsBase::class, EcsSibling::class))
 		];
 
@@ -299,9 +300,7 @@ test('ECS nested boolean queries agree with object membership through structural
 
 			foreach($queries as $query)
 			{
-				$expected = array_keys(
-					array_filter($model, fn($parts) => ecsReferenceMatch($parts, $query))
-				);
+				$expected = array_keys(array_filter($model, fn($parts) => ecsReferenceMatch($parts, $query)));
 				$actual = $r->query($query);
 				sort($actual);
 				check($actual === $expected, "Query differs from object membership at step $step");

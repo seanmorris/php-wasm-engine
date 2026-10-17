@@ -17,8 +17,14 @@ final class Hit
 	 * @param int|null $shape Removable terrain handle, or null for permanent geometry.
 	 * @return void Stores the contact data without modifying terrain or a body.
 	 */
-	public function __construct(public float $t, public float $x, public float $y, public float $nx
-		, public float $ny, public bool $oneWay = false, public ?int $shape = null
+	public function __construct(
+		public float $t
+		, public float $x
+		, public float $y
+		, public float $nx
+		, public float $ny
+		, public bool $oneWay = false
+		, public ?int $shape = null
 	){
 	}
 }

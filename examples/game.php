@@ -1,14 +1,14 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__).'/autoload.php';
-require_once __DIR__.'/breakables.php';
-require_once __DIR__.'/DemoLevel.php';
-require_once __DIR__.'/DemoGame.php';
-require_once __DIR__.'/DemoDebugOverlay.php';
-require_once __DIR__.'/menu.php';
-require_once __DIR__.'/cards.php';
-require_once __DIR__.'/DemoBackdrop.php';
-require_once __DIR__.'/DemoStartup.php';
+require_once dirname(__DIR__) . '/autoload.php';
+require_once __DIR__ . '/breakables.php';
+require_once __DIR__ . '/DemoLevel.php';
+require_once __DIR__ . '/DemoGame.php';
+require_once __DIR__ . '/DemoDebugOverlay.php';
+require_once __DIR__ . '/menu.php';
+require_once __DIR__ . '/cards.php';
+require_once __DIR__ . '/DemoBackdrop.php';
+require_once __DIR__ . '/DemoStartup.php';
 
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Physics\Body;
@@ -26,6 +26,7 @@ $entity = $engine->entities->create(
 	$body
 	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
 );
+
 $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $entity);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);

@@ -37,6 +37,7 @@ final class PauseMenu
 			static fn(string $text): bool => function_exists('SDL_SetClipboardText')
 				&& SDL_SetClipboardText($text) === 0
 		);
+
 		$engine->setInputHandler([$this, 'update']);
 	}
 
@@ -67,13 +68,12 @@ final class PauseMenu
 			, $frame['events']
 			, $this->renderer->regions
 		);
+
 		$engine->userPaused = $this->menu->isOpen;
 
-		$engine->input->setTextInput(
-			$this->menu->editor !== null && $frame['focused']
-			, $this->renderer->editorRect
-		);
+		$engine->input->setTextInput($this->menu->editor !== null && $frame['focused'], $this->renderer->editorRect);
 		$this->renderer->font->theme = $this->theme === 'auto' ? $frame['theme'] : $this->theme;
+
 		return $captured;
 	}
 
@@ -84,12 +84,7 @@ final class PauseMenu
 	 */
 	public function render(): void
 	{
-		$this->renderer->render(
-			$this->menu
-			, $this->engine->device->width
-			, $this->engine->device->height
-			, $this->time
-		);
+		$this->renderer->render($this->menu, $this->engine->device->width, $this->engine->device->height, $this->time);
 	}
 
 	/**

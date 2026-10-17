@@ -15,8 +15,11 @@ final class Projection
 	 * zero for infinite maps.
 	 * @return void Validates the supported orientation and positive tile dimensions.
 	 */
-	public function __construct(public string $orientation, public int $tileWidth
-		, public int $tileHeight, public int $mapHeight = 0
+	public function __construct(
+		public string $orientation
+		, public int $tileWidth
+		, public int $tileHeight
+		, public int $mapHeight = 0
 	){
 		if(!in_array($orientation, ['orthogonal','isometric'], true))
 		{
@@ -38,13 +41,15 @@ final class Projection
 	 */
 	public function project(float $x, float $y): array
 	{
-		return $this->orientation === 'isometric' ? [($x - $y + $this->mapHeight) * $this
-			->tileWidth / 2
-			, ($x + $y) * $this->tileHeight / 2
-		] : [$x * $this->tileWidth
-			, $y * $this
-			->tileHeight
-		];
+		return $this->orientation === 'isometric'
+			? [
+				($x - $y + $this->mapHeight) * $this->tileWidth / 2
+				, ($x + $y) * $this->tileHeight / 2
+			]
+			: [
+				$x * $this->tileWidth
+				, $y * $this->tileHeight
+			];
 	}
 
 	/**
@@ -63,6 +68,7 @@ final class Projection
 
 		$x = $x / ($this->tileWidth / 2) - $this->mapHeight;
 		$y /= $this->tileHeight / 2;
+
 		return [($x + $y) / 2,($y - $x) / 2];
 	}
 }

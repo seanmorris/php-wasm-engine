@@ -1,34 +1,41 @@
 <?php
-require dirname(__DIR__).'/autoload.php';
+require dirname(__DIR__) . '/autoload.php';
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Render\
 {
 	Device,Camera,MapRenderer,Sprite,SpriteRenderer
 };
 
-$image = dirname(__DIR__).'/examples/assets/test.png';
-$set = ['firstgid' => 1
-, 'tilewidth' => 16
-, 'tileheight' => 16
-, 'columns' => 1
-, 'tilecount' => 1
+$image = dirname(__DIR__) . '/examples/assets/test.png';
+$set = [
+	'firstgid' => 1
+	, 'tilewidth' => 16
+	, 'tileheight' => 16
+	, 'columns' => 1
+	, 'tilecount' => 1
 	, 'image' => $image
 ];
+
 $device = new Device(384, 192);
 $camera = new Camera(-48, -16, 384, 192);
-$data = ['orientation' => 'isometric'
-, 'width' => 34
-, 'height' => 2
-, 'tilewidth' => 16
-, 'tileheight' =>
-	8
-	, 'tilesets' => [$set]
-	, 'layers' => [['id' => 1
-	, 'type' => 'tilelayer'
+$data = [
+	'orientation' => 'isometric'
 	, 'width' => 34
 	, 'height' => 2
-	, 'data' => array_fill(0, 68, 1)]]
+	, 'tilewidth' => 16
+	, 'tileheight' => 8
+	, 'tilesets' => [$set]
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'type' => 'tilelayer'
+			, 'width' => 34
+			, 'height' => 2
+			, 'data' => array_fill(0, 68, 1)
+		]
+	]
 ];
+
 file_put_contents('/iso-test.tmj', json_encode($data));
 $map = (new Loader)->map('/iso-test.tmj');
 $renderer = new MapRenderer($map);
@@ -82,19 +89,32 @@ $isoExact = $expected === $actual;
 $isoStats = $renderer->stats;
 $renderer->close();
 
-$data = ['orientation' => 'orthogonal'
-, 'infinite' => true
-, 'width' => 0
-, 'height' => 0
-, 'tilewidth' =>
-	16
-	, 'tileheight' => 16,'tilesets' => [$set]
-	, 'layers' => [['id' => 1
-	, 'type' => 'tilelayer'
-	, 'chunks' => [['x' => -10000,'y' => -2,'width' => 1,'height' => 1,'data' => [1]]
-	, ['x' => 10000
-	, 'y' => 0,'width' => 1,'height' => 1,'data' => [1]]]]]
+$data = [
+	'orientation' => 'orthogonal'
+	, 'infinite' => true
+	, 'width' => 0
+	, 'height' => 0
+	, 'tilewidth' => 16
+	, 'tileheight' => 16
+	, 'tilesets' => [$set]
+	, 'layers' => [
+		[
+			'id' => 1
+			, 'type' => 'tilelayer'
+			, 'chunks' => [
+				['x' => -10000,'y' => -2,'width' => 1,'height' => 1,'data' => [1]]
+				, [
+					'x' => 10000
+					, 'y' => 0
+					, 'width' => 1
+					, 'height' => 1
+					, 'data' => [1]
+				]
+			]
+		]
+	]
 ];
+
 file_put_contents('/sparse-test.tmj', json_encode($data));
 $map = (new Loader)->map('/sparse-test.tmj');
 $renderer = new MapRenderer($map);

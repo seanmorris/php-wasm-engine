@@ -102,23 +102,20 @@ final class DemoDebugOverlay
 
 		$mode = ((int)floor(($body->angle + M_PI / 4) / (M_PI / 2)) % 4 + 4) % 4;
 		$surface = ['Floor (0)', 'L-wall (1)', 'Ceiling (2)', 'R-wall (3)'][$mode];
-		$state = $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground'
-			: 'air'
-		));
+		$state = $body->ability ?: ($body->rolling ? 'rolling' : ($body->grounded ? 'ground' : 'air'));
 
 		return [
-			'Player' => $body->profile, 'Grounded' => $body->grounded ? 'Yes' : 'No'
+			'Player' => $body->profile
+			, 'Grounded' => $body->grounded ? 'Yes' : 'No'
 			, 'Surface' => $body->grounded ? $surface : 'Air'
-			, 'X px' => sprintf('%.3f', $body->x), 'Y px' => sprintf('%.3f', $body->y)
+			, 'X px' => sprintf('%.3f', $body->x)
+			, 'Y px' => sprintf('%.3f', $body->y)
 			, 'Collision layer' => (string)$body->collisionLayer
 			, 'Gnd px/s' => sprintf('%.3f', $body->groundSpeed)
 			, 'X px/s' => sprintf('%.3f', $body->vx)
 			, 'Y px/s' => sprintf('%.3f', $body->vy)
 			, 'Gnd rad' => sprintf('%.3f', $body->angle)
-			, 'Air rad' => $body->vx || $body->vy ? sprintf(
-				'%.3f'
-				, atan2($body->vy, $body->vx)
-			) : '-'
+			, 'Air rad' => $body->vx || $body->vy ? sprintf('%.3f', atan2($body->vy, $body->vx)) : '-'
 			, 'State' => $state
 		];
 	}
@@ -174,7 +171,9 @@ final class DemoDebugOverlay
 		$this->terrain = $terrain;
 		$this->previousCasts = $total;
 
-		$this->snapshot = ['enabled' => $this->enabled, 'showFps' => $this->showFps
+		$this->snapshot = [
+			'enabled' => $this->enabled
+			, 'showFps' => $this->showFps
 			, 'visible' => $visible && !$this->closed
 			, 'frame' => $this->frame
 			, 'fps' => $this->fps
@@ -187,6 +186,7 @@ final class DemoDebugOverlay
 		if(!$visible || $this->closed || (!$this->enabled && !$this->showFps))
 		{
 			$this->cache = [];
+
 			return;
 		}
 
@@ -198,7 +198,7 @@ final class DemoDebugOverlay
 
 		if($this->enabled)
 		{
-			$key = $game->scene.':'.$game->body->profile.':'.(int)$game->engine->userPaused;
+			$key = $game->scene . ':' . $game->body->profile . ':' . (int)$game->engine->userPaused;
 
 			if($this->refresh >= .1 || $this->rows === [] || $this->sceneKey !== $key)
 			{
@@ -232,15 +232,7 @@ final class DemoDebugOverlay
 
 				array_push(
 					$batch
-					, ...$this->text(
-						$label
-						, $x + $pad
-						, $y + $pad
-						, $scale
-						, 132 * $scale
-						, 'left'
-						, [.7, .8, .9, 1]
-					)
+					, ...$this->text($label, $x + $pad, $y + $pad, $scale, 132 * $scale, 'left', [.7, .8, .9, 1])
 				);
 
 				array_push(
@@ -260,28 +252,23 @@ final class DemoDebugOverlay
 
 		if($this->showFps)
 		{
-			$text = $this->fps === null ? 'FPS -- / -- MS'
+			$text = $this->fps === null
+				? 'FPS -- / -- MS'
 				: sprintf('FPS %.0f / %.2f MS', $this->fps, $this->frameMilliseconds);
+
 			$y = $height - ($this->font->lineHeight * $scale + 3 * $pad);
 			$meterWidth = 224 * $scale;
-			$boxes[] = [$pad
-			, $y
-			, $meterWidth
-			, $this->font->lineHeight * $scale + 2 * $pad
+			$boxes[] = [
+				$pad
+				, $y
+				, $meterWidth
+				, $this->font->lineHeight * $scale + 2 * $pad
 				, .025, .035, .065, .84
 			];
 
 			array_push(
 				$batch
-				, ...$this->text(
-					$text
-					, 2 * $pad
-					, $y + $pad
-					, $scale
-					, $meterWidth - 2 * $pad
-					, 'left'
-					, [1, 1, 1, 1]
-				)
+				, ...$this->text($text, 2 * $pad, $y + $pad, $scale, $meterWidth - 2 * $pad, 'left', [1, 1, 1, 1])
 			);
 		}
 
@@ -306,10 +293,15 @@ final class DemoDebugOverlay
 	 * @param array{float,float,float,float} $color Glyph tint in RGBA order.
 	 * @return list<\PhpWasmEngine\Render\Sprite> Cached sprites owned by this overlay.
 	 */
-	private function text(string $text, float $x, float $y, float $scale, float $width,
-		string $align, array $color
-	): array
-	{
+	private function text(
+		string $text
+		, float $x
+		, float $y
+		, float $scale
+		, float $width
+		, string $align
+		, array $color
+	): array {
 		$key = serialize([$text, $x, $y, $scale, $width, $align, $color]);
 		$glyphs = $this->cache[$key] ?? null;
 
@@ -326,6 +318,7 @@ final class DemoDebugOverlay
 		}
 
 		$this->nextCache[$key] = $glyphs;
+
 		return $glyphs;
 	}
 

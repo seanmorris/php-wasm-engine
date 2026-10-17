@@ -9,7 +9,7 @@ use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Physics\Body;
 
 test('sprite sheets expose Tiled classes as named animations', function() {
-	$sheet = new SpriteSheet(new Loader, dirname(__DIR__).'/examples/assets/tiles.tsj');
+	$sheet = new SpriteSheet(new Loader, dirname(__DIR__) . '/examples/assets/tiles.tsj');
 	check($sheet->sprite('runner')->gid === 7);
 	check($sheet->map->animatedGid(5, 180) === 6);
 	rejects(fn() => $sheet->sprite('missing'));
@@ -17,7 +17,7 @@ test('sprite sheets expose Tiled classes as named animations', function() {
 
 test('object factories produce PHP components at world positions', function() {
 	$loader = new Loader;
-	$map = $loader->map(dirname(__DIR__).'/examples/assets/platformer.tmj');
+	$map = $loader->map(dirname(__DIR__) . '/examples/assets/platformer.tmj');
 	$map->x = -100;
 	$spawner = new ObjectSpawner;
 	$spawner->register('Player', fn($object) => [new Body($object['x'], $object['y'])]);
@@ -29,12 +29,7 @@ test('object factories produce PHP components at world positions', function() {
 test('asset paths normalize parent segments and preserve URL authorities', function() {
 	check(Assets::relative('/assets/maps/a.tmj', '../tiles/b.tsj') === '/assets/tiles/b.tsj');
 
-	check(
-		Assets::relative(
-			'https://example.test/maps/a.tmj'
-			, '../tiles/b.tsj'
-		) === 'https://example.test/tiles/b.tsj'
-	);
+	check(Assets::relative('https://example.test/maps/a.tmj', '../tiles/b.tsj') === 'https://example.test/tiles/b.tsj');
 });
 
 test('asset read failures can be retried and unsupported formats fail explicitly', function() {

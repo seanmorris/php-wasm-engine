@@ -34,8 +34,11 @@ final class MapTerrain
 					'/^Collision\s*(\d+)$/i'
 					, $layer->name
 					, $match
-				)?$match[1]:0
+				)
+					? $match[1]
+					: 0
 				));
+
 				$ox = $map->x + $layer->offsetX;
 				$oy = $map->y + $layer->offsetY;
 
@@ -150,7 +153,8 @@ final class MapTerrain
 						 * @param array{0:float,1:float} $p Vertex before world translation.
 						 * @return array{0:float,1:float} World-space X and Y in pixels.
 						 */
-						fn($p) => [$p[0] + $ox,$p[1] + $oy], $points
+						fn($p) => [$p[0] + $ox,$p[1] + $oy]
+						, $points
 					);
 
 					if($switch)
@@ -197,10 +201,12 @@ final class MapTerrain
 
 		$w = $object['width'] ?? 0;
 		$h = $object['height'] ?? 0;
-		$points = $object['polygon'] ?? $object['polyline'] ?? [['x' => 0,'y' => 0]
-		, ['x' => $w
-			, 'y' => 0
-		]
+		$points = $object['polygon'] ?? $object['polyline'] ?? [
+			['x' => 0,'y' => 0]
+			, [
+				'x' => $w
+				, 'y' => 0
+			]
 			, ['x' => $w,'y' => $h],['x' => 0,'y' => $h]
 		];
 
@@ -210,10 +216,9 @@ final class MapTerrain
 
 			for($i = 0; $i < 24; $i++)
 			{
-				$points[] = ['x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
-				, 'y' => $h / 2 + sin(
-					$i * M_PI / 12
-				) * $h / 2
+				$points[] = [
+					'x' => $w / 2 + cos($i * M_PI / 12) * $w / 2
+					, 'y' => $h / 2 + sin($i * M_PI / 12) * $h / 2
 				];
 			}
 		}
@@ -229,10 +234,11 @@ final class MapTerrain
 			 * @param array{x:float|int,y:float|int} $p Local unrotated shape vertex.
 			 * @return array{0:float,1:float} Vertex in the containing layer's coordinate space.
 			 */
-			fn($p) => [($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s
-			, ($object['y'] ?? 0) + $p[
+			fn($p) => [
+				($object['x'] ?? 0) + $p['x'] * $c - $p['y'] * $s
+				, ($object['y'] ?? 0) + $p[
 				'x'
-			] * $s + $p['y'] * $c
+				] * $s + $p['y'] * $c
 			]
 			, $points
 		);

@@ -25,9 +25,7 @@ final class Gid
 	 */
 	public static function from($raw): self
 	{
-		if(!is_numeric($raw) || !is_finite((float)$raw) || $raw < 0 || $raw > 4294967295.0 || floor(
-			(float)$raw
-		) != $raw
+		if(!is_numeric($raw) || !is_finite((float)$raw) || $raw < 0 || $raw > 4294967295.0 || floor((float)$raw) != $raw
 		){
 			throw new \InvalidArgumentException('GID must be uint32');
 		}
@@ -65,7 +63,7 @@ final class Gid
 	 */
 	public function bytes(): string
 	{
-		return chr($this->id & 255).chr(($this->id >> 8) & 255).chr(($this->id >> 16) & 255).chr(
+		return chr($this->id & 255) . chr(($this->id >> 8) & 255) . chr(($this->id >> 16) & 255) . chr(
 			(($this->id >> 24) & 15) | ($this->flags << 4)
 		);
 	}

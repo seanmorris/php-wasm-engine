@@ -22,10 +22,13 @@ final class Sequences
 	 * @param bool $strict Whether an unrelated fresh press cancels partial matches.
 	 * @return void Installs validated steps and clears progress for this name.
 	 */
-	public function add(string $name, array $steps, float $maxGap = .75,
-		?float $maxDuration = null, bool $strict = true
-	): void
-	{
+	public function add(
+		string $name
+		, array $steps
+		, float $maxGap = .75
+		, ?float $maxDuration = null
+		, bool $strict = true
+	): void {
 		if($name === '' || !$steps || !is_finite($maxGap) || $maxGap <= 0
 			|| ($maxDuration !== null && (!is_finite($maxDuration) || $maxDuration <= 0))
 		){
@@ -58,7 +61,10 @@ final class Sequences
 			throw new \InvalidArgumentException('Sequence controls cannot be empty');
 		}
 
-		return ['button12' => 'up', 'button13' => 'down', 'button14' => 'left'
+		return [
+			'button12' => 'up'
+			, 'button13' => 'down'
+			, 'button14' => 'left'
 			, 'button15' => 'right'
 		][$name] ?? $name;
 	}
@@ -100,9 +106,7 @@ final class Sequences
 		if(!$triggers || !is_finite($minimum) || $minimum < 0
 			|| ($minimum > 0 && $edge !== 'release')
 		){
-			throw new \InvalidArgumentException(
-				'A charge needs a release and nonnegative hold time'
-			);
+			throw new \InvalidArgumentException('A charge needs a release and nonnegative hold time');
 		}
 
 		return ['edge' => $edge, 'triggers' => $triggers, 'held' => $held, 'minHold' => $minimum];
@@ -173,6 +177,7 @@ final class Sequences
 	{
 		$matches = $this->matches;
 		$this->matches = [];
+
 		return $matches;
 	}
 
@@ -191,11 +196,12 @@ final class Sequences
 
 		$relative = strtr(
 			$direction
-			, ['left' => $this->facing === 1 ? 'back' : 'forward'
-			, 'right' => $this
-				->facing === 1 ? 'forward' : 'back'
+			, [
+				'left' => $this->facing === 1 ? 'back' : 'forward'
+				, 'right' => $this->facing === 1 ? 'forward' : 'back'
 			]
 		);
+
 		return array_values(array_unique([$direction, $relative]));
 	}
 
@@ -285,7 +291,7 @@ final class Sequences
 
 		$vertical = isset($next['button12']) ? 'up' : (isset($next['button13']) ? 'down' : '');
 		$horizontal = isset($next['button14']) ? 'left' : (isset($next['button15']) ? 'right' : '');
-		$direction = trim($vertical.'-'.$horizontal, '-') ?: 'neutral';
+		$direction = trim($vertical . '-' . $horizontal, '-') ?: 'neutral';
 		$held = $this->heldTokens($next, $direction);
 		$previous = $this->heldTokens($this->held, $this->direction);
 		$press = [];
@@ -313,9 +319,13 @@ final class Sequences
 			}
 		}
 
-		$event = ['press' => $press, 'release' => array_diff_key($previous, $held)
-			, 'held' => $held, 'since' => $since
+		$event = [
+			'press' => $press
+			, 'release' => array_diff_key($previous, $held)
+			, 'held' => $held
+			, 'since' => $since
 		];
+
 		$this->held = $next;
 		$this->since = array_intersect_key($since, $held);
 		$this->direction = $direction;
@@ -363,9 +373,12 @@ final class Sequences
 				{
 					if(!$completed)
 					{
-						$this->matches[] = ['name' => $name, 'time' => $time
+						$this->matches[] = [
+							'name' => $name
+							, 'time' => $time
 							, 'duration' => $time - $candidate['start']
 						];
+
 						$completed = true;
 					}
 				}

@@ -86,6 +86,7 @@ final class Engine
 		if(($this->document && $this->document->hidden) || !$this->device->ready())
 		{
 			$this->pause();
+
 			return;
 		}
 
@@ -112,6 +113,7 @@ final class Engine
 		if($this->input->quit)
 		{
 			$this->stop();
+
 			return;
 		}
 
@@ -148,8 +150,9 @@ final class Engine
 			$this->controls->reset();
 		}
 
-		$alpha = $this->clock->advance($elapsed,
-			/**
+		$alpha = $this->clock->advance(
+			$elapsed
+			, /**
 			 * Consume buffered input and advance systems for one fixed simulation step.
 			 *
 			 * @param float $dt Fixed simulation interval in seconds.
@@ -176,8 +179,7 @@ final class Engine
 	 * resources after context restoration.
 	 * @return void Starts the frame loop, or leaves an already running loop unchanged.
 	 */
-	public function start(callable $render, ?callable $cleanup = null, ?callable $restore = null):
-	void
+	public function start(callable $render, ?callable $cleanup = null, ?callable $restore = null): void
 	{
 		if($this->running)
 		{
@@ -186,72 +188,70 @@ final class Engine
 
 		if(!function_exists('vrzno_env'))
 		{
-			throw new \RuntimeException(
-				'Browser scheduling requires vrzno; native hosts can call tick()'
-			);
+			throw new \RuntimeException('Browser scheduling requires vrzno; native hosts can call tick()');
 		}
 
 		$this->window = new \Vrzno;
 		$this->cleanup = $cleanup;
 		$this->restore = $restore;
 		$this->document = $this->window->document;
-		$this->visibility =
-			/**
-			 * Suspend timing when document visibility changes.
-			 *
-			 * @return null Marks the next resumed frame to discard elapsed idle time.
-			 */
-			fn() => $this->pause();
+
+		/**
+		 * Suspend timing when document visibility changes.
+		 *
+		 * @return null Marks the next resumed frame to discard elapsed idle time.
+		 */
+		$this->visibility = fn() => $this->pause();
 		$this->document->addEventListener('visibilitychange', $this->visibility);
 		$this->running = true;
 		$this->previous = null;
-		$this->frame =
-			/**
-			 * Run one browser animation frame and schedule its successor.
-			 *
-			 * @param float $now Browser requestAnimationFrame timestamp in milliseconds.
-			 * @return void Stops scheduling when the engine is stopped and pauses recoverable
-			 * context losses.
-			 */
-			function($now) use ($render) {
-				if(!$this->running)
+
+		/**
+		 * Run one browser animation frame and schedule its successor.
+		 *
+		 * @param float $now Browser requestAnimationFrame timestamp in milliseconds.
+		 * @return void Stops scheduling when the engine is stopped and pauses recoverable
+		 * context losses.
+		 */
+		$this->frame = function($now) use ($render) {
+			if(!$this->running)
+			{
+				return;
+			}
+
+			$elapsed = $this->previous === null?0:($now - $this->previous) / 1000;
+			$this->previous = $now;
+
+			try
+			{
+				$this->tick(max(0, $elapsed), $render);
+			}
+			catch(\Throwable $error)
+			{
+				// The GPU can disappear during a draw, before its loss event arrives.
+				if(!$this->device->isLost())
 				{
-					return;
+					$this->stop();
+					throw $error;
 				}
 
-				$elapsed = $this->previous === null?0:($now - $this->previous) / 1000;
-				$this->previous = $now;
+				$this->pause();
+			}
 
-				try
-				{
-					$this->tick(max(0, $elapsed), $render);
-				}
-				catch(\Throwable $error)
-				{
-					// The GPU can disappear during a draw, before its loss event arrives.
-					if(!$this->device->isLost())
-					{
-						$this->stop();
-						throw $error;
-					}
-
-					$this->pause();
-				}
-
-				if($this->running)
-				{
-					$this->raf = $this->window->requestAnimationFrame($this->frame);
-				}
-			};
+			if($this->running)
+			{
+				$this->raf = $this->window->requestAnimationFrame($this->frame);
+			}
+		};
 
 		$this->refresh = vrzno_env('onRefresh');
-		$this->refreshCleanup =
-			/**
-			 * Stop the engine before its owning WASM runtime refreshes.
-			 *
-			 * @return null Releases frame listeners, input, and graphics ownership.
-			 */
-			fn() => $this->stop();
+
+		/**
+		 * Stop the engine before its owning WASM runtime refreshes.
+		 *
+		 * @return null Releases frame listeners, input, and graphics ownership.
+		 */
+		$this->refreshCleanup = fn() => $this->stop();
 
 		if($this->refresh)
 		{
@@ -296,7 +296,8 @@ final class Engine
 			{
 				($this->cleanup)();
 			}
-		} finally
+		}
+		finally
 		{
 			$this->input->close();
 			$this->device->close();

@@ -55,9 +55,7 @@ final class Atlas
 
 					if(!$surface)
 					{
-						throw new \RuntimeException(
-							'Cannot load '.$tile['image'].': ' .SDL_GetError()
-						);
+						throw new \RuntimeException('Cannot load ' . $tile['image'] . ': ' . SDL_GetError());
 					}
 
 					$surfaces[$tile['image']] = $surface;
@@ -77,8 +75,10 @@ final class Atlas
 				 * @param array{0:int,1:int} $s Source image width and height in pixels.
 				 * @return int Padded image area in square pixels.
 				 */
-				fn($s) => ($s[0] + 2) * ($s[1] + 2), $images
+				fn($s) => ($s[0] + 2) * ($s[1] + 2)
+				, $images
 			));
+
 			$this->width = min($max, max(1, (int)ceil(sqrt($area))));
 
 			foreach($images as [$w,$h])
@@ -117,16 +117,7 @@ final class Atlas
 				throw new \RuntimeException('Atlas exceeds GPU height; split the map tilesets');
 			}
 
-			$surface = new \SDL_Surface(
-				0
-				, $this->width
-				, $this->height
-				, 32
-				, 255
-				, 65280
-				, 16711680
-				, -16777216
-			);
+			$surface = new \SDL_Surface(0, $this->width, $this->height, 32, 255, 65280, 16711680, -16777216);
 
 			try
 			{
@@ -157,7 +148,8 @@ final class Atlas
 					, GL_UNSIGNED_BYTE
 					, $surface
 				);
-			} finally
+			}
+			finally
 			{
 				SDL_FreeSurface($surface);
 			}
@@ -184,18 +176,9 @@ final class Atlas
 
 			$this->metadata = self::texture(GL_TEXTURE_2D);
 
-			glTexImage2D(
-				GL_TEXTURE_2D
-				, 0
-				, GL_RGBA32F
-				, $count
-				, 2
-				, 0
-				, GL_RGBA
-				, GL_FLOAT
-				, $rectBytes .$offsetBytes
-			);
-		} catch(\Throwable $error)
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, $count, 2, 0, GL_RGBA, GL_FLOAT, $rectBytes . $offsetBytes);
+		}
+		catch(\Throwable $error)
 		{
 			$this->release();
 			throw $error;
@@ -240,6 +223,7 @@ final class Atlas
 		glTexParameteri($target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glTexParameteri($target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri($target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
 		return $ids[0];
 	}
 
@@ -281,6 +265,7 @@ final class Atlas
 					, GL_FLOAT
 					, pack('f*', ...$this->rects[$frame])
 				);
+
 				$this->frames[$gid] = $frame;
 				$updates++;
 			}

@@ -49,10 +49,7 @@ final class Query
 	{
 		foreach($this->terms as $term)
 		{
-			$match = $term instanceof self?$term->matches($registry, $entity):$registry->has(
-				$entity
-				, $term
-			);
+			$match = $term instanceof self?$term->matches($registry, $entity):$registry->has($entity, $term);
 
 			if($this->operation === 'all' && !$match)
 			{

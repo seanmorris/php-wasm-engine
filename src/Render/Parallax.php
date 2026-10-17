@@ -24,6 +24,7 @@ final class Parallax
 		$oy = $map->y + ($map->data['parallaxoriginy'] ?? 0);
 		$halfX = $camera->width / $camera->zoom / 2;
 		$halfY = $camera->height / $camera->zoom / 2;
+
 		return [
 			$ox + ($camera->x + $halfX - $ox) * $layer->parallaxX - $halfX
 			, $oy + ($camera->y + $halfY - $oy) * $layer->parallaxY - $halfY
@@ -45,10 +46,7 @@ final class Parallax
 			return $layer->image;
 		}
 
-		$time = fmod(
-			max(0, $milliseconds)
-			, array_sum(array_column($layer->imageFrames, 'duration'))
-		);
+		$time = fmod(max(0, $milliseconds), array_sum(array_column($layer->imageFrames, 'duration')));
 
 		foreach($layer->imageFrames as $frame)
 		{
@@ -77,13 +75,14 @@ final class Parallax
 	 * @return array{rect:array{float,float,float,float},uv:array{float,float,float,float}}|null The
 	 * screen x/y/width/height and normalized u/v/width/height, or null for invisible content.
 	 */
-	public static function layout(Layer $layer, TileMap $map, Camera $camera, float $milliseconds =
-		0
+	public static function layout(
+		Layer $layer
+		, TileMap $map
+		, Camera $camera
+		, float $milliseconds = 0
 		, float $stackHeight = 0
-	): ?array
-	{
-		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer
-			->imageHeight <= 0
+	): ?array {
+		if(!$layer->visible || $layer->opacity <= 0 || $layer->imageWidth <= 0 || $layer->imageHeight <= 0
 		){
 			return null;
 		}
@@ -137,12 +136,15 @@ final class Parallax
 			$v -= floor($v);
 		}
 
-		return ['rect' => [$left,$top,$right - $left,$bottom - $top]
-		, 'uv' => [$u,$v
-		, (
-			$right - $left
-		) / $width
-			, ($bottom - $top) / $height
-		]];
+		return [
+			'rect' => [$left,$top,$right - $left,$bottom - $top]
+			, 'uv' => [
+				$u,$v
+				, (
+					$right - $left
+				) / $width
+				, ($bottom - $top) / $height
+			]
+		];
 	}
 }

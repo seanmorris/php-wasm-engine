@@ -125,11 +125,12 @@ final class Gamepads
 
 				if($axis < SDL_CONTROLLER_AXIS_TRIGGERLEFT)
 				{
-					$value = abs($value) <= $this->deadZone?0:($value <=> 0) * (abs($value) - $this
-						->deadZone
-					) / (
-						1 - $this->deadZone
-					);
+					$value = abs($value) <= $this->deadZone
+						? 0
+						: ($value <=> 0) * (abs($value) - $this->deadZone
+						) / (
+							1 - $this->deadZone
+						);
 				}
 				else
 				{
@@ -282,8 +283,13 @@ final class Gamepads
 			SDL_GameControllerClose($handle);
 		}
 
-		$this->handles = $this->axes = $this->buttons = $this->blockedAxes = $this->blockedButtons =
-			[];
+		$this->handles
+		= $this->axes
+		= $this->buttons
+		= $this->blockedAxes
+		= $this->blockedButtons
+		= [];
+
 		SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
 	}
 }
