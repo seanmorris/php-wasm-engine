@@ -57,6 +57,7 @@ export function boot(
 			, 'water-skim-rail'
 			, 'water-loop'
 			, 'gravity'
+			, 'ceiling-curves'
 			, 'badniks', 'grinding', 'loop', 'breakables', 'infinite', 'isometric'
 		].includes(scene)
 		|| !['runner', 'glider', 'flyer'].includes(profile)

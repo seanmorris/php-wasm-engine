@@ -60,7 +60,7 @@ test(
 			, 'water'
 			, 'water-rail'
 			, 'water-skim-rail'
-			, 'water-loop', 'gravity', 'grinding', 'loop'
+			, 'water-loop', 'gravity', 'ceiling-curves', 'grinding', 'loop'
 			, 'infinite', 'isometric', 'world', 'breakables'
 		]) {
 			await change(page, scene);

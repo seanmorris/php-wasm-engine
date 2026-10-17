@@ -150,6 +150,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		, 'water-skim-rail' => 'Surface skim rail'
 		, 'water-loop' => 'Rising water loop'
 		, 'gravity' => 'Gravity switches & springs'
+		, 'ceiling-curves' => 'Curved ceiling springs'
 		, 'badniks' => 'CrabMeat badniks'
 		, 'grinding' => 'Grinding rail'
 		, 'world' => 'Streaming world'

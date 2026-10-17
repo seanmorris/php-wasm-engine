@@ -1119,6 +1119,195 @@ $gravity['layers'][] = [
 ] + $layerDefaults;
 
 jsonAsset('gravity.tmj', $gravity);
+$curveWidth = 72;
+$curveHeight = 96;
+$curvePixelWidth = $curveWidth * 32;
+$curvePixelHeight = $curveHeight * 32;
+$curveRadius = 96.0;
+$curveLead = 200.0;
+$curveCeiling = 220.0;
+$curveStations = [
+	['center' => [1800.0, 2400.0], 'gravity' => [0, 1], 'next' => 'left']
+	, ['center' => [632.0, 2244.0], 'gravity' => [-1, 0], 'next' => 'up']
+	, ['center' => [788.0, 1076.0], 'gravity' => [0, -1], 'next' => 'right']
+	, ['center' => [1956.0, 1232.0], 'gravity' => [1, 0], 'next' => 'down']
+];
+
+/**
+ * Draw the four collision paths used by the rotating-gravity ceiling course.
+ *
+ * @param int $x Image-space horizontal pixel coordinate.
+ * @param int $y Image-space vertical pixel coordinate.
+ * @return array{int,int,int,int} Opaque course pixel or transparent background pixel.
+ */
+$curvePixel = static function(int $x, int $y) use(
+	$curveStations
+	, $curveRadius
+	, $curveLead
+	, $curveCeiling
+): array {
+	$distance = INF;
+
+	foreach($curveStations as $station)
+	{
+		[[$cx, $cy], [$gravityX, $gravityY]] = [$station['center'], $station['gravity']];
+		$dx = $x - $cx;
+		$dy = $y - $cy;
+		$tangentX = $gravityY;
+		$tangentY = -$gravityX;
+		$u = $dx * $tangentX + $dy * $tangentY;
+		$v = $dx * $gravityX + $dy * $gravityY;
+		$wallV = max(0, min($curveLead, $v));
+		$ceilingU = max(-$curveCeiling, min(0, $u));
+		$distance = min($distance, hypot($u - $curveRadius, $v - $wallV), hypot($u - $ceilingU, $v + $curveRadius));
+
+		if($u >= 0 && $v <= 0)
+		{
+			$distance = min($distance, abs(hypot($u, $v) - $curveRadius));
+		}
+	}
+
+	if($distance <= 3)
+	{
+		return [105, 212, 157, 255];
+	}
+
+	if($distance <= 14)
+	{
+		return ($x + $y) % 11 === 0 ? [71, 100, 105, 255] : [42, 63, 77, 255];
+	}
+
+	return [0, 0, 0, 0];
+};
+
+png(__DIR__ . '/assets/ceiling-curves.png', $curvePixelWidth, $curvePixelHeight, $curvePixel);
+$ceilingCurves = $base;
+$ceilingCurves['width'] = $curveWidth;
+$ceilingCurves['height'] = $curveHeight;
+$ceilingCurves['layers'] = $background;
+$ceilingCurves['layers'][] = [
+	'id' => 60
+	, 'name' => 'Curved course art'
+	, 'type' => 'imagelayer'
+	, 'image' => 'ceiling-curves.png'
+	, 'imagewidth' => $curvePixelWidth
+	, 'imageheight' => $curvePixelHeight
+	, 'properties' => [['name' => 'collision', 'type' => 'bool', 'value' => false]]
+] + $layerDefaults;
+
+$courseObjects = [];
+$curveFeatures = [];
+
+foreach($curveStations as $index => $station)
+{
+	[[$cx, $cy], [$gravityX, $gravityY]] = [$station['center'], $station['gravity']];
+	$tangentX = $gravityY;
+	$tangentY = -$gravityX;
+
+	/**
+	 * Transform station-local tangent and gravity coordinates into map pixels.
+	 *
+	 * @param float $u Coordinate toward logical right under this station's gravity.
+	 * @param float $v Coordinate in this station's gravity direction.
+	 * @return array{float,float} Map-space X and Y coordinates.
+	 */
+	$curvePoint = static fn(float $u, float $v): array => [
+		$cx + $tangentX * $u + $gravityX * $v
+		, $cy + $tangentY * $u + $gravityY * $v
+	];
+
+	$points = [$curvePoint($curveRadius, $curveLead), $curvePoint($curveRadius, 0)];
+
+	for($segment = 1; $segment <= 24; $segment++)
+	{
+		$angle = $segment / 24 * M_PI_2;
+		$points[] = $curvePoint($curveRadius * cos($angle), -$curveRadius * sin($angle));
+	}
+
+	$points[] = $curvePoint(-$curveCeiling, -$curveRadius);
+
+	$courseObjects[] = [
+		'id' => 500 + $index
+		, 'class' => 'CurvedCeiling'
+		, 'x' => 0
+		, 'y' => 0
+		, 'polyline' => array_map(
+			/**
+			 * Convert a map-space point to Tiled's object-point keys.
+			 *
+			 * @param array{float,float} $point Course surface vertex.
+			 * @return array{x:float,y:float} Tiled polyline vertex.
+			 */
+			fn(array $point): array => ['x' => $point[0], 'y' => $point[1]]
+			, $points
+		)
+		, 'properties' => [['name' => 'solid', 'type' => 'bool', 'value' => true]]
+	];
+
+	[$springX, $springY] = $curvePoint($curveRadius - 18.001, $curveLead);
+	[$switchX, $switchY] = $curvePoint(-150, -$curveRadius);
+
+	$curveFeatures[] = $gravityFeature(
+		601 + $index
+		, 'Spring'
+		, $springX
+		, $springY
+		, 0
+		, [
+			'normalX' => (float)-$gravityX
+			, 'normalY' => (float)-$gravityY
+			, 'power' => 1100.0
+			, 'length' => 48.0
+			, 'spriteGid' => 1
+		]
+	);
+
+	$curveFeatures[] = $gravityFeature(
+		611 + $index
+		, 'GravitySwitch'
+		, $switchX
+		, $switchY
+		, 0
+		, [
+			'normalX' => (float)$gravityX
+			, 'normalY' => (float)$gravityY
+			, 'gravity' => $station['next']
+			, 'length' => 64.0
+			, 'spriteGid' => 1
+		]
+	);
+}
+
+$ceilingCurves['layers'][] = [
+	'id' => 61
+	, 'name' => 'Curved collision paths'
+	, 'type' => 'objectgroup'
+	, 'objects' => $courseObjects
+] + $layerDefaults;
+
+$ceilingCurves['layers'][] = [
+	'id' => 62
+	, 'name' => 'Gravity course features'
+	, 'type' => 'objectgroup'
+	, 'objects' => $curveFeatures
+] + $layerDefaults;
+
+[$curveSpawnX, $curveSpawnY] = [1878.0, 2582.0];
+$ceilingCurves['layers'][] = [
+	'id' => 63
+	, 'name' => 'Spawns'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 1
+			, 'class' => 'Player'
+			, 'x' => $curveSpawnX
+			, 'y' => $curveSpawnY
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('ceiling-curves.tmj', $ceilingCurves);
 $waterProperties = [
 	['name' => 'gravity','type' => 'float','value' => .4]
 	, ['name' => 'drag','type' => 'float','value' => .85]
