@@ -327,7 +327,10 @@ final class Vehicles
 				: null;
 
 			$behavior = $this->behavior($vehicle);
+			$visualAngle = $vehicle->visualAngle;
 			$behavior?->control($vehicle, $input, $combo, $dt);
+			$this->safeVisualAngle($vehicle, $visualAngle);
+
 			$values = ['left' => $input->value('left'), 'right' => $input->value('right'), 0 => $input->value(0)];
 			// Preserve the original button edge even when boarding with jump already held.
 			$previous = $values;
@@ -335,7 +338,9 @@ final class Vehicles
 			$vehicle->drive->set($previous);
 			$vehicle->drive->set($values);
 			$this->move($vehicle, $values, $dt);
+			$visualAngle = $vehicle->visualAngle;
 			$behavior?->updated($vehicle, $combo, $dt);
+			$this->safeVisualAngle($vehicle, $visualAngle);
 
 			if($vehicle->occupant !== null)
 			{
@@ -370,6 +375,30 @@ final class Vehicles
 		$this->previous = [];
 
 		foreach($players as $player) $this->sync($player, $registry->get($player, Body::class));
+	}
+
+	/**
+	 * Keep a presentation-only chassis rotation from sweeping its passenger into terrain.
+	 *
+	 * @param Vehicle $vehicle Occupied vehicle whose behavior may have changed visual pitch.
+	 * @param float $fallback Last accepted visual angle in radians.
+	 * @return void Retains the requested angle when the complete rider pose is clear, otherwise
+	 * restores the previous presentation until the chassis gains room.
+	 */
+	private function safeVisualAngle(Vehicle $vehicle, float $fallback): void
+	{
+		if($vehicle->occupant === null || $vehicle->visualAngle === $fallback) return;
+
+		$rider = $this->registry->get($vehicle->occupant, Body::class);
+		[$x, $y, $angle] = $vehicle->seat($rider);
+		$probe = clone $rider;
+		$probe->angle = $angle;
+		$probe->collisionLayer = $vehicle->body->collisionLayer;
+		$hit = $this->terrain->castBody($probe, $x - $probe->x, $y - $probe->y);
+		$probe->x = $x;
+		$probe->y = $y;
+
+		if($hit !== null || !$this->terrain->canPlace($probe)) $vehicle->visualAngle = $fallback;
 	}
 
 	/**
@@ -660,7 +689,10 @@ final class Vehicles
 		$sprite->x = $vehicle->body->supportX();
 		$sprite->y = $vehicle->body->supportY();
 		[$rotation, $flip] = $this->art[$id] ??= [$sprite->rotation, $sprite->flipX];
-		$sprite->rotation = $rotation + $vehicle->body->angle
+
+		if($vehicle->spriteGid !== null) $sprite->gid = $vehicle->spriteGid;
+
+		$sprite->rotation = $rotation + $vehicle->body->angle + $vehicle->visualAngle
 			+ ($vehicle->pose === 'manual' ? -.16 * $vehicle->body->facing : 0);
 
 		$sprite->flipX = $flip !== ($vehicle->body->facing < 0);
@@ -678,7 +710,8 @@ final class Vehicles
 		foreach($this->vehicles as $id => $vehicle)
 		{
 			$b = $vehicle->body;
-			$result[] = [
+			$behavior = $this->behavior($vehicle);
+			$item = [
 				'entity' => $id
 				, 'sourceId' => $vehicle->sourceId
 				, 'occupant' => $vehicle->occupant
@@ -694,6 +727,25 @@ final class Vehicles
 				, 'pose' => $vehicle->pose
 				, 'lockedIn' => $vehicle->lockedIn
 			];
+
+			if($behavior instanceof Tornado)
+			{
+				$item += [
+					'type' => 'tornado'
+					, 'flying' => $behavior->flying
+					, 'thrusting' => $behavior->thrusting
+					, 'landingGear' => $behavior->landingGear
+					, 'fuel' => $behavior->fuel
+					, 'pitch' => $behavior->pitch
+					, 'crashed' => $behavior->crashed
+				];
+			}
+			else
+			{
+				$item['type'] = $behavior instanceof Skateboard ? 'skateboard' : 'generic';
+			}
+
+			$result[] = $item;
 		}
 
 		return $result;

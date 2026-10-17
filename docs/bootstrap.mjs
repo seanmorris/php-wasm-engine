@@ -51,6 +51,7 @@ export function boot(
 			, 'bridges'
 			, 'grapples'
 			, 'vehicles'
+			, 'tornado'
 			, 'light-dash'
 			, 'water'
 			, 'water-rail'

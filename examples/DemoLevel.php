@@ -196,7 +196,7 @@ final class DemoLevel
 		$map = reset($maps);
 		$this->spawn = $this->playerSpawn($map);
 
-		if($this->id === 'ceiling-curves')
+		if(in_array($this->id, ['ceiling-curves', 'tornado'], true))
 		{
 			$padding = 256.0;
 			$this->resetBounds = [
@@ -471,6 +471,7 @@ final class DemoLevel
 			'world' => [32.0, 0.0],
 			'isometric' => [-160.0, -80.0],
 			'ceiling-curves' => [$this->spawn[0] - 500, $this->spawn[1] - 280],
+			'tornado' => [$this->spawn[0] - 240, $this->spawn[1] - 180],
 			default => [0.0, 0.0]
 		};
 	}

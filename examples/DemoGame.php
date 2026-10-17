@@ -115,7 +115,7 @@ final class DemoGame
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
 	 * @param string $scene Platformer, platforms, bridges, grapples, vehicles, light-dash, water, water-rail,
-	 * water-skim-rail, water-loop, gravity, ceiling-curves, badniks,
+	 * water-skim-rail, water-loop, gravity, ceiling-curves, tornado, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
@@ -137,6 +137,7 @@ final class DemoGame
 				, 'light-dash'
 				, 'grapples'
 				, 'vehicles'
+				, 'tornado'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -467,7 +468,11 @@ final class DemoGame
 		$previous?->close($this->engine);
 		$this->counter->rings = 0;
 		$this->levelStartedAt = $this->engine->time;
-		$this->cameraBehavior->setCameraLimits(maxY: $this->scene === 'ceiling-curves' ? null : 120);
+
+		$this->cameraBehavior->setCameraLimits(
+			maxY: in_array($this->scene, ['ceiling-curves', 'tornado'], true) ? null : 120
+		);
+
 		$this->resetPlayer();
 		[$this->camera->x, $this->camera->y] = $this->level->origin();
 		$this->engine->input->reset();
@@ -888,10 +893,24 @@ final class DemoGame
 
 		if(in_array(
 			$this->scene
-			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles']
+			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles', 'tornado']
 			, true
 		)){
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
+		}
+
+		$vehicle = $level->vehicles?->ridden($this->entity);
+
+		if($vehicle !== null && $this->engine->entities->has($vehicle->entity, \PhpWasmEngine\Gameplay\Tornado::class))
+		{
+			$tornado = $this->engine->entities->get($vehicle->entity, \PhpWasmEngine\Gameplay\Tornado::class);
+
+			$this->status->textContent .= sprintf(
+				' · fuel %d%% · gear %s · %s'
+				, (int)round($tornado->fuel)
+				, $tornado->landingGear ? 'down' : 'up'
+				, $tornado->crashed ? 'crash recovery' : ($tornado->thrusting ? 'rocket thrust' : 'cruise')
+			);
 		}
 
 		if($level->waters?->regions)

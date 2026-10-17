@@ -58,6 +58,7 @@ final class DemoStartup
 			, 'light-dash' => 'Light dash'
 			, 'grapples' => 'Grapple ropes'
 			, 'vehicles' => 'Skateboard course'
+			, 'tornado' => 'Tornado flight course'
 			, 'water' => 'Water regions'
 			, 'water-rail' => 'Underwater rail'
 			, 'water-skim-rail' => 'Surface skim rail'
