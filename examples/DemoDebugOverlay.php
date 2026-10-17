@@ -21,8 +21,7 @@ final class DemoDebugOverlay
 	private ?RectRenderer $rects = null;
 	private bool $ownsAtlas, $closed = false;
 	private int $samples = 0, $previousCasts = 0;
-	private float $seconds = 0, $refresh = 0;
-	private string $sceneKey = '';
+	private float $seconds = 0;
 	private ?Terrain $terrain = null;
 	private array $rows = [], $cache = [], $nextCache = [];
 
@@ -53,14 +52,12 @@ final class DemoDebugOverlay
 		}
 
 		$this->frame++;
-		$this->refresh += $elapsed;
 
 		if($elapsed <= 0)
 		{
 			$this->seconds = 0;
 			$this->samples = 0;
 			$this->fps = $this->frameMilliseconds = null;
-			$this->refresh = .1;
 		}
 		else
 		{
@@ -82,7 +79,6 @@ final class DemoDebugOverlay
 				&& empty($event['repeat']) && empty($event['ctrl'])
 			){
 				$this->enabled = !$this->enabled;
-				$this->refresh = .1;
 			}
 		}
 	}
@@ -108,9 +104,17 @@ final class DemoDebugOverlay
 		{
 			$state = 'spindash';
 		}
+		elseif($state === '' && $body->grinding)
+		{
+			$state = $body->crouching ? 'grinding-crouching' : 'grinding';
+		}
 		elseif($state === '' && $body->rolling)
 		{
 			$state = 'rolling';
+		}
+		elseif($state === '' && $body->jumping)
+		{
+			$state = 'jumping';
 		}
 		elseif($state === '' && $body->crouching)
 		{
@@ -125,9 +129,11 @@ final class DemoDebugOverlay
 			'Player' => $body->profile
 			, 'Grounded' => $body->grounded ? 'Yes' : 'No'
 			, 'Surface' => $body->grounded ? $surface : 'Air'
-			, 'X px' => sprintf('%.3f', $body->x)
-			, 'Y px' => sprintf('%.3f', $body->y)
+			, 'X px' => sprintf('%.3f', $body->supportX())
+			, 'Y px' => sprintf('%.3f', $body->supportY())
 			, 'Collision layer' => (string)$body->collisionLayer
+			, 'Facing / direction' => "$body->facing / $body->direction"
+			, 'Drop charge' => sprintf('%.3f', $body->dropCharge)
 			, 'Gnd px/s' => sprintf('%.3f', $body->groundSpeed)
 			, 'X px/s' => sprintf('%.3f', $body->vx)
 			, 'Y px/s' => sprintf('%.3f', $body->vy)
@@ -138,7 +144,7 @@ final class DemoDebugOverlay
 	}
 
 	/**
-	 * Sample live diagnostics at most ten times per second while keeping GPU draw counts separate.
+	 * Read live diagnostics for the current rendered frame while keeping GPU draw counts separate.
 	 *
 	 * @param DemoGame $game Session supplying world, camera, input, and entity state.
 	 * @param int $casts Collision casts since the previous rendered frame, not a lifetime total.
@@ -150,10 +156,25 @@ final class DemoDebugOverlay
 		$camera = $game->camera;
 		$stream = $game->level?->stream;
 		$stats = $game->renderStats;
+		$bossRegion = $player ? $game->level?->bossRegions?->active($player) : null;
+
+		$cameraState = $player
+			? sprintf(
+				'%.1f / %.1f · %s %.2f/%.2f'
+				, $camera->x
+				, $camera->y
+				, $game->cameraBehavior->mode
+				, $game->cameraBehavior->anchorX
+				, $game->cameraBehavior->anchorY
+			)
+			: sprintf('%.1f / %.1f · manual', $camera->x, $camera->y);
 
 		return ['Scene' => $game->scene] + self::playerRows($player) + [
-			'Camera X/Y' => sprintf('%.1f / %.1f', $camera->x, $camera->y)
+			'Camera X/Y' => $cameraState
 			, 'Zoom' => sprintf('%.2f', $camera->zoom)
+			, 'Screen lock' => $bossRegion
+				? sprintf('%.0f..%.0f', $bossRegion->x, $bossRegion->x + $bossRegion->width)
+				: 'Off'
 			, 'Entities' => (string)count($game->engine->entities->query(Query::all()))
 			, 'Maps R/P/E' => sprintf(
 				'%d / %d / %d'
@@ -210,20 +231,19 @@ final class DemoDebugOverlay
 		$width = $game->engine->device->width;
 		$height = $game->engine->device->height;
 		$scale = min(1, $width / 720, $height / 540);
+
+		if($this->enabled)
+		{
+			$this->rows = $this->read($game, $casts);
+			$fullHeight = (count($this->rows) + 1) * ($this->font->lineHeight + 2) + 32;
+			$scale = min($scale, $height / $fullHeight);
+		}
+
 		$pad = 8 * $scale;
 		$batch = $boxes = $this->nextCache = [];
 
 		if($this->enabled)
 		{
-			$key = $game->scene . ':' . $game->body->profile . ':' . (int)$game->engine->userPaused;
-
-			if($this->refresh >= .1 || $this->rows === [] || $this->sceneKey !== $key)
-			{
-				$this->rows = $this->read($game, $casts);
-				$this->refresh = 0;
-				$this->sceneKey = $key;
-			}
-
 			$panelWidth = 304 * $scale;
 			$line = ($this->font->lineHeight + 2) * $scale;
 			$x = $width - $panelWidth - $pad;
@@ -352,7 +372,6 @@ final class DemoDebugOverlay
 		$this->sprites?->restore();
 		$this->rects?->restore();
 		$this->cache = [];
-		$this->refresh = .1;
 	}
 
 	/**

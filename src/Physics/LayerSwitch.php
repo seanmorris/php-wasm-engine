@@ -67,7 +67,7 @@ final class LayerSwitch
 	}
 
 	/**
-	 * Choose an eligible destination using tangent speed, airborne velocity, or facing.
+	 * Choose an eligible destination using tangent speed, airborne velocity, or movement direction.
 	 *
 	 * @param Body $body Actor whose collision layer and movement state determine the route.
 	 * @return int|null Destination layer, or null if direction, source layer, or rolling
@@ -80,7 +80,7 @@ final class LayerSwitch
 			return null;
 		}
 
-		$speed = ($body->grounded?$body->groundSpeed:0) ?: ($body->vx ?: $body->facing);
+		$speed = ($body->grounded?$body->groundSpeed:0) ?: ($body->vx ?: $body->direction);
 
 		if(!$speed)
 		{

@@ -53,8 +53,16 @@ test(
 		expect(files).not.toContain('stream.world');
 		await php(page, '$originalEngine = $engine; $originalPlayer = $body;');
 
-		for(const scene of ['breakables', 'loop', 'infinite', 'isometric', 'world', 'breakables'])
-		{
+		for(const scene of [
+			'breakables'
+			, 'platforms'
+			, 'light-dash'
+			, 'water'
+			, 'water-rail'
+			, 'water-skim-rail'
+			, 'water-loop', 'grinding', 'loop'
+			, 'infinite', 'isometric', 'world', 'breakables'
+		]) {
 			await change(page, scene);
 			await expect(page.locator('canvas')).toHaveAttribute('data-scene', scene);
 			await expect.poll(async () => (await data(page, 'menu')).open).toBe(false);
@@ -62,11 +70,12 @@ test(
 			await php(page, `vrzno_env('canvas')->dataset->identity = json_encode([
 			$originalEngine === $engine, $originalPlayer === $body,
 			count($engine->entities->query(PhpWasmEngine\\Gameplay\\BreakableBlock::class)),
-			count($engine->entities->query(PhpWasmEngine\\Effects\\ParticleBurst::class))
+			count($engine->entities->query(PhpWasmEngine\\Effects\\ParticleBurst::class)),
+			count($engine->entities->query(PhpWasmEngine\\Gameplay\\WaterParticle::class))
 		]);`
 			);
 
-			expect(await data(page, 'identity')).toEqual([true, true, scene === 'breakables' ? 3 : 0, 0]);
+			expect(await data(page, 'identity')).toEqual([true, true, scene === 'breakables' ? 3 : 0, 0, 0]);
 
 			if(scene === 'breakables')
 			{

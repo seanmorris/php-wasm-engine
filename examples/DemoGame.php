@@ -5,8 +5,15 @@ use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
 use PhpWasmEngine\Gameplay\BreakableBlock;
+use PhpWasmEngine\Gameplay\Combo;
+use PhpWasmEngine\Gameplay\LightDash;
+use PhpWasmEngine\Gameplay\GrappleGrip;
+use PhpWasmEngine\Gameplay\Rider;
 use PhpWasmEngine\Gameplay\PlayerCombat;
+use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Gameplay\RingCounter;
+use PhpWasmEngine\Gameplay\Shield;
+
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Sprite;
@@ -21,6 +28,8 @@ final class DemoGame
 	public ?DemoStartup $startup = null;
 	public ?DemoDebugOverlay $debug = null;
 	public ?DemoPlayerHud $hud = null;
+	public ?DemoComboHud $comboHud = null;
+	public PlatformCamera $cameraBehavior;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
 	public float $levelStartedAt = 0;
@@ -40,6 +49,7 @@ final class DemoGame
 	 * @param Camera $camera Shared viewport and user zoom setting.
 	 * @param Body $body Persistent player body receiving each destination's spawn pose.
 	 * @param RingCounter $counter Persistent player score and level ring count.
+	 * @param Combo $combo Persistent player movement reward chain and recent result.
 	 * @param int $entity Registry ID for the persistent player body and sprite.
 	 * @return void Installs one movement system; assets load after selectScene is called.
 	 */
@@ -48,11 +58,14 @@ final class DemoGame
 		, public Camera $camera
 		, public Body $body
 		, public RingCounter $counter
+		, public Combo $combo
 		, public int $entity
 	){
 		$this->host = vrzno_env('demoControls');
 		$this->canvas = vrzno_env('canvas');
 		$this->status = (new Vrzno)->document->querySelector('#status');
+		$this->cameraBehavior = new PlatformCamera;
+		$this->cameraBehavior->setCameraLimits(maxY: 120);
 		$engine->systems->add('movement', [$this, 'update']);
 		(require __DIR__ . '/sequences.php')($engine->input->sequences);
 	}
@@ -97,20 +110,40 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, badniks, loop, breakables, infinite, isometric, or world
-	 * identifier.
+	 * @param string $scene Platformer, platforms, grapples, vehicles, light-dash, water, water-rail,
+	 * water-skim-rail, water-loop, badniks,
+	 * grinding, loop, breakables, infinite, isometric, or world identifier.
+	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
 	 */
-	public function selectScene(string $scene): void
+	public function selectScene(string $scene, bool $restart = false): void
 	{
-		if(!in_array($scene, ['platformer', 'badniks', 'loop', 'breakables', 'infinite', 'isometric', 'world'], true))
-		{
+		if(!in_array(
+			$scene
+			, [
+				'platformer'
+				, 'water'
+				, 'water-rail'
+				, 'water-skim-rail'
+				, 'water-loop'
+				, 'platforms'
+				, 'light-dash'
+				, 'grapples'
+				, 'vehicles'
+				, 'badniks'
+				, 'grinding'
+				, 'loop'
+				, 'breakables'
+				, 'infinite', 'isometric', 'world'
+			]
+			, true
+		)){
 			throw new InvalidArgumentException('Unknown demo level');
 		}
 
 		$this->releasePending();
 
-		if($this->scene === $scene)
+		if($this->scene === $scene && !$restart)
 		{
 			$this->menu?->menu->close();
 
@@ -119,6 +152,19 @@ final class DemoGame
 
 		$scope = (vrzno_env('createAssetScope'))();
 		$this->pending = new DemoLevel($scene, $scope);
+	}
+
+	/**
+	 * Reload the active level with fresh rings, enemies, platforms, and other level-owned objects.
+	 *
+	 * @return void Stages the same scene while retaining PHP, player profile, score, and menu settings.
+	 */
+	public function restartLevel(): void
+	{
+		if($this->level !== null)
+		{
+			$this->selectScene($this->scene, true);
+		}
 	}
 
 	/**
@@ -158,9 +204,14 @@ final class DemoGame
 	public function selectProfile(string $profile): void
 	{
 		$defaults = new Body(profile: $profile);
+		$this->level?->vehicles?->dismount($this->entity, 'transfer');
+		$this->level?->grapples?->release($this->entity);
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
 		$this->body->ability = '';
+		$this->body->glideDirection = 0;
+		$this->body->lightDashed = false;
+		$this->engine->entities->get($this->entity, LightDash::class)->reset();
 		$this->body->crouching = false;
 		$this->body->crouchTime = 0;
 		$this->body->wall = 0;
@@ -185,6 +236,10 @@ final class DemoGame
 	 */
 	private function resetPlayer(): void
 	{
+		$this->level?->vehicles?->dismount($this->entity, 'reset');
+		$this->engine->entities->get($this->entity, Rider::class)->cooldowns = [];
+		$this->level?->grapples?->release($this->entity, inherit: false);
+		$this->engine->entities->get($this->entity, GrappleGrip::class)->reset();
 		$defaults = new Body(80, 100, $this->body->profile);
 
 		foreach([
@@ -196,11 +251,16 @@ final class DemoGame
 			, 'angle'
 			, 'grounded'
 			, 'rolling'
+			, 'jumping'
+			, 'grinding'
 			, 'crouching'
 			, 'facing'
+			, 'direction'
+			, 'glideDirection'
 			, 'wall'
 			, 'collisionLayer'
 			, 'ability'
+			, 'lightDashed'
 			, 'charge'
 			, 'crouchTime'
 			, 'dropCharge'
@@ -212,8 +272,22 @@ final class DemoGame
 		}
 
 		$this->body->halfHeight = $this->body->standingHeight;
+		$this->body->water = null;
+		$this->body->underwater = $this->body->waterEntered = $this->body->waterExited = false;
+		$this->body->skimming = false;
+		$this->body->waterDepth = 0;
+		$this->combo->reset();
+		$this->engine->entities->get($this->entity, LightDash::class)->reset();
+		$this->level?->vehicles?->sync($this->entity, $this->body);
+		$this->level?->grapples?->sync($this->entity, $this->body);
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
+		$this->level?->miniBosses?->sync($this->entity, $this->body);
+		$this->level?->bossRegions?->sync($this->body);
+		$this->cameraBehavior->setMode('auto');
+		$this->cameraBehavior->clearFocus();
+		$this->cameraBehavior->clearWorldBounds();
+		$this->cameraBehavior->sync($this->body);
 
 		if($this->engine->entities->has($this->entity, PlayerCombat::class))
 		{
@@ -224,11 +298,21 @@ final class DemoGame
 	/**
 	 * Name the player's mutually exclusive visible movement pose.
 	 *
-	 * @param Body $body Player body carrying crouch, charge, roll, and grounded state.
-	 * @return string Spindash, rolling, crouching, ground, or air diagnostic pose.
+	 * @param Body $body Player body carrying crouch, charge, grind, roll, jump, and grounded state.
+	 * @return string Lightdash, hanging, spindash, grinding, rolling, jumping, crouching, ground, or air pose.
 	 */
 	private function playerPose(Body $body): string
 	{
+		if($body->ability === 'riding')
+		{
+			return $this->level?->vehicles?->ridden($this->entity)?->pose ?? 'riding';
+		}
+
+		if(in_array($body->ability, ['lightdash', 'hanging'], true))
+		{
+			return $body->ability;
+		}
+
 		if($body->charge > 0)
 		{
 			return 'spindash';
@@ -237,6 +321,16 @@ final class DemoGame
 		if($body->rolling)
 		{
 			return 'rolling';
+		}
+
+		if($body->grinding)
+		{
+			return $body->crouching ? 'grinding-crouching' : 'grinding';
+		}
+
+		if($body->jumping)
+		{
+			return 'jumping';
 		}
 
 		if($body->crouching)
@@ -251,20 +345,55 @@ final class DemoGame
 	 * Resolve generated player art for a movement profile and visible pose.
 	 *
 	 * @param string $profile Runner, glider, or flyer artwork family.
-	 * @param string $pose Pose returned by playerPose; air and ground share standing art.
+	 * @param string $pose Pose returned by playerPose; plain air and ground share standing art.
 	 * @return int Global demo tileset ID, including animated rolling art for a spindash.
 	 */
 	private function playerGid(string $profile, string $pose): int
 	{
-		$art = in_array($pose, ['rolling', 'spindash'], true)
+		$art = in_array($pose, ['rolling', 'jumping', 'spindash'], true)
 			? 'rolling'
-			: ($pose === 'crouching' ? 'crouching' : 'standing');
+			: (in_array($pose, ['crouching', 'grinding-crouching', 'riding-crouching'], true)
+				? 'crouching'
+				: 'standing'
+			);
 
 		return [
 			'runner' => ['standing' => 7, 'crouching' => 10, 'rolling' => 13]
 			, 'glider' => ['standing' => 8, 'crouching' => 11, 'rolling' => 15]
 			, 'flyer' => ['standing' => 9, 'crouching' => 12, 'rolling' => 17]
 		][$profile][$art];
+	}
+
+	/**
+	 * Calculate the localized background displacement used by charged and braking poses.
+	 *
+	 * @param Body $body Player body carrying charge, direction, surface, and tangent speed state.
+	 * @return array{strength:float,x:float,y:float} Signed strength and field center matching the
+	 * reference effect's distinct charge and braking offsets.
+	 */
+	private function playerBackdropTwist(Body $body): array
+	{
+		$strength = 0.0;
+		$offset = 0.0;
+
+		if($body->charge > 0)
+		{
+			$strength = 120 * $body->charge * $body->direction;
+			$offset = -13 * $body->direction;
+		}
+
+		if($strength == 0 && $body->grounded && !$body->rolling && !$body->grinding
+			&& $body->direction * $body->groundSpeed < 0
+		){
+			$strength = max(-256, min(256, -$body->groundSpeed * 22 / 60));
+			$offset = -16 * $body->direction;
+		}
+
+		return [
+			'strength' => $strength
+			, 'x' => $body->supportX() + $offset
+			, 'y' => $body->supportY()
+		];
 	}
 
 	/**
@@ -328,7 +457,7 @@ final class DemoGame
 			$this->notifyReady();
 		}
 
-		foreach(['world', 'breakables', 'badniks'] as $key)
+		foreach(['world', 'breakables', 'badniks', 'boss', 'water', 'bossLock'] as $key)
 		{
 			unset($this->canvas->dataset->$key);
 		}
@@ -366,6 +495,13 @@ final class DemoGame
 
 		$controls = $this->engine->controls;
 
+		if($controls->pressed('reset') && $controls->down('action'))
+		{
+			$this->restartLevel();
+
+			return;
+		}
+
 		if($this->scene === 'world' || $this->scene === 'isometric')
 		{
 			$speed = $this->scene === 'world' ? 900 : 300;
@@ -393,13 +529,53 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
-		$this->level->movement->step($this->body, $controls, $dt);
-		$lookDown = $this->body->crouchTime >= .75
-			? min(120, $this->camera->height / $this->camera->zoom / 5)
-			: 0;
+		$vehicleInput = $this->level->vehicles?->control($this->entity, $controls, $dt) ?? false;
+		$released = !$vehicleInput && ($this->level->grapples?->control($this->entity, $controls, $dt) ?? false);
+		$hanging = $this->body->ability === 'hanging';
+		$lightDashing = !$vehicleInput && !$released && !$hanging
+			&& ($this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false);
 
-		$this->camera->follow($this->body->x, $this->body->y + $lookDown, $dt);
-		$this->camera->y = min(120, $this->camera->y);
+		$jumpConsumed = $vehicleInput || $released || $hanging || $lightDashing
+			|| ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
+
+		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+		$this->level->vehicles?->update($entities, $dt);
+		$bossRegion = $this->level->bossRegions?->update($this->body);
+
+		if($bossRegion !== null)
+		{
+			$this->level->miniBosses?->wakeSource($bossRegion->bossSourceId);
+		}
+
+		$score = $this->body->ability === 'riding' ? null : $this->combo->update($this->body, $dt);
+
+		if($score !== null)
+		{
+			$this->counter->score += $score;
+		}
+
+		if($bossRegion !== null)
+		{
+			$this->cameraBehavior->setMode('boss');
+			$this->cameraBehavior->bossAnchorY = $bossRegion->cameraAnchorY;
+
+			$this->cameraBehavior->setWorldBounds($bossRegion->x, $bossRegion->x + $bossRegion->width);
+		}
+		else
+		{
+			$this->cameraBehavior->setMode($this->level->vehicles?->ridden($this->entity)?->cameraMode ?? 'auto');
+			$this->cameraBehavior->clearWorldBounds();
+		}
+
+		$look = 0;
+
+		if($this->body->grounded && !$this->body->rolling && !$this->body->grinding
+			&& abs($this->body->groundSpeed) < 1 && $this->body->charge <= 0
+		){
+			$look = $controls->axis('up', 'down');
+		}
+
+		$this->cameraBehavior->update($this->camera, $this->body, $dt, $look);
 	}
 
 	/**
@@ -415,8 +591,10 @@ final class DemoGame
 		if($this->startup?->render())
 		{
 			$this->hud?->render($this, false);
+			$this->comboHud?->render($this, false);
 			$this->debug?->render($this, false);
 			$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
+			$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 			$this->engine->device->present();
 
@@ -433,8 +611,10 @@ final class DemoGame
 
 		$playerVisible = $this->level !== null && !in_array($this->scene, ['world', 'isometric'], true);
 		$this->hud?->render($this, $playerVisible);
+		$this->comboHud?->render($this, $playerVisible);
 		$this->debug?->render($this, $this->level !== null);
 		$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
+		$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 		$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
 		$this->menu->render();
 		$this->engine->device->present();
@@ -466,6 +646,10 @@ final class DemoGame
 		$level = $this->level;
 		$camera = $this->camera;
 		$time = $this->engine->time * 1000;
+		$level->waterRenderer?->begin();
+		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
+		$this->canvas->dataset->vehicles = json_encode($level->vehicles?->snapshot() ?? []);
+		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
 
 		if($this->scene === 'world')
 		{
@@ -509,7 +693,31 @@ final class DemoGame
 		}
 
 		$body = $this->body;
+		$backdropTwist = $this->playerBackdropTwist($body);
+		$twistingBackdrop = $level->backdropTwist !== null && $backdropTwist['strength'] != 0;
+
+		if($level->backdropTwist !== null)
+		{
+			$level->backdropTwist->draws = 0;
+		}
+
+		if($twistingBackdrop)
+		{
+			$level->backdropTwist->begin();
+		}
+
 		$level->renderer->render($camera, $time);
+
+		if($twistingBackdrop)
+		{
+			$level->backdropTwist->compose(
+				$camera
+				, $backdropTwist['x']
+				, $backdropTwist['y']
+				, $backdropTwist['strength']
+			);
+		}
+
 		$pose = $this->playerPose($body);
 		$playerOpacity = 1.0;
 
@@ -525,31 +733,79 @@ final class DemoGame
 				$sprite->time = -$time;
 			}
 
-			$sprite->x = $body->x - sin($body->angle) * $body->halfHeight;
-			$sprite->y = $body->y + cos($body->angle) * $body->halfHeight;
+			$sprite->x = $body->supportX();
+			$sprite->y = $body->supportY();
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
+			$sprite->originY = 30 / 32;
+
+			if($pose === 'handstand')
+			{
+				$sprite->rotation += M_PI;
+				$sprite->originY = 2 / 32;
+			}
+			elseif($pose === 'leanback')
+			{
+				$sprite->rotation -= .4 * $body->facing;
+			}
+
 			$playerOpacity = $sprite->opacity = $combat->flickerOpacity();
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
+		$level->waterRenderer?->compose($level->waters, $camera, $time);
+
 		$this->canvas->dataset->body = json_encode([
 			'x' => $body->x
 			, 'y' => $body->y
+			, 'supportX' => $body->supportX()
+			, 'supportY' => $body->supportY()
 			, 'grounded' => $body->grounded
 			, 'rolling' => $body->rolling
+			, 'jumping' => $body->jumping
+			, 'grinding' => $body->grinding
 			, 'crouching' => $body->crouching
 			, 'crouchTime' => $body->crouchTime
 			, 'charge' => $body->charge
+			, 'dropCharge' => $body->dropCharge
+			, 'backdropTwist' => $backdropTwist['strength']
+			, 'backdropTwistX' => $backdropTwist['x']
+			, 'backdropTwistY' => $backdropTwist['y']
+			, 'facing' => $body->facing
+			, 'direction' => $body->direction
 			, 'pose' => $pose
 			, 'ability' => $body->ability
+			, 'vehicle' => $this->engine->entities->get($this->entity, Rider::class)->vehicle
+			, 'grapple' => $this->engine->entities->get($this->entity, GrappleGrip::class)->point
+			, 'lightDashed' => $body->lightDashed
+			, 'lightDashTarget' => $this->engine->entities->get($this->entity, LightDash::class)->target
 			, 'speed' => $body->groundSpeed
 			, 'angle' => $body->angle
 			, 'collisionLayer' => $body->collisionLayer
 			, 'mercy' => $this->engine->entities->get($this->entity, PlayerCombat::class)->mercy
 			, 'opacity' => $playerOpacity
+			, 'shield' => $this->engine->entities->has($this->entity, Shield::class)
+				? $this->engine->entities->get($this->entity, Shield::class)->active
+				: ''
+			, 'underwater' => $body->underwater
+			, 'waterDepth' => $body->waterDepth
+			, 'waterEntered' => $body->waterEntered
+			, 'waterExited' => $body->waterExited
+			, 'skimming' => $body->skimming
 		]);
+
+		$this->canvas->dataset->bossLock = json_encode(
+			$level->bossRegions?->snapshot($body) ?? [
+				'active' => false
+				, 'sourceId' => null
+				, 'bossSourceId' => null
+				, 'x' => null
+				, 'y' => null
+				, 'width' => null
+				, 'height' => null
+			]
+		);
 
 		$stats = $level->renderer->stats;
 		$this->renderStats = $stats;
@@ -560,19 +816,44 @@ final class DemoGame
 			$this->renderStats['instances'] += $level->sprites->instances;
 		}
 
+		$this->renderStats['draws'] += $level->waterRenderer?->draws ?? 0;
+		$this->renderStats['draws'] += $level->backdropTwist?->draws ?? 0;
+
 		$this->status->textContent = sprintf(
 			'%s · %.0f px/s · %d draws · %d visible instances · %d tile uploads · %d collision casts'
 			, $body->ability ?: $pose
 			, $body->groundSpeed
-			, $stats['draws'] + $level->sprites->draws
-			, $stats['instances'] + $level->sprites->instances
+			, $this->renderStats['draws']
+			, $this->renderStats['instances']
 			, $stats['uploads']
 			, $level->terrain->raycasts
 		);
 
-		if($this->scene === 'loop')
-		{
+		if(in_array(
+			$this->scene
+			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles']
+			, true
+		)){
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
+		}
+
+		if($level->waters?->regions)
+		{
+			$this->canvas->dataset->water = json_encode([
+				'underwater' => $body->underwater
+				, 'depth' => $body->waterDepth
+				, 'skimming' => $body->skimming
+				, 'draws' => $level->waterRenderer?->draws ?? 0
+				, 'features' => $level->waterFeatures?->snapshot()
+				, 'particles' => $level->waterParticles?->snapshot()
+			]);
+
+			$this->status->textContent .= $body->underwater
+				? sprintf(' · underwater %.0f%%', $body->waterDepth * 100)
+				: ($body->skimming
+					? ($body->grinding ? ' · skim-grinding' : ' · skimming')
+					: ' · approach the water at speed'
+				);
 		}
 
 		if($this->scene === 'breakables')
@@ -592,18 +873,43 @@ final class DemoGame
 		if($this->scene === 'badniks')
 		{
 			$counts = $level->badniks->counts();
+			$boss = $level->miniBosses->snapshot();
+			$counts['monitors'] = $level->monitors->counts();
+			$counts['shields'] = $level->shields->counts();
 			$combat = $this->engine->entities->get($this->entity, PlayerCombat::class);
 			$counts['hits'] = $combat->hits;
 			$counts['defeats'] = $combat->defeats;
 			$counts['scatteredRings'] = $level->rings->scatteredCount();
 			$this->canvas->dataset->badniks = json_encode($counts);
+			$this->canvas->dataset->boss = json_encode($boss);
 
 			$this->status->textContent .= sprintf(
-				' · %d badniks · %d shots · %d defeated'
+				' · %d badniks · %d shots · %d monitors · %d shields · %d defeated'
 				, $counts['badniks']
 				, $counts['projectiles']
+				, $counts['monitors']['intact']
+				, $counts['shields']['active']
 				, $counts['defeats']
 			);
+
+			if($level->bossRegions?->active($body))
+			{
+				$this->status->textContent .= sprintf(
+					' · boss %d/%d HP · %s · arena locked'
+					, $boss['hitPoints']
+					, $boss['maxHitPoints']
+					, $boss['phase']
+				);
+			}
+			elseif($boss['present'])
+			{
+				$this->status->textContent .= sprintf(
+					' · boss %d/%d HP · %s'
+					, $boss['hitPoints']
+					, $boss['maxHitPoints']
+					, $boss['phase']
+				);
+			}
 		}
 	}
 
@@ -617,6 +923,7 @@ final class DemoGame
 		$this->level?->restore();
 		$this->menu?->restore();
 		$this->hud?->restore();
+		$this->comboHud?->restore();
 		$this->debug?->restore();
 		$this->startup?->restore();
 	}
@@ -630,6 +937,7 @@ final class DemoGame
 	{
 		$this->startup?->close();
 		$this->hud?->close();
+		$this->comboHud?->close();
 		$this->debug?->close();
 		$this->menu?->close();
 		$this->releasePending();
@@ -637,9 +945,16 @@ final class DemoGame
 		$this->level = null;
 		unset(
 			$this->canvas->dataset->hud
+			, $this->canvas->dataset->combo
 			, $this->canvas->dataset->debug
 			, $this->canvas->dataset->sequences
 			, $this->canvas->dataset->badniks
+			, $this->canvas->dataset->boss
+			, $this->canvas->dataset->bossLock
+			, $this->canvas->dataset->water
+			, $this->canvas->dataset->vehicles
+			, $this->canvas->dataset->grapples
+			, $this->canvas->dataset->platforms
 		);
 	}
 }

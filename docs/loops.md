@@ -4,6 +4,16 @@ Select **Loop-de-loop** in the live demo and hold Right from the start. After ex
 
 Open [`examples/assets/loop.tmj`](../examples/assets/loop.tmj) in Tiled. Its external [`loop.tsj`](../examples/assets/loop.tsj) tileset contains original procedural artwork and collision polygons. Run `php examples/generate-assets.php` to regenerate the demo assets.
 
+Select **Grinding rail** for the extended test course. Its
+[`grinding.tmj`](../examples/assets/grinding.tmj) begins with separate grinding, ordinary-ground,
+and grinding polygons sharing a level surface. Four visible quarter bends then raise and lower the
+rail before it reaches the loop. [`grinding.tsj`](../examples/assets/grinding.tsj) retains matching
+curved artwork and the loop's exact collision polygons. The loop layers add `grinding` to shared
+plane 0 and selectable planes 1 and 2. Together they prove that grinding state leaves and resumes on
+ordinary ground, follows both directions through 90-degree bends, survives wall and ceiling
+adhesion, and crosses all three directional switches. The loop crown remains shared, the lower left
+route is on plane 1, and the lower right route is on plane 2.
+
 ![Shared crown and floor, two selectable lower halves, and three directional gates](loop-layout.svg)
 
 ## What moving-boxes-2 does
@@ -53,7 +63,7 @@ Create rectangle objects with class **layer-switch** (or **LayerSwitch**). Conve
 
 The two layer IDs must be distinct positive integers. A gate only switches from the expected source; unrelated planes remain selected. A body on layer 0 may enter either route. Rectangles use Tiled's top-left origin, while tile objects use their bottom-left anchor. Object rotation, group offsets, map placement, and isometric object projection are applied before collision queries.
 
-PHP gates use the **body center**. Give entrance gates enough height to include grounded and jumping bodies, place them outside the walls, and place the crown gate in shared terrain where either destination is clear. Grounded direction uses tangent speed, then horizontal velocity or facing when stopped. Airborne direction uses horizontal velocity, then facing. Rolling restrictions leave an ineligible body on its current layer.
+PHP gates use the **body center**. Give entrance gates enough height to include grounded and jumping bodies, place them outside the walls, and place the crown gate in shared terrain where either destination is clear. Grounded direction uses tangent speed, then horizontal velocity or the retained movement direction when stopped. Airborne direction uses horizontal velocity, then retained movement direction. Rolling restrictions leave an ineligible body on its current layer.
 
 ## Continuous switching and collision
 

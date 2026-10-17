@@ -15,10 +15,15 @@ final class Platformer
 	 * casts.
 	 * @param callable(Body,Hit):mixed|null $onImpact Callback before collision response; removing
 	 * the contacted shape allows remaining movement. The callback's return value is ignored.
+	 * @param WaterRegions|null $waters Optional liquid volumes that change movement and expose
+	 * entry, exit, buoyancy, current, and surface-skimming state.
 	 * @return void Creates a controller that can update multiple independent bodies.
 	 */
-	public function __construct(public Terrain $terrain, ?callable $onImpact = null)
-	{
+	public function __construct(
+		public Terrain $terrain
+		, ?callable $onImpact = null
+		, public ?WaterRegions $waters = null
+	){
 		$this->onImpact = $onImpact === null ? null : \Closure::fromCallable($onImpact);
 	}
 
@@ -41,20 +46,49 @@ final class Platformer
 	 * @param Body $b Actor to simulate in place.
 	 * @param Controls $input Current logical controls and button edges.
 	 * @param float $dt Finite, positive simulation delta in seconds.
+	 * @param bool $jumpConsumed True when an earlier ability intercepted this step's jump press.
 	 * @return void Mutates pose, momentum, collision layer, and ability state on the supplied body.
 	 */
-	public function step(Body $b, Controls $input, float $dt): void
+	public function step(Body $b, Controls $input, float $dt, bool $jumpConsumed = false): void
 	{
 		if($dt <= 0 || !is_finite($dt))
 		{
 			throw new \InvalidArgumentException('Invalid physics step');
 		}
 
+		if($b->ability !== 'glide')
+		{
+			$b->glideDirection = 0;
+		}
+
+		$startX = $b->x;
+		$startY = $b->y;
+		$previousWater = $b->water;
+		$water = $this->waters?->at($b->x, $b->y);
+		$this->waterState($b, $water, $previousWater);
+
+		if(in_array($b->ability, ['hanging', 'riding'], true))
+		{
+			return;
+		}
+
+		$drag = $water?->drag ?? 1;
+		$gravityScale = $water?->gravity ?? 1;
 		$axis = $input->axis('left', 'right');
 
-		if($axis)
+		if($water !== null && $b->density > 0 && $b->density < $water->density && $b->waterDepth > 0)
+		{
+			$b->grounded = false;
+		}
+
+		if($axis && $b->grounded)
 		{
 			$b->facing = $axis <=> 0;
+
+			if(!$b->grinding || abs($b->groundSpeed) < $b->minGrindSpeed)
+			{
+				$b->direction = $b->facing;
+			}
 		}
 
 		// Retry blocked gates while overlapping, including actors at rest.
@@ -70,7 +104,7 @@ final class Platformer
 		$b->jumpBuffer = max(0, $b->jumpBuffer - $dt);
 		$b->coyote = $b->grounded?.08:max(0, $b->coyote - $dt);
 
-		if($input->pressed('jump'))
+		if(!$jumpConsumed && $input->pressed('jump'))
 		{
 			$b->jumpBuffer = .1;
 		}
@@ -79,13 +113,18 @@ final class Platformer
 		{
 			$b->flightRemaining = 5.8;
 			$b->ability = '';
+			$b->jumping = false;
+			$b->lightDashed = false;
 		}
 
 		if($b->ability === 'climb')
 		{
+			$b->grinding = false;
+			$b->jumping = false;
 			$b->crouching = false;
 			$b->charge = 0;
 			$b->crouchTime = 0;
+			$this->height($b);
 			$this->climb($b, $input, $dt);
 
 			return;
@@ -93,20 +132,52 @@ final class Platformer
 
 		if($b->grounded)
 		{
-			$this->groundPose($b, $input, $dt);
+			if($b->grinding)
+			{
+				$this->grindPose($b, $input);
+			}
+			else
+			{
+				$this->groundPose($b, $input, $dt);
+			}
 
 			if(!$b->charge)
 			{
-				$b->groundSpeed += sin($b->angle) * $b->gravity * ($b->rolling?.75:.35) * $dt;
+				$slope = $b->grinding ? .75 : ($b->rolling ? .75 : .35);
+				$b->groundSpeed += sin($b->angle) * $b->gravity * $gravityScale * $slope * $dt;
 
-				if($axis && !$b->rolling)
+				if($b->grinding)
+				{
+					$direction = $b->groundSpeed <=> 0;
+
+					if($direction === 0)
+					{
+						$direction = $b->direction ?: $b->facing ?: 1;
+					}
+
+					$speed = abs($b->groundSpeed);
+
+					if($axis && ($axis === $direction || $speed < $b->minGrindSpeed))
+					{
+						$speed += $b->acceleration * abs($axis) * $dt;
+					}
+					elseif(!$b->crouching)
+					{
+						$speed = max(0, $speed - $b->friction * .125 * $dt);
+					}
+
+					$speed += $b->grindAcceleration * $dt;
+					$b->groundSpeed = $direction * max($b->minGrindSpeed, min($b->maxGrindSpeed, $speed));
+					$b->direction = $direction;
+				}
+				elseif($axis && !$b->rolling)
 				{
 					$accel = $axis * $b->groundSpeed < 0?$b->braking:$b->acceleration;
 
 					// Input cannot erase momentum already above the running cap.
 					if(abs($b->groundSpeed) < $b->maxSpeed || $axis * $b->groundSpeed < 0)
 					{
-						$b->groundSpeed = self::approach($b->groundSpeed, $axis * $b->maxSpeed, $accel * $dt);
+						$b->groundSpeed = self::approach($b->groundSpeed, $axis * $b->maxSpeed, $accel * $drag * $dt);
 					}
 				}
 				else
@@ -160,13 +231,16 @@ final class Platformer
 			}
 			elseif(!$spindashTap)
 			{
-				$b->vx += sin($b->angle) * $b->jumpSpeed;
-				$b->vy -= cos($b->angle) * $b->jumpSpeed;
+				$b->vx += sin($b->angle) * $b->jumpSpeed * $drag;
+				$b->vy -= cos($b->angle) * $b->jumpSpeed * $drag;
 				$b->grounded = false;
 				$b->rolling = false;
+				$b->grinding = false;
+				$b->jumping = true;
 				$b->crouching = false;
 				$b->charge = 0;
 				$b->crouchTime = 0;
+				$this->height($b);
 				$b->x += sin($b->angle) * .05;
 				$b->y -= cos($b->angle) * .05;
 			}
@@ -178,16 +252,17 @@ final class Platformer
 
 		if(!$b->grounded)
 		{
+			$b->grinding = false;
 			$b->crouching = false;
 			$b->charge = 0;
 			$b->crouchTime = 0;
 
-			if($input->released('jump') && $b->vy < -240 && $b->ability === '')
+			if($input->released('jump') && $b->jumping && $b->vy < 0 && $b->ability === '' && !$b->lightDashed)
 			{
-				$b->vy = -240;
+				$b->vy *= .5;
 			}
 
-			if(!$jumped && $input->pressed('jump'))
+			if($b->jumping && !$jumped && !$jumpConsumed && $input->pressed('jump') && $b->ability !== 'lightdash')
 			{
 				if($b->profile === 'flyer' && $b->flightRemaining > 0)
 				{
@@ -198,17 +273,33 @@ final class Platformer
 				if($b->profile === 'glider')
 				{
 					$b->ability = 'glide';
-					$b->vx = $b->facing * max(240, abs($b->vx));
+					$b->glideDirection = ($b->vx <=> 0) ?: $b->facing;
+					$b->vx = $b->glideDirection * max(240, abs($b->vx));
 					$b->vy = max(0, $b->vy);
 				}
 			}
 
-			if($b->profile === 'runner' && $input->down('action'))
+			if($b->profile === 'runner' && $b->jumping && $input->down('action') && $b->ability !== 'lightdash')
 			{
 				$b->dropCharge = min(1, $b->dropCharge + $dt * 2);
 			}
+			elseif($b->dropCharge > 0)
+			{
+				$b->dropCharge = 0;
+			}
 
-			$gravity = $b->gravity;
+			$gravity = $b->gravity * $gravityScale;
+
+			if($water !== null)
+			{
+				$b->vx += $water->currentX * $dt;
+				$b->vy += $water->currentY * $dt;
+
+				if($b->density > 0 && $b->density < $water->density)
+				{
+					$gravity -= $b->gravity * ($water->density / $b->density) * $b->waterDepth;
+				}
+			}
 
 			if($b->ability === 'fly')
 			{
@@ -228,7 +319,22 @@ final class Platformer
 			elseif($b->ability === 'glide')
 			{
 				$gravity *= .125;
-				$b->vx = self::approach($b->vx, $b->facing * 420, 240 * $dt);
+
+				if($axis)
+				{
+					$b->glideDirection = $axis <=> 0;
+				}
+
+				$b->glideDirection = $b->glideDirection ?: (($b->vx <=> 0) ?: $b->facing);
+				// MB2 retains requested steering and brakes four times faster during a reversal.
+				$turning = $b->vx * $b->glideDirection < 0;
+				$b->vx = self::approach($b->vx, $b->glideDirection * 420, 240 * ($turning ? 4 : 1) * $dt);
+
+				if($b->vx != 0)
+				{
+					$b->facing = $b->direction = $b->vx <=> 0;
+				}
+
 				$b->vy = min(100, $b->vy);
 
 				if($input->down('down'))
@@ -236,15 +342,26 @@ final class Platformer
 					$b->ability = '';
 				}
 			}
-			elseif(abs($b->vx) < $b->maxSpeed || $axis * $b->vx < 0)
+
+			if($b->jumping && $b->vy > -240 && $b->vy < 0)
 			{
-				$b->vx += $axis * $b->airAcceleration * $dt;
+				// MB2 loses 1/32 of horizontal speed per reference frame near a jump's apex.
+				$b->vx *= (31 / 32) ** (60 * $dt);
 			}
 
-			$b->vy = min($b->terminalSpeed, $b->vy + $gravity * $dt);
+			// The speed gate also rejects braking; apex drag can bring a jump back below it.
+			if(!in_array($b->ability, ['glide', 'lightdash'], true) && abs($b->vx) < $b->maxSpeed)
+			{
+				$b->vx += $axis * $b->airAcceleration * $drag * $dt;
+			}
+
+			$b->vy = min($b->terminalSpeed * $drag, $b->vy + $gravity * $dt);
 		}
 
 		$wasGrounded = $b->grounded;
+		// MB2 permits skimming only in floor mode, within 45 degrees of upright.
+		// Retain the starting orientation: losing adhesion resets the angle below.
+		$skimEligible = $wasGrounded && cos($b->angle) >= M_SQRT1_2;
 
 		if($wasGrounded)
 		{
@@ -275,22 +392,140 @@ final class Platformer
 		if(!$wasGrounded && $b->grounded)
 		{
 			$b->groundSpeed = $b->vx * cos($b->angle) + $b->vy * sin($b->angle);
+			$b->jumping = false;
+			$b->lightDashed = false;
 
 			if($b->dropCharge > 0)
 			{
-				$b->groundSpeed += $b->facing * (360 + 480 * $b->dropCharge);
+				// MB2 processes landing input before checkDropDash, after air speed becomes ground speed.
+				if($axis && abs($b->groundSpeed) > 1e-8 && (!$b->grinding || abs($b->groundSpeed) < 180))
+				{
+					$b->facing = $b->direction = $axis <=> 0;
+				}
+
+				$b->groundSpeed += $b->direction * (360 + 480 * $b->dropCharge);
 				$b->rolling = true;
 				$b->dropCharge = 0;
 			}
 
 			$b->ability = '';
 			$b->charge = 0;
+			$this->height($b);
 		}
 
 		if(!$b->grounded)
 		{
+			$b->grinding = false;
 			$b->angle = 0;
 		}
+		elseif($b->grinding && abs($b->groundSpeed) > 1e-8)
+		{
+			$b->direction = $b->groundSpeed <=> 0;
+		}
+
+		if($b->ability !== 'glide')
+		{
+			$b->glideDirection = 0;
+		}
+
+		$this->finishWater($b, $previousWater, $startX, $startY, $skimEligible);
+	}
+
+	/**
+	 * Publish current liquid occupancy and one-step entry or exit edges on a body.
+	 *
+	 * @param Body $body Body receiving the active region and overlap fraction.
+	 * @param WaterRegion|null $water Region containing the body's center.
+	 * @param WaterRegion|null $previous Region retained after the preceding physics step.
+	 * @return void Updates water, underwater, transition, depth, and skimming state.
+	 */
+	private function waterState(Body $body, ?WaterRegion $water, ?WaterRegion $previous): void
+	{
+		$body->waterEntered = $water !== null && $water !== $previous;
+		$body->waterExited = $previous !== null && $water !== $previous;
+		$body->water = $water;
+		$body->underwater = $water !== null;
+		$body->waterDepth = $water?->depth($body) ?? 0;
+		$body->skimming = false;
+	}
+
+	/**
+	 * Resolve fast water-surface skimming and retain boundary events after the movement sweep.
+	 * Segment intersection catches complete pass-throughs without treating water as solid terrain.
+	 *
+	 * @param Body $body Body after terrain movement and adhesion.
+	 * @param WaterRegion|null $previous Region active at the end of the preceding step.
+	 * @param float $startX World X coordinate before this step.
+	 * @param float $startY World Y coordinate before this step.
+	 * @param bool $skimEligible Whether the body began its sweep grounded and facing a floor.
+	 * @return void Snaps eligible runners to the surface and publishes final liquid state.
+	 */
+	private function finishWater(
+		Body $body
+		, ?WaterRegion $previous
+		, float $startX
+		, float $startY
+		, bool $skimEligible
+	): void {
+		if($this->waters === null)
+		{
+			return;
+		}
+
+		$dy = $body->y - $startY;
+		$bottom = $body->y + $body->halfHeight;
+		$tolerance = max(2, abs($dy) + .01);
+		$surface = $this->waters->surfaceAt($body->x, $bottom, $tolerance);
+		$speed = abs($body->grounded ? $body->groundSpeed : $body->vx);
+		$startedAbove = $startY + $body->halfHeight <= ($surface?->y ?? -INF) + 2;
+		$floorContact = cos($body->angle) >= M_SQRT1_2;
+
+		if($skimEligible && $floorContact && $surface !== null && $speed >= $surface->skimSpeed
+			&& ($dy >= 0 || $body->skimming)
+			&& $startedAbove
+		){
+			$body->y = $surface->y - $body->halfHeight - .001;
+			$body->groundSpeed = $body->grounded ? $body->groundSpeed : $body->vx;
+			$body->vx = $body->groundSpeed;
+			$body->vy = 0;
+			$body->grounded = true;
+			$body->angle = 0;
+			$body->water = null;
+			$body->underwater = false;
+			$body->waterDepth = 0;
+			$body->skimming = true;
+		}
+		else
+		{
+			$final = $this->waters->at($body->x, $body->y);
+			$entered = $body->waterEntered;
+			$exited = $body->waterExited;
+			$this->waterState($body, $final, $previous);
+			$body->waterEntered = $body->waterEntered || $entered;
+			$body->waterExited = $body->waterExited || $exited;
+		}
+
+		if($this->waters->crossed($startX, $startY, $body->x - $startX, $body->y - $startY)
+			&& $previous === null && $body->water === null && !$body->skimming
+		){
+			$body->waterEntered = $body->waterExited = true;
+		}
+	}
+
+	/**
+	 * Select the visual crouch and clear ground-only actions while attached to a rail.
+	 *
+	 * @param Body $b Grounded body whose collision contact is annotated as grinding.
+	 * @param Controls $input Logical controls used to select the low-friction crouching pose.
+	 * @return void Keeps standing collision bounds and leaves speed changes to the ground solver.
+	 */
+	private function grindPose(Body $b, Controls $input): void
+	{
+		$b->rolling = false;
+		$b->crouching = $input->down('down');
+		$b->charge = 0;
+		$b->crouchTime = 0;
+		$b->dropCharge = 0;
 	}
 
 	/**
@@ -356,14 +591,15 @@ final class Platformer
 	}
 
 	/**
-	 * Apply rolling or standing height while preserving the contact point along the body normal.
+	 * Apply compact somersault or standing height while preserving the contact point along the body
+	 * normal.
 	 *
-	 * @param Body $b Actor whose rolling flag selects the desired height.
+	 * @param Body $b Actor whose rolling or jumping flag selects the desired height.
 	 * @return void Moves the body center and updates its half-height.
 	 */
 	private function height(Body $b): void
 	{
-		$height = $b->rolling?$b->rollingHeight:$b->standingHeight;
+		$height = $b->rolling || $b->jumping?$b->rollingHeight:$b->standingHeight;
 		$b->y += ($b->halfHeight - $height) * cos($b->angle);
 		$b->x -= ($b->halfHeight - $height) * sin($b->angle);
 		$b->halfHeight = $height;
@@ -446,6 +682,11 @@ final class Platformer
 				}
 			}
 
+			if($b->ability === 'lightdash')
+			{
+				$b->ability = '';
+			}
+
 			$contacts++;
 			$b->x += $dx * $best->t + $best->nx * .001;
 			$b->y += $dy * $best->t + $best->ny * .001;
@@ -454,6 +695,7 @@ final class Platformer
 			if($floor || ($b->grounded && ($best->nx * sin($b->angle) - $best->ny * cos($b->angle)) > .5
 			)){
 				$b->grounded = true;
+				$b->grinding = $best->grinding;
 				$b->angle = atan2($best->nx, -$best->ny);
 				$distance = ($b->x - $best->x) * $best->nx + ($b->y - $best->y) * $best->ny;
 				$b->x += $best->nx * ($b->halfHeight + .001 - $distance);
@@ -461,9 +703,12 @@ final class Platformer
 			}
 			elseif(abs($best->nx) > .8)
 			{
+				$b->grinding = false;
+
 				if($b->ability === 'glide')
 				{
 					$b->ability = 'climb';
+					$b->jumping = false;
 					$b->wall = (int)-$best->nx;
 					$b->vx = $b->vy = 0;
 
@@ -517,6 +762,7 @@ final class Platformer
 		if(!$hits)
 		{
 			$b->grounded = false;
+			$b->grinding = false;
 
 			return;
 		}
@@ -532,16 +778,38 @@ final class Platformer
 			, $hits
 		));
 
+		// A lower neighboring ledge is not a second point on the nearest support surface.
+		$supports = [];
+
+		foreach($hits as $hit)
+		{
+			if(abs($hit->t * 16 - 6 - $distance) < .01)
+			{
+				$supports[] = $hit;
+			}
+		}
+
 		$b->x -= $sa * $distance;
 		$b->y += $ca * $distance;
+		$b->grinding = false;
 
-		if(count($hits) === 2)
+		foreach($supports as $hit)
 		{
-			$b->angle = atan2($hits[1]->y - $hits[0]->y, $hits[1]->x - $hits[0]->x);
+			if($hit->grinding)
+			{
+				$b->grinding = true;
+
+				break;
+			}
+		}
+
+		if(count($supports) === 2)
+		{
+			$b->angle = atan2($supports[1]->y - $supports[0]->y, $supports[1]->x - $supports[0]->x);
 		}
 		else
 		{
-			$b->angle = atan2($hits[0]->nx, -$hits[0]->ny);
+			$b->angle = atan2($supports[0]->nx, -$supports[0]->ny);
 		}
 	}
 
@@ -558,8 +826,10 @@ final class Platformer
 		if($input->pressed('jump'))
 		{
 			$b->ability = '';
+			$b->jumping = true;
 			$b->vx = -$b->wall * 300;
 			$b->vy = -$b->jumpSpeed * .8;
+			$this->height($b);
 			$b->x -= $b->wall * .1;
 
 			return;
@@ -574,9 +844,69 @@ final class Platformer
 
 		if(!$hit)
 		{
+			if($dy < 0 && $this->climbOver($b))
+			{
+				return;
+			}
+
 			$b->ability = '';
 			$b->vx = $b->wall * 120;
 			$b->vy = -180;
 		}
+	}
+
+	/**
+	 * Pull a climber over a wall end when a nearby upper surface has room for the body.
+	 *
+	 * @param Body $b Climbing actor whose side probe just passed the top of its wall.
+	 * @return bool True after placing the actor upright on the ledge; false when no usable top
+	 * surface exists.
+	 */
+	private function climbOver(Body $b): bool
+	{
+		$wall = $b->wall;
+		$x = $b->x + $wall * ($b->radius * 2 + 2);
+		$height = $b->standingHeight;
+		$start = $b->y - $height - 2;
+		$hit = $this->terrain->raycast($x, $start, 0, $height * 2 + 20, false, $b->collisionLayer);
+
+		if($hit === null || $hit->ny >= -.5 || abs($hit->y - $b->y) > $height + 4)
+		{
+			return false;
+		}
+
+		$angle = atan2($hit->nx, -$hit->ny);
+		$ca = cos($angle);
+		$sa = sin($angle);
+		$targetX = $hit->x + $hit->nx * ($height + .001);
+		$targetY = $hit->y + $hit->ny * ($height + .001);
+		$points = [
+			[$targetX, $targetY]
+			, [$targetX + $hit->nx * ($height - .01), $targetY + $hit->ny * ($height - .01)]
+			, [$targetX - $ca * ($b->radius - .01), $targetY - $sa * ($b->radius - .01)]
+			, [$targetX + $ca * ($b->radius - .01), $targetY + $sa * ($b->radius - .01)]
+		];
+
+		foreach($points as [$checkX, $checkY])
+		{
+			if($this->terrain->solidAt($checkX, $checkY, $b->collisionLayer))
+			{
+				return false;
+			}
+		}
+
+		$b->x = $targetX;
+		$b->y = $targetY;
+		$b->vx = $b->vy = $b->groundSpeed = 0;
+		$b->angle = $angle;
+		$b->grounded = true;
+		$b->rolling = false;
+		$b->jumping = false;
+		$b->ability = '';
+		$b->wall = 0;
+		$b->facing = $wall;
+		$b->direction = $wall;
+
+		return true;
 	}
 }

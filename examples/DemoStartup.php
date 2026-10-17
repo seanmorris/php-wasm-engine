@@ -53,6 +53,14 @@ final class DemoStartup
 
 		foreach([
 			'platformer' => 'Platformer'
+			, 'platforms' => 'Moving platforms'
+			, 'light-dash' => 'Light dash'
+			, 'grapples' => 'Grapple ropes'
+			, 'vehicles' => 'Skateboard course'
+			, 'water' => 'Water regions'
+			, 'water-rail' => 'Underwater rail'
+			, 'water-skim-rail' => 'Surface skim rail'
+			, 'water-loop' => 'Rising water loop'
 			, 'badniks' => 'CrabMeat badniks'
 			, 'world' => 'Streaming world'
 			, 'loop' => 'Loop-de-loop'

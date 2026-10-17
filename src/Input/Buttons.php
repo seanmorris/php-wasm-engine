@@ -8,6 +8,7 @@ final class Buttons
 	public const ALIASES = [
 		'jump' => 0
 		, 'action' => 1
+		, 'lightdash' => 2
 		, 'reset' => 8
 		, 'pause' => 9
 		, 'up' => 12

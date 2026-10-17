@@ -367,9 +367,15 @@ test('landing, acceleration, braking, jumping and variable jump height', functio
 	tick($p, $b, ['left' => true], 3);
 	check($b->groundSpeed < $speed);
 	tick($p, $b, ['jump' => true]);
-	check(!$b->grounded && $b->vy < 0);
+	check(!$b->grounded && $b->jumping && !$b->rolling && $b->vy < 0);
+	near($b->halfHeight, $b->rollingHeight);
+	$upward = $b->vy;
 	tick($p, $b, []);
-	check($b->vy >= -241);
+	near($b->vy, $upward / 2 + $b->gravity / 60);
+	check($b->jumping);
+	tick($p, $b, [], 90);
+	check($b->grounded && !$b->jumping && !$b->rolling);
+	near($b->halfHeight, $b->standingHeight);
 });
 
 test('fast bodies do not tunnel through floors or walls', function() {
@@ -405,7 +411,8 @@ test('slope sensors align feet and momentum leaves a ledge tangentially', functi
 	check($b->grounded && $b->angle < -.3);
 	$b->groundSpeed = 500;
 	tick($p, $b, ['right' => true], 30);
-	check(!$b->grounded && $b->x > 100);
+	check(!$b->grounded && !$b->jumping && !$b->rolling && $b->x > 100);
+	near($b->halfHeight, $b->standingHeight);
 });
 
 test('one-way platforms permit upward passage and down-jump drop', function() {
@@ -458,11 +465,19 @@ test('down plus jump taps or held action build a decaying spindash charge', func
 	check(!$b->crouching && $b->rolling && $b->groundSpeed > 500);
 });
 
-test('drop dash charges in air and releases on landing', function() {
+test('drop dash requires a held action during a jump', function() {
 	$p = new Platformer(ground());
+	$falling = new Body(0, 0, 'runner');
+	tick($p, $falling, ['action' => true], 8);
+	check($falling->dropCharge === 0.0, 'plain falling must not charge a drop dash');
+
 	$b = new Body(0, 60, 'runner');
 	tick($p, $b, [], 10);
 	tick($p, $b, ['jump' => true]);
+	tick($p, $b, ['action' => true], 6);
+	check($b->dropCharge > 0, 'holding action during a jump must build charge');
+	tick($p, $b);
+	check($b->dropCharge === 0.0, 'releasing action before landing must cancel the charge');
 	tick($p, $b, ['action' => true], 70);
 	check($b->grounded && $b->rolling);
 });
@@ -470,6 +485,7 @@ test('drop dash charges in air and releases on landing', function() {
 test('flight has a finite budget and glide can catch a wall and jump away', function() {
 	$p = new Platformer(ground());
 	$fly = new Body(0, -300, 'flyer');
+	$fly->jumping = true;
 	tick($p, $fly, ['jump' => true]);
 	check($fly->ability === 'fly');
 	tick($p, $fly, ['jump' => true], 360);
@@ -477,13 +493,49 @@ test('flight has a finite budget and glide can catch a wall and jump away', func
 	$p = new Platformer(new Terrain([['points' => [[100,-500],[120,-500],[120,500],[100,500]]]]));
 	$b = new Body(70, 0, 'glider');
 	$b->vx = 300;
+	$b->jumping = true;
 	tick($p, $b, ['jump' => true], 12);
 	check($b->ability === 'climb');
+	check(!$b->jumping);
 	$old = $b->y;
 	tick($p, $b, ['up' => true], 10);
 	check($b->y < $old);
 	tick($p, $b, ['jump' => true]);
-	check($b->vx < 0 && $b->ability !== 'climb');
+	check($b->vx < 0 && $b->jumping && $b->ability !== 'climb');
+});
+
+test('gliders climb over the top of a solid ledge in either direction', function() {
+	foreach([1, -1] as $wall)
+	{
+		$near = $wall > 0 ? 100 : -300;
+		$far = $wall > 0 ? 300 : -100;
+		$terrain = new Terrain([['points' => [[$near,100],[$far,100],[$far,500],[$near,500]]]]);
+		$body = new Body($wall * 92, 130, 'glider');
+		$body->ability = 'climb';
+		$body->wall = $wall;
+		$body->facing = $wall;
+		$p = new Platformer($terrain);
+		tick($p, $body, ['up' => true], 20);
+		check($body->grounded && $body->ability === '' && $body->wall === 0);
+		check($body->x * $wall > 100 && $body->facing === $wall);
+		check(!$body->jumping && !$body->rolling);
+		near($body->y + $body->halfHeight, 100, .01);
+	}
+});
+
+test('climbers detach when a ledge top has no standing clearance', function() {
+	$terrain = new Terrain([
+		['points' => [[100,100],[300,100],[300,500],[100,500]]]
+		, ['points' => [[90,50],[130,50],[130,70],[90,70]]]
+	]);
+
+	$body = new Body(92, 130, 'glider');
+	$body->ability = 'climb';
+	$body->wall = 1;
+	$p = new Platformer($terrain);
+	tick($p, $body, ['up' => true], 20);
+	check(!$body->grounded && $body->ability === '');
+	check($body->x < 100, 'blocked clearance must not place the climber inside the ledge');
 });
 
 require __DIR__ . '/physics.php';
@@ -493,6 +545,7 @@ require __DIR__ . '/sprites.php';
 require __DIR__ . '/parallax.php';
 require __DIR__ . '/world.php';
 require __DIR__ . '/input.php';
+require __DIR__ . '/air-control.php';
 require __DIR__ . '/sequences.php';
 require __DIR__ . '/ecs.php';
 require __DIR__ . '/breakables.php';
@@ -501,7 +554,18 @@ require __DIR__ . '/menus.php';
 require __DIR__ . '/cards.php';
 require __DIR__ . '/debug-overlay.php';
 require __DIR__ . '/rings.php';
+require __DIR__ . '/light-dash.php';
+require __DIR__ . '/grapples.php';
+require __DIR__ . '/vehicles.php';
 require __DIR__ . '/badniks.php';
+require __DIR__ . '/mini-bosses.php';
+require __DIR__ . '/boss-regions.php';
+require __DIR__ . '/platform-camera.php';
+require __DIR__ . '/monitors.php';
+require __DIR__ . '/shields.php';
+require __DIR__ . '/grinding.php';
+require __DIR__ . '/water.php';
+require __DIR__ . '/platforms.php';
 
 $failed = 0;
 

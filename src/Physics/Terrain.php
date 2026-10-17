@@ -15,8 +15,8 @@ final class Terrain
 	/**
 	 * Create spatial indexes and add the supplied solid or one-way shapes.
 	 *
-	 * @param list<array{points:array,oneWay?:bool,collisionLayer?:int}> $shapes Initial vertex
-	 * lists with optional one-way and collision-plane metadata.
+	 * @param array $shapes Initial vertex lists with optional one-way, collision-plane, and rail
+	 * metadata.
 	 * @param int $cellSize Positive broadphase cell size in world pixels.
 	 * @return void Initializes terrain with shared geometry unless a shape selects a plane.
 	 */
@@ -29,7 +29,12 @@ final class Terrain
 
 		foreach($shapes as $shape)
 		{
-			$this->add($shape['points'], $shape['oneWay'] ?? false, $shape['collisionLayer'] ?? 0);
+			$this->add(
+				$shape['points']
+				, $shape['oneWay'] ?? false
+				, $shape['collisionLayer'] ?? 0
+				, $shape['grinding'] ?? false
+			);
 		}
 	}
 
@@ -42,11 +47,16 @@ final class Terrain
 	 * directed edge, three or more a closed polygon.
 	 * @param bool $oneWay Keep only upward-facing edges and permit passage from below.
 	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @param bool $grinding Mark contacts on the shape as grinding rails.
 	 * @return void Adds geometry without changing any body's selected plane.
 	 */
-	public function add(array $points, bool $oneWay = false, int $collisionLayer = 0): void
-	{
-		$handle = $this->addShape($points, $oneWay, $collisionLayer);
+	public function add(
+		array $points
+		, bool $oneWay = false
+		, int $collisionLayer = 0
+		, bool $grinding = false
+	): void {
+		$handle = $this->addShape($points, $oneWay, $collisionLayer, $grinding);
 
 		// Permanent map terrain does not need to retain removable-shape bookkeeping.
 		foreach($this->shapes[$handle]['segments'] as $id)
@@ -58,15 +68,57 @@ final class Terrain
 	}
 
 	/**
+	 * Add an open scripted rail path as upward-facing one-way collision segments.
+	 *
+	 * @param list<array{float|int,float|int}> $points Ordered world-space rail vertices.
+	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @return void Adds every consecutive path segment with grinding metadata.
+	 */
+	public function addRail(array $points, int $collisionLayer = 0): void
+	{
+		if(count($points) < 2)
+		{
+			throw new \InvalidArgumentException('Rails require at least two vertices');
+		}
+
+		foreach($points as $point)
+		{
+			if(!is_array($point) || !isset($point[0], $point[1])
+				|| !is_numeric($point[0]) || !is_numeric($point[1])
+				|| !is_finite((float)$point[0]) || !is_finite((float)$point[1])
+			){
+				throw new \InvalidArgumentException('Rail vertices must be finite coordinates');
+			}
+		}
+
+		for($i = 1; $i < count($points); $i++)
+		{
+			$segment = [$points[$i - 1], $points[$i]];
+
+			if($segment[1][0] < $segment[0][0])
+			{
+				$segment = array_reverse($segment);
+			}
+
+			$this->add($segment, true, $collisionLayer, true);
+		}
+	}
+
+	/**
 	 * Add geometry and retain a stable handle for removing it later.
 	 *
 	 * @param list<array{float|int,float|int}> $points Finite vertices forming an edge or polygon.
 	 * @param bool $oneWay Keep only upward-facing edges and permit passage from below.
 	 * @param int $collisionLayer Nonnegative plane ID; zero is common to every body.
+	 * @param bool $grinding Mark contacts on the shape as grinding rails.
 	 * @return int Shape handle, never reused, accepted by removeShape.
 	 */
-	public function addShape(array $points, bool $oneWay = false, int $collisionLayer = 0): int
-	{
+	public function addShape(
+		array $points
+		, bool $oneWay = false
+		, int $collisionLayer = 0
+		, bool $grinding = false
+	): int {
 		if($collisionLayer < 0)
 		{
 			throw new \InvalidArgumentException('Collision layers must be nonnegative');
@@ -151,7 +203,7 @@ final class Terrain
 			$key = json_encode([$x + 0.0,$y + 0.0,$u + 0.0,$v + 0.0]);
 			$reverse = json_encode([$u + 0.0,$v + 0.0,$x + 0.0,$y + 0.0]);
 			$id = $this->nextSegment++;
-			$this->segments[$id] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer];
+			$this->segments[$id] = [$x,$y,$u,$v,$nx,$ny,$oneWay,$collisionLayer,$grinding];
 			$this->shapes[$shape]['segments'][] = $id;
 			$this->segmentShapes[$id] = $shape;
 
@@ -437,14 +489,26 @@ final class Terrain
 	}
 
 	/**
+	 * Test whether the complete oriented body fits its current collision plane.
+	 *
+	 * @param Body $body Proposed center, orientation, dimensions, and collision plane.
+	 * @return bool True when its interior is free of solid terrain; one-way edges permit overlap.
+	 */
+	public function canPlace(Body $body): bool
+	{
+		return $this->canSwitch($body, $body->collisionLayer, true);
+	}
+
+	/**
 	 * Check destination occupancy and new solid edges against the oriented body interior.
 	 *
 	 * @param Body $body Actor whose center, bounds, orientation, and current plane are inspected.
 	 * @param int $target Destination collision plane to test together with common terrain.
+	 * @param bool $all Include existing solid edges when testing a placement without a plane change.
 	 * @return bool True when changing planes will not embed the actor in newly active solid
 	 * geometry.
 	 */
-	private function canSwitch(Body $body, int $target): bool
+	private function canSwitch(Body $body, int $target, bool $all = false): bool
 	{
 		if($this->solidAt($body->x, $body->y, $target))
 		{
@@ -473,7 +537,7 @@ final class Terrain
 
 					$seen[$id] = true;
 
-					if(!$this->active($id, $target) || $this->active($id, $body->collisionLayer))
+					if(!$this->active($id, $target) || (!$all && $this->active($id, $body->collisionLayer)))
 					{
 						continue;
 					}
@@ -579,7 +643,7 @@ final class Terrain
 					}
 
 					$seen[$id] = true;
-					[$ax,$ay,$bx,$by,$nx,$ny,$oneWay] = $this->segments[$id];
+					[$ax,$ay,$bx,$by,$nx,$ny,$oneWay,,$grinding] = $this->segments[$id];
 
 					if(($ignoreOneWay && $oneWay) || $dx * $nx + $dy * $ny >= -1e-9)
 					{
@@ -611,6 +675,7 @@ final class Terrain
 							, $ny
 							, $oneWay
 							, $this->segmentShapes[$id] ?? null
+							, $grinding
 						);
 					}
 				}
@@ -673,7 +738,7 @@ final class Terrain
 					}
 
 					$seen[$id] = true;
-					[$ax,$ay,$bx,$by,$nx,$ny,$oneWay] = $this->segments[$id];
+					[$ax,$ay,$bx,$by,$nx,$ny,$oneWay,,$grinding] = $this->segments[$id];
 
 					if(($ignoreOneWay && $oneWay) || $dx * $nx + $dy * $ny >= -1e-8)
 					{
@@ -699,7 +764,10 @@ final class Terrain
 
 						if(abs($velocity) < 1e-10)
 						{
-							if($origin < $lo - 1e-8 || $origin > $hi + 1e-8)
+							// Touching an endpoint cap while moving parallel to this axis does not enter
+							// the expanded segment. This lets a body cross from a rail onto a solid top
+							// without the polygon's vertical edge acting as a wall above its endpoint.
+							if($origin <= $lo + 1e-8 || $origin >= $hi - 1e-8)
 							{
 								$far = -INF;
 								break;
@@ -750,6 +818,7 @@ final class Terrain
 						, $hy
 						, $oneWay
 						, $this->segmentShapes[$id] ?? null
+						, $grinding
 					);
 				}
 			}

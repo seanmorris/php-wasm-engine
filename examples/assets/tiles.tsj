@@ -3,10 +3,10 @@
     "name": "demo",
     "tilewidth": 32,
     "tileheight": 32,
-    "columns": 26,
-    "tilecount": 26,
+    "columns": 37,
+    "tilecount": 37,
     "image": "tiles.png",
-    "imagewidth": 832,
+    "imagewidth": 1184,
     "imageheight": 32,
     "tiles": [
         {
@@ -74,6 +74,11 @@
             "properties": [
                 {
                     "name": "oneWay",
+                    "value": true
+                },
+                {
+                    "name": "grinding",
+                    "type": "bool",
                     "value": true
                 }
             ],
@@ -227,6 +232,62 @@
                 {
                     "tileid": 25,
                     "duration": 80
+                }
+            ]
+        },
+        {
+            "id": 26,
+            "class": "water-splash",
+            "animation": [
+                {
+                    "tileid": 26,
+                    "duration": 46
+                },
+                {
+                    "tileid": 27,
+                    "duration": 46
+                },
+                {
+                    "tileid": 28,
+                    "duration": 46
+                },
+                {
+                    "tileid": 29,
+                    "duration": 46
+                },
+                {
+                    "tileid": 30,
+                    "duration": 46
+                },
+                {
+                    "tileid": 31,
+                    "duration": 46
+                },
+                {
+                    "tileid": 32,
+                    "duration": 44
+                }
+            ]
+        },
+        {
+            "id": 33,
+            "class": "water-skim",
+            "animation": [
+                {
+                    "tileid": 33,
+                    "duration": 48
+                },
+                {
+                    "tileid": 34,
+                    "duration": 48
+                },
+                {
+                    "tileid": 35,
+                    "duration": 48
+                },
+                {
+                    "tileid": 36,
+                    "duration": 48
                 }
             ]
         }

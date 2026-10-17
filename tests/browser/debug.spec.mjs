@@ -70,6 +70,22 @@ test(
 		await expect.poll(async () => (await state(page)).frame).toBeGreaterThan(previous + 2);
 		expect((await state(page)).enabled).toBe(true);
 
+		const liveFrames = await page.evaluate(async() => {
+			const canvas = document.querySelector('canvas');
+			const frames = [];
+
+			for(let index = 0; index < 4; index++)
+			{
+				await new Promise(requestAnimationFrame);
+				const debug = JSON.parse(canvas.dataset.debug);
+				frames.push([debug.frame, Number(debug.rows['Render frame'])]);
+			}
+
+			return frames;
+		});
+
+		expect(liveFrames.every(([frame, row]) => frame === row)).toBe(true);
+
 		const x = Number((await state(page)).rows['X px']);
 		await page.keyboard.down('ArrowRight');
 		await expect.poll(async () => Number((await state(page)).rows['X px'])).toBeGreaterThan(x + 10);

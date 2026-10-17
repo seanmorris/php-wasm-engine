@@ -32,12 +32,38 @@ final class Camera
 	 * @param float $dt Elapsed time in seconds.
 	 * @param float $stiffness Nonnegative response rate per second; larger values follow more
 	 * tightly.
+	 * @param float $anchorX Horizontal target position within the visible world from zero through
+	 * one.
+	 * @param float $anchorY Vertical target position within the visible world from zero through one.
 	 * @return void Updates the camera's top-left position without changing viewport size or zoom.
 	 */
-	public function follow(float $x, float $y, float $dt, float $stiffness = 8): void
+	public function follow(
+		float $x
+		, float $y
+		, float $dt
+		, float $stiffness = 8
+		, float $anchorX = .5
+		, float $anchorY = .5
+	): void {
+		$targetX = $x - $this->width / $this->zoom * $anchorX;
+		$targetY = $y - $this->height / $this->zoom * $anchorY;
+
+		$this->panTo($targetX, $targetY, $dt, $stiffness);
+	}
+
+	/**
+	 * Smoothly move the camera toward a top-left world position using exponential damping.
+	 *
+	 * @param float $x Target top-left world X coordinate in pixels.
+	 * @param float $y Target top-left world Y coordinate in pixels.
+	 * @param float $dt Elapsed time in seconds.
+	 * @param float $stiffness Nonnegative response rate per second; larger values pan more tightly.
+	 * @return void Updates the camera pose without changing viewport size or zoom.
+	 */
+	public function panTo(float $x, float $y, float $dt, float $stiffness = 8): void
 	{
 		$blend = 1 - exp(-$stiffness * $dt);
-		$this->x += ($x - $this->width / $this->zoom / 2 - $this->x) * $blend;
-		$this->y += ($y - $this->height / $this->zoom / 2 - $this->y) * $blend;
+		$this->x += ($x - $this->x) * $blend;
+		$this->y += ($y - $this->y) * $blend;
 	}
 }

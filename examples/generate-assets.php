@@ -40,7 +40,7 @@ $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
 $playerColors = [[86,167,245,255],[242,120,114,255],[246,189,83,255]];
 
-png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerColors) {
+png(__DIR__ . '/assets/tiles.png', 1184, 32, static function($x, $y) use($playerColors) {
 	$id = intdiv($x, 32);
 	$x %= 32;
 
@@ -165,7 +165,7 @@ png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerC
 		return $stripe && hypot($dx, $dy) < 8 ? [240,247,255,255] : $playerColors[$profile];
 	}
 
-	if($id >= 9)
+	if($id >= 9 && $id < 12)
 	{
 		if($x < 5 || $x > 26 || $y < 14 || $y > 29 || (($x < 9 || $x > 23) && $y < 23))
 		{
@@ -178,6 +178,59 @@ png(__DIR__ . '/assets/tiles.png', 832, 32, static function($x, $y) use($playerC
 		}
 
 		return $y > 26 ? [222,238,247,255] : $playerColors[$id - 9];
+	}
+
+	if($id >= 26 && $id <= 32)
+	{
+		$frame = $id - 26;
+		$progress = $frame / 6;
+		$radiusX = 4 + $frame * 1.75;
+		$radiusY = max(1, 3.5 - $frame * .35);
+		$ellipse = hypot(($x - 16) / $radiusX, ($y - 27) / $radiusY);
+		$alpha = (int)round(230 * (1 - $progress * .6));
+
+		if(abs($ellipse - 1) < .24)
+		{
+			return [116,224,239,$alpha];
+		}
+
+		foreach([-1,1] as $side)
+		{
+			$dropX = 16 + $side * (3 + $frame * 1.6);
+			$dropY = 25 - sin($progress * M_PI) * 15;
+
+			if(hypot($x - $dropX, $y - $dropY) <= max(1, 2.4 - $progress))
+			{
+				return [153,238,247,$alpha];
+			}
+		}
+
+		return [0,0,0,0];
+	}
+
+	if($id >= 33 && $id <= 36)
+	{
+		$frame = $id - 33;
+		$crestX = 24 - $frame * 2;
+		$crestY = 25 - $frame % 2;
+		$alpha = 190 - $frame * 12;
+
+		if($x <= $crestX && $x >= 2 + $frame
+			&& (($y === 27 && ($x + $frame) % 3 !== 0)
+				|| ($y === 23 + $frame % 2 && $x >= 8 && ($x + $frame) % 4 < 2)
+			)
+		){
+			return [128,225,239,$alpha];
+		}
+
+		if(hypot(($x - $crestX) / 5, ($y - $crestY) / 7) >= .72
+			&& hypot(($x - $crestX) / 5, ($y - $crestY) / 7) <= 1.12
+			&& $x >= $crestX
+		){
+			return [174,242,248,$alpha];
+		}
+
+		return [0,0,0,0];
 	}
 
 	if($x < 6 || $x > 25 || $y < 3 || $y > 29)
@@ -204,10 +257,10 @@ $tiles = [
 	, 'name' => 'demo'
 	, 'tilewidth' => 32
 	, 'tileheight' => 32
-	, 'columns' => 26
-	, 'tilecount' => 26
+	, 'columns' => 37
+	, 'tilecount' => 37
 	, 'image' => 'tiles.png'
-	, 'imagewidth' => 832
+	, 'imagewidth' => 1184
 	, 'imageheight' => 32
 	, 'tiles' => [
 		['id' => 0,'properties' => $solid]
@@ -249,6 +302,7 @@ $tiles = [
 					'name' => 'oneWay'
 					, 'value' => true
 				]
+				, ['name' => 'grinding','type' => 'bool','value' => true]
 			]
 			, 'objectgroup' => [
 				'objects' => [
@@ -334,10 +388,406 @@ $tiles = [
 				, ['tileid' => 25,'duration' => 80]
 			]
 		]
+		, [
+			'id' => 26
+			, 'class' => 'water-splash'
+			, 'animation' => [
+				['tileid' => 26,'duration' => 46]
+				, ['tileid' => 27,'duration' => 46]
+				, ['tileid' => 28,'duration' => 46]
+				, ['tileid' => 29,'duration' => 46]
+				, ['tileid' => 30,'duration' => 46]
+				, ['tileid' => 31,'duration' => 46]
+				, ['tileid' => 32,'duration' => 44]
+			]
+		]
+		, [
+			'id' => 33
+			, 'class' => 'water-skim'
+			, 'animation' => [
+				['tileid' => 33,'duration' => 48]
+				, ['tileid' => 34,'duration' => 48]
+				, ['tileid' => 35,'duration' => 48]
+				, ['tileid' => 36,'duration' => 48]
+			]
+		]
 	]
 ];
 
 jsonAsset('tiles.tsj', $tiles);
+
+png(__DIR__ . '/assets/monitors.png', 768, 32, static function($x, $y) {
+	$id = intdiv($x, 32);
+	$x %= 32;
+	$transparent = [0,0,0,0];
+	$dark = [31,39,52,255];
+	$middle = [92,111,128,255];
+	$light = [204,220,224,255];
+	$gold = [255,205,73,255];
+	$colors = [
+		[139,231,255,255]
+		, [112,184,255,255]
+		, [255,100,43,255]
+		, [67,220,240,255]
+		, [255,242,116,255]
+	];
+
+	if($id === 0 || $id === 1)
+	{
+		if(($x >= 2 && $x <= 29 && $y >= 2 && $y <= 27)
+			|| ($y >= 28 && $y <= 31 && (($x >= 4 && $x <= 11) || ($x >= 21 && $x <= 28)))
+		){
+			if($x >= 5 && $x <= 26 && $y >= 5 && $y <= 21)
+			{
+				return ($x + $y + $id) % 7 === 0 ? [52,75,85,255] : [12,20,29,255];
+			}
+
+			return ($x <= 4 || $y <= 4) ? $light : (($x + $y + $id) % 5 === 0 ? $middle : $dark);
+		}
+
+		return $transparent;
+	}
+
+	if($id === 2)
+	{
+		if($y >= 18 && $y <= 29 && $x >= 2 && $x <= 29)
+		{
+			return (($x + $y) % 6 === 0) ? $middle : $dark;
+		}
+
+		if(($x >= 3 && $x <= 8 && $y >= 10 && $y <= 20)
+			|| ($x >= 23 && $x <= 28 && $y >= 13 && $y <= 21)
+		){
+			return $middle;
+		}
+
+		return $transparent;
+	}
+
+	if($id === 3)
+	{
+		$distance = hypot($x - 16, $y - 16);
+
+		return $distance >= 5 && $distance <= 8 ? $gold : $transparent;
+	}
+
+	if($id === 4)
+	{
+		return $transparent;
+	}
+
+	if($id === 5)
+	{
+		foreach([[11,17],[16,12],[21,17]] as [$cx, $cy])
+		{
+			$distance = hypot($x - $cx, $y - $cy);
+
+			if($distance >= 3 && $distance <= 5)
+			{
+				return $gold;
+			}
+		}
+
+		return $transparent;
+	}
+
+	if($id === 6 || $id === 7)
+	{
+		$dx = abs($x - 16);
+		$dy = abs($y - 16);
+		$outer = $id === 6 ? 12 : 15;
+		$inside = $dx + $dy <= $outer && (min($dx, $dy) <= 4 || $dx + $dy <= 8);
+
+		return $inside
+			? ($dx + $dy < 7 ? [255,246,183,255] : [255,132,62,255])
+			: $transparent;
+	}
+
+	if($id >= 9 && $id <= 13)
+	{
+		$type = $id - 9;
+		$color = $colors[$type];
+		$dx = $x - 16;
+		$dy = $y - 16;
+		$distance = hypot($dx, $dy);
+
+		if($type === 0)
+		{
+			return $distance >= 7 && $distance <= 10 ? $color : $transparent;
+		}
+
+		if($type === 1)
+		{
+			$bolt = ($y >= 5 && $y <= 26)
+				&& (($x >= 15 && $x <= 19 && $y < 15)
+					|| ($x >= 11 && $x <= 16 && $y >= 13 && $y < 18)
+					|| ($x >= 13 && $x <= 16 && $y >= 17)
+				);
+
+			return $bolt ? $color : $transparent;
+		}
+
+		if($type === 2)
+		{
+			$flame = $y >= 6 && $y <= 26 && abs($dx) <= max(2, intdiv($y - 2, 3))
+				&& !($y > 18 && abs($dx) < 3);
+
+			return $flame ? ($distance < 6 ? [255,225,96,255] : $color) : $transparent;
+		}
+
+		if($type === 3)
+		{
+			return $distance >= 7 && $distance <= 11
+				? ($x < 13 && $y < 13 ? $light : $color)
+				: $transparent;
+		}
+
+		$star = abs($dx) <= 2 || abs($dy) <= 2 || abs($dx - $dy) <= 1 || abs($dx + $dy) <= 1;
+
+		return $star && $distance <= 11 ? $color : $transparent;
+	}
+
+	if($id >= 14 && $id <= 23)
+	{
+		$type = intdiv($id - 14, 2);
+		$frame = ($id - 14) % 2;
+		$color = $colors[$type];
+		$dx = $x - 16;
+		$dy = $y - 16;
+		$distance = hypot($dx, $dy);
+		$radius = 13 + $frame;
+		$edge = $distance >= $radius - 1.5 && $distance <= $radius + .75;
+		$spark = (($x + $y * 3 + $type * 5 + $frame * 7) % 19 === 0)
+			&& $distance >= 10 && $distance <= 15;
+
+		if($type === 1 && $edge)
+		{
+			$edge = (($x + $y + $frame * 2) % 5) < 3;
+		}
+
+		if($type === 2 && $edge)
+		{
+			$edge = $y < 22 || (($x + $frame) % 4) < 2;
+		}
+
+		if($type === 4 && $spark)
+		{
+			return [255,255,255,255];
+		}
+
+		return $edge || $spark ? $color : $transparent;
+	}
+
+	return $transparent;
+});
+
+$monitors = [
+	'type' => 'tileset'
+	, 'name' => 'monitors'
+	, 'tilewidth' => 32
+	, 'tileheight' => 32
+	, 'columns' => 24
+	, 'tilecount' => 24
+	, 'image' => 'monitors.png'
+	, 'imagewidth' => 768
+	, 'imageheight' => 32
+	, 'tiles' => [
+		[
+			'id' => 0
+			, 'class' => 'monitor-shell'
+			, 'animation' => [
+				['tileid' => 0,'duration' => 180]
+				, ['tileid' => 1,'duration' => 180]
+			]
+		]
+		, ['id' => 2,'class' => 'monitor-broken']
+		, [
+			'id' => 3
+			, 'class' => 'monitor-screen-ring'
+			, 'animation' => [
+				['tileid' => 4,'duration' => 192]
+				, ['tileid' => 3,'duration' => 460]
+				, ['tileid' => 4,'duration' => 116]
+			]
+		]
+		, [
+			'id' => 5
+			, 'class' => 'monitor-screen-triple-ring'
+			, 'animation' => [
+				['tileid' => 4,'duration' => 192]
+				, ['tileid' => 5,'duration' => 460]
+				, ['tileid' => 4,'duration' => 116]
+			]
+		]
+		, [
+			'id' => 6
+			, 'class' => 'monitor-explosion'
+			, 'animation' => [
+				['tileid' => 6,'duration' => 80]
+				, ['tileid' => 7,'duration' => 80]
+			]
+		]
+		, ...array_map(
+			static fn($type, $id) => [
+				'id' => $id
+				, 'class' => 'monitor-screen-shield-' . $type
+				, 'animation' => [
+					['tileid' => 4,'duration' => 192]
+					, ['tileid' => $id,'duration' => 460]
+					, ['tileid' => 4,'duration' => 116]
+				]
+			]
+			, ['normal', 'electric', 'fire', 'water', 'star']
+			, range(9, 13)
+		)
+		, ...array_map(
+			static fn($type, $id) => [
+				'id' => $id
+				, 'class' => 'shield-aura-' . $type
+				, 'animation' => [
+					['tileid' => $id,'duration' => 120]
+					, ['tileid' => $id + 1,'duration' => 120]
+				]
+			]
+			, ['normal', 'electric', 'fire', 'water', 'star']
+			, [14, 16, 18, 20, 22]
+		)
+	]
+];
+
+jsonAsset('monitors.tsj', $monitors);
+
+png(__DIR__ . '/assets/bosses.png', 480, 48, static function($x, $y) {
+	$id = intdiv($x, 48);
+	$x %= 48;
+	$transparent = [0,0,0,0];
+	$dx = $x - 24;
+	$dy = $y - 24;
+	$distance = hypot($dx, $dy);
+
+	if($id <= 4)
+	{
+		$damaged = $id === 2 || $id === 3;
+		$dead = $id === 4;
+		$alternate = $id % 2;
+		$outer = $damaged ? [255,111,60,255] : ($dead ? [85,94,112,255] : [119,211,224,255]);
+		$middle = $damaged ? [188,44,56,255] : ($dead ? [45,51,67,255] : [38,91,121,255]);
+		$core = $damaged ? [255,224,117,255] : ($dead ? [20,25,36,255] : [248,218,103,255]);
+
+		if($distance > 22)
+		{
+			return $transparent;
+		}
+
+		if($distance >= 18 || abs($dx) <= 2 || abs($dy) <= 2)
+		{
+			return $outer;
+		}
+
+		if($distance >= 10)
+		{
+			return (($x + $y + $alternate * 3) % 7 === 0) ? $outer : $middle;
+		}
+
+		if($dead && (abs($dx + $dy) <= 1 || ($dy > 0 && abs($dx - 4) <= 1)))
+		{
+			return [238,240,242,255];
+		}
+
+		if($dy >= -4 && $dy <= 3 && $dx >= -7 && $dx <= 7)
+		{
+			if($dx >= 2 - $alternate && $dx <= 5 - $alternate && !$dead)
+			{
+				return [250,251,247,255];
+			}
+
+			return $dead ? [12,15,22,255] : $core;
+		}
+
+		return $middle;
+	}
+
+	if($id === 5 || $id === 6)
+	{
+		$angle = atan2($dy, $dx) + ($id - 5) * M_PI / 8;
+		$spoke = abs(sin($angle * 4)) < .28 && $distance <= 15;
+
+		if($distance <= 9 || $spoke && $distance >= 7)
+		{
+			return $distance <= 4 ? [255,208,75,255] : [191,53,72,255];
+		}
+
+		return $transparent;
+	}
+
+	if($id === 7)
+	{
+		return abs($dx) + abs($dy) <= 6
+			? (abs($dx) + abs($dy) <= 2 ? [255,239,148,255] : [209,54,67,255])
+			: $transparent;
+	}
+
+	$outer = $id === 8 ? 19 : 23;
+	$inner = $id === 8 ? 7 : 11;
+	$ray = abs($dx) <= 2 || abs($dy) <= 2 || abs($dx - $dy) <= 2 || abs($dx + $dy) <= 2;
+
+	if($distance <= $inner || $ray && $distance <= $outer)
+	{
+		return $distance <= $inner ? [255,244,174,255] : [255,116,50,255];
+	}
+
+	return $transparent;
+});
+
+$bosses = [
+	'type' => 'tileset'
+	, 'name' => 'bosses'
+	, 'tilewidth' => 48
+	, 'tileheight' => 48
+	, 'columns' => 10
+	, 'tilecount' => 10
+	, 'image' => 'bosses.png'
+	, 'imagewidth' => 480
+	, 'imageheight' => 48
+	, 'tiles' => [
+		[
+			'id' => 0
+			, 'class' => 'mini-boss-idle'
+			, 'animation' => [
+				['tileid' => 0,'duration' => 160]
+				, ['tileid' => 1,'duration' => 160]
+			]
+		]
+		, [
+			'id' => 2
+			, 'class' => 'mini-boss-damaged'
+			, 'animation' => [
+				['tileid' => 2,'duration' => 45]
+				, ['tileid' => 3,'duration' => 45]
+			]
+		]
+		, ['id' => 4,'class' => 'mini-boss-dead']
+		, [
+			'id' => 5
+			, 'class' => 'spike-bomb'
+			, 'animation' => [
+				['tileid' => 5,'duration' => 90]
+				, ['tileid' => 6,'duration' => 90]
+			]
+		]
+		, ['id' => 7,'class' => 'spike-fragment']
+		, [
+			'id' => 8
+			, 'class' => 'boss-explosion'
+			, 'animation' => [
+				['tileid' => 8,'duration' => 80]
+				, ['tileid' => 9,'duration' => 80]
+			]
+		]
+	]
+];
+
+jsonAsset('bosses.tsj', $bosses);
 $width = 96;
 $height = 20;
 $floor = array_fill(0, $width * $height, 0);
@@ -568,8 +1018,197 @@ $base['layers'] = [
 ];
 
 $base['layers'] = array_merge($background, $base['layers']);
-jsonAsset('platformer.tmj', $base);
+$platformer = $base;
+
+for($x = 42; $x <= 50; $x++)
+{
+	$platformer['layers'][count($background)]['data'][13 * $width + $x] = 4;
+}
+
+jsonAsset('platformer.tmj', $platformer);
+$waterProperties = [
+	['name' => 'gravity','type' => 'float','value' => .4]
+	, ['name' => 'drag','type' => 'float','value' => .85]
+	, ['name' => 'density','type' => 'float','value' => 1]
+	, ['name' => 'skimSpeed','type' => 'float','value' => 900]
+	, ['name' => 'color','type' => 'color','value' => '#4d147ab8']
+	, ['name' => 'displacement','type' => 'float','value' => 4]
+	, ['name' => 'displacementScale','type' => 'float','value' => 64]
+	, ['name' => 'displacementSpeed','type' => 'float','value' => 42.6666667]
+];
+
+$waterFloor = array_fill(0, $width * $height, 0);
+
+for($x = 0; $x < $width; $x++)
+{
+	$top = $x >= 28 && $x < 56 ? 18 : 14;
+
+	for($y = $top; $y < $height; $y++)
+	{
+		$waterFloor[$y * $width + $x] = 1;
+	}
+}
+
+$water = $base;
+$water['layers'][count($background)]['data'] = $waterFloor;
+$water['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
+$water['layers'][] = [
+	'id' => 4
+	, 'name' => 'Water regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 896
+			, 'y' => 448
+			, 'width' => 896
+			, 'height' => 192
+			, 'properties' => $waterProperties
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water.tmj', $water);
+$waterRailFloor = array_fill(0, $width * $height, 0);
+$waterRailLandStart = 56;
+
+for($x = 0; $x < $width; $x++)
+{
+	if($x < 14 || $x >= $waterRailLandStart)
+	{
+		for($y = 14; $y < $height; $y++)
+		{
+			$waterRailFloor[$y * $width + $x] = 1;
+		}
+	}
+	else
+	{
+		$waterRailFloor[14 * $width + $x] = 4;
+
+		for($y = 18; $y < $height; $y++)
+		{
+			$waterRailFloor[$y * $width + $x] = 1;
+		}
+	}
+}
+
+$waterRail = $base;
+$waterRail['layers'][count($background)]['name'] = 'Land and rail';
+$waterRail['layers'][count($background)]['data'] = $waterRailFloor;
+$waterRail['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
+$waterRailArt = array_fill(0, $width * $height, 0);
+
+for($y = 14; $y < $height; $y++)
+{
+	for($x = $waterRailLandStart; $x < $width; $x++)
+	{
+		$waterRailFloor[$y * $width + $x] = 0;
+		$waterRailArt[$y * $width + $x] = 1;
+	}
+}
+
+$waterRail['layers'][count($background)]['data'] = $waterRailFloor;
+$waterRail['layers'][] = [
+	'id' => 4
+	, 'name' => 'Dry land art'
+	, 'type' => 'tilelayer'
+	, 'width' => $width
+	, 'height' => $height
+	, 'data' => $waterRailArt
+	, 'properties' => [['name' => 'collision','type' => 'bool','value' => false]]
+] + $layerDefaults;
+
+$waterRail['layers'][] = [
+	'id' => 5
+	, 'name' => 'Dry land surface'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 3
+			, 'x' => $waterRailLandStart * $base['tilewidth']
+			, 'y' => 14 * $base['tileheight']
+			, 'width' => ($width - $waterRailLandStart) * $base['tilewidth']
+			, 'height' => ($height - 14) * $base['tileheight']
+			, 'properties' => [
+				['name' => 'solid','type' => 'bool','value' => true]
+			]
+		]
+	]
+] + $layerDefaults;
+
+$waterRail['layers'][] = [
+	'id' => 6
+	, 'name' => 'Water regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 640
+			, 'y' => 352
+			, 'width' => 960
+			, 'height' => 288
+			, 'properties' => $waterProperties
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water-rail.tmj', $waterRail);
+$waterSkimRailFloor = array_fill(0, $width * $height, 0);
+
+for($x = 0; $x < $width; $x++)
+{
+	$rail = ($x >= 8 && $x < 48) || ($x >= 56 && $x < 88);
+	$land = $x < 8 || $x >= 88;
+
+	if($rail)
+	{
+		$waterSkimRailFloor[14 * $width + $x] = 4;
+	}
+	elseif($land)
+	{
+		for($y = 14; $y < $height; $y++)
+		{
+			$waterSkimRailFloor[$y * $width + $x] = 1;
+		}
+	}
+
+	for($y = 18; $y < $height; $y++)
+	{
+		$waterSkimRailFloor[$y * $width + $x] = 1;
+	}
+}
+
+$waterSkimRail = $base;
+$waterSkimRail['layers'][count($background)]['name'] = 'Banks, surface rails, and seabed';
+$waterSkimRail['layers'][count($background)]['data'] = $waterSkimRailFloor;
+$waterSkimRail['layers'][count($background) + 1]['data'] = array_fill(0, $width * $height, 0);
+$waterSkimRail['layers'][] = [
+	'id' => 4
+	, 'name' => 'Surface water'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 2
+			, 'class' => 'WaterRegion'
+			, 'x' => 40 * $base['tilewidth']
+			, 'y' => 14 * $base['tileheight']
+			, 'width' => 24 * $base['tilewidth']
+			, 'height' => 6 * $base['tileheight']
+			, 'properties' => $waterProperties
+		]
+	]
+] + $layerDefaults;
+
+jsonAsset('water-skim-rail.tmj', $waterSkimRail);
 $badniks = $base;
+$badniks['tilesets'][] = ['firstgid' => $tiles['tilecount'] + 1,'source' => 'monitors.tsj'];
+$badniks['tilesets'][] = [
+	'firstgid' => $tiles['tilecount'] + $monitors['tilecount'] + 1
+	, 'source' => 'bosses.tsj'
+];
+
 $badniks['layers'][] = [
 	'id' => 4
 	, 'name' => 'Badniks'
@@ -591,13 +1230,92 @@ $badniks['layers'][] = [
 		]
 		, [
 			'id' => 3
-			, 'class' => 'CrabMeat'
+			, 'class' => 'MiniBoss'
 			, 'point' => true
-			, 'x' => 1408
-			, 'y' => 448
+			, 'x' => 1728
+			, 'y' => 352
 			, 'properties' => [
-				['name' => 'direction','type' => 'int','value' => 1]
-				, ['name' => 'patrolOffset','type' => 'float','value' => 45]
+				['name' => 'hitPoints','type' => 'int','value' => 8]
+				, ['name' => 'points','type' => 'int','value' => 1000]
+				, ['name' => 'bombInterval','type' => 'float','value' => 60]
+			]
+		]
+	]
+] + $layerDefaults;
+
+$badniks['layers'][] = [
+	'id' => 5
+	, 'name' => 'Monitors'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 4
+			, 'class' => 'RingMonitor'
+			, 'point' => true
+			, 'x' => 288
+			, 'y' => 448
+		]
+		, [
+			'id' => 5
+			, 'class' => 'TripleRingMonitor'
+			, 'point' => true
+			, 'x' => 800
+			, 'y' => 288
+		]
+		, [
+			'id' => 6
+			, 'class' => 'NormalShieldMonitor'
+			, 'point' => true
+			, 'x' => 1056
+			, 'y' => 288
+		]
+		, [
+			'id' => 7
+			, 'class' => 'ElectricShieldMonitor'
+			, 'point' => true
+			, 'x' => 1312
+			, 'y' => 448
+		]
+		, [
+			'id' => 8
+			, 'class' => 'FireShieldMonitor'
+			, 'point' => true
+			, 'x' => 1632
+			, 'y' => 448
+		]
+		, [
+			'id' => 9
+			, 'class' => 'WaterShieldMonitor'
+			, 'point' => true
+			, 'x' => 1936
+			, 'y' => 448
+		]
+		, [
+			'id' => 10
+			, 'class' => 'StarShieldMonitor'
+			, 'point' => true
+			, 'x' => 2080
+			, 'y' => 448
+		]
+	]
+] + $layerDefaults;
+
+$badniks['layers'][] = [
+	'id' => 6
+	, 'name' => 'Boss regions'
+	, 'type' => 'objectgroup'
+	, 'objects' => [
+		[
+			'id' => 11
+			, 'name' => 'boss-region'
+			, 'class' => 'BossRegion'
+			, 'x' => 960
+			, 'y' => 0
+			, 'width' => 1280
+			, 'height' => 448
+			, 'properties' => [
+				['name' => 'boss', 'type' => 'object', 'value' => 3]
+				, ['name' => 'cameraAnchorY', 'type' => 'float', 'value' => .72]
 			]
 		]
 	]
@@ -791,3 +1509,10 @@ foreach(range(-2, 2) as $section)
 
 jsonAsset('stream.world', ['type' => 'world','maps' => $worldMaps]);
 require __DIR__ . '/generate-loop.php';
+
+require __DIR__ . '/generate-platforms.php';
+require __DIR__ . '/generate-light-dash.php';
+
+require __DIR__ . '/generate-grapples.php';
+
+require __DIR__ . '/generate-vehicles.php';

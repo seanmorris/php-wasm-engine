@@ -12,6 +12,14 @@
         {
             "firstgid": 1,
             "source": "tiles.tsj"
+        },
+        {
+            "firstgid": 38,
+            "source": "monitors.tsj"
+        },
+        {
+            "firstgid": 62,
+            "source": "bosses.tsj"
         }
     ],
     "layers": [
@@ -4112,20 +4120,117 @@
                 },
                 {
                     "id": 3,
-                    "class": "CrabMeat",
+                    "class": "MiniBoss",
                     "point": true,
-                    "x": 1408,
-                    "y": 448,
+                    "x": 1728,
+                    "y": 352,
                     "properties": [
                         {
-                            "name": "direction",
+                            "name": "hitPoints",
                             "type": "int",
-                            "value": 1
+                            "value": 8
                         },
                         {
-                            "name": "patrolOffset",
+                            "name": "points",
+                            "type": "int",
+                            "value": 1000
+                        },
+                        {
+                            "name": "bombInterval",
                             "type": "float",
-                            "value": 45
+                            "value": 60
+                        }
+                    ]
+                }
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": 5,
+            "name": "Monitors",
+            "type": "objectgroup",
+            "objects": [
+                {
+                    "id": 4,
+                    "class": "RingMonitor",
+                    "point": true,
+                    "x": 288,
+                    "y": 448
+                },
+                {
+                    "id": 5,
+                    "class": "TripleRingMonitor",
+                    "point": true,
+                    "x": 800,
+                    "y": 288
+                },
+                {
+                    "id": 6,
+                    "class": "NormalShieldMonitor",
+                    "point": true,
+                    "x": 1056,
+                    "y": 288
+                },
+                {
+                    "id": 7,
+                    "class": "ElectricShieldMonitor",
+                    "point": true,
+                    "x": 1312,
+                    "y": 448
+                },
+                {
+                    "id": 8,
+                    "class": "FireShieldMonitor",
+                    "point": true,
+                    "x": 1632,
+                    "y": 448
+                },
+                {
+                    "id": 9,
+                    "class": "WaterShieldMonitor",
+                    "point": true,
+                    "x": 1936,
+                    "y": 448
+                },
+                {
+                    "id": 10,
+                    "class": "StarShieldMonitor",
+                    "point": true,
+                    "x": 2080,
+                    "y": 448
+                }
+            ],
+            "visible": true,
+            "opacity": 1,
+            "x": 0,
+            "y": 0
+        },
+        {
+            "id": 6,
+            "name": "Boss regions",
+            "type": "objectgroup",
+            "objects": [
+                {
+                    "id": 11,
+                    "name": "boss-region",
+                    "class": "BossRegion",
+                    "x": 960,
+                    "y": 0,
+                    "width": 1280,
+                    "height": 448,
+                    "properties": [
+                        {
+                            "name": "boss",
+                            "type": "object",
+                            "value": 3
+                        },
+                        {
+                            "name": "cameraAnchorY",
+                            "type": "float",
+                            "value": 0.72
                         }
                     ]
                 }

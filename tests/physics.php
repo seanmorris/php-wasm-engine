@@ -74,6 +74,22 @@ test('shared tile edges do not form invisible walls', function() {
 	near($body->y + $body->halfHeight, 448, .01);
 });
 
+test('tangent motion crosses from an open surface onto a solid ledge corner', function() {
+	$terrain = new Terrain;
+	$terrain->add([[-100,100],[100,100]], true);
+	$terrain->add([[100,100],[200,100],[200,200],[100,200]]);
+	$body = new Body(80, 82);
+	$body->grounded = true;
+	$body->groundSpeed = 240;
+	$body->friction = 0;
+	$body->gravity = 0;
+	$movement = new Platformer($terrain);
+	tick($movement, $body, [], 20);
+	check($body->grounded && $body->x > 120);
+	near($body->groundSpeed, 240);
+	near($body->supportY(), 100, .01);
+});
+
 test('surface attachment follows a full loop and releases at low speed', function() {
 	$terrain = new Terrain;
 

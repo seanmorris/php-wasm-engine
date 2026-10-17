@@ -3,6 +3,8 @@ use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Gameplay\Badnik;
 use PhpWasmEngine\Gameplay\BadnikBehavior;
 use PhpWasmEngine\Gameplay\BadnikProjectile;
+use PhpWasmEngine\Gameplay\Combo;
+use PhpWasmEngine\Gameplay\ComboReward;
 use PhpWasmEngine\Gameplay\Badniks;
 use PhpWasmEngine\Gameplay\CrabMeat;
 use PhpWasmEngine\Gameplay\CrabMeats;
@@ -23,7 +25,7 @@ test('Tiled CrabMeat objects retain their timed patrol, poses, and paired delaye
 	$badniks = new Badniks($registry, $terrain);
 	$crabs = new CrabMeats($registry, $terrain, $map, $badniks);
 	$ids = $crabs->entities();
-	check(count($ids) === 2);
+	check(count($ids) === 1);
 	$entity = $ids[0];
 	$badnik = $registry->get($entity, Badnik::class);
 	$crab = $registry->get($entity, CrabMeat::class);
@@ -74,7 +76,9 @@ test('badnik contacts damage walking players and pop under swept rolling attacks
 	$body->grounded = true;
 	$counter = new RingCounter(5, 10);
 	$combat = new PlayerCombat(1);
-	$player = $registry->create($body, $counter, $combat);
+	$combo = new Combo;
+	$combo->add(new ComboReward('Before damage', 100));
+	$player = $registry->create($body, $counter, $combat, $combo);
 
 	$enemy = $badniks->create(
 		new Badnik(100, 0, points: 100, explosionGid: 2)
@@ -88,6 +92,7 @@ test('badnik contacts damage walking players and pop under swept rolling attacks
 	check($combat->hits === 1 && $counter->rings === 0 && $registry->has($enemy, Badnik::class));
 	check(count($registry->query(ScatteredRing::class)) === 5);
 	check(!$body->rolling && !$body->grounded && $body->vx === 240.0 && $body->vy === -360.0);
+	check($combo->chain === [] && $combo->failed && $combo->result === 100);
 	check(!$combat->attacking($body), 'damage knockback must not immediately pop the attacker');
 	check($combat->flickerOpacity() === 1.0);
 	$combat->mercy = .4;
@@ -115,6 +120,17 @@ test('badnik contacts damage walking players and pop under swept rolling attacks
 	check($badniks->counts() === ['badniks' => 0,'projectiles' => 0,'explosions' => 1]);
 	$badniks->close();
 	$rings->close();
+});
+
+test('only a roll or jump somersault counts as a contact attack', function() {
+	$combat = new PlayerCombat;
+	$body = new Body(0, -100);
+	check(!$body->grounded && !$body->jumping && !$combat->attacking($body));
+	$body->jumping = true;
+	check($combat->attacking($body));
+	$body->jumping = false;
+	$body->rolling = true;
+	check($combat->attacking($body));
 });
 
 test('projectiles use continuous terrain casts and become harmless when their owner is gone', function() {

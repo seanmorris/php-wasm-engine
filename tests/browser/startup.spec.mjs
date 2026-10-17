@@ -114,12 +114,12 @@ test(
 		await expect.poll(async () => (await data(page, 'menu')).values.hints).toBe(false);
 		await page.keyboard.press('Escape');
 		await activate(page, 'level');
-		await activate(page, 'breakables');
+		await activate(page, 'water');
 		await activate(page, 'movement');
 		await expect.poll(async () => (await data(page, 'menu')).values.movement).toBe('glider');
 		await activate(page, 'play');
 		await expect.poll(async () => (await data(page)).phase).toBe('playing');
-		await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'breakables');
+		await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'water');
 		await page.keyboard.press('p');
 		await expect.poll(async () => (await data(page, 'menu')).open).toBe(true);
 		expect((await data(page, 'menu')).values.name).toBe('Intro player');

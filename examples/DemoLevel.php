@@ -2,18 +2,32 @@
 declare(strict_types=1);
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Gameplay\Badnik;
 use PhpWasmEngine\Gameplay\Badniks;
+use PhpWasmEngine\Gameplay\BossRegions;
 use PhpWasmEngine\Gameplay\BreakableBlocks;
 use PhpWasmEngine\Gameplay\CrabMeats;
+use PhpWasmEngine\Gameplay\MiniBosses;
+use PhpWasmEngine\Gameplay\LightDashes;
+use PhpWasmEngine\Gameplay\Monitors;
+use PhpWasmEngine\Gameplay\Platforms;
+use PhpWasmEngine\Gameplay\Grapples;
+use PhpWasmEngine\Gameplay\Vehicles;
 use PhpWasmEngine\Gameplay\Rings;
+use PhpWasmEngine\Gameplay\Shields;
+use PhpWasmEngine\Gameplay\WaterFeatures;
+use PhpWasmEngine\Gameplay\WaterParticles;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\MapTerrain;
 use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Physics\Terrain;
+use PhpWasmEngine\Physics\WaterRegions;
+use PhpWasmEngine\Render\BackdropTwistRenderer;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\MapRenderer;
 use PhpWasmEngine\Render\SpriteRenderer;
+use PhpWasmEngine\Render\WaterRenderer;
 use PhpWasmEngine\Render\WorldRenderer;
 use PhpWasmEngine\Tiled\Loader;
 use PhpWasmEngine\Tiled\World;
@@ -27,10 +41,23 @@ final class DemoLevel
 	public ?SpriteRenderer $sprites = null;
 	public ?Terrain $terrain = null;
 	public ?Platformer $movement = null;
+	public ?WaterRegions $waters = null;
+	public ?WaterRenderer $waterRenderer = null;
+	public ?BackdropTwistRenderer $backdropTwist = null;
 	public ?BreakableBlocks $blocks = null;
 	public ?Rings $rings = null;
+	public ?LightDashes $lightDashes = null;
 	public ?Badniks $badniks = null;
+	public ?BossRegions $bossRegions = null;
 	public ?CrabMeats $crabs = null;
+	public ?MiniBosses $miniBosses = null;
+	public ?Monitors $monitors = null;
+	public ?Shields $shields = null;
+	public ?WaterFeatures $waterFeatures = null;
+	public ?Platforms $platforms = null;
+	public ?Grapples $grapples = null;
+	public ?Vehicles $vehicles = null;
+	public ?WaterParticles $waterParticles = null;
 	private string $systemPrefix;
 	private bool $closed = false;
 
@@ -153,22 +180,138 @@ final class DemoLevel
 
 		$map = reset($maps);
 		$this->terrain = MapTerrain::build($map);
-		$this->rings = new Rings($engine->entities, $map, terrain: $this->terrain);
+		$this->waters = WaterRegions::fromMaps($map);
+		$this->lightDashes = new LightDashes($engine->entities);
+
+		$this->rings = new Rings(
+			$engine->entities
+			, $map
+			, terrain: $this->terrain
+			, onCollect: [$this->lightDashes, 'collected']
+		);
+
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
+		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
+		$this->platforms = new Platforms($engine->entities, $this->terrain, $map);
+
+		$engine->systems->add($this->systemPrefix . 'platforms', [$this->platforms, 'update'], after: ['movement']);
+
+		if($this->id !== 'isometric')
+		{
+			$this->backdropTwist = new BackdropTwistRenderer($engine->device->width, $engine->device->height);
+		}
+
+		if($this->waterFeatures->isEmpty())
+		{
+			$this->waterFeatures->close();
+			$this->waterFeatures = null;
+		}
+		else
+		{
+			$engine->systems->add(
+				$this->systemPrefix . 'water-features'
+				, [$this->waterFeatures, 'update']
+				, after: ['movement']
+			);
+		}
+
+		$this->grapples = new Grapples(
+			$engine->entities
+			, $this->terrain
+			, $map
+			, /**
+			 * Resolve a rope suspension reference to an existing moving platform entity.
+			 *
+			 * @param int $sourceId Original Tiled object ID shared by platform and rope loaders.
+			 * @return int|null Live platform entity, or null for a fixed map anchor.
+			 */
+			function(int $sourceId): ?int {
+				foreach($this->platforms->platforms as $platform)
+				{
+					if($platform->sourceId === $sourceId)
+					{
+						return $platform->entity;
+					}
+				}
+
+				return $this->waterFeatures?->platforms[$sourceId]->entity ?? null;
+			}
+		);
+
+		$after = [$this->systemPrefix . 'platforms'];
+
+		if($this->waterFeatures !== null)
+		{
+			$after[] = $this->systemPrefix . 'water-features';
+		}
+
+		$engine->systems->add($this->systemPrefix . 'grapples', [$this->grapples, 'update'], after: $after);
+
+		if($this->waters->regions)
+		{
+			$this->waterRenderer = new WaterRenderer($engine->device->width, $engine->device->height);
+
+			$this->waterParticles = new WaterParticles(
+				$engine->entities
+				, $map
+				, $this->waters
+				, milliseconds: $engine->time * 1000
+			);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'water-particles'
+				, [$this->waterParticles, 'update']
+				, after: [
+					$this->waterFeatures === null
+						? 'movement'
+						: $this->systemPrefix . 'water-features'
+				]
+			);
+		}
+
 		$this->renderer->render($view, $engine->time * 1000);
-		$engine->systems->add($this->systemPrefix . 'rings', [$this->rings, 'update'], after: ['movement']);
+
+		$engine->systems->add(
+			$this->systemPrefix . 'rings'
+			, [$this->rings, 'update']
+			, after: [$this->systemPrefix . 'vehicle-seats']
+		);
 
 		if($this->id === 'badniks')
 		{
 			$this->badniks = new Badniks($engine->entities, $this->terrain, $this->rings);
 			$this->crabs = new CrabMeats($engine->entities, $this->terrain, $map, $this->badniks);
+
+			$this->miniBosses = new MiniBosses(
+				$engine->entities
+				, $this->terrain
+				, $map
+				, $this->rings
+				, advanceCombat: false
+			);
+
+			$this->shields = new Shields($engine->entities, $map);
+			$this->monitors = new Monitors($engine->entities, $this->terrain, $map, shields: $this->shields);
 			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
+			$engine->systems->add($this->systemPrefix . 'monitors', [$this->monitors, 'update'], after: ['movement']);
 
 			$engine->systems->add(
 				$this->systemPrefix . 'badniks'
 				, [$this->badniks, 'update']
 				, after: [$this->systemPrefix . 'crabs']
+			);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'mini-bosses'
+				, [$this->miniBosses, 'update']
+				, after: [$this->systemPrefix . 'badniks']
+			);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'shields'
+				, [$this->shields, 'update']
+				, after: [$this->systemPrefix . 'mini-bosses']
 			);
 		}
 
@@ -177,17 +320,50 @@ final class DemoLevel
 			$this->blocks = configureBreakables($engine, $this->terrain, $map, $this->systemPrefix);
 		}
 
-		$this->movement = new Platformer(
-			$this->terrain
-			, /**
-			 * Shatter rolling contacts against blocks owned by this level.
+		$bossRegions = BossRegions::fromMaps(
+			/**
+			 * Resolve a Tiled boss reference through the demo's spawned encounter entities.
 			 *
-			 * @param Body $body Actor at the beginning of the collision sweep.
-			 * @param Hit $hit First impact in the continuous terrain cast.
-			 * @return bool True when the contact removed a block's collision shape.
+			 * @param int $sourceId Referenced Tiled object ID.
+			 * @return bool True while a referenced multi-hit boss or legacy badnik remains live.
 			 */
-			fn(Body $body, Hit $hit): bool =>
-				$this->blocks?->impact($body, $hit, $engine->time * 1000) ?? false
+			function(int $sourceId) use ($engine): bool {
+				if($this->miniBosses?->aliveSource($sourceId))
+				{
+					return true;
+				}
+
+				$entity = $this->crabs?->entityForSourceId($sourceId);
+
+				return $entity !== null && $engine->entities->has($entity, Badnik::class);
+			}
+			, $map
+		);
+
+		if($bossRegions->regions)
+		{
+			$this->bossRegions = $bossRegions;
+		}
+
+		/**
+		 * Remove breakable blocks or monitors contacted in an eligible movement pose.
+		 *
+		 * @param Body $body Actor at the beginning of the collision sweep.
+		 * @param Hit $hit First impact in the continuous terrain cast.
+		 * @return bool True when the contact removed an owned collision shape.
+		 */
+		$impact = function(Body $body, Hit $hit) use ($engine): bool {
+			return ($this->blocks?->impact($body, $hit, $engine->time * 1000) ?? false)
+				|| ($this->monitors?->impact($body, $hit, $engine->time * 1000) ?? false);
+		};
+
+		$this->movement = new Platformer($this->terrain, $impact, $this->waters);
+		$this->vehicles = new Vehicles($engine->entities, $this->terrain, $this->movement, $map);
+
+		$engine->systems->add(
+			$this->systemPrefix . 'vehicle-seats'
+			, [$this->vehicles, 'carry']
+			, after: [$this->systemPrefix . 'grapples']
 		);
 
 		return true;
@@ -228,7 +404,9 @@ final class DemoLevel
 	public function restore(): void
 	{
 		$this->renderer?->restore();
+		$this->backdropTwist?->restore();
 		$this->sprites?->restore();
+		$this->waterRenderer?->restore();
 	}
 
 	/**
@@ -250,9 +428,27 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'rings');
 		$engine->systems->remove($this->systemPrefix . 'badniks');
 		$engine->systems->remove($this->systemPrefix . 'crabs');
+		$engine->systems->remove($this->systemPrefix . 'mini-bosses');
+		$engine->systems->remove($this->systemPrefix . 'monitors');
+		$engine->systems->remove($this->systemPrefix . 'shields');
+		$engine->systems->remove($this->systemPrefix . 'water-features');
+		$engine->systems->remove($this->systemPrefix . 'platforms');
+		$engine->systems->remove($this->systemPrefix . 'grapples');
+		$engine->systems->remove($this->systemPrefix . 'vehicle-seats');
+		$engine->systems->remove($this->systemPrefix . 'water-particles');
+		$this->vehicles?->close();
+		$this->grapples?->close();
 		$this->blocks?->close();
 		$this->rings?->close();
 		$this->badniks?->close();
+		$this->miniBosses?->close();
+		$this->monitors?->close();
+		$this->shields?->close();
+		$this->waterFeatures?->close();
+		$this->platforms?->close();
+		$this->waterParticles?->close();
+		$this->waterRenderer?->close();
+		$this->backdropTwist?->close();
 		$this->sprites?->close();
 		$this->renderer?->close();
 		$this->stream?->close();

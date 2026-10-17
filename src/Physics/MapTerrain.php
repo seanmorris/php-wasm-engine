@@ -41,6 +41,7 @@ final class MapTerrain
 
 				$ox = $map->x + $layer->offsetX;
 				$oy = $map->y + $layer->offsetY;
+				$layerGrinding = (bool)($layer->properties['grinding'] ?? $layer->properties['grind'] ?? false);
 
 				foreach($layer->chunks as $chunk)
 				{
@@ -90,6 +91,10 @@ final class MapTerrain
 								}
 
 								$props = Loader::properties($shape['properties'] ?? []);
+								$grinding = (bool)($props['grinding'] ?? $props['grind']
+									?? $tile['properties']['grinding'] ?? $tile['properties']['grind']
+									?? $layerGrinding
+								);
 
 								$terrain->add(
 									$transformed
@@ -97,6 +102,7 @@ final class MapTerrain
 										?? $layer->properties['oneWay'] ?? false
 									)
 									, $collisionLayer
+									, $grinding
 								);
 							}
 						}
@@ -105,15 +111,24 @@ final class MapTerrain
 
 				foreach($layer->objects as $object)
 				{
+					if(\PhpWasmEngine\Gameplay\VehicleLoader::matches($object)
+						|| \PhpWasmEngine\Gameplay\Platforms::matches($object)
+						|| in_array(strtolower(($object['class'] ?? '') ?: ($object['type'] ?? '')), [
+							'grapple-point', 'grapplepoint', 'rope-anchor', 'ropeanchor'
+						], true
+						)
+					){
+						continue;
+					}
+
 					$props = Loader::properties($object['properties'] ?? []);
 
-					$switch = in_array(
-						($object['class'] ?? '')?:($object['type'] ?? '')
-						, ['layer-switch', 'LayerSwitch']
-						, true
-					);
+					$class = ($object['class'] ?? '')?:($object['type'] ?? '');
+					$switch = in_array($class, ['layer-switch', 'LayerSwitch'], true);
+					$grinding = in_array(strtolower($class), ['rail', 'grinding'], true)
+						|| (bool)($props['grinding'] ?? $props['grind'] ?? $layerGrinding);
 
-					if(!$switch && !($props['solid'] ?? $layer->properties['solid'] ?? false))
+					if(!$switch && !$grinding && !($props['solid'] ?? $layer->properties['solid'] ?? false))
 					{
 						continue;
 					}
@@ -171,11 +186,16 @@ final class MapTerrain
 					}
 					else
 					{
-						$terrain->add(
-							$points
-							, (bool)($props['oneWay'] ?? false)
-							, (int)($props['collisionLayer'] ?? $collisionLayer)
-						);
+						$plane = (int)($props['collisionLayer'] ?? $collisionLayer);
+
+						if($grinding && isset($object['polyline']))
+						{
+							$terrain->addRail($points, $plane);
+						}
+						else
+						{
+							$terrain->add($points, (bool)($props['oneWay'] ?? $grinding), $plane, $grinding);
+						}
 					}
 				}
 			}
