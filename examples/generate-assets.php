@@ -1514,3 +1514,5 @@ require __DIR__ . '/generate-platforms.php';
 require __DIR__ . '/generate-light-dash.php';
 
 require __DIR__ . '/generate-grapples.php';
+
+require __DIR__ . '/generate-vehicles.php';

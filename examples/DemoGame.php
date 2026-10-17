@@ -8,6 +8,7 @@ use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\LightDash;
 use PhpWasmEngine\Gameplay\GrappleGrip;
+use PhpWasmEngine\Gameplay\Rider;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Gameplay\RingCounter;
@@ -109,7 +110,7 @@ final class DemoGame
 	/**
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
-	 * @param string $scene Platformer, platforms, grapples, light-dash, water, water-rail,
+	 * @param string $scene Platformer, platforms, grapples, vehicles, light-dash, water, water-rail,
 	 * water-skim-rail, water-loop, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
@@ -128,6 +129,7 @@ final class DemoGame
 				, 'platforms'
 				, 'light-dash'
 				, 'grapples'
+				, 'vehicles'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -202,6 +204,7 @@ final class DemoGame
 	public function selectProfile(string $profile): void
 	{
 		$defaults = new Body(profile: $profile);
+		$this->level?->vehicles?->dismount($this->entity, 'transfer');
 		$this->level?->grapples?->release($this->entity);
 		$this->body->profile = $profile;
 		$this->body->jumpSpeed = $defaults->jumpSpeed;
@@ -233,6 +236,8 @@ final class DemoGame
 	 */
 	private function resetPlayer(): void
 	{
+		$this->level?->vehicles?->dismount($this->entity, 'reset');
+		$this->engine->entities->get($this->entity, Rider::class)->cooldowns = [];
 		$this->level?->grapples?->release($this->entity, inherit: false);
 		$this->engine->entities->get($this->entity, GrappleGrip::class)->reset();
 		$defaults = new Body(80, 100, $this->body->profile);
@@ -273,6 +278,7 @@ final class DemoGame
 		$this->body->waterDepth = 0;
 		$this->combo->reset();
 		$this->engine->entities->get($this->entity, LightDash::class)->reset();
+		$this->level?->vehicles?->sync($this->entity, $this->body);
 		$this->level?->grapples?->sync($this->entity, $this->body);
 		$this->level?->rings?->sync($this->entity, $this->body);
 		$this->level?->badniks?->sync($this->entity, $this->body);
@@ -297,6 +303,11 @@ final class DemoGame
 	 */
 	private function playerPose(Body $body): string
 	{
+		if($body->ability === 'riding')
+		{
+			return $this->level?->vehicles?->ridden($this->entity)?->pose ?? 'riding';
+		}
+
 		if(in_array($body->ability, ['lightdash', 'hanging'], true))
 		{
 			return $body->ability;
@@ -341,7 +352,10 @@ final class DemoGame
 	{
 		$art = in_array($pose, ['rolling', 'jumping', 'spindash'], true)
 			? 'rolling'
-			: (in_array($pose, ['crouching', 'grinding-crouching'], true) ? 'crouching' : 'standing');
+			: (in_array($pose, ['crouching', 'grinding-crouching', 'riding-crouching'], true)
+				? 'crouching'
+				: 'standing'
+			);
 
 		return [
 			'runner' => ['standing' => 7, 'crouching' => 10, 'rolling' => 13]
@@ -515,15 +529,17 @@ final class DemoGame
 			$this->resetPlayer();
 		}
 
-		$released = $this->level->grapples?->control($this->entity, $controls, $dt) ?? false;
+		$vehicleInput = $this->level->vehicles?->control($this->entity, $controls, $dt) ?? false;
+		$released = !$vehicleInput && ($this->level->grapples?->control($this->entity, $controls, $dt) ?? false);
 		$hanging = $this->body->ability === 'hanging';
-		$lightDashing = !$released && !$hanging
+		$lightDashing = !$vehicleInput && !$released && !$hanging
 			&& ($this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false);
 
-		$jumpConsumed = $released || $hanging || $lightDashing
+		$jumpConsumed = $vehicleInput || $released || $hanging || $lightDashing
 			|| ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
 
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+		$this->level->vehicles?->update($entities, $dt);
 		$bossRegion = $this->level->bossRegions?->update($this->body);
 
 		if($bossRegion !== null)
@@ -531,7 +547,7 @@ final class DemoGame
 			$this->level->miniBosses?->wakeSource($bossRegion->bossSourceId);
 		}
 
-		$score = $this->combo->update($this->body, $dt);
+		$score = $this->body->ability === 'riding' ? null : $this->combo->update($this->body, $dt);
 
 		if($score !== null)
 		{
@@ -547,7 +563,7 @@ final class DemoGame
 		}
 		else
 		{
-			$this->cameraBehavior->setMode('auto');
+			$this->cameraBehavior->setMode($this->level->vehicles?->ridden($this->entity)?->cameraMode ?? 'auto');
 			$this->cameraBehavior->clearWorldBounds();
 		}
 
@@ -632,6 +648,7 @@ final class DemoGame
 		$time = $this->engine->time * 1000;
 		$level->waterRenderer?->begin();
 		$this->canvas->dataset->platforms = json_encode($level->platforms?->snapshot() ?? []);
+		$this->canvas->dataset->vehicles = json_encode($level->vehicles?->snapshot() ?? []);
 		$this->canvas->dataset->grapples = json_encode($level->grapples?->snapshot() ?? []);
 
 		if($this->scene === 'world')
@@ -721,6 +738,18 @@ final class DemoGame
 			$sprite->rotation = $body->angle;
 			$sprite->flipX = $body->facing < 0;
 			$sprite->scaleY = 1;
+			$sprite->originY = 30 / 32;
+
+			if($pose === 'handstand')
+			{
+				$sprite->rotation += M_PI;
+				$sprite->originY = 2 / 32;
+			}
+			elseif($pose === 'leanback')
+			{
+				$sprite->rotation -= .4 * $body->facing;
+			}
+
 			$playerOpacity = $sprite->opacity = $combat->flickerOpacity();
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
@@ -747,6 +776,7 @@ final class DemoGame
 			, 'direction' => $body->direction
 			, 'pose' => $pose
 			, 'ability' => $body->ability
+			, 'vehicle' => $this->engine->entities->get($this->entity, Rider::class)->vehicle
 			, 'grapple' => $this->engine->entities->get($this->entity, GrappleGrip::class)->point
 			, 'lightDashed' => $body->lightDashed
 			, 'lightDashTarget' => $this->engine->entities->get($this->entity, LightDash::class)->target
@@ -799,8 +829,11 @@ final class DemoGame
 			, $level->terrain->raycasts
 		);
 
-		if(in_array($this->scene, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop'], true))
-		{
+		if(in_array(
+			$this->scene
+			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles']
+			, true
+		)){
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;
 		}
 
@@ -919,6 +952,7 @@ final class DemoGame
 			, $this->canvas->dataset->boss
 			, $this->canvas->dataset->bossLock
 			, $this->canvas->dataset->water
+			, $this->canvas->dataset->vehicles
 			, $this->canvas->dataset->grapples
 			, $this->canvas->dataset->platforms
 		);

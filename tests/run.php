@@ -556,6 +556,7 @@ require __DIR__ . '/debug-overlay.php';
 require __DIR__ . '/rings.php';
 require __DIR__ . '/light-dash.php';
 require __DIR__ . '/grapples.php';
+require __DIR__ . '/vehicles.php';
 require __DIR__ . '/badniks.php';
 require __DIR__ . '/mini-bosses.php';
 require __DIR__ . '/boss-regions.php';

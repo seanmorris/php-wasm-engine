@@ -330,7 +330,7 @@ final class Grapples
 				$body = $registry->get($player, Body::class);
 				$grip = $registry->get($player, GrappleGrip::class);
 
-				if($grip->point !== null || isset($grip->cooldowns[$id])
+				if($body->ability === 'riding' || $grip->point !== null || isset($grip->cooldowns[$id])
 					|| ($point->collisionLayer !== 0 && $point->collisionLayer !== $body->collisionLayer)
 				){
 					continue;

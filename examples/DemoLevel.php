@@ -12,6 +12,7 @@ use PhpWasmEngine\Gameplay\LightDashes;
 use PhpWasmEngine\Gameplay\Monitors;
 use PhpWasmEngine\Gameplay\Platforms;
 use PhpWasmEngine\Gameplay\Grapples;
+use PhpWasmEngine\Gameplay\Vehicles;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
 use PhpWasmEngine\Gameplay\WaterFeatures;
@@ -55,6 +56,7 @@ final class DemoLevel
 	public ?WaterFeatures $waterFeatures = null;
 	public ?Platforms $platforms = null;
 	public ?Grapples $grapples = null;
+	public ?Vehicles $vehicles = null;
 	public ?WaterParticles $waterParticles = null;
 	private string $systemPrefix;
 	private bool $closed = false;
@@ -273,7 +275,7 @@ final class DemoLevel
 		$engine->systems->add(
 			$this->systemPrefix . 'rings'
 			, [$this->rings, 'update']
-			, after: [$this->systemPrefix . 'grapples']
+			, after: [$this->systemPrefix . 'vehicle-seats']
 		);
 
 		if($this->id === 'badniks')
@@ -356,6 +358,13 @@ final class DemoLevel
 		};
 
 		$this->movement = new Platformer($this->terrain, $impact, $this->waters);
+		$this->vehicles = new Vehicles($engine->entities, $this->terrain, $this->movement, $map);
+
+		$engine->systems->add(
+			$this->systemPrefix . 'vehicle-seats'
+			, [$this->vehicles, 'carry']
+			, after: [$this->systemPrefix . 'grapples']
+		);
 
 		return true;
 	}
@@ -425,7 +434,9 @@ final class DemoLevel
 		$engine->systems->remove($this->systemPrefix . 'water-features');
 		$engine->systems->remove($this->systemPrefix . 'platforms');
 		$engine->systems->remove($this->systemPrefix . 'grapples');
+		$engine->systems->remove($this->systemPrefix . 'vehicle-seats');
 		$engine->systems->remove($this->systemPrefix . 'water-particles');
+		$this->vehicles?->close();
 		$this->grapples?->close();
 		$this->blocks?->close();
 		$this->rings?->close();

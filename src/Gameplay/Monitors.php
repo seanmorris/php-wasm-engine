@@ -506,6 +506,18 @@ final class Monitors
 		{
 			if($this->registry->get($id, Body::class) === $body)
 			{
+				if($this->registry->has($id, Vehicle::class))
+				{
+					$vehicle = $this->registry->get($id, Vehicle::class);
+
+					return $vehicle->occupant !== null && Vehicle::forRider(
+						$this->registry
+						, $vehicle->occupant
+					) === $vehicle
+						? $vehicle->occupant
+						: null;
+				}
+
 				return $id;
 			}
 		}

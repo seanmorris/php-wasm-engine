@@ -105,7 +105,7 @@ final class Shields
 			$shield->firePower = .25;
 		}
 
-		if($body->grounded || $body->ability === 'climb')
+		if($body->grounded || in_array($body->ability, ['climb', 'riding'], true))
 		{
 			return false;
 		}

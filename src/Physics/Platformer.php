@@ -67,7 +67,7 @@ final class Platformer
 		$water = $this->waters?->at($b->x, $b->y);
 		$this->waterState($b, $water, $previousWater);
 
-		if($b->ability === 'hanging')
+		if(in_array($b->ability, ['hanging', 'riding'], true))
 		{
 			return;
 		}

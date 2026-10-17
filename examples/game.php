@@ -17,6 +17,7 @@ use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\LightDash;
 use PhpWasmEngine\Gameplay\GrappleGrip;
+use PhpWasmEngine\Gameplay\Rider;
 use PhpWasmEngine\Gameplay\RingCounter;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
@@ -35,6 +36,7 @@ $entity = $engine->entities->create(
 	$body
 	, $counter
 	, $combo
+	, new Rider
 	, new GrappleGrip
 	, new LightDash
 	, new PlayerCombat

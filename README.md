@@ -124,6 +124,90 @@ boost on an ordinary moving landing. Neutral input retains the previous orientat
 adds to existing momentum, so opposite input can reverse a slow landing or brake a faster one.
 Fast grinding keeps its travel-direction lock.
 
+## Vehicles and skateboards
+
+Choose **Level → Skateboard course** from either menu. The player drops onto the first board;
+spares sit farther along the course. Accelerate across ordinary ground, follow four quarter bends,
+and ride a loop with collision-layer switches. Rings above the entry provide jump/trick targets.
+All three character profiles can ride the same board.
+
+| Action | Keyboard | Standard gamepad |
+| --- | --- | --- |
+| Steer or brake | Left / Right | Left stick / D-pad |
+| Crouch | Down | Down |
+| Jump with the board | Space / Z | Button 0: A / Cross |
+| Lean back | X | Button 1: B / Circle |
+| Handstand | C | Button 2: X / Square |
+| Manual | V | Button 3: Y / Triangle |
+| Jump off | Up + Space / Z | Up + button 0 |
+| Restore the course | Shift+R | Hold B / Circle, press Back / Select |
+
+Hold a trick button to sustain its pose. Airborne leanbacks and handstands start a combo; manuals
+extend an existing chain through a landing. Grinding extends that chain with one accumulating
+rail reward. Releasing the trick and reaching ordinary ground banks the score in the rider's
+inventory. Reverse travel relative to facing produces fakie labels. Jump and trick buttons belong
+to the vehicle while seated, so they cannot also trigger flight, gliding, shields, or light-dash.
+
+`Rider` opts a character into boarding. `Vehicle` belongs to a separate entity with its own `Body`
+and optional `Sprite`. The character keeps its identity, movement profile, inventory, combat,
+and combo components. `VehicleBehavior` supplies mounted, before-movement, and after-movement
+callbacks; `Skateboard` is the first implementation.
+
+```php
+use PhpWasmEngine\Gameplay\{Rider, Vehicle, Vehicles, Skateboard};
+
+$registry->add($player, new Rider);
+$vehicles = new Vehicles($registry, $terrain, $movement, $map);
+
+// Or add a scripted board. Body coordinates describe its center, six pixels above the wheels.
+$board = new Vehicle(Skateboard::body(320, 442), seatHeight: 12);
+$boardEntity = $vehicles->add($board, new Skateboard, new Sprite($boardGid));
+
+// Once per fixed update, before character-specific abilities:
+$consumed = $vehicles->control($player, $controls, $dt);
+$movement->step($body, $controls, $dt, $consumed);
+$vehicles->update($registry, $dt);
+
+// After moving platforms, before pickups/rendering; this does not step physics again.
+$vehicles->carry($registry, $dt);
+```
+
+Use the returned `control()` flag to gate other ability systems. `Platformer` leaves a seated
+character's movement to the vehicle. The chassis uses the existing slopes, rails, water, and
+layer-switch solver. Passenger casts check the full displacement of each short curved segment
+against walls and ceilings. Boarding also sweeps the falling character's path; it still works
+when a fast fall reaches the floor in the same step. Rings sweep both rider and chassis bounds
+and credit the rider once. Monitor and badnik rewards also retain the rider as their owner.
+
+`mount($player, $boardEntity)` explicitly takes an empty seat if clearance permits it.
+`dismount($player)` uses the Up+Jump exit; `lockedIn` prevents this voluntary exit and `quickDrop`
+makes button 0 request it without Up. `dismount($player, 'transfer')` hands off the chassis surface and velocity when clearance permits;
+`'damage'` preserves externally applied knockback and `'reset'` leaves motion to the caller.
+Removing either body's component releases the association. Call `sync($player, $body)` after a
+teleport and `close()` when unloading the level. `close()` removes owned vehicles and regions while
+preserving character entities. `Vehicle::forRider($registry, $player)` resolves a live mutual seat
+association for other gameplay systems.
+
+Tiled objects use class `Skateboard` / `skate-board`, or `VehicleRegion` / `DropVehicleRegion`.
+Tile objects anchor at the bottom; point objects identify the wheel contact point. `seatHeight`,
+`seatForward`, and `seatAngle` configure the seat in pixels and radians. Objects also accept
+`lockedIn`, `quickDrop`, `direction`, and `collisionLayer`. Layers contribute offsets, tint, opacity,
+and collision planes; Tiled GID flips are decoded before atlas lookup. Objects must be axis aligned.
+An annotated `skateboard` tile supplies fallback artwork, avoiding hard-coded atlas positions.
+
+A `VehicleRegion` with `vehicle=skate-board` supplies a locked board for each eligible rider.
+`restricted=true` retires it on exit and prevents repeated supply for that rider. A
+`DropVehicleRegion` forces a momentum-preserving dismount; its detection includes complete
+crossings of thin regions. Region supply currently supports skateboards; other vehicle types can
+be registered through `add()` with their own behavior. Region attachment still requires passenger
+clearance.
+
+`Vehicles::snapshot()` exposes entity IDs, original object IDs, occupant IDs, motion, pose, and
+collision plane. The demo publishes this as `canvas.dataset.vehicles`, with the current vehicle ID
+in `canvas.dataset.body.vehicle`. Restarting a level rebuilds the boards; changing level or movement
+profile releases the old seat. Graphics restoration keeps the same PHP entities and associations.
+Regenerate the example and its original board artwork with `php examples/generate-vehicles.php`.
+
 ## Grapple points and ropes
 
 Choose **Level → Grapple ropes** in either menu. Jump into a gold handle to grab it automatically,

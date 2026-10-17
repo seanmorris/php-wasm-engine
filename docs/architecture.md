@@ -243,3 +243,23 @@ reattachment for fifteen reference frames. Damage detaches without replacing kno
 level retirement, missing anchors, and handle removal clear attachments and grouped rope sprites.
 `PlatformCamera` derives its existing `hooked` preset from the hanging ability. Ring pickup runs
 after grapple transport so collections see the carried position.
+
+## Vehicle ownership
+
+`Vehicles` owns independent chassis entities and explicit `Vehicle`/`Rider` associations. A rider
+keeps its character body and inventory; `ability=riding` prevents independent movement. Logical
+input is routed before other abilities, retaining original press/release edges when a held button
+crosses a boarding boundary. `VehicleBehavior` surrounds the shared terrain step with vehicle
+specific actions; `Skateboard` supplies coasting, crouching, tricks, and combo settlement rules.
+
+The chassis uses `Platformer` continuously. Curved travel is divided into short arcs, with a full
+passenger-body cast for each segment so a seat offset cannot carry its occupant through a ceiling.
+A separate `carry()` phase reconciles seats after platforms move without advancing either body a
+second time. Pickup and reward systems resolve the rider as the inventory owner. Damage releases
+the seat while preserving knockback. Component-removal listeners clear both ends of an association;
+level teardown destroys owned chassis and regions, leaving the persistent character alive.
+
+`VehicleLoader` promotes Tiled skateboard and supply/drop region objects. `MapTerrain` excludes
+those objects from static geometry. Artwork uses annotated tiles, decoded GID transforms, inherited
+layer appearance, and the normal sprite atlas, so graphics restoration does not rebuild gameplay
+state. The example shares the grinding course's quarter bends and two-plane loop.

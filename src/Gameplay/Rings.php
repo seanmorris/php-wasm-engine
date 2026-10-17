@@ -149,6 +149,7 @@ final class Rings
 		{
 			$body = $registry->get($collector, Body::class);
 			$counter = $registry->get($collector, RingCounter::class);
+			$vehicle = Vehicle::forRider($registry, $collector);
 			$from = $this->previous[$collector] ?? [$body->x, $body->y];
 			$active[$collector] = $this->previous[$collector] = [$body->x, $body->y];
 
@@ -171,8 +172,16 @@ final class Rings
 					continue;
 				}
 
-				if(!$this->intersects($body, $from, $ring, $this->ringPrevious[$entity] ?? [$ring->x, $ring->y]))
-				{
+				$ringFrom = $this->ringPrevious[$entity] ?? [$ring->x, $ring->y];
+
+				if(!$this->intersects($body, $from, $ring, $ringFrom)
+					&& ($vehicle === null || !$this->intersects(
+						$vehicle->body
+						, [$vehicle->previousX, $vehicle->previousY]
+						, $ring
+						, $ringFrom
+					))
+				){
 					continue;
 				}
 

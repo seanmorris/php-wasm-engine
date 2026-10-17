@@ -176,7 +176,9 @@ final class Badniks
 
 			if($this->registry->has($attacker, Body::class))
 			{
-				$this->rebound($this->registry->get($attacker, Body::class));
+				$this->rebound(
+					Vehicle::forRider($this->registry, $attacker)?->body ?? $this->registry->get($attacker, Body::class)
+				);
 			}
 		}
 
@@ -309,14 +311,23 @@ final class Badniks
 				$body = $this->registry->get($player, Body::class);
 				$playerFrom = $this->players[$player] ?? [$body->x, $body->y];
 
-				if(!$this->intersectsBadnik($body, $playerFrom, $badnik, $from))
+				$vehicle = Vehicle::forRider($this->registry, $player);
+
+				$chassisHit = $vehicle !== null && $this->intersectsBadnik(
+					$vehicle->body
+					, [$vehicle->previousX, $vehicle->previousY]
+					, $badnik
+					, $from
+				);
+
+				if(!$chassisHit && !$this->intersectsBadnik($body, $playerFrom, $badnik, $from))
 				{
 					continue;
 				}
 
 				$combat = $this->registry->get($player, PlayerCombat::class);
 
-				if($combat->attacking($body))
+				if($combat->attacking($vehicle?->body ?? $body))
 				{
 					$this->pop($id, $player);
 
