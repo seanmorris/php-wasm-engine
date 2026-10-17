@@ -121,13 +121,23 @@ final class Vehicles
 		if(!$this->terrain->canPlace($probe)) return false;
 
 		$behavior = $this->behavior($vehicle);
-		$behavior?->mounted($vehicle, $body);
 		$vehicle->occupant = $player;
 		$rider->vehicle = $id;
+
+		try
+		{
+			$behavior?->mounted($vehicle, $body);
+		}
+		catch(\Throwable $error)
+		{
+			$vehicle->occupant = $rider->vehicle = null;
+			throw $error;
+		}
+
 		$vehicle->drive->reset();
 		$body->halfHeight = $body->standingHeight;
-		$body->charge = $body->dropCharge = $body->crouchTime = $body->coyote = $body->jumpBuffer = $body->dropTimer =
-			0;
+		$body->charge = $body->dropCharge = $body->crouchTime = 0;
+		$body->coyote = $body->jumpBuffer = $body->dropTimer = 0;
 
 		$body->wall = $body->glideDirection = 0;
 		$body->rolling = $body->jumping = $body->crouching = $body->lightDashed = false;

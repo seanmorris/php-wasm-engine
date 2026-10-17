@@ -75,13 +75,18 @@ final class VehicleLoader
 					throw new \UnexpectedValueException('This vehicle region requires a skateboard');
 				}
 
-				$system->region(
-					new VehicleRegion($x, $y, (float)$object['width'], (float)$object['height'], (bool)($p[
-						'restricted'
-					] ?? false
-					), $drop, $sprite, $plane
-					)
+				$region = new VehicleRegion(
+					$x
+					, $y
+					, (float)$object['width']
+					, (float)$object['height']
+					, (bool)($p['restricted'] ?? false)
+					, $drop
+					, $sprite
+					, $plane
 				);
+
+				$system->region($region);
 
 				continue;
 			}
@@ -92,17 +97,17 @@ final class VehicleLoader
 			$body->collisionLayer = $plane;
 			$body->facing = $body->direction = (int)($p['direction'] ?? 1) < 0 ? -1 : 1;
 
-			$system->add(
-				new Vehicle($body, (float)($p['seatHeight'] ?? 12), (float)($p['seatForward'] ?? 0), (float)($p[
-					'seatAngle'
-				] ?? 0
-				), (bool)($p['lockedIn'] ?? false), (bool)($p['quickDrop'] ?? false), (int)$object[
-					'id'
-				]
-				)
-				, new Skateboard
-				, $sprite
+			$vehicle = new Vehicle(
+				$body
+				, (float)($p['seatHeight'] ?? 12)
+				, (float)($p['seatForward'] ?? 0)
+				, (float)($p['seatAngle'] ?? 0)
+				, (bool)($p['lockedIn'] ?? false)
+				, (bool)($p['quickDrop'] ?? false)
+				, (int)$object['id']
 			);
+
+			$system->add($vehicle, new Skateboard, $sprite);
 		}
 	}
 

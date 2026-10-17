@@ -402,3 +402,69 @@ test('vehicle attacks and badnik damage retain the rider as the score and invent
 		check(!$registry->has($id, PlayerCombat::class));
 	}
 });
+
+test('vehicle mount callbacks receive the rider association and failed callbacks release it', function() {
+	foreach([false, true] as $fail)
+	{
+		[$registry, , $system, $body, $rider, $player, $vehicle, $id] = vehicleFixture();
+		$registry->remove($id, Skateboard::class);
+
+		$behavior = new class($fail) implements PhpWasmEngine\Gameplay\VehicleBehavior {
+			public ?int $seen = null;
+
+			/**
+			 * Select whether the test callback fails.
+			 *
+			 * @param bool $fail Whether to throw during mounting.
+			 * @return void Retains the selected failure policy.
+			 */
+			public function __construct(private bool $fail) {}
+
+			/**
+			 * Observe the new rider before their incoming velocity is replaced.
+			 *
+			 * @param Vehicle $vehicle Seat being assigned.
+			 * @param Body $rider Incoming character body.
+			 * @return void Records occupant identity and optionally throws.
+			 */
+			public function mounted(Vehicle $vehicle, Body $rider): void
+			{
+				$this->seen = $vehicle->occupant;
+
+				if($this->fail) throw new RuntimeException('Mount hook failed');
+			}
+
+			/**
+			 * Leave the default drive controls intact.
+			 *
+			 * @param Vehicle $vehicle Driven vehicle.
+			 * @param Controls $input Current logical controls.
+			 * @param Combo|null $combo Optional rider combo.
+			 * @param float $dt Positive simulation seconds.
+			 * @return void Makes no changes for this callback fixture.
+			 */
+			public function control(Vehicle $vehicle, Controls $input, ?Combo $combo, float $dt): void {}
+
+			/**
+			 * Leave the simulated vehicle unchanged.
+			 *
+			 * @param Vehicle $vehicle Simulated vehicle.
+			 * @param Combo|null $combo Optional rider combo.
+			 * @param float $dt Positive simulation seconds.
+			 * @return void Makes no changes for this callback fixture.
+			 */
+			public function updated(Vehicle $vehicle, ?Combo $combo, float $dt): void {}
+		};
+
+		$registry->add($id, $behavior);
+
+		if($fail) rejects(fn() => $system->mount($player, $id));
+		else check($system->mount($player, $id));
+
+		check($behavior->seen === $player, 'a mount callback needs the rider identity');
+		check($vehicle->occupant === ($fail ? null : $player));
+		check($rider->vehicle === ($fail ? null : $id));
+		check($body->ability === ($fail ? '' : 'riding'));
+		$system->close();
+	}
+});
