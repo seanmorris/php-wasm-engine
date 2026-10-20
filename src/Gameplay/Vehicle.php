@@ -15,6 +15,9 @@ final class Vehicle
 	public string $pose = 'standing';
 	public string $cameraMode = 'auto';
 	public bool $holdCombo = false, $scoreGrinding = true;
+	/** Whether button zero may reach the shared chassis jump solver. */
+	public bool $jumpEnabled = true;
+	/** Facing-local presentation angle; horizontal mirroring reverses its world-space rotation. */
 	public float $visualAngle = 0;
 	public ?int $spriteGid = null;
 	public Controls $drive;
@@ -82,7 +85,7 @@ final class Vehicle
 	 */
 	public function seat(Body $rider): array
 	{
-		$angle = $this->body->angle + $this->visualAngle;
+		$angle = $this->body->angle + $this->visualAngle * $this->body->facing;
 		$forward = $this->seatForward * $this->body->facing;
 		$rotation = $angle + $this->seatAngle;
 

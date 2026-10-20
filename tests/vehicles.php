@@ -1,15 +1,21 @@
 <?php
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\CameraShake;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Gameplay\
 {
-	Vehicle, Vehicles, Rider, Skateboard, Tornado, Combo, ComboReward, RingCounter, PlayerCombat
+	Vehicle, Vehicles, Rider, Skateboard, Tornado, EggWalker, VehicleMelee, VehicleEmitter
+	, VehicleProjectile, Combo, ComboReward, RingCounter, PlayerCombat, Badnik, BadnikBehavior, Badniks
 };
 use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\
 {
 	Body, Terrain, Platformer
 };
-use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Render\
+{
+	Sprite, SpriteGroup, SpriteLayers
+};
 
 /**
  * Build a board and opt-in rider above a flat floor.
@@ -356,6 +362,7 @@ test('vehicle loader preserves offsets and all GID flips without leaving ghost c
 		near($vehicle->body->y, 483);
 		$art = $registry->get($vehicle->entity, Sprite::class);
 		near($art->opacity, .4);
+		check($art->outline, 'vehicles follow the default actor outline policy');
 		check($map->tile($art->gid)['class'] === 'skateboard');
 		check(!$terrain->solidAt(187, 480), 'vehicle object cannot remain as a static rectangle');
 		$system->close();
@@ -473,6 +480,10 @@ test('Tornado rocket takeoff, pitch, landing gear, stall and fuel use reference 
 	$vehicle = new Vehicle(Tornado::body(0, 82));
 	$vehicle->occupant = 1;
 	$vehicle->body->grounded = true;
+	check($vehicle->body->radius === 48.0 && $vehicle->body->halfHeight === 24.0);
+	check($vehicle->body->acceleration === 1800.0 && $vehicle->body->braking === 855.0);
+	check($vehicle->body->friction === 405.0 && $vehicle->body->gravity === 2340.0);
+	check($vehicle->body->jumpSpeed === 480.0 && $vehicle->body->maxSpeed === 300.0);
 
 	$tornado = new Tornado([
 		'tornado' => 10
@@ -485,36 +496,104 @@ test('Tornado rocket takeoff, pitch, landing gear, stall and fuel use reference 
 	$tornado->mounted($vehicle, new Body);
 	$input = new Controls;
 	$input->set([2 => true]);
-	$tornado->control($vehicle, $input, null, .1);
+	$tornado->control($vehicle, $input, null, 1 / 60);
 	check(!$vehicle->body->grounded && $tornado->flying && $tornado->thrusting);
-	check(!$tornado->landingGear && $tornado->fuel < 100);
-	check($vehicle->body->vx >= 240 && $vehicle->body->vy < 0);
+	check(!$tornado->landingGear);
+	near($tornado->fuel, 99.9);
+	$takeoffSpeed = 240 * 1.025 ** sin(-.208);
+	near($vehicle->body->vx, $takeoffSpeed);
+	near($tornado->pitch, -.208);
+	near($vehicle->body->vy, sin(-.208) * $takeoffSpeed * 2);
 	check($vehicle->cameraMode === 'airplane' && $vehicle->spriteGid === 13);
 
 	$input->set([]);
-	$tornado->control($vehicle, $input, null, .1);
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	near($tornado->fuel, 100);
+	near($tornado->pitch, -.1664);
+	check($vehicle->spriteGid === 11);
+
 	$input->set([1 => true, 'up' => true]);
-	$before = $tornado->pitch;
-	$tornado->control($vehicle, $input, null, .1);
-	check($tornado->landingGear && $tornado->pitch < $before);
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	check($tornado->landingGear);
+	near($tornado->pitch, -.1964);
 	check($vehicle->spriteGid === 12);
 
 	$vehicle->body->vx = 120;
 	$input->set([]);
-	$tornado->control($vehicle, $input, null, .1);
-	check($vehicle->body->gravity === 1800.0, 'an unpowered slow aircraft should stall');
-	$fuel = $tornado->fuel;
-
-	for($i = 0; $i < 8; $i++) $tornado->control($vehicle, $input, null, .1);
-
-	check($tornado->fuel > $fuel, 'fuel should replenish after its half-second delay');
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	check($vehicle->body->gravity === 2340.0, 'an unpowered slow aircraft should stall');
 	$vehicle->body->grounded = true;
 	$tornado->updated($vehicle, null, 1 / 60);
 	check(!$tornado->flying && $tornado->landingGear && $vehicle->cameraMode === 'auto');
 	check($vehicle->spriteGid === 10 && $vehicle->visualAngle === 0.0);
 });
 
-test('Tornado uses visual pitch for its rider without changing the terrain collision angle', function() {
+test('Tornado depletion and powered crashes apply the reference half-second ignition lockout', function() {
+	$vehicle = new Vehicle(Tornado::body());
+	$vehicle->occupant = 1;
+	$vehicle->body->vx = 600;
+	$tornado = new Tornado;
+	$tornado->mounted($vehicle, new Body);
+	$tornado->fuel = .05;
+	$tornado->thrusting = true;
+	$input = new Controls;
+	$input->set([2 => true]);
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	near($tornado->fuel, 0);
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	check(!$tornado->thrusting);
+
+	$input->set([]);
+
+	for($frame = 0; $frame < 20; $frame++) $tornado->control($vehicle, $input, null, 1 / 60);
+
+	near($tornado->fuel, 0);
+
+	for($frame = 0; $frame < 12; $frame++) $tornado->control($vehicle, $input, null, 1 / 60);
+
+	check($tornado->fuel > 0);
+	$tornado->fuel = 100;
+	$tornado->thrusting = $tornado->flying = true;
+	$vehicle->body->vx = 0;
+	$vehicle->body->jumping = false;
+	$tornado->updated($vehicle, null, 1 / 60);
+	check($tornado->crashed && !$tornado->thrusting);
+	$input->set([2 => true]);
+	$tornado->control($vehicle, $input, null, 1 / 60);
+	check(!$tornado->thrusting, 'holding thrust cannot bypass crash recovery');
+});
+
+test('generated Tornado artwork faces right before runtime mirroring', function() {
+	$png = file_get_contents(dirname(__DIR__) . '/examples/assets/tornado-thrust.png');
+	check($png !== false && substr($png, 0, 8) === "\x89PNG\r\n\x1a\n");
+	$idat = '';
+
+	for($offset = 8; $offset < strlen($png);)
+	{
+		$length = unpack('N', substr($png, $offset, 4))[1];
+		$type = substr($png, $offset + 4, 4);
+
+		if($type === 'IDAT') $idat .= substr($png, $offset + 8, $length);
+
+		$offset += 12 + $length;
+	}
+
+	$rgba = gzuncompress($idat);
+	check($rgba !== false);
+
+	$pixel = static function(int $x, int $y) use ($rgba): array {
+		$offset = $y * (1 + 96 * 4) + 1 + $x * 4;
+
+		return array_values(unpack('C4', substr($rgba, $offset, 4)));
+	};
+
+	check($pixel(87, 10) === [215, 229, 236, 210], 'the propeller belongs on the right-facing nose');
+	check($pixel(47, 16) === [89, 191, 226, 255], 'the cockpit belongs at the aircraft center');
+	check($pixel(0, 27) === [255, 103, 48, 230], 'rocket exhaust belongs behind the right-facing tail');
+	check($pixel(95, 27)[3] === 0, 'the right-facing nose must not contain exhaust');
+});
+
+test('Tornado mirrors visual pitch for its artwork and rider without changing its collision angle', function() {
 	$body = Tornado::body(100, 100);
 	$vehicle = new Vehicle($body, seatHeight: 20, seatForward: -12);
 	$rider = new Body;
@@ -525,6 +604,93 @@ test('Tornado uses visual pitch for its rider without changing the terrain colli
 	near($flatAngle, 0);
 	near($pitchedAngle, -.5);
 	check(abs($pitchedX - $flatX) > 1 && abs($pitchedY - $flatY) > 1);
+
+	$registry = new Registry;
+	$terrain = new Terrain;
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain));
+	$body->facing = $body->direction = -1;
+	[$leftX, $leftY, $leftAngle] = $vehicle->seat($rider);
+	$sprite = new Sprite(1);
+	$sprite->rotation = .125;
+	$system->add($vehicle, sprite: $sprite);
+
+	near($leftAngle, .5);
+	check(abs($leftX - $flatX) > 1 && abs($leftY - $flatY) > 1);
+	near($sprite->rotation, .625);
+	check($sprite->flipX, 'left-facing artwork should mirror while its local nose-up rotation reverses');
+	$system->close();
+});
+
+test('Tornado D-pad and post-dead-zone stick input use moving-boxes pitch signs', function() {
+
+	$sample = static function(array $values, int $direction = 1): array {
+		$registry = new Registry;
+		$terrain = new Terrain;
+		$terrain->add([[-1000, 100], [1000, 100], [1000, 500], [-1000, 500]]);
+		$system = new Vehicles($registry, $terrain, new Platformer($terrain));
+		$body = Tornado::body(0, 0);
+		$body->facing = $body->direction = $direction;
+		$body->vx = 600 * $direction;
+		$vehicle = new Vehicle($body);
+		$tornado = new Tornado;
+		$system->add($vehicle, $tornado);
+		$vehicle->occupant = 1;
+		$tornado->mounted($vehicle, new Body);
+		$input = new Controls;
+		$input->set($values);
+		$tornado->control($vehicle, $input, null, 1 / 60);
+		$result = [$tornado->pitch, $body->vy];
+		$system->close();
+
+		return $result;
+	};
+
+	[$dpadUp, $rightClimb] = $sample(['up' => 1]);
+	[$stickUp] = $sample(['up' => .35]);
+	[$dpadDown] = $sample(['down' => 1]);
+	[$stickDown] = $sample(['down' => .35]);
+	[$leftUp, $leftClimb] = $sample(['up' => .35], -1);
+	[$neutral] = $sample([]);
+	[$stickDrift] = $sample(['up' => .05]);
+
+	near($dpadUp, $stickUp);
+	near($dpadDown, $stickDown);
+	near($stickDrift, $neutral);
+	check($dpadUp < -.203 && $dpadDown > -.203, 'Up must pitch upward and Down downward');
+	near($leftUp, $dpadUp);
+	check($rightClimb < 0 && $leftClimb < 0, 'Up must climb in either travel direction');
+});
+
+test('Tornado exchanges forward speed continuously and symmetrically with pitch', function() {
+
+	$sample = static function(float $pitch): array {
+		$body = Tornado::body();
+		$body->facing = $body->direction = 1;
+		$body->vx = 600;
+		$vehicle = new Vehicle($body);
+		$vehicle->occupant = 1;
+		$tornado = new Tornado;
+		$tornado->mounted($vehicle, new Body);
+		$tornado->flying = $tornado->thrusting = true;
+		$tornado->landingGear = false;
+		$tornado->pitch = $pitch;
+		$input = new Controls;
+		$input->set([2 => true]);
+		$tornado->control($vehicle, $input, null, 1 / 60);
+
+		return [$body->vx, $body->vy, $tornado->pitch];
+	};
+
+	[$climbSpeed, $climbVelocity, $climbPitch] = $sample(-.5);
+	[$levelSpeed, $levelVelocity] = $sample(0);
+	[$descentSpeed, $descentVelocity, $descentPitch] = $sample(.5);
+
+	check($climbSpeed < $levelSpeed && $levelSpeed < $descentSpeed);
+	near($levelSpeed, 600);
+	near($levelVelocity, 0);
+	near($climbSpeed * $descentSpeed, 600 ** 2);
+	near($climbPitch, -$descentPitch);
+	check($climbVelocity < 0 && $descentVelocity > 0);
 });
 
 test('Tornado course loads annotated flight art and leaves its aircraft out of static collision', function() {
@@ -537,10 +703,69 @@ test('Tornado course loads annotated flight art and leaves its aircraft out of s
 	$vehicle = array_values($system->vehicles)[0];
 	check($registry->has($vehicle->entity, Tornado::class));
 	check($registry->get($vehicle->entity, Sprite::class)->gid === 38);
+	check($vehicle->seatHeight === 14.0 && $vehicle->seatForward === 0.0);
+	[$seatX] = $vehicle->seat(new Body);
+	near($seatX, $vehicle->body->supportX(), 1e-6);
+	$vehicle->body->facing = $vehicle->body->direction = -1;
+	[$leftSeatX] = $vehicle->seat(new Body);
+	near($leftSeatX, $vehicle->body->supportX(), 1e-6);
 	check(!$terrain->solidAt($vehicle->body->x, $vehicle->body->y));
 	check($terrain->solidAt(16, 2800));
-	check($terrain->solidAt(2128, 2000));
-	check($terrain->solidAt(6400, 1000));
+	check($terrain->solidAt(2128, 2784) && !$terrain->solidAt(2128, 2700));
+	check($terrain->solidAt(6400, 2600) && !$terrain->solidAt(6400, 2500));
+	check(!$terrain->solidAt(4000, 32), 'the terrain-following course must not impose a ceiling');
+	$system->close();
+});
+
+test('Tornado reference controls traverse both sensor ridges and land on the final runway', function() {
+	$map = (new PhpWasmEngine\Tiled\Loader)->map(dirname(__DIR__) . '/examples/assets/tornado.tmj');
+	$registry = new Registry;
+	$terrain = PhpWasmEngine\Physics\MapTerrain::build($map);
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain), $map);
+	$vehicle = array_values($system->vehicles)[0];
+	$tornado = $registry->get($vehicle->entity, Tornado::class);
+	$player = $registry->create(new Body(144, 2656), new Rider);
+	check($system->mount($player, $vehicle->entity));
+	$input = new Controls;
+	$gear = false;
+	$minimumY = INF;
+	$landed = false;
+
+	for($frame = 0; $frame < 1200; $frame++)
+	{
+		if($vehicle->body->x < 7600)
+		{
+			$values = [2 => true];
+
+			if($vehicle->body->y > 2400) $values['up'] = true;
+		}
+		else
+		{
+			$values = ['down' => true];
+
+			if(!$gear)
+			{
+				$values[1] = true;
+				$gear = true;
+			}
+		}
+
+		$input->set($values);
+		$system->control($player, $input, 1 / 60);
+		$system->update($registry, 1 / 60);
+		$minimumY = min($minimumY, $vehicle->body->y);
+		check(!$tornado->crashed, 'the authored ring route must clear its terrain profile');
+
+		if($vehicle->body->grounded && $vehicle->body->x > 7600)
+		{
+			$landed = true;
+			break;
+		}
+	}
+
+	check($minimumY < 2400, 'the gradual high ridge should exercise a sustained climb');
+	check($landed && $vehicle->body->x >= 8192 && $vehicle->body->x <= 10192);
+	check($tornado->landingGear && !$tornado->flying);
 	$system->close();
 });
 
@@ -555,27 +780,202 @@ test('Tornado high-speed flight cannot tunnel through a thin wall', function() {
 	near($body->vx, 0);
 });
 
-test('Tornado pitch waits for runway clearance without detaching its rider', function() {
+test('Tornado pitch remains controllable after clearing the runway sensor', function() {
 	$registry = new Registry;
 	$terrain = new Terrain;
 	$terrain->add([[-1000, 100], [2000, 100], [2000, 500], [-1000, 500]]);
 	$system = new Vehicles($registry, $terrain, new Platformer($terrain));
-	$vehicle = new Vehicle(Tornado::body(0, 82), seatHeight: 19, seatForward: -12, lockedIn: true);
+	$vehicle = new Vehicle(Tornado::body(0, 76), seatHeight: 14, seatForward: 0, lockedIn: true);
 	$vehicle->body->grounded = true;
-	$id = $system->add($vehicle, new Tornado);
-	$rider = new Body(-12, 63);
+	$tornado = new Tornado;
+	$id = $system->add($vehicle, $tornado);
+	$rider = new Body(0, 68);
 	$player = $registry->create($rider, new Rider);
 	check($system->mount($player, $id));
 	$input = new Controls;
+	$noseUp = 0.0;
 
 	for($frame = 0; $frame < 120; $frame++)
 	{
 		$input->set([2 => true, 'up' => true]);
 		$system->control($player, $input, 1 / 60);
 		$system->update($registry, 1 / 60);
+		$noseUp = min($noseUp, $tornado->pitch);
 		check($system->ridden($player) === $vehicle, 'pitch cannot eject a seated rider near terrain');
 	}
 
-	check($vehicle->body->x > 200 && $vehicle->body->y < 82);
-	check(abs($vehicle->visualAngle) > .1);
+	check($vehicle->body->x > 200 && $vehicle->body->y < 76);
+	check($noseUp < -.2, 'the downward sensor should pitch up to clear nearby terrain');
+	check($vehicle->visualAngle < -.1, 'holding Up must retain a climb beyond the terrain sensor');
+});
+
+test('EggWalker composes reference locomotion with ECS melee and emitter capabilities', function() {
+	$body = EggWalker::body(0, 68);
+	check($body->radius === 16.0 && $body->halfHeight === 32.0);
+	check($body->acceleration === 360.0 && $body->braking === 324.0 && $body->friction === 180.0);
+	check($body->airAcceleration === 1080.0 && $body->gravity === 2340.0);
+	check($body->jumpSpeed === 720.0 && $body->maxSpeed === 150.0);
+	$vehicle = new Vehicle($body, seatHeight: 48);
+	$vehicle->occupant = 1;
+	$walker = new EggWalker;
+	$components = $walker->vehicleComponents();
+	check(count($components) === 4 && $components[0] instanceof VehicleMelee);
+	check($components[1] instanceof VehicleEmitter);
+	check($components[2] instanceof CameraShake);
+	check($components[3] instanceof Rumble);
+	$rider = new Body;
+	$walker->mounted($vehicle, $rider);
+	check($vehicle->cameraMode === 'walker');
+
+	$input = new Controls;
+	$body->grounded = false;
+	$body->vy = 120;
+	$input->set([0 => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($walker->boosting && $body->vy < 120);
+	$input->set([0 => true, 'up' => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($walker->latchedBooster);
+	$input->set([]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($walker->boosting, 'the Up latch should retain the air booster after releasing jump');
+
+	$body->vy = 120;
+	$input->set(['down' => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($walker->crouching && !$walker->boosting && !$vehicle->jumpEnabled);
+	check($body->halfHeight === 24.0 && $vehicle->seatHeight === 30.0 && $body->vy === 360.0);
+	$input->set([4 => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($body->facing === -1 && $body->direction === -1 && $body->halfHeight === 32.0);
+	$input->set([5 => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	check($body->facing === 1 && $body->direction === 1);
+
+	$body->grounded = false;
+	$body->vy = 500;
+	$input->set(['down' => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	$body->grounded = true;
+	$walker->updated($vehicle, null, 1 / 60);
+	near($components[2]->y, -6.65);
+	near($walker->vehicleSnapshot($vehicle)['shakeY'], -6.65);
+
+	$components[2]->impulse();
+	$input->set([]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	$body->grounded = false;
+	$body->vy = 100;
+	$input->set(['down' => true]);
+	$walker->control($vehicle, $input, null, 1 / 60);
+	$body->grounded = true;
+	$walker->updated($vehicle, null, 1 / 60);
+	near($components[2]->y, 0);
+});
+
+test('EggWalker Tiled loading registers behavior and reusable weapon components', function() {
+	$map = (new PhpWasmEngine\Tiled\Loader)->map(dirname(__DIR__) . '/examples/assets/egg-walker.tmj');
+	$registry = new Registry;
+	$terrain = PhpWasmEngine\Physics\MapTerrain::build($map);
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain), $map);
+	check(count($system->vehicles) === 1);
+	$vehicle = array_values($system->vehicles)[0];
+	check($registry->has($vehicle->entity, EggWalker::class));
+	check($registry->has($vehicle->entity, VehicleMelee::class));
+	check($registry->has($vehicle->entity, VehicleEmitter::class));
+	check($registry->has($vehicle->entity, CameraShake::class));
+	check($registry->get($vehicle->entity, Sprite::class)->gid === 38);
+	check($registry->has($vehicle->entity, SpriteLayers::class));
+	$layers = $registry->get($vehicle->entity, SpriteLayers::class);
+	check($layers->behind === [$registry->get($vehicle->entity, Sprite::class)]);
+	check(count($layers->front) === 1 && $layers->front[0]->gid === 39);
+	check($vehicle->seatHeight === 48.0 && $vehicle->seatForward === 0.0);
+	check(!$terrain->solidAt($vehicle->body->x, $vehicle->body->y));
+	check($terrain->solidAt(32, 640) && !$terrain->solidAt(2048, 640));
+	$playerSprite = new Sprite(1);
+	$player = $registry->create(new Body(144, 574), new Rider, $playerSprite);
+	check($system->mount($player, $vehicle->entity));
+	check($layers->anchor === $player);
+	check(SpriteGroup::collectGroups($registry) === [[$layers->behind[0]], [$playerSprite], [$layers->front[0]]]);
+	$input = new Controls;
+	$minimumY = INF;
+
+	for($frame = 0; $frame < 1200; $frame++)
+	{
+		$values = ['right' => true];
+
+		if($vehicle->body->x > 1800 && $vehicle->body->x < 2350) $values[0] = true;
+
+		$input->set($values);
+		$system->control($player, $input, 1 / 60);
+		$system->update($registry, 1 / 60);
+		$minimumY = min($minimumY, $vehicle->body->y);
+
+		if($vehicle->body->x > 2400) break;
+	}
+
+	check($frame < 1200 && $vehicle->body->grounded, 'the authored booster gap must match walker physics');
+	check($minimumY < 520, 'the gap should require a visible boosted arc');
+	$system->close();
+});
+
+test('EggWalker ECS weapons repeat fire and pop badniks with rider credit', function() {
+	$registry = new Registry;
+	$terrain = new Terrain;
+	$terrain->add([[-1000, 100], [2000, 100], [2000, 500], [-1000, 500]]);
+	$system = new Vehicles($registry, $terrain, new Platformer($terrain));
+	$vehicle = new Vehicle(EggWalker::body(0, 68), seatHeight: 48, lockedIn: true);
+	$vehicle->body->grounded = true;
+	$id = $system->add($vehicle, new EggWalker);
+	$body = new Body(0, 34);
+	$counter = new RingCounter;
+	$combat = new PlayerCombat;
+	$player = $registry->create($body, new Rider, $counter, $combat);
+	check($system->mount($player, $id));
+	$badniks = new Badniks($registry, $terrain);
+
+	$enemy = $badniks->create(
+		new Badnik(80, 68, points: 100)
+		, new class implements BadnikBehavior {}
+		, new Sprite(1)
+	);
+
+	$input = new Controls;
+	$input->set([1 => true]);
+	$system->control($player, $input, 1 / 60);
+	$system->update($registry, 1 / 60);
+	$badniks->update($registry, 1 / 60);
+	check(!$registry->has($enemy, Badnik::class));
+	check($counter->score === 100 && $combat->defeats === 1);
+	$input->set([]);
+
+	for($frame = 0; $frame < 12; $frame++)
+	{
+		$system->control($player, $input, 1 / 60);
+		$system->update($registry, 1 / 60);
+		$badniks->update($registry, 1 / 60);
+	}
+
+	$target = $badniks->create(
+		new Badnik(112, 44, points: 100)
+		, new class implements BadnikBehavior {}
+		, new Sprite(1)
+	);
+
+	$input->set([2 => true]);
+
+	for($frame = 0; $frame < 30 && $registry->has($target, Badnik::class); $frame++)
+	{
+		$system->control($player, $input, 1 / 60);
+		$system->update($registry, 1 / 60);
+		$badniks->update($registry, 1 / 60);
+	}
+
+	check(!$registry->has($target, Badnik::class));
+	check($counter->score === 200 && $combat->defeats === 2);
+	$emitter = $registry->get($id, VehicleEmitter::class);
+	check($emitter->shots >= 2, 'holding cannon fire should use the configured repeat interval');
+	check(count($registry->query(VehicleProjectile::class)) < $emitter->shots, 'the hitting projectile should retire');
+	$badniks->close();
+	$system->close();
 });

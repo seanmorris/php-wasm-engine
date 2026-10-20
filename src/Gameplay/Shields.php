@@ -4,6 +4,7 @@ namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Query;
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Sprite;
@@ -228,6 +229,11 @@ final class Shields
 				$body->y -= $body->gravityY * .05;
 				$body->ability = 'bubble-rebound';
 				$shield->bubbleArmed = false;
+
+				if($registry->has($player, Rumble::class))
+				{
+					$registry->get($player, Rumble::class)->bubbleRebound();
+				}
 			}
 
 			if($shield->active === '')
@@ -314,7 +320,6 @@ final class Shields
 		{
 			$body = $this->registry->get($player, Body::class);
 			$sprite = new Sprite($gid, $body->x, $body->y, .5, .5);
-			$sprite->outline = false;
 			$sprite->scaleX = $sprite->scaleY = 1.25;
 			$id = $this->registry->create(new ShieldAura($player), $sprite);
 			$this->auras[$player] = $id;

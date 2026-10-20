@@ -30,57 +30,65 @@ function tornadoPng(string $path, string $state): void
 
 		for($x = 0; $x < 96; $x++)
 		{
+			// Author the canonical state facing right. Vehicle rendering mirrors this artwork when
+			// the chassis faces left, matching the orientation expected by every other vehicle.
+			$sourceX = 95 - $x;
 			$color = [0, 0, 0, 0];
 			$dark = $state === 'crashed' ? [76, 66, 70, 255] : [53, 67, 92, 255];
 			$red = $state === 'crashed' ? [145, 74, 68, 255] : [221, 65, 71, 255];
 			$cream = [246, 226, 164, 255];
 			$blue = [89, 191, 226, 255];
 
-			if($x >= 14 && $x <= 82 && $y >= 20 && $y <= 34
-				&& hypot(($x - 50) / 42, ($y - 27) / 10) <= 1
+			if($sourceX >= 14 && $sourceX <= 82 && $y >= 20 && $y <= 34
+				&& hypot(($sourceX - 50) / 42, ($y - 27) / 10) <= 1
 			){
 				$color = $y < 24 ? $cream : $red;
 			}
 
-			if($x >= 34 && $x <= 61 && $y >= 12 && $y <= 23
-				&& hypot(($x - 48) / 16, ($y - 21) / 11) <= 1
+			if($sourceX >= 34 && $sourceX <= 61 && $y >= 12 && $y <= 23
+				&& hypot(($sourceX - 48) / 16, ($y - 21) / 11) <= 1
 			){
 				$color = $blue;
 			}
 
-			if($x >= 37 && $x <= 58 && $y >= 18 && $y <= 20) $color = $dark;
+			if($sourceX >= 37 && $sourceX <= 58 && $y >= 18 && $y <= 20) $color = $dark;
 
-			if($x >= 42 && $x <= 70 && $y >= 31 && $y <= 38) $color = $red;
+			if($sourceX >= 42 && $sourceX <= 70 && $y >= 31 && $y <= 38) $color = $red;
 
-			if($x >= 71 && $x <= 86 && $y >= 11 && $y <= 29) $color = $red;
+			if($sourceX >= 71 && $sourceX <= 86 && $y >= 11 && $y <= 29) $color = $red;
 
-			if($x >= 76 && $x <= 89 && $y >= 9 && $y <= 13) $color = $cream;
+			if($sourceX >= 76 && $sourceX <= 89 && $y >= 9 && $y <= 13) $color = $cream;
 
-			if($x >= 5 && $x <= 17 && $y >= 23 && $y <= 32) $color = $dark;
+			if($sourceX >= 5 && $sourceX <= 17 && $y >= 23 && $y <= 32) $color = $dark;
 
 			$propeller = ($state === 'flight' || $state === 'thrust') ? 3 : 1;
 
-			if(abs($x - 8) <= $propeller && $y >= 10 && $y <= 42) $color = [215, 229, 236, 210];
+			if(abs($sourceX - 8) <= $propeller && $y >= 10 && $y <= 42) $color = [215, 229, 236, 210];
 
-			if($x >= 8 && $x <= 14 && $y >= 25 && $y <= 28) $color = $cream;
+			if($sourceX >= 8 && $sourceX <= 14 && $y >= 25 && $y <= 28) $color = $cream;
 
 			if(in_array($state, ['ground', 'gear'], true))
 			{
-				if(($x >= 27 && $x <= 30 || $x >= 68 && $x <= 71) && $y >= 34 && $y <= 41) $color = $dark;
+				if(($sourceX >= 27 && $sourceX <= 30 || $sourceX >= 68 && $sourceX <= 71)
+					&& $y >= 34 && $y <= 41
+				) $color = $dark;
 
-				if((hypot($x - 28, $y - 42) < 4 || hypot($x - 70, $y - 42) < 4)) $color = [30, 34, 45, 255];
+				if((hypot($sourceX - 28, $y - 42) < 4 || hypot($sourceX - 70, $y - 42) < 4))
+				{
+					$color = [30, 34, 45, 255];
+				}
 			}
 
-			if($state === 'thrust' && $x >= 83 && $y >= 23 && $y <= 31)
+			if($state === 'thrust' && $sourceX >= 83 && $y >= 23 && $y <= 31)
 			{
-				$length = 95 - $x;
+				$length = 95 - $sourceX;
 				$color = abs($y - 27) <= max(1, $length / 4)
-					? ($x > 90 ? [255, 103, 48, 230] : [255, 226, 103, 255])
+					? ($sourceX > 90 ? [255, 103, 48, 230] : [255, 226, 103, 255])
 					: $color;
 			}
 
-			if($state === 'crashed' && (($x + $y) % 13 === 0 || ($x - $y) % 17 === 0)
-				&& $x >= 20 && $x <= 80 && $y >= 14 && $y <= 37
+			if($state === 'crashed' && (($sourceX + $y) % 13 === 0 || ($sourceX - $y) % 17 === 0)
+				&& $sourceX >= 20 && $sourceX <= 80 && $y >= 14 && $y <= 37
 			){
 				$color = [32, 35, 43, 255];
 			}
@@ -164,32 +172,54 @@ function tornadoRect(array &$data, int $width, int $x1, int $y1, int $x2, int $y
 	for($x = max(0, $x1); $x <= min(319, $x2); $x++) $data[$y * $width + $x] = $gid;
 }
 
-// A ten-thousand-pixel course: runway, climb gate, tunnel, slalom, landing shelf, and return runway.
+// A ten-thousand-pixel terrain-following course. The four-tile ring clearance keeps the reference
+// 128-pixel downward sensor engaged while the stepped ridges leave enough horizontal distance for
+// its damped pitch and ten-pixel-per-frame flight cap. There is deliberately no ceiling.
 tornadoRect($terrain, $width, 0, 88, 319, 95, 1);
-tornadoRect($terrain, $width, 0, 84, 42, 87, 1);
-tornadoRect($terrain, $width, 66, 51, 72, 87, 1);
-tornadoRect($terrain, $width, 104, 0, 138, 14, 1);
-tornadoRect($terrain, $width, 104, 77, 138, 87, 1);
-tornadoRect($terrain, $width, 160, 46, 166, 87, 1);
-tornadoRect($terrain, $width, 195, 0, 201, 54, 1);
-tornadoRect($terrain, $width, 226, 57, 253, 61, 1);
-tornadoRect($terrain, $width, 274, 82, 319, 87, 1);
+$profile = [
+	[0, 48, 84]       // takeoff runway
+	, [49, 63, 88]    // open-sky leveling stretch
+	, [64, 71, 86]
+	, [72, 79, 84]
+	, [80, 87, 82]
+	, [88, 95, 80]    // first sensor ridge
+	, [96, 103, 82]
+	, [104, 111, 84]
+	, [112, 119, 86]
+	, [120, 147, 88]  // recovery valley
+	, [148, 157, 86]
+	, [158, 167, 84]
+	, [168, 177, 82]
+	, [178, 187, 80]
+	, [188, 197, 78]  // broad high point reached by gradual pitch changes
+	, [198, 207, 80]
+	, [208, 217, 82]
+	, [218, 227, 84]
+	, [228, 239, 86]
+	, [240, 255, 88]  // second recovery valley
+	, [256, 319, 84]  // approach and landing runway
+];
 
-$route = [];
+foreach($profile as [$left, $right, $top])
+{
+	if($top < 88) tornadoRect($terrain, $width, $left, $top, $right, 87, 1);
+}
 
-for($x = 12; $x <= 60; $x += 4) $route[] = [$x, max(38, 78 - intdiv($x, 2))];
+for($x = 12; $x <= 316; $x += 4)
+{
+	$ground = 88;
 
-for($x = 76; $x <= 98; $x += 4) $route[] = [$x, 38 + (($x / 4) % 2) * 9];
+	foreach($profile as [$left, $right, $top])
+	{
+		if($x >= $left && $x <= $right)
+		{
+			$ground = $top;
+			break;
+		}
+	}
 
-for($x = 110; $x <= 132; $x += 4) $route[] = [$x, 42];
-
-for($x = 142; $x <= 218; $x += 4) $route[] = [$x, 28 + (int)(18 * sin($x / 10))];
-
-for($x = 232; $x <= 264; $x += 4) $route[] = [$x, 50];
-
-for($x = 278; $x <= 314; $x += 4) $route[] = [$x, 76];
-
-foreach($route as [$x, $y]) $rings[$y * $width + $x] = 5;
+	$rings[($ground - 4) * $width + $x] = 5;
+}
 
 $layers = $backgrounds;
 $layers[] = [
@@ -236,8 +266,8 @@ $layers[] = [
 			, 'gid' => 38
 			, 'properties' => [
 				['name' => 'lockedIn', 'type' => 'bool', 'value' => true]
-				, ['name' => 'seatHeight', 'type' => 'float', 'value' => 19]
-				, ['name' => 'seatForward', 'type' => 'float', 'value' => -12]
+				, ['name' => 'seatHeight', 'type' => 'float', 'value' => 14]
+				, ['name' => 'seatForward', 'type' => 'float', 'value' => 0]
 			]
 		]
 	]

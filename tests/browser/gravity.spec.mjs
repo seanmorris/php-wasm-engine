@@ -240,6 +240,37 @@ test('the visible curved-ceiling course cycles through all four gravity directio
 	expect(Object.keys(features.switches)).toHaveLength(4);
 	expect(Object.keys(features.springs)).toHaveLength(4);
 
+	// Record the authored downward-gravity phase synchronously. Calling into the
+	// runtime first, then waiting for rAF, can skip it while the automatic course
+	// advances into the first wall-gravity section.
+	const directionsPromise = page.evaluate(async() => {
+		const canvas = document.querySelector('canvas');
+		const seen = [];
+		const started = performance.now();
+		let previous = '';
+
+		const observe = () => {
+			const body = JSON.parse(canvas.dataset.body || '{}');
+			const direction = JSON.stringify([body.gravityX, body.gravityY]);
+
+			if(direction !== previous)
+			{
+				seen.push(JSON.parse(direction));
+				previous = direction;
+			}
+		};
+
+		observe();
+
+		while(seen.length < 5 && performance.now() - started < 10000)
+		{
+			await new Promise(resolve => requestAnimationFrame(resolve));
+			observe();
+		}
+
+		return seen;
+	});
+
 	const initialView = JSON.parse(await run(page, `echo json_encode([
 		$body->x - $camera->x,
 		$body->y - $camera->y,
@@ -255,27 +286,7 @@ test('the visible curved-ceiling course cycles through all four gravity directio
 	expect(initialView[2]).toBeGreaterThan(1000);
 	expect(initialView[3]).toBeGreaterThan(1800);
 
-	const directions = await page.evaluate(async() => {
-		const canvas = document.querySelector('canvas');
-		const seen = [];
-		const started = performance.now();
-		let previous = '';
-
-		while(seen.length < 5 && performance.now() - started < 10000)
-		{
-			await new Promise(resolve => requestAnimationFrame(resolve));
-			const body = JSON.parse(canvas.dataset.body || '{}');
-			const direction = JSON.stringify([body.gravityX, body.gravityY]);
-
-			if(direction !== previous)
-			{
-				seen.push(JSON.parse(direction));
-				previous = direction;
-			}
-		}
-
-		return seen;
-	});
+	const directions = await directionsPromise;
 
 	expect(directions.slice(0, 5)).toEqual([[0, 1], [-1, 0], [0, -1], [1, 0], [0, 1]]);
 	expect(errors).toEqual([]);

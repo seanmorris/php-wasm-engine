@@ -9,6 +9,7 @@ use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Render\SpriteGroup;
 use PhpWasmEngine\Render\SpriteRenderer;
 use PhpWasmEngine\Render\SpriteSheet;
+use PhpWasmEngine\Render\WaterRenderer;
 use PhpWasmEngine\Tiled\Loader;
 
 // The PNG contains these colored rectangles and a fully green adjacent animation frame.
@@ -273,6 +274,32 @@ $device->begin([1, 1, 1, 1]);
 $renderer->renderEntities($registry, $camera, 150);
 $checks['restored outline and opt-out'] = $pixels
 	=== glReadPixels(0, 0, 96, 96, GL_RGBA, GL_UNSIGNED_BYTE);
+
+$camera->x = $camera->y = 0;
+$left = new Sprite(1, 40, 40, 0, 0);
+$left->animated = false;
+$left->crop = [11, 11, 1, 1];
+$right = clone $left;
+$right->x = 41;
+$device->begin([1, 1, 1, 1]);
+$renderer->render([$left, $right], $camera);
+$independent = bin2hex(glReadPixels(40, 55, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE));
+$grouped = new Registry;
+$grouped->create($left, new SpriteGroup($right));
+$device->begin([1, 1, 1, 1]);
+$renderer->renderEntities($grouped, $camera);
+$composite = bin2hex(glReadPixels(40, 55, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE));
+$checks['separate entities retain painter-order outlines'] = $independent === '000000ff';
+$checks['entity artwork rejects sibling outlines'] = $composite === '00ff00ff';
+
+$water = new WaterRenderer(96, 96);
+$device->begin([1, 1, 1, 1]);
+$water->begin([1, 1, 1, 1]);
+$renderer->renderEntities($grouped, $camera);
+$water->compose([], $camera);
+$offscreen = bin2hex(glReadPixels(40, 55, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE));
+$checks['offscreen entity outlines retain depth grouping'] = $offscreen === $composite;
+$water->close();
 
 $renderer->close();
 $atlas->close();

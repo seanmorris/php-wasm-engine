@@ -128,7 +128,6 @@ final class WaterParticles
 
 		$particle = new WaterParticle(WaterParticle::SPLASH, .32, $body);
 		$sprite = new Sprite($this->gids[WaterParticle::SPLASH], $x, $y + 2, .5, 1);
-		$sprite->outline = false;
 		$sprite->time = -$this->time * 1000;
 		$id = $this->registry->create($particle, $sprite);
 		$this->owned[$id] = $particle;
@@ -298,7 +297,6 @@ final class WaterParticles
 		{
 			$particle = new WaterParticle(WaterParticle::SKIM, 0, $bodyId);
 			$sprite = new Sprite($this->gids[WaterParticle::SKIM], originX: .5, originY: 1);
-			$sprite->outline = false;
 			$sprite->opacity = .65;
 			$sprite->scaleX = 1.5;
 			$sprite->time = -$this->time * 1000;

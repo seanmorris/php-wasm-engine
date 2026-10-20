@@ -3,7 +3,9 @@ declare(strict_types=1);
 namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Ecs\Query;
 use PhpWasmEngine\Effects\ParticleBurst;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
@@ -169,8 +171,22 @@ final class BreakableBlocks
 		}
 
 		$id = $this->shapes[$hit->shape] ?? null;
+		$shattered = $id !== null && $this->shatter($id, $milliseconds);
 
-		return $id !== null && $this->shatter($id, $milliseconds);
+		if($shattered)
+		{
+			foreach($this->registry->query(Query::all(Body::class, Rumble::class)) as $actor)
+			{
+				if($this->registry->get($actor, Body::class) === $body)
+				{
+					$this->registry->get($actor, Rumble::class)->breakBlock();
+
+					break;
+				}
+			}
+		}
+
+		return $shattered;
 	}
 
 	/**

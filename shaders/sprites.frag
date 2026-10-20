@@ -61,11 +61,15 @@ void main() {
 
     vec2 point=snapTexel(uv*rect.zw);
     vec4 pixel=spritePixel(point);
-    outputColor=pixel*color;
 
-    // Keep colored and partially transparent artwork unchanged. Only empty pixels gain ink.
-    if(pixel.a==0. && any(greaterThan(outlinePixels, vec2(0))))
+    // Artwork and ink are separate instances. Drawing every entity's artwork first lets its
+    // shared, farther outline depth fail anywhere any sibling has already contributed artwork.
+    if(any(greaterThan(outlinePixels, vec2(0)))) {
+        if(pixel.a>0.) discard;
         outputColor=vec4(0, 0, 0, outlineAlpha(point)*color.a);
+    } else {
+        outputColor=pixel*color;
+    }
 
     if(outputColor.a==0.) discard;
 }

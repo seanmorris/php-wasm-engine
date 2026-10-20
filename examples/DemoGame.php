@@ -4,6 +4,8 @@ declare(strict_types=1);
 use PhpWasmEngine\Engine;
 use PhpWasmEngine\Ecs\Registry;
 use PhpWasmEngine\Effects\ParticleBurst;
+use PhpWasmEngine\Effects\CameraShake;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Gameplay\BreakableBlock;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\LightDash;
@@ -38,6 +40,8 @@ final class DemoGame
 	public string $scene = '';
 	public string $error = '';
 	public bool $motionBlur = true;
+	public bool $rumble = true;
+	public string $rumbleTestStatus = 'Not tested';
 	private object $host;
 	private object $canvas;
 	private object $status;
@@ -115,7 +119,7 @@ final class DemoGame
 	 * Start or replace a nonblocking level request without restarting PHP or simulation.
 	 *
 	 * @param string $scene Platformer, platforms, bridges, grapples, vehicles, light-dash, water, water-rail,
-	 * water-skim-rail, water-loop, gravity, ceiling-curves, tornado, badniks,
+	 * water-skim-rail, water-loop, gravity, ceiling-curves, tornado, egg-walker, badniks,
 	 * grinding, loop, breakables, infinite, isometric, or world identifier.
 	 * @param bool $restart Whether to rebuild the currently selected level from its original assets.
 	 * @return void Keeps the current level until ready; selecting it again cancels the request.
@@ -138,6 +142,7 @@ final class DemoGame
 				, 'grapples'
 				, 'vehicles'
 				, 'tornado'
+				, 'egg-walker'
 				, 'badniks'
 				, 'grinding'
 				, 'loop'
@@ -185,6 +190,38 @@ final class DemoGame
 	{
 		$this->motionBlur = $enabled;
 		$this->level?->motionBlur?->reset();
+	}
+
+	/** Enable or silence MB2 haptic patterns without retaining pulses from the old preference. */
+	public function setRumble(bool $enabled): void
+	{
+		$this->rumble = $enabled;
+
+		if(!$enabled)
+		{
+			foreach($this->engine->entities->query(Rumble::class) as $id)
+			{
+				$this->engine->entities->get($id, Rumble::class)->reset();
+			}
+
+			$this->engine->input->gamepads->rumble(0, 0, 0);
+		}
+	}
+
+	/** Send a conspicuous diagnostic pulse to the gamepad currently driving the menu. */
+	public function testRumble(): void
+	{
+		$status = $this->engine->input->gamepads->rumbleStatus();
+
+		if($status !== 'Ready')
+		{
+			$this->rumbleTestStatus = $status;
+			return;
+		}
+
+		$this->rumbleTestStatus = $this->engine->input->gamepads->rumble(1000, 1, 1)
+			? 'Pulse accepted'
+			: 'SDL rejected the pulse';
 	}
 
 	/**
@@ -257,6 +294,7 @@ final class DemoGame
 	private function resetPlayer(): void
 	{
 		$this->level?->motionBlur?->reset();
+		$this->engine->entities->get($this->entity, Rumble::class)->reset();
 		$this->level?->vehicles?->dismount($this->entity, 'reset');
 		$this->engine->entities->get($this->entity, Rider::class)->cooldowns = [];
 		$this->level?->grapples?->release($this->entity, inherit: false);
@@ -567,7 +605,18 @@ final class DemoGame
 		$jumpConsumed = $vehicleInput || $released || $hanging || $lightDashing
 			|| ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
 
+		$wasGrounded = $this->body->grounded;
+		$landingSpeed = abs($this->body->gravityVelocity());
 		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+
+		if(!$vehicleInput && !$wasGrounded && $this->body->grounded)
+		{
+			$rumble = $this->engine->entities->get($this->entity, Rumble::class);
+
+			// Platformer lets an impact already produced by this terrain sweep take precedence.
+			if(!$rumble->hasImmediatePulse()) $rumble->landing($landingSpeed);
+		}
+
 		$this->level->vehicles?->update($entities, $dt);
 		$bossRegion = $this->level->bossRegions?->update($this->body);
 
@@ -605,6 +654,29 @@ final class DemoGame
 		}
 
 		$this->cameraBehavior->update($this->camera, $this->body, $dt, $look);
+		$this->dispatchRumble($entities, $dt);
+	}
+
+	/** Advance every ECS haptic queue and route ready pulses through the active gamepad adapter. */
+	private function dispatchRumble(Registry $entities, float $dt): void
+	{
+		$pulse = null;
+
+		foreach($entities->query(Rumble::class) as $id)
+		{
+			foreach($entities->get($id, Rumble::class)->update($dt) as $ready)
+			{
+				// MB2's Controller retains only its final willRumble request per input frame.
+				$pulse = $ready;
+			}
+		}
+
+		if($this->rumble && $pulse !== null)
+		{
+			$this->engine->input->gamepads->rumble(
+				$pulse['duration'], $pulse['strong'], $pulse['weak']
+			);
+		}
 	}
 
 	/**
@@ -615,6 +687,7 @@ final class DemoGame
 	public function render(): void
 	{
 		$this->load();
+		$this->dispatchRumble($this->engine->entities, 0);
 		$this->engine->device->begin();
 
 		if($this->startup?->render())
@@ -681,6 +754,13 @@ final class DemoGame
 			, $this->frameElapsed
 			, $this->motionBlur && !$this->engine->userPaused && !$this->menu->menu->isOpen
 		);
+
+		$vehicle = $level->vehicles?->ridden($this->entity);
+
+		if($vehicle !== null && $this->engine->entities->has($vehicle->entity, CameraShake::class))
+		{
+			$camera = $this->engine->entities->get($vehicle->entity, CameraShake::class)->view($camera);
+		}
 
 		$this->canvas->dataset->motionBlur = json_encode($motionBlur);
 		$level->waterRenderer?->begin();
@@ -893,7 +973,7 @@ final class DemoGame
 
 		if(in_array(
 			$this->scene
-			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles', 'tornado']
+			, ['water-rail', 'water-skim-rail', 'water-loop', 'grinding', 'loop', 'vehicles', 'tornado', 'egg-walker']
 			, true
 		)){
 			$this->status->textContent .= ' · collision layer ' . $body->collisionLayer;

@@ -6,7 +6,7 @@ use PhpWasmEngine\Input\Controls;
 use PhpWasmEngine\Physics\Body;
 
 /** MB2 board coasting, crouching, fakie tricks, manuals, and rail combo continuation. */
-final class Skateboard implements VehicleBehavior
+final class Skateboard implements VehicleBehavior, VehicleDiagnostics
 {
 	public string $trick = '';
 	public float $remaining = 0;
@@ -159,4 +159,12 @@ final class Skateboard implements VehicleBehavior
 			$this->grindRemainder -= $points;
 		}
 	}
+
+	/**
+	 * Identify board telemetry without a behavior-type branch in the generic vehicle owner.
+	 *
+	 * @param Vehicle $vehicle Board whose telemetry is requested.
+	 * @return array<string,mixed> Serializable board type field.
+	 */
+	public function vehicleSnapshot(Vehicle $vehicle): array { return ['type' => 'skateboard']; }
 }

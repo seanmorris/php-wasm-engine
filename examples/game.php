@@ -13,6 +13,7 @@ require_once __DIR__ . '/DemoBackdrop.php';
 require_once __DIR__ . '/DemoStartup.php';
 
 use PhpWasmEngine\Engine;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Gameplay\PlayerCombat;
 use PhpWasmEngine\Gameplay\Combo;
 use PhpWasmEngine\Gameplay\LightDash;
@@ -40,6 +41,7 @@ $entity = $engine->entities->create(
 	, new GrappleGrip
 	, new LightDash
 	, new PlayerCombat
+	, new Rumble
 	, new Sprite(['runner' => 7, 'glider' => 8, 'flyer' => 9][$profile], originY: 30 / 32)
 );
 

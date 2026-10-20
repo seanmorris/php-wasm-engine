@@ -10,7 +10,7 @@ use PhpWasmEngine\Physics\
 final class WaterRenderer
 {
 	private Program $program;
-	private array $vao = [],$framebuffer = [];
+	private array $vao = [],$framebuffer = [],$depthBuffer = [];
 	private int $sceneTexture = 0,$displacementTexture = 0;
 	private bool $closed = false,$capturing = false;
 	public int $draws = 0;
@@ -20,7 +20,7 @@ final class WaterRenderer
 	 *
 	 * @param int $width Positive drawing-buffer width in pixels.
 	 * @param int $height Positive drawing-buffer height in pixels.
-	 * @return void Creates restorable GPU resources for postprocessing water regions.
+	 * @return void Creates restorable color and depth resources for postprocessing water regions.
 	 */
 	public function __construct(public int $width, public int $height)
 	{
@@ -38,7 +38,7 @@ final class WaterRenderer
 	}
 
 	/**
-	 * Allocate framebuffer, scene texture, wave map, and shader-generated quad state.
+	 * Allocate framebuffer, scene texture, depth buffer, wave map, and fullscreen geometry.
 	 *
 	 * @return void Creates all context-local resources or releases partial allocation on failure.
 	 */
@@ -53,6 +53,10 @@ final class WaterRenderer
 			glGenFramebuffers(1, $this->framebuffer);
 			glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, $this->sceneTexture, 0);
+			glGenRenderbuffers(1, $this->depthBuffer);
+			glBindRenderbuffer(GL_RENDERBUFFER, $this->depthBuffer[0]);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, $this->width, $this->height);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, $this->depthBuffer[0]);
 
 			if(glCheckFramebufferStatus(GL_FRAMEBUFFER) !== GL_FRAMEBUFFER_COMPLETE)
 			{
@@ -63,6 +67,7 @@ final class WaterRenderer
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 64, 64, 0, GL_RGBA, GL_UNSIGNED_BYTE, $this->map());
+			glBindRenderbuffer(GL_RENDERBUFFER, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		}
 		catch(\Throwable $error)
@@ -101,7 +106,7 @@ final class WaterRenderer
 	 *
 	 * @param array{0:float|int,1:float|int,2:float|int,3:float|int} $color Scene clear color as
 	 * normalized RGBA channels.
-	 * @return void Clears the capture target and begins one capture/composite pair.
+	 * @return void Clears the color and depth targets and begins one capture/composite pair.
 	 */
 	public function begin(array $color = [.055,.075,.12,1]): void
 	{
@@ -115,7 +120,9 @@ final class WaterRenderer
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
 		glViewport(0, 0, $this->width, $this->height);
 		glClearColor(...$color);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClearDepth(1);
+		glDepthMask(true);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
 
 	/**
@@ -224,7 +231,7 @@ final class WaterRenderer
 	}
 
 	/**
-	 * Delete live context objects while retaining dimensions and shader source for restoration.
+	 * Delete live texture, depth, framebuffer, and geometry objects while retaining dimensions.
 	 *
 	 * @return void Clears every owned GL handle except the separately managed program wrapper.
 	 */
@@ -242,12 +249,17 @@ final class WaterRenderer
 			glDeleteFramebuffers(1, $this->framebuffer);
 		}
 
+		if($this->depthBuffer)
+		{
+			glDeleteRenderbuffers(1, $this->depthBuffer);
+		}
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
 
 		$this->sceneTexture = $this->displacementTexture = 0;
-		$this->framebuffer = $this->vao = [];
+		$this->framebuffer = $this->depthBuffer = $this->vao = [];
 	}
 }

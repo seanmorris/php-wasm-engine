@@ -335,7 +335,14 @@ test('Tiled gravity features become ECS sprites, collision edges, and scriptable
 	near($features->springs[11]->power, 1440);
 	check(count($registry->query(GravitySwitch::class)) === 1);
 	check(count($registry->query(Spring::class)) === 1);
-	check(count($registry->query(PhpWasmEngine\Render\Sprite::class)) === 2);
+	$sprites = $registry->query(PhpWasmEngine\Render\Sprite::class);
+	check(count($sprites) === 2);
+
+	foreach($sprites as $id)
+	{
+		check($registry->get($id, PhpWasmEngine\Render\Sprite::class)->outline);
+	}
+
 	check(count($features->snapshot()['switches']) === 1);
 	$body = new Body;
 	check($features->activate(10, $body));

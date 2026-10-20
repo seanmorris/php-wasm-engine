@@ -59,6 +59,7 @@ final class DemoStartup
 			, 'grapples' => 'Grapple ropes'
 			, 'vehicles' => 'Skateboard course'
 			, 'tornado' => 'Tornado flight course'
+			, 'egg-walker' => 'EggWalker proving ground'
 			, 'water' => 'Water regions'
 			, 'water-rail' => 'Underwater rail'
 			, 'water-skim-rail' => 'Surface skim rail'

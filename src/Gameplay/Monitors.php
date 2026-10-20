@@ -4,6 +4,7 @@ namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Query;
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Hit;
 use PhpWasmEngine\Physics\Terrain;
@@ -166,7 +167,6 @@ final class Monitors
 				)
 			};
 
-			$shell->outline = $screen->outline = false;
 			$result[] = $this->create($monitor, $effect, $shell, $screen);
 		}
 
@@ -315,6 +315,11 @@ final class Monitors
 			}
 
 			$this->registry->get($id, MonitorEffect::class)->apply($this->registry, $player, $monitor);
+
+			if($this->registry->has($player, Rumble::class))
+			{
+				$this->registry->get($player, Rumble::class)->pop();
+			}
 		}
 
 		if($body !== null && !$body->grounded)

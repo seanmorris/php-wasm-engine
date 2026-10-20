@@ -4,6 +4,7 @@ namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Query;
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
@@ -105,6 +106,7 @@ final class Badniks
 		}
 
 		$this->updateProjectiles($playerIds, $dt);
+		$this->updateVehicleProjectiles();
 		$this->updateContacts($playerIds);
 		$this->updateExplosions($dt);
 		$active = [];
@@ -119,6 +121,41 @@ final class Badniks
 		}
 
 		$this->players = array_intersect_key($this->players, $active);
+	}
+
+	/**
+	 * Pop the first badnik crossed by each rider-owned vehicle projectile.
+	 *
+	 * @return void Destroys each hitting shot and awards its rider through the common pop path.
+	 */
+	private function updateVehicleProjectiles(): void
+	{
+		foreach($this->registry->query(VehicleProjectile::class) as $shotId)
+		{
+			$shot = $this->registry->get($shotId, VehicleProjectile::class);
+
+			foreach($this->registry->query(Badnik::class) as $badnikId)
+			{
+				$badnik = $this->registry->get($badnikId, Badnik::class);
+				$center = [$badnik->x, $badnik->y - $badnik->height / 2];
+				$from = $this->badniks[$badnikId] ?? $center;
+
+				if(!$this->swept(
+					[$shot->previousX, $shot->previousY]
+					, [$shot->x, $shot->y]
+					, $from
+					, $center
+					, $shot->radius + $badnik->width / 2
+					, $shot->radius + $badnik->height / 2
+				)) continue;
+
+				$this->pop($badnikId, $shot->attacker);
+
+				if($this->registry->alive($shotId)) $this->registry->destroy($shotId);
+
+				continue 2;
+			}
+		}
 	}
 
 	/**
@@ -179,6 +216,11 @@ final class Badniks
 				$this->rebound(
 					Vehicle::forRider($this->registry, $attacker)?->body ?? $this->registry->get($attacker, Body::class)
 				);
+			}
+
+			if($this->registry->has($attacker, Rumble::class))
+			{
+				$this->registry->get($attacker, Rumble::class)->pop();
 			}
 		}
 
@@ -312,6 +354,9 @@ final class Badniks
 				$playerFrom = $this->players[$player] ?? [$body->x, $body->y];
 
 				$vehicle = Vehicle::forRider($this->registry, $player);
+				$melee = $vehicle !== null && $this->registry->has($vehicle->entity, VehicleMelee::class)
+					? $this->registry->get($vehicle->entity, VehicleMelee::class)
+					: null;
 
 				$chassisHit = $vehicle !== null && $this->intersectsBadnik(
 					$vehicle->body
@@ -320,14 +365,22 @@ final class Badniks
 					, $from
 				);
 
-				if(!$chassisHit && !$this->intersectsBadnik($body, $playerFrom, $badnik, $from))
+				$attackHit = $vehicle !== null && $melee?->attacking()
+					&& $this->intersectsBadnik(
+						$this->attackBody($vehicle, $melee)
+						, $this->attackFrom($vehicle, $melee)
+						, $badnik
+						, $from
+					);
+
+				if(!$attackHit && !$chassisHit && !$this->intersectsBadnik($body, $playerFrom, $badnik, $from))
 				{
 					continue;
 				}
 
 				$combat = $this->registry->get($player, PlayerCombat::class);
 
-				if($combat->attacking($vehicle?->body ?? $body))
+				if($attackHit || $combat->attacking($vehicle?->body ?? $body))
 				{
 					$this->pop($id, $player);
 
@@ -350,6 +403,49 @@ final class Badniks
 		}
 
 		$this->badniks = array_intersect_key($active, array_fill_keys($this->registry->query(Badnik::class), true));
+	}
+
+	/**
+	 * Build a one-sided surface-relative melee volume at its current endpoint.
+	 *
+	 * @param Vehicle $vehicle Chassis supplying support point, orientation, and facing.
+	 * @param VehicleMelee $melee Capability supplying reach, thickness, and outward offset.
+	 * @return Body Oriented collision body covering the configured attack volume.
+	 */
+	private function attackBody(Vehicle $vehicle, VehicleMelee $melee): Body
+	{
+		$body = clone $vehicle->body;
+		$direction = $body->direction ?: $body->facing ?: 1;
+		$tangent = $body->radius + $melee->reach / 2;
+		$body->x = $body->supportX()
+			+ cos($body->angle) * $direction * $tangent
+			+ sin($body->angle) * $melee->normalOffset;
+
+		$body->y = $body->supportY()
+			+ sin($body->angle) * $direction * $tangent
+			- cos($body->angle) * $melee->normalOffset;
+
+		$body->radius = $melee->reach / 2;
+		$body->halfHeight = $melee->height / 2;
+
+		return $body;
+	}
+
+	/**
+	 * Return the melee volume's previous center for relative continuous collision.
+	 *
+	 * @param Vehicle $vehicle Chassis supplying previous and current positions.
+	 * @param VehicleMelee $melee Capability used to reconstruct the current attack volume.
+	 * @return array{float,float} Previous world-space center approximated from chassis movement.
+	 */
+	private function attackFrom(Vehicle $vehicle, VehicleMelee $melee): array
+	{
+		$body = $this->attackBody($vehicle, $melee);
+
+		return [
+			$body->x + $vehicle->previousX - $vehicle->body->x
+			, $body->y + $vehicle->previousY - $vehicle->body->y
+		];
 	}
 
 	/**
@@ -389,6 +485,11 @@ final class Badniks
 		if($damaged && $this->registry->has($player, Combo::class))
 		{
 			$this->registry->get($player, Combo::class)->fail();
+		}
+
+		if($damaged && $this->registry->has($player, Rumble::class))
+		{
+			$this->registry->get($player, Rumble::class)->playerDamage();
 		}
 
 		return $damaged;

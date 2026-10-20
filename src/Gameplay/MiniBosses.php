@@ -4,6 +4,7 @@ namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Query;
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
@@ -434,7 +435,6 @@ final class MiniBosses
 		);
 
 		$sprite = new Sprite($this->gids['spike-bomb'], $x, $y, .5, .5);
-		$sprite->outline = false;
 		$id = $this->registry->create($projectile, $sprite);
 		$this->owned[$id] = true;
 		$behavior->bombs++;
@@ -521,7 +521,6 @@ final class MiniBosses
 		$x = $boss->x + $boss->width * $offsetX;
 		$y = $boss->y + $boss->height * $offsetY;
 		$sprite = new Sprite($this->gids['boss-explosion'], $x, $y, .5, .5);
-		$sprite->outline = false;
 		$id = $this->registry->create(new BossExplosion, $sprite);
 		$this->owned[$id] = true;
 		$behavior->explosions++;
@@ -621,6 +620,11 @@ final class MiniBosses
 		$behavior->damagers[$attacker] = $behavior->age;
 		$this->phase($boss, $behavior, 'damaged');
 
+		if($this->registry->has($attacker, Rumble::class))
+		{
+			$this->registry->get($attacker, Rumble::class)->bossHit();
+		}
+
 		if(!$boss->alive() && $this->registry->alive($attacker))
 		{
 			$combat = $this->registry->get($attacker, PlayerCombat::class);
@@ -712,6 +716,11 @@ final class MiniBosses
 		if($damaged && $this->registry->has($player, Combo::class))
 		{
 			$this->registry->get($player, Combo::class)->fail();
+		}
+
+		if($damaged && $this->registry->has($player, Rumble::class))
+		{
+			$this->registry->get($player, Rumble::class)->playerDamage();
 		}
 
 		return $damaged;
@@ -839,7 +848,6 @@ final class MiniBosses
 			);
 
 			$sprite = new Sprite($this->gids['spike-fragment'], $bomb->x, $bomb->y, .5, .5);
-			$sprite->outline = false;
 			$id = $this->registry->create($fragment, $sprite);
 			$this->owned[$id] = true;
 		}

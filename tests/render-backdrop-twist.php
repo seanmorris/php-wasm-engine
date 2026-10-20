@@ -137,7 +137,8 @@ $restoredExact = $restored['pixels'] === $positive['pixels'];
 
 $sceneTexture = (new ReflectionProperty($renderer, 'sceneTexture'))->getValue($renderer);
 $sceneFramebuffer = (new ReflectionProperty($renderer, 'framebuffer'))->getValue($renderer)[0];
-$live = [glIsTexture($sceneTexture), glIsFramebuffer($sceneFramebuffer)];
+$depthBuffer = (new ReflectionProperty($renderer, 'depthBuffer'))->getValue($renderer)[0];
+$live = [glIsTexture($sceneTexture), glIsFramebuffer($sceneFramebuffer), glIsRenderbuffer($depthBuffer)];
 
 $checks = [
 	'zero strength copies the backdrop once' => $plain['draws'] === 1
@@ -150,12 +151,12 @@ $checks = [
 	, 'nested framebuffer receives identical output' => $parentComplete && $nestedExact
 	, 'nested framebuffer binding is restored' => $nestedRestored
 	, 'context restoration preserves output' => $restoredExact
-	, 'resources are live before closure' => $live === [true, true]
+	, 'resources are live before closure' => $live === [true, true, true]
 ];
 
 $renderer->close();
-$released = [!glIsTexture($sceneTexture), !glIsFramebuffer($sceneFramebuffer)];
-$checks['owned resources are released'] = $released === [true, true];
+$released = [!glIsTexture($sceneTexture), !glIsFramebuffer($sceneFramebuffer), !glIsRenderbuffer($depthBuffer)];
+$checks['owned resources are released'] = $released === [true, true, true];
 
 $spriteRenderer->close();
 $atlas->close();

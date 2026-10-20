@@ -293,10 +293,12 @@ test('grapple demo resolves static, squine, and path anchors with map offsets an
 	foreach($system->points as $id => $point)
 	{
 		$sprite = $registry->get($id, Sprite::class);
-		check($sprite->flipX && $sprite->gid > 0);
+		check($sprite->flipX && $sprite->gid > 0 && $sprite->outline);
 		near($sprite->opacity, .4);
 		check($sprite->tint === $layer->tint);
-		near($registry->get($id, SpriteGroup::class)->sprites[0]->opacity, .4);
+		$rope = $registry->get($id, SpriteGroup::class)->sprites[0];
+		near($rope->opacity, .4);
+		check(!$rope->outline, 'repeated rope strips remain an MB2-style structural exclusion');
 	}
 
 	$system->close();

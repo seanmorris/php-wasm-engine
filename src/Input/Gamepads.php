@@ -62,6 +62,77 @@ final class Gamepads
 	}
 
 	/**
+	 * Request one dual-motor pulse on the controller that most recently supplied input.
+	 *
+	 * @param int $duration Nonnegative pulse duration in milliseconds.
+	 * @param float $strong Low-frequency motor magnitude in [0,1].
+	 * @param float $weak High-frequency motor magnitude in [0,1].
+	 * @return bool True when the active SDL controller supports and accepted the pulse.
+	 */
+	public function rumble(int $duration, float $strong, float $weak): bool
+	{
+		if($duration < 0 || !is_finite($strong) || $strong < 0 || $strong > 1
+			|| !is_finite($weak) || $weak < 0 || $weak > 1
+		){
+			throw new \InvalidArgumentException('Invalid gamepad rumble pulse');
+		}
+
+		if($this->rumbleStatus() !== 'Ready')
+		{
+			return false;
+		}
+
+		$handle = $this->handles[$this->activeId];
+
+		// MB2 silences these pulses on PS3-era pads: they can latch an audible motor buzz
+		// instead of playing a very short weak vibration. SDL's duration-based request also
+		// makes an explicit zero pulse the correct way to stop any current browser effect.
+		if(preg_match('/playstation.{0,5}3/i', $this->activeName()) && $duration < 100 && $strong < .75)
+		{
+			$duration = 0;
+			$strong = $weak = 0;
+		}
+
+		return SDL_GameControllerRumble(
+			$handle
+			, (int)round($strong * 65535)
+			, (int)round($weak * 65535)
+			, $duration
+		) === 0;
+	}
+
+	/**
+	 * Describe whether the most recently active controller can receive a rumble request.
+	 *
+	 * This is intentionally synchronous: browser haptic APIs settle asynchronously, but the
+	 * SDL call can still expose missing bindings, a missing active pad, and unsupported motors.
+	 *
+	 * @return string A concise status suitable for a settings-menu diagnostic.
+	 */
+	public function rumbleStatus(): string
+	{
+		if($this->closed || $this->activeId === null || !isset($this->handles[$this->activeId]))
+		{
+			return 'Use a controller first';
+		}
+
+		// Rumble was added to php-sdl-wasm after controller input. Keep the
+		// engine usable with older runtimes and builds that omit those bindings.
+		if(!function_exists('SDL_GameControllerHasRumble')
+			|| !function_exists('SDL_GameControllerRumble')
+		){
+			return 'Runtime has no rumble API';
+		}
+
+		if(!SDL_GameControllerHasRumble($this->handles[$this->activeId]))
+		{
+			return 'Controller has no rumble motor';
+		}
+
+		return 'Ready';
+	}
+
+	/**
 	 * Discover controllers, release disconnected handles, and sample normalized inputs.
 	 *
 	 * @return void Refreshes per-controller axes and buttons unless this owner has closed.

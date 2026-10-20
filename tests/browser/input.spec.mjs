@@ -4,14 +4,23 @@ async function pads(page, connected = true)
 {
 	await page.addInitScript(connected => {
 		window.inputPads = [];
+		window.rumbleEffects = [];
 
-		window.connectPad = (index = 0) => {
+		window.connectPad = (index = 0, id = 'Standard Gamepad ' + index) => {
 			const pad = {
-				id: 'Standard Gamepad ' + index
+				id
 				, index
 				, connected: true
 				, mapping: 'standard'
 				, timestamp: performance.now()
+				, vibrationActuator: {
+					effects: ['dual-rumble']
+					, playEffect: (effect, parameters) => {
+						rumbleEffects.push({index, effect, parameters});
+
+						return Promise.resolve('complete');
+					}
+				}
 				, axes: [
 					0
 					, 0
@@ -210,6 +219,92 @@ test('individual controller reads, dead-zone changes and closing a second owner 
 	await change(page, {index: 2});
 	await expect.poll(async() => (await frame(page)).axis).toBe(0);
 	expect(errors).toEqual([]);
+});
+
+test('rumble targets the active SDL controller and reports device capability', async({page}) => {
+	const errors = await start(page);
+	await page.evaluate(() => connectPad(2));
+	await expect.poll(async() => (await frame(page)).ids.length).toBe(2);
+	await change(page, {index: 2,buttons: [0]});
+	await expect.poll(async() => (await frame(page)).keys.jump).toBe(true);
+
+	const result = await page.evaluate(async() => {
+		const module = await enginePhp.binary;
+
+		module.rumbleResult = json => window.rumbleResult = JSON.parse(json);
+
+		const status = await enginePhp.run(`<?php
+			$pads=$engine->input->gamepads;
+			$supported=function_exists('SDL_GameControllerHasRumble')
+				&& function_exists('SDL_GameControllerRumble');
+			$accepted=$pads->rumble(125,.25,.75);
+			$invalid=0;
+			foreach([[-1,0,0],[1,-.1,0],[1,0,1.1]] as [$duration,$strong,$weak]) {
+				try {$pads->rumble($duration,$strong,$weak);} catch(InvalidArgumentException $error) {$invalid++;}
+			}
+			vrzno_env('rumbleResult')(json_encode([$supported,$accepted,$invalid]));
+		`
+		);
+
+		return {status,result: window.rumbleResult};
+	});
+
+	expect(errors).toEqual([]);
+	expect(result.status).toBe(0);
+	expect(result.result.slice(1)).toEqual([result.result[0],3]);
+
+	if(process.env.EXPECT_RUMBLE_API === '1') expect(result.result[0]).toBe(true);
+
+	if(!result.result[0])
+	{
+		expect(await page.evaluate(() => rumbleEffects)).toEqual([]);
+
+		return;
+	}
+
+	await expect.poll(() => page.evaluate(() => rumbleEffects.length)).toBeGreaterThan(0);
+	const effects = await page.evaluate(() => rumbleEffects);
+	const pulse = effects.find(entry => entry.parameters.strongMagnitude > 0);
+
+	expect(pulse.index).toBe(2);
+	expect(pulse.effect).toBe('dual-rumble');
+	expect(pulse.parameters).toMatchObject({duration: 3000,startDelay: 0});
+	expect(pulse.parameters.strongMagnitude).toBeCloseTo(.25, 4);
+	expect(pulse.parameters.weakMagnitude).toBeCloseTo(.75, 4);
+});
+
+test('PS3 short weak haptics stop rather than latching a motor', async({page}) => {
+	const errors = await start(page, false);
+	await page.evaluate(() => connectPad(0, 'PlayStation 3 Controller'));
+	await expect.poll(async() => (await frame(page)).ids.length).toBe(1);
+	await change(page, {buttons: [0]});
+	await expect.poll(async() => (await frame(page)).keys.jump).toBe(true);
+
+	const result = await page.evaluate(async() => {
+		const module = await enginePhp.binary;
+
+		module.ps3RumbleResult = json => window.ps3RumbleResult = JSON.parse(json);
+
+		const status = await enginePhp.run(`<?php
+			$pads=$engine->input->gamepads;
+			$supported=function_exists('SDL_GameControllerHasRumble')
+				&& function_exists('SDL_GameControllerRumble');
+			$accepted=$pads->rumble(80,0,.5);
+			vrzno_env('ps3RumbleResult')(json_encode([$supported,$accepted,$pads->activeName()]));
+		`
+		);
+
+		return {status,result: window.ps3RumbleResult};
+	});
+
+	expect(errors).toEqual([]);
+	expect(result.status).toBe(0);
+	expect(result.result.slice(1)).toEqual([result.result[0], 'PlayStation 3 Controller']);
+
+	if(!result.result[0]) return;
+
+	await page.waitForTimeout(100);
+	expect(await page.evaluate(() => rumbleEffects)).toEqual([]);
 });
 
 for(const suspension of ['visibility','WebGL','focus'])

@@ -311,6 +311,7 @@ final class Platforms
 			}
 
 			$properties = Loader::properties($object['properties'] ?? []);
+			$class = strtolower(($object['class'] ?? '') ?: ($object['type'] ?? ''));
 			$width = (float)($object['width'] ?? 96);
 			$height = (float)($object['height'] ?? 16);
 
@@ -320,7 +321,7 @@ final class Platforms
 				, $width
 				, $height
 				, (bool)($properties['oneWay'] ?? $properties['platform']
-					?? strtolower(($object['class'] ?? '') ?: ($object['type'] ?? '')) !== 'block'
+					?? $class !== 'block'
 				)
 				, (float)($properties['settle'] ?? 0)
 				, (int)($properties['collisionLayer'] ?? $layer->properties['collisionLayer'] ?? 0)
@@ -356,7 +357,7 @@ final class Platforms
 				$sprite->scaleY = $height / $tile['rect'][3];
 				$sprite->flipX = (bool)($gid->flags & 8);
 				$sprite->flipY = (bool)($gid->flags & 4);
-				$sprite->outline = (bool)($properties['outline'] ?? false);
+				$sprite->outline = (bool)($properties['outline'] ?? $class !== 'block');
 				$sprite->tint = $layer->tint;
 				$sprite->opacity = $layer->visible && ($object['visible'] ?? true) ? $layer->opacity : 0;
 

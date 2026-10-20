@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Ecs\Registry;
+use PhpWasmEngine\Effects\Rumble;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
@@ -226,6 +227,17 @@ final class GravityFeatures
 				{
 					$this->launch($spring->sourceId, $body);
 					$this->cooldowns[$key] = .12;
+					$rumbleId = $bodyId;
+
+					if(!$registry->has($rumbleId, Rumble::class) && $registry->has($bodyId, Vehicle::class))
+					{
+						$rumbleId = $registry->get($bodyId, Vehicle::class)->occupant ?? 0;
+					}
+
+					if($rumbleId > 0 && $registry->alive($rumbleId) && $registry->has($rumbleId, Rumble::class))
+					{
+						$registry->get($rumbleId, Rumble::class)->spring();
+					}
 
 					break;
 				}
@@ -411,7 +423,6 @@ final class GravityFeatures
 		$sprite->rotation = atan2($normalX, -$normalY);
 		$sprite->scaleX = $length / 32;
 		$sprite->scaleY = .5;
-		$sprite->outline = false;
 
 		return $sprite;
 	}

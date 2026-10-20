@@ -13,7 +13,7 @@ npm start
 
 Open http://localhost:9130 and press **Run PHP** in the center of the game frame. The demo shows download progress, intro cards, a scrolling title with a **Press Start / Enter** prompt, and a main menu. Choose **Play** to load the selected level. **Level**, **Movement**, and **Settings** configure the run before play.
 
-Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, moving and bendable platforms, gravity and spring courses, skateboard and Tornado courses, water courses, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
+Press **P**, **Escape**, or **Start / Options** during play to open the pause menu. **Level** selects the platformer, moving and bendable platforms, gravity and spring courses, skateboard, Tornado, and EggWalker courses, water courses, CrabMeat badniks, grinding rail, loop-de-loop, breakable blocks, infinite map, isometric scene, or streaming world. **Movement** selects runner, glider, or flyer. Level changes keep the running engine, clock, player object, and menu settings. Movement changes apply to the current player in place. **Main menu** retains the level for **Resume game**.
 
 The bottom-right speaker and fullscreen buttons share their state with the pause menu. Mute persists across reloads when browser storage is available. Fullscreen expands only the game frame and its corner controls; use the corner button or Escape to return. The start button hides once the game runs. Page text stays outside fullscreen.
 
@@ -151,7 +151,8 @@ to the vehicle while seated, so they cannot also trigger flight, gliding, shield
 `Rider` opts a character into boarding. `Vehicle` belongs to a separate entity with its own `Body`
 and optional `Sprite`. The character keeps its identity, movement profile, inventory, combat,
 and combo components. `VehicleBehavior` supplies mounted, before-movement, and after-movement
-callbacks; `Skateboard` is the first implementation.
+callbacks. `Skateboard`, `Tornado`, and `EggWalker` share that chassis lifecycle while contributing
+their own movement state and reusable capabilities.
 
 ```php
 use PhpWasmEngine\Gameplay\{Rider, Vehicle, Vehicles, Skateboard};
@@ -213,14 +214,22 @@ Regenerate the example and its original board artwork with `php examples/generat
 Choose **Level → Tornado flight course** and fall into the aircraft's seat. Space / Z or controller
 A / Cross makes a conventional jump takeoff. Hold C or X / Square to retract the gear and fire the
 rocket engine. While airborne, Up and Down pitch the aircraft; X or B / Circle toggles landing gear.
-Fuel drains at six units per second under thrust, waits half a second after release, then refills at
-fifteen units per second. The upper-left HUD and `Vehicles::snapshot()` expose the current fuel.
+Fuel drains at six units per second under thrust and refills at fifteen units per second while the
+thruster is idle. Emptying the tank applies moving-boxes-2's half-second refill and ignition
+lockout. The upper-left HUD and `Vehicles::snapshot()` expose the current fuel.
 
-The 10,240 × 3,072 pixel course has a long runway, a climb gate, a broad ceiling-and-floor tunnel,
-alternating slalom walls, an elevated landing shelf, and a final runway. Ring trails mark routes at
-several heights without limiting free flight. Low unpowered airspeed stalls; thrusting from rest
-starts a rocket takeoff; a stopped high-speed impact enters a short crash recovery. Flight selects
-the `airplane` camera mode, which pans toward the aircraft's travel direction instead of snapping.
+The 10,240 × 3,072 pixel course has a takeoff runway, an open-sky leveling stretch, two gradual
+terrain-sensor ridges, recovery valleys, and a final landing runway. The ring trail remains four
+tiles above the local ground to demonstrate the downward sensor's useful envelope. The course has
+no ceiling, and its reset region is unbounded above. Low unpowered airspeed stalls; thrusting from
+rest starts a rocket takeoff; a stopped powered impact enters a half-second ignition lockout. Flight
+uses the reference 60 Hz constants converted to seconds: a 5 px/frame runway cap, 8 px/frame
+cruise tuning, 10 px/frame flight cap, 4 px/frame thrust impulse, 5% neutral cruise drag, and
+0.035-radian pitch input. A 128-pixel downward sensor applies the reference pitch damping and
+near-ground thrust lift, but no longer disables climb input when terrain leaves its range. A
+continuous pitch-energy curve replaces the reference's duplicated descent-only speed branch:
+shallow climbs trade little forward speed, steeper climbs trade more, and descents recover speed
+symmetrically. The `airplane` camera mode pans toward the aircraft's travel direction.
 The aircraft, rider seat, and camera retain one association across ground, takeoff, collision, and
 landing. Swept chassis and passenger casts prevent the wide aircraft from crossing thin terrain at
 high speed.
@@ -236,8 +245,8 @@ use PhpWasmEngine\Gameplay\{Tornado, Vehicle};
 
 $aircraft = new Vehicle(
 	Tornado::body(320, 442)
-	, seatHeight: 19
-	, seatForward: -12
+	, seatHeight: 14
+	, seatForward: 0
 	, lockedIn: true
 );
 
@@ -248,6 +257,51 @@ The snapshot adds `type`, `flying`, `thrusting`, `landingGear`, `fuel`, `pitch`,
 Tornado entities. This gives scripts stable verbs and nouns for input playback, assertions, and
 batch test drivers. Generate the map and original aircraft art with
 `php examples/generate-tornado.php`.
+
+## EggWalker
+
+Choose **Level → EggWalker proving ground** and drop into the walker. Its dimensions and time-based
+movement values follow moving-boxes-2: a 32 × 64 standing chassis, 150 px/s walking cap,
+360 px/s² acceleration, 180 px/s² friction, and a 720 px/s jump. The authored course includes a
+crouch-height tunnel, a booster gap, and raised CrabMeat targets matched to that slower, heavier
+movement model.
+
+| Action | Keyboard | Standard gamepad |
+| --- | --- | --- |
+| Walk | Left / Right | Left stick / D-pad |
+| Jump; hold airborne for booster | Space / Z | Button 0: A / Cross |
+| Latch booster after takeoff | Up + Space / Z | Up + button 0 |
+| Cancel booster, dive, or crouch | Down | Down |
+| Chain punch | X | Button 1: B / Circle |
+| Hold cannon fire | C | Button 2: X / Square |
+| Force facing left / right | Q / E | Buttons 4 / 5: shoulders |
+
+The rider remains in the cockpit seat while the body switches between its 64-pixel standing and
+48-pixel crouched bounds. A first airborne crouch adds the reference downward impulse. Landing that
+drop while still crouched at 8 px/reference-frame or faster starts the reference vertical camera
+shake: a 7-pixel impulse that reverses and decays by five percent per frame. The render-only offset
+does not disturb camera following or motion-blur measurement. The booster only counters downward
+gravity velocity, and Up latches it until landing or Down cancels it. Punches stay active for 12
+reference frames with a 25-frame restart interval. Cannon shots repeat every six frames, travel at
+240 px/s, begin falling after six frames, and expire after 200 frames.
+
+EggWalker is composed through the ECS instead of adding weapon branches to `Vehicles`.
+`VehicleComponents` registers `VehicleMelee`, `VehicleEmitter`, and `CameraShake` on the chassis entity;
+`VehicleWeapons` advances those capabilities and creates rider-owned `VehicleProjectile` entities.
+`Badniks` consumes the generic melee and projectile components, so another vehicle can reuse either
+capability without becoming an EggWalker subtype. `VehicleDiagnostics` contributes type-specific
+snapshot fields, and `VehicleTerrainAware` supplies terrain only to behaviors that request it.
+EggWalker itself owns locomotion, crouch/booster state, and presentation. Its rear and foreground
+art are separate `SpriteLayers` planes anchored around the occupant, matching moving-boxes-2's
+chair/gun/rear-leg → rider → hull/arm/front-leg order without vehicle-specific renderer branches.
+
+Tiled objects use class `EggWalker` or `egg-walker`. Annotated `egg-walker`,
+`egg-walker-walking`, `egg-walker-crouching`, `egg-walker-falling`, `egg-walker-boosting`,
+`egg-walker-punch`, `egg-walker-shooting`, and `egg-walker-shot` tiles select state artwork; matched
+`-front` classes provide each foreground plane.
+The usual seat, direction, lock, and collision-layer properties apply. `Vehicles::snapshot()` adds
+`type`, `crouching`, `boosting`, `punching`, `shooting`, and `shots`. Regenerate the original demo
+art and map with `php examples/generate-egg-walker.php`.
 
 ## Grapple points and ropes
 
@@ -366,7 +420,7 @@ layer offsets are included. Rotated collision rectangles are rejected; GID flips
 | `next` | On each route point: reference to its successor. Missing/zero ends the route; cycles loop. |
 | `pathSpeed` | Reference pixels per frame (60 Hz), converted to pixels per second; defaults to 8. |
 | `collisionLayer` | Shared plane 0 or a positive selected plane. |
-| `outline` | Optional sprite outline; defaults to false. |
+| `outline` | Optional sprite outline override; moving platforms default to true and legacy `block` objects to false. |
 
 Platforms update after body movement, so jumping, walking off, and dropping through release the
 rider before transport. Foot rays verify the actual support shape. Full-displacement body casts
@@ -789,9 +843,18 @@ foreach($engine->input->gamepads->ids() as $id)
 	$look = $engine->input->gamepads->axis(SDL_CONTROLLER_AXIS_RIGHTX,$id);
 	$interact = $engine->input->gamepads->button(SDL_CONTROLLER_BUTTON_X,$id);
 }
+
+// Pulse the controller that most recently supplied input.
+$engine->input->gamepads->rumble(120, 1, .5);
 ~~~
 
 SDL supplies device mappings. `axis()` returns stick values in -1..1 and trigger values in 0..1; `button()` returns a boolean. Omitting the instance ID combines buttons from all pads and selects the strongest magnitude for each axis. IDs change on reconnect, even when the browser reuses a slot. `Controls` exposes standard button numbers 0–16, including shoulders, triggers and stick clicks, alongside the existing named actions. The right stick remains available through `Gamepads::axis()`.
+
+`rumble()` uses the active controller's SDL handle, not a browser-wide heuristic.
+It returns false when no controller is active, the device does not advertise
+rumble, or the loaded php-sdl-wasm runtime predates the rumble bindings. The demo's
+Controller rumble preference clears queued ECS pulses and
+stops the active motors when disabled.
 
 `Engine` buffers keyboard presses and sampled gamepad action presses until the next simulation step, so short taps survive frames without an update. Custom loops should call `SdlInput::poll()` each frame and pass `SdlInput::consume()` to `Controls::set()` once per simulation step. `snapshot()` previews the pending input without consuming it.
 
@@ -1132,7 +1195,9 @@ $sprite->outline = false; // Disable the outline for this sprite.
 $sprite->outline = true;  // Restore the default.
 ~~~
 
-Each member of a `SpriteGroup` has its own flag. Outlined and unoutlined sprites share the same instanced draw and atlas. The original artwork keeps its anchor and dimensions; expansion affects rendering only, so body and block collision bounds stay the same. RGB tint leaves the outline black. Source alpha, tint alpha, and sprite opacity control its fade; colored and partially transparent artwork retains its original appearance.
+Each member of a `SpriteGroup` has its own flag. The renderer first draws every member's artwork, then draws their enabled outlines at a shared, farther depth. This produces one composite entity silhouette: a member's outline cannot cross or hide sibling artwork. Separate entities retain ordinary painter ordering. Artwork and outline instances still share one draw and atlas. The original artwork keeps its anchor and dimensions, so body and block collision bounds stay the same. RGB tint leaves the outline black. Source alpha, tint alpha, and sprite opacity control its fade; colored and partially transparent artwork retains its original appearance.
+
+The default follows moving-boxes-2's actor policy. Vehicles, monitors, moving platforms, switches, springs, projectiles, effects, and particles are outlined. Regions and terrain-like structures opt out: ordinary blocks and breakable blocks, buoyant block platforms, bridge segments, and repeated rope strips remain unoutlined. The engine's offscreen water, motion-blur, and backdrop targets include depth buffers so composite silhouettes survive postprocessing captures.
 
 `BreakableBlocks::create()` disables outlines on its sprite, and the resulting shards inherit that setting. `ParticleBurst::grid()` copies the source flag for other effects. Disable it before splitting an image when pieces should meet without black seams.
 
@@ -1154,7 +1219,7 @@ $group->sprites[1]->rotation = .2;
 $sprites->renderEntities($engine->entities, $camera, $engine->time * 1000);
 ~~~
 
-Group positions are world coordinates. Each member has its own transform, crop, and animation clock. `renderEntities()` collects both component types in entity creation order, drawing a primary `Sprite` before its group members if an entity has both. Pass `entityIds: [$assembly, $player]` to choose painter order. `SpriteGroup::collect()` also returns the flat list for custom sorting or the existing `render()` API. Every selected sprite must use the renderer's atlas. `SpriteRenderer::$instances` counts submitted sprites.
+Group positions are world coordinates. Each member has its own transform, crop, and animation clock. `renderEntities()` collects both component types in entity creation order, drawing a primary `Sprite` before its group members if an entity has both. Pass `entityIds: [$assembly, $player]` to choose painter order. `SpriteGroup::collectGroups()` preserves entity boundaries for composite rendering; `collect()` still returns the flat list for custom sorting or the existing `render()` API, where each supplied sprite is treated as a separate outline group. Every selected sprite must use the renderer's atlas. `SpriteRenderer::$instances` counts logical sprites rather than the internal ink instances.
 
 ## Breakable blocks and particles
 

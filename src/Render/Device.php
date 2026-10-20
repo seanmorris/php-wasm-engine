@@ -34,6 +34,7 @@ final class Device
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
 		$this->window = SDL_CreateWindow($title, 0, 0, $width, $height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 		$this->context = SDL_GL_CreateContext($this->window);
@@ -128,7 +129,7 @@ final class Device
 	}
 
 	/**
-	 * Set the device viewport and clear its color buffer.
+	 * Set the device viewport and clear its color and depth buffers.
 	 *
 	 * @param array{0:float|int,1:float|int,2:float|int,3:float|int} $color Clear color as
 	 * normalized red, green, blue, and alpha channels.
@@ -138,7 +139,9 @@ final class Device
 	{
 		glViewport(0, 0, $this->width, $this->height);
 		glClearColor(...$color);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClearDepth(1);
+		glDepthMask(true);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
 
 	/**

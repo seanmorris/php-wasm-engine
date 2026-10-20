@@ -637,7 +637,7 @@ test('water particles animate surface crossings and retain one directional skim 
 	check($splash->kind === WaterParticle::SPLASH && $splash->body === $bodyId);
 	near($splashSprite->x, 1000);
 	near($splashSprite->y, $region->y + 2);
-	check(!$splashSprite->outline && $map->tile($splashSprite->gid)['class'] === 'water-splash');
+	check($splashSprite->outline && $map->tile($splashSprite->gid)['class'] === 'water-splash');
 
 	$body->waterEntered = $body->underwater = false;
 	$body->water = null;
@@ -658,7 +658,7 @@ test('water particles animate surface crossings and retain one directional skim 
 	$skimSprite = $registry->get($skimId, Sprite::class);
 	near($skimSprite->x, $body->x - 24);
 	near($skimSprite->y, $region->y + 2);
-	check(!$skimSprite->flipX && !$skimSprite->outline && $skimSprite->scaleX === 1.5);
+	check(!$skimSprite->flipX && $skimSprite->outline && $skimSprite->scaleX === 1.5);
 
 	$body->x = 1100;
 	$body->groundSpeed = -1000;

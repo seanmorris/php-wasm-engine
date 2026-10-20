@@ -77,11 +77,12 @@ for($y = 0; $y < $height; $y++)
 
 $sceneTexture = (new ReflectionProperty($renderer, 'sceneTexture'))->getValue($renderer);
 $mapTexture = (new ReflectionProperty($renderer, 'displacementTexture'))->getValue($renderer);
-$live = [glIsTexture($sceneTexture), glIsTexture($mapTexture)];
+$depthBuffer = (new ReflectionProperty($renderer, 'depthBuffer'))->getValue($renderer)[0];
+$live = [glIsTexture($sceneTexture), glIsTexture($mapTexture), glIsRenderbuffer($depthBuffer)];
 $error = glGetError();
 $renderer->close();
 $rects->close();
-$released = [!glIsTexture($sceneTexture), !glIsTexture($mapTexture)];
+$released = [!glIsTexture($sceneTexture), !glIsTexture($mapTexture), !glIsRenderbuffer($depthBuffer)];
 $device->close();
 
 echo json_encode(compact('draws', 'outsideExact', 'wetPixels', 'animatedPixels', 'live', 'released', 'error'));

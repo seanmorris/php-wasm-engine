@@ -31,7 +31,7 @@ final class SpriteRenderer
 	/**
 	 * Allocate the vertex array and per-instance buffer used by sprite draws.
 	 *
-	 * @return void Configures position, rectangle, transform, sprite flags, and tint attributes.
+	 * @return void Configures position, rectangle, transform, flags, tint, and depth attributes.
 	 */
 	private function create(): void
 	{
@@ -40,9 +40,9 @@ final class SpriteRenderer
 		glGenBuffers(1, $this->buffers);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
 
-		for($i = 0; $i < 4; $i++)
+		for($i = 0; $i < 5; $i++)
 		{
-			glVertexAttribPointer($i, 4, GL_FLOAT, false, 64, $i * 16);
+			glVertexAttribPointer($i, 4, GL_FLOAT, false, 80, $i * 16);
 			glEnableVertexAttribArray($i);
 			glVertexAttribDivisor($i, 1);
 		}
@@ -62,44 +62,82 @@ final class SpriteRenderer
 	 */
 	public function render(array $sprites, Camera $camera, float $milliseconds = 0): void
 	{
+		$groups = [];
+
+		foreach($sprites as $sprite)
+		{
+			$groups[] = [$sprite];
+		}
+
+		$this->renderGroups($groups, $camera, $milliseconds);
+	}
+
+	/**
+	 * Draw entity groups with artwork in front of one shared outline depth per group.
+	 *
+	 * Each group occupies a depth band nearer than the group before it. Artwork instances are
+	 * emitted first in painter order; outlined sprites are then repeated as ink-only instances at
+	 * the back of their own band. Existing sibling artwork consequently rejects their ink while the
+	 * whole group still paints over earlier entities.
+	 *
+	 * @param list<list<Sprite>> $groups Entity sprite groups in painter order.
+	 * @param Camera $camera Viewport and world-to-screen transform.
+	 * @param float $milliseconds Simulation time used to select animation frames.
+	 * @return void Submits one instanced batch, or no draw when every group is empty.
+	 */
+	private function renderGroups(array $groups, Camera $camera, float $milliseconds): void
+	{
 		$this->draws = 0;
 		$this->instances = 0;
+		$groups = array_values(array_filter($groups));
 
-		if(!$sprites)
+		if(!$groups)
 		{
 			return;
 		}
 
-		$bytes = '';
+		$slots = count($groups);
 
-		foreach($sprites as $sprite)
+		foreach($groups as $group)
 		{
-			$gid = $sprite->frame($this->atlas->map, $milliseconds);
+			$slots += count($group);
+			$this->instances += count($group);
+		}
 
-			$rect = $this->atlas->rects[$gid] ?? throw new \OutOfBoundsException("Sprite GID $gid is missing");
-			$rect = $sprite->rectangle($rect);
+		$bytes = '';
+		$gpuInstances = 0;
+		$rank = 0;
 
-			$bytes .= pack(
-				'f*'
-				, $sprite->x
-				, $sprite->y
-				, $rect[2] * $sprite->scaleX
-				, $rect[3] * $sprite->scaleY
-				, ...$rect
-			);
+		foreach($groups as $group)
+		{
+			$outlineDepth = $this->depth($rank++, $slots);
+			$records = [];
 
-			$bytes .= pack(
-				'f*'
-				, $sprite->originX
-				, $sprite->originY
-				, $sprite->rotation
-				, ($sprite->flipX?1:0) | ($sprite->flipY?2:0) | ($sprite->outline?4:0)
-					| ($sprite->smooth?8:0)
-				, $sprite->tint[0]
-				, $sprite->tint[1]
-				, $sprite->tint[2]
-				, $sprite->tint[3] * $sprite->opacity
-			);
+			foreach($group as $sprite)
+			{
+				$gid = $sprite->frame($this->atlas->map, $milliseconds);
+				$rect = $this->atlas->rects[$gid]
+					?? throw new \OutOfBoundsException("Sprite GID $gid is missing");
+
+				$records[] = [$sprite, $sprite->rectangle($rect)];
+			}
+
+			foreach($records as [$sprite, $rect])
+			{
+				$bytes .= $this->instance($sprite, $rect, $this->depth($rank++, $slots), false);
+				$gpuInstances++;
+			}
+
+			foreach($records as [$sprite, $rect])
+			{
+				if(!$sprite->outline)
+				{
+					continue;
+				}
+
+				$bytes .= $this->instance($sprite, $rect, $outlineDepth, true);
+				$gpuInstances++;
+			}
 		}
 
 		$p = $this->program;
@@ -113,20 +151,72 @@ final class SpriteRenderer
 		glUniform1f($p->location('zoom'), $camera->zoom);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
 		glBufferData(GL_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STREAM_DRAW);
-		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count($sprites));
+		glClearDepth(1);
+		glDepthMask(true);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, $gpuInstances);
+		glDisable(GL_DEPTH_TEST);
 		glBindVertexArray(0);
 		$this->draws = 1;
-		$this->instances = count($sprites);
+	}
+
+	/**
+	 * Pack one artwork or outline-only GPU instance.
+	 *
+	 * @param Sprite $sprite Mutable sprite pose and appearance.
+	 * @param array{int,int,int,int} $rect Resolved atlas rectangle after an optional crop.
+	 * @param float $depth Normalized depth, where smaller values paint nearer the viewer.
+	 * @param bool $outlinePass Whether this instance emits only expanded black ink.
+	 * @return string One eighty-byte, five-vector instance record.
+	 */
+	private function instance(Sprite $sprite, array $rect, float $depth, bool $outlinePass): string
+	{
+		$flags = ($sprite->flipX ? 1 : 0) | ($sprite->flipY ? 2 : 0)
+			| ($outlinePass ? 4 : 0) | ($sprite->smooth ? 8 : 0);
+
+		return pack('f*', ...[
+			$sprite->x
+			, $sprite->y
+			, $rect[2] * $sprite->scaleX
+			, $rect[3] * $sprite->scaleY
+			, ...$rect
+			, $sprite->originX
+			, $sprite->originY
+			, $sprite->rotation
+			, $flags
+			, $sprite->tint[0]
+			, $sprite->tint[1]
+			, $sprite->tint[2]
+			, $sprite->tint[3] * $sprite->opacity
+			, $depth
+			, 0
+			, 0
+			, 0
+		]);
+	}
+
+	/**
+	 * Convert a far-to-near integer rank into a normalized depth clear of both clipping planes.
+	 *
+	 * @param int $rank Zero-based painter rank.
+	 * @param int $slots Total outline and artwork ranks in this batch.
+	 * @return float Depth in the open interval from zero to one.
+	 */
+	private function depth(int $rank, int $slots): float
+	{
+		return 1 - ($rank + 1) / ($slots + 1);
 	}
 
 	/**
 	 * Draw single-sprite and multi-sprite entities in one shared-atlas batch.
 	 *
-	 * @param Registry $registry Registry containing Sprite and SpriteGroup components.
+	 * @param Registry $registry Registry containing Sprite, SpriteGroup, or SpriteLayers components.
 	 * @param Camera $camera Viewport and world-to-screen transform.
 	 * @param float $milliseconds Simulation time used to select animation frames.
 	 * @param list<int>|null $entityIds Explicit painter order, or null for entity creation order.
-	 * @return void Collects visible components and submits their sprites in one draw.
+	 * @return void Preserves entity boundaries and submits composite silhouettes in one draw.
 	 */
 	public function renderEntities(
 		Registry $registry
@@ -134,7 +224,7 @@ final class SpriteRenderer
 		, float $milliseconds = 0
 		, ?array $entityIds = null
 	): void {
-		$this->render(SpriteGroup::collect($registry, $entityIds), $camera, $milliseconds);
+		$this->renderGroups(SpriteGroup::collectGroups($registry, $entityIds), $camera, $milliseconds);
 	}
 
 	/**

@@ -27,6 +27,7 @@ test('Tiled mini bosses wake, stalk, and drop splitting spike bombs', function()
 	near($boss->y, 352);
 	check($boss->hitPoints === 8 && $boss->phase === 'idle');
 	check($bosses->entityForSourceId(3) === $entity && $bosses->aliveSource(3));
+	check($registry->get($entity, Sprite::class)->outline);
 
 	$body = new Body($boss->x + 600, 100);
 	$combat = new PlayerCombat;
@@ -42,6 +43,7 @@ test('Tiled mini bosses wake, stalk, and drop splitting spike bombs', function()
 	near($boss->x, 1998);
 	check($behavior->bombs === 1);
 	check(count($registry->query(SpikeBomb::class)) === 1);
+	check($registry->get($registry->query(SpikeBomb::class)[0], Sprite::class)->outline);
 
 	for($frame = 0; $frame < 45; $frame++)
 	{

@@ -1,10 +1,14 @@
 import {defineConfig} from '@playwright/test';
 import fs from 'node:fs';
+
+const port = Number(process.env.PORT || 9130);
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
 	testDir: 'tests/browser'
 	, timeout: 90000
 	, workers: 1
-	, use: {baseURL: 'http://127.0.0.1:9130',headless: true}
+	, use: {baseURL,headless: true}
 	, projects: [{
 		name: 'chromium'
 		, use: {
@@ -21,7 +25,7 @@ export default defineConfig({
 	}]
 	, webServer: {
 		command: 'npm start'
-		, url: 'http://127.0.0.1:9130'
+		, url: baseURL
 		, reuseExistingServer: !process.env.CI
 		, timeout: 120000
 	}

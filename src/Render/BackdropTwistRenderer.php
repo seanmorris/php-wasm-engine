@@ -6,7 +6,7 @@ namespace PhpWasmEngine\Render;
 final class BackdropTwistRenderer
 {
 	private Program $program;
-	private array $vao = [], $framebuffer = [];
+	private array $vao = [], $framebuffer = [], $depthBuffer = [];
 	private int $sceneTexture = 0, $targetFramebuffer = 0;
 	private bool $closed = false, $capturing = false;
 	public int $draws = 0;
@@ -16,7 +16,7 @@ final class BackdropTwistRenderer
 	 *
 	 * @param int $width Positive drawing-buffer width in pixels.
 	 * @param int $height Positive drawing-buffer height in pixels.
-	 * @return void Creates restorable resources for localized background displacement.
+	 * @return void Creates restorable color and depth resources for background displacement.
 	 */
 	public function __construct(public int $width, public int $height)
 	{
@@ -34,7 +34,7 @@ final class BackdropTwistRenderer
 	}
 
 	/**
-	 * Allocate the framebuffer, scene texture, and shader-generated quad state.
+	 * Allocate the framebuffer, scene texture, depth buffer, and shader-generated quad state.
 	 *
 	 * @return void Creates context-local resources or releases partial allocation on failure.
 	 */
@@ -49,12 +49,17 @@ final class BackdropTwistRenderer
 			glGenFramebuffers(1, $this->framebuffer);
 			glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, $this->sceneTexture, 0);
+			glGenRenderbuffers(1, $this->depthBuffer);
+			glBindRenderbuffer(GL_RENDERBUFFER, $this->depthBuffer[0]);
+			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, $this->width, $this->height);
+			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, $this->depthBuffer[0]);
 
 			if(glCheckFramebufferStatus(GL_FRAMEBUFFER) !== GL_FRAMEBUFFER_COMPLETE)
 			{
 				throw new \RuntimeException('Backdrop twist framebuffer is incomplete');
 			}
 
+			glBindRenderbuffer(GL_RENDERBUFFER, 0);
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		}
 		catch(\Throwable $error)
@@ -71,7 +76,7 @@ final class BackdropTwistRenderer
 	 *
 	 * @param array{0:float|int,1:float|int,2:float|int,3:float|int} $color Scene clear color as
 	 * normalized RGBA channels.
-	 * @return void Clears the capture texture and begins one capture/composite pair.
+	 * @return void Clears the capture color and depth buffers and begins one capture/composite pair.
 	 */
 	public function begin(array $color = [.055,.075,.12,1]): void
 	{
@@ -86,7 +91,9 @@ final class BackdropTwistRenderer
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
 		glViewport(0, 0, $this->width, $this->height);
 		glClearColor(...$color);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClearDepth(1);
+		glDepthMask(true);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	}
 
 	/**
@@ -197,7 +204,7 @@ final class BackdropTwistRenderer
 	}
 
 	/**
-	 * Delete live context objects while retaining dimensions and shader source for restoration.
+	 * Delete live texture, depth, framebuffer, and geometry objects while retaining dimensions.
 	 *
 	 * @return void Clears every owned GL handle except the separately managed program wrapper.
 	 */
@@ -213,12 +220,17 @@ final class BackdropTwistRenderer
 			glDeleteFramebuffers(1, $this->framebuffer);
 		}
 
+		if($this->depthBuffer)
+		{
+			glDeleteRenderbuffers(1, $this->depthBuffer);
+		}
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
 
 		$this->sceneTexture = 0;
-		$this->framebuffer = $this->vao = [];
+		$this->framebuffer = $this->depthBuffer = $this->vao = [];
 	}
 }

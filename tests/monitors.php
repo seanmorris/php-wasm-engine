@@ -46,6 +46,7 @@ test('Tiled monitors stay solid for walking and reward a continuous rolling impa
 	check($terrain->solidAt(288, 430));
 	check($registry->has($ids[0], SpriteGroup::class));
 	$screen = $registry->get($ids[0], SpriteGroup::class)->sprites[0];
+	check($registry->get($ids[0], Sprite::class)->outline && $screen->outline);
 	check($screen->gid === 41);
 	check($screen->frame($map, 0) === 42);
 	check($screen->frame($map, 200) === 41);

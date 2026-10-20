@@ -330,7 +330,6 @@ final class WaterFeatures
 		);
 
 		$sprite = $this->sprite($object, $x + $width / 2, $y, $width, $height, 4);
-		$sprite->outline = false;
 		$switch->shape = $this->terrain->addShape($switch->points(), true, $switch->collisionLayer);
 		$this->switches[$id] = $switch;
 		$switch->entity = $this->registry->create($switch, $sprite);

@@ -10,6 +10,7 @@ use PhpWasmEngine\Physics\Platformer;
 use PhpWasmEngine\Physics\Terrain;
 use PhpWasmEngine\Render\Sprite;
 use PhpWasmEngine\Render\SpriteGroup;
+use PhpWasmEngine\Render\SpriteLayers;
 use PhpWasmEngine\Render\SpriteSheet;
 use PhpWasmEngine\Tiled\Loader;
 
@@ -133,17 +134,38 @@ test(
 
 		check(SpriteGroup::collect($r) === [$a, $b, $c, $d, $a]);
 		check(SpriteGroup::collect($r, [$both, $multiple]) === [$d, $a, $b, $c]);
+		check(SpriteGroup::collectGroups($r) === [[$a], [$b, $c], [$d, $a]]);
+		check(SpriteGroup::collectGroups($r, [$both, $multiple]) === [[$d, $a], [$b, $c]]);
 
 		$group->sprites[] = $d;
 		check(SpriteGroup::collect($r, [$multiple]) === [$b, $c, $d]);
+		check(SpriteGroup::collectGroups($r, [$multiple]) === [[$b, $c, $d]]);
 
 		$r->add($single, $c);
 		check($r->get($single, Sprite::class) === $c);
 
 		$r->destroy($multiple);
 		check(SpriteGroup::collect($r) === [$c, $d, $a]);
+		check(SpriteGroup::collectGroups($r) === [[$c], [$d, $a]]);
 	}
 );
+
+test('sprite layers interleave independent outline planes around a selected anchor', function() {
+	$r = new Registry;
+	$anchor = new Sprite(1);
+	$behind = new Sprite(2);
+	$front = new Sprite(3);
+	$owner = $r->create($behind, $layers = new SpriteLayers([$behind], [$front]));
+	$anchorId = $r->create($anchor);
+	$layers->anchor = $anchorId;
+
+	check(SpriteGroup::collectGroups($r) === [[$behind], [$anchor], [$front]]);
+	check(SpriteGroup::collectGroups($r, [$anchorId]) === [[$anchor]]);
+	check(SpriteGroup::collectGroups($r, [$owner]) === [[$behind], [$front]]);
+
+	$layers->anchor = null;
+	check(SpriteGroup::collectGroups($r) === [[$behind], [$front], [$anchor]]);
+});
 
 test(
 	'grid particles partition odd crop dimensions and freeze the current animation frame'

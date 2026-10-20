@@ -68,7 +68,7 @@ final class DemoLevel
 	public ?WaterParticles $waterParticles = null;
 	/** @var array{float,float} Player center loaded from the map's Player point object. */
 	public array $spawn = [80.0, 100.0];
-	/** @var array{float,float,float,float}|null Optional player reset bounds in world pixels. */
+	/** @var array{float,?float,float,float}|null Optional player reset bounds in world pixels. */
 	public ?array $resetBounds = null;
 	private string $systemPrefix;
 	private bool $closed = false;
@@ -201,7 +201,9 @@ final class DemoLevel
 			$padding = 256.0;
 			$this->resetBounds = [
 				$map->x - $padding
-				, $map->y - $padding
+				// The airplane's reference damping already limits sustained climbs. Keep horizontal
+				// and fall recovery without imposing an artificial maximum altitude.
+				, $this->id === 'tornado' ? null : $map->y - $padding
 				, $map->x + (float)$map->data['width'] * (float)$map->data['tilewidth'] + $padding
 				, $map->y + (float)$map->data['height'] * (float)$map->data['tileheight'] + $padding
 			];
@@ -323,10 +325,21 @@ final class DemoLevel
 			, after: [$this->systemPrefix . 'vehicle-seats']
 		);
 
-		if($this->id === 'badniks')
+		if(in_array($this->id, ['badniks', 'egg-walker'], true))
 		{
 			$this->badniks = new Badniks($engine->entities, $this->terrain, $this->rings);
 			$this->crabs = new CrabMeats($engine->entities, $this->terrain, $map, $this->badniks);
+			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
+
+			$engine->systems->add(
+				$this->systemPrefix . 'badniks'
+				, [$this->badniks, 'update']
+				, after: [$this->systemPrefix . 'crabs']
+			);
+		}
+
+		if($this->id === 'badniks')
+		{
 
 			$this->miniBosses = new MiniBosses(
 				$engine->entities
@@ -338,14 +351,7 @@ final class DemoLevel
 
 			$this->shields = new Shields($engine->entities, $map);
 			$this->monitors = new Monitors($engine->entities, $this->terrain, $map, shields: $this->shields);
-			$engine->systems->add($this->systemPrefix . 'crabs', [$this->crabs, 'update'], after: ['movement']);
 			$engine->systems->add($this->systemPrefix . 'monitors', [$this->monitors, 'update'], after: ['movement']);
-
-			$engine->systems->add(
-				$this->systemPrefix . 'badniks'
-				, [$this->badniks, 'update']
-				, after: [$this->systemPrefix . 'crabs']
-			);
 
 			$engine->systems->add(
 				$this->systemPrefix . 'mini-bosses'
@@ -456,7 +462,8 @@ final class DemoLevel
 
 		[$left, $top, $right, $bottom] = $this->resetBounds;
 
-		return $body->x < $left || $body->x > $right || $body->y < $top || $body->y > $bottom;
+		return $body->x < $left || $body->x > $right
+			|| ($top !== null && $body->y < $top) || $body->y > $bottom;
 	}
 
 	/**

@@ -276,7 +276,7 @@ test('Tiled moving platforms resolve offsets, flips, links, and avoid static gho
 	near($platform->x, 1110);
 	near($platform->y, 2136);
 	$sprite = $registry->get($platform->entity, Sprite::class);
-	check($sprite->gid === 1 && $sprite->flipX && !$sprite->outline);
+	check($sprite->gid === 1 && $sprite->flipX && $sprite->outline);
 	$platforms->update($registry, .5);
 	near($platform->x, 1140);
 	near($sprite->x, 1140);

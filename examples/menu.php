@@ -98,6 +98,25 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 			, 'get' => fn() => $game->motionBlur
 			, 'set' => fn($value) => $game->setMotionBlur($value)
 		]
+		, 'rumble' => [
+			'label' => 'Controller rumble'
+			, 'input' => 'boolean'
+			, 'default' => true
+			, 'subtext' => 'Use MB2 impact patterns on the most recently active gamepad.'
+			, 'get' => fn() => $game->rumble
+			, 'set' => fn($value) => $game->setRumble($value)
+		]
+		, 'rumble-test' => [
+			'label' => 'Test controller rumble'
+			, 'subtext' => 'Send a one-second full-strength pulse to the controller that opened this menu.'
+			, 'callback' => fn() => $game->testRumble()
+		]
+		, 'rumble-status' => [
+			'label' => 'Rumble test status'
+			, 'input' => 'output'
+			, 'get' => fn() => $game->rumbleTestStatus
+			, 'subtext' => 'The browser can still reject an accepted pulse asynchronously.'
+		]
 		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
 		, 'time' => [
 			'label' => 'Game time'
@@ -120,6 +139,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		$game->debug->enabled = false;
 		$game->debug->showFps = true;
 		$game->setMotionBlur(true);
+		$game->setRumble(true);
 		$camera->zoom = 1;
 		$menu->back();
 	};
@@ -146,6 +166,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		, 'grapples' => 'Grapple ropes'
 		, 'vehicles' => 'Skateboard course'
 		, 'tornado' => 'Tornado flight course'
+		, 'egg-walker' => 'EggWalker proving ground'
 		, 'water' => 'Water regions'
 		, 'water-rail' => 'Underwater rail'
 		, 'water-skim-rail' => 'Surface skim rail'

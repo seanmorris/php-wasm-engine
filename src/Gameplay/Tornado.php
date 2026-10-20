@@ -3,14 +3,30 @@ declare(strict_types=1);
 namespace PhpWasmEngine\Gameplay;
 
 use PhpWasmEngine\Input\Controls;
-use PhpWasmEngine\Physics\Body;
+use PhpWasmEngine\Physics\
+{
+	Body, Terrain
+};
 
 /** Fuelled two-dimensional aircraft with MB2-compatible takeoff, thrust, gear, pitch, and stall controls. */
-final class Tornado implements VehicleBehavior
+final class Tornado implements VehicleBehavior, VehicleDiagnostics, VehicleTerrainAware
 {
+	private const REFERENCE_RATE = 60;
+	private const GROUND_ACCELERATION = 1800;
+	private const GROUND_BRAKING = 855;
+	private const GROUND_FRICTION = 405;
+	private const GROUND_SPEED = 300;
+	private const CRUISE_SPEED = 480;
+	private const THRUST_SPEED = 600;
+	private const STALL_SPEED = 180;
+	private const GRAVITY = 2340;
+	private const SENSOR_LENGTH = 128;
+	private const VERTICAL_SPEED_EXCHANGE = 1.025;
+
 	public bool $flying = false, $thrusting = false, $landingGear = true, $crashed = false;
 	public float $fuel = 100, $pitch = -.26;
-	private float $refillDelay = 0, $noThrust = 0, $incomingSpeed = 0;
+	private float $refillDelay = 0, $noThrust = 0;
+	private ?Terrain $terrain = null;
 
 	/**
 	 * Retain the annotated artwork GIDs used for the aircraft's observable states.
@@ -31,20 +47,28 @@ final class Tornado implements VehicleBehavior
 	public static function body(float $x = 0, float $y = 0): Body
 	{
 		$body = new Body($x, $y);
-		$body->radius = 42;
-		$body->halfHeight = $body->standingHeight = $body->rollingHeight = 18;
-		$body->acceleration = 900;
-		$body->braking = 1800;
-		$body->friction = 480;
+		$body->radius = 48;
+		$body->halfHeight = $body->standingHeight = $body->rollingHeight = 24;
+		$body->acceleration = self::GROUND_ACCELERATION;
+		$body->braking = self::GROUND_BRAKING;
+		$body->friction = self::GROUND_FRICTION;
 
 		$body->airAcceleration = 0;
-		$body->gravity = 1800;
-		$body->jumpSpeed = 360;
-		$body->maxSpeed = 300;
-		$body->terminalSpeed = 1200;
+		$body->gravity = self::GRAVITY;
+		$body->jumpSpeed = 480;
+		$body->maxSpeed = self::GROUND_SPEED;
+		$body->terminalSpeed = 30720;
 
 		return $body;
 	}
+
+	/**
+	 * Bind the reference downward flight sensor to the vehicle owner's collision terrain.
+	 *
+	 * @param Terrain $terrain Shared terrain used for the 128-pixel clearance ray.
+	 * @return void Replaces the sensor source used by subsequent control steps.
+	 */
+	public function bindTerrain(Terrain $terrain): void { $this->terrain = $terrain; }
 
 	/**
 	 * Transfer a rider's forward momentum and reset transient flight state when boarding.
@@ -60,7 +84,7 @@ final class Tornado implements VehicleBehavior
 		$this->flying = !$body->grounded;
 		$this->thrusting = $this->crashed = false;
 		$this->landingGear = true;
-		$this->pitch = -.26 * $body->facing;
+		$this->pitch = -.26;
 		$this->refillDelay = $this->noThrust = 0;
 
 		$this->present($vehicle);
@@ -78,91 +102,161 @@ final class Tornado implements VehicleBehavior
 	public function control(Vehicle $vehicle, Controls $input, ?Combo $combo, float $dt): void
 	{
 		$body = $vehicle->body;
-		$wasThrusting = $this->thrusting;
+		$frames = self::REFERENCE_RATE * $dt;
 		$this->noThrust = max(0, $this->noThrust - $dt);
-		$this->incomingSpeed = hypot($body->vx, $body->vy);
-		$this->thrusting = false;
-
-		if(!$input->down(2)) $this->crashed = false;
+		$this->refillDelay = max(0, $this->refillDelay - $dt);
 
 		if($vehicle->occupant === null)
 		{
+			$this->thrusting = false;
 			$this->refill($dt);
+			$this->present($vehicle);
 
 			return;
 		}
 
 		if(!$body->grounded && $input->pressed(1)) $this->landingGear = !$this->landingGear;
 
-		$rocket = $input->down(2) && $this->fuel > ($wasThrusting ? 0 : 1)
-			&& !$this->crashed && $this->noThrust <= 0;
+		if(!$input->down(2))
+		{
+			$this->thrusting = $this->crashed = false;
+		}
+		else
+		{
+			$this->landingGear = false;
+
+			if(($this->thrusting || $this->fuel > 1) && $this->fuel > 0
+				&& !$this->crashed && $this->noThrust <= 0
+			){
+				$this->thrusting = true;
+			}
+		}
 
 		if($body->grounded)
 		{
 			$this->flying = false;
-			$this->landingGear = true;
-			$this->crashed = false;
-			$this->pitch = -.26 * $body->facing;
+			$this->pitch = -.26;
+		}
 
-			$body->gravity = 1800;
-			$body->maxSpeed = 300;
-			$this->refill($dt);
-
-			if($rocket)
+		if(!$this->thrusting && abs($body->vx) < self::STALL_SPEED)
+		{
+			$this->flying = false;
+			$body->gravity = self::GRAVITY;
+		}
+		elseif(!$body->grounded || abs($body->groundSpeed) > self::GROUND_SPEED)
+		{
+			if($body->grounded)
 			{
 				$body->grounded = false;
-				$body->jumping = true;
-				$body->vx = $body->facing * max(240, abs($body->groundSpeed));
-				$body->vy = -180;
-				$this->flying = true;
-				$this->landingGear = false;
+				$body->vy = -120;
 			}
-		}
 
-		if(!$body->grounded)
-		{
 			$this->flying = true;
-			$direction = $body->facing ?: ($body->vx <=> 0) ?: 1;
-			$body->facing = $body->direction = $direction;
-			$speed = abs($body->vx);
-
-			if($rocket)
-			{
-				$this->thrusting = true;
-				$this->landingGear = false;
-				$this->fuel = max(0, $this->fuel - 6 * $dt);
-				$this->refillDelay = .5;
-				$speed = min(600, $speed + 14400 * $dt);
-			}
-			else
-			{
-				$this->refill($dt);
-
-				if($speed > 300 && !$input->axis('left', 'right')) $speed *= .95 ** (60 * $dt);
-			}
-
-			$axis = $input->axis('up', 'down');
-			$this->pitch += $axis * 2.1 * $dt * $direction;
-
-			if(!$axis)
-			{
-				$this->pitch += .6 * $dt * $direction;
-			}
-
-			if($this->landingGear) $this->pitch += .3 * $dt * $direction;
-
-			$this->pitch = max(-1.35, min(1.35, $this->pitch * $direction)) * $direction;
-			$stalling = $speed < 180 && !$this->thrusting;
-
-			$body->gravity = $stalling ? 1800 : 0;
-			$body->maxSpeed = $this->thrusting ? 600 : 480;
-			$body->vx = $direction * min(600, $speed);
-
-			if(!$stalling)
-			{
-				$body->vy = sin($this->pitch) * abs($body->vx) * $direction * 1.6;
-			}
+			$body->gravity = 0;
 		}
+
+		if($this->thrusting && $this->fuel <= 0)
+		{
+			$this->thrusting = false;
+			$this->noThrust = $this->refillDelay = .5;
+		}
+
+		if($this->thrusting) $this->fuel = max(0, $this->fuel - .1 * $frames);
+		else $this->refill($dt);
+
+		$direction = $body->direction ?: ($body->facing ?: (($body->vx <=> 0) ?: 1));
+
+		if(!$this->thrusting && abs($body->vx) > self::THRUST_SPEED)
+		{
+			$body->vx -= min(abs($body->vx), 12 * $frames) * ($body->vx <=> 0);
+		}
+
+		if($this->thrusting && (($body->vx <=> 0) !== $direction || abs($body->vx) < self::THRUST_SPEED))
+		{
+			if($body->grounded && abs($body->vx) < 1e-9)
+			{
+				$this->pitch = -.26;
+				$body->grounded = false;
+				$body->jumping = true;
+				$body->vy = -300;
+				$this->flying = true;
+				$body->gravity = 0;
+			}
+
+			$body->vx += $direction * 240 * $frames;
+		}
+
+		if(!$this->thrusting && abs($body->vx) > self::CRUISE_SPEED / 2
+			&& !$input->axis('left', 'right')
+		){
+			$body->vx *= .95 ** $frames;
+		}
+
+		if(abs($body->vx) > self::THRUST_SPEED) $body->vx = self::THRUST_SPEED * $direction;
+
+		if($this->flying)
+		{
+			$axis = $input->axis('up', 'down');
+
+			if(abs($axis) < .1) $axis = 0;
+			elseif(abs($axis) > .55) $axis = $axis <=> 0;
+
+			$clearance = $this->clearance($body);
+
+			// The terrain sensor stabilizes a released or nose-down aircraft near the
+			// ground, but must not fight an intentional climb. Applying the damper before
+			// every input capped a held nose-up command around -0.175 radians.
+			if($axis >= 0 && ($clearance <= self::SENSOR_LENGTH || $this->pitch > 0))
+			{
+				$this->pitch *= .8 ** $frames;
+			}
+
+			if($this->landingGear) $this->pitch += .005 * $frames;
+
+			if(abs($body->vx) < 1e-9)
+			{
+				$this->flying = false;
+				$body->gravity = self::GRAVITY;
+				$this->present($vehicle);
+
+				return;
+			}
+
+			$newPitch = $this->pitch + ($axis <=> 0) * .035 * $frames;
+
+			if($axis && abs($newPitch) < M_PI_2) $this->pitch = $newPitch;
+
+			if($this->thrusting && $clearance < self::SENSOR_LENGTH)
+			{
+				$this->pitch -= .025 * $frames;
+			}
+
+			// Exchange forward speed continuously with climb or descent. The old reference branch
+			// applied a full 2.5% step to every positive pitch and accidentally repeated that same
+			// condition for climbs. Scaling its exponent by the vertical pitch component makes the
+			// exchange symmetric, smooth through level flight, and independent of the fixed-step rate.
+			$body->vx *= self::VERTICAL_SPEED_EXCHANGE ** (sin($this->pitch) * $frames);
+
+			if(($body->vx <=> 0) === $direction)
+			{
+				$body->vy = sin($this->pitch) * $body->vx * $direction * 2;
+			}
+
+			$body->jumping = false;
+		}
+		elseif(!$this->thrusting && $this->pitch < M_PI_2 && $body->vy > 0)
+		{
+			$this->pitch += .025 * $frames;
+		}
+
+		if($body->grounded)
+		{
+			$this->landingGear = true;
+			$this->pitch = -.26;
+			$body->gravity = self::GRAVITY;
+		}
+
+		$body->maxSpeed = self::GROUND_SPEED;
 
 		$this->present($vehicle);
 	}
@@ -183,32 +277,78 @@ final class Tornado implements VehicleBehavior
 		{
 			$this->flying = $this->thrusting = $this->crashed = false;
 			$this->landingGear = true;
-			$this->pitch = -.26 * $body->facing;
-			$body->gravity = 1800;
-			$body->maxSpeed = 300;
+			$this->pitch = -.26;
+			$body->gravity = self::GRAVITY;
+			$body->maxSpeed = self::GROUND_SPEED;
 		}
-		elseif($this->incomingSpeed > 240 && hypot($body->vx, $body->vy) < 30)
+		elseif(!$body->jumping && abs($body->vx) < 1e-9)
 		{
-			$this->crashed = true;
-			$this->thrusting = false;
-			$this->noThrust = .5;
-			$body->gravity = 1800;
+			$this->flying = false;
+			$body->gravity = self::GRAVITY;
+
+			if($this->thrusting)
+			{
+				$this->crashed = true;
+				$this->thrusting = false;
+				$this->noThrust = .5;
+			}
 		}
 
 		$this->present($vehicle);
 	}
 
 	/**
-	 * Restore fuel after the reference half-second delay.
+	 * Publish aircraft state without coupling the generic vehicle owner to this behavior type.
+	 *
+	 * @param Vehicle $vehicle Aircraft whose telemetry is requested.
+	 * @return array<string,mixed> Serializable flight, fuel, gear, and crash state.
+	 */
+	public function vehicleSnapshot(Vehicle $vehicle): array
+	{
+		return [
+			'type' => 'tornado'
+			, 'flying' => $this->flying
+			, 'thrusting' => $this->thrusting
+			, 'landingGear' => $this->landingGear
+			, 'fuel' => $this->fuel
+			, 'pitch' => $this->pitch
+			, 'crashed' => $this->crashed
+		];
+	}
+
+	/**
+	 * Restore fuel unless an exhausted thruster is inside its half-second lockout.
 	 *
 	 * @param float $dt Positive simulation seconds.
 	 * @return void Advances the delay or replenishes fuel at fifteen units per second.
 	 */
 	private function refill(float $dt): void
 	{
-		$this->refillDelay = max(0, $this->refillDelay - $dt);
-
 		if($this->refillDelay <= 0) $this->fuel = min(100, $this->fuel + 15 * $dt);
+	}
+
+	/**
+	 * Measure the moving-boxes-2 downward sensor from the chassis support point.
+	 *
+	 * @param Body $body Aircraft body supplying position and collision layer.
+	 * @return float Terrain distance in pixels, or 128 when the ray misses or starts on terrain.
+	 */
+	private function clearance(Body $body): float
+	{
+		if($this->terrain === null) return self::SENSOR_LENGTH;
+
+		$hit = $this->terrain->raycast(
+			$body->supportX()
+			, $body->supportY()
+			, 0
+			, self::SENSOR_LENGTH
+			, false
+			, $body->collisionLayer
+		);
+
+		$distance = $hit === null ? self::SENSOR_LENGTH : self::SENSOR_LENGTH * $hit->t;
+
+		return $distance <= 1e-9 ? self::SENSOR_LENGTH : $distance;
 	}
 
 	/**

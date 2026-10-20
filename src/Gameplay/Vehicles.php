@@ -11,7 +11,10 @@ use PhpWasmEngine\Physics\
 {
 	Body, Terrain, Platformer
 };
-use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Render\
+{
+	Sprite, SpriteLayers
+};
 use PhpWasmEngine\Tiled\TileMap;
 
 /** Own vehicle physics, single-seat associations, swept boarding, controls, and level teardown. */
@@ -20,6 +23,7 @@ final class Vehicles
 	/** @var array<int,Vehicle> Owned vehicle components keyed by live entity ID. */
 	public array $vehicles = [];
 	private array $previous = [], $pending = [], $art = [], $regions = [], $retired = [];
+	private VehicleWeapons $weapons;
 	private bool $closed = false;
 
 	/**
@@ -38,6 +42,7 @@ final class Vehicles
 		, ?TileMap $map = null
 	){
 		$registry->on('removed', [$this, 'removed']);
+		$this->weapons = new VehicleWeapons($registry, $terrain);
 
 		try
 		{
@@ -68,7 +73,16 @@ final class Vehicles
 		$id = $vehicle->entity = $this->registry->create($vehicle, $vehicle->body);
 		$this->vehicles[$id] = $vehicle;
 
-		if($behavior !== null) $this->registry->add($id, $behavior);
+		if($behavior instanceof VehicleTerrainAware) $behavior->bindTerrain($this->terrain);
+
+		if($behavior !== null)
+		{
+			$this->registry->add($id, $behavior);
+
+			if($behavior instanceof VehicleComponents)
+			foreach($behavior->vehicleComponents() as $component)
+			$this->registry->add($id, $component);
+		}
 
 		if($sprite !== null)
 		{
@@ -142,6 +156,12 @@ final class Vehicles
 		$body->wall = $body->glideDirection = 0;
 		$body->rolling = $body->jumping = $body->crouching = $body->lightDashed = false;
 		$body->ability = 'riding';
+
+		if($this->registry->has($id, SpriteLayers::class))
+		{
+			$this->registry->get($id, SpriteLayers::class)->anchor = $player;
+		}
+
 		$this->place($vehicle, $body);
 
 		return true;
@@ -172,10 +192,9 @@ final class Vehicles
 			return false;
 		}
 
-		if($input->pressed(0) && ($input->down('up') || $vehicle->quickDrop))
-		{
-			$this->dismount($player, 'jump');
-
+		if($input->pressed(0) && ($input->down('up') || $vehicle->quickDrop)
+			&& $this->dismount($player, 'jump')
+		){
 			return true;
 		}
 
@@ -292,6 +311,8 @@ final class Vehicles
 			if($registry->alive($id)) $registry->destroy($id);
 		}
 
+		$this->weapons->update($dt);
+
 		$players = $registry->query(Query::all(Body::class, Rider::class));
 
 		foreach($players as $player)
@@ -329,9 +350,15 @@ final class Vehicles
 			$behavior = $this->behavior($vehicle);
 			$visualAngle = $vehicle->visualAngle;
 			$behavior?->control($vehicle, $input, $combo, $dt);
+			$this->weapons->control($vehicle, $input, $dt);
 			$this->safeVisualAngle($vehicle, $visualAngle);
 
-			$values = ['left' => $input->value('left'), 'right' => $input->value('right'), 0 => $input->value(0)];
+			$values = [
+				'left' => $input->value('left')
+				, 'right' => $input->value('right')
+				, 0 => $vehicle->jumpEnabled ? $input->value(0) : 0
+			];
+
 			// Preserve the original button edge even when boarding with jump already held.
 			$previous = $values;
 			$previous[0] = $input->pressed(0) ? 0 : ($input->released(0) ? 1 : $input->value(0));
@@ -607,6 +634,11 @@ final class Vehicles
 		$vehicle->drive->reset();
 		unset($this->pending[$vehicle->entity]);
 
+		if($this->registry->has($vehicle->entity, SpriteLayers::class))
+		{
+			$this->registry->get($vehicle->entity, SpriteLayers::class)->anchor = null;
+		}
+
 		if($this->registry->has($player, Body::class))
 		{
 			$body = $this->registry->get($player, Body::class);
@@ -686,16 +718,27 @@ final class Vehicles
 		if(!$this->registry->has($id, Sprite::class)) return;
 
 		$sprite = $this->registry->get($id, Sprite::class);
-		$sprite->x = $vehicle->body->supportX();
-		$sprite->y = $vehicle->body->supportY();
 		[$rotation, $flip] = $this->art[$id] ??= [$sprite->rotation, $sprite->flipX];
 
 		if($vehicle->spriteGid !== null) $sprite->gid = $vehicle->spriteGid;
 
-		$sprite->rotation = $rotation + $vehicle->body->angle + $vehicle->visualAngle
-			+ ($vehicle->pose === 'manual' ? -.16 * $vehicle->body->facing : 0);
+		$sprites = $this->registry->has($id, SpriteLayers::class)
+			? [
+				...$this->registry->get($id, SpriteLayers::class)->behind
+				, ...$this->registry->get($id, SpriteLayers::class)->front
+			]
+			: [$sprite];
 
-		$sprite->flipX = $flip !== ($vehicle->body->facing < 0);
+		foreach($sprites as $plane)
+		{
+			$plane->x = $vehicle->body->supportX();
+			$plane->y = $vehicle->body->supportY();
+			$plane->rotation = $rotation + $vehicle->body->angle
+				+ $vehicle->visualAngle * $vehicle->body->facing
+				+ ($vehicle->pose === 'manual' ? -.16 * $vehicle->body->facing : 0);
+
+			$plane->flipX = $flip !== ($vehicle->body->facing < 0);
+		}
 	}
 
 	/**
@@ -728,22 +771,9 @@ final class Vehicles
 				, 'lockedIn' => $vehicle->lockedIn
 			];
 
-			if($behavior instanceof Tornado)
-			{
-				$item += [
-					'type' => 'tornado'
-					, 'flying' => $behavior->flying
-					, 'thrusting' => $behavior->thrusting
-					, 'landingGear' => $behavior->landingGear
-					, 'fuel' => $behavior->fuel
-					, 'pitch' => $behavior->pitch
-					, 'crashed' => $behavior->crashed
-				];
-			}
-			else
-			{
-				$item['type'] = $behavior instanceof Skateboard ? 'skateboard' : 'generic';
-			}
+			$item += $behavior instanceof VehicleDiagnostics
+				? $behavior->vehicleSnapshot($vehicle)
+				: ['type' => 'generic'];
 
 			$result[] = $item;
 		}
@@ -767,7 +797,9 @@ final class Vehicles
 		foreach(array_keys($this->regions + $this->retired) as $id)
 		if($this->registry->alive($id))
 		$this->registry->destroy($id);
+
 		$this->regions = $this->previous = $this->pending = $this->retired = [];
+		$this->weapons->close();
 		$this->registry->off('removed', [$this, 'removed']);
 	}
 

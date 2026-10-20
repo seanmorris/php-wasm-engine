@@ -2,7 +2,10 @@
 declare(strict_types=1);
 namespace PhpWasmEngine\Gameplay;
 
-use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Render\
+{
+	Sprite, SpriteLayers
+};
 use PhpWasmEngine\Tiled\
 {
 	Gid, Layer, Loader, TileMap
@@ -16,7 +19,7 @@ final class VehicleLoader
 	 * Identify dynamic vehicle objects before building static map collision.
 	 *
 	 * @param array<string,mixed> $object Raw Tiled object definition.
-	 * @return bool True for Tornado, skateboard, supply-region, and drop-region objects.
+	 * @return bool True for Tornado, EggWalker, skateboard, supply-region, and drop-region objects.
 	 */
 	public static function matches(array $object): bool
 	{
@@ -26,6 +29,8 @@ final class VehicleLoader
 				'skateboard'
 				, 'skate-board'
 				, 'tornado'
+				, 'eggwalker'
+				, 'egg-walker'
 				, 'vehicleregion'
 				, 'vehicle-region'
 				, 'dropvehicleregion'
@@ -46,6 +51,7 @@ final class VehicleLoader
 	{
 		$fallback = null;
 		$tornado = [];
+		$walker = [];
 
 		foreach($map->tilesets as $set)
 		foreach($set['definitions'] as $local => $tile)
@@ -55,6 +61,8 @@ final class VehicleLoader
 			if($class === 'skateboard') $fallback = $set['firstgid'] + $local;
 
 			if(str_starts_with($class, 'tornado')) $tornado[$class] = $set['firstgid'] + $local;
+
+			if(str_starts_with($class, 'egg-walker')) $walker[$class] = $set['firstgid'] + $local;
 		}
 
 		foreach($map->layers as $layer)
@@ -71,11 +79,22 @@ final class VehicleLoader
 			$x = (float)$object['x'] + $map->x + $layer->offsetX;
 			$y = (float)$object['y'] + $map->y + $layer->offsetY;
 			$isTornado = $class === 'tornado';
-			$sprite = $this->sprite($map, $object, $layer, $isTornado ? ($tornado['tornado'] ?? null) : $fallback);
+			$isWalker = in_array($class, ['eggwalker', 'egg-walker'], true);
+			$baseGid = $isTornado
+				? ($tornado['tornado'] ?? null)
+				: ($isWalker ? ($walker['egg-walker'] ?? null) : $fallback);
 
-			if(!in_array($class, ['skateboard', 'skate-board', 'tornado'], true))
+			$sprite = $this->sprite($map, $object, $layer, $baseGid);
+
+			if(!in_array($class, ['skateboard', 'skate-board', 'tornado', 'eggwalker', 'egg-walker'], true))
 			{
 				$drop = str_starts_with($class, 'drop');
+
+				if($sprite !== null)
+				{
+					// MB2 excludes invisible supply/drop regions even when an editor tile is present.
+					$sprite->outline = false;
+				}
 
 				if(!$drop && !in_array($p['vehicle'] ?? 'skate-board', ['skate-board', 'skateboard'], true))
 				{
@@ -100,21 +119,37 @@ final class VehicleLoader
 
 			$x += (float)($object['width'] ?? 0) / 2;
 			$y += isset($object['gid']) ? 0 : (float)($object['height'] ?? 0);
-			$body = $isTornado ? Tornado::body($x, $y - 18) : Skateboard::body($x, $y - 6);
+			$body = $isTornado
+				? Tornado::body($x, $y - 24)
+				: ($isWalker ? EggWalker::body($x, $y - 32) : Skateboard::body($x, $y - 6));
+
 			$body->collisionLayer = $plane;
 			$body->facing = $body->direction = (int)($p['direction'] ?? 1) < 0 ? -1 : 1;
 
 			$vehicle = new Vehicle(
 				$body
-				, (float)($p['seatHeight'] ?? ($isTornado ? 20 : 12))
-				, (float)($p['seatForward'] ?? ($isTornado ? -18 : 0))
+				, (float)($p['seatHeight'] ?? ($isTornado ? 14 : ($isWalker ? 48 : 12)))
+				, (float)($p['seatForward'] ?? 0)
 				, (float)($p['seatAngle'] ?? 0)
 				, (bool)($p['lockedIn'] ?? false)
 				, (bool)($p['quickDrop'] ?? false)
 				, (int)$object['id']
 			);
 
-			$system->add($vehicle, $isTornado ? new Tornado($tornado) : new Skateboard, $sprite);
+			$layers = null;
+
+			if($isWalker && $sprite !== null && isset($walker['egg-walker-front']))
+			{
+				$front = clone $sprite;
+				$front->gid = $walker['egg-walker-front'];
+				$layers = new SpriteLayers([$sprite], [$front]);
+			}
+
+			$behavior = $isTornado
+				? new Tornado($tornado)
+				: ($isWalker ? new EggWalker($walker, $layers) : new Skateboard);
+
+			$system->add($vehicle, $behavior, $sprite);
 		}
 	}
 
@@ -136,7 +171,6 @@ final class VehicleLoader
 		$gid = Gid::from($raw);
 		$tile = $map->tile($gid->id) ?? throw new \UnexpectedValueException('Vehicle artwork tile is missing');
 		$sprite = new Sprite($gid->id);
-		$sprite->outline = false;
 		$sprite->flipX = (bool)($gid->flags & 8);
 		$sprite->flipY = (bool)($gid->flags & 4);
 		$sprite->opacity = $layer->visible && ($object['visible'] ?? true) ? $layer->opacity : 0;

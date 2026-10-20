@@ -141,7 +141,7 @@ test('sprite groups reproduce whole images, freeze animation and restore cropped
 	expect(result.error).toBe(0);
 });
 
-test('sprite outlines expand by one world pixel with per-instance opt-outs', async({page}) => {
+test('sprite outlines expand by one world pixel with entity grouping and per-instance opt-outs', async({page}) => {
 	await boot(page);
 	const result = JSON.parse(await run(page, 'require "/engine/tests/render-outlines.php";'));
 	expect(Object.keys(result.checks).length).toBeGreaterThan(35);
@@ -204,8 +204,8 @@ test('water displacement is clipped, animated, tinted and releases its textures'
 	expect(result.outsideExact).toBe(true);
 	expect(result.wetPixels).toBeGreaterThan(1000);
 	expect(result.animatedPixels).toBeGreaterThan(500);
-	expect(result.live).toEqual([true, true]);
-	expect(result.released).toEqual([true, true]);
+	expect(result.live).toEqual([true, true, true]);
+	expect(result.released).toEqual([true, true, true]);
 	expect(result.error).toBe(0);
 });
 

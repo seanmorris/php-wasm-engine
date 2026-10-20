@@ -52,6 +52,7 @@ export function boot(
 			, 'grapples'
 			, 'vehicles'
 			, 'tornado'
+			, 'egg-walker'
 			, 'light-dash'
 			, 'water'
 			, 'water-rail'

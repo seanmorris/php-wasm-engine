@@ -147,7 +147,6 @@ final class GrappleLoader
 		$sprite->scaleY = $height / $tile['rect'][3];
 		$sprite->flipX = (bool)($gid->flags & 8);
 		$sprite->flipY = (bool)($gid->flags & 4);
-		$sprite->outline = false;
 		$sprite->tint = $layer->tint;
 		$sprite->opacity = $layer->visible && ($object['visible'] ?? true) ? $layer->opacity : 0;
 

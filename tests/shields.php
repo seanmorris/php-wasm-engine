@@ -100,6 +100,7 @@ test('Tiled shield monitors grant animated auras and each movement ability uses 
 	check(count($registry->query(ShieldAura::class)) === 1);
 	$aura = $registry->query(ShieldAura::class)[0];
 	check($registry->get($aura, Sprite::class)->gid === 52);
+	check($registry->get($aura, Sprite::class)->outline);
 
 	$controls = new Controls;
 	$shields->grant($player, Shield::ELECTRIC);

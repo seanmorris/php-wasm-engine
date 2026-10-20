@@ -1,4 +1,5 @@
 <?php
+use PhpWasmEngine\Effects\CameraShake;
 use PhpWasmEngine\Gameplay\PlatformCamera;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
@@ -22,6 +23,32 @@ test('camera top-left panning retains exponential follow compatibility', functio
 
 	near($whole->x, $parts->x);
 	near($whole->y, $parts->y);
+});
+
+test('camera shake follows the reference alternating decay without moving the follow camera', function() {
+	$camera = new Camera(10, 20);
+	$shake = new CameraShake;
+	$shake->impulse(y: 7);
+	$shake->update(1 / 60);
+	$view = $shake->view($camera);
+	near($shake->y, -6.65);
+	near($view->x, 10);
+	near($view->y, 13.35);
+	near($camera->x, 10);
+	near($camera->y, 20);
+
+	$whole = new CameraShake;
+	$parts = new CameraShake;
+	$whole->impulse(4, 7);
+	$parts->impulse(4, 7);
+	$whole->update(1 / 30);
+
+	foreach(range(1, 4) as $_) $parts->update(1 / 120);
+
+	near($whole->x, $parts->x);
+	near($whole->y, $parts->y);
+	rejects(fn() => $shake->impulse(INF));
+	rejects(fn() => $shake->update(-1));
 });
 
 test('platform camera pans into and out of world bounds without snapping', function() {
