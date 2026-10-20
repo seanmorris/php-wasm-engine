@@ -17,6 +17,7 @@ use PhpWasmEngine\Gameplay\GravityFeatures;
 use PhpWasmEngine\Gameplay\Vehicles;
 use PhpWasmEngine\Gameplay\Rings;
 use PhpWasmEngine\Gameplay\Shields;
+use PhpWasmEngine\Gameplay\TextActors;
 use PhpWasmEngine\Gameplay\WaterFeatures;
 use PhpWasmEngine\Gameplay\WaterParticles;
 use PhpWasmEngine\Physics\Body;
@@ -66,6 +67,7 @@ final class DemoLevel
 	public ?Vehicles $vehicles = null;
 	public ?GravityFeatures $gravityFeatures = null;
 	public ?WaterParticles $waterParticles = null;
+	public ?TextActors $textActors = null;
 	/** @var array{float,float} Player center loaded from the map's Player point object. */
 	public array $spawn = [80.0, 100.0];
 	/** @var array{float,?float,float,float}|null Optional player reset bounds in world pixels. */
@@ -222,6 +224,7 @@ final class DemoLevel
 
 		$this->renderer = new MapRenderer($map);
 		$this->sprites = new SpriteRenderer($this->renderer->atlas);
+		$this->textActors = new TextActors($engine->entities, $map);
 		$this->waterFeatures = new WaterFeatures($engine->entities, $this->terrain, $map, $this->waters);
 		$this->platforms = new Platforms($engine->entities, $this->terrain, $map);
 		$this->bridges = new BendableBridges($engine->entities, $this->terrain, $map);
@@ -552,6 +555,7 @@ final class DemoLevel
 		$this->bridges?->close();
 		$this->gravityFeatures?->close();
 		$this->waterParticles?->close();
+		$this->textActors?->close();
 		$this->waterRenderer?->close();
 		$this->backdropTwist?->close();
 		$this->motionBlurRenderer?->close();

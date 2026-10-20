@@ -95,6 +95,14 @@ final class SdlInput
 					return;
 				}
 
+				if(!$this->textInput && in_array($event->code, [
+					'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'
+					, 'PageUp', 'PageDown', 'Home', 'End', 'Space'
+				], true))
+				{
+					$event->preventDefault();
+				}
+
 				if($event->type === 'keyup')
 				{
 					unset($this->browserKeys[$event->code]);
@@ -165,6 +173,28 @@ final class SdlInput
 		$this->uiBlocked = [];
 		$this->sequences->reset();
 		$this->sequenceBlocked = [];
+	}
+
+	/**
+	 * Suppress UI controls that remain held while ownership moves between UI layers.
+	 *
+	 * Unlike reset(), this retains focus, buffered gameplay state, and the current input generation.
+	 * A modal can therefore consume Back once without its parent menu interpreting the same physical
+	 * hold as a second Back action on the following frame.
+	 *
+	 * @return void Blocks held keyboard and controller controls until they return to neutral.
+	 */
+	public function suppressHeldUi(): void
+	{
+		foreach($this->keys as $code => $held)
+		{
+			if($held)
+			{
+				$this->uiBlocked[$code] = true;
+			}
+		}
+
+		$this->gamepads->reset();
 	}
 
 	/**

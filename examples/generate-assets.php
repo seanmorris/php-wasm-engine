@@ -35,6 +35,16 @@ function jsonAsset(string $name, array $data): void
 	);
 }
 
+/**
+ * Snap authored geometry to the collision sub-grid.  Tiled preserves these
+ * dyadic coordinates through an import/export round trip, avoiding tiny
+ * trigonometric serialization differences in curved courses.
+ */
+function quantizeWorldPixel(float $value): float
+{
+	return round($value * 256) / 256;
+}
+
 // Tiled's JSON importer reads omitted visibility and opacity as false and zero.
 $layerDefaults = ['visible' => true,'opacity' => 1,'x' => 0,'y' => 0];
 
@@ -1013,6 +1023,34 @@ $base['layers'] = [
 				, 'x' => 80
 				, 'y' => 100
 			]
+			, [
+				'id' => 2
+				, 'name' => 'Movement hint'
+				, 'class' => 'TextActor'
+				, 'x' => 24
+				, 'y' => 24
+				, 'width' => 360
+				, 'height' => 32
+				, 'properties' => [
+					['name' => 'content', 'type' => 'string', 'value' => 'ARROWS / WASD TO MOVE']
+					, ['name' => 'color', 'type' => 'color', 'value' => '#FFE066']
+					, ['name' => 'scale', 'type' => 'float', 'value' => 1.25]
+				]
+			]
+			, [
+				'id' => 3
+				, 'name' => 'Jump hint'
+				, 'class' => 'text-actor'
+				, 'x' => 24
+				, 'y' => 48
+				, 'width' => 360
+				, 'height' => 32
+				, 'properties' => [
+					['name' => 'content', 'type' => 'string', 'value' => 'SPACE / ⓿ TO JUMP']
+					, ['name' => 'color', 'type' => 'color', 'value' => '#BDE7FF']
+					, ['name' => 'scale', 'type' => 'float', 'value' => 1.25]
+				]
+			]
 		]
 	] + $layerDefaults
 ];
@@ -1238,7 +1276,10 @@ foreach($curveStations as $index => $station)
 			 * @param array{float,float} $point Course surface vertex.
 			 * @return array{x:float,y:float} Tiled polyline vertex.
 			 */
-			fn(array $point): array => ['x' => $point[0], 'y' => $point[1]]
+			fn(array $point): array => [
+				'x' => quantizeWorldPixel($point[0])
+				, 'y' => quantizeWorldPixel($point[1])
+			]
 			, $points
 		)
 		, 'properties' => [['name' => 'solid', 'type' => 'bool', 'value' => true]]

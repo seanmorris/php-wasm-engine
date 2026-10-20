@@ -1,5 +1,6 @@
 import './site.css';
 import {AssetLoader} from '../browser/AssetLoader.mjs';
+import {DomTexture} from '../browser/DomTexture.mjs';
 import {DemoControls} from './controls.mjs';
 
 const status = document.querySelector('#status');
@@ -26,6 +27,10 @@ canvas.addEventListener('webglcontextlost', () => {
 canvas.addEventListener('webglcontextrestored', () => {
 	if(state === 'running') status.textContent = 'Restoring graphics…';
 });
+
+canvas.addEventListener('wheel', event => {
+	if(state === 'running') event.preventDefault();
+}, {passive: false});
 
 /**
 * Load one demo, reusing its WASM runtime when the PHP version/extensions match.
@@ -155,6 +160,25 @@ export function boot(
 		const module = await php.binary;
 		signal.throwIfAborted();
 		Object.assign(module, {scene, profile, motionBlur, demoControls: controls});
+
+		if(run)
+		{
+			const domTexture = new DomTexture(canvas);
+			module.domTexture = domTexture;
+
+			const closeDomTexture = () => {
+				domTexture.dispose();
+
+				if(module.domTexture === domTexture) module.domTexture = null;
+
+				module.onRefresh.delete(closeDomTexture);
+				signal.removeEventListener('abort', closeDomTexture);
+			};
+
+			module.onRefresh.add(closeDomTexture);
+			signal.addEventListener('abort', closeDomTexture, {once: true});
+		}
+
 		const response = await fetch(new URL('engine-files.json', base), {signal});
 
 		if(!response.ok) throw Error('Engine manifest: ' + response.status);

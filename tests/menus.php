@@ -2,8 +2,23 @@
 use PhpWasmEngine\Ui\Menu;
 use PhpWasmEngine\Ui\MenuInput;
 use PhpWasmEngine\Ui\TextBuffer;
+use PhpWasmEngine\Ui\Easing;
 use PhpWasmEngine\Render\BitmapFont;
 use PhpWasmEngine\Tiled\Loader;
+
+test('snappy UI easing is frame-rate independent and settles exactly', function() {
+	$oneStep = Easing::snappy(0, 100, .1);
+	$twoSteps = Easing::snappy(Easing::snappy(0, 100, .05), 100, .05);
+
+	near($oneStep, $twoSteps);
+	check($oneStep > 0 && $oneStep < 100);
+	check(Easing::snappy(99.9995, 100, .01) === 100.0);
+
+	foreach([-1, INF, NAN] as $seconds)
+	{
+		rejects(fn() => Easing::snappy(0, 1, $seconds));
+	}
+});
 
 test('each wheel event moves one visible row regardless of HID line count', function() {
 	$items = [];

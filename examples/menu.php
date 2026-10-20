@@ -36,7 +36,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 			, 'step' => .25
 			, 'subtext' => 'Left/right adjusts. Select to type a value.'
 			, 'get' => fn() => $camera->zoom
-			, 'set' => fn($value) => $camera->zoom = $value
+			, 'set' => fn($value) => $camera->setZoom($value)
 		]
 		, 'scale' => [
 			'label' => 'Menu scale'
@@ -117,6 +117,21 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 			, 'get' => fn() => $game->rumbleTestStatus
 			, 'subtext' => 'The browser can still reject an accepted pulse asynchronously.'
 		]
+		, 'php-info' => [
+			'label' => 'PHP info'
+			, 'hidden' => fn() => !$game->canShowPhpInfo()
+			, 'callback' => fn() => $game->showPhpInfo()
+			, 'subtext' =>
+				'View the complete browser PHP runtime report. Scroll with the keyboard, controller, or wheel.'
+		]
+		, 'text-demo' => [
+			'label' => 'Text system demo'
+			, 'callback' => function(Menu $menu) use ($game) {
+				$game->showTextDemo();
+				$menu->close();
+			}
+			, 'subtext' => 'Preview MB2-style dialog, focus, center, demo, and bitmap text overlays.'
+		]
 		, 'scene' => ['label' => 'Scene', 'input' => 'output', 'get' => fn() => $game->scene]
 		, 'time' => [
 			'label' => 'Game time'
@@ -140,7 +155,7 @@ function createDemoMenu(Engine $engine, Camera $camera, DemoGame $game): PauseMe
 		$game->debug->showFps = true;
 		$game->setMotionBlur(true);
 		$game->setRumble(true);
-		$camera->zoom = 1;
+		$camera->setZoom(1);
 		$menu->back();
 	};
 

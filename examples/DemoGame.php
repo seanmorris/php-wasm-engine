@@ -19,7 +19,10 @@ use PhpWasmEngine\Gameplay\Shield;
 use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Ui\DomTextureModal;
 use PhpWasmEngine\Ui\PauseMenu;
+use PhpWasmEngine\Ui\TextMessages;
+use PhpWasmEngine\Ui\TextRenderer;
 
 /** One engine session with replaceable level resources and persistent player/menu settings. */
 final class DemoGame
@@ -31,6 +34,9 @@ final class DemoGame
 	public ?DemoDebugOverlay $debug = null;
 	public ?DemoPlayerHud $hud = null;
 	public ?DemoComboHud $comboHud = null;
+	public ?DomTextureModal $phpInfo = null;
+	public ?TextMessages $messages = null;
+	public ?TextRenderer $textRenderer = null;
 	public PlatformCamera $cameraBehavior;
 	public array $renderStats = ['draws' => 0, 'instances' => 0, 'uploads' => 0];
 	public array $settings = [];
@@ -69,6 +75,13 @@ final class DemoGame
 	){
 		$this->host = vrzno_env('demoControls');
 		$this->canvas = vrzno_env('canvas');
+		$domTexture = vrzno_env('domTexture');
+
+		if(is_object($domTexture))
+		{
+			$this->phpInfo = new DomTextureModal($domTexture);
+		}
+
 		$this->status = (new Vrzno)->document->querySelector('#status');
 		$this->cameraBehavior = new PlatformCamera;
 		$this->cameraBehavior->setCameraLimits(maxY: 120);
@@ -86,6 +99,7 @@ final class DemoGame
 	public function input(Engine $engine, float $elapsed): bool
 	{
 		$this->frameElapsed = $elapsed;
+		$this->messages?->update($elapsed);
 
 		foreach($engine->input->sequences->drain() as $match)
 		{
@@ -108,7 +122,14 @@ final class DemoGame
 			? $this->startup->menu
 			: $this->menu->menu;
 
-		$this->debug?->update($elapsed, $engine->input->uiFrame($menu->editor !== null, $menu->isOpen));
+		if($this->phpInfo?->isOpen())
+		{
+			return $this->phpInfo->update($engine, $elapsed, $menu);
+		}
+
+		$frame = $engine->input->uiFrame($menu->editor !== null, $menu->isOpen);
+		$this->messages?->setFocused($frame['focused']);
+		$this->debug?->update($elapsed, $frame);
 
 		return $this->startup !== null
 			? $this->startup->update($engine, $elapsed)
@@ -222,6 +243,23 @@ final class DemoGame
 		$this->rumbleTestStatus = $this->engine->input->gamepads->rumble(1000, 1, 1)
 			? 'Pulse accepted'
 			: 'SDL rejected the pulse';
+	}
+
+	/** Whether this browser session supplied the reusable HTML texture bridge. */
+	public function canShowPhpInfo(): bool { return $this->phpInfo !== null; }
+
+	/** Capture PHP's complete native diagnostic document for the in-canvas information panel. */
+	public function showPhpInfo(): void
+	{
+		if($this->phpInfo === null)
+		{
+			return;
+		}
+
+		ob_start();
+		phpinfo();
+		$html = (string)ob_get_clean();
+		$this->phpInfo->show('PHP info', $html);
 	}
 
 	/**
@@ -597,17 +635,20 @@ final class DemoGame
 		}
 
 		$vehicleInput = $this->level->vehicles?->control($this->entity, $controls, $dt) ?? false;
-		$released = !$vehicleInput && ($this->level->grapples?->control($this->entity, $controls, $dt) ?? false);
+		$gameplayControls = $controls->gravityRelative($this->body->gravityX, $this->body->gravityY);
+		$released = !$vehicleInput && ($this->level->grapples?->control($this->entity, $gameplayControls, $dt) ?? false
+		);
+
 		$hanging = $this->body->ability === 'hanging';
 		$lightDashing = !$vehicleInput && !$released && !$hanging
-			&& ($this->level->lightDashes?->control($this->entity, $controls, $dt) ?? false);
+			&& ($this->level->lightDashes?->control($this->entity, $gameplayControls, $dt) ?? false);
 
 		$jumpConsumed = $vehicleInput || $released || $hanging || $lightDashing
-			|| ($this->level->shields?->control($this->entity, $controls, $dt) ?? false);
+			|| ($this->level->shields?->control($this->entity, $gameplayControls, $dt) ?? false);
 
 		$wasGrounded = $this->body->grounded;
 		$landingSpeed = abs($this->body->gravityVelocity());
-		$this->level->movement->step($this->body, $controls, $dt, $jumpConsumed);
+		$this->level->movement->step($this->body, $gameplayControls, $dt, $jumpConsumed);
 
 		if(!$vehicleInput && !$wasGrounded && $this->body->grounded)
 		{
@@ -695,9 +736,17 @@ final class DemoGame
 			$this->hud?->render($this, false);
 			$this->comboHud?->render($this, false);
 			$this->debug?->render($this, false);
+			$this->textRenderer?->renderMessages(
+				$this->messages ?? throw new LogicException('Text messages were not initialized')
+				, $this->engine->device->width, $this->engine->device->height
+			);
 			$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
 			$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 			$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
+			$this->canvas->dataset->messages = json_encode($this->messages?->snapshot());
+			$this->canvas->dataset->text = json_encode($this->textRenderer?->snapshot);
+			$this->phpInfo?->render($this->engine->device->width, $this->engine->device->height);
+			$this->canvas->dataset->phpInfo = json_encode($this->phpInfo?->state());
 			$this->engine->device->present();
 
 			$this->canvas->dataset->menu = demoMenuState($this->menu, $this->engine, $this->startup->menu);
@@ -715,10 +764,18 @@ final class DemoGame
 		$this->hud?->render($this, $playerVisible);
 		$this->comboHud?->render($this, $playerVisible);
 		$this->debug?->render($this, $this->level !== null);
+		$this->textRenderer?->renderMessages(
+			$this->messages ?? throw new LogicException('Text messages were not initialized')
+			, $this->engine->device->width, $this->engine->device->height
+		);
 		$this->canvas->dataset->hud = json_encode($this->hud?->snapshot);
 		$this->canvas->dataset->combo = json_encode($this->comboHud?->snapshot);
 		$this->canvas->dataset->debug = json_encode($this->debug?->snapshot);
+		$this->canvas->dataset->messages = json_encode($this->messages?->snapshot());
+		$this->canvas->dataset->text = json_encode($this->textRenderer?->snapshot);
 		$this->menu->render();
+		$this->phpInfo?->render($this->engine->device->width, $this->engine->device->height);
+		$this->canvas->dataset->phpInfo = json_encode($this->phpInfo?->state());
 		$this->engine->device->present();
 		$this->canvas->dataset->menu = demoMenuState($this->menu, $this->engine);
 		$this->canvas->dataset->loading = $this->pending?->id ?? '';
@@ -893,6 +950,8 @@ final class DemoGame
 			$level->sprites->renderEntities($this->engine->entities, $camera, $time);
 		}
 
+		$this->textRenderer?->renderActors($this->engine->entities, $camera);
+
 		$level->waterRenderer?->compose($level->waters, $camera, $time);
 
 		$this->canvas->dataset->body = json_encode([
@@ -956,6 +1015,9 @@ final class DemoGame
 			$this->renderStats['draws'] += $level->sprites->draws;
 			$this->renderStats['instances'] += $level->sprites->instances;
 		}
+
+		$this->renderStats['draws'] += ($this->textRenderer?->snapshot['worldGlyphs'] ?? 0) > 0 ? 1 : 0;
+		$this->renderStats['instances'] += $this->textRenderer?->snapshot['worldGlyphs'] ?? 0;
 
 		$this->renderStats['draws'] += $level->waterRenderer?->draws ?? 0;
 		$this->renderStats['draws'] += $level->backdropTwist?->draws ?? 0;
@@ -1082,6 +1144,7 @@ final class DemoGame
 		$this->comboHud?->restore();
 		$this->debug?->restore();
 		$this->startup?->restore();
+		$this->textRenderer?->restore();
 	}
 
 	/**
@@ -1096,6 +1159,8 @@ final class DemoGame
 		$this->comboHud?->close();
 		$this->debug?->close();
 		$this->menu?->close();
+		$this->phpInfo?->close();
+		$this->textRenderer?->close();
 		$this->releasePending();
 		$this->level?->close($this->engine);
 		$this->level = null;
@@ -1113,6 +1178,28 @@ final class DemoGame
 			, $this->canvas->dataset->platforms
 			, $this->canvas->dataset->bridges
 			, $this->canvas->dataset->motionBlur
+			, $this->canvas->dataset->phpInfo
+			, $this->canvas->dataset->messages
+			, $this->canvas->dataset->text
 		);
+	}
+
+	/** Return the persistent MB2-style text channel for gameplay scripts and menu callbacks. */
+	public function textMessages(): TextMessages
+	{
+		return $this->messages ?? throw new LogicException('Text messages were not initialized');
+	}
+
+	/** Briefly demonstrate each portable text capability without inventing a replay subsystem. */
+	public function showTextDemo(): void
+	{
+		$messages = $this->textMessages();
+		$messages->showDialog(
+			['World labels, dialog, and HUD text use the same bitmap font.', '⓿ continues   ❶ closes the menu']
+			, 'TEXT SYSTEM', 'left'
+		);
+		$messages->showCenter('TEXT SYSTEM READY', [1, .9, .3, 1], 2.5);
+		$messages->showFocus('Focus and controller prompts are available.', 2.5);
+		$messages->showDemo('play', 2.5);
 	}
 }

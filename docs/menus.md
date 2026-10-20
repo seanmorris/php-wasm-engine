@@ -1,7 +1,9 @@
 # Bitmap fonts and menus
 
 Press P, Escape, or Start in a live demo to open its pause menu. Settings
-contains text, numeric, slider, selection, boolean, and read-only rows. Valid
+contains text, numeric, slider, selection, boolean, read-only, and **PHP info**
+rows. PHP info captures the running runtime's complete `phpinfo()` document and
+rasterizes it into a scrollable WebGL texture inside the game canvas. Valid
 changes apply immediately. The simulation stops while menu input and rendering
 continue.
 
@@ -57,8 +59,48 @@ and checks the signal after this gain.
 
 The PHP menu calls `DemoGame` for scene and movement changes. The browser host
 at `vrzno_env('demoControls')` supplies fullscreen and persistent mute. Browser
-controls live in `docs/controls.mjs`; the reusable `Menu` API does not require
-a browser host.
+controls live in `docs/controls.mjs`. `browser/DomTexture.mjs` is a separate
+browser primitive for trusted HTML: it measures and rasterizes one complete SVG
+`foreignObject` shot, splits it into GPU-height tiles in the shared WebGL2
+context, then scrolls those prebuilt tiles without rerasterizing. It restores
+the engine's GL state afterward and rebuilds its textures after a context
+restore. `DomTextureModal` adapts its JSON-friendly state and scroll controls
+to PHP. The reusable `Menu` API does not require a browser host.
+
+In the PHP info panel, arrows/WASD, D-pad, and left stick scroll by a line;
+mouse wheel scrolls by two lines; Page Up/Down or shoulders scroll a page;
+Home/End jump to either end. Escape/B returns to Settings, while P/Start closes
+the whole menu.
+
+## World text and message overlays
+
+`Gameplay\TextActors` promotes visible Tiled object-layer objects with class
+`TextActor` or moving-boxes-2's `text-actor` into non-solid ECS labels. Use a
+`content` string property (or Tiled's native text payload), optional `color`,
+`scale`, and `align` (`left`, `center`, or `right`). Labels inherit their map,
+layer, tint, opacity, and offset, use the same themed bitmap font as menus, and
+are removed with their level. The Platformer scene includes two small authored
+examples.
+
+`Ui\TextMessages` is the DOM-free counterpart for MB2's center message,
+focus prompt, typed dialog, and recording/replay badge. `TextRenderer` draws it
+after HUDs and before menus, so menus and PHP info remain modal. Dialogs accept
+a speaker name and `left`/`right` placement but intentionally use a generic
+speaker header: the MB2 portrait art is not part of this project.
+
+```php
+$messages = $game->textMessages();
+$messages->showCenter('READY', [1, .9, .3, 1], 2.5);
+$messages->showDialog(['Find the next panel.', '⓿ continues.'], 'GUIDE', 'left');
+$messages->showFocus();              // Default keyboard/controller focus prompt.
+$messages->showDemo('play', 2.5);    // Or 'record'.
+```
+
+`update($elapsed)` advances durations and dialog reveal time using unpaused UI
+time. `setFocused(bool)` supplies the standard blur prompt and delayed return
+dismissal. The Settings page's **Text system demo** previews all four layers.
+`canvas.dataset.messages` and `canvas.dataset.text` expose diagnostic snapshots
+for browser tests and the inspector.
 
 ## Demo diagnostics
 

@@ -34,6 +34,9 @@ final class MenuRenderer
 	private bool $closed = false;
 	private float $editScroll = 0;
 	private ?TextBuffer $lastEditor = null;
+	private ?Menu $scrollMenu = null;
+	private array $scrollRows = [];
+	private float $scrollOffset = 0, $scrollTime = 0;
 
 	/**
 	 * Upload a font and allocate reusable glyph and rectangle batches.
@@ -72,6 +75,18 @@ final class MenuRenderer
 		{
 			$this->boxes[] = array_merge($rect, $color);
 		}
+	}
+
+	/** Return the shared nonnegative screen-space area of two rectangles. */
+	private function intersect(array $a, array $b): array
+	{
+		$x = max($a[0], $b[0]);
+		$y = max($a[1], $b[1]);
+
+		return [
+			$x, $y, max(0, min($a[0] + $a[2], $b[0] + $b[2]) - $x)
+			, max(0, min($a[1] + $a[3], $b[1] + $b[3]) - $y)
+		];
 	}
 
 	/**
@@ -155,6 +170,9 @@ final class MenuRenderer
 
 		if(!$menu->isOpen || $this->closed)
 		{
+			$this->scrollMenu = null;
+			$this->scrollRows = [];
+
 			return;
 		}
 
@@ -176,6 +194,7 @@ final class MenuRenderer
 		$menu->scroll = max(0, min($menu->scroll, max(0, count($rows) - $count)));
 		$menu->scroll = min($menu->scroll, $index);
 		$menu->scroll = max($menu->scroll, $index - $count + 1);
+		$scroll = $this->scroll($menu, array_keys($rows), $menu->scroll, $seconds);
 
 		$this->box([0, 0, $width, $height], $this->style['dimmer']);
 		$this->box([$x, $y, $w, $h], $this->style['panel']);
@@ -190,12 +209,14 @@ final class MenuRenderer
 			, align: $this->style['titleAlign'] ?? $this->style['align']
 		);
 
-		$line = $inner[1] + $header;
+		$rowsClip = [$inner[0], $inner[1] + $header, $inner[2], $count * $rowHeight];
+		$first = (int)floor($scroll);
+		$line = $rowsClip[1] - ($scroll - $first) * $rowHeight;
 
-		foreach(array_slice($rows, $menu->scroll, $count, true) as $id => $item)
+		foreach(array_slice($rows, $first, $count + 1, true) as $id => $item)
 		{
 			$rect = [$inner[0], $line, $inner[2], $rowHeight];
-			$this->row($menu, $id, $item, $rect, $s, $seconds);
+			$this->row($menu, $id, $item, $rect, $rowsClip, $s, $seconds);
 			$line += $rowHeight;
 		}
 
@@ -240,13 +261,44 @@ final class MenuRenderer
 		$this->cache = $this->nextCache;
 	}
 
+	/** Advance the displayed fractional menu viewport toward its integer navigation target. */
+	private function scroll(Menu $menu, array $rows, int $target, float $seconds): float
+	{
+		if($this->scrollMenu !== $menu || $this->scrollRows !== $rows || $seconds <= $this->scrollTime)
+		{
+			$this->scrollMenu = $menu;
+			$this->scrollRows = $rows;
+			$this->scrollOffset = $target;
+			$this->scrollTime = $seconds;
+
+			return $this->scrollOffset;
+		}
+
+		$elapsed = min(.05, $seconds - $this->scrollTime);
+		$this->scrollTime = $seconds;
+
+		// Page/Home/End jumps should reveal their selected destination immediately. Normal single-row
+		// navigation retains the animated viewport motion below.
+		if(abs($target - $this->scrollOffset) > 1)
+		{
+			$this->scrollOffset = $target;
+
+			return $this->scrollOffset;
+		}
+
+		$this->scrollOffset = Easing::snappy($this->scrollOffset, $target, $elapsed);
+
+		return $this->scrollOffset;
+	}
+
 	/**
 	 * Lay out one row with a label, value, optional slider, and editable text selection.
 	 *
 	 * @param Menu $menu Owner of the row and any active text buffer.
 	 * @param string $id Stable row ID used for hit testing.
 	 * @param array<string,mixed> $item Resolved visible item metadata.
-	 * @param array{float,float,float,float} $rect Visible row rectangle.
+	 * @param array{float,float,float,float} $rect Row rectangle before viewport clipping.
+	 * @param array{float,float,float,float} $rowsClip Visible scrolling row viewport.
 	 * @param float $scale Screen scale for font metrics and padding.
 	 * @param float $seconds Unpaused UI time for caret animation.
 	 * @return void Appends row geometry and one pointer region.
@@ -256,69 +308,86 @@ final class MenuRenderer
 		, string $id
 		, array $item
 		, array $rect
+		, array $rowsClip
 		, float $scale
 		, float $seconds
 	): void {
 		[$x, $y, $w, $h] = $rect;
+		$visible = $this->intersect($rect, $rowsClip);
+
+		if($visible[2] <= 0 || $visible[3] <= 0)
+		{
+			return;
+		}
+
 		$selected = $menu->selected === $id;
 		$type = $item['input'] ?? '';
 		$color = $this->style[$item['disabled'] ? 'disabled' : ($selected ? 'selected' : 'foreground')];
 
 		if($selected)
 		{
-			$this->box($rect, $this->style['highlight']);
+			$this->box($rect, $this->style['highlight'], $rowsClip);
 		}
 
 		$labelWidth = $type !== '' ? $w * .49 : $w;
 		$align = $item['align'] ?? $this->style['align'];
+		$labelClip = $this->intersect([$x, $y, $labelWidth, $h], $rowsClip);
 
-		$this->text(
-			($selected ? '> ' : '  ') . $item['label']
-			, $x + 2 * $scale
-			, $y + 4 * $scale
-			, $scale
-			, $color
-			, [$x, $y, $labelWidth, $h]
-			, align: $align
-		);
+		if($labelClip[2] > 0 && $labelClip[3] > 0)
+		{
+			$this->text(
+				($selected ? '> ' : '  ') . $item['label']
+				, $x + 2 * $scale
+				, $y + 4 * $scale
+				, $scale
+				, $color
+				, $labelClip
+				, align: $align
+			);
+		}
 
-		$region = ['id' => $id, 'rect' => $rect];
+		$region = ['id' => $id, 'rect' => $visible];
 
 		if($type !== '')
 		{
 			$valueAlign = $item['valueAlign'] ?? $this->style['valueAlign'] ?? $align;
-			$clip = [$x + $w * .52, $y, $w * .48 - 4 * $scale, $h];
+			$field = [$x + $w * .52, $y, $w * .48 - 4 * $scale, $h];
 			$value = $type === 'boolean' ? ($item['value'] ? 'ON' : 'OFF') : (string)$item['value'];
 			$isEditing = $selected && $menu->editor;
 
 			if(($item['subType'] ?? '') === 'range' && isset($item['min'], $item['max'])
 				&& !$isEditing && $item['max'] > $item['min']
 			){
-				$track = $clip[2] * .6;
+				$track = $field[2] * .6;
 
 				$ratio = max(0, min(1, ($item['value'] - $item['min']) / ($item['max'] - $item['min'])));
 
-				$this->box([$clip[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled']);
+				$this->box(
+					[$field[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled'], $rowsClip
+				);
 
 				$this->box(
 					[
-						$clip[0] + $track * $ratio - 2 * $scale, $y + 5 * $scale, 4 * $scale
+						$field[0] + $track * $ratio - 2 * $scale, $y + 5 * $scale, 4 * $scale
 						, 10 * $scale
 					]
 					, $color
+					, $rowsClip
 				);
 
-				$region['slider'] = [$clip[0], $track];
-				$clip[0] += $track + 6 * $scale;
-				$clip[2] -= $track + 6 * $scale;
+				$region['slider'] = [$field[0], $track];
+				$field[0] += $track + 6 * $scale;
+				$field[2] -= $track + 6 * $scale;
 			}
 
-			if($isEditing)
+			$clip = $this->intersect($field, $rowsClip);
+
+			if($clip[2] > 0 && $clip[3] > 0 && $isEditing)
 			{
 				$region['carets'] = $this->field($menu->editor, $clip, $scale, $color, $seconds, $valueAlign);
 				$this->editorRect = array_map('intval', $clip);
 			}
-			else
+			elseif($clip[2] > 0 && $clip[3] > 0)
 			{
 				$layout = $this->text(
 					$value
@@ -337,6 +406,10 @@ final class MenuRenderer
 				{
 					$region['carets'][] = $clip[0] + $position[0];
 				}
+			}
+			else
+			{
+				$region['carets'] = [];
 			}
 		}
 

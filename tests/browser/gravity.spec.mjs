@@ -227,6 +227,42 @@ test('gravity course permits settling and exposes every control through the live
 	expect(errors).toEqual([]);
 });
 
+test('live player input rotates into the active gravity basis', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/');
+	await page.waitForFunction(() => typeof window.bootEngine === 'function');
+	await page.evaluate(() => window.bootEngine({intro: false, scene: 'gravity', motionBlur: false}));
+	const canvas = page.locator('canvas');
+	await expect(canvas).toHaveAttribute('data-scene', 'gravity', {timeout: 60000});
+
+	const initial = JSON.parse(await run(page, `
+		$body->x = 1500;
+		$body->y = 300;
+		$body->vx = $body->vy = $body->groundSpeed = 0;
+		$body->gravity = 0;
+		$body->setGravityDirection(1, 0);
+		$body->angle = $body->uprightAngle();
+		$body->grounded = $body->jumping = false;
+		$body->ability = '';
+		echo json_encode([$body->x, $body->y]);
+	`
+	));
+
+	await page.keyboard.down('ArrowUp');
+
+	await expect.poll(async() => JSON.parse(await canvas.getAttribute('data-body')).y, {timeout: 3000})
+		.toBeLessThan(initial[1] - 80);
+
+	await page.keyboard.up('ArrowUp');
+
+	const body = JSON.parse(await canvas.getAttribute('data-body'));
+	expect(body.x).toBeCloseTo(initial[0], 0);
+	expect(body.gravityX).toBe(1);
+	expect(body.gravityY).toBe(0);
+	expect(errors).toEqual([]);
+});
+
 test('the visible curved-ceiling course cycles through all four gravity directions', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));

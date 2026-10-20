@@ -25,6 +25,35 @@ final class Camera
 	}
 
 	/**
+	 * Change magnification while keeping one viewport-relative world point fixed on screen.
+	 *
+	 * Camera coordinates describe the world-space top-left corner, so assigning {@see $zoom}
+	 * directly makes the view expand from that corner. Center anchoring is the useful default for
+	 * player-following and manually panned views alike; callers can supply another normalized
+	 * viewport position for cursor- or target-anchored zoom.
+	 *
+	 * @param float $zoom Positive world-to-screen scale factor.
+	 * @param float $anchorX Horizontal fixed point in the viewport from zero through one.
+	 * @param float $anchorY Vertical fixed point in the viewport from zero through one.
+	 * @return void Repositions the camera so the selected world point keeps its output position.
+	 */
+	public function setZoom(float $zoom, float $anchorX = .5, float $anchorY = .5): void
+	{
+		if(!is_finite($this->zoom) || $this->zoom <= 0 || !is_finite($zoom) || $zoom <= 0
+			|| !is_finite($anchorX) || !is_finite($anchorY)
+			|| $anchorX < 0 || $anchorX > 1 || $anchorY < 0 || $anchorY > 1
+		){
+			throw new \InvalidArgumentException('Camera zoom and anchor must be finite and in range');
+		}
+
+		$fixedX = $this->x + $this->width / $this->zoom * $anchorX;
+		$fixedY = $this->y + $this->height / $this->zoom * $anchorY;
+		$this->zoom = $zoom;
+		$this->x = $fixedX - $this->width / $zoom * $anchorX;
+		$this->y = $fixedY - $this->height / $zoom * $anchorY;
+	}
+
+	/**
 	 * Smoothly center the camera on a world point using exponential damping.
 	 *
 	 * @param float $x Target world X coordinate in pixels.

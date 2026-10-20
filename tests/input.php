@@ -22,6 +22,36 @@ test('controls retain proportional input and button edges across fixed steps', f
 	check(!$input->released('jump'));
 });
 
+test('gravity-relative controls rotate directional vectors without synthesizing held edges', function() {
+	$input = new Controls;
+	$input->set(['right' => .75, 'down' => .5, 'jump' => true, 4 => true]);
+
+	$cases = [
+		[0, 1, ['right' => .75, 'down' => .5]]
+		, [1, 0, ['left' => .5, 'down' => .75]]
+		, [0, -1, ['left' => .75, 'up' => .5]]
+		, [-1, 0, ['right' => .5, 'up' => .75]]
+	];
+
+	foreach($cases as [$gravityX, $gravityY, $expected])
+	{
+		$relative = $input->gravityRelative($gravityX, $gravityY);
+		near($relative->value('left'), $expected['left'] ?? 0);
+		near($relative->value('right'), $expected['right'] ?? 0);
+		near($relative->value('up'), $expected['up'] ?? 0);
+		near($relative->value('down'), $expected['down'] ?? 0);
+		check($relative->pressed('jump') && $relative->down(4));
+	}
+
+	$input->set(['right' => true, 'jump' => true]);
+	$input->set(['right' => true, 'jump' => true]);
+	$relative = $input->gravityRelative(1, 0);
+	check($relative->down('down') && !$relative->pressed('down') && !$relative->released('right'));
+	check(!$relative->pressed('jump'));
+	rejects(fn() => $input->gravityRelative(0, 0));
+	rejects(fn() => $input->gravityRelative(1, 1));
+});
+
 test('rumble queues delayed ECS pulses and reset silences pending patterns', function() {
 	$rumble = new Rumble;
 	$rumble->pulse(40, 0, 1);

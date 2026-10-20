@@ -24,6 +24,8 @@ use PhpWasmEngine\Physics\Body;
 use PhpWasmEngine\Render\Camera;
 use PhpWasmEngine\Render\Device;
 use PhpWasmEngine\Render\Sprite;
+use PhpWasmEngine\Ui\TextMessages;
+use PhpWasmEngine\Ui\TextRenderer;
 
 $scene = $scene ?? (vrzno_env('scene') ?: 'platformer');
 $profile = vrzno_env('profile') ?: 'runner';
@@ -49,6 +51,8 @@ $camera = new Camera(0, 0, 960, 540);
 $game = new DemoGame($engine, $camera, $body, $counter, $combo, $entity);
 $game->setMotionBlur(vrzno_env('motionBlur') !== false);
 $pauseMenu = $game->menu = createDemoMenu($engine, $camera, $game);
+$game->messages = new TextMessages;
+$game->textRenderer = new TextRenderer($pauseMenu->renderer->font, $pauseMenu->renderer->atlas);
 $game->hud = new DemoPlayerHud($pauseMenu->renderer->font, $counter, $pauseMenu->renderer->atlas);
 $game->comboHud = new DemoComboHud($pauseMenu->renderer->font, $combo, $pauseMenu->renderer->atlas);
 $game->debug = new DemoDebugOverlay($pauseMenu->renderer->font, $pauseMenu->renderer->atlas);

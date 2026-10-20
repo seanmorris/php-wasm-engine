@@ -25,6 +25,25 @@ test('camera top-left panning retains exponential follow compatibility', functio
 	near($whole->y, $parts->y);
 });
 
+test('camera zoom keeps its chosen viewport point stationary', function() {
+	$camera = new Camera(100, 50, 960, 540);
+	$center = [$camera->x + $camera->width / $camera->zoom / 2, $camera->y + $camera->height / $camera->zoom / 2];
+	$camera->setZoom(2);
+	near($camera->x + $camera->width / $camera->zoom / 2, $center[0]);
+	near($camera->y + $camera->height / $camera->zoom / 2, $center[1]);
+
+	$rightTop = [$camera->x + $camera->width / $camera->zoom, $camera->y];
+	$camera->setZoom(.5, 1, 0);
+	near($camera->x + $camera->width / $camera->zoom, $rightTop[0]);
+	near($camera->y, $rightTop[1]);
+
+	rejects(fn() => $camera->setZoom(0));
+	rejects(fn() => $camera->setZoom(INF));
+	rejects(fn() => $camera->setZoom(1, -1));
+	rejects(fn() => $camera->setZoom(1, .5, NAN));
+	rejects(fn() => (new Camera(zoom: 0))->setZoom(1));
+});
+
 test('camera shake follows the reference alternating decay without moving the follow camera', function() {
 	$camera = new Camera(10, 20);
 	$shake = new CameraShake;

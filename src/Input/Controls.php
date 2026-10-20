@@ -77,4 +77,59 @@ final class Controls
 	{
 		return $this->value($positive) - $this->value($negative);
 	}
+
+	/**
+	 * Project screen-relative directions into the local axes of one cardinal gravity direction.
+	 *
+	 * Button and action values remain unchanged. Both snapshots are transformed with the same
+	 * basis, so changing gravity while a direction is held does not synthesize a press or release.
+	 *
+	 * @param int $gravityX Horizontal component of the body's cardinal gravity direction.
+	 * @param int $gravityY Vertical component of the body's cardinal gravity direction.
+	 * @return self Independent directional view whose right and down match the body's local axes.
+	 */
+	public function gravityRelative(int $gravityX, int $gravityY): self
+	{
+		if(abs($gravityX) + abs($gravityY) !== 1)
+		{
+			throw new \InvalidArgumentException('Gravity direction must be cardinal');
+		}
+
+		$controls = new self;
+		$controls->current = self::rotateDirections($this->current, $gravityX, $gravityY);
+		$controls->previous = self::rotateDirections($this->previous, $gravityX, $gravityY);
+
+		return $controls;
+	}
+
+	/**
+	 * Transform one screen-relative directional snapshot into gravity-local button strengths.
+	 *
+	 * @param array<string,float> $buttons Canonical controls and analog strengths.
+	 * @param int $gravityX Horizontal component of the body's gravity direction.
+	 * @param int $gravityY Vertical component of the body's gravity direction.
+	 * @return array<string,float> Snapshot with only the four cardinal directions replaced.
+	 */
+	private static function rotateDirections(array $buttons, int $gravityX, int $gravityY): array
+	{
+		$x = ($buttons['button15'] ?? 0) - ($buttons['button14'] ?? 0);
+		$y = ($buttons['button13'] ?? 0) - ($buttons['button12'] ?? 0);
+		$right = $x * $gravityY - $y * $gravityX;
+		$down = $x * $gravityX + $y * $gravityY;
+
+		foreach(['button12','button13','button14','button15'] as $button)
+		{
+			unset($buttons[$button]);
+		}
+
+		if($right < 0) $buttons['button14'] = -$right;
+
+		if($right > 0) $buttons['button15'] = $right;
+
+		if($down < 0) $buttons['button12'] = -$down;
+
+		if($down > 0) $buttons['button13'] = $down;
+
+		return $buttons;
+	}
 }

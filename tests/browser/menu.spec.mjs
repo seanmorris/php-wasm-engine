@@ -50,6 +50,22 @@ async function start(page, {scene = 'platformer',fallback  = false} = {})
 
 const state = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.menu??'null'));
 
+async function camera(page)
+{
+	return page.evaluate(async() => {
+		const module = await enginePhp.binary;
+
+		await enginePhp.run(`<?php
+		vrzno_env('canvas')->dataset->cameraProbe = json_encode([
+			$camera->x, $camera->y, $camera->width, $camera->height, $camera->zoom
+		]);
+		`
+		);
+
+		return JSON.parse(module.canvas.dataset.cameraProbe);
+	});
+}
+
 async function open(page)
 {
 	await page.locator('canvas').focus();
@@ -79,9 +95,19 @@ test('pause menus keep simulation stopped while nested controls apply live', asy
 	await expect.poll(async() => (await state(page)).selected).toBe('settings');
 	await page.keyboard.press('Enter');
 	await expect.poll(async() => (await state(page)).title).toBe('Settings');
+	await page.evaluate(() => enginePhp.run('<?php $camera->x = 100; $camera->y = 50;'));
+	const beforeZoom = await camera(page);
+	const center = [
+		beforeZoom[0] + beforeZoom[2] / beforeZoom[4] / 2
+		, beforeZoom[1] + beforeZoom[3] / beforeZoom[4] / 2
+	];
+
 	await choose(page, 'zoom');
 	await page.keyboard.press('ArrowRight');
 	await expect.poll(async() => (await state(page)).values.zoom).toBe(1.25);
+	const afterZoom = await camera(page);
+	expect(afterZoom[0] + afterZoom[2] / afterZoom[4] / 2).toBeCloseTo(center[0]);
+	expect(afterZoom[1] + afterZoom[3] / afterZoom[4] / 2).toBeCloseTo(center[1]);
 	await choose(page, 'hints');
 	await page.keyboard.press('Space');
 	await expect.poll(async() => (await state(page)).values.hints).toBe(false);
