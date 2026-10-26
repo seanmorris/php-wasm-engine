@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "name": "@fixture/motion",
+  "version": "1.0.0",
+  "requires": {
+    "phonics": "^0.1.0"
+  },
+  "dependencies": {},
+  "php": {
+    "files": [
+      "game.php",
+      "module.php"
+    ],
+    "autoload": {}
+  },
+  "exports": {
+    "module": {
+      "type": "module",
+      "php": "module.php"
+    },
+    "game": {
+      "type": "game",
+      "php": "game.php",
+      "modules": [
+        "#module"
+      ]
+    },
+    "position": {
+      "type": "factory",
+      "class": "Fixture.Position",
+      "module": "#module"
+    }
+  },
+  "integrity": {
+    "game.php": "sha256-w6zPJZx2Ja3wd/9deZ/6ajGRfa7CMcscB2kPC+dcU1I=",
+    "module.php": "sha256-o5NujzWQ1jPvYqh07yrEdd7/wsTlkw77/wzwgBowlD0="
+  }
+}

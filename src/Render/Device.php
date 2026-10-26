@@ -1,12 +1,15 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
+/** Own an SDL window, GLES context, frame presentation, and browser context restoration. */
 final class Device
 {
+	/** Native SDL window handle used by input and buffer presentation. */
 	public $window;
 	private $context;
 	private bool $closed = false;
+	/** Graphics generation incremented whenever browser context restoration completes. */
 	public int $generation = 0;
 	private $canvas = null, $webgl = null, $lostListener = null, $restoredListener = null;
 	private bool $lost = false, $pendingRestore = false;
@@ -19,7 +22,7 @@ final class Device
 	 * @param string $title Native SDL window title.
 	 * @return void Acquires video/event resources and configures two-dimensional alpha blending.
 	 */
-	public function __construct(public int $width = 960, public int $height = 540, string $title = 'PHP WASM Engine')
+	public function __construct(public int $width = 960, public int $height = 540, string $title = 'Phonics')
 	{
 		if(!function_exists('glDrawArraysInstanced'))
 		{
@@ -124,6 +127,28 @@ final class Device
 			$this->pendingRestore = false;
 			$this->generation++;
 		}
+
+		return true;
+	}
+
+	/**
+	 * Resize the native window and browser drawing buffer.
+	 *
+	 * @param int $width Drawing-buffer width in physical pixels.
+	 * @param int $height Drawing-buffer height in physical pixels.
+	 * @return bool True when the dimensions changed.
+	 */
+	public function resize(int $width, int $height): bool
+	{
+		if($width < 1 || $height < 1)
+		throw new \InvalidArgumentException('Device dimensions must be positive');
+
+		if($this->closed || ($this->width === $width && $this->height === $height))
+		return false;
+
+		SDL_SetWindowSize($this->window, $width, $height);
+		$this->width = $width;
+		$this->height = $height;
 
 		return true;
 	}

@@ -12,6 +12,30 @@ class EcsSibling implements EcsTagged {}
 
 class EcsOther {}
 
+test('ECS type lookups preserve aliases, case variants and types defined after a miss', function() {
+	$r = new Registry;
+	$component = new EcsChild;
+	$id = $r->create($component);
+	check(Registry::canonical('EcsLateAlias') === 'EcsLateAlias');
+	check(!$r->has($id, 'EcsLateAlias'));
+	class_alias(EcsChild::class, 'EcsLateAlias');
+	class_alias(EcsTagged::class, 'EcsTaggedAlias');
+
+	for($iteration = 0; $iteration < 2; $iteration++)
+	{
+		foreach(['EcsLateAlias', 'ecslatealias', '\\EcsChild', 'ecschild', 'EcsTaggedAlias', EcsBase::class] as $type)
+		{
+			check($r->has($id, $type));
+			check($r->get($id, $type) === $component);
+			check($r->query($type) === [$id]);
+			check($r->query(Query::all($type)) === [$id]);
+		}
+	}
+
+	$r->remove($id, 'ecslatealias');
+	check(!$r->has($id, EcsChild::class));
+});
+
 test('ECS snapshots stay independent across callers, mutations and registries', function() {
 	$r = new Registry;
 	$empty = $r->create();

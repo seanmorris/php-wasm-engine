@@ -69,7 +69,7 @@ async function start(page, connected = true, step = 1/60)
 
 	await page.route('**/favicon.ico', route => route.fulfill({status: 204}));
 	await pads(page, connected);
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 
 	await page.evaluate(async ({version,step}) => {
@@ -407,7 +407,7 @@ test(
 		const errors = [];
 		page.on('pageerror', error => errors.push(error.message));
 		await pads(page);
-		await page.goto('/');
+		await page.goto('/sane-phonics/');
 		await page.waitForFunction(() => typeof window.bootEngine==='function');
 		await page.evaluate(profile => window.bootEngine({profile}), profile);
 
@@ -446,7 +446,7 @@ test('a jump somersaults without becoming a ground roll on landing', async({page
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await pads(page);
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 	await page.evaluate(() => window.bootEngine({profile: 'runner'}));
 
@@ -466,7 +466,7 @@ test('gamepad crouch and spindash break blocks after releasing Down', async({pag
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await pads(page);
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 	await page.evaluate(() => window.bootEngine({scene: 'breakables'}));
 

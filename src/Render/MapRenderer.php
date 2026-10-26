@@ -1,17 +1,19 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\
-{
-	TileMap,Chunk,Gid
-};
+namespace Phonics\Render;
+use Phonics\Tiled\TileMap;
+use Phonics\Tiled\Chunk;
+use Phonics\Tiled\Gid;
 
 /** RGBA8UI texture-array slices hold tile IDs, one instance per visible chunk/layer. */
 final class MapRenderer
 {
+	/** Owned tileset image and metadata atlas. */
 	public Atlas $atlas;
+	/** @var array{draws:int,instances:int,uploads:int} Latest tile-rendering statistics. */
 	public array $stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
 	private Program $program;
+	/** Optional owned renderer for Tiled image layers. */
 	public ?ImageRenderer $images = null;
 	private array $pages = [], $buffers = [], $vao = [],$gridRanges = [];
 	private array $layout = [];
@@ -175,7 +177,7 @@ final class MapRenderer
 			/**
 			 * Identify the layer, chunk, and painter index for layout-change detection.
 			 *
-			 * @param array{0:\PhpWasmEngine\Tiled\Layer,1:Chunk,2:int} $entry Layer/chunk pair and
+			 * @param array{0:\Phonics\Tiled\Layer,1:Chunk,2:int} $entry Layer/chunk pair and
 			 * its flattened map order.
 			 * @return array{0:int,1:int,2:int} Layer object ID, chunk object ID, and flattened
 			 * layer order.
@@ -238,7 +240,7 @@ final class MapRenderer
 	/**
 	 * Conservatively test a transformed chunk against the view, allowing oversized tiles.
 	 *
-	 * @param \PhpWasmEngine\Tiled\Layer $layer Layer supplying visibility, offsets, and parallax.
+	 * @param \Phonics\Tiled\Layer $layer Layer supplying visibility, offsets, and parallax.
 	 * @param Chunk $chunk Tile page whose projected bounds are tested.
 	 * @param Camera $camera Current viewport and world position.
 	 * @return bool True when a visible, nontransparent layer's chunk may contribute pixels.
@@ -282,7 +284,7 @@ final class MapRenderer
 	/**
 	 * Pack one chunk/layer instance for the tile shader.
 	 *
-	 * @param \PhpWasmEngine\Tiled\Layer $layer Layer supplying offsets, opacity, parallax factors,
+	 * @param \Phonics\Tiled\Layer $layer Layer supplying offsets, opacity, parallax factors,
 	 * and tint.
 	 * @param Chunk $chunk Tile page supplying map-local grid position.
 	 * @param int $slice Index of the chunk within its bound texture array.

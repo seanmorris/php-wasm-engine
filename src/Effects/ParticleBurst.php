@@ -1,14 +1,15 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Effects;
+namespace Phonics\Effects;
 
-use PhpWasmEngine\Render\Sprite;
-use PhpWasmEngine\Render\SpriteGroup;
-use PhpWasmEngine\Tiled\TileMap;
+use Phonics\Render\Sprite;
+use Phonics\Render\SpriteGroup;
+use Phonics\Tiled\TileMap;
 
 /** Cropped sprite shards with deterministic ballistic motion and a finite lifetime. */
 final class ParticleBurst
 {
+	/** Elapsed burst lifetime in seconds. */
 	public float $age = 0;
 
 	/**

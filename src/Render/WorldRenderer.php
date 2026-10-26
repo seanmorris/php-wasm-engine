@@ -1,11 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Asset\Assets;
-use PhpWasmEngine\Tiled\
-{
-	World,WorldStream
-};
+namespace Phonics\Render;
+use Phonics\Tiled\World;
+use Phonics\Tiled\WorldStream;
 
 /** Lazy GPU residency for a Tiled world. Scene order follows the world's maps list. */
 final class WorldRenderer
@@ -54,19 +51,19 @@ final class WorldRenderer
 			, $margin
 		) as $map
 		){
-			if(isset($this->resident[$map->path]) && $this->resident[$map->path][0]->map !== $map)
+			if(isset($this->resident[$map->identity]) && $this->resident[$map->identity][0]->map !== $map)
 			{
-				$this->resident[$map->path][0]->close();
-				unset($this->resident[$map->path]);
+				$this->resident[$map->identity][0]->close();
+				unset($this->resident[$map->identity]);
 			}
 
-			if(!isset($this->resident[$map->path]))
+			if(!isset($this->resident[$map->identity]))
 			{
-				$this->resident[$map->path] = [new MapRenderer($map),0];
+				$this->resident[$map->identity] = [new MapRenderer($map),0];
 			}
 
-			[$renderer] = $this->resident[$map->path];
-			$this->resident[$map->path][1] = $this->frame;
+			[$renderer] = $this->resident[$map->identity];
+			$this->resident[$map->identity][1] = $this->frame;
 			$stats['maps']++;
 			$backgroundEnd = count($map->layers);
 
@@ -79,7 +76,7 @@ final class WorldRenderer
 				}
 			}
 
-			$active[$map->path] = [$renderer,$backgroundEnd];
+			$active[$map->identity] = [$renderer,$backgroundEnd];
 		}
 
 		$this->backgroundMap = $this->selectBackground($active, $camera);
@@ -158,7 +155,7 @@ final class WorldRenderer
 
 		foreach($world->entries($x, $y, 0, 0) as $entry)
 		{
-			$path = Assets::relative($world->path, $entry['fileName']);
+			$path = $world->identity($entry);
 
 			if(isset($active[$path]))
 			{

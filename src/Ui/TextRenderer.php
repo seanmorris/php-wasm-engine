@@ -1,17 +1,17 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Ecs\Registry;
-use PhpWasmEngine\Gameplay\TextActor;
-use PhpWasmEngine\Render\Atlas;
-use PhpWasmEngine\Render\BitmapFont;
-use PhpWasmEngine\Render\Camera;
-use PhpWasmEngine\Render\RectRenderer;
-use PhpWasmEngine\Render\Sprite;
-use PhpWasmEngine\Render\SpriteRenderer;
+use Phonics\Ecs\Registry;
+use Phonics\Ui\TextActor;
+use Phonics\Render\Atlas;
+use Phonics\Render\BitmapFont;
+use Phonics\Render\Camera;
+use Phonics\Render\RectRenderer;
+use Phonics\Render\Sprite;
+use Phonics\Render\SpriteRenderer;
 
-/** Draw map text and MB2-style message overlays from the engine's shared bitmap font. */
+/** Draw map text and transient message overlays from the framework's shared bitmap font. */
 final class TextRenderer
 {
 	private SpriteRenderer $sprites;
@@ -19,16 +19,29 @@ final class TextRenderer
 	private bool $closed = false;
 	/** @var array<string,array{sprites:list<Sprite>,width:float,height:float}> */
 	private array $layouts = [];
+	/** @var array{worldActors:int,worldGlyphs:int,overlayGlyphs:int} Latest render counts. */
 	public array $snapshot = ['worldActors' => 0, 'worldGlyphs' => 0, 'overlayGlyphs' => 0];
 
-	/** The Atlas belongs to MenuRenderer; this renderer owns only its own GL programs and buffers. */
+	/**
+	 * The Atlas belongs to MenuRenderer; this renderer owns only its own GL programs and buffers.
+	 *
+	 * @param BitmapFont $font Bitmap font used to lay out text.
+	 * @param Atlas $atlas Shared texture atlas; ownership stays with its caller.
+	 * @return void Creates independent sprite and rectangle batch renderers over the borrowed atlas.
+	 */
 	public function __construct(private BitmapFont $font, Atlas $atlas)
 	{
 		$this->sprites = new SpriteRenderer($atlas);
 		$this->rects = new RectRenderer;
 	}
 
-	/** Render static, non-colliding TextActor components in the same camera plane as map sprites. */
+	/**
+	 * Render static, non-colliding TextActor components in the same camera plane as map sprites.
+	 *
+	 * @param Registry $registry Entity registry containing TextActor components.
+	 * @param Camera $camera Viewport used for world-to-screen conversion.
+	 * @return void Updates world counters and submits shadows followed by glyphs.
+	 */
 	public function renderActors(Registry $registry, Camera $camera): void
 	{
 		if($this->closed)
@@ -66,7 +79,14 @@ final class TextRenderer
 		$this->sprites->render([...$shadow, ...$glyphs], $camera);
 	}
 
-	/** Draw focus, demo, center, and dialog layers in screen space above gameplay. */
+	/**
+	 * Draw focus, demo, center, and dialog layers in screen space above gameplay.
+	 *
+	 * @param TextMessages $messages Renderer-independent overlay state to snapshot.
+	 * @param int $width Width in pixels.
+	 * @param int $height Height in pixels.
+	 * @return void Updates overlay counters and submits panels followed by glyphs.
+	 */
 	public function renderMessages(TextMessages $messages, int $width, int $height): void
 	{
 		if($this->closed)
@@ -89,20 +109,45 @@ final class TextRenderer
 			$measure = $this->layout($state['focus']['text'], $scale, $width * .76, $state['focus']['color'], 'center');
 			$x = floor(($width - min($width * .76, $measure['width'])) / 2);
 			$y = floor($height * .13);
+
 			$this->panelText(
-				$boxes, $glyphs, $state['focus']['text'], $x, $y, $scale, $state['focus']['color'], $pad
-				, max($measure['width'], 1), 'center'
+				$boxes
+				, $glyphs
+				, $state['focus']['text']
+				, $x
+				, $y
+				, $scale
+				, $state['focus']['color']
+				, $pad
+				, max($measure['width'], 1)
+				, 'center'
 			);
 		}
 
 		if($state['center'] !== null)
 		{
-			$measure = $this->layout($state['center']['text'], $scale * 1.25, $width * .8, $state['center']['color'], 'center');
+			$measure = $this->layout(
+				$state['center']['text']
+				, $scale * 1.25
+				, $width * .8
+				, $state['center']['color']
+				, 'center'
+			);
+
 			$x = floor(($width - min($width * .8, $measure['width'])) / 2);
 			$y = floor($height * .38);
+
 			$this->panelText(
-				$boxes, $glyphs, $state['center']['text'], $x, $y, $scale * 1.25, $state['center']['color'], $pad
-				, max($measure['width'], 1), 'center'
+				$boxes
+				, $glyphs
+				, $state['center']['text']
+				, $x
+				, $y
+				, $scale * 1.25
+				, $state['center']['color']
+				, $pad
+				, max($measure['width'], 1)
+				, 'center'
 			);
 		}
 
@@ -137,7 +182,18 @@ final class TextRenderer
 			if($dialog['speaker'] !== '')
 			{
 				$speakerAlign = $dialog['side'] === 'right' ? 'right' : 'left';
-				$this->append($glyphs, $dialog['speaker'], $textX, $y + $pad, $scale, [.55, .85, 1, 1], $wrap, $speakerAlign, $wrap);
+
+				$this->append(
+					$glyphs
+					, $dialog['speaker']
+					, $textX
+					, $y + $pad
+					, $scale
+					, [.55, .85, 1, 1]
+					, $wrap
+					, $speakerAlign
+					, $wrap
+				);
 			}
 
 			array_push($glyphs, ...$bodyGlyphs);
@@ -148,7 +204,11 @@ final class TextRenderer
 		$this->sprites->render($glyphs, new Camera(0, 0, $width, $height));
 	}
 
-	/** Rebuild program state after a browser WebGL context recovery. */
+	/**
+	 * Rebuild program state after a browser WebGL context recovery.
+	 *
+	 * @return void Recreates owned sprite and rectangle GPU state unless closed.
+	 */
 	public function restore(): void
 	{
 		if(!$this->closed)
@@ -158,7 +218,11 @@ final class TextRenderer
 		}
 	}
 
-	/** Release only GL resources owned by this renderer, not MenuRenderer's shared Atlas. */
+	/**
+	 * Release only GL resources owned by this renderer, not MenuRenderer's shared Atlas.
+	 *
+	 * @return void Permanently closes owned renderers and clears cached layouts.
+	 */
 	public function close(): void
 	{
 		if($this->closed)
@@ -172,18 +236,54 @@ final class TextRenderer
 		$this->rects->close();
 	}
 
-	/** @return array{sprites:list<Sprite>,width:float,height:float} Cached origin-relative glyph layout. */
+	/**
+	 * Lay out text using cached bitmap glyph metrics.
+	 *
+	 * @param string $text Text content to display.
+	 * @param float $scale Positive text scale.
+	 * @param float $wrap Wrap value used by this operation.
+	 * @param array $color Text or panel color.
+	 * @param string $align Horizontal text alignment.
+	 * @return array{sprites:list<Sprite>,width:float,height:float} Cached origin-relative glyph layout.
+	 */
 	private function layout(string $text, float $scale, float $wrap, array $color, string $align): array
 	{
 		$key = serialize([$text, $scale, $wrap, $color, $align, $this->font->theme]);
 
-		return $this->layouts[$key] ??= $this->font->layout($text, $scale, $wrap, $color, $align, is_finite($wrap) ? $wrap : null);
+		return $this->layouts[$key] ??= $this->font->layout(
+			$text
+			, $scale
+			, $wrap
+			, $color
+			, $align
+			, is_finite($wrap) ? $wrap : null
+		);
 	}
 
-	/** @return array{sprites:list<Sprite>,width:float,height:float} */
+	/**
+	 * Append glyph instances to the current render batch.
+	 *
+	 * @param array $target Target value used by this operation.
+	 * @param string $text Text content to display.
+	 * @param float $x World X coordinate in pixels.
+	 * @param float $y World Y coordinate in pixels.
+	 * @param float $scale Positive text scale.
+	 * @param array $color Text or panel color.
+	 * @param float $wrap Wrap value used by this operation.
+	 * @param string $align Horizontal text alignment.
+	 * @param float|null $alignWidth Align Width value used by this operation.
+	 * @return array{sprites:list<Sprite>,width:float,height:float} Result of this operation.
+	 */
 	private function append(
-		array &$target, string $text, float $x, float $y, float $scale, array $color, float $wrap = INF
-		, string $align = 'left', ?float $alignWidth = null
+		array &$target
+		, string $text
+		, float $x
+		, float $y
+		, float $scale
+		, array $color
+		, float $wrap = INF
+		, string $align = 'left'
+		, ?float $alignWidth = null
 	): array {
 		$layout = $this->font->layout($text, $scale, $wrap, $color, $align, $alignWidth);
 
@@ -198,10 +298,32 @@ final class TextRenderer
 		return $layout;
 	}
 
-	/** Add a compact dark backing rectangle and its text to an overlay batch. */
+	/**
+	 * Add a compact dark backing rectangle and its text to an overlay batch.
+	 *
+	 * @param array $boxes Boxes value used by this operation.
+	 * @param array $glyphs Glyphs value used by this operation.
+	 * @param string $text Text content to display.
+	 * @param float $x World X coordinate in pixels.
+	 * @param float $y World Y coordinate in pixels.
+	 * @param float $scale Positive text scale.
+	 * @param array $color Text or panel color.
+	 * @param float $pad Pad value used by this operation.
+	 * @param float $wrap Wrap value used by this operation.
+	 * @param string $align Horizontal text alignment.
+	 * @return void Completes the operation.
+	 */
 	private function panelText(
-		array &$boxes, array &$glyphs, string $text, float $x, float $y, float $scale, array $color
-		, float $pad, float $wrap = INF, string $align = 'left'
+		array &$boxes
+		, array &$glyphs
+		, string $text
+		, float $x
+		, float $y
+		, float $scale
+		, array $color
+		, float $pad
+		, float $wrap = INF
+		, string $align = 'left'
 	): void {
 		$layout = $this->layout($text, $scale, $wrap, $color, $align);
 		$panelWidth = is_finite($wrap) ? min($wrap, max(1, $layout['width'])) : max(1, $layout['width']);

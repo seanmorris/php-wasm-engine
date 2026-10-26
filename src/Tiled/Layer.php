@@ -1,19 +1,43 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
+namespace Phonics\Tiled;
 
+/** Flattened Tiled tile, object, or image layer with inherited display properties. */
 final class Layer
 {
+	/** @var list<Chunk> Sparse tile chunks in authored order. */
 	public array $chunks = [];
+	/** @var list<array<string,mixed>> Translated Tiled objects in authored order. */
 	public array $objects = [];
+	/** @var array<string,mixed> Inherited custom properties keyed by name. */
 	public array $properties = [];
+	/** Effective visibility after flattening parent groups. */
 	public bool $visible = true;
-	public float $offsetX = 0, $offsetY = 0, $opacity = 1, $parallaxX = 1, $parallaxY = 1;
+	/** Accumulated horizontal world-pixel offset. */
+	public float $offsetX = 0;
+	/** Accumulated vertical world-pixel offset. */
+	public float $offsetY = 0;
+	/** Accumulated normalized layer opacity. */
+	public float $opacity = 1;
+	/** Accumulated horizontal camera parallax factor. */
+	public float $parallaxX = 1;
+	/** Accumulated vertical camera parallax factor. */
+	public float $parallaxY = 1;
+	/** @var array{float,float,float,float} Accumulated normalized RGBA tint. */
 	public array $tint = [1,1,1,1];
+	/** Canonical source URL of an image layer, or null for other layer kinds. */
 	public ?string $image = null;
-	public int $imageWidth = 0, $imageHeight = 0;
-	public bool $repeatX = false, $repeatY = false;
+	/** Native pixel width of the current image-layer frame. */
+	public int $imageWidth = 0;
+	/** Native pixel height of the current image-layer frame. */
+	public int $imageHeight = 0;
+	/** Whether the image repeats across the horizontal world axis. */
+	public bool $repeatX = false;
+	/** Whether the image repeats across the vertical world axis. */
+	public bool $repeatY = false;
+	/** @var list<array{image:string,duration:float}> Optional timed image-layer frames. */
 	public array $imageFrames = [];
+	/** @var array{float,float,float,float}|null Color-key RGBA value removed during upload. */
 	public ?array $transparentColor = null;
 
 	/**

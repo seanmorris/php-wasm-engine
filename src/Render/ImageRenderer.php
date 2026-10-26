@@ -1,10 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\
-{
-	Layer,TileMap
-};
+namespace Phonics\Render;
+use Phonics\Tiled\Layer;
+use Phonics\Tiled\TileMap;
 
 /** Repeats images in the fragment shader: one quad per layer, regardless of camera size. */
 final class ImageRenderer
@@ -12,7 +10,10 @@ final class ImageRenderer
 	private Program $program;
 	private array $vao = [], $textures = [], $heights = [];
 	private bool $closed = false;
-	public int $draws = 0, $uploads = 0;
+	/** Image-layer draw calls submitted during the latest render. */
+	public int $draws = 0;
+	/** Image textures uploaded during the latest render preparation. */
+	public int $uploads = 0;
 
 	/**
 	 * Create a shader and vertex array for the map's repeating image layers.
@@ -53,7 +54,7 @@ final class ImageRenderer
 			return $this->textures[$path];
 		}
 
-		$source = IMG_Load($path);
+		$source = IMG_Load(\Phonics\Asset\Resource::local($path));
 
 		if(!$source)
 		{

@@ -1,9 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Effects;
+namespace Phonics\Effects;
 
-use PhpWasmEngine\Ecs\Registry;
+use Phonics\Ecs\Registry;
 
+/** Advance every ParticleBurst component and retire completed particle entities. */
 final class ParticleSystem
 {
 

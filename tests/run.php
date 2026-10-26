@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/autoload.php';
+require dirname(__DIR__) . '/packages/sane-phonics/autoload.php';
 
 use PhpWasmEngine\Asset\Assets;
 use PhpWasmEngine\Tiled\Gid;
@@ -538,37 +539,38 @@ test('climbers detach when a ledge top has no standing clearance', function() {
 	check($body->x < 100, 'blocked clearance must not place the climber inside the ledge');
 });
 
-require __DIR__ . '/physics.php';
-require __DIR__ . '/loops.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/physics.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/loops.php';
 require __DIR__ . '/integration.php';
 require __DIR__ . '/sprites.php';
 require __DIR__ . '/parallax.php';
 require __DIR__ . '/world.php';
 require __DIR__ . '/input.php';
-require __DIR__ . '/air-control.php';
-require __DIR__ . '/gravity.php';
+require __DIR__ . '/action-input.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/air-control.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/gravity.php';
 require __DIR__ . '/sequences.php';
 require __DIR__ . '/ecs.php';
-require __DIR__ . '/breakables.php';
-require __DIR__ . '/rolling-breakables.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/breakables.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/rolling-breakables.php';
 require __DIR__ . '/menus.php';
 require __DIR__ . '/cards.php';
-require __DIR__ . '/debug-overlay.php';
-require __DIR__ . '/rings.php';
-require __DIR__ . '/light-dash.php';
-require __DIR__ . '/grapples.php';
-require __DIR__ . '/vehicles.php';
-require __DIR__ . '/badniks.php';
-require __DIR__ . '/mini-bosses.php';
-require __DIR__ . '/boss-regions.php';
-require __DIR__ . '/platform-camera.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/debug-overlay.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/rings.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/light-dash.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/grapples.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/vehicles.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/badniks.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/mini-bosses.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/boss-regions.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/platform-camera.php';
 require __DIR__ . '/motion-blur.php';
-require __DIR__ . '/monitors.php';
-require __DIR__ . '/shields.php';
-require __DIR__ . '/grinding.php';
-require __DIR__ . '/water.php';
-require __DIR__ . '/platforms.php';
-require __DIR__ . '/bridges.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/monitors.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/shields.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/grinding.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/water.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/platforms.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/bridges.php';
 require __DIR__ . '/text.php';
 
 $failed = 0;

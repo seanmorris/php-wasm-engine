@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/color",
+  "version": "1.0.0",
+  "files": [
+    "module.php",
+    "tuning.json",
+    "phonics.json"
+  ]
+}

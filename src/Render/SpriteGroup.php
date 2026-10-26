@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
-use PhpWasmEngine\Ecs\Query;
-use PhpWasmEngine\Ecs\Registry;
+use Phonics\Ecs\Query;
+use Phonics\Ecs\Registry;
 
 /** Several independently positioned sprites attached to one entity. */
 final class SpriteGroup

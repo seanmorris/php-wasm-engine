@@ -1,9 +1,14 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Physics;
+namespace Phonics\Physics;
 
+/** Earliest continuous terrain contact, its surface normal, ownership, and metadata. */
 final class Hit
 {
+	/** Deprecated platformer annotation retained until 1.0. */
+	public bool $grinding;
+	/** Uninterpreted surface metadata supplied by the geometry owner. */
+	public array $metadata;
 
 	/**
 	 * Record the earliest terrain contact from a continuous collision query.
@@ -15,7 +20,7 @@ final class Hit
 	 * @param float $ny Y component of the outward unit surface normal.
 	 * @param bool $oneWay Whether the contacted edge belongs to a one-way platform.
 	 * @param int|null $shape Removable terrain handle, or null for permanent geometry.
-	 * @param bool $grinding Whether the surface is an annotated grinding rail.
+	 * @param array|bool $grinding Surface metadata, or a legacy boolean annotation.
 	 * @return void Stores the contact data without modifying terrain or a body.
 	 */
 	public function __construct(
@@ -26,7 +31,9 @@ final class Hit
 		, public float $ny
 		, public bool $oneWay = false
 		, public ?int $shape = null
-		, public bool $grinding = false
+		, array|bool $grinding = false
 	){
+		$this->metadata = is_array($grinding) ? $grinding : [];
+		$this->grinding = is_bool($grinding) ? $grinding : (bool)($grinding['grinding'] ?? false);
 	}
 }

@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
+/** Mutable world-space view rectangle and world-to-screen magnification. */
 final class Camera
 {
 

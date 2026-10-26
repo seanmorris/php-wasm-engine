@@ -10,11 +10,20 @@ test('Tiled TextActor objects preserve inherited coordinates, color, and level o
 	$loader = fixture([
 		'text.tmj' => mapData([
 			[
-				'id' => 4, 'name' => 'Labels', 'type' => 'objectgroup', 'offsetx' => 5, 'offsety' => 7
-				, 'opacity' => .5, 'tintcolor' => '#80FFFFFF'
+				'id' => 4
+				, 'name' => 'Labels'
+				, 'type' => 'objectgroup'
+				, 'offsetx' => 5
+				, 'offsety' => 7
+				, 'opacity' => .5
+				, 'tintcolor' => '#80FFFFFF'
 				, 'objects' => [
 					[
-						'id' => 12, 'class' => 'text-actor', 'x' => 20, 'y' => 30, 'width' => 160
+						'id' => 12
+						, 'class' => 'text-actor'
+						, 'x' => 20
+						, 'y' => 30
+						, 'width' => 160
 						, 'properties' => [
 							['name' => 'content', 'value' => 'HELLO']
 							, ['name' => 'color', 'value' => '#80FF8040']
@@ -23,14 +32,22 @@ test('Tiled TextActor objects preserve inherited coordinates, color, and level o
 						]
 					]
 					, ['id' => 13, 'class' => 'TextActor', 'x' => 1, 'y' => 2, 'text' => ['text' => 'NATIVE']]
-					, ['id' => 14, 'class' => 'TextActor', 'x' => 1, 'y' => 2, 'visible' => false, 'properties' => [
-						['name' => 'content', 'value' => 'HIDDEN']
-					]]
+					, [
+						'id' => 14
+						, 'class' => 'TextActor'
+						, 'x' => 1
+						, 'y' => 2
+						, 'visible' => false
+						, 'properties' => [
+							['name' => 'content', 'value' => 'HIDDEN']
+						]
+					]
 				]
 			]
 		])
 		, 'tiles.tsj' => tiles()
 	]);
+
 	$map = $loader->map('text.tmj');
 	$map->x = 100;
 	$map->y = 200;
@@ -40,8 +57,14 @@ test('Tiled TextActor objects preserve inherited coordinates, color, and level o
 	check(count($ids) === 2 && !$actors->isEmpty());
 	$first = $registry->get($ids[0], TextActor::class);
 	check($first->text === 'HELLO' && $first->sourceId === 12 && $first->align === 'center');
-	near($first->x, 125); near($first->y, 237); near($first->width, 160); near($first->scale, 1.5);
-	near($first->opacity, .5); near($first->tint[0], 1); near($first->tint[1], 128 / 255); near($first->tint[2], 64 / 255);
+	near($first->x, 125);
+	near($first->y, 237);
+	near($first->width, 160);
+	near($first->scale, 1.5);
+	near($first->opacity, .5);
+	near($first->tint[0], 1);
+	near($first->tint[1], 128 / 255);
+	near($first->tint[2], 64 / 255);
 	near($first->tint[3], 64 / 255);
 	check($registry->get($ids[1], TextActor::class)->text === 'NATIVE');
 	$actors->close();

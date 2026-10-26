@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
-use PhpWasmEngine\Asset\Assets;
+namespace Phonics\Tiled;
+use Phonics\Asset\Assets;
 
+/** Load, normalize, cache, and provenance-track supported Tiled JSON resources. */
 final class Loader
 {
 	private array $maps = [];
+	/** Byte and decoded-JSON cache used for maps, worlds, templates, tilesets, and images. */
 	public Assets $assets;
 
 	/**
@@ -26,20 +28,23 @@ final class Loader
 	 */
 	public function map(string $path): TileMap
 	{
+		$path = \Phonics\Asset\Resource::source($path);
+
 		if(isset($this->maps[$path]))
 		{
 			return $this->maps[$path];
 		}
 
 		$data = $this->assets->json($path);
-		$map = new TileMap($path, $data);
+		$map = new TileMap(self::properties($data['properties'] ?? [])['phonics.source'] ?? $path, $data);
 
 		foreach($data['tilesets'] ?? [] as $entry)
 		{
 			$source = isset($entry['source'])?Assets::relative($path, $entry['source']):$path;
 			$set = isset($entry['source'])?$this->assets->json($source):$entry;
+			$set['sourceUrl'] = self::properties($set['properties'] ?? [])['phonics.source'] ?? $source;
 			$set['firstgid'] = (int)$entry['firstgid'];
-			$set['definitions'] = $this->definitions($set, $source);
+			$set['definitions'] = $this->definitions($set, $set['sourceUrl']);
 			$map->tilesets[] = $set;
 		}
 
@@ -154,10 +159,16 @@ final class Loader
 
 			$definitions[$id]['image'] = Assets::relative(
 				$path
-				, $tile['image'] ?? $set['image'] ?? throw new \UnexpectedValueException('Tile has no image')
+				, self::properties($tile['properties'] ?? [])['phonics.source.image'] ?? self::properties(
+					$set['properties'] ?? []
+				)['phonics.source.image'] ?? $tile['image'] ?? $set['image'] ?? throw new \UnexpectedValueException(
+					'Tile has no image'
+				)
 			);
 
-			$definitions[$id]['properties'] = self::properties($tile['properties'] ?? []);
+			$definitions[$id]['sourceUrl'] = $path;
+			$definitions[$id]['propertyRecords'] = self::propertyRecords($tile['properties'] ?? [], $path);
+			$definitions[$id]['properties'] = self::properties($definitions[$id]['propertyRecords']);
 		}
 
 		return $definitions;
@@ -196,7 +207,11 @@ final class Loader
 			}
 
 			unset($value);
-			$layer->properties = self::properties($data['properties'] ?? []);
+
+			$layer->properties = array_replace(
+				$parent?->properties ?? []
+				, self::properties(self::propertyRecords($data['properties'] ?? [], $map->path))
+			);
 
 			if($data['type'] === 'group')
 			{
@@ -254,11 +269,21 @@ final class Loader
 			}
 			elseif($data['type'] === 'objectgroup')
 			{
-				$layer->objects = $data['objects'] ?? [];
+				$layer->objects = array_map(/**
+				 * Apply the registered component factory.
+				 *
+				 * @param mixed $object Tiled object definition to resolve.
+				 * @return mixed Result of this operation.
+				 */
+					fn($object) => $this->object($object, $map), $data['objects'] ?? []
+				);
 			}
 			elseif($data['type'] === 'imagelayer')
 			{
-				$layer->image = isset($data['image'])?Assets::relative($map->path, $data['image']) : null;
+				$layer->image = isset($data['image'])
+					? Assets::relative($map->path, $layer->properties['phonics.source.image'] ?? $data['image'])
+					: null;
+
 				$layer->imageWidth = (int)($data['imagewidth'] ?? 0);
 				$layer->imageHeight = (int)($data['imageheight'] ?? 0);
 				$layer->repeatX = (bool)($data['repeatx'] ?? isset($layer->properties['from']));
@@ -315,6 +340,103 @@ final class Loader
 
 			$map->layers[] = $layer;
 		}
+	}
+
+	/**
+	 * Preserve the declaring source when properties are inherited or merged.
+	 *
+	 * @param list<array<string,mixed>> $properties Typed Tiled property records.
+	 * @param string $source Canonical URL of the declaring resource.
+	 * @return list<array<string,mixed>> Property records carrying canonical declaring identity.
+	 */
+	public static function propertyRecords(array $properties, string $source): array
+	{
+		$values = self::properties($properties);
+
+		foreach($properties as &$property)
+		{
+			$property['source'] ??= $source;
+
+			if(($property['type'] ?? '') === 'file'
+				|| (($property['name'] ?? '') === 'phonics.entity' && !str_starts_with($property['value'], '@'))
+			)
+			$property['value'] = Assets::relative(
+				$property['source']
+				, $values['phonics.source.property.' . $property['name']] ?? $property['value']
+			);
+		}
+
+		unset($property);
+
+		return $properties;
+	}
+
+	/**
+	 * Resolve templates and tile defaults before applying instance properties.
+	 *
+	 * @param array $object Tiled object definition to resolve.
+	 * @param TileMap $map Loaded Tiled map defining this stage.
+	 * @param array $chain Canonical template references already being resolved.
+	 * @param string|null $source Canonical URL of the declaring resource.
+	 * @return array Result of this operation.
+	 */
+	private function object(array $object, TileMap $map, array $chain = [], ?string $source = null): array
+	{
+		$source ??= $map->path;
+		$source = self::properties($object['properties'] ?? [])['phonics.source'] ?? $source;
+		$object['properties'] = self::propertyRecords($object['properties'] ?? [], $source);
+		$defaults = [];
+
+		if(isset($object['template']))
+		{
+			$template = Assets::relative(
+				$source
+				, self::properties($object['properties'] ?? [])['phonics.source.template'] ?? $object['template']
+			);
+
+			if(in_array($template, $chain, true))
+			throw new \LogicException('Template cycle: ' . implode(' -> ', [...$chain, $template]));
+
+			$data = $this->assets->json($template);
+			$defaults = $this->object($data['object'], $map, [...$chain, $template], $template);
+
+			if(isset($defaults['gid'], $data['tileset']['source']))
+			{
+				$setSource = Assets::relative($template, $data['tileset']['source']);
+				$found = false;
+
+				foreach($map->tilesets as $set)
+				{
+					if($set['sourceUrl'] !== $setSource) continue;
+
+					$defaults['gid'] += $set['firstgid'] - $data['tileset']['firstgid'];
+					$found = true;
+				}
+
+				if(!$found)
+				throw new \UnexpectedValueException("Template tileset $setSource missing from {$map->path}");
+			}
+
+			unset($object['template']);
+		}
+
+		$tile = isset($object['gid']) ? $map->tile(Gid::from($object['gid'])->id) : null;
+		$properties = [];
+
+		foreach([
+			...($tile['propertyRecords'] ?? [])
+			, ...($defaults['properties'] ?? [])
+			, ...$object['properties']
+		] as $p)
+		$properties[$p['name']] = $p;
+		$result = $object + $defaults;
+		$result['properties'] = array_values($properties);
+		$result['sourceUrl'] = $source;
+
+		if(!isset($result['class']) && !isset($result['type']) && $tile)
+		$result['class'] = $tile['class'] ?? $tile['type'] ?? '';
+
+		return $result;
 	}
 
 	/**

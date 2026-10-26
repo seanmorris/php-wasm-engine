@@ -1,12 +1,14 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
-use PhpWasmEngine\Asset\Assets;
-use PhpWasmEngine\Spatial\BoundsIndex;
+namespace Phonics\Tiled;
+use Phonics\Asset\Assets;
+use Phonics\Spatial\BoundsIndex;
 
+/** Indexed explicit Tiled world manifest with independent mutable map placements. */
 final class World
 {
 	private BoundsIndex $index;
+	private array $placements = [], $sources = [];
 
 	/**
 	 * Create a world bounds index from an explicit map manifest.
@@ -32,7 +34,7 @@ final class World
 	/**
 	 * Rebuild the spatial index after editing manifest bounds.
 	 *
-	 * @return void Validates unique map filenames and finite nonnegative bounds without loading
+	 * @return void Validates unique map placements and finite nonnegative bounds without loading
 	 * maps.
 	 */
 	public function reindex(): void
@@ -60,11 +62,11 @@ final class World
 				throw new \UnexpectedValueException('World map dimensions must be nonnegative');
 			}
 
-			$path = Assets::relative($this->path, $entry['fileName']);
+			$path = Assets::relative($this->path, $entry['fileName']) . ':' . $entry['x'] . ':' . $entry['y'];
 
 			if(isset($seen[$path]))
 			{
-				throw new \UnexpectedValueException('World map filenames must be unique');
+				throw new \UnexpectedValueException('World map placements must be unique');
 			}
 
 			$seen[$path] = true;
@@ -94,6 +96,13 @@ final class World
 
 		unset($entry);
 		$this->index = new BoundsIndex($indexed);
+		$this->sources = [];
+
+		foreach($this->data['maps'] ?? [] as $entry)
+		{
+			$source = Assets::relative($this->path, $entry['fileName']);
+			$this->sources[$source] = ($this->sources[$source] ?? 0) + 1;
+		}
 	}
 
 	/**
@@ -138,6 +147,20 @@ final class World
 	}
 
 	/**
+	 * Distinguish repeated placements while retaining legacy keys for unique map sources.
+	 * @param array $entry Map filename and authored placement.
+	 * @return string Opaque placement identifier, separate from the source URL.
+	 */
+	public function identity(array $entry): string
+	{
+		$source = Assets::relative($this->path, $entry['fileName']);
+
+		return ($this->sources[$source] ?? 0) > 1
+			? $source . '@[' . $entry['x'] . ',' . $entry['y'] . ']'
+			: $source;
+	}
+
+	/**
 	 * Load one manifest entry and apply its world placement to the cached map.
 	 *
 	 * @param array<string,mixed> $entry Manifest record containing fileName and world x/y
@@ -146,7 +169,10 @@ final class World
 	 */
 	public function load(array $entry): TileMap
 	{
-		$map = $this->loader->map(Assets::relative($this->path, $entry['fileName']));
+		$source = Assets::relative($this->path, $entry['fileName']);
+		$key = $source . ':' . $entry['x'] . ':' . $entry['y'];
+		$map = $this->placements[$key] ??= clone $this->loader->map($source);
+		$map->identity = $this->identity($entry);
 		$map->x = (float)$entry['x'];
 		$map->y = (float)$entry['y'];
 
@@ -180,11 +206,20 @@ final class World
 	/**
 	 * Invalidate a map cache entry without releasing shared dependencies.
 	 *
-	 * @param string $fileName Map filename relative to the world manifest, or an absolute path.
+	 * @param string|array $fileName Source filename, or one placement record to evict independently.
 	 * @return void Removes the cached map and its source bytes/JSON.
 	 */
-	public function unload(string $fileName): void
+	public function unload(string|array $fileName): void
 	{
-		$this->loader->forget(Assets::relative($this->path, $fileName));
+		$source = Assets::relative($this->path, is_array($fileName) ? $fileName['fileName'] : $fileName);
+
+		if(is_array($fileName)) unset($this->placements[$source . ':' . $fileName['x'] . ':' . $fileName['y']]);
+		else
+		foreach($this->placements as $key => $map)
+		if(str_starts_with($key, $source . ':'))
+		unset($this->placements[$key]);
+
+		foreach($this->placements as $key => $map) if(str_starts_with($key, $source . ':')) return;
+		$this->loader->forget($source);
 	}
 }

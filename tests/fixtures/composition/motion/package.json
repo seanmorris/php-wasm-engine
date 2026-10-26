@@ -1,0 +1,9 @@
+{
+  "name": "@fixture/motion",
+  "version": "1.0.0",
+  "files": [
+    "game.php",
+    "module.php",
+    "phonics.json"
+  ]
+}

@@ -1,16 +1,33 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ecs;
+namespace Phonics\Ecs;
 
 /** Object components, stable entity IDs, type indexes, snapshot queries. */
 final class Registry
 {
+	private static array $canonicalNames = [];
 	private int $next = 1;
 	private array $entities = [], $index = [], $commands = [], $listeners = [];
 	private array $typeCache = [], $queryCache = [];
 	private int $cachedIds = 0;
 	private const QUERY_CACHE_ENTRIES = 64;
 	private const QUERY_CACHE_IDS = 131072;
+
+	/**
+	 * Normalize aliases before using a component name as an index key.
+	 * @param string $type Class or interface name, including a legacy alias.
+	 * @return string Canonical declared name, or the unresolved name.
+	 */
+	public static function canonical(string $type): string
+	{
+		if(isset(self::$canonicalNames[$type])) return self::$canonicalNames[$type];
+
+		// Loaded types and aliases cannot change their declared name. Do not cache
+		// misses: a later package or autoloader may still define that component.
+		if(!class_exists($type) && !interface_exists($type)) return $type;
+
+		return self::$canonicalNames[$type] = (new \ReflectionClass($type))->getName();
+	}
 
 	/**
 	 * Allocate a stable entity ID and attach its initial components.
@@ -84,6 +101,7 @@ final class Registry
 	 */
 	public function remove(int $id, string $type): void
 	{
+		$type = self::canonical($type);
 		$this->requireEntity($id);
 
 		foreach($this->entities[$id] as $class => $component)
@@ -139,6 +157,7 @@ final class Registry
 	 */
 	public function get(int $id, string $type): object
 	{
+		$type = self::canonical($type);
 		$this->requireEntity($id);
 
 		if(isset($this->entities[$id][$type]))
@@ -164,7 +183,7 @@ final class Registry
 	 * @param class-string $type Component class, parent class, or interface.
 	 * @return bool True when at least one attached component matches the type.
 	 */
-	public function has(int $id, string $type): bool { return isset($this->index[$type][$id]); }
+	public function has(int $id, string $type): bool { return isset($this->index[self::canonical($type)][$id]); }
 
 	/**
 	 * Take a snapshot of live entity IDs matching a type or boolean query.
@@ -176,7 +195,7 @@ final class Registry
 	{
 		if(is_string($query))
 		{
-			return array_keys($this->index[$query] ?? []);
+			return array_keys($this->index[self::canonical($query)] ?? []);
 		}
 
 		if(!$query instanceof Query)
@@ -200,7 +219,7 @@ final class Registry
 			{
 				if(is_string($term))
 				{
-					$ids = $this->index[$term] ?? [];
+					$ids = $this->index[self::canonical($term)] ?? [];
 
 					if(count($ids) < count($candidates))
 					{
@@ -241,7 +260,7 @@ final class Registry
 	{
 		if(is_string($query))
 		{
-			return $this->index[$query] ?? [];
+			return $this->index[self::canonical($query)] ?? [];
 		}
 
 		if(!in_array($query->operation, ['all', 'any', 'not'], true))

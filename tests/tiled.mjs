@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,readdirSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {basename,dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -10,7 +10,15 @@ const assets = fileURLToPath(new URL('../examples/assets/', import.meta.url));
 
 const read = path => JSON.parse(readFileSync(path, 'utf8'));
 
-const properties = value => Object.fromEntries((value??[]).map(p => [p.name,p.value]));
+const properties = value => Object.fromEntries(
+	(value??[]).map(
+		p => [p.name
+			, p.type === 'color'
+				? (p.value.length === 7 ? '#ff' + p.value.slice(1) : p.value).toLowerCase()
+				: p.value
+		]
+	)
+);
 
 const sourcePath = (file, relative) => resolve(dirname(file), relative);
 
@@ -188,3 +196,90 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tsj')))
 		});
 	});
 }
+
+const campaign = fileURLToPath(new URL('../packages/php-noid/worlds/', import.meta.url));
+
+for(const name of readdirSync(campaign).filter(name => name.endsWith('.tmj')))
+{
+	test('Tiled preserves PhpNoid ' + name + ' entity factories and typed configuration', () => {
+		roundTrip(join(campaign, name), 'map', (before, after) => {
+			assert.deepEqual(properties(after.properties), properties(before.properties));
+			assert.equal(after.layers.length, before.layers.length);
+
+			before.layers.forEach((layer, i) => {
+				if(layer.type === 'objectgroup') objects(layer.objects, after.layers[i].objects);
+				else if(layer.type === 'tilelayer') assert.deepEqual(cells(after.layers[i]), cells(layer));
+			});
+		});
+	});
+}
+
+test('Tiled saves template references and provenance on supported object properties', () => {
+	const directory = mkdtempSync(join(tmpdir(), 'phonics-template-'));
+
+	try
+	{
+		const template = {
+			type: 'template'
+			, object: {
+				type: 'Fixture.Actor'
+				, width: 24
+				, height: 24
+				, properties: [
+					{name: 'phonics.source',type: 'string',value: 'https://cdn.test/templates/actor.tx'}
+					, {name: 'phonics.entity',type: 'string',value: 'https://cdn.test/phonics.json#actor'}
+					, {name: 'speed',type: 'float',value: 3.5}
+					, {name: 'texture',type: 'file',value: '../image.png'}
+				]
+			}
+		};
+
+		writeFileSync(join(directory, 'actor.tx'), JSON.stringify(template));
+		const file = join(directory, 'level.tmj');
+
+		writeFileSync(
+			file
+			, JSON.stringify({
+				type: 'map'
+				, orientation: 'orthogonal'
+				, width: 10
+				, height: 10
+				, tilewidth: 16
+				, tileheight: 16
+				, layers: [{type: 'objectgroup',id: 1,objects: [{id: 1,template: 'actor.tx',x: 30,y: 40}]}]
+				, tilesets: []
+			})
+		);
+
+		roundTrip(file, 'map', (_before, after, exported) => {
+			const object = after.layers[0].objects[0];
+			assert.equal(sourcePath(exported, object.template), join(directory, 'actor.tx'));
+			assert.deepEqual(read(join(directory, 'actor.tx')), template);
+
+			roundTrip(exported, 'map', (_first, reopened) => {
+				assert.equal(reopened.layers[0].objects[0].x, 30);
+			});
+		});
+	}
+	finally
+	{
+		rmSync(directory, {recursive: true,force: true});
+	}
+});
+
+test('PHPTris challenge grids and typed properties survive Tiled export', () => {
+	for(const mode of ['endless','race','time','squares','cascade','targets','bonds','reactor'])
+	{
+		const file = resolve('packages/php-tris/worlds', mode + '-01.tmj');
+
+		roundTrip(file, 'map', (before, after) => {
+			assert.deepEqual(properties(after.properties), properties(before.properties));
+			assert.deepEqual(after.layers[0].data, before.layers[0].data);
+
+			assert.deepEqual(
+				properties(after.layers[1].objects[0].properties)
+				, properties(before.layers[1].objects[0].properties)
+			);
+		});
+	}
+});

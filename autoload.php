@@ -1,27 +1,28 @@
 <?php
 declare(strict_types=1);
 
-spl_autoload_register(
-	/**
-	 * Load an engine class from its namespace-relative PHP source file.
-	 *
-	 * @param string $class Fully qualified class name requested by PHP.
-	 * @return void Requires an existing engine class file; unrelated or missing classes are left to
-	 * other loaders.
-	 */
+/** Register the neutral framework and its pre-1.0 aliases. Games register their own aliases. */
+spl_autoload_register(/**
+ * Apply the registered session callback.
+ *
+ * @param string $class Fully qualified class or factory name.
+ * @return void Completes the operation.
+ */
 	static function(string $class): void {
-		$prefix = 'PhpWasmEngine\\';
+		$aliases = require __DIR__ . '/legacy.php';
+		$target = $aliases[$class] ?? $class;
 
-		if(strncmp($class, $prefix, strlen($prefix)) !== 0)
+		if(!str_starts_with($target, 'Phonics\\')) return;
+
+		$file = __DIR__ . '/src/' . str_replace('\\', '/', substr($target, 8)) . '.php';
+
+		if(is_file($file)) require_once $file;
+
+		foreach($aliases as $old => $canonical)
 		{
-			return;
-		}
-
-		$file = __DIR__ . '/src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-
-		if(is_file($file))
-		{
-			require $file;
+			if($canonical === $target && !class_exists($old, false) && !interface_exists($old, false)
+				&& (class_exists($target, false) || interface_exists($target, false))
+			) class_alias($target, $old);
 		}
 	}
 );

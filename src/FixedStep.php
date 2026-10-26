@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine;
+namespace Phonics;
 
+/** Bounded fixed-step accumulator with interpolation and dropped-stall accounting. */
 final class FixedStep
 {
 	private float $accumulator = 0;
+	/** Total elapsed seconds discarded because a frame exceeded the catch-up cap. */
 	public float $droppedTime = 0;
 
 	/**

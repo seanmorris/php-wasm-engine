@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Spatial;
+namespace Phonics\Spatial;
 
 /** Static AABB tree. Huge or negative coordinates do not allocate empty grid cells. */
 final class BoundsIndex

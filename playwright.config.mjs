@@ -5,7 +5,8 @@ const port = Number(process.env.PORT || 9130);
 const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-	testDir: 'tests/browser'
+	testDir: '.'
+	, testMatch: ['tests/browser/**/*.spec.mjs', 'packages/*/tests/browser/**/*.spec.mjs']
 	, timeout: 90000
 	, workers: 1
 	, use: {baseURL,headless: true}

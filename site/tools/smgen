@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+PROJECT_DIR=$( cd -- "${SCRIPT_DIR}/.." &> /dev/null && pwd )
+SMGEN_REPOSITORY=https://github.com/seanmorris/smgen.git
+SMGEN_REF=$(tr -d '[:space:]' < "${PROJECT_DIR}/.smgen-version")
+
+if [[ ! "${SMGEN_REF}" =~ ^[0-9a-f]{40}$ ]]; then
+	echo "Invalid smgen revision in ${PROJECT_DIR}/.smgen-version" >&2
+	exit 1
+fi
+
+if [[ -n "${SMGEN_BIN:-}" ]]; then
+	if ! command -v "${SMGEN_BIN}" >/dev/null 2>&1; then
+		echo "SMGEN_BIN is not executable: ${SMGEN_BIN}" >&2
+		exit 1
+	fi
+	smgen_bin=${SMGEN_BIN}
+else
+	checkout_dir=${PROJECT_DIR}/.cache/smgen/${SMGEN_REF}
+	smgen_bin=${checkout_dir}/smgen.sh
+
+	if [[ ! -x "${smgen_bin}" ]]; then
+		if ! command -v git >/dev/null 2>&1; then
+			echo "git is required to install the pinned smgen revision." >&2
+			exit 1
+		fi
+
+		cache_dir=${PROJECT_DIR}/.cache/smgen
+		staging_dir=${cache_dir}/.staging-${SMGEN_REF}-$$
+
+		mkdir -p "${cache_dir}"
+		trap 'rm -rf -- "${staging_dir}"' EXIT
+
+		git init --quiet "${staging_dir}"
+		git -C "${staging_dir}" fetch --quiet --depth 1 "${SMGEN_REPOSITORY}" "${SMGEN_REF}"
+
+		resolved_ref=$(git -C "${staging_dir}" rev-parse FETCH_HEAD)
+		if [[ "${resolved_ref}" != "${SMGEN_REF}" ]]; then
+			echo "Fetched smgen revision ${resolved_ref}, expected ${SMGEN_REF}." >&2
+			exit 1
+		fi
+
+		git -C "${staging_dir}" checkout --quiet --detach FETCH_HEAD
+
+		if [[ -e "${checkout_dir}" ]]; then
+			rm -rf -- "${checkout_dir}"
+		fi
+		mv -- "${staging_dir}" "${checkout_dir}"
+		trap - EXIT
+	fi
+
+	resolved_ref=$(git -C "${checkout_dir}" rev-parse HEAD)
+	if [[ "${resolved_ref}" != "${SMGEN_REF}" ]]; then
+		echo "Cached smgen revision ${resolved_ref}, expected ${SMGEN_REF}." >&2
+		exit 1
+	fi
+fi
+
+for command_name in php pandoc yq; do
+	if ! command -v "${command_name}" >/dev/null 2>&1; then
+		echo "${command_name} is required to build Phonics documentation." >&2
+		exit 1
+	fi
+done
+
+if ! yq --version 2>&1 | grep -Eq 'version v?4\.'; then
+	echo "Phonics documentation requires mikefarah/yq version 4." >&2
+	exit 1
+fi
+
+if ! php -r 'exit(extension_loaded("yaml") ? 0 : 1);'; then
+	echo "The PHP yaml extension is required to build Phonics documentation." >&2
+	exit 1
+fi
+
+if [[ -z "${UUID:-}" ]]; then
+	if command -v uuid >/dev/null 2>&1; then
+		UUID=uuid
+	elif command -v uuidgen >/dev/null 2>&1; then
+		UUID=uuidgen
+	else
+		UUID=${SCRIPT_DIR}/uuid.php
+	fi
+	export UUID
+fi
+
+if ! command -v "${UUID}" >/dev/null 2>&1; then
+	echo "UUID is not executable: ${UUID}" >&2
+	exit 1
+fi
+
+exec "${smgen_bin}" "$@"

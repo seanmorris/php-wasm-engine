@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
+use Phonics\Input\InputCode;
+use Phonics\Input\Source;
 
 /** Translate host-neutral button snapshots and text/pointer events into menu commands. */
 final class MenuInput
@@ -68,7 +70,7 @@ final class MenuInput
 	 * revert, pageUp/pageDown, home/end states; directions activate at half strength.
 	 * @param float $dt Nonnegative elapsed UI time in seconds.
 	 * @param list<array<string,mixed>> $events Ordered key, text, composition, pointer,
-	 * and wheel events; each wheel event moves one row using only its vertical direction.
+	 * and wheel events; each wheel event moves one row along the page selection axis.
 	 * @param list<array<string,mixed>> $regions Visible row hit regions from MenuRenderer.
 	 * @return bool True when this frame belongs to the menu, including its opening/closing frame.
 	 */
@@ -79,6 +81,10 @@ final class MenuInput
 		, array $events = []
 		, array $regions = []
 	): bool {
+		// Accept shared command codes directly while preserving named UI-frame callers.
+		foreach(InputCode::MENU as $name => $code)
+		if(isset($buttons[$code])) $buttons[$name] = max($buttons[$name] ?? 0, $buttons[$code]);
+
 		if(!is_finite($dt) || $dt < 0)
 		{
 			throw new \InvalidArgumentException('UI elapsed time must be finite and nonnegative');
@@ -118,6 +124,7 @@ final class MenuInput
 		}
 
 		$menu->refresh();
+		$pointerActivated = false;
 
 		foreach($events as $event)
 		{
@@ -132,11 +139,15 @@ final class MenuInput
 			}
 			elseif($event['type'] === 'pointer')
 			{
-				$this->pointer($menu, $event, $regions);
+				$pointerActivated = $this->pointer($menu, $event, $regions) || $pointerActivated;
 			}
 			elseif($event['type'] === 'wheel')
 			{
-				$menu->move(-($event['y'] <=> 0), false);
+				$delta = $menu->orientation === Menu::HORIZONTAL
+					? (($event['x'] ?? 0) ?: ($event['y'] ?? 0))
+					: ($event['y'] ?? 0);
+
+				$menu->move(-($delta <=> 0), false);
 			}
 		}
 
@@ -145,24 +156,28 @@ final class MenuInput
 			return $wasOpen;
 		}
 
-		if($this->pulses('back'))
+		$back = $this->pulses('back');
+		$confirm = $this->pulses('confirm');
+
+		if($back)
 		{
 			$menu->back();
 		}
-		elseif($this->pulses('confirm'))
+		elseif($confirm && !$pointerActivated)
 		{
 			$menu->activate();
 		}
 
-		foreach([
-			'up' => -1
-			, 'down' => 1
-			, 'pageUp' => -7
+		$horizontal = !$menu->editor && $menu->orientation === Menu::HORIZONTAL;
+		$navigation = $horizontal ? ['left' => -1, 'right' => 1] : ['up' => -1, 'down' => 1];
+
+		foreach($navigation + [
+			'pageUp' => -7
 			, 'pageDown' => 7
 			, 'home' => -1000000
 			, 'end' => 1000000
-		] as $key => $distance)
-		{
+		] as $key => $distance
+		){
 			$count = $this->pulses($key, true);
 
 			for($i = 0; $i < $count; $i++)
@@ -171,7 +186,9 @@ final class MenuInput
 			}
 		}
 
-		foreach(['left' => -1, 'right' => 1] as $key => $direction)
+		$adjustment = $horizontal ? ['up' => -1, 'down' => 1] : ['left' => -1, 'right' => 1];
+
+		foreach($adjustment as $key => $direction)
 		{
 			$count = $this->pulses($key, true);
 
@@ -306,13 +323,13 @@ final class MenuInput
 	 * @param list<array<string,mixed>> $regions Current visible row rectangles.
 	 * @return void Ignores clipped or disabled controls and clears drags on release.
 	 */
-	private function pointer(Menu $menu, array $event, array $regions): void
+	private function pointer(Menu $menu, array $event, array $regions): bool
 	{
 		if($event['action'] === 'up')
 		{
 			$this->drag = null;
 
-			return;
+			return false;
 		}
 
 		$hit = $this->drag;
@@ -346,7 +363,7 @@ final class MenuInput
 
 		if(!$hit || ($event['action'] === 'move' && !$this->drag))
 		{
-			return;
+			return false;
 		}
 
 		$menu->select($hit['id']);
@@ -354,19 +371,19 @@ final class MenuInput
 
 		if(!$item || $item['disabled'])
 		{
-			return;
+			return false;
 		}
 
-		if(($event['button'] ?? 0) === 2)
+		if(($event['button'] ?? 0) === Source::MIDDLE)
 		{
 			$menu->revert();
 
-			return;
+			return true;
 		}
 
-		if($event['action'] === 'down' && ($event['button'] ?? 1) !== 1)
+		if($event['action'] === 'down' && ($event['button'] ?? Source::PRIMARY) !== Source::PRIMARY)
 		{
-			return;
+			return false;
 		}
 
 		if(isset($hit['slider']) && ($this->drag || $event['x'] >= $hit['slider'][0]))
@@ -411,5 +428,7 @@ final class MenuInput
 		{
 			$menu->activate();
 		}
+
+		return $event['action'] === 'down';
 	}
 }

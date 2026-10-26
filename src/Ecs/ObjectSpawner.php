@@ -1,14 +1,32 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ecs;
-use PhpWasmEngine\Tiled\
-{
-	TileMap,Loader
-};
+namespace Phonics\Ecs;
+use Phonics\Tiled\TileMap;
+use Phonics\Tiled\Loader;
 
+/** Translate recognized Tiled object classes and pallet references into ECS entities. */
 final class ObjectSpawner
 {
+	/** Require every phonics.entity reference to resolve through a registered pallet alias. */
+	public bool $strictReferences = false;
 	private array $factories = [];
+	private array $aliases = [];
+
+	/**
+	 * Associate a pallet export reference with an already registered factory.
+	 * @param string $reference Session-scoped export reference.
+	 * @param string $class Factory class name.
+	 * @return void Registers the alias, rejecting conflicts and missing factories.
+	 */
+	public function alias(string $reference, string $class): void
+	{
+		if(!isset($this->factories[$class])) throw new \LogicException("Missing factory $class for $reference");
+
+		if(isset($this->aliases[$reference]) && $this->aliases[$reference] !== $class)
+		throw new \LogicException("Conflicting factory reference $reference");
+
+		$this->aliases[$reference] = $class;
+	}
 
 	/**
 	 * Associate a Tiled object class with a PHP component factory.
@@ -16,10 +34,12 @@ final class ObjectSpawner
 	 * @param string $class Tiled object class or legacy type to recognize.
 	 * @param callable(array<string,mixed>,TileMap):iterable<object> $factory Receives the
 	 * translated object and its map, and returns initial components.
-	 * @return void Replaces any factory registered under the same class name.
+	 * @return void Registers the factory; duplicate names raise LogicException.
 	 */
 	public function register(string $class, callable $factory): void
 	{
+		if(isset($this->factories[$class])) throw new \LogicException("Conflicting factory $class");
+
 		$this->factories[$class] = $factory;
 	}
 
@@ -38,7 +58,16 @@ final class ObjectSpawner
 		{
 			foreach($layer->objects as $object)
 			{
-				$class = $object['class'] ?? $object['type'] ?? '';
+				$reference = Loader::properties($object['properties'] ?? [])['phonics.entity'] ?? null;
+
+				if($reference && $this->strictReferences && !isset($this->aliases[$reference]))
+				throw new \LogicException(
+					"Unresolved entity export $reference in {$map->path}; enable its module in phonics.modules"
+				);
+
+				$class = $reference
+					? ($this->aliases[$reference] ?? ($object['class'] ?? $object['type'] ?? ''))
+					: ($object['class'] ?? $object['type'] ?? '');
 
 				if(!isset($this->factories[$class]))
 				{

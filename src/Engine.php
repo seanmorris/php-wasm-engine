@@ -1,26 +1,33 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine;
-use PhpWasmEngine\Ecs\
-{
-	Registry,Scheduler
-};
-use PhpWasmEngine\Input\
-{
-	Controls,SdlInput
-};
-use PhpWasmEngine\Render\Device;
+namespace Phonics;
+use Phonics\Ecs\Registry;
+use Phonics\Ecs\Scheduler;
+use Phonics\Input\Controls;
+use Phonics\Input\SdlInput;
+use Phonics\Render\Device;
 
 /** PHP owns scheduling, SDL event polling and fixed-step simulation. */
 final class Engine
 {
+	/** Session entity registry shared by every scheduled system. */
 	public Registry $entities;
+	/** Ordered fixed-step system scheduler bound to entities. */
 	public Scheduler $systems;
+	/** Logical input snapshot updated before each simulation step. */
 	public Controls $controls;
+	/** SDL and browser input event owner. */
 	public SdlInput $input;
+	/** Fixed-step accumulator controlling simulation catch-up and interpolation. */
 	public FixedStep $clock;
+	/** Whether the browser animation-frame loop is active. */
 	public bool $running = false;
+	/** Total fixed simulation time advanced by this engine, in seconds. */
 	public float $time = 0;
+	/** CPU milliseconds spent in fixed systems during the latest browser frame. */
+	public float $simulationCpuMs = 0;
+	/** Number of fixed updates run during the latest browser frame. */
+	public int $simulationSteps = 0;
 	private $frame = null;
 	private $window = null;
 	private $raf = null;
@@ -30,10 +37,13 @@ final class Engine
 	private ?float $previous = null;
 	private $restore = null, $document = null, $visibility = null;
 	private int $generation;
+	/** Whether simulation is suspended for visibility, context, or user state. */
 	public bool $paused = false;
+	/** Whether the user explicitly requested the paused state. */
 	public bool $userPaused = false;
 	private bool $pauseHeld = false;
 	private $inputHandler = null;
+	private $frameInputHandler = null;
 	private bool $inputCaptured = false;
 
 	/**
@@ -44,6 +54,13 @@ final class Engine
 	 * @return void Replaces the handler; null restores the original input path.
 	 */
 	public function setInputHandler(?callable $handler): void { $this->inputHandler = $handler; }
+
+	/**
+	 * Install display-rate gameplay input after UI, pause, and focus gating.
+	 * @param callable(Engine,float):void|null $handler Receives elapsed seconds capped like the simulation clock.
+	 * @return void Replaces the callback without changing the fixed simulation rate.
+	 */
+	public function setFrameInputHandler(?callable $handler): void { $this->frameInputHandler = $handler; }
 
 	/**
 	 * Create the entity registry, scheduler, input reader, and simulation clock.
@@ -83,6 +100,8 @@ final class Engine
 	 */
 	public function tick(float $elapsed, callable $render): void
 	{
+		if(!is_finite($elapsed) || $elapsed < 0) throw new \InvalidArgumentException('Invalid elapsed time');
+
 		if(($this->document && $this->document->hidden) || !$this->device->ready())
 		{
 			$this->pause();
@@ -147,8 +166,16 @@ final class Engine
 		{
 			$elapsed = 0;
 			$this->input->consume();
+			$this->input->frameActions();
 			$this->controls->reset();
 		}
+		elseif($this->frameInputHandler && $this->input->focused())
+		{
+			($this->frameInputHandler)($this, min($elapsed, $this->clock->step * $this->clock->maxSteps));
+		}
+
+		$simulationStarted = hrtime(true);
+		$this->simulationSteps = 0;
 
 		$alpha = $this->clock->advance(
 			$elapsed
@@ -159,11 +186,14 @@ final class Engine
 			 * @return void Updates the simulation clock after all systems run.
 			 */
 			function($dt) {
+				$this->simulationSteps++;
 				$this->controls->set($this->input->consume());
 				$this->systems->update($dt);
 				$this->time += $dt;
 			}
 		);
+
+		$this->simulationCpuMs = (hrtime(true) - $simulationStarted) / 1e6;
 
 		$render($this, $alpha);
 	}
@@ -307,6 +337,7 @@ final class Engine
 			$this->raf = null;
 			$this->refreshCleanup = null;
 			$this->inputHandler = null;
+			$this->frameInputHandler = null;
 		}
 	}
 }

@@ -1,32 +1,43 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Input;
+namespace Phonics\Input;
 
+/** Current and previous logical input snapshots with analog values and edge detection. */
 final class Controls
 {
 	private array $current = [], $previous = [];
+	private array $presses = [];
 
 	/**
 	 * Clear current and previous button states.
 	 *
 	 * @return void Removes held strengths and pending button edges.
 	 */
-	public function reset(): void { $this->current = $this->previous = []; }
+	public function reset(): void { $this->current = $this->previous = $this->presses = []; }
 
 	/**
 	 * Advance the input snapshot by one simulation step.
 	 *
-	 * @param array<int|string,bool|int|float> $keys Button indices, actions or analog strengths.
+	 * @param array<int|string,bool|int|float>|ActionFrame $keys Legacy buttons or signed named actions.
 	 * @return void Moves current values to previous and installs the supplied snapshot.
 	 */
-	public function set(array $keys): void
+	public function set(array|ActionFrame $keys): void
 	{
 		$this->previous = $this->current;
-		$this->current = Buttons::normalize($keys);
+		$this->presses = [];
+
+		if($keys instanceof ActionFrame)
+		{
+			$this->current = [];
+
+			foreach($keys->values as $code => $value) $this->current[Buttons::name($code)] = max(-1, min(1, $value));
+
+			foreach($keys->presses as $code => $count) $this->presses[Buttons::name($code)] = $count;
+		} else $this->current = Buttons::normalize($keys);
 	}
 
 	/**
-	 * Read a button strength or directional magnitude, clamped to [0,1].
+	 * Read a signed action strength; legacy button values remain in [0,1].
 	 *
 	 * @param int|string $key Button index or logical control name to read.
 	 * @return float Analog strength; absent controls return zero.
@@ -42,7 +53,15 @@ final class Controls
 	 * @param int|string $key Button index or logical control name to inspect.
 	 * @return bool True for a nonzero current control value.
 	 */
-	public function down(int|string $key): bool { return $this->value($key) > 0; }
+	public function down(int|string $key): bool { return $this->value($key) != 0 || $this->pressCount($key) !== 0; }
+
+	/**
+	 * Count taps and wheel pulses since the preceding simulation step.
+	 *
+	 * @param int|string $key Logical action code or legacy control name.
+	 * @return int Signed number of buffered presses.
+	 */
+	public function pressCount(int|string $key): int { return (int)($this->presses[Buttons::name($key)] ?? 0); }
 
 	/**
 	 * Detect a transition from released to held in the current simulation step.
@@ -52,7 +71,7 @@ final class Controls
 	 */
 	public function pressed(int|string $key): bool
 	{
-		return $this->down($key) && empty($this->previous[Buttons::name($key)]);
+		return $this->pressCount($key) !== 0 || ($this->down($key) && empty($this->previous[Buttons::name($key)]));
 	}
 
 	/**

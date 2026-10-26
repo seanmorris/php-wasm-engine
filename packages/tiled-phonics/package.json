@@ -1,0 +1,28 @@
+{
+  "name": "@seanmorris/tiled-phonics",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "files": [
+    "extension/",
+    "lib/",
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "phonics.json"
+  ],
+  "peerDependencies": {
+    "@seanmorris/phonics": "0.1.0"
+  },
+  "exports": {
+    "./phonics.json": "./phonics.json"
+  },
+  "bin": {
+    "tiled-phonics": "./bin/tiled-phonics.mjs"
+  },
+  "peerDependenciesMeta": {
+    "@seanmorris/phonics": {
+      "optional": true
+    }
+  }
+}

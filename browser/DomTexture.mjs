@@ -14,13 +14,12 @@ export class DomTexture
 		if(!(canvas instanceof HTMLCanvasElement)) throw Error('DomTexture requires a canvas');
 
 		this.canvas = canvas;
-		this.gl = canvas.getContext('webgl2');
-
-		if(!this.gl) throw Error('DomTexture requires WebGL2');
+		this.context = null;
 
 		this.opened = false;
 		this.title = '';
 		this.html = '';
+		this.headerHint = '';
 		this.scroll = 0;
 		this.targetScroll = 0;
 		this.scrollTime = 0;
@@ -57,13 +56,24 @@ export class DomTexture
 		canvas.addEventListener('webglcontextrestored', this.restored);
 	}
 
+	/** Let the game choose context attributes before this optional overlay first draws. */
+	get gl()
+	{
+		this.context ??= this.canvas.getContext('webgl2');
+
+		if(!this.context) throw Error('DomTexture requires WebGL2');
+
+		return this.context;
+	}
+
 	/** Open fresh trusted HTML at its initial scroll position. */
-	show(title, html)
+	show(title, html, headerHint = 'Esc / B: Back')
 	{
 		this.clearTiles();
 		this.opened = true;
 		this.title = String(title || 'Information');
 		this.html = String(html || '');
+		this.headerHint = String(headerHint || '');
 		this.scroll = 0;
 		this.targetScroll = 0;
 		this.scrollTime = 0;
@@ -83,7 +93,7 @@ export class DomTexture
 	{
 		this.clearTiles();
 		this.opened = false;
-		this.title = this.html = '';
+		this.title = this.html = this.headerHint = '';
 		this.contentImage = this.overlayImage = this.pendingImages = null;
 		this.tiles = [];
 		this.layout = null;
@@ -143,15 +153,16 @@ export class DomTexture
 
 	/**
 	 * Upload and draw the current HTML panel. This is intentionally synchronous: it is called
-	 * after the PHP renderer and restores every GL binding it changes before returning.
+	 * after the PHP renderer and restores every GL binding it changes before returning. The
+	 * caller's draw framebuffer remains active so composed render passes retain the overlay.
 	 */
-	render(width = this.canvas.width, height = this.canvas.height)
+	render(width = this.canvas.width, height = this.canvas.height, headerHeight = 38)
 	{
 		if(!this.opened) return false;
 
 		this.advanceScroll();
 
-		const layout = this.resolveLayout(width, height);
+		const layout = this.resolveLayout(width, height, headerHeight);
 
 		if(this.dirty || !sameLayout(layout, this.layout)) this.rasterize(layout);
 
@@ -173,7 +184,6 @@ export class DomTexture
 			const resources = this.createResources();
 			const gl = this.gl;
 
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
@@ -241,14 +251,14 @@ export class DomTexture
 		return layout.contentWidth / Math.max(1, this.contentWidth);
 	}
 
-	resolveLayout(width, height)
+	resolveLayout(width, height, headerHeight = 38)
 	{
 		width = Math.max(1, Math.floor(Number(width) || this.canvas.width || 1));
 		height = Math.max(1, Math.floor(Number(height) || this.canvas.height || 1));
 		const margin = Math.max(12, Math.round(Math.min(width, height) * .035));
 		const panelWidth = Math.max(160, Math.min(920, width - margin * 2));
 		const panelHeight = Math.max(120, height - margin * 2);
-		const headerHeight = 38;
+		headerHeight = Math.max(38, Math.round(Number(headerHeight) || 38));
 		const footerHeight = 28;
 		const panelX = Math.round((width - panelWidth) / 2);
 		const panelY = Math.round((height - panelHeight) / 2);
@@ -423,7 +433,11 @@ export class DomTexture
 	<div style="position:absolute;left:${layout.panelX}px;top:${layout.panelY}px;width:${layout.panelWidth}px;height:${layout.panelHeight}px;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 12px 45px rgba(0,0,0,.48);display:flex;flex-direction:column;">
 		<div style="height:${layout.headerHeight}px;flex:0 0 ${layout.headerHeight}px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#1c2638;color:#f7f9ff;font-weight:700;font-size:15px;"><span>${escapeXml(
 			this.title
-		)}</span><span style="opacity:.72;font-size:12px;font-weight:500">Esc / B: Settings</span></div>
+		)}</span>${this.headerHint
+			? `<span style="opacity:.72;font-size:12px;font-weight:500">${escapeXml(
+				this.headerHint
+			)}</span>`
+			: ''}</div>
 		<div style="height:${layout.contentHeight + 24}px;flex:0 0 ${layout.contentHeight + 24}px;box-sizing:border-box;padding:12px 16px;background:#fff;"></div>
 		<div style="height:${layout.footerHeight}px;flex:0 0 ${layout.footerHeight}px;display:flex;align-items:center;padding:0 14px;background:#edf1f7;color:#39465a;font-size:11px;">↑↓ / wheel scroll · PgUp/PgDn page · Home/End</div>
 	</div>
@@ -493,7 +507,7 @@ void main() { color = texture(source, uv); }`
 	/** Release the current document tiles without invalidating their source image. */
 	clearTiles()
 	{
-		if(!this.gl.isContextLost())
+		if(this.tiles.length && !this.gl.isContextLost())
 		{
 			for(const tile of this.tiles) this.gl.deleteTexture(tile.texture);
 		}
@@ -651,7 +665,7 @@ function clamp(value, minimum, maximum)
 
 function sameLayout(a, b)
 {
-	return b !== null && a.width === b.width && a.height === b.height;
+	return b !== null && a.width === b.width && a.height === b.height && a.headerHeight === b.headerHeight;
 }
 
 function escapeXml(value)

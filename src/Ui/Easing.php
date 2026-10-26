@@ -1,10 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
 /** Frame-rate-independent, non-overshooting motion for responsive UI positions. */
 final class Easing
 {
+
 	/**
 	 * Move a scalar toward its target with a quick exponential response and a stable resting point.
 	 *

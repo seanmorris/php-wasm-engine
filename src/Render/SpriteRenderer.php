@@ -1,15 +1,18 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
-use PhpWasmEngine\Ecs\Registry;
+use Phonics\Ecs\Registry;
 
+/** Batch sprites and layered ECS sprite components through a shared Atlas. */
 final class SpriteRenderer
 {
 	private Program $program;
 	private array $vao = [],$buffers = [];
 	private bool $closed = false;
+	/** Instanced draw calls submitted by the latest render operation. */
 	public int $draws = 0;
+	/** Sprite instances submitted by the latest render operation. */
 	public int $instances = 0;
 
 	/**

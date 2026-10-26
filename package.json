@@ -1,35 +1,91 @@
 {
-  "name": "php-wasm-engine",
+  "name": "@seanmorris/phonics",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "engines": {
     "node": ">=22"
   },
   "type": "module",
   "scripts": {
-    "start": "webpack serve --mode development",
-    "test": "php tests/run.php && php tests/phpdoc.php",
+    "start": "npm run build:site && webpack serve --mode development",
+    "test": "php tests/run.php && php tests/phpdoc.php && npm run test:packages",
     "bench:ecs": "php benchmarks/ecs.php",
     "bench:ecs:browser": "node scripts/bench-ecs-browser.mjs",
+    "bench:php-noid": "php packages/php-noid/benchmarks/collisions.php",
+    "bench:php-noid:browser": "node scripts/bench-php-noid-browser.mjs",
     "test:tiled": "node --test tests/tiled.mjs",
     "test:browser": "playwright test",
     "lint": "npm run lint:js",
     "lint:js": "eslint .",
     "lint:fix": "npm run lint:js:fix",
     "lint:js:fix": "eslint . --fix",
-    "build:docs": "webpack --mode production && node scripts/build-docs.mjs",
-    "setup:runtime": "node scripts/runtime.mjs"
+    "build:docs": "webpack --mode production && node scripts/build-docs.mjs && npm run build:site",
+    "setup:runtime": "node scripts/runtime.mjs",
+    "build:manifests": "node scripts/manifests.mjs",
+    "test:packages": "node --test tests/packages/*.test.mjs && php packages/php-noid/tests/run.php && php tests/core-phonics.php && php tests/world-runtime.php && php tests/network.php && php tests/network-timing.php && php packages/php-tris/tests/run.php && php packages/doom-phonics/tests/run.php",
+    "test:artifacts": "node scripts/check-artifacts.mjs",
+    "test:editor": "node --test packages/tiled-phonics/tests/*.test.mjs",
+    "generate": "php packages/sane-phonics/examples/generate-assets.php && node packages/php-noid/generate-stages.mjs && node packages/php-tris/generate.mjs && npm run build:manifests",
+    "test:generated": "node scripts/check-generated.mjs",
+    "build:site": "bash site/build.sh",
+    "capture:games": "node scripts/capture-game-screenshots.mjs",
+    "test:site": "node --test site/tests/*.test.mjs",
+    "serve:docs": "npm run build:docs && node bin/phonics.mjs serve docs/dist",
+    "test:site:browser": "playwright test --config site/playwright.config.mjs",
+    "test:cli": "node --test tests/cli.test.mjs",
+    "test:cli:browser": "PHONICS_CLI_BROWSER=1 node --test tests/cli.test.mjs",
+    "bench:php-tris": "php packages/php-tris/benchmarks/board.php",
+    "bench:php-tris:browser": "node scripts/bench-php-tris-browser.mjs"
   },
   "devDependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
     "@playwright/test": "^1.55.0",
+    "@seanmorris/phonics": "file:.",
     "copy-webpack-plugin": "^14.0.0",
     "css-loader": "^7.1.5",
     "eslint": "9.39.5",
+    "espree": "^10.4.0",
     "html-webpack-plugin": "^5.6.8",
     "sm-no-saccade-style": "github:seanmorris/sm-no-saccade-style#cf7baef911afcacac56479831174a5ef5843d16d",
+    "smgen-assistant": "github:seanmorris/smgen-assistant#44f182245c476179c68e2b454785854863b1bc9d",
     "style-loader": "^4.0.0",
     "webpack": "^5.111.1",
     "webpack-cli": "^7.2.3",
     "webpack-dev-server": "^6.0.0"
+  },
+  "description": "Game-neutral PHP and browser ECS runtime for Tiled worlds",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/sane-phonics",
+    "packages/php-noid",
+    "packages/tiled-phonics",
+    "packages/php-tris",
+    "packages/doom-phonics",
+    "packages/phonics-matrix"
+  ],
+  "exports": {
+    ".": "./browser/Phonics.mjs",
+    "./package-graph": "./browser/PackageGraph.mjs",
+    "./resources": "./browser/ResourceStore.mjs",
+    "./launcher": "./browser/launcher/GameLauncher.mjs",
+    "./networking": "./browser/Networking.mjs",
+    "./phonics.json": "./phonics.json"
+  },
+  "files": [
+    "src/",
+    "browser/",
+    "shaders/",
+    "resources/",
+    "autoload.php",
+    "legacy.php",
+    "phonics.json",
+    "composer.json",
+    "README.md",
+    "LICENSE",
+    "bin/",
+    "cli/"
+  ],
+  "bin": {
+    "phonics": "./bin/phonics.mjs"
   }
 }

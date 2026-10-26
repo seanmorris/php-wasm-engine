@@ -1,16 +1,20 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Engine;
-use PhpWasmEngine\Render\BitmapFont;
+use Phonics\Engine;
+use Phonics\Render\BitmapFont;
 
 /** Optional SDL/Engine adapter; Menu itself remains scriptable without a runtime. */
 final class PauseMenu
 {
+	/** Owned screen-space menu renderer. */
 	public MenuRenderer $renderer;
+	/** Menu input adapter translating SDL UI frames into menu commands. */
 	public MenuInput $controls;
+	/** Font/button theme name, or auto to follow the latest input device. */
 	public string $theme = 'auto';
+	/** Total real time in seconds used by animated menu presentation. */
 	public float $time = 0;
 	private int $generation = -1;
 	private bool $closed = false;

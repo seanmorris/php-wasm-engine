@@ -1,20 +1,27 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Input;
+namespace Phonics\Input;
 
+/** Poll SDL and browser events into gameplay controls, UI events, text input, and sequences. */
 final class SdlInput
 {
+	/** Whether SDL delivered a quit request during the latest poll. */
 	public bool $quit = false;
 	private array $keys = [], $pressedKeys = [], $pressedButtons = [];
+	/** Connected controller manager owned by this input reader. */
 	public Gamepads $gamepads;
+	/** Stateful command-sequence recognizer fed from logical controls. */
 	public Sequences $sequences;
 	private array $bindings = [];
+	/** @var array<int,array{buttons:list<int>,axes:array<int,int>}> Gameplay controller overrides. */
+	private array $padBindings = [];
 	private bool $discarding = false;
 	private float $sequenceTime = 0;
 	private array $sequenceBlocked = [];
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
 	private $canvas = null, $focusListener = null, $blurListener = null;
+	private bool $pointerLocked = false;
 	private $keyboardWindow = null, $keyListener = null;
 	private array $browserKeys = [];
 	private array $uiEvents = [];
@@ -22,8 +29,41 @@ final class SdlInput
 	private bool $uiEditing = false;
 	private bool $textInput = false, $switchingText = false;
 	private $textTarget = null;
+	/** Input revision incremented after polling so consumers can detect fresh snapshots. */
 	public int $generation = 0;
+	/** Last active device family used for keyboard or controller button hints. */
 	public string $inputTheme = 'keyboard';
+	/** Optional signed gameplay profile; legacy snapshots and menu bindings stay independent. */
+	public ?ActionInput $actions = null;
+	/** Radial right-stick dead zone for the signed profile. */
+	public float $lookDeadZone = .12;
+	private array $lookActivity = [];
+
+	/**
+	 * Install a gameplay profile while retaining legacy APIs for other games.
+	 *
+	 * @param Bindings $bindings Editable named-action profile.
+	 * @return void Clears stale input and installs the profile buffer.
+	 */
+	public function useBindings(Bindings $bindings): void
+	{
+		$this->reset();
+		$this->actions = new ActionInput($bindings);
+	}
+
+	/**
+	 * Check whether gameplay may sample this reader on the current frame.
+	 *
+	 * @return bool True while focused and open.
+	 */
+	public function focused(): bool { return $this->focused && !$this->closed; }
+
+	/**
+	 * Read display-frame rates and consume relative displacement once.
+	 *
+	 * @return ActionFrame Current named actions or an empty sample without a profile.
+	 */
+	public function frameActions(): ActionFrame { return $this->actions?->frame() ?? new ActionFrame; }
 
 	/**
 	 * Create gamepad polling and attach browser canvas focus listeners when available.
@@ -98,8 +138,8 @@ final class SdlInput
 				if(!$this->textInput && in_array($event->code, [
 					'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'
 					, 'PageUp', 'PageDown', 'Home', 'End', 'Space'
-				], true))
-				{
+				], true
+				)){
 					$event->preventDefault();
 				}
 
@@ -137,6 +177,7 @@ final class SdlInput
 		}
 
 		$this->focused = $focused;
+		$this->actions?->reset();
 		$this->generation++;
 		$this->uiEvents = [];
 		$this->uiBlocked = [];
@@ -173,6 +214,7 @@ final class SdlInput
 		$this->uiBlocked = [];
 		$this->sequences->reset();
 		$this->sequenceBlocked = [];
+		$this->actions?->reset();
 	}
 
 	/**
@@ -213,6 +255,31 @@ final class SdlInput
 
 		$this->reset();
 		$this->bindings[$button] = array_values(array_unique($keys));
+	}
+
+	/**
+	 * Replace the controller sources for one gameplay button without changing UI navigation.
+	 *
+	 * @param int $button Nonnegative logical gameplay button number.
+	 * @param list<int> $buttons SDL controller buttons; an empty list removes digital bindings.
+	 * @param array<int,int> $axes SDL controller axes mapped to -1 or 1 for their negative or positive half.
+	 * @return void Preserves keyboard bindings and discards held input and partial sequences.
+	 */
+	public function bindGamepad(int $button, array $buttons = [], array $axes = []): void
+	{
+		if($button < 0) throw new \InvalidArgumentException('Gamepad bindings require a nonnegative button');
+
+		foreach($buttons as $source)
+		if(!is_int($source) || $source < 0 || $source >= SDL_CONTROLLER_BUTTON_MAX)
+		throw new \InvalidArgumentException('Invalid SDL controller button');
+
+		foreach($axes as $axis => $direction)
+		if(!is_int($axis) || $axis < 0 || $axis >= SDL_CONTROLLER_AXIS_MAX || !in_array($direction, [-1, 1], true))
+		throw new \InvalidArgumentException('Controller axes require an SDL axis and a direction of -1 or 1');
+
+		$this->reset();
+		$this->bindings[$button] ??= [];
+		$this->padBindings[$button] = ['buttons' => array_values(array_unique($buttons)), 'axes' => $axes];
 	}
 
 	/**
@@ -261,10 +328,20 @@ final class SdlInput
 		}
 
 		$this->uiEvents = [];
+		$this->actions?->beginPoll();
 
 		if($this->canvas)
 		{
 			$this->focus($this->ownsFocus());
+			$locked = $this->canvas->ownerDocument->pointerLockElement === $this->canvas;
+
+			if($this->pointerLocked && !$locked)
+			{
+				$this->actions?->release(Source::MOUSE_BUTTON);
+				$this->actions?->release(Source::MOUSE_AXIS);
+			}
+
+			$this->pointerLocked = $locked;
 		}
 
 		// Sample pads before keyboard releases so a device handoff stays one logical hold.
@@ -332,6 +409,8 @@ final class SdlInput
 
 			if($this->focused)
 			{
+				if(!$this->discarding) $this->actionEvent($event);
+
 				$this->uiEvent($event);
 			}
 		}
@@ -344,6 +423,8 @@ final class SdlInput
 		}
 
 		$this->observeSequences();
+
+		if($this->actions && $this->focused && !$this->discarding) $this->sampleActionPads();
 
 		foreach($this->snapshot(false) as $key => $value)
 		{
@@ -358,15 +439,113 @@ final class SdlInput
 	/**
 	 * Read input for one simulation step and consume buffered press edges.
 	 *
-	 * @return array<string,bool|int|float> Named button states and analog movement strengths; empty
+	 * @return array<string,bool|int|float>|ActionFrame Legacy buttons or signed actions; empty
 	 * while unfocused or closed.
 	 */
-	public function consume(): array
+	public function consume(): array|ActionFrame
 	{
-		$snapshot = $this->snapshot();
+		$snapshot = $this->actions
+			? ($this->focused() ? $this->actions->consume() : new ActionFrame)
+			: $this->snapshot();
+
 		$this->pressedKeys = $this->pressedButtons = [];
 
 		return $snapshot;
+	}
+
+	/**
+	 * Translate physical SDL events before gameplay assigns their meaning.
+	 *
+	 * @param \SDL_Event $event Polled keyboard or pointer event.
+	 * @return void Updates physical buffers for the installed profile.
+	 */
+	private function actionEvent(\SDL_Event $event): void
+	{
+		if(!$this->actions) return;
+
+		if(in_array($event->type, [SDL_MOUSEBUTTONDOWN, SDL_MOUSEWHEEL], true)
+			|| ($event->type === SDL_MOUSEMOTION && hypot($event->motion->xrel, $event->motion->yrel) >= 3)
+		)
+		$this->inputTheme = 'keyboard';
+
+		if(($event->type === SDL_KEYUP || ($event->type === SDL_KEYDOWN && !$event->key->repeat)) && $event->key->keysym
+			->sym > 0
+		)
+		$this->actions->hold(new Source(Source::KEY, $event->key->keysym->sym), $event->type === SDL_KEYDOWN ? 1 : 0);
+
+		if($event->type === SDL_MOUSEBUTTONDOWN || $event->type === SDL_MOUSEBUTTONUP)
+		{
+			$code = $event->button->button;
+
+			if($code >= 1 && $code <= 5)
+			$this->actions->hold(new Source(Source::MOUSE_BUTTON, $code), $event->type === SDL_MOUSEBUTTONDOWN ? 1 : 0);
+		}
+
+		if($event->type === SDL_MOUSEWHEEL)
+		{
+			$sign = $event->wheel->direction === SDL_MOUSEWHEEL_FLIPPED ? -1 : 1;
+			$this->actions->move(Source::WHEEL, Source::X, $event->wheel->x * $sign);
+			$this->actions->move(Source::WHEEL, Source::Y, $event->wheel->y * $sign);
+		}
+
+		if($event->type === SDL_MOUSEMOTION)
+		{
+			$gameplay = !$this->canvas || $this->pointerLocked;
+			$this->actions->move(Source::MOUSE_AXIS, Source::X, $event->motion->xrel, $gameplay);
+			$this->actions->move(Source::MOUSE_AXIS, Source::Y, $event->motion->yrel, $gameplay);
+		}
+	}
+
+	/**
+	 * Merge connected pads after one radial response per right stick.
+	 *
+	 * @return void Updates current button and signed-axis strengths.
+	 */
+	private function sampleActionPads(): void
+	{
+		for($button = 0; $button < SDL_CONTROLLER_BUTTON_MAX; $button++)
+		$this->actions->hold(new Source(Source::PAD_BUTTON, $button), (float)$this->gamepads->button($button));
+		$axes = [];
+		$activity = [];
+
+		foreach($this->gamepads->ids() as $id)
+		{
+			[$x, $y] = ActionInput::stick(
+				$this->gamepads->rawAxis(SDL_CONTROLLER_AXIS_RIGHTX, $id)
+				, $this->gamepads->rawAxis(SDL_CONTROLLER_AXIS_RIGHTY, $id)
+				, $this->lookDeadZone
+			);
+
+			[$previousX, $previousY] = $this->lookActivity[$id] ?? [0, 0];
+
+			if(hypot($x, $y) > 0 && (hypot($previousX, $previousY) === 0.0 || hypot(
+				$x - $previousX
+				, $y - $previousY
+			) > .002
+			)){
+				$this->gamepads->activeId = $id;
+				$this->inputTheme = self::padTheme($this->gamepads->activeName());
+			}
+
+			$activity[$id] = [$x, $y];
+
+			for($axis = 0; $axis < SDL_CONTROLLER_AXIS_MAX; $axis++)
+			{
+				$value = match($axis)
+				{
+					SDL_CONTROLLER_AXIS_RIGHTX => $x, SDL_CONTROLLER_AXIS_RIGHTY => $y, default => $this->gamepads
+						->axis($axis, $id)
+				};
+
+				foreach([-1, 1] as $sign) $axes[$axis][$sign] = max($axes[$axis][$sign] ?? 0, $value * $sign);
+			}
+		}
+
+		$this->lookActivity = $activity;
+
+		for($axis = 0; $axis < SDL_CONTROLLER_AXIS_MAX; $axis++)
+		foreach([-1, 1] as $sign)
+		$this->actions->hold(new Source(Source::PAD_AXIS, $axis, $sign), $axes[$axis][$sign] ?? 0);
 	}
 
 	/**
@@ -404,13 +583,23 @@ final class SdlInput
 
 		foreach($this->bindings as $id => $keys)
 		{
-			$value = isset($pad[$id]) ? (float)$this->gamepads->button($pad[$id]) : 0;
+			$binding = $this->padBindings[$id] ?? null;
+			$value = 0;
 
-			if($id === 6 || $id === 7)
+			if($binding !== null)
+			{
+				foreach($binding['buttons'] as $button)
+				$value = max($value, (float)$this->gamepads->button($button));
+
+				foreach($binding['axes'] as $axis => $direction)
+				$value = max($value, $direction * $this->gamepads->axis($axis));
+			}
+			elseif($id === 6 || $id === 7)
 			{
 				$axis = $id === 6 ? SDL_CONTROLLER_AXIS_TRIGGERLEFT : SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
 				$value = $this->gamepads->axis($axis);
 			}
+			elseif(isset($pad[$id])) $value = (float)$this->gamepads->button($pad[$id]);
 
 			foreach($keys as $key)
 			{
@@ -430,7 +619,11 @@ final class SdlInput
 			if(!$this->gamepads->button($pad[$negative]) && !$this->gamepads->button($pad[$positive]))
 			{
 				$value = $this->gamepads->axis($axis);
+
+				if(!isset($this->padBindings[$negative]))
 				$values['button' . $negative] = max($values['button' . $negative], -$value);
+
+				if(!isset($this->padBindings[$positive]))
 				$values['button' . $positive] = max($values['button' . $positive], $value);
 			}
 		}
@@ -501,6 +694,16 @@ final class SdlInput
 		}
 
 		return 'generic';
+	}
+
+	/**
+	 * Choose artwork for controller bindings independently of the last menu input method.
+	 *
+	 * @return string Xbox, PlayStation, or generic glyph theme for the preferred connected pad.
+	 */
+	public function controllerTheme(): string
+	{
+		return self::padTheme($this->gamepads->preferredName());
 	}
 
 	/**
@@ -725,7 +928,7 @@ final class SdlInput
 				$buttons[$positive] = max(0, $value, (int)(!$editing && $this->held($keyC, $keyD)));
 			}
 
-			$buttons['confirm'] = (!$editing && $this->held(SDLK_RETURN, SDLK_KP_ENTER, SDLK_SPACE))
+			$buttons['confirm'] = (!$editing && $this->held(SDLK_RETURN, SDLK_KP_ENTER, SDLK_SPACE, SDLK_y))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_A);
 
 			$buttons['back'] = (!$editing && $this->held(SDLK_ESCAPE, SDLK_x, SDLK_LCTRL, SDLK_RCTRL))
@@ -746,6 +949,8 @@ final class SdlInput
 			$buttons['home'] = !$editing && $this->held(SDLK_HOME);
 			$buttons['end'] = !$editing && $this->held(SDLK_END);
 		}
+
+		foreach(InputCode::MENU as $name => $code) $buttons[$code] = $buttons[$name] ?? 0;
 
 		return [
 			'buttons' => $buttons

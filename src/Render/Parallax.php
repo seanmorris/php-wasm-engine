@@ -1,10 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\
-{
-	Layer,TileMap
-};
+namespace Phonics\Render;
+use Phonics\Tiled\Layer;
+use Phonics\Tiled\TileMap;
 
 /** Camera-relative image layout, independent of SDL and the GPU. */
 final class Parallax

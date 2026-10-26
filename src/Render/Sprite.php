@@ -1,16 +1,31 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
-use PhpWasmEngine\Tiled\TileMap;
+use Phonics\Tiled\TileMap;
 
+/** Mutable sprite pose, frame selection, crop, tint, filtering, and outline state. */
 final class Sprite
 {
-	public float $rotation = 0,$scaleX = 1,$scaleY = 1,$opacity = 1,$time = 0;
-	public bool $flipX = false,$flipY = false;
+	/** Clockwise rotation in radians around the configured origin. */
+	public float $rotation = 0;
+	/** Horizontal world-space scale. */
+	public float $scaleX = 1;
+	/** Vertical world-space scale. */
+	public float $scaleY = 1;
+	/** Normalized alpha multiplier applied after tint. */
+	public float $opacity = 1;
+	/** Animation time offset in milliseconds. */
+	public float $time = 0;
+	/** Whether to reflect artwork horizontally before rotation. */
+	public bool $flipX = false;
+	/** Whether to reflect artwork vertically before rotation. */
+	public bool $flipY = false;
+	/** @var array{float,float,float,float} Normalized RGBA color multiplier. */
 	public array $tint = [1,1,1,1];
 	/** @var array{int,int,int,int}|null Tile-relative pixel crop, or null for the whole frame. */
 	public ?array $crop = null;
+	/** Whether frame() follows the tile's animation instead of retaining its base GID. */
 	public bool $animated = true;
 	/** @var bool Expand the rendered silhouette by one world pixel with a black shader outline. */
 	public bool $outline = true;

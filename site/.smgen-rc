@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+TITLE_PREFIX="Phonics"
+BASE_URL=""
+OUTPUT_DIR=./.cache/rendered
+PAGES_DIR=./.cache/pages
+STATIC_DIR=./static
+TEMPLATE_DIR=./templates
+HIGHLIGHT_STYLE=pygments

@@ -1,31 +1,45 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Engine;
+use Phonics\Engine;
 
 /** Capture menu-style input for a browser-rendered HTML texture modal. */
 final class DomTextureModal
 {
 	private array $held = [], $next = [];
 	private int $generation = -1;
+	private string $theme = 'keyboard';
 	private array $state = ['open' => false, 'ready' => false, 'scroll' => 0, 'maxScroll' => 0];
 
 	/**
+	 * Initialize DomTextureModal state and its owned services.
+	 *
 	 * @param object $bridge Browser DomTexture instance supplied through vrzno_env().
+	 * @param MenuRenderer|null $hintRenderer Optional shared bitmap renderer for themed back hints.
 	 * @return void Starts closed and keeps all rendering state in the browser bridge.
 	 */
-	public function __construct(private object $bridge) {}
+	public function __construct(private object $bridge, private ?MenuRenderer $hintRenderer = null) {}
 
-	/** Open trusted HTML from an application-owned source. */
+	/**
+	 * Open trusted HTML from an application-owned source.
+	 *
+	 * @param string $title Panel title rendered by the browser bridge.
+	 * @param string $html Trusted application-owned body markup.
+	 * @return void Resets input and scroll state for the new panel.
+	 */
 	public function show(string $title, string $html): void
 	{
-		$this->bridge->show($title, $html);
+		$this->bridge->show($title, $html, $this->hintRenderer ? '' : 'Esc / B: Back');
 		$this->state = ['open' => true, 'ready' => false, 'scroll' => 0, 'maxScroll' => 0];
 		$this->reset();
 	}
 
-	/** Close the browser panel without changing the menu page beneath it. */
+	/**
+	 * Close the browser panel without changing the menu page beneath it.
+	 *
+	 * @return void Clears bridge and input state while retaining reusable renderers.
+	 */
 	public function close(): void
 	{
 		$this->bridge->close();
@@ -33,20 +47,34 @@ final class DomTextureModal
 		$this->reset();
 	}
 
-	/** Whether the browser bridge is currently displaying a panel. */
+	/**
+	 * Whether the browser bridge is currently displaying a panel.
+	 *
+	 * @return bool True while a browser panel is open.
+	 */
 	public function isOpen(): bool { return (bool)($this->state['open'] ?? false); }
 
-	/** Return the last bridge snapshot for diagnostics and browser tests. */
-	public function state(): array { return $this->state; }
+	/**
+	 * Return the last bridge snapshot for diagnostics and browser tests.
+	 *
+	 * @return array<string,mixed> Open, readiness, scroll, theme, and optional back-hint state.
+	 */
+	public function state(): array { return $this->state + ['theme' => $this->theme]; }
 
 	/**
 	 * Capture familiar menu controls while the modal is visible.
 	 *
 	 * Escape/B returns to the Settings page, while P/Start performs the normal full menu close.
+	 *
+	 * @param Engine $engine Engine supplying UI input and pause state.
+	 * @param float $elapsed Elapsed time in seconds.
+	 * @param Menu $menu Menu beneath the modal, closed by the pause action.
+	 * @return bool Always true while the modal captures the frame's input.
 	 */
 	public function update(Engine $engine, float $elapsed, Menu $menu): bool
 	{
 		$frame = $engine->input->uiFrame(false, true);
+		$this->theme = $frame['theme'];
 
 		if($frame['generation'] !== $this->generation || !$frame['focused'])
 		{
@@ -98,34 +126,89 @@ final class DomTextureModal
 		return true;
 	}
 
-	/** Draw the browser texture over the engine's finished scene. */
-	public function render(int $width, int $height): void
+	/**
+	 * Draw the browser texture over the engine's finished scene.
+	 *
+	 * @param int $width Width in pixels.
+	 * @param int $height Height in pixels.
+	 * @param int $hintScale Integer back-hint scale; header and hit bounds expand to fit.
+	 * @return void Updates the bridge texture and optional clickable bitmap back hint.
+	 */
+	public function render(int $width, int $height, int $hintScale = 1): void
 	{
 		if(!$this->isOpen())
 		{
 			return;
 		}
 
-		$this->bridge->render($width, $height);
+		$hintScale = max(1, $hintScale);
+		$headerHeight = max(38, 24 * $hintScale);
+		$this->bridge->render($width, $height, $headerHeight);
 		$this->synchronize();
+
+		if($this->hintRenderer)
+		{
+			$margin = max(12, round(min($width, $height) * .035));
+			$panelWidth = max(160, min(920, $width - $margin * 2));
+			$panelRight = round(($width + $panelWidth) / 2);
+			$this->hintRenderer->font->theme = $this->theme;
+			$size = $this->hintRenderer->font->measure('❶ Back', $hintScale);
+			$padding = 8 * $hintScale;
+			$left = $panelRight - $size['width'] - 2 * $padding;
+			$this->state['backHint'] = [$left, $margin, $size['width'] + 2 * $padding, $headerHeight];
+			$this->state['hintScale'] = $hintScale;
+
+			$this->hintRenderer->renderHint(
+				'❶ Back'
+				, $width
+				, $height
+				, [
+					$left + $padding
+					, $margin + floor(($headerHeight - $size['height']) / 2)
+					, $size['width'], $size['height']
+				]
+				, $hintScale
+				, [.88, .92, 1, 1]
+			);
+		}
 	}
 
-	/** Discard held actions after focus and graphics recovery. */
+	/**
+	 * Discard held actions after focus and graphics recovery.
+	 *
+	 * @return void Clears held durations and repeat deadlines.
+	 */
 	public function reset(): void { $this->held = $this->next = []; }
 
+	/**
+	 * Scroll the modal by the requested offset.
+	 *
+	 * @param float $amount Signed scroll distance in document pixels.
+	 * @return void Completes the operation.
+	 */
 	private function scrollBy(float $amount): void
 	{
 		$this->bridge->scrollBy($amount);
 		$this->synchronize();
 	}
 
+	/**
+	 * Scroll the modal to the requested position.
+	 *
+	 * @param float $offset Offset value used by this operation.
+	 * @return void Completes the operation.
+	 */
 	private function scrollTo(float $offset): void
 	{
 		$this->bridge->scrollTo($offset);
 		$this->synchronize();
 	}
 
-	/** Decode the bridge snapshot without allowing malformed diagnostic state to interrupt input. */
+	/**
+	 * Decode the bridge snapshot without allowing malformed diagnostic state to interrupt input.
+	 *
+	 * @return void Completes the operation.
+	 */
 	private function synchronize(): void
 	{
 		try
@@ -143,7 +226,13 @@ final class DomTextureModal
 		}
 	}
 
-	/** Advance held durations using the same first-press and accelerated repeat cadence as MenuInput. */
+	/**
+	 * Advance held durations using the same first-press and accelerated repeat cadence as MenuInput.
+	 *
+	 * @param array $buttons Buttons value used by this operation.
+	 * @param float $elapsed Elapsed time in seconds.
+	 * @return void Completes the operation.
+	 */
 	private function advance(array $buttons, float $elapsed): void
 	{
 		foreach(array_unique(array_merge(array_keys($buttons), array_keys($this->held))) as $key)
@@ -159,7 +248,13 @@ final class DomTextureModal
 		}
 	}
 
-	/** Return first press and optional accelerated repeats for one logical action. */
+	/**
+	 * Return first press and optional accelerated repeats for one logical action.
+	 *
+	 * @param string $key Key value used by this operation.
+	 * @param bool $repeat Repeat value used by this operation.
+	 * @return int Result of this operation.
+	 */
 	private function pulses(string $key, bool $repeat = false): int
 	{
 		if(!isset($this->held[$key]))

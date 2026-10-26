@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
+namespace Phonics\Tiled;
 
+/** Reversible orthogonal or isometric conversion between tile and pixel coordinates. */
 final class Projection
 {
 

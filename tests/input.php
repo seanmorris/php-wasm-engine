@@ -57,17 +57,22 @@ test('rumble queues delayed ECS pulses and reset silences pending patterns', fun
 	$rumble->pulse(40, 0, 1);
 	$rumble->pulse(110, .75, 1, 40);
 	check($rumble->pending() === 2);
-	check($rumble->update(0) === [['duration'=>40,'strong'=>0.0,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 40,'strong' => 0.0,'weak' => 1.0]]);
 	check($rumble->pending() === 1 && $rumble->update(.039) === []);
-	check($rumble->update(.001) === [['duration'=>110,'strong'=>.75,'weak'=>1.0]]);
+	check($rumble->update(.001) === [['duration' => 110,'strong' => .75,'weak' => 1.0]]);
 	check($rumble->pending() === 0);
 
 	foreach([
-		fn()=>$rumble->pulse(-1,0,0),fn()=>$rumble->pulse(1,-.1,0),
-		fn()=>$rumble->pulse(1,0,1.1),fn()=>$rumble->pulse(1,0,0,-1),fn()=>$rumble->update(-.1)
-	] as $invalid) { rejects($invalid); }
+		fn() => $rumble->pulse(-1, 0, 0),fn() => $rumble->pulse(1, -.1, 0)
+		, fn() => $rumble->pulse(1, 0, 1.1)
+		, fn() => $rumble->pulse(1, 0, 0, -1)
+		, fn() => $rumble->update(-.1)
+	] as $invalid)
+	{
+		rejects($invalid);
+	}
 
-	$rumble->pulse(50,1,1,50);
+	$rumble->pulse(50, 1, 1, 50);
 	$rumble->reset();
 	check($rumble->pending() === 0 && $rumble->update(1) === []);
 });
@@ -76,40 +81,41 @@ test('rumble names and preserves the MB2 haptic patterns', function() {
 	$rumble = new Rumble;
 	$rumble->pop();
 	check($rumble->hasImmediatePulse());
-	check($rumble->update(0) === [['duration'=>40,'strong'=>0.0,'weak'=>1.0]]);
-	check($rumble->update(.04) === [['duration'=>110,'strong'=>.75,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 40,'strong' => 0.0,'weak' => 1.0]]);
+	check($rumble->update(.04) === [['duration' => 110,'strong' => .75,'weak' => 1.0]]);
 
 	$rumble->spring();
-	check($rumble->update(0) === [['duration'=>120,'strong'=>1.0,'weak'=>1.0]]);
-	check($rumble->update(.1) === [['duration'=>500,'strong'=>0.0,'weak'=>.25]]);
+	check($rumble->update(0) === [['duration' => 120,'strong' => 1.0,'weak' => 1.0]]);
+	check($rumble->update(.1) === [['duration' => 500,'strong' => 0.0,'weak' => .25]]);
 
 	$rumble->breakBlock();
 	$rumble->bossHit();
 	$rumble->playerDamage();
 	$rumble->bubbleRebound();
+
 	check($rumble->update(0) === [
-		['duration'=>140,'strong'=>1.0,'weak'=>1.0]
-		, ['duration'=>120,'strong'=>1.0,'weak'=>1.0]
-		, ['duration'=>350,'strong'=>1.0,'weak'=>1.0]
-		, ['duration'=>200,'strong'=>1.0,'weak'=>1.0]
+		['duration' => 140,'strong' => 1.0,'weak' => 1.0]
+		, ['duration' => 120,'strong' => 1.0,'weak' => 1.0]
+		, ['duration' => 350,'strong' => 1.0,'weak' => 1.0]
+		, ['duration' => 200,'strong' => 1.0,'weak' => 1.0]
 	]);
 
 	$rumble->reset();
 	$rumble->landing(120);
-	check($rumble->update(0) === [['duration'=>80,'strong'=>0.0,'weak'=>.5]]);
+	check($rumble->update(0) === [['duration' => 80,'strong' => 0.0,'weak' => .5]]);
 	$rumble->landing(-480);
-	check($rumble->update(0) === [['duration'=>80,'strong'=>0.0,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 80,'strong' => 0.0,'weak' => 1.0]]);
 
 	$rumble->cameraShake(1);
 	check($rumble->update(0) === []);
 	check($rumble->cameraShake(7));
-	check($rumble->update(0) === [['duration'=>112,'strong'=>.1,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 112,'strong' => .1,'weak' => 1.0]]);
 	check($rumble->cameraShake(30, 29));
-	check($rumble->update(0) === [['duration'=>240,'strong'=>1.0,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 240,'strong' => 1.0,'weak' => 1.0]]);
 	check($rumble->cameraShake(-50, -49));
-	check($rumble->update(0) === [['duration'=>200,'strong'=>1.0,'weak'=>1.0]]);
+	check($rumble->update(0) === [['duration' => 200,'strong' => 1.0,'weak' => 1.0]]);
 
-	foreach([fn()=>$rumble->landing(NAN), fn()=>$rumble->cameraShake(INF)] as $invalid) rejects($invalid);
+	foreach([fn() => $rumble->landing(NAN), fn() => $rumble->cameraShake(INF)] as $invalid) rejects($invalid);
 });
 
 test('partial air steering preserves look direction and proportional acceleration', function() {

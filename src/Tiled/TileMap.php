@@ -1,12 +1,37 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
+namespace Phonics\Tiled;
 
+/** Loaded Tiled map with mutable placement/layers and shared normalized tileset definitions. */
 final class TileMap
 {
-	public array $layers = [], $tilesets = [];
-	public float $x = 0, $y = 0;
+	/** @var list<Layer> Flattened display and object layers in painter order. */
+	public array $layers = [];
+	/** @var list<array<string,mixed>> Normalized tilesets sorted by first global tile ID. */
+	public array $tilesets = [];
+	/** Mutable horizontal world placement in pixels. */
+	public float $x = 0;
+	/** Mutable vertical world placement in pixels. */
+	public float $y = 0;
+	/** Coordinate converter derived from the map orientation and tile dimensions. */
 	public Projection $projection;
+	/** Stable placement identity, distinct for repeated uses of the same source map. */
+	public string $identity;
+
+	/**
+	 * Copy mutable layer/chunk state while sharing immutable source definitions.
+	 *
+	 * @return void Replaces every layer and chunk with a mutable clone.
+	 */
+	public function __clone()
+	{
+		foreach($this->layers as $index => $layer)
+		{
+			$this->layers[$index] = clone $layer;
+
+			foreach($layer->chunks as $key => $chunk) $this->layers[$index]->chunks[$key] = clone $chunk;
+		}
+	}
 
 	/**
 	 * Create a map model and its coordinate projection from decoded Tiled metadata.
@@ -18,6 +43,8 @@ final class TileMap
 	 */
 	public function __construct(public string $path, public array $data)
 	{
+		$this->identity = $path;
+
 		$this->projection = new Projection(
 			$data['orientation'] ?? 'orthogonal'
 			, (int)$data['tilewidth']

@@ -1,17 +1,23 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Render\BitmapFont;
+use Phonics\Render\BitmapFont;
 
 /** A single-line UTF-8 buffer; cursor offsets are Unicode codepoints, as in SDL text events. */
 final class TextBuffer
 {
+	/** Committed single-line UTF-8 text. */
 	public string $text;
+	/** Caret offset in Unicode codepoints. */
 	public int $caret;
+	/** Selection anchor offset in Unicode codepoints. */
 	public int $anchor;
+	/** Current uncommitted IME composition preview. */
 	public string $composition = '';
+	/** IME selection start within composition, in codepoints. */
 	public int $compositionStart = 0;
+	/** IME selection length within composition, in codepoints. */
 	public int $compositionLength = 0;
 
 	/**

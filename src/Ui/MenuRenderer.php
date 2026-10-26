@@ -1,19 +1,23 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Render\Atlas;
-use PhpWasmEngine\Render\BitmapFont;
-use PhpWasmEngine\Render\Camera;
-use PhpWasmEngine\Render\RectRenderer;
-use PhpWasmEngine\Render\SpriteRenderer;
+use Phonics\Render\Atlas;
+use Phonics\Render\BitmapFont;
+use Phonics\Render\Camera;
+use Phonics\Render\RectRenderer;
+use Phonics\Render\SpriteRenderer;
 
 /** One shared font atlas and two instanced passes render every page of a menu. */
 final class MenuRenderer
 {
+	/** Owned font and controller-symbol atlas. */
 	public Atlas $atlas;
+	/** @var list<array<string,mixed>> Pointer hit regions produced by the latest render. */
 	public array $regions = [];
+	/** @var array{float,float,float,float}|null Screen rectangle of the active editor row. */
 	public ?array $editorRect = null;
+	/** @var array<string,mixed> Mutable sizing, spacing, color, and panel settings. */
 	public array $style = [
 		'scale' => 2
 		, 'width' => 720
@@ -27,6 +31,7 @@ final class MenuRenderer
 		, 'selection' => [.2, .35, .6, 1]
 		, 'dimmer' => [0, 0, 0, .45]
 	];
+	/** Whether navigation and action hints appear below the menu. */
 	public bool $showHints = true;
 	private SpriteRenderer $sprites;
 	private RectRenderer $rects;
@@ -77,7 +82,13 @@ final class MenuRenderer
 		}
 	}
 
-	/** Return the shared nonnegative screen-space area of two rectangles. */
+	/**
+	 * Return the shared nonnegative screen-space area of two rectangles.
+	 *
+	 * @param array $a A value used by this operation.
+	 * @param array $b B value used by this operation.
+	 * @return array Result of this operation.
+	 */
 	private function intersect(array $a, array $b): array
 	{
 		$x = max($a[0], $b[0]);
@@ -101,6 +112,7 @@ final class MenuRenderer
 	 * @param float $wrap Maximum line width, or infinity for a horizontally clipped field.
 	 * @param string $align Left, center, or right alignment within the available width.
 	 * @param float|null $alignWidth Alignment width; null uses the clip's right edge minus x.
+	 * @param bool $includeVerticalOverhang Keep negative bearings and descenders outside the line box.
 	 * @return array Layout including uncropped caret positions relative to the text origin.
 	 */
 	private function text(
@@ -113,16 +125,36 @@ final class MenuRenderer
 		, float $wrap = INF
 		, string $align = 'left'
 		, ?float $alignWidth = null
+		, bool $includeVerticalOverhang = false
 	): array {
 		$alignWidth ??= max(1, $clip[0] + $clip[2] - $x);
 
-		$key = serialize([$text, $x, $y, $scale, $color, $clip, $wrap, $align, $alignWidth, $this->font->theme]);
+		$key = serialize([
+			$text, $x, $y, $scale, $color, $clip, $wrap, $align, $alignWidth
+			, $this->font->theme, $includeVerticalOverhang
+		]);
+
 		$cached = $this->cache[$key] ?? null;
 
 		if(!$cached)
 		{
 			$layout = $this->font->layout($text, $scale, $wrap, $color, $align, $alignWidth);
 			$visible = [];
+
+			if($includeVerticalOverhang && $layout['sprites'])
+			{
+				$clipTop = $clip[1];
+				$clipBottom = $clip[1] + $clip[3];
+
+				foreach($layout['sprites'] as $sprite)
+				{
+					$clipTop = min($clipTop, $y + $sprite->y);
+					$clipBottom = max($clipBottom, $y + $sprite->y + $sprite->crop[3] * $sprite->scaleY);
+				}
+
+				$clip[1] = $clipTop;
+				$clip[3] = $clipBottom - $clipTop;
+			}
 
 			foreach($layout['sprites'] as $sprite)
 			{
@@ -261,7 +293,85 @@ final class MenuRenderer
 		$this->cache = $this->nextCache;
 	}
 
-	/** Advance the displayed fractional menu viewport toward its integer navigation target. */
+	/**
+	 * Draw one themed control hint over an existing screen-space surface.
+	 *
+	 * This uses the same annotated button sheet as menu footers, so characters such as `❶`
+	 * resolve to Ctrl, B, Circle, or the generic button for the active font theme.
+	 *
+	 * @param string $hint Hint text containing ordinary and themed glyphs.
+	 * @param int $width Drawing-buffer width in pixels.
+	 * @param int $height Drawing-buffer height in pixels.
+	 * @param array{float,float,float,float} $rect Screen-space hint bounds.
+	 * @param float $scale Output scale in screen pixels per logical font pixel.
+	 * @param array{float,float,float,float} $color Text tint; button artwork keeps its source color.
+	 * @return void Submits one glyph batch without drawing a menu panel.
+	 */
+	public function renderHint(
+		string $hint
+		, int $width
+		, int $height
+		, array $rect
+		, float $scale = 1
+		, array $color = [1, 1, 1, 1]
+	): void {
+		$this->renderHints([['text' => $hint, 'rect' => $rect, 'scale' => $scale]], $width, $height, $color);
+	}
+
+	/**
+	 * Draw several control hints in one cached glyph batch over an existing surface.
+	 *
+	 * @param list<array{text:string,rect:array{float,float,float,float},scale?:float,theme?:string}> $hints
+	 * Right-aligned hints, optionally overriding the font theme for individual device bindings.
+	 * @param int $width Drawing-buffer width in pixels.
+	 * @param int $height Drawing-buffer height in pixels.
+	 * @param array{float,float,float,float} $color Text tint; button artwork keeps its source color.
+	 * @return void Submits one glyph batch without drawing a menu panel.
+	 */
+	public function renderHints(array $hints, int $width, int $height, array $color = [1, 1, 1, 1]): void
+	{
+		$this->regions = $this->batch = $this->boxes = $this->nextCache = [];
+		$this->editorRect = null;
+
+		if($this->closed) return;
+
+		$theme = $this->font->theme;
+
+		foreach($hints as $hint)
+		{
+			$rect = $hint['rect'];
+
+			if($rect[2] <= 0 || $rect[3] <= 0) continue;
+
+			$this->font->theme = $hint['theme'] ?? $theme;
+			$this->text(
+				$hint['text']
+				, $rect[0]
+				, $rect[1]
+				, $hint['scale'] ?? 1
+				, $color
+				, $rect
+				, align: 'right'
+				, alignWidth: $rect[2]
+				, includeVerticalOverhang: true
+			);
+		}
+
+		$this->font->theme = $theme;
+
+		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height));
+		$this->cache = $this->nextCache;
+	}
+
+	/**
+	 * Advance the displayed fractional menu viewport toward its integer navigation target.
+	 *
+	 * @param Menu $menu Menu value used by this operation.
+	 * @param array $rows Rows value used by this operation.
+	 * @param int $target Target value used by this operation.
+	 * @param float $seconds Seconds value used by this operation.
+	 * @return float Result of this operation.
+	 */
 	private function scroll(Menu $menu, array $rows, int $target, float $seconds): float
 	{
 		if($this->scrollMenu !== $menu || $this->scrollRows !== $rows || $seconds <= $this->scrollTime)
@@ -362,9 +472,7 @@ final class MenuRenderer
 
 				$ratio = max(0, min(1, ($item['value'] - $item['min']) / ($item['max'] - $item['min'])));
 
-				$this->box(
-					[$field[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled'], $rowsClip
-				);
+				$this->box([$field[0], $y + 9 * $scale, $track, 2 * $scale], $this->style['disabled'], $rowsClip);
 
 				$this->box(
 					[

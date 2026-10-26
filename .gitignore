@@ -9,3 +9,17 @@
 /test-results/
 /playwright-report/
 *.log
+
+/dist/
+
+/site/.cache/
+packages/doom-phonics/demo/local-wads/
+
+# Local source material, profiling output, and crash artifacts.
+/scratch/
+/core
+/JetSlalom.jar
+/SKULLTAG_ACTORS.WAD
+/SKULLTAG_ACTORS.lmp
+/blockade-buster.zip
+/kexdoom_sc55_ogg.wad

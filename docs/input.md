@@ -1,7 +1,7 @@
 # Logical input and sequences
 
 Space and Xbox A are button **0**. PlayStation Cross and the bottom face button
-on a standard pad use the same number. Existing gameplay actions still work:
+on a standard pad use the same number. Read logical buttons or aliases through `Controls`:
 
 ```php
 $jumped = $engine->controls->pressed(0);
@@ -50,6 +50,22 @@ $engine->input->bindButton(2, [SDLK_LSHIFT, SDLK_c]);
 $engine->input->bindButton(20, [SDLK_f]); // Application-defined button.
 ```
 
+Replace controller sources for a gameplay button independently of its keyboard keys:
+
+```php
+$engine->input->bindGamepad(0, [SDL_CONTROLLER_BUTTON_RIGHTSHOULDER]);
+$engine->input->bindGamepad(5, [SDL_CONTROLLER_BUTTON_A]);
+$engine->input->bindGamepad(14, axes: [SDL_CONTROLLER_AXIS_LEFTX => -1]);
+$engine->input->bindGamepad(15, axes: [SDL_CONTROLLER_AXIS_LEFTX => 1]);
+$engine->input->bindGamepad(19, axes: [SDL_CONTROLLER_AXIS_RIGHTX => -1]);
+$engine->input->bindGamepad(20, axes: [SDL_CONTROLLER_AXIS_RIGHTX => 1]);
+```
+
+`bindGamepad()` replaces both the digital and analog controller sources for that
+logical button. Axis directions select the negative or positive half after the
+configured dead zone; multiple sources merge at their strongest value. Calling it
+with no sources removes controller input for that button.
+
 Rebinding discards held input and partial sequences. Menu navigation and text
 editing keep their own UI bindings. For separate players, read individual SDL
 instance IDs through `Gamepads`, then feed each player's logical snapshot into
@@ -78,8 +94,7 @@ $matchedSteps = $codes->progress('konami');
 $codes->remove('debug');
 ```
 
-`.75` is the maximum gap between matched steps, matching moving-boxes-2's
-750 ms code window. Times use seconds throughout this API. An optional fourth
+`.75` sets a maximum gap of 750 ms between matched steps. Times use seconds throughout this API. An optional fourth
 argument limits total duration. A fifth argument, `strict: false`, lets unrelated
 presses pass without cancelling progress. Those presses do not extend the gap.
 
@@ -129,8 +144,8 @@ active at strength `.5`; movement still uses the full analog value.
 ## Timing and recovery
 
 `Engine` polls input every visible frame, including while simulation is paused.
-Read completions in the frame hook if they must act while paused. The demo does
-this in `DemoGame::input()`. Registered sequences keep observing menu navigation;
+Read completions in the frame hook if they must act while paused. Registered
+sequences keep observing menu navigation;
 opening or closing a capturing menu clears partial history through the engine's
 normal input reset. SDL text editing suppresses recognition, clears partial
 history and requires held editing controls to be released before recognition
@@ -149,7 +164,7 @@ it on the other device.
 The matcher works without SDL, including native tests and replay code:
 
 ```php
-$codes = new PhpWasmEngine\Input\Sequences;
+$codes = new Phonics\Input\Sequences;
 $codes->add('double-jump', [0, 0], .3);
 $codes->update([0 => 1], 0.0);
 $codes->update([], .05);
@@ -162,15 +177,56 @@ snapshots during idle frames so timeouts expire. Custom SDL loops should call
 `poll()` once per frame and `consume()` once per simulation step; the built-in
 observer must not be fed the buffered `snapshot()` again.
 
-## Try it in the demo
+## Inspect recognition
 
-While playing, enter **Up Up Down Down Left Right Left Right X Space**, or use
-the D-pad followed by **B A**. Konami enables the debug panel. The moving-boxes
-debug code, **Up Up Down Down Up Up Up Up**, also enables it.
+Use `progress()` to show partial input and `drain()` to log completed sequence names. Keep presentation and gameplay responses outside the recognizer: the same definitions can drive a debug action, menu shortcut, accessibility feature, or game move. Tests can feed timestamped snapshots directly without SDL.
 
-The panel's **Sequence** and **Matches** rows show completions. Try **Down,
-Right, X** quickly, hold **Down** and press **C**, or hold **Space + X**. On a
-pad those are **Down, Right, B**, **Down + X**, and **A + B**. These examples
-report `special`, `uppercut`, and `two-button`; they do not add combat to the
-platformer. The sample uses right-facing motions. Its definitions live in
-[`examples/sequences.php`](https://github.com/seanmorris/php-wasm-engine/blob/develop/examples/sequences.php).
+## Named action profiles
+
+`InputCode` reserves logical codes through `0xFFFF` for the engine. New game
+commands start at `InputCode::GAME_START` (`0x10000`). Existing legacy button
+IDs remain supported. Use the shared `YES`, `NO`, `PAUSE`, directional,
+paging, home/end and revert aliases directly for UI commands.
+
+`Source` describes physical input independently of its action: SDL keys and
+controller buttons use the named `Key` and `Pad` constants; mouse motion,
+wheel movement and controller axes use signed directional halves. A `Bindings`
+profile maps each action and direction to alternatives. Keyboard/mouse and
+controller alternatives can be edited or restored independently. `bind()`
+requires a `replace` or `share` policy when a source conflicts with another
+action; `remove()` removes just that source.
+
+Install a profile with `$engine->input->useBindings($bindings)`. Fixed updates
+then receive signed `Controls::value()` values in `[-1,1]`, buffered digital
+taps, and `Controls::pressCount()` for wheel pulses or repeated taps. Opposing
+inputs subtract; alternatives in one direction use their strongest strength.
+Absolute axes always use their latest sample. The legacy `snapshot()`, button
+binding methods and sequence observer remain available.
+
+`Engine::setFrameInputHandler()` runs after UI, pause and focus gating, before
+fixed updates. Its delta is capped at the fixed clock's stall limit. Read
+`$engine->input->frameActions()` here to consume relative displacement once
+per display frame. `ActionFrame::value($code, $device)` retains device strengths
+so applications can apply different mouse, keyboard and controller gains.
+Fixed-step action reads do not consume mouse displacement, and display-frame
+reads do not consume fixed-step press counts.
+
+Doom uses this hook to integrate local look. It renders simulated yaw plus
+pending yaw, then transfers the pending yaw into the next player command
+exactly once. Pitch is absolute and visible immediately. The same command
+sampler serves offline and online play; remote commands received in a batch
+accumulate yaw and retain the newest pitch.
+
+Doom's Controls menu includes Keyboard & Mouse and Controller binding pages.
+Capture waits for neutral input, supports alternative bindings and removal,
+and offers Replace, Share or Cancel for conflicts. Escape/P/Start stay reserved
+for Pause; Escape or Start cancels capture. Menu navigation stays fixed.
+Profiles and look settings are saved in browser storage as
+`doom-phonics.controls.v1`; invalid entries fall back independently, and
+unavailable storage allows session-only edits.
+
+Right-stick look defaults to a 12% radial deadzone, a rescaled 1.5 exponent
+response, 180 degrees/second horizontally and 120 degrees/second vertically.
+Sensitivity multipliers range from 0.25 to 3; deadzone ranges from 0 to 30%.
+Vertical inversion is optional. Releasing the stick stops integration without
+recentering. Mouse and controller look settings are independent.

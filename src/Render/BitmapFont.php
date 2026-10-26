@@ -1,16 +1,20 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
-use PhpWasmEngine\Tiled\Loader;
-use PhpWasmEngine\Tiled\TileMap;
+use Phonics\Tiled\Loader;
+use Phonics\Tiled\TileMap;
 
 /** A font assembled from annotated Tiled tilesets, independent of GPU allocation. */
 final class BitmapFont
 {
+	/** Synthetic map containing every glyph and symbol tileset used by the font atlas. */
 	public TileMap $map;
+	/** Baseline-to-baseline distance in logical font pixels. */
 	public float $lineHeight;
+	/** Logical advance assigned to a space character. */
 	public float $spaceAdvance;
+	/** Preferred symbol theme used before generic glyph fallback. */
 	public string $theme = 'generic';
 	private array $glyphs = [];
 	private string $fallback;

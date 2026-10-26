@@ -7,7 +7,7 @@ async function start(page)
 	await page.route('**/favicon.ico', route => route.fulfill({status: 204}));
 	page.on('console', message => {if(message.type()==='error') errors.push(message.text());});
 
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 
 	await page.evaluate(async version => {

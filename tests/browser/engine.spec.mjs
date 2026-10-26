@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 async function boot(page, zlib = false)
 {
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 
 	await page.evaluate(options => window.bootEngine({run: false,...options}), {
@@ -221,7 +221,7 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 	`;
 
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine === 'function');
 	await page.evaluate(() => window.bootEngine({scene: 'water'}));
 	const canvas = page.locator('canvas');
@@ -250,7 +250,7 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 test('the rising-water loop exposes scriptable switches and object 3958', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine === 'function');
 	await page.evaluate(() => window.bootEngine({scene: 'water-loop'}));
 	const canvas = page.locator('canvas');
@@ -298,7 +298,7 @@ for(const direction of [1, -1])
 test('charged spindash follows the submerged loop in direction ' + direction, async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine === 'function');
 	await page.evaluate(() => window.bootEngine({intro: false, scene: 'water-loop'}));
 	const canvas = page.locator('canvas');
@@ -382,7 +382,7 @@ test(
 	, async({page}) => {
 		const errors = [];
 		page.on('pageerror', e => errors.push(e.message));
-		await page.goto('/');
+		await page.goto('/sane-phonics/');
 		await page.waitForFunction(() => typeof window.bootEngine==='function');
 		await page.evaluate(scene => window.bootEngine({scene}), scene);
 
@@ -405,12 +405,27 @@ test(
 		expect(Number(await page.locator('canvas').getAttribute('data-frames'))).toBe(pausedFrames);
 		await page.evaluate(() => loseExtension.restoreContext());
 
-		await expect.poll(async() => Number(await page.locator('canvas').getAttribute('data-frames'))).toBeGreaterThan(
-			pausedFrames+20
-		);
+		// Context recreation can be slow under software WebGL. Require the same forward
+		// progress as startup without treating this functional check as a frame-rate budget.
+		await expect.poll(
+			async() => Number(await page.locator('canvas').getAttribute('data-frames'))
+			, {timeout: 15000}
+		).toBeGreaterThan(pausedFrames+20);
 
 		if(scene!=='isometric')
 		{
+			if(scene==='grinding')
+			{
+				// The rail carries an idle rider to its end during graphics recovery.
+				// Reset before checking horizontal movement against the end wall.
+				await page.keyboard.press('r');
+
+				await expect.poll(
+					async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')).x
+					, {intervals: [16]}
+				).toBeLessThan(100);
+			}
+
 			await expect.poll(
 				async() => JSON.parse(await page.locator('canvas').getAttribute('data-body')||'{}').grounded
 				, {timeout: 15000}
@@ -456,7 +471,7 @@ test(
 test('a live block stops walking, shatters on rolling impact, restores debris and resets', async({page}) => {
 	const errors = [];
 	page.on('pageerror', e => errors.push(e.message));
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 	await page.evaluate(() => window.bootEngine({scene: 'breakables'}));
 	const canvas = page.locator('canvas');
@@ -498,12 +513,24 @@ test('a live block stops walking, shatters on rolling impact, restores debris an
 	await page.waitForTimeout(100);
 	expect(Number(await canvas.getAttribute('data-frames'))).toBe(pausedFrames);
 	expect(await state()).toEqual({intact: 2,pieces: 12});
-	await page.evaluate(() => shardContext.restoreContext());
 
-	await expect.poll(async() => Number(await canvas.getAttribute('data-frames')))
-		.toBeGreaterThan(pausedFrames+2);
+	const restored = await page.evaluate(before => new Promise(resolve => {
+		const canvas = document.querySelector('canvas');
 
-	expect(await state()).toEqual({intact: 2,pieces: 12});
+		const frame = () => {
+			if(Number(canvas.dataset.frames) > before + 2)
+				return resolve(JSON.parse(canvas.dataset.breakables));
+
+			requestAnimationFrame(frame);
+		};
+
+		// Sample the first restored frames before the rolling player reaches another block.
+		shardContext.restoreContext();
+		requestAnimationFrame(frame);
+	}), pausedFrames
+	);
+
+	expect(restored).toEqual({intact: 2,pieces: 12});
 	await page.keyboard.down('ArrowRight');
 	await expect.poll(async() => (await body()).x, {timeout: 10000}).toBeGreaterThan(420);
 	await page.keyboard.up('ArrowRight');
@@ -519,7 +546,7 @@ test('a live block stops walking, shatters on rolling impact, restores debris an
 test('the live loop switches routes, exits, and runs back through the other direction', async({page}) => {
 	const errors = [];
 	page.on('pageerror', e => errors.push(e.message));
-	await page.goto('/');
+	await page.goto('/sane-phonics/');
 	await page.waitForFunction(() => typeof window.bootEngine==='function');
 	await page.evaluate(() => window.bootEngine({scene: 'loop'}));
 
@@ -574,4 +601,109 @@ test('the live loop switches routes, exits, and runs back through the other dire
 	await expect.poll(async() => Math.abs((await body()).x-80), {intervals: [50]}).toBeLessThan(1);
 	await page.evaluate(() => window.stopEngine());
 	expect(errors).toEqual([]);
+});
+
+test('named frame input runs before fixed steps and respects pause, UI capture and focus', async({page}) => {
+	await boot(page);
+
+	await run(page, String.raw`
+		require '/engine/autoload.php';
+		$engine = new Phonics\Engine(new Phonics\Render\Device(160, 90));
+		$engine->clock = new Phonics\FixedStep(1 / 35, 4);
+		$engine->input->useBindings(new Phonics\Input\Bindings([
+			Phonics\Input\InputCode::GAME_START => [1 => [new Phonics\Input\Source(Phonics\Input\Source::KEY, Phonics\Input\Key::RIGHT)]]
+		]));
+		$angle = $pending = 0.0;
+		$capture = false;
+		$frameDeltas = $continuity = [];
+		$draw = static function(): void {};
+		$engine->setInputHandler(static function() use (&$capture): bool { return $capture; });
+		$engine->setFrameInputHandler(static function($engine, $dt) use (&$frameDeltas, &$pending): void {
+			$frameDeltas[] = $dt;
+			$pending += $engine->input->frameActions()->value(Phonics\Input\InputCode::GAME_START) * $dt;
+		});
+		$engine->systems->add('consume-look', static function() use (&$angle, &$pending, &$continuity): void {
+			$before = $angle + $pending;
+			$angle += $pending;
+			$pending = 0.0;
+			$continuity[] = $angle + $pending - $before;
+		});
+	`
+	);
+
+	await page.locator('canvas').focus();
+	await run(page, '$engine->tick(0, $draw);');
+	await page.keyboard.down('ArrowRight');
+
+	let state = JSON.parse(
+		await run(page, '$engine->tick(.001, $draw); echo json_encode([$angle, $pending, $engine->simulationSteps]);')
+	);
+
+	expect(state).toEqual([0, .001, 0]);
+
+	for(const fps of [30, 60, 144])
+	{
+		state = JSON.parse(await run(page, `
+			$engine->clock = new Phonics\\FixedStep(1 / 35, 4);
+			$angle = $pending = 0.0; $continuity = [];
+			for($i = 0; $i < ${fps}; $i++) $engine->tick(1 / ${fps}, $draw);
+			echo json_encode([$angle + $pending, max($continuity), min($continuity)]);
+		`
+		));
+
+		expect(state[0]).toBeCloseTo(1, 10);
+		expect(state.slice(1)).toEqual([0, 0]);
+	}
+
+	state = JSON.parse(
+		await run(page, '$engine->tick(5, $draw); echo json_encode([end($frameDeltas), $engine->simulationSteps]);')
+	);
+
+	expect(state[0]).toBeCloseTo(4 / 35, 10);
+	expect(state[1]).toBe(4);
+	await page.keyboard.up('ArrowRight');
+
+	await run(
+		page
+		, '$engine->tick(0, $draw); $beforePause = $angle + $pending; $beforeCalls = count($frameDeltas); $engine->userPaused = true;'
+	);
+
+	await page.keyboard.down('ArrowRight');
+
+	state = JSON.parse(
+		await run(
+			page
+			, '$engine->tick(.1, $draw); echo json_encode([$angle + $pending - $beforePause, count($frameDeltas) - $beforeCalls]);'
+		)
+	);
+
+	expect(state).toEqual([0, 0]);
+	await page.keyboard.up('ArrowRight');
+	await run(page, '$engine->userPaused = false; $capture = true; $engine->tick(.1, $draw);');
+	await page.keyboard.down('ArrowRight');
+
+	state = JSON.parse(
+		await run(
+			page
+			, '$engine->tick(.1, $draw); echo json_encode([$angle + $pending - $beforePause, count($frameDeltas) - $beforeCalls]);'
+		)
+	);
+
+	expect(state).toEqual([0, 0]);
+	await page.keyboard.up('ArrowRight');
+	await run(page, '$capture = false; $engine->tick(0, $draw);');
+	await page.keyboard.down('ArrowRight');
+	await run(page, '$engine->tick(.001, $draw); $beforeBlur = $angle + $pending; $beforeCalls = count($frameDeltas);');
+	await page.evaluate(() => {document.body.tabIndex = -1; document.body.focus();});
+
+	state = JSON.parse(
+		await run(
+			page
+			, '$engine->tick(.1, $draw); echo json_encode([$angle + $pending - $beforeBlur, count($frameDeltas) - $beforeCalls]);'
+		)
+	);
+
+	expect(state).toEqual([0, 0]);
+	await page.keyboard.up('ArrowRight');
+	await run(page, '$engine->input->close(); $engine->device->close();');
 });

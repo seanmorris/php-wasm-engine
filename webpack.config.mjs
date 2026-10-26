@@ -15,19 +15,21 @@ export default async (_env, argv) => {
 		, devtool: development ? 'eval-source-map' : false
 		, module: {rules: [{test: /\.css$/,use: ['style-loader','css-loader']}]}
 		, plugins: [
-			new HtmlWebpackPlugin({template: './docs/index.html'})
-			, new CopyPlugin({
-				patterns: ['architecture.md'
-					, 'loops.md'
-					, 'menus.md'
-					, 'startup.md'
-					, 'input.md'
-					, 'loop-layout.svg'
-				]
-				.map(
-					name => ({from: 'docs/' + name,to: name})
-				)
-			})
+			new HtmlWebpackPlugin(
+				{template: './docs/index.html', filename: 'sane-phonics/index.html', sitePrefix: '../'}
+			)
+			, new CopyPlugin(
+				{
+					patterns: [{from: 'preview', to: 'preview'}
+						, {from: 'packages/php-tris/index.html', to: 'php-tris/index.html'}
+						, {from: 'packages/doom-phonics/index.html', to: 'doom-phonics/index.html'}
+						, {
+							from: 'packages/php-noid/index.html'
+							, to: 'php-noid/index.html'
+						}
+					]
+				}
+			)
 		]
 	};
 
@@ -42,10 +44,13 @@ export default async (_env, argv) => {
 			host: '127.0.0.1'
 			, port: Number(process.env.PORT||9130)
 			, hot: false
-			, liveReload: true
+			, liveReload: !process.env.PHONICS_TEST
+			, client: process.env.PHONICS_TEST ? false : undefined
 			, headers: {'Cache-Control': 'no-store'}
 			, static: [
-				...['src','shaders','examples','tests'].map(directory => ({
+				{directory: path.join(root, 'site/.cache/rendered'), publicPath: '/', watch: false}
+
+				, ...['src','shaders','resources','examples','tests','packages','browser'].map(directory => ({
 					directory: path.join(root, directory)
 					, publicPath: '/engine/' + directory
 					, serveIndex: false
@@ -72,8 +77,10 @@ export default async (_env, argv) => {
 					try {res.json(await engineFiles());} catch(error) {next(error);}
 				});
 
+				server.app.get('/engine/phonics.json', (_req, res) => res.sendFile(path.join(root, 'phonics.json')));
+				server.app.get('/engine/legacy.php', (_req, res) => res.sendFile(path.join(root, 'legacy.php')));
 				server.app.get('/engine/autoload.php', (_req, res) => res.sendFile(path.join(root, 'autoload.php')));
-				server.app.get('/docs/index.html', (_req, res) => res.redirect('/'));
+				server.app.get('/docs/index.html', (_req, res) => res.redirect('/sane-phonics/'));
 
 				return middlewares;
 			}

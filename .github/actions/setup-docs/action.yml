@@ -1,0 +1,16 @@
+name: Set up documentation tools
+description: Install the PHP, Pandoc, and yq dependencies used by the pinned smgen build.
+runs:
+  using: composite
+  steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: yaml
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc
+        curl --fail --location --retry 3 https://github.com/mikefarah/yq/releases/download/v4.47.2/yq_linux_amd64 -o "$RUNNER_TEMP/yq"
+        echo "1bb99e1019e23de33c7e6afc23e93dad72aad6cf2cb03c797f068ea79814ddb0  $RUNNER_TEMP/yq" | sha256sum --check
+        sudo install -m 755 "$RUNNER_TEMP/yq" /usr/local/bin/yq

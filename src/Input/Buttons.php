@@ -1,10 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Input;
+namespace Phonics\Input;
 
 /** Standard gamepad numbers shared by SDL, keyboard bindings and recorded input. */
 final class Buttons
 {
+	/** Conventional action and direction names mapped to SDL game-controller button indices. */
 	public const ALIASES = [
 		'jump' => 0
 		, 'action' => 1
@@ -25,6 +26,8 @@ final class Buttons
 	 */
 	public static function name(int|string $key): string
 	{
+		$key = ['yes' => InputCode::YES, 'no' => InputCode::NO][$key] ?? $key;
+
 		if(isset(self::ALIASES[$key]))
 		{
 			$key = self::ALIASES[$key];

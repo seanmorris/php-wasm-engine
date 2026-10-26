@@ -58,6 +58,35 @@ test('each wheel event moves one visible row regardless of HID line count', func
 	}
 });
 
+test('horizontal submenus rotate navigation, adjustment, and wheel input', function() {
+	$menu = new Menu([
+		'horizontal' => [
+			'orientation' => Menu::HORIZONTAL
+			, 'children' => [
+				'first' => ['input' => 'number', 'value' => 5]
+				, 'second' => ['input' => 'number', 'value' => 10]
+				, 'third' => ['input' => 'number', 'value' => 15]
+			]
+		]
+	]);
+	$menu->open();
+	$menu->activate();
+	$input = new MenuInput;
+
+	check($menu->orientation === Menu::HORIZONTAL && $menu->selected === 'first');
+	$input->update($menu, ['right' => true], 0);
+	check($menu->selected === 'second');
+	$input->update($menu, [], 0);
+	$input->update($menu, ['down' => true], 0);
+	check($menu->selected === 'second' && $menu->value('second') == 11);
+	$input->update($menu, [], 0);
+	$input->update($menu, [], 0, [['type' => 'wheel', 'x' => -2, 'y' => 0]]);
+	check($menu->selected === 'third');
+	$menu->back();
+	check($menu->orientation === Menu::VERTICAL && $menu->selected === 'horizontal');
+	rejects(fn() => new Menu(['bad' => ['orientation' => 'diagonal']]));
+});
+
 test('bitmap alignment places each wrapped line and its carets within the line box', function() {
 	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
 
@@ -271,6 +300,33 @@ test('slider dragging clamps outside its track instead of entering text editing'
 
 	$input->update($menu, [], 0, [['type' => 'pointer', 'action' => 'move', 'x' => 200, 'y' => 10]], $regions);
 	check($menu->value('slider') == 10 && $menu->editor === null);
+});
+
+test('one pointer press cannot activate two nested menu levels through its confirm alias', function() {
+	$menu = new Menu([
+		'read-this' => [
+			'label' => 'Read This'
+			, 'children' => [
+				'rebind' => [
+					'label' => 'Rebind'
+					, 'children' => ['keyboard' => ['label' => 'Keyboard']]
+				]
+			]
+		]
+	]);
+	$menu->open();
+	$input = new MenuInput;
+	$regions = [['id' => 'read-this', 'rect' => [0, 0, 150, 30]]];
+	$pointer = [['type' => 'pointer', 'action' => 'down', 'button' => 1, 'x' => 75, 'y' => 15]];
+
+	$input->update($menu, ['confirm' => true], 0, $pointer, $regions);
+	check($menu->depth() === 1 && $menu->title === 'Read This' && $menu->selected === 'rebind');
+
+	$input->update($menu, ['confirm' => true], .1);
+	check($menu->depth() === 1);
+	$input->update($menu, [], .1);
+	$input->update($menu, ['confirm' => true], 0);
+	check($menu->depth() === 2 && $menu->title === 'Rebind');
 });
 
 test('invalid numeric definitions and malformed font annotations are rejected', function() {

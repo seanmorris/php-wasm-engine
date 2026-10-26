@@ -1,6 +1,6 @@
 {
-  "name": "seanmorris/php-wasm-engine",
-  "description": "A PHP 2D engine for php-sdl-wasm with Tiled maps and surface-based platforming",
+  "name": "seanmorris/phonics",
+  "description": "Game-neutral PHP ECS, rendering, input and Tiled world runtime",
   "type": "library",
   "license": "Apache-2.0",
   "require": {
@@ -9,20 +9,33 @@
   },
   "autoload": {
     "psr-4": {
-      "PhpWasmEngine\\": "src/"
-    }
+      "Phonics\\": "src/"
+    },
+    "files": [
+      "autoload.php"
+    ]
   },
   "scripts": {
-    "test": ["php tests/run.php", "php tests/phpdoc.php"],
+    "test": [
+      "php tests/run.php",
+      "php tests/phpdoc.php",
+			"php tests/core-phonics.php",
+			"php tests/world-runtime.php",
+			"php tests/network.php",
+			"php tests/network-timing.php",
+      "php packages/php-noid/tests/run.php",
+      "php packages/php-tris/tests/run.php",
+      "php packages/doom-phonics/tests/run.php"
+    ],
     "bench:ecs": "php benchmarks/ecs.php",
     "lint": [
       "php-cs-fixer fix --dry-run --diff",
       "@lint:docs",
       "@lint:readability"
     ],
-    "lint:docs": "php scripts/check-phpdoc.php",
+    "lint:docs": "php scripts/check-phpdoc.php src packages/sane-phonics/src packages/php-noid/src packages/php-tris/src",
     "lint:fix": "php-cs-fixer fix",
-    "lint:readability": "sm-no-saccade-style --max-line-length=120 src tests examples benchmarks autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
+    "lint:readability": "sm-no-saccade-style --max-line-length=120 src packages tests examples benchmarks autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
   },
   "require-dev": {
     "seanmorris/sm-no-saccade-style": "dev-fix/readable-block-layout"
@@ -32,5 +45,38 @@
       "type": "vcs",
       "url": "https://github.com/seanmorris/sm-no-saccade-style"
     }
-  ]
+  ],
+  "archive": {
+    "exclude": [
+      "/tests",
+      "/packages",
+      "/scratch",
+      "/Screenshot*",
+      "/examples",
+      "/node_modules",
+      "/vendor",
+      "/docs",
+      "/scripts",
+      "/benchmarks",
+      "/art",
+      "/.runtime",
+      "/test-results",
+      "/.github",
+      "/package-lock.json",
+      "/composer.lock",
+      "/*config*",
+      "/.php-cs-fixer.php",
+      "/core",
+      "/preview",
+      "/dist",
+      "/eslint.config.mjs",
+      "/webpack.config.mjs",
+      "/playwright.config.mjs",
+      "/Screenshot_2026-10-20_15-36-59.png",
+      "/site",
+      "/bin",
+      "/cli"
+    ]
+  },
+  "version": "0.1.0"
 }

@@ -1,14 +1,15 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\
-{
-	Loader,TileMap
-};
+namespace Phonics\Render;
+use Phonics\Tiled\Loader;
+use Phonics\Tiled\TileMap;
 
+/** Named animation facade over one annotated external Tiled tileset. */
 final class SpriteSheet
 {
+	/** Synthetic single-tileset map used by Atlas and Sprite frame lookup. */
 	public TileMap $map;
+	/** @var array<string,int> Animation names mapped to their first global tile IDs. */
 	public array $animations = [];
 
 	/**

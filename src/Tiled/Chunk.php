@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
+namespace Phonics\Tiled;
 
+/** Mutable sparse Tiled chunk storing packed little-endian GIDs and upload revision. */
 final class Chunk
 {
+	/** Revision incremented after each tile edit so renderers can refresh GPU data. */
 	public int $revision = 0;
 
 	/**

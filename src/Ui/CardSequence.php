@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
 /** Deterministic, renderer-independent sequencing with readiness and fresh-press guards. */
 final class CardSequence
 {
+	/** Lifecycle state: idle, entering, showing, leaving, complete, or cancelled. */
 	public string $state = 'idle';
+	/** Elapsed seconds within the current lifecycle state. */
 	public float $elapsed = 0;
 
 	private int $index = -1;

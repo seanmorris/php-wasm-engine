@@ -2,7 +2,7 @@
 require_once __DIR__ . '/vendor/autoload.php';
 
 $finder = PhpCsFixer\Finder::create()->in(
-	[__DIR__ . '/src', __DIR__ . '/tests', __DIR__ . '/examples', __DIR__ . '/benchmarks']
+	[__DIR__ . '/src', __DIR__ . '/packages', __DIR__ . '/tests', __DIR__ . '/examples', __DIR__ . '/benchmarks']
 )
 	->append([__DIR__ . '/autoload.php',__DIR__ . '/scripts/check-phpdoc.php',__FILE__]);
 

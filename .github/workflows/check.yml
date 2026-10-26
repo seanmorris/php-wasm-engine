@@ -11,6 +11,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint:js
+      - run: npm run test:packages
+      - run: npm run test:cli
+      - run: npm run test:generated
+      - run: npm run build:manifests && git diff --exit-code -- phonics.json packages tests/fixtures
   php:
     runs-on: ubuntu-latest
     steps:
@@ -20,10 +24,14 @@ jobs:
           php-version: '8.2'
           extensions: zlib
       - run: composer install --no-interaction --prefer-dist
-      - run: php examples/generate-assets.php && git diff --exit-code -- examples/assets
+      - run: php packages/sane-phonics/examples/generate-assets.php && git diff --exit-code -- packages/sane-phonics/examples/assets resources
       - run: composer test
       - name: Check ECS benchmark workloads
         run: php benchmarks/ecs.php --entities=1000 --samples=1 --iterations=1 > "$RUNNER_TEMP/ecs-benchmark.json"
+      - name: Check PHP-Noid collision workloads
+        run: php packages/php-noid/benchmarks/collisions.php --samples=1 --iterations=2 > "$RUNNER_TEMP/php-noid-collisions-native.json"
+      - name: Check PHPTris board workloads
+        run: npm run bench:php-tris
       - run: composer lint
   tiled:
     runs-on: ubuntu-latest
@@ -32,6 +40,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci
+      - run: npm link --workspace @seanmorris/tiled-phonics
       - name: Install Tiled 1.12.2
         run: |
           sudo apt-get update
@@ -46,6 +56,9 @@ jobs:
       - run: xvfb-run -a npm run test:tiled
         env:
           QT_QPA_PLATFORM: xcb
+      - run: xvfb-run -a npm run test:editor
+        env:
+          QT_QPA_PLATFORM: xcb
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -57,4 +70,37 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run setup:runtime
+      - run: npm run test:cli:browser
+      - name: Measure PHP-Noid collisions in PHP-WASM
+        run: node scripts/bench-php-noid-browser.mjs > "$RUNNER_TEMP/php-noid-collisions.json"
+      - name: Measure PHPTris board phases in PHP-WASM
+        run: npm run bench:php-tris:browser
       - run: npm run test:browser
+        env:
+          PHONICS_TEST: 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: php-noid-performance
+          path: |
+            ${{ runner.temp }}/php-noid-collisions.json
+            test-results/**/*profile*
+      - uses: ./.github/actions/setup-docs
+      - run: npm run build:docs
+      - run: npm run test:site
+      - run: npm run test:site:browser
+
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: zip
+      - run: npm ci
+      - run: npm run test:artifacts

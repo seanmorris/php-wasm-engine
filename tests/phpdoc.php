@@ -109,7 +109,10 @@ PHP;
 });
 
 phpDocTest('breakables documents both assigned callbacks with parameter and return descriptions', function() {
-	$functions = phpDocFunctions(file_get_contents(dirname(__DIR__) . '/examples/breakables.php'));
+	$functions = phpDocFunctions(
+		file_get_contents(dirname(__DIR__) . '/packages/sane-phonics/examples/breakables.php')
+	);
+
 	phpDocCheck(count($functions) === 3);
 
 	foreach($functions as $function) phpDocCheck(phpDocErrors($function) === [], $function['name'] . ' PHPDoc');

@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Input;
+namespace Phonics\Input;
 
 /** Timed, device-independent input recognition; no SDL or rendering dependency. */
 final class Sequences

@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
 /** Instanced solid rectangles for screen-space panels, sliders, and text selections. */
 final class RectRenderer
@@ -8,13 +8,16 @@ final class RectRenderer
 	private Program $program;
 	private array $vao = [], $buffers = [];
 	private bool $closed = false;
+	private bool $bound = false;
 
 	/**
 	 * Create the screen-space rectangle program and buffers in the current GL context.
 	 *
+	 * @param bool $exclusive Retain the program binding when this renderer owns every draw in
+	 * the context. Leave false when other renderers or external GL code can change the program.
 	 * @return void Allocates resources owned exclusively by this renderer.
 	 */
-	public function __construct()
+	public function __construct(private bool $exclusive = false)
 	{
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.vert')
@@ -69,7 +72,12 @@ final class RectRenderer
 			$bytes .= pack('f*', ...$rectangle);
 		}
 
-		$this->program->use();
+		if(!$this->exclusive || !$this->bound)
+		{
+			$this->program->use();
+			$this->bound = true;
+		}
+
 		glUniform2f($this->program->location('viewport'), $width, $height);
 		glBindVertexArray($this->vao[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
@@ -85,6 +93,8 @@ final class RectRenderer
 	 */
 	private function release(): void
 	{
+		$this->bound = false;
+
 		if($this->vao)
 		{
 			glDeleteVertexArrays(count($this->vao), $this->vao);

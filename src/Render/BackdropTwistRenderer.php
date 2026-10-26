@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
 /** Captures background draws and applies a localized radial twist before foreground sprites. */
 final class BackdropTwistRenderer
@@ -9,6 +9,7 @@ final class BackdropTwistRenderer
 	private array $vao = [], $framebuffer = [], $depthBuffer = [];
 	private int $sceneTexture = 0, $targetFramebuffer = 0;
 	private bool $closed = false, $capturing = false;
+	/** Composite draw calls submitted by the latest capture. */
 	public int $draws = 0;
 
 	/**

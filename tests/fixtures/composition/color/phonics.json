@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "name": "@fixture/color",
+  "version": "1.0.0",
+  "requires": {
+    "phonics": "^0.1.0"
+  },
+  "dependencies": {},
+  "php": {
+    "files": [
+      "module.php"
+    ],
+    "autoload": {}
+  },
+  "exports": {
+    "module": {
+      "type": "module",
+      "php": "module.php"
+    },
+    "tuning": {
+      "type": "asset",
+      "path": "tuning.json"
+    }
+  },
+  "integrity": {
+    "module.php": "sha256-J92KIP7mHKfTlNfi104qHwr2pPu8dTDUIA27Mo48pvY=",
+    "tuning.json": "sha256-B5uJCXCljP4UWfEX5KculFnHuEwkJQqDpLXoFdzAVzU="
+  },
+  "assets": [
+    "tuning.json"
+  ],
+  "preload": [
+    "tuning.json"
+  ]
+}

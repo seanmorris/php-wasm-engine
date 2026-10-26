@@ -1,13 +1,25 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
-use PhpWasmEngine\Tiled\TileMap;
+namespace Phonics\Render;
+use Phonics\Tiled\TileMap;
 
 /** Shelf-pack source images once; dense metadata keeps sparse firstgids cheap. */
 final class Atlas
 {
-	public int $texture = 0,$metadata = 0,$width = 1,$height = 1;
-	public array $indices = [], $rects = [], $tiles = [];
+	/** GL image-atlas texture handle, replaced after context restoration. */
+	public int $texture = 0;
+	/** GL dense tile-metadata texture handle, replaced after context restoration. */
+	public int $metadata = 0;
+	/** Packed atlas width in pixels. */
+	public int $width = 1;
+	/** Packed atlas height in pixels. */
+	public int $height = 1;
+	/** @var array<int,int> Global tile ID to dense metadata-column index. */
+	public array $indices = [];
+	/** @var array<string,array{int,int,int,int}> Source image paths to packed pixel rectangles. */
+	public array $rects = [];
+	/** @var array<int,array<string,mixed>> Normalized tile definitions keyed by global tile ID. */
+	public array $tiles = [];
 	private array $frames = [];
 	private bool $closed = false;
 
@@ -51,7 +63,7 @@ final class Atlas
 						continue;
 					}
 
-					$surface = IMG_Load($tile['image']);
+					$surface = IMG_Load(\Phonics\Asset\Resource::local($tile['image']));
 
 					if(!$surface)
 					{

@@ -1,13 +1,18 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
-use PhpWasmEngine\Asset\Assets;
+namespace Phonics\Tiled;
+use Phonics\Asset\Assets;
 
 /** PHP selects maps and resolves dependencies; the host only transfers files. */
 final class WorldStream
 {
 	private array $states = [], $references = [];
-	public array $entered = [], $exited = [], $errors = [];
+	/** @var list<TileMap> Maps activated by the latest update. */
+	public array $entered = [];
+	/** @var list<TileMap> Maps evicted by the latest update. */
+	public array $exited = [];
+	/** @var array<string,string> Current loading failures keyed by placement identity. */
+	public array $errors = [];
 	private $request, $release;
 	private bool $closed = false;
 
@@ -73,9 +78,10 @@ final class WorldStream
 
 		foreach($near as $order => $entry)
 		{
-			$path = Assets::relative($this->world->path, $entry['fileName']);
+			$path = $this->world->identity($entry);
 			$this->states[$path] ??= [
 				'entry' => $entry
+				, 'source' => Assets::relative($this->world->path, $entry['fileName'])
 				, 'order' => $order
 				, 'files' => []
 				, 'map' => null
@@ -88,7 +94,7 @@ final class WorldStream
 
 		foreach($keep as $entry)
 		{
-			$retained[Assets::relative($this->world->path, $entry['fileName'])] = true;
+			$retained[$this->world->identity($entry)] = true;
 		}
 
 		// Acquire new dependencies before releasing old maps that may share them.
@@ -101,7 +107,7 @@ final class WorldStream
 
 			try
 			{
-				if(!$this->prepare($state, $path))
+				if(!$this->prepare($state, $state['source']))
 				{
 					continue;
 				}
@@ -182,23 +188,7 @@ final class WorldStream
 		$state['failed'] = null;
 		$ready = true;
 
-		foreach($data['tilesets'] ?? [] as $set)
-		{
-			if(isset($set['source']))
-			{
-				$source = Assets::relative($path, $set['source']);
-
-				if(!$this->available($state, $source))
-				{
-					$ready = false;
-					continue;
-				}
-
-				$state['failed'] = $source;
-				$this->world->loader->assets->json($source);
-				$state['failed'] = null;
-			}
-		}
+		$ready = $this->dependencies($state, $data, $path, [$path]);
 
 		if(!$ready)
 		{
@@ -235,6 +225,67 @@ final class WorldStream
 		{
 			$ready = $this->available($state, $image) && $ready;
 		}
+
+		return $ready;
+	}
+
+	/**
+	 * Acquire nested templates, tilesets, images and file properties before parsing a map.
+	 *
+	 * @param array $state Map lifecycle state owning the acquired resources.
+	 * @param array $data Tiled document or nested object being visited.
+	 * @param string $source Canonical URL of the declaring document.
+	 * @param array $chain Documents already visited on this dependency path.
+	 * @return bool Whether every discovered dependency is mounted.
+	 */
+	private function dependencies(array &$state, array $data, string $source, array $chain): bool
+	{
+		$ready = true;
+		$properties = Loader::properties($data['properties'] ?? []);
+
+		foreach($data['properties'] ?? [] as $property)
+		{
+			if(($property['type'] ?? '') !== 'file' || ($property['value'] ?? '') === '') continue;
+
+			$dependency = Assets::relative(
+				$properties['phonics.source'] ?? $source
+				, $properties['phonics.source.property.' . $property['name']] ?? $property['value']
+			);
+
+			$ready = $this->available($state, $dependency) && $ready;
+		}
+
+
+		foreach($data as $key => $value)
+		{
+			if(in_array($key, ['properties', 'data', 'chunks', 'polygon', 'polyline', 'animation'], true)) continue;
+
+			if(in_array($key, ['source', 'template', 'image'], true) && is_string($value))
+			{
+				$dependency = Assets::relative($source, $properties['phonics.source.' . $key] ?? $value);
+
+				if(!$this->available($state, $dependency))
+				{
+					$ready = false;
+					continue;
+				}
+
+				if($key === 'image') continue;
+
+				if(in_array($dependency, $chain, true))
+				throw new \RuntimeException('Tiled dependency cycle: ' . implode(' -> ', [...$chain, $dependency]));
+
+				$state['failed'] = $dependency;
+				$document = $this->world->loader->assets->json($dependency);
+				$state['failed'] = null;
+				$ready = $this->dependencies($state, $document, $dependency, [...$chain, $dependency]) && $ready;
+			}
+			elseif(is_array($value))
+			{
+				$ready = $this->dependencies($state, $value, $source, $chain) && $ready;
+			}
+		}
+
 
 		return $ready;
 	}
@@ -308,7 +359,7 @@ final class WorldStream
 
 		foreach($this->world->entries($x, $y, $width, $height, $margin) as $entry)
 		{
-			$path = Assets::relative($this->world->path, $entry['fileName']);
+			$path = $this->world->identity($entry);
 
 			if($this->states[$path]['ready'] ?? false)
 			{
@@ -334,7 +385,7 @@ final class WorldStream
 	{
 		foreach($this->world->entries($x, $y, $width, $height, $margin) as $entry)
 		{
-			if(!($this->states[Assets::relative($this->world->path, $entry['fileName'])]['ready']
+			if(!($this->states[$this->world->identity($entry)]['ready']
 				?? false
 			)){
 				return false;
@@ -374,7 +425,7 @@ final class WorldStream
 			}
 		}
 
-		$this->world->unload($this->states[$path]['entry']['fileName']);
+		$this->world->unload($this->states[$path]['entry']);
 		$this->states[$path]['map'] = null;
 		$this->states[$path]['failed'] = null;
 		unset($this->errors[$path]);
@@ -396,7 +447,7 @@ final class WorldStream
 			$this->exited[] = $state['map'];
 		}
 
-		$this->world->unload($state['entry']['fileName']);
+		$this->world->unload($state['entry']);
 
 		foreach(array_keys($state['files']) as $file)
 		{

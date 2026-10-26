@@ -1,15 +1,27 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
 /** Declarative menu state and live bindings, usable without SDL or a renderer. */
 final class Menu
 {
+	/** Stack rows from top to bottom and use vertical input for selection. */
+	public const VERTICAL = 'vertical';
+	/** Stack rows from left to right and use horizontal input for selection. */
+	public const HORIZONTAL = 'horizontal';
+	/** Whether the menu currently accepts navigation and activation input. */
 	public bool $isOpen = false;
+	/** Stable ID of the selected visible row, or null when none are visible. */
 	public ?string $selected = null;
+	/** Active text/numeric editing buffer, or null outside edit mode. */
 	public ?TextBuffer $editor = null;
+	/** First visible row index retained independently for each submenu. */
 	public int $scroll = 0;
+	/** Selection axis for the current page. */
+	public string $orientation = self::VERTICAL;
+	/** Whether an asynchronous row action currently blocks menu input. */
 	public bool $loading = false;
+	/** User-facing asynchronous action failure, cleared by later navigation or activation. */
 	public ?string $error = null;
 	private array $items = [], $stack = [];
 	private $loader = null;
@@ -55,6 +67,12 @@ final class Menu
 				{
 					throw new \InvalidArgumentException('Alignment must be left, center, or right');
 				}
+			}
+
+			if(isset($item['orientation'])
+				&& !in_array($item['orientation'], [self::VERTICAL, self::HORIZONTAL], true)
+			){
+				throw new \InvalidArgumentException('Menu orientation must be vertical or horizontal');
 			}
 
 			if($type === 'number')
@@ -325,12 +343,14 @@ final class Menu
 				, 'selected' => $this->selected
 				, 'title' => $this->title
 				, 'scroll' => $this->scroll
+				, 'orientation' => $this->orientation
 				, 'loader' => $this->loader
 			];
 
 			$this->title = $item['label'];
 			$this->selected = null;
 			$this->scroll = 0;
+			$this->orientation = $item['orientation'] ?? self::VERTICAL;
 			$this->items = [];
 			$this->loader = is_callable($item['children']) ? $item['children'] : null;
 			$this->loading = $this->loader !== null;
@@ -386,6 +406,7 @@ final class Menu
 		$this->selected = $parent['selected'];
 		$this->title = $parent['title'];
 		$this->scroll = $parent['scroll'];
+		$this->orientation = $parent['orientation'];
 		$this->loader = $parent['loader'];
 		$this->loading = false;
 		$this->error = null;

@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
 /** Sprite planes that may surround another entity in painter order. */
 final class SpriteLayers
@@ -13,6 +13,7 @@ final class SpriteLayers
 	 *
 	 * @param list<Sprite> $behind Planes painted behind the optional anchor.
 	 * @param list<Sprite> $front Planes painted in front of the optional anchor.
+	 * @return void Stores mutable sprite lists without copying their members.
 	 */
 	public function __construct(public array $behind = [], public array $front = []) {}
 }

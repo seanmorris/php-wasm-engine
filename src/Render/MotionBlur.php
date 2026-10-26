@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
-/** Measures camera travel using moving-boxes-2's directional motion-blur response curve. */
+/** Measure camera travel for a frame-rate-independent directional motion-blur response. */
 final class MotionBlur
 {
 	private ?float $x = null, $y = null, $zoom = null;

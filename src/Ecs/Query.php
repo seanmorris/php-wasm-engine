@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ecs;
+namespace Phonics\Ecs;
 
+/** Immutable-by-convention boolean expression over ECS component types. */
 final class Query
 {
 

@@ -1,281 +1,78 @@
-# Implementation notes
-
-## Reference projects
-
-The initial design was informed by Sean Morris's local projects:
-
-- tigl/app/world/World.js, TileMap.js, and sprite/SpriteBoard.js: manifest bounds, spatial queries, deferred map initialization, cached requests, and visibility-driven renderer lifetimes.
-- tigl/app/sprite/Parallax.js: repeating image strips, independent scroll factors, and viewport anchors.
-- moving-boxes-2/app/backdrop/Backdrop.js: stacked strips, automatic drift, and animated image frames.
-- moving-boxes-2/app/actor/Block.js: rider-weighted settling, single-axis squine and two-axis
-  elliptical oscillation, and linked `path`/`next` route nodes. `Platforms` separates collision
-  supports, oscillators, and path cursors into ECS components. `PlatformTransport` casts the full
-  relative motion to detect pushes, then casts passengers against world geometry before moving
-  the support. Each path segment is processed separately so corners remain intact.
-- soop: object components, boolean queries, systems, and deferred structural commands.
-- moving-boxes-2/app/behavior/Platformer.js: surface modes, ground/air velocity, terrain sensors, tangent momentum, and normal-directed jumps.
-- moving-boxes-2/app/behavior/Crouch.js and Spindash.js: grounded crouch state, Down + tap 0 or hold 1 charging, passive charge decay, and Down-release launch.
-- moving-boxes-2/app/actor/Sonic.js: landing-triggered drop dash, braking and spindash visual
-  displacement triggers, signed effect strengths, and button-2 ring acquisition, light-dash
-  chaining, nine-frame timers, and combo accrual.
-- moving-boxes-2/app/actor/PointActor.js, app/effects/Twist.js, and the viewport background-filter
-  layer: the radial tangential field placed between the map and actor artwork.
-- moving-boxes-2/app/viewport/Viewport.js and viewport.html: camera-delta motion strength,
-  directional Gaussian map-layer blur, and sharp actor and overlay composition.
-- moving-boxes-2/app/actor/Knuckles.js: glide, wall catching, climbing, and jumping away.
-- moving-boxes-2/app/actor/Tails.js: lift, flight duration, reduced gravity, and exhaustion.
-- moving-boxes-2/app/region/WaterRegion.js and the viewport waves filter: liquid gravity, drag,
-  density, surface skimming, tinted clipping, and scrolling displacement.
-- moving-boxes-2/app/behavior/Platformer.js, region/GrindingRegion.js, actor/SkateBoard.js,
-  actor/PointActor.js, and viewport/Viewport.js: annotated grinding surfaces, retained direction,
-  minimum rail speed, airborne combo links, summed reward multipliers, settlement, and top-right HUD.
-- moving-boxes-2/app/actor/CrabMeat.js, behavior/Patrol.js, mixin/CanPop.js, and actor/Projectile.js: reusable badnik contacts, alternating patrol phases, paired delayed shots, ballistic motion, and player attack responses.
-- moving-boxes-2/app/actor/PointActor.js and actor/Ring.js: bounded radial ring loss, a delayed recovery window, reduced collectible sets, ballistic gravity, terrain bounces, and expiry.
-- moving-boxes-2/app/actor/Monitor.js, BrokenMonitor.js, and actor/monitor ring variants: solid reward boxes, attack-triggered popping, separated screen art, one-shot effects, broken casings, and airborne rebounds.
-- moving-boxes-2/app/powerups/NormalSheild.js, ElectricSheild.js, FireSheild.js, BubbleSheild.js, StarSheild.js, and their monitor actors: one-hit defense, elemental immunity, retained selections, temporary star override, and shield-specific airborne controls. The PHP API corrects the reference source's `Sheild` spelling while accepting it in imported Tiled class and reward names.
-- moving-boxes-2/app/controller/Controller.js, Axis.js, and GamepadConfig.js: left-stick/D-pad movement, A jump, B dash actions, Start pause, and a proportional 20% stick dead zone.
+# Phonics architecture
 
-The PHP implementation has its own data model, solver, units, control state, and renderer. The CrabMeat and monitor demo uses original procedural artwork and component systems rather than the reference framework's actor hierarchy.
+Phonics is a game-neutral runtime for worlds assembled in Tiled. The browser resolves a world's package graph, verifies executable files, prepares an isolated PHP filesystem, and starts one PHP/SDL session. PHP owns simulation and rendering. JavaScript owns asynchronous loading, host policy, mounting, and cleanup.
 
-## PHP and browser boundaries
+## World-first startup
 
-Asset, Tiled, Ecs, FixedStep, Controls, and Physics are ordinary PHP. Render and SdlInput call php-sdl-wasm extensions. Engine uses vrzno for frame scheduling and cleanup. The demo's PHP code updates its DOM status through vrzno.
+`Phonics.loadWorld(worldUrl, options)` is the public browser entry point. It reads supported Tiled custom properties instead of a host-side game table:
 
-Gamepads polls SDL controller handles by instance ID, detects connection changes, releases detached handles, and sends rumble through the exact active SDL handle. SDL handles browser Gamepad API access, device mappings and haptic capability checks. SdlInput merges keyboard and gamepad strengths; Controls retains press/release edges for fixed simulation steps. Individual pad axes and buttons remain available for custom bindings. Canvas focus listeners cover element blur, which does not produce an SDL window-focus event. Focus, visibility and graphics recovery suppress held gamepad controls until neutral. Start toggles simulation pause while polling and rendering continue. Engine closes input before SDL teardown.
+- `phonics.import.<alias>` registers a package manifest in the session pallet.
+- `phonics.game` selects a game export by `@alias/name` or a manifest URL and fragment.
+- `phonics.start` selects the first map or exported asset.
+- `phonics.modules` lists additional module exports as a JSON string.
 
-docs/bootstrap.mjs imports the runtime and mounts files. It contains no movement, map parsing, entity processing, or rendering logic. Optional zlib uses php-sdl-wasm's sharedLibs resolver.
+The loader resolves the complete dependency graph before executing code. Package requirements, dependency cycles, export types, PHP namespace ownership, code origins, and integrity metadata are checked first. Every declared PHP dependency is fetched and mounted before its bootstrap runs, so PHP autoloading remains synchronous.
 
-## GPU representation
+A ready session exposes its canonical world URL, abort signal, parsed world, package graph, asset adapter, starting map, PHP runtime, and `dispose()` method. Disposal aborts outstanding work, runs module cleanup in reverse registration order, releases scoped resources, and refreshes the PHP runtime.
 
-Tiled GIDs use flag bits above PHP WASM's signed integer range. Gid decodes without narrowing to signed int32 and stores four bytes. The renderer remaps sparse global IDs to dense atlas indexes.
+## Resource identity and ownership
 
-Layers are split into at most 32×32 cells. Texture arrays are bounded by GL_MAX_ARRAY_TEXTURE_LAYERS. Independent instance attributes retain layer placement and appearance. Dirty revisions trigger a slice upload. Floating-point metadata supplies atlas rectangles and offsets; animation updates metadata rather than every tile.
+Every loaded resource retains a canonical source URL separately from its cache key or WASM mount. Relative references resolve against the resource that declares them: world to map, map to tileset, tileset to image, and manifest to code or assets. Root-relative paths, queries, and fragments use normal URL semantics.
 
-Isometric drawing orders diagonals globally, including negative chunks, at the cost of more draws. Games order sprites before passing them to SpriteRenderer. Objects retain metadata; games supply their graphics.
+`ResourceStore` deduplicates canonical URLs, retries failed requests when asked, verifies SHA-256 integrity, and reference-counts ownership through cancellable scopes. `SessionAssets` maps those URLs into isolated package mounts while preserving package-relative layouts. Shared bytes can outlive one scene; mutable map placement and ECS state cannot.
 
-SpriteSheet::play resolves an animation name to a tile GID and starts it by storing the negative simulation time in Sprite::time. SpriteRenderer adds that offset to its render time before selecting the Tiled animation frame. Repeated requests for the current GID preserve the offset unless an explicit restart is requested. Switching does not recreate the sprite or upload textures, and sprite playback survives atlas restoration.
+Tiled authoring caches use `phonics.source` and `phonics.source.property.<name>` metadata to retain canonical provenance. Browser and native PHP loaders honor those overrides. Relocating an authoring cache therefore does not change the published identity of its dependencies.
 
-SpriteGroup stores several world-positioned sprites on one entity while preserving the registry's one-component-per-class rule. SpriteLayers stores independently outlined rear and foreground planes and can place them immediately around an anchor entity in painter order. The occupied EggWalker uses that generic relation for rear chair, gun, and leg; rider; then foreground hull, arm, and leg. SpriteRenderer::renderEntities retains those plane and entity boundaries while collecting them into one instanced batch. Each sprite may select a tile-relative integer crop; this adjusts the source rectangle and rendered dimensions without uploading a texture. Frozen sprites bypass tile animation lookup. Tint is constant per instance in the shader, avoiding interpolation rounding across triangles.
+## PHP runtime boundary
 
-Sprite::$outline defaults to true. Each entity receives a depth band: its artwork instances render first in painter order, followed by outline-only instances at one shared, farther depth. Artwork from any sibling therefore rejects internal ink while the completed entity still paints over earlier entities. The vertex shader expands outline quads by one world unit along each local axis before rotation. It keeps the artwork's original anchor and computes the outline radius in source pixels from the absolute sprite scale. The fragment shader fills only transparent pixels with black using the largest alpha in that source neighborhood. It clamps every lookup to the current frame or crop. Checking intermediate texels keeps outlines continuous when source pixels shrink below one world pixel. Fully opaque neighbors end the search early; opt-outs skip the ink instance and neighborhood scan. Integer texel fetches and stabilization at texel boundaries keep cropped artwork consistent. Camera zoom applies after world-space expansion. Artwork and ink remain one GPU draw and do not alter physics bounds. The default follows moving-boxes-2's actor and particle policy; regions, legacy and buoyant blocks, breakable blocks, bridge segments, and repeated rope strips opt out while moving platforms remain outlined. Offscreen scene targets carry depth renderbuffers so grouping remains valid through water, motion-blur, and backdrop captures.
+Asset, ECS, scheduling, Tiled parsing, spatial indexing, fixed-step simulation, generic collision queries, controls, and most layout calculations are ordinary PHP. SDL input and WebGL rendering use the PHP/SDL runtime extensions. The browser bridge supplies request scheduling, asynchronous data transfer, DOM-backed textures, audio output, quick controls, and session lifecycle callbacks.
 
-BackdropTwistRenderer captures map output in an RGBA8 texture, restores that texture to the caller's framebuffer, and redraws a clipped 64-world-pixel square through a cubic radial tangential field. Sprites render after composition, matching the reference background-filter layer and keeping actor and particle pixels unchanged. The renderer remembers its parent framebuffer, so it can capture and compose inside WaterRenderer before sprites enter the water pass. It owns one texture, framebuffer, vertex array, and shader program and recreates them after context restoration. The demo applies the reference braking and spindash offsets at the player's support point, derives braking strength from opposing tangent speed with a ±256 clamp, and derives spindash strength from retained direction and normalized charge up to ±120. Inactive frames skip capture and both extra draws.
+`Engine` polls input and renders on visible browser frames while `FixedStep` advances simulation at a stable interval. Catch-up is bounded; excess time is reported through `FixedStep::$droppedTime`. Paused, hidden, and lost-context frames reset timing and input baselines so stale movement does not enter the next update.
 
-MotionBlur separates camera measurement from GPU composition. Its model uses final camera travel,
-output zoom, and elapsed render time to reproduce the moving-boxes-2 response at a 60 Hz reference
-rate while avoiding strength changes caused by browser frame rate. Disabled, paused, recovered,
-teleported, and zoom-changing frames replace the baseline so stale travel cannot flash on the next
-draw. MotionBlurRenderer captures the complete map pass in an RGBA8 texture and applies a
-one-dimensional Gaussian along the measured screen direction. Clamp-to-edge sampling matches the
-reference filter's duplicate edge mode. Actor, entity, and HUD batches follow the composite and
-stay sharp. The capture retains its parent framebuffer, allowing backdrop displacement inside it
-and water capture outside it. It owns and restores one texture, framebuffer, vertex array, and
-shader program; inactive samples allocate no per-frame resources and submit no extra draw.
-
-ParticleBurst partitions a sprite's current frame into an integer grid. It maps each cell through the original anchor, scale, rotation, and flips, then gives each piece an independent center, velocity, spin, and fade. Odd dimensions distribute all source pixels exactly. Motion uses constant-acceleration integration and clamps at the configured lifetime. ParticleSystem retires the owning entity through the registry's deferred queue. A burst uses one SpriteGroup and one entity regardless of its piece count.
-
-ImageRenderer draws Tiled image layers between tile batches in map order. A vertex-ID quad covers the visible part of the image, or the viewport along repeated axes. The fragment shader wraps texel coordinates, so a wide view does not create more geometry. PHP reduces the repeat phase before sending it to the GPU, retaining precision at negative and distant world coordinates. Integer texel fetches stabilize non-power-of-two repeat boundaries. Each image uploads once per renderer, including animated frames when first used; changing the camera or scrolling updates only uniforms.
-
-Parallax calculates layout without SDL. Normal image and tile layers use Tiled's view-center reference and the map's world-space parallax origin. Anchored strips use a common top/center/bottom stack offset and world-camera coordinates multiplied by independent camera factors. Their phase excludes map placement and map-local parallax origins, so matching stacks stay aligned across maps. Time is expressed in milliseconds, and automatic scrolling in pixels per second. The implementation uses explicit image frames instead of the reference project's DOM background and palette-recolor pipeline.
-
-WorldRenderer draws image layers before each map's first tile layer in a background pass. Only the ready map containing the camera center contributes its anchored stack; overlaps use manifest order. While that map is pending or the center is in a gap, the previous visible ready stack remains selected, falling back to the first visible ready map. Regular image layers still render for all visible maps. The remaining layers follow in map order. This keeps repeating skies behind terrain and prevents duplicate alpha blending at boundaries. MapRenderer's optional start/end layer indexes describe a half-open range for these passes, and its `anchoredImages` argument suppresses anchored images for unselected backgrounds.
-
-WaterRenderer captures map and sprite output into one RGBA8 framebuffer. Its base pass copies that
-scene to the default framebuffer. Each visible water rectangle then redraws its clipped area with
-a procedural repeating RG displacement texture, a small horizontal blur, and the Tiled tint.
-World-space lookup coordinates keep wave phase continuous across neighboring regions and camera
-movement. HUD and menu passes follow composition, so screen-space text is not displaced. The
-renderer owns its framebuffer, color texture, wave texture, vertex array, and shader program, and
-recreates each one after context restoration.
-
-Format semantics follow the official [Tiled JSON format](https://doc.mapeditor.org/en/stable/reference/json-map-format/), [global tile IDs](https://doc.mapeditor.org/en/stable/reference/global-tile-ids/), and [world format](https://doc.mapeditor.org/en/stable/manual/worlds/).
-
-PlatformCamera separates gameplay framing from the render camera. Modes select target viewport
-anchors for ground, wall, ceiling, air, climbing, tubes, bosses, scripted focus points, and the
-other moving-boxes-2 camera contexts. High ground or air speed biases the target along the active
-surface. Anchor changes use the reference frame divisors converted to elapsed-time exponential
-damping. Camera position uses the same conversion with faster panning for scripted focus changes.
-World rectangles and camera-coordinate limits clamp the desired top-left point before damping.
-Consequently, a newly engaged boss arena changes the camera destination without changing its
-current pose, and release pans back through the same path. Direct Camera::follow remains the small
-general-purpose primitive; Camera::panTo accepts a top-left destination for policy controllers.
-CameraShake produces a render-only camera clone, so alternating impact displacement cannot feed
-back into follow damping, bounds, or motion-blur velocity. Its continuous waveform matches the
-reference sign reversal and five-percent decay at sixty hertz while remaining step-independent.
-
-## Where raycasting prevents tunneling
-
-Physics/Terrain.php provides two casts:
-
-1. raycast intersects a ray segment with front-facing terrain edges. It walks crossed spatial cells and returns the earliest intersection along the entire ray.
-2. castBody casts an oriented rectangle through its full displacement. Candidate segments expand by body extents; interval intersection on three separating axes finds the first contact. Segment endpoints participate, so obstacles smaller than the spacing between foot sensors still block movement.
-
-Platformer::sweep uses castBody for horizontal, vertical, and diagonal movement, including dash, fall, flight, glide, and climb. Its optional onImpact callback receives the earliest body hit before collision response. Hit::$shape identifies removable geometry; a null handle means permanent terrain. If the callback removes the contacted shape, the sweep advances to that contact and recasts the remaining displacement without clipping velocity. Removed shapes do not consume the six-contact budget; a separate limit of 1024 removals bounds callbacks that keep creating obstacles. Otherwise, the sweep moves to contact, projects velocity and remaining displacement onto the surface, then repeats for up to six contacts. Unresolved displacement is discarded. Callback return values alone cannot disable a collision.
-
-Platformer::adhere casts two short inward rays for surface height and angle. Platformer::stand checks head clearance. Platformer::climb probes the wall's end. Grounded movement updates its tangent in increments of at most four pixels, capped at 1024 increments per step. Each increment still uses a continuous cast.
-
-WaterRegions uses a slab intersection test over the body's complete center displacement. A body
-that starts and ends outside a liquid rectangle still reports both waterEntered and waterExited
-when it crosses the volume in one step. Surface skimming compares the complete vertical movement
-with the surface and snaps only actors at or above the configured horizontal speed. These regions
-are nonsolid and do not replace Terrain::castBody for walls, floors, or underwater collision.
-Because rail contact and surface support are resolved independently, a rail placed at the exact
-waterline can report both `grinding` and `skimming`. Extending each rail into the water rectangle
-creates an overlap zone, so leaving or entering the open surface does not require crossing a
-vertical liquid boundary.
-
-Badniks stores each player's and badnik's previous center. It performs a relative swept AABB test over both full displacements, which catches fast rolling attacks and normal contacts even when the rectangles do not overlap at either endpoint. Projectile contacts sweep the player and shot relative to one another. Projectile terrain motion constructs a small body and calls `Terrain::castBody()` for the complete ballistic displacement before committing the new position. These checks prevent high-speed actors and shots from tunneling through their targets. CrabMeats uses short downward rays to retain floor contact and `castBody()` to stop horizontal patrol movement at a wall.
-
-Rings applies the same continuous rules to damage bursts. Each `ScatteredRing` casts its circular body over the complete ballistic step, reflects velocity from the earliest terrain normal, and processes up to four contacts. Pickup checks subtract ring motion from player motion before testing the swept bounds. Fast bounces and player crossings therefore cannot pass through thin terrain or each other between fixed updates. A pickup delay prevents the player from immediately reclaiming rings while still inside the burst. Decorative members never enter the pickup path and expire earlier.
-
-Monitors inserts each intact box into Terrain as a removable rectangle. `Platformer::sweep()` reports the earliest shape to `Monitors::impact()` over the actor's complete displacement. An eligible roll or jump somersault removes that exact handle before the sweep recasts its remaining movement. Walking and plain falling retain the shape and receive ordinary collision response. The same cast therefore prevents a high-speed attacker from skipping a thin monitor and prevents an ineligible body from passing through it. The reward screen is a separate sprite component and has no collision after the pop.
-
-Shield monitor rewards attach a `Shield` inventory component to the player. Defense remains in `PlayerCombat`, where elemental immunity is checked before mercy or knockback and an ordinary absorption is resolved before ring loss. `Badniks` therefore uses the same contact and projectile sweeps with a damage category; shields do not introduce a second collision path. `Shields` owns optional aura entities and movement abilities. Its control hook runs before `Platformer::step()`, while its scheduled update runs after badnik damage to remove consumed art in the same simulation step and to detect water-shield landings. Star stores the selected persistent shield, overrides it for a bounded timer, and restores it without copying renderer state.
-
-Bodies must start outside solid geometry. Geometry can change between steps or in the impact callback, after a body cast has completed. Casts and sensor probes are read-only. Matching opposite tile edges are linked during construction and cancel during a query when both neighbors belong to active collision layers. Arbitrary intersecting polygons are not boolean-unioned.
+Graphics resources retain their PHP-side configuration across WebGL context loss. Owners restore shared devices, atlases, programs, buffers, textures, and renderers in dependency order before drawing resumes. Explicit `close()` methods release GPU and SDL handles before their parent device or runtime closes.
 
-Shield input follows moving-boxes-2's command routing. `Shields::control` runs before movement and returns whether it consumed Jump. `Platformer::step` accepts that result, preventing the same edge from also starting flight or glide. Flight-capable profiles reserve neutral Jump for their native ability, use a vertical modifier for electric jump, and use Down for water bounce. These abilities require `Body::$jumping`, which is set by an actual jump and remains false after simply walking off a ledge. Fire thrust changes horizontal speed without replacing an active flight or glide state. Climbing rejects airborne shield movement.
+## Entities, modules, and systems
 
-`Body::$jumping` and `Body::$grounded` are independent. A surface jump sets the former for the complete airborne arc, selects the compact somersault bounds, and clears it when collision finds a landing. Loss of floor adhesion only clears `grounded`, producing a plain fall at standing height. Player combat, monitors, and shield jumps use `jumping` rather than treating every airborne body as an attack. Ground rolling remains a separate state and is not inherited from a jump at landing.
+`Registry` stores stable integer entity IDs and object components. It normalizes canonical and compatibility class names at lookup boundaries. Queries accept a component class or a composed `Query::all()`, `any()`, and `not()` expression, and return snapshots that remain stable while callers iterate them.
 
-Terrain::addShape returns a stable removal handle. Segment and polygon IDs remain monotonic after removals. Terrain::removeShape clears only the affected spatial buckets and opposite-edge links, so surviving neighbors become exposed without rebuilding the map. Permanent Terrain::add calls discard the extra ownership record. BreakableBlocks ties these handles to intact block components. Its impact method shatters only when Body::$rolling is true and the contacted handle belongs to an intact block. Walking, nearby action presses, and resting support leave it solid. Shattering validates and prepares a frozen sprite grid before removing collision, then retains the same entity as a nonsolid particle burst. Entity destruction and scene cleanup release the owned geometry. Blocks have stationary collision rectangles; moving platforms and particle collision are outside this component's behavior.
+The registry indexes concrete classes, parents, and interfaces. Structural mutations invalidate bounded query caches; changing fields inside an attached component does not. Deferred commands allow systems to add or remove entities safely during an update. Lifecycle listeners observe component additions and removals.
 
-Each body selects one positive collision layer in addition to shared layer 0. MapTerrain reads layer properties or Collision N names and creates nonsolid LayerSwitch regions from Tiled objects. Platformer compares continuous body casts with continuous gate crossings, processes the earliest event, and recasts remaining motion after changing planes. Gates do not consume the terrain-contact budget. Destination occupancy and oriented-body intersection checks reject newly solid geometry before a switch; blocked gates retry while overlapping. Adhesion, standing, jump-platform and climbing probes all use the body's selected plane. When an upward climber's side probe passes a wall end, a second probe looks beyond the edge for an upward-facing surface and checks standing clearance. A valid result places the body on top facing inward; a missing or blocked surface keeps the ordinary airborne detach path.
+`Scheduler` runs named systems in dependency order and rejects missing dependencies and cycles. A package module receives `Phonics\Package\Context`, which owns its system and factory registrations. Modules register cleanup with `onClose()` rather than retaining global process state.
 
-Grinding is metadata on the same indexed collision segments. MapTerrain reads `grinding` or
-`grind` from a layer, tile, collision shape, or object. `Rail` and `Grinding` polylines become open
-one-way paths, while `Terrain::addRail()` supplies the equivalent scripting API. `Hit::$grinding`
-carries the tag through body casts and foot rays. Platformer therefore enters a rail on the exact
-continuous landing contact, adheres across ordinary sloped segments, and leaves an endpoint with
-tangent momentum. The system does not sample by speed, so a thin rail remains reachable during a
-large fixed-step displacement.
+`ObjectSpawner` converts recognized Tiled object classes and pallet references into components returned by registered factories. The framework does not interpret game-specific entity names or properties.
 
-`Body::$facing` is the visual look direction, while `Body::$direction` is the retained surface and
-action orientation; `Body::$vx` remains the actual horizontal air movement. Opposite input during a
-grind turns the sprite without reversing rail travel, and the rail solver keeps `direction` aligned
-with tangent speed until the actor can actually reverse. Tails-style flight keeps its takeoff look
-direction while ordinary horizontal air acceleration remains active, allowing velocity to pass
-through zero and reverse without turning the airborne sprite. Gliding keeps a separate
-`Body::$glideDirection` for the last horizontal steering request. Opposite input brakes at four
-times the normal glide acceleration; neutral input retains that request, and `facing`/`direction`
-follow actual horizontal velocity after it crosses zero. Starting a glide keeps existing travel
-direction, falling back to facing only at rest. Landing, climbing, cancellation, and demo resets
-clear the requested turn. The existing 420 px/s glide target remains unchanged, with 240 px/s²
-acceleration and 960 px/s² reversal braking.
+## Tiled data and streaming
 
-MB2's `Knuckles.js` uses a stick-dependent limit of `16 + 8 * abs(xAxis)` pixels per frame,
-halved underwater, and separate flying, turning, and stalled animations. This change carries over
-its steering state and reversal rules while retaining the PHP controller's speed tuning and the
-demo's existing glide artwork.
-
-Dropdash applies held landing input before choosing the boost direction, matching
-`PointActor::processInputDirect()` followed by `Platformer::checkDropDash()` in MB2. Neutral
-input retains the earlier direction. A held opposite direction subtracts its boost from existing
-landing momentum; it does not force the entire velocity to reverse. Fast grinding retains its
-separate travel-direction lock.
-
-Ordinary air control follows MB2 after both jumps and edge falls from normal ground or rails.
-`Body::$airAcceleration` defaults to 1,080 px/s², converting 0.3 px/frame² at 60 Hz. Analog strength
-and water drag scale this acceleration. Input applies only below `Body::$maxSpeed` in absolute
-horizontal speed, including opposing input: fast departures retain their momentum until another
-force or collision lowers their speed. Facing and retained direction do not turn with ordinary
-air steering. Flight shares that steering; glide and light-dash keep their own horizontal control.
-
-A jumping body with `-240 < vy < 0` loses 1/32 of horizontal speed per reference frame before the
-input speed check. The multiplier `(31 / 32) ** (60 * dt)` gives the same decay over elapsed time
-at different simulation rates. Plain falls and descending jumps receive no apex drag. Because
-damping precedes the speed check, it can bring a fast jump back into the steerable range. This
-jump-state effect also applies during abilities when their vertical velocity enters that interval.
-
-Releasing Jump halves an ordinary jump's remaining upward velocity once, before apex damping
-and gravity. Plain falls are unaffected; active abilities and the retained light-dash suppression
-continue to own their jump-release behavior.
-
-`LightDash` is per-player ECS state. `LightDashes` reads live `Ring` components and receives the
-generic `Rings` post-pickup notification. Initial acquisition requires a forward pair within 48
-pixels; chaining searches within 128 pixels after all same-step pickups retire. World-space
-centers replace MB2's bottom-anchored actor offsets. Angular comparisons use a dot product or
-wrapped difference so leftward trails work across the minus/plus-pi boundary. The reference speed
-formula is converted to pixels per second with a 1,650 cap, and nine reference frames become .15
-seconds. No teleport or collision bypass is used: `Platformer` retains gravity and full-motion
-body casts while suppressing directional input. Solid impacts release the active ability, and
-the next control step retires its target. The demo clears route state on respawn, profile changes,
-and level changes, and gates shield controls while the dash owns input.
-
-Combo is a player component rather than renderer state. `ComboReward` retains a live point value,
-an additive multiplier, a label, and optional presentation metadata. `Combo::update()` owns rail
-accrual and safe-landing settlement, returns a score exactly once, and keeps success or failure data
-long enough for any HUD to inspect. DemoComboHud reads that component after world rendering and
-draws it in screen space with the shared annotated font atlas. Badnik damage fails the component
-through the registry; other gameplay systems can call `add()`, `settle()`, or `fail()` directly.
-
-The generated grinding course combines these systems with the three-plane loop layout. Matching
-polygons first switch from rail to ordinary ground and back without changing surface height. Four
-separate quarter-circle boundaries raise and lower the rail before the loop. Entrance, crown, and
-exit gates then switch its active lower half by travel direction. Every loop plane is tagged
-`grinding`, so body casts and adhesion retain the rail state through vertical and inverted contacts
-at normal and extreme speeds.
-
-The [loop guide](loops.md) analyzes moving-boxes-2's big-loop tileset, its shared crown and two selectable halves, and its three directional gates. The PHP implementation uses original procedural tiles with polygon collision metadata, tangent-speed routing at the ceiling, airborne crown-gate behavior, and swept triggers. Rendering remains independent of collision selection. The demo anchors sprites along the rotated body normal so their feet stay on the loop surface.
-
-## Ownership and limits
-
-Close renderers before Device::close destroys the context. MapRenderer owns its Atlas and ImageRenderer. SpriteRenderer borrows an Atlas. WorldRenderer owns resident map renderers. Engine runs user cleanup on stop and runtime refresh.
-
-World indexes manifest bounds in a static AABB tree. Queries preserve manifest painter order and allocate no cells between distant maps. Optional local bounds cover negative infinite chunks without shifting their world origin. With mounted files, World::visible loads intersecting maps synchronously. WorldStream instead polls a host file-transfer callback, discovering JSON, external tilesets, tile images, and image-layer frames in PHP. It activates maps only when dependencies are mounted. WorldRenderer accepts either source and never starts synchronous loads for pending streamed maps.
-
-Tigl's compiled world keeps map headers available before initializing its maps. SpriteBoard requests nearby renderers, TileMap caches initialization, and Session limits nearby entity simulation. WorldStream uses the standard explicit Tiled manifest bounds and adds separate preload and retention margins. Per-file reference counts keep shared files mounted until their last map leaves. Applications consume entered/exited changes to manage entities and collision terrain; they can gate motion on isReady for the body's swept bounds. Eviction discards map edits unless the application saves them.
-
-browser/AssetLoader.mjs only handles fetch, cancellation, and mounting. Promise identity checks prevent obsolete responses from writing to a restarted or closed session. Files are scoped to a configured source root. The PHP frame loop polls readiness, so downloads never suspend a PHP animation-frame callback. Live demos load source, shaders, and menu fonts at startup, then request the selected map or world dependencies. GPU test fixtures still mount their assets up front. AssetLoader scopes share pending transfers and mounted files across active and staged scenes. A scene closes its scope only after releasing graphics; shared files remain until their final owner leaves. Whole maps are streamed; individual infinite-map chunks are not fetched separately.
-
-The atlas packs each map's source images and reports GPU capacity errors. Dense tile metadata currently uses one column per tile. Device listens for WebGL loss and restoration and checks `isContextLost()` before each frame, including the interval before the loss event arrives. Engine pauses hidden or lost-context frames, resets its time baseline and input on resume, and invokes the third `start()` callback to restore GPU resources before drawing. A loss during rendering also suspends the loop. Renderers retain PHP data while rebuilding programs, uniform locations, buffers, VAOs, texture arrays, atlas animation metadata, and image caches. Restore a shared Atlas through its owner before restoring sprite batches. Stop detaches browser listeners and releases resources even while the context is lost. Full browser page discard still requires application persistence.
-
-## Live demo level changes
-
-DemoGame retains one Engine, registry, clock, camera, player, and pause menu. DemoLevel stages a destination using WorldStream, including a one-map manifest for standalone maps. Its renderer and collision data are prepared at a frame boundary before the old level is closed. The player keeps its identity and profile but moves to the new level's spawn. Menu zoom, player name, hint settings, audio, and fullscreen persist.
-
-Failures close only staged resources. The previous scene remains usable, and another selection retries or replaces the request. Leaving breakables removes that level's systems, colliders, intact blocks, debris, and ECS listener. Registry::off detaches the exact callback previously passed to Registry::on. World streaming remains a camera-navigation demo; its proximity loading continues after the scene swap.
-
-## Grapple constraints and riders
-
-`GrappleGrip` opts a `Body` into automatic swept contact with a `GrapplePoint`. `Grapples` owns
-handle and anchor entities; each handle also has a `Rope` and optional `Sprite`/`SpriteGroup`.
-`GrappleLoader` resolves `tiedTo` across flattened layers, translates world offsets, and chooses
-annotated atlas art. An application resolver can link anchor proxies to existing body, suspended
-platform, or buoyant platform entities without transferring their ownership.
-
-The movement update records swing input and consumes a fresh Jump to detach. `Platformer` retains
-water-state updates but skips ordinary motion while the ability is `hanging`. After moving-anchor
-systems run, `Grapples` interpolates anchor movement and advances the rope through short curvature
-increments. Each increment uses full-distance terrain casts for the hook and every rider. The
-rope clamps its maximum length and removes outward relative velocity while retaining tangential
-momentum and slack. Contact also sweeps relative player/handle bounds; alignment requires free
-standing bounds and a clear cast. Obstructed transport releases riders if the anchor pulls out of
-reach. Ropes do not wrap around terrain.
-
-The first rider pumps the shared rope; release uses anchor velocity when available, endpoint
-velocity otherwise, and a three-quarter jump impulse for button 0. Per-handle cooldowns prevent
-reattachment for fifteen reference frames. Damage detaches without replacing knockback. Reset,
-level retirement, missing anchors, and handle removal clear attachments and grouped rope sprites.
-`PlatformCamera` derives its existing `hooked` preset from the hanging ability. Ring pickup runs
-after grapple transport so collections see the carried position.
-
-## Vehicle ownership
-
-`Vehicles` owns independent chassis entities and explicit `Vehicle`/`Rider` associations. A rider
-keeps its character body and inventory; `ability=riding` prevents independent movement. Logical
-input is routed before other abilities, retaining original press/release edges when a held button
-crosses a boarding boundary. `VehicleBehavior` surrounds the shared terrain step with vehicle
-specific actions; `Skateboard` supplies coasting, crouching, tricks, and combo settlement rules.
-
-The chassis uses `Platformer` continuously. Curved travel is divided into short arcs, with a full
-passenger-body cast for each segment so a seat offset cannot carry its occupant through a ceiling.
-A separate `carry()` phase reconciles seats after platforms move without advancing either body a
-second time. Pickup and reward systems resolve the rider as the inventory owner. Damage releases
-the seat while preserving knockback. Component-removal listeners clear both ends of an association;
-level teardown destroys owned chassis and regions, leaving the persistent character alive.
-
-`VehicleLoader` promotes Tiled skateboard and supply/drop region objects. `MapTerrain` excludes
-those objects from static geometry. Artwork uses annotated tiles, decoded GID transforms, inherited
-layer appearance, and the normal sprite atlas, so graphics restoration does not rebuild gameplay
-state. The example shares the grinding course's quarter bends and two-plane loop.
+`Loader` reads worlds, maps, templates, external tilesets, images, inherited file properties, and inline tilesets while preserving each document's source identity. `Projection` converts supported tile coordinate systems into world coordinates. Layers retain visibility, tint, opacity, offsets, parallax, objects, chunks, properties, and revision state.
+
+`World` indexes finite map bounds in a static bounds tree without loading every map. `WorldStream` requests visible maps and their dependency closure through a host callback, activates them only when all files are present, and reports entered, exited, and failed maps. Preload and retention margins let applications stage adjacent maps and delay eviction.
+
+Streaming operates on complete maps. Applications own the entity and terrain state created for each resident map and decide whether to persist edits before eviction.
+
+## Collision and spatial queries
+
+Core physics uses `Pose`, bounds, masks, surface metadata, and generic geometry. `Terrain` stores indexed segments and polygons and exposes ray, circle, and continuously swept body casts. Candidate shapes come from spatial buckets; the solver tests exact geometry only for nearby candidates.
+
+Collision hits report the first contact time, point, normal, source metadata, and optional removable-shape handle. Adding or removing a shape updates only affected index buckets. Casts are read-only, and geometry changes belong between simulation steps or in a caller-controlled impact callback.
+
+Rules such as rail interpretation, directional layer switching, character adhesion, damage, brick behavior, and water gameplay belong to game packages. They compose the neutral casts rather than extending core with concrete game classes.
+
+## Rendering
+
+Tiled global IDs retain their unsigned flag bits and map to dense atlas indexes. `Atlas` packs source images and animation metadata. Tile layers use bounded texture arrays and instanced placement; changed layer revisions upload only their affected slices. `ImageRenderer` draws ordinary and repeating image layers in map order.
+
+`SpriteRenderer` batches sprites that share an atlas. Each sprite carries position, origin, scale, rotation, flips, tint, opacity, animation time, crop, filtering, and outline state. `SpriteGroup` and `SpriteLayers` preserve entity-level painter order for composite artwork.
+
+`WorldRenderer` combines resident map renderers in manifest order. Cameras define world viewports and projections. Generic post-process renderers own their framebuffer and texture resources and can nest when callers preserve the surrounding framebuffer.
+
+## Input and UI
+
+`SdlInput` maps keyboard and gamepad state into logical numbered buttons and action aliases. `Controls` preserves pressed and released edges across fixed updates. `Sequences` recognizes timed codes, chords, held modifiers, relative directions, and release steps without consuming gameplay controls.
+
+Framework UI includes bitmap fonts, editable text buffers, menu input and rendering, cards, transient messages, generic world text actors, and DOM-backed texture modals. Browser modules receive shared audio and mute/fullscreen services through their activation context. Games provide their own menu content, HUD composition, screens, and accessibility labels.
+
+## Compatibility boundary
+
+The supported PHP namespace is `Phonics\`. Pre-1.0 `PhpWasmEngine\` names remain aliases and resolve consistently in mixed ECS lookups. Legacy browser boot functions and development example URLs adapt to `loadWorld()` without adding game selection logic to the host.
+
+Compatibility adapters do not make the core depend on a game package. A core-only installation can load a separately packaged game when its manifest declares all code and assets it needs.

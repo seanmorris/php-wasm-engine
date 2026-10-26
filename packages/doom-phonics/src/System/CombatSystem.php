@@ -1,0 +1,2307 @@
+<?php
+declare(strict_types=1);
+namespace DoomPhonics\System;
+use DoomPhonics\Input\DoomActions;
+
+use DoomPhonics\Adapter\ActorFactory;
+use DoomPhonics\Audio\NullSoundEmitter;
+use DoomPhonics\Audio\SoundCatalog;
+use DoomPhonics\Audio\SoundCue;
+use DoomPhonics\Audio\SoundEmitter;
+use DoomPhonics\Audio\SoundEvent;
+use DoomPhonics\Audio\SoundListener;
+use DoomPhonics\Audio\SoundSource;
+use DoomPhonics\Component\ActorState;
+use DoomPhonics\Component\BeamEffect;
+use DoomPhonics\Component\Body;
+use DoomPhonics\Component\ChargeAttack;
+use DoomPhonics\Component\FloorClip;
+use DoomPhonics\Component\Gravity;
+use DoomPhonics\Component\HitPoints;
+use DoomPhonics\Component\MonsterBrain;
+use DoomPhonics\Component\NetworkPlayer;
+use DoomPhonics\Component\PlayerStart;
+use DoomPhonics\Component\PlayerCommand;
+use DoomPhonics\Component\Projectile;
+use DoomPhonics\Component\ProjectileBounce;
+use DoomPhonics\Component\RemoteProjectile;
+use DoomPhonics\Component\SpawnPoint;
+use DoomPhonics\Component\Transform;
+use DoomPhonics\Component\TransientEffect;
+use DoomPhonics\Component\Velocity;
+use DoomPhonics\Component\ViewLighting;
+use DoomPhonics\Component\ViewInput;
+use DoomPhonics\Component\WeaponOverlay;
+use DoomPhonics\Component\WeaponOwner;
+use DoomPhonics\Definition\ActionDispatcher;
+use DoomPhonics\Definition\ActorCatalog;
+use DoomPhonics\Definition\StateFrame;
+use DoomPhonics\Definition\WeaponSlots;
+use DoomPhonics\Game\Collision;
+use DoomPhonics\Game\DamageEvent;
+use DoomPhonics\Game\DamageResolver;
+use DoomPhonics\Game\DoomGravity;
+use DoomPhonics\Game\Level;
+use DoomPhonics\Game\HitscanImpact;
+use DoomPhonics\Game\LineSpecials;
+use DoomPhonics\Game\PlayerState;
+use DoomPhonics\Game\ProjectileTracer;
+use DoomPhonics\Game\ProjectileImpact;
+use DoomPhonics\Game\WorldPoint;
+use Phonics\Ecs\Query;
+use Phonics\Ecs\Registry;
+use Phonics\Input\Controls;
+
+/** DECORATE action primitives for E1 weapons, monsters, missiles, pain, and death. */
+final class CombatSystem
+{
+	private Query $players;
+	private Query $projectiles;
+	private Query $damageable;
+	private Query $charges;
+	private SoundEmitter $sound;
+	private SoundCatalog $sounds;
+	private ProjectileTracer $projectileTracer;
+	private DamageResolver $damageResolver;
+	private WeaponSlots $weaponSlots;
+
+	public function __construct(
+		public Level $level
+		, public ActorCatalog $actors
+		, public ActorFactory $factory
+		, public Collision $collision
+		, public Controls $controls
+		, public ActionDispatcher $actions
+		, public ?LineSpecials $specials = null
+		, ?SoundEmitter $sound = null
+		, ?SoundCatalog $sounds = null
+		, public float $gravity = DoomGravity::ACCELERATION
+		, ?DamageResolver $damageResolver = null
+		, ?WeaponSlots $weaponSlots = null
+		, public bool $simulateProjectiles = true
+		, public bool $simulateBeams = true
+	){
+		$this->players = Query::all(PlayerStart::class, PlayerState::class, Transform::class, HitPoints::class);
+		$this->projectiles = Query::all(Projectile::class, Transform::class, Velocity::class, ActorState::class);
+		$this->damageable = Query::all(Transform::class, Body::class, HitPoints::class, ActorState::class);
+		$this->charges = Query::all(ChargeAttack::class, Transform::class, Velocity::class, Body::class);
+		$this->sound = $sound ?? new NullSoundEmitter;
+		$this->sounds = $sounds ?? new SoundCatalog;
+		$this->projectileTracer = new ProjectileTracer($level);
+		$this->damageResolver = $damageResolver ?? new DamageResolver;
+		$this->weaponSlots = $weaponSlots ?? WeaponSlots::fromCatalog($actors);
+		$this->registerActions();
+	}
+
+	public function update(Registry $registry, float $dt): void
+	{
+		foreach($registry->query($this->players) as $entity)
+		{
+			$player = $registry->get($entity, PlayerState::class);
+			$this->selectWeapon($registry, $entity, $player);
+
+			if($player->weaponEntity === null || !$registry->alive($player->weaponEntity))
+			{
+				$this->equip($registry, $entity, $player);
+				continue;
+			}
+
+			$this->updateWeaponSwitch($registry, $entity, $player);
+		}
+
+		foreach($registry->query($this->charges) as $entity) $this->moveCharge($registry, $entity, $dt);
+
+		foreach($registry->query($this->projectiles) as $entity) $this->moveProjectile($registry, $entity, $dt);
+
+		foreach($registry->query(RemoteProjectile::class) as $entity)
+		{
+			$replica = $registry->get($entity, RemoteProjectile::class);
+			$label = $registry->get($entity, ActorState::class)->label;
+
+			if($label !== $replica->soundLabel)
+			{
+				if(strcasecmp($label, 'Death') === 0) $this->actorSound($entity, $registry, 'DeathSound');
+				elseif($replica->soundLabel === null) $this->actorSound($entity, $registry, 'SeeSound');
+
+				$replica->soundLabel = $label;
+			}
+		}
+	}
+
+	private function registerActions(): void
+	{
+
+		$register = fn(string $name, callable $callback) => $this->actions->register($name, $callback);
+
+		$register(
+			'A_WeaponReady'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->weaponReady($entity, $registry)
+		);
+
+		$register(
+			'A_ReFire'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->weaponReady($entity, $registry)
+		);
+
+		$register(
+			'A_Lower'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->lowerWeapon($entity, $registry)
+		);
+
+		$register(
+			'A_Raise'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->raiseWeapon($entity, $registry)
+		);
+
+		$pistol = fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+			$entity
+			, $registry
+			, 1
+			, 5
+			, 1
+			, 2048
+			, 0
+			, 'weapons/pistol'
+		);
+
+		$shotgun = fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+			$entity
+			, $registry
+			, 7
+			, 5
+			, 6
+			, 2048
+			, 0
+			, 'weapons/shotgf'
+		);
+
+		$superShotgun = fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+			$entity
+			, $registry
+			, 20
+			, 5
+			, 11
+			, 2048
+			, 0
+			, 'weapons/sshotf'
+		);
+
+		$chaingun = fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+			$entity
+			, $registry
+			, 1
+			, 5
+			, 5
+			, 2048
+			, strtoupper($frame->frame) === 'B' ? 1 : 0
+			, 'weapons/chngun'
+		);
+
+		$register('A_FirePistol', $pistol);
+		$register('A_FireShotgun', $shotgun);
+		$register('A_FireShotgun2', $superShotgun);
+		$register('A_FireCGun', $chaingun);
+
+		$register(
+			'A_FireBullets'
+			, function(int $entity, StateFrame $frame, Registry $registry): void {
+				$spread = (float)($frame->arguments[0] ?? 0);
+				$verticalSpread = (float)($frame->arguments[1] ?? 0);
+				$pellets = max(1, (int)($frame->arguments[2] ?? 1));
+				$damage = max(0, (int)($frame->arguments[3] ?? 5));
+				$puff = (string)($frame->arguments[4] ?? 'BulletPuff');
+				$range = (float)($frame->arguments[6] ?? 0);
+				$attackSound = $registry->has($entity, ActorState::class)
+					? $registry->get($entity, ActorState::class)->definition->value('AttackSound')
+					: null;
+
+				$this->playerHitscan(
+					$entity
+					, $registry
+					, $pellets
+					, $damage
+					, $spread
+					, $range > 0 ? $range : 2048
+					, null
+					, is_string($attackSound) && $attackSound !== '' ? $attackSound : null
+					, $puff
+					, $verticalSpread
+				);
+			}
+		);
+
+		$register(
+			'A_PlaySound'
+			, function(int $entity, StateFrame $frame, Registry $registry): void {
+				$logical = (string)($frame->arguments[0] ?? '');
+
+				if($logical !== '') $this->playLogicalSound($entity, $registry, $logical);
+			}
+		);
+
+		foreach(['A_CheckForReload','A_ResetReloadCounter'] as $name)
+		$register($name, static function(int $entity, StateFrame $frame, Registry $registry): void {});
+
+		$register(
+			'A_Punch'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerPunch($entity, $registry)
+		);
+
+		$register(
+			'A_Saw'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+				$entity
+				, $registry
+				, 1
+				, 8
+				, 3
+				, 72
+				, null
+				, 'weapons/sawfull'
+			)
+		);
+
+		$register(
+			'A_FireMissile'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'Rocket'
+			)
+		);
+
+		$register(
+			'A_FirePlasma'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'PlasmaBall'
+				, mt_rand(0, 1)
+			)
+		);
+
+		$register(
+			'A_FireBFG'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'BFGBall'
+			)
+		);
+
+		$register(
+			'A_FireSTGrenade'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'Grenade'
+			)
+		);
+
+		$register(
+			'A_FireRailgun'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->fireRailgun($entity, $registry)
+		);
+
+		$register(
+			'A_GunFlash'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->gunFlashFromFrame(
+				$entity
+				, $frame
+				, $registry
+			)
+		);
+
+		$register(
+			'A_Light0'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->weaponLight($entity, $registry, 0)
+		);
+
+		$register(
+			'A_Light1'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->weaponLight($entity, $registry, 1)
+		);
+
+		$register(
+			'A_Light2'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->weaponLight($entity, $registry, 2)
+		);
+
+		$register(
+			'A_BFGSound'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/bfgf'
+			)
+		);
+
+		$register(
+			'A_BFGSpray'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->bfgSpray($entity, $registry)
+		);
+
+		$register('A_Look', fn(int $entity, StateFrame $frame, Registry $registry) => $this->look($entity, $registry));
+
+		$register(
+			'A_Chase'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->chase($entity, $registry)
+		);
+
+		$register(
+			'A_FaceTarget'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->faceTarget($entity, $registry)
+		);
+
+		$register(
+			'A_PosAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterHitscan($entity, $registry, 1)
+		);
+
+		$register(
+			'A_SPosAttackUseAtkSound'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterHitscan($entity, $registry, 3)
+		);
+
+		$register(
+			'A_TroopAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterAttack(
+				$entity
+				, $registry
+				, 'DoomImpBall'
+				, 3
+			)
+		);
+
+		$register(
+			'A_SargAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterMelee($entity, $registry, 10)
+		);
+
+		$register(
+			'A_BruisAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterAttack(
+				$entity
+				, $registry
+				, 'BaronBall'
+				, 8
+			)
+		);
+
+		$register(
+			'A_HeadAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterAttack(
+				$entity
+				, $registry
+				, 'CacodemonBall'
+				, 10
+			)
+		);
+
+		$register(
+			'A_CyberAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->monsterProjectile(
+				$entity
+				, $registry
+				, 'Rocket'
+			)
+		);
+
+		$register(
+			'A_SkullAttack'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->skullAttack($entity, $registry)
+		);
+
+		$register(
+			'A_SpidRefire'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->spiderRefire($entity, $registry)
+		);
+
+		$register(
+			'A_Pain'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->actorSound(
+				$entity
+				, $registry
+				, 'PainSound'
+			)
+		);
+
+		$register(
+			'A_Scream'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->actorSound(
+				$entity
+				, $registry
+				, 'DeathSound'
+			)
+		);
+
+		$register(
+			'A_XScream'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'misc/gibbed'
+			)
+		);
+
+		$register(
+			'A_Respawn'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->respawn($entity, $registry)
+		);
+
+		$register(
+			'A_NoBlocking'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->removeBlocking($entity, $registry)
+		);
+
+		$register(
+			'A_BarrelDestroy'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->removeBlocking($entity, $registry)
+		);
+
+		$register(
+			'A_Explode'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->explode($entity, $registry)
+		);
+
+		$register(
+			'A_Detonate'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->explode($entity, $registry)
+		);
+
+		$register(
+			'A_SetFloorClip'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->setFloorClip($entity, $registry)
+		);
+
+		$register(
+			'A_UnSetFloorClip'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->unsetFloorClip($entity, $registry)
+		);
+
+		$register(
+			'A_BossDeath'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->bossDeath($entity, $registry)
+		);
+
+		// The reference renderer used these names for hard-coded weapon timelines. Keep them as
+		// aliases over the same DECORATE/ECS primitives so imported definitions do not need a
+		// second combat implementation.
+		$register('A_PISTOL_FIRE', $pistol);
+		$register('A_SHOTGUN_FIRE', $shotgun);
+		$register('A_SUPERSHOTGUN_FIRE', $superShotgun);
+		$register('A_CHAINGUN_FIRE', $chaingun);
+
+		$register(
+			'A_PUNCH_MELEE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerPunch($entity, $registry)
+		);
+
+		$register(
+			'A_SAW_INIT'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/sawup'
+			)
+		);
+
+		$register(
+			'A_SAW_IDLE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/sawidle'
+			)
+		);
+
+		$register(
+			'A_SAW_MELEE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+				$entity
+				, $registry
+				, 1
+				, 8
+				, 3
+				, 72
+				, null
+				, 'weapons/sawfull'
+			)
+		);
+
+		$register(
+			'A_SAW_MELEE_SILENT'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerHitscan(
+				$entity
+				, $registry
+				, 1
+				, 8
+				, 3
+				, 72
+			)
+		);
+
+		$register(
+			'A_SUPERSHOTGUN_RELOAD'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/shotgr'
+			)
+		);
+
+		$register(
+			'A_ROCKET_FIRE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'Rocket'
+				, 0
+			)
+		);
+
+		$register(
+			'A_PLASMA_FIRE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'PlasmaBall'
+				, mt_rand(0, 1)
+			)
+		);
+
+		$register(
+			'A_BFG9K_FIRE_START'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/bfgf'
+			)
+		);
+
+		$register(
+			'A_BFG9K_FIRE_LAUNCH'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'BFGBall'
+				, 0
+			)
+		);
+
+		$register(
+			'A_GRENADE_FIRE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'Grenade'
+				, 0
+			)
+		);
+
+		$register(
+			'A_RAILGUN_FIRE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->fireRailgun($entity, $registry)
+		);
+
+		$register(
+			'A_BFG10K_IDLE'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/bfg10kidle'
+			)
+		);
+
+		$register(
+			'A_BFG10K_FIRE_START'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playLogicalSound(
+				$entity
+				, $registry
+				, 'weapons/bfg10k'
+			)
+		);
+
+		$register(
+			'A_BFG10K_FIRE_LAUNCH'
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->playerMissile(
+				$entity
+				, $registry
+				, 'BFGBall'
+				, 0
+			)
+		);
+	}
+
+	private function equip(Registry $registry, int $owner, PlayerState $player): void
+	{
+		if($player->weaponEntity !== null)
+		{
+			foreach($registry->query(WeaponOverlay::class) as $entity)
+			if($registry->get($entity, WeaponOverlay::class)->weaponEntity === $player->weaponEntity)
+			$registry->destroy($entity);
+
+			if($registry->alive($player->weaponEntity)) $registry->destroy($player->weaponEntity);
+		}
+
+		if($registry->has($owner, ViewLighting::class))
+		$registry->get($owner, ViewLighting::class)->clearWeaponFlash();
+
+		$definition = $this->actors->named($player->weapon) ?? $this->actors->named('Pistol');
+
+		if(!$definition) throw new \UnexpectedValueException('DECORATE has no player weapon ' . $player->weapon);
+
+		$player->weaponEntity = $registry->create(new ActorState($definition, 'Ready'), new WeaponOwner($owner));
+	}
+
+	private function selectWeapon(Registry $registry, int $entity, PlayerState $player): void
+	{
+		$current = $player->pendingWeapon ?? $player->weapon;
+		$command = $registry->has($entity, PlayerCommand::class)
+			? $registry->get($entity, PlayerCommand::class)
+			: null;
+
+		$view = $registry->has($entity, ViewInput::class)
+			? $registry->get($entity, ViewInput::class)
+			: null;
+
+		$requestedSlot = $command ? $command->consumeWeaponSlot() : $view?->consumeWeaponSlot();
+
+		if($requestedSlot === null && !$command)
+		foreach(array_keys($this->weaponSlots->all()) as $slot)
+		if($this->controls->pressed(DoomActions::SLOTS[$slot]))
+		{
+			$requestedSlot = $slot;
+			break;
+		}
+
+		if($requestedSlot !== null)
+		{
+			$weapon = $this->weaponSlots->select($requestedSlot, $current, $player->weapons);
+
+			if($weapon !== null) $player->requestWeapon($weapon);
+		}
+
+		$steps = $command?->consumeWeaponSteps() ?? $view?->consumeWeaponSteps() ?? 0;
+
+		if(!$command)
+		$steps += (int)$this->controls->pressed(DoomActions::NEXT_WEAPON) - (int)$this->controls->pressed(
+			DoomActions::PREVIOUS_WEAPON
+		);
+
+		for($step = 0; $step < abs($steps); $step++)
+		{
+			$weapon = $this->weaponSlots->step($current, $player->weapons, $steps);
+
+			if($weapon === null) break;
+
+			$current = $weapon;
+			$player->requestWeapon($weapon);
+		}
+	}
+
+	private function updateWeaponSwitch(Registry $registry, int $owner, PlayerState $player): void
+	{
+		$weapon = $player->weaponEntity;
+
+		if($weapon === null || !$registry->has($weapon, ActorState::class)) return;
+
+		$state = $registry->get($weapon, ActorState::class);
+		$current = $state->definition->name;
+
+		// Keep direct PlayerState assignments as a compatibility request rather than snapping.
+		if($player->pendingWeapon === null && strcasecmp($current, $player->weapon) !== 0)
+		{
+			$player->pendingWeapon = $player->weapon;
+			$player->weapon = $current;
+		}
+
+		if($player->pendingWeapon === null)
+		{
+			if(strcasecmp($state->label, 'Deselect') === 0) $state->enter('Select');
+
+			return;
+		}
+
+		if(strcasecmp($player->pendingWeapon, $current) === 0)
+		{
+			$player->pendingWeapon = null;
+
+			return;
+		}
+
+		if(strcasecmp($state->label, 'Deselect') === 0) return;
+
+		$this->clearWeaponOverlays($registry, $weapon);
+
+		if($state->definition->state('Deselect')) $state->enter('Deselect');
+		else $this->finishWeaponSwitch($weapon, $registry);
+	}
+
+	private function lowerWeapon(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class);
+		$owner->offsetY = min(96, $owner->offsetY + 6);
+
+		if($owner->offsetY >= 96) $this->finishWeaponSwitch($weapon, $registry);
+	}
+
+	private function raiseWeapon(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class);
+		$owner->offsetY = max(0, $owner->offsetY - 6);
+
+		if($owner->offsetY <= 0) $registry->get($weapon, ActorState::class)->enter('Ready');
+	}
+
+	private function finishWeaponSwitch(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class);
+
+		if(!$registry->alive($owner->entity) || !$registry->has($owner->entity, PlayerState::class)) return;
+
+		$player = $registry->get($owner->entity, PlayerState::class);
+		$name = $player->pendingWeapon ?? $player->weapon;
+		$definition = $this->actors->named($name);
+
+		if(!$definition || !$this->actors->isA($definition, 'Weapon'))
+		throw new \UnexpectedValueException('DECORATE has no player weapon ' . $name);
+
+		$this->clearWeaponOverlays($registry, $weapon);
+		$player->weapon = $definition->name;
+		$player->pendingWeapon = null;
+		$state = $registry->get($weapon, ActorState::class);
+		$state->definition = $definition;
+		$owner->offsetY = 96;
+		$state->enter($definition->state('Select') ? 'Select' : 'Ready');
+
+		if(!$definition->state('Select')) $owner->offsetY = 0;
+	}
+
+	private function clearWeaponOverlays(Registry $registry, int $weapon): void
+	{
+		foreach($registry->query(WeaponOverlay::class) as $entity)
+		if($registry->get($entity, WeaponOverlay::class)->weaponEntity === $weapon)
+		$registry->destroy($entity);
+	}
+
+	private function weaponReady(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$state = $registry->get($weapon, ActorState::class);
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		$trigger = $registry->alive($owner) && $registry->has($owner, PlayerCommand::class)
+			? $registry->get($owner, PlayerCommand::class)->fire
+			: $this->controls->down(DoomActions::FIRE) || ($registry->alive($owner) && $registry->has(
+				$owner
+				, ViewInput::class
+			)
+				&& $registry->get($owner, ViewInput::class)->fire
+			);
+
+		if(!$trigger) return;
+
+		if($registry->alive($owner) && $this->hasAmmo($registry->get($owner, PlayerState::class), $state->definition))
+		$state->enter('Fire');
+	}
+
+	private function hasAmmo(PlayerState $player, object $weapon): bool
+	{
+		$type = (string)$weapon->value('Weapon.AmmoType', '');
+		$use = (int)$weapon->value('Weapon.AmmoUse', 0);
+
+		return $type === '' || $use === 0 || ($player->ammo[$type] ?? 0) >= $use;
+	}
+
+	private function consumeAmmo(PlayerState $player, object $weapon): bool
+	{
+		if(!$this->hasAmmo($player, $weapon)) return false;
+
+		$type = (string)$weapon->value('Weapon.AmmoType', '');
+		$use = (int)$weapon->value('Weapon.AmmoUse', 0);
+
+		if($type !== '' && $use > 0) $player->ammo[$type] -= $use;
+
+		return true;
+	}
+
+	private function gunFlashFromFrame(int $weapon, StateFrame $frame, Registry $registry): void
+	{
+		$state = $registry->get($weapon, ActorState::class);
+		$default = strtolower($state->label) === 'altfire' ? 'AltFlash' : 'Flash';
+		$label = isset($frame->arguments[0]) ? (string)$frame->arguments[0] : $default;
+
+		if($label === '') $label = $default;
+
+		$flags = $frame->arguments[1] ?? 0;
+		$animateOwner = !($flags === 'GFF_NOEXTCHANGE' || $flags === 1 || $flags === '1');
+
+		$this->gunFlash($weapon, $registry, $label, 0, $animateOwner);
+	}
+
+	private function gunFlash(
+		int $weapon
+		, Registry $registry
+		, string $label = 'Flash'
+		, int $offset = 0
+		, bool $animateOwner = true
+	): void {
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		if(!$registry->alive($owner)) return;
+
+		$weaponState = $registry->get($weapon, ActorState::class);
+		$sequence = $weaponState->definition->state($label);
+
+		if(!$sequence || !isset($sequence->frames[$offset])) return;
+
+		foreach($registry->query(WeaponOverlay::class) as $entity)
+		{
+			$overlay = $registry->get($entity, WeaponOverlay::class);
+
+			if($overlay->weaponEntity === $weapon)
+			$registry->get($entity, ActorState::class)->stopped = true;
+		}
+
+		$flash = new ActorState($weaponState->definition, $label);
+		$flash->enter($label, $offset);
+		$registry->create($flash, new WeaponOverlay($owner, $weapon));
+
+		if($animateOwner && $registry->has($owner, ActorState::class)
+			&& $registry->get($owner, ActorState::class)->definition->state('Missile')
+		)
+		$registry->get($owner, ActorState::class)->enter('Missile');
+	}
+
+	private function weaponLight(int $entity, Registry $registry, int $steps): void
+	{
+		$owner = $this->actionOwner($entity, $registry);
+
+		if($owner === null || !$registry->has($owner, ViewLighting::class)) return;
+
+		$lighting = $registry->get($owner, ViewLighting::class);
+
+		if($steps <= 0) $lighting->clearWeaponFlash();
+		elseif($steps === 1) $lighting->useWeaponFlash();
+		else $lighting->useBrightWeaponFlash();
+	}
+
+	private function playerHitscan(
+		int $weapon
+		, Registry $registry
+		, int $pellets
+		, int $damage
+		, float $spread
+		, float $range = 2048
+		, ?int $flashOffset = null
+		, ?string $sound = null
+		, string $puff = 'BulletPuff'
+		, float $verticalSpread = 0
+	): void {
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		if(!$registry->alive($owner)) return;
+
+		$state = $registry->get($weapon, ActorState::class);
+		$player = $registry->get($owner, PlayerState::class);
+
+		if(!$this->consumeAmmo($player, $state->definition))
+		{
+			$state->enter('Ready');
+
+			return;
+		}
+
+		if($flashOffset !== null) $this->gunFlash($weapon, $registry, 'Flash', $flashOffset);
+
+		if($sound !== null) $this->playLogicalSound($weapon, $registry, $sound);
+
+		$pose = $registry->get($owner, Transform::class);
+		$aimSlope = $registry->has($owner, ViewInput::class)
+			? $registry->get($owner, ViewInput::class)->aimSlope()
+			: 0.0;
+
+		for($i = 0; $i < $pellets; $i++)
+		{
+			$spreadRange = (int)round($spread * 100);
+			$verticalRange = (int)round($verticalSpread * 100);
+			$offset = $pellets === 1 || $spreadRange <= 0
+				? 0.0
+				: deg2rad(mt_rand(-$spreadRange, $spreadRange) / 100);
+
+			$slopeOffset = $pellets === 1 || $verticalSpread <= 0
+				? 0.0
+				: tan(deg2rad(mt_rand(-$verticalRange, $verticalRange) / 100));
+
+			$impact = $this->hitscanResult(
+				$registry
+				, $owner
+				, $pose->x
+				, $pose->y
+				, $pose->z + 41
+				, $pose->angle + $offset
+				, $range
+				, $aimSlope + $slopeOffset
+			);
+
+			if($impact->target !== null)
+			{
+				if($this->usesPuff($registry, $impact->target))
+				$this->spawnPuff($registry, $puff, $impact, $pose);
+
+				$this->damage($registry, $impact->target, $owner, $damage * mt_rand(1, 3));
+			}
+			elseif($impact->geometry !== null && !$impact->geometry->escapesIntoSky())
+			{
+				$this->spawnPuff($registry, $puff, $impact, $pose);
+
+				if($impact->geometry->line !== null && $this->specials)
+				$this->specials->shoot(
+					$impact->geometry->line
+					, $this->level->sectorAt($pose->x, $pose->y)->index
+					, $player
+					, $pose
+				);
+			}
+		}
+	}
+
+	private function fireRailgun(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		if(!$registry->alive($owner)) return;
+
+		$state = $registry->get($weapon, ActorState::class);
+		$player = $registry->get($owner, PlayerState::class);
+
+		if(!$this->consumeAmmo($player, $state->definition))
+		{
+			$state->enter('Ready');
+
+			return;
+		}
+
+		$this->gunFlash($weapon, $registry, 'Flash', 0);
+		$sound = $registry->has($weapon, ActorState::class)
+			? $registry->get($weapon, ActorState::class)->definition->value('AttackSound')
+			: null;
+
+		if(is_string($sound) && $sound !== '') $this->playLogicalSound($weapon, $registry, $sound);
+
+		// Guests predict weapon feedback; the host resolves the rail and publishes its beam.
+		if(!$this->simulateBeams) return;
+
+		$pose = $registry->get($owner, Transform::class);
+		$slope = $registry->has($owner, ViewInput::class)
+			? $registry->get($owner, ViewInput::class)->aimSlope()
+			: 0.0;
+
+		$range = 6400.0;
+		$originZ = $pose->z + 41;
+		$end = $this->hitscanGeometry($pose->x, $pose->y, $originZ, $pose->angle, $range, $slope);
+		$dx = cos($pose->angle);
+		$dy = sin($pose->angle);
+		$targets = [];
+
+		foreach($registry->query($this->damageable) as $entity)
+		{
+			if($entity === $owner) continue;
+
+			$body = $registry->get($entity, Body::class);
+
+			if(!$body->shootable) continue;
+
+			$distance = $this->rayActorDistance(
+				$pose->x
+				, $pose->y
+				, $originZ
+				, $dx
+				, $dy
+				, $slope
+				, $registry->get($entity, Transform::class)
+				, $body
+			);
+
+			if($distance !== null && $distance < $end->distance) $targets[] = [$distance,$entity];
+		}
+
+		usort($targets, static fn(array $left, array $right): int => $left[0] <=> $right[0]);
+
+		foreach($targets as [$distance,$target])
+		{
+			if($this->usesPuff($registry, $target))
+			$this->spawnPuff(
+				$registry
+				, 'BulletPuff'
+				, new HitscanImpact(
+					$distance
+					, $pose->x + $dx * $distance
+					, $pose->y + $dy * $distance
+					, $originZ + $slope * $distance
+					, $target
+				)
+				, $pose
+			);
+
+			// The reference rail passes through actors and applies one fixed 100-point hit.
+			$this->damage($registry, $target, $owner, 100);
+		}
+
+		if($end->geometry !== null && !$end->geometry->escapesIntoSky())
+		{
+			$this->spawnPuff($registry, 'BulletPuff', $end, $pose);
+
+			if($end->geometry->line !== null && $this->specials)
+			$this->specials->shoot(
+				$end->geometry->line
+				, $this->level->sectorAt($pose->x, $pose->y)->index
+				, $player
+				, $pose
+			);
+		}
+
+		$registry->create(new BeamEffect(
+			// The reference line begins eight units below its view camera. Preserve that
+			// relationship with Doom-Phonics' 41-unit camera rather than copying its
+			// renderer-specific absolute height.
+			new WorldPoint($pose->x, $pose->y, $pose->z + 33)
+			, new WorldPoint($end->x, $end->y, $end->z)
+			, .75
+			, 8
+		));
+	}
+
+	private function playerMissile(
+		int $weapon
+		, Registry $registry
+		, string $projectile
+		, ?int $flashOffset = null
+	): void {
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		if(!$registry->alive($owner)) return;
+
+		$state = $registry->get($weapon, ActorState::class);
+		$player = $registry->get($owner, PlayerState::class);
+
+		if(!$this->consumeAmmo($player, $state->definition))
+		{
+			$state->enter('Ready');
+
+			return;
+		}
+
+		if($flashOffset !== null) $this->gunFlash($weapon, $registry, 'Flash', $flashOffset);
+
+		$pose = $registry->get($owner, Transform::class);
+		$aimSlope = $registry->has($owner, ViewInput::class)
+			? $registry->get($owner, ViewInput::class)->aimSlope()
+			: 0.0;
+
+		$this->spawnProjectile(
+			$registry
+			, $owner
+			, $projectile
+			, $pose->x
+			, $pose->y
+			, $pose->z + 32
+			, $pose->angle
+			, null
+			, $aimSlope
+		);
+	}
+
+	private function playerPunch(int $weapon, Registry $registry): void
+	{
+		if(!$registry->has($weapon, WeaponOwner::class)) return;
+
+		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
+		if(!$registry->alive($owner) || !$registry->has($owner, PlayerState::class)) return;
+
+		$player = $registry->get($owner, PlayerState::class);
+		$damage = isset($player->powers['Strength']) ? 100 : 10;
+		$this->playerHitscan($weapon, $registry, 1, $damage, 6, 64);
+	}
+
+	private function look(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Transform::class)) return;
+
+		$pose = $registry->get($entity, Transform::class);
+		$nearest = null;
+		$distance = INF;
+
+		foreach($registry->query($this->players) as $player)
+		{
+			$p = $registry->get($player, Transform::class);
+			$d = hypot($p->x - $pose->x, $p->y - $pose->y);
+
+			if($d < $distance && $this->visible($pose, $p))
+			{
+				$nearest = $player;
+				$distance = $d;
+			} }
+
+		if($nearest !== null)
+		{
+			$brain = $registry->get($entity, MonsterBrain::class);
+			$brain->target = $nearest;
+			$brain->awake = true;
+			$this->actorSound($entity, $registry, 'SeeSound');
+			$registry->get($entity, ActorState::class)->enter('See');
+		}
+	}
+
+	private function chase(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Body::class))return;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))
+		{
+			$registry->get($entity, ActorState::class)->enter('Spawn');
+
+			return;
+		}
+
+		$pose = $registry->get($entity, Transform::class);
+		$target = $registry->get($brain->target, Transform::class);
+		$dx = $target->x - $pose->x;
+		$dy = $target->y - $pose->y;
+		$distance = hypot($dx, $dy);
+		$pose->angle = atan2($dy, $dx);
+		$state = $registry->get($entity, ActorState::class);
+		$melee = (float)$state->definition->value('MeleeRange', 44) + 20;
+
+		if(mt_rand(0, 255) < 3) $this->actorSound($entity, $registry, 'ActiveSound');
+
+		if($distance < $melee && $state->definition->state('Melee'))
+		{
+			$state->enter('Melee');
+
+			return;
+		}
+
+		if($distance < 768 && mt_rand(0, 7) === 0 && $state->definition->state('Missile'))
+		{
+			$state->enter('Missile');
+
+			return;
+		}
+
+		$speed = (float)$state->definition->value('Speed', 8);
+
+		if($distance > 0)
+		$this->collision->move(
+			$pose
+			, $registry->get($entity, Body::class)
+			, $dx / $distance * $speed
+			, $dy / $distance * $speed
+			, $entity
+		);
+	}
+
+	private function faceTarget(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class))return;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))return;
+
+		$a = $registry->get($entity, Transform::class);
+		$b = $registry->get($brain->target, Transform::class);
+		$a->angle = atan2($b->y - $a->y, $b->x - $a->x);
+	}
+
+	private function monsterHitscan(int $entity, Registry $registry, int $pellets): void
+	{
+		$this->faceTarget($entity, $registry);
+		$pose = $registry->get($entity, Transform::class);
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target)) return;
+
+		$aim = $this->aimAngle($registry, $brain->target, $pose);
+
+		$this->actorSound($entity, $registry, 'AttackSound');
+
+		$targetPose = $registry->get($brain->target, Transform::class);
+		$targetBody = $registry->has($brain->target, Body::class)
+			? $registry->get($brain->target, Body::class)
+			: null;
+
+		$distance = max(1.0, hypot($targetPose->x - $pose->x, $targetPose->y - $pose->y));
+		$slope = ($targetPose->z + ($targetBody?->height ?? 56) * .5 - ($pose->z + 32)) / $distance;
+
+		for($i = 0; $i < $pellets; $i++)
+		{
+			$impact = $this->hitscanResult(
+				$registry
+				, $entity
+				, $pose->x
+				, $pose->y
+				, $pose->z + 32
+				, $aim + deg2rad(mt_rand(-6, 6))
+				, 2048
+				, $slope
+			);
+
+			if($impact->target !== null)
+			{
+				if($this->usesPuff($registry, $impact->target))
+				$this->spawnPuff($registry, 'BulletPuff', $impact, $pose);
+
+				$this->damage($registry, $impact->target, $entity, 3 * mt_rand(1, 5));
+			}
+			elseif($impact->geometry !== null && !$impact->geometry->escapesIntoSky())
+			$this->spawnPuff($registry, 'BulletPuff', $impact, $pose);
+		}
+	}
+
+	private function monsterMelee(int $entity, Registry $registry, int $base): void
+	{
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))return;
+
+		$a = $registry->get($entity, Transform::class);
+		$b = $registry->get($brain->target, Transform::class);
+
+		if(hypot($a->x - $b->x, $a->y - $b->y) <= 72)
+		{
+			$this->actorSound($entity, $registry, 'AttackSound');
+			$this->damage($registry, $brain->target, $entity, $base * mt_rand(1, 3));
+		}
+	}
+
+	private function monsterAttack(int $entity, Registry $registry, string $projectile, int $melee): void
+	{
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))return;
+
+		$a = $registry->get($entity, Transform::class);
+		$b = $registry->get($brain->target, Transform::class);
+		$distance = hypot($a->x - $b->x, $a->y - $b->y);
+
+		if($distance <= 72)
+		{
+			$this->actorSound($entity, $registry, 'AttackSound');
+			$this->damage($registry, $brain->target, $entity, $melee * mt_rand(1, 8));
+
+			return;
+		}
+
+		$this->spawnProjectile(
+			$registry
+			, $entity
+			, $projectile
+			, $a->x
+			, $a->y
+			, $a->z + 32
+			, $this->aimAngle($registry, $brain->target, $a)
+			, $b
+		);
+	}
+
+	private function monsterProjectile(int $entity, Registry $registry, string $projectile): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class)) return;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target)) return;
+
+		$source = $registry->get($entity, Transform::class);
+		$target = $registry->get($brain->target, Transform::class);
+
+		$this->spawnProjectile(
+			$registry
+			, $entity
+			, $projectile
+			, $source->x
+			, $source->y
+			, $source->z + 32
+			, $this->aimAngle($registry, $brain->target, $source)
+			, $target
+		);
+	}
+
+	private function skullAttack(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class)) return;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))
+		{
+			$registry->get($entity, ActorState::class)->enter('Spawn');
+
+			return;
+		}
+
+		$pose = $registry->get($entity, Transform::class);
+		$target = $registry->get($brain->target, Transform::class);
+		$distance = max(1, hypot($target->x - $pose->x, $target->y - $pose->y));
+		$speed = 20 * 35;
+		$angle = $this->aimAngle($registry, $brain->target, $pose);
+		$pose->angle = $angle;
+		$velocity = $registry->get($entity, Velocity::class);
+		$velocity->x = cos($angle) * $speed;
+		$velocity->y = sin($angle) * $speed;
+		$velocity->z = (($target->z + 28) - $pose->z) / $distance * $speed;
+		$damage = (int)$registry->get($entity, ActorState::class)->definition->value('Damage', 3);
+		$registry->add($entity, new ChargeAttack($brain->target, $damage));
+		$this->actorSound($entity, $registry, 'AttackSound');
+	}
+
+	/** Shadow/invisibility perturbs monster aim by the same angular range as the classic random offset. */
+	private function aimAngle(Registry $registry, int $target, Transform $source): float
+	{
+		$targetPose = $registry->get($target, Transform::class);
+		$angle = atan2($targetPose->y - $source->y, $targetPose->x - $source->x);
+
+		if($registry->has($target, PlayerState::class)
+			&& isset($registry->get($target, PlayerState::class)->powers['Invisibility'])
+		)
+		$angle += (mt_rand(0, 255) - mt_rand(0, 255)) * M_PI / 2048;
+
+		return $angle;
+	}
+
+	private function moveCharge(Registry $registry, int $entity, float $dt): void
+	{
+		$charge = $registry->get($entity, ChargeAttack::class);
+
+		if(!$registry->alive($charge->target))
+		{
+			$this->stopCharge($entity, $registry);
+
+			return;
+		}
+
+		$pose = $registry->get($entity, Transform::class);
+		$velocity = $registry->get($entity, Velocity::class);
+		$body = $registry->get($entity, Body::class);
+		$motion = $this->collision->moveAndSlide($pose, $body, $velocity->x * $dt, $velocity->y * $dt, $entity);
+		$blocked = $motion['collided'];
+		$pose->z += $velocity->z * $dt;
+		$targetPose = $registry->get($charge->target, Transform::class);
+		$targetBody = $registry->get($charge->target, Body::class);
+		$touching = hypot($pose->x - $targetPose->x, $pose->y - $targetPose->y)
+			<= $body->radius + $targetBody->radius;
+
+		$vertical = $pose->z + $body->height >= $targetPose->z
+			&& $pose->z <= $targetPose->z + $targetBody->height;
+
+		if(($touching && $vertical) || in_array($charge->target, $motion['actors'], true))
+		{
+			$this->damage($registry, $charge->target, $entity, $charge->damage * mt_rand(1, 8));
+			$this->stopCharge($entity, $registry);
+		}
+		elseif($blocked) $this->stopCharge($entity, $registry);
+	}
+
+	private function stopCharge(int $entity, Registry $registry): void
+	{
+		$velocity = $registry->get($entity, Velocity::class);
+		$velocity->x = $velocity->y = $velocity->z = 0;
+		$registry->remove($entity, ChargeAttack::class);
+		$state = $registry->get($entity, ActorState::class);
+
+		if($state->definition->state('See')) $state->enter('See');
+	}
+
+	private function spiderRefire(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, MonsterBrain::class)) return;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+
+		if($brain->target === null || !$registry->alive($brain->target))
+		{
+			$registry->get($entity, ActorState::class)->enter('See');
+
+			return;
+		}
+
+		$this->faceTarget($entity, $registry);
+		$source = $registry->get($entity, Transform::class);
+		$target = $registry->get($brain->target, Transform::class);
+
+		if(mt_rand(0, 255) < 10 || !$this->visible($source, $target))
+		$registry->get($entity, ActorState::class)->enter('See');
+	}
+
+	private function spawnProjectile(
+		Registry $registry
+		, int $owner
+		, string $name
+		, float $x
+		, float $y
+		, float $z
+		, float $angle
+		, ?Transform $target
+		, float $aimSlope = 0
+	): ?int {
+		if(!$this->simulateProjectiles) return null;
+
+		$definition = $this->actors->named($name);
+
+		if(!$definition) return null;
+
+		$sector = $this->level->sectorAt($x, $y);
+
+		$entity = $this->factory->spawn(
+			$registry
+			, $definition
+			, ['x' => $x, 'y' => $y, 'z' => 0, 'angle' => rad2deg($angle), 'type' => 0, 'index' => -1, 'flags' => []]
+			, ['floor' => $sector->floor, 'ceiling' => $sector->ceiling]
+		);
+
+		$pose = $registry->get($entity, Transform::class);
+		$pose->x = $x;
+		$pose->y = $y;
+		$pose->z = $z;
+		$pose->angle = $angle;
+		$pose->beginStep();
+		$speed = (float)$definition->value('Speed', 10) * 35;
+		$verticalSpeed = $aimSlope * $speed;
+
+		if($target)
+		{
+			$distance = max(1, hypot($target->x - $x, $target->y - $y));
+			$verticalSpeed = (($target->z + 28) - $z) / $distance * $speed;
+		}
+
+		$velocity = $registry->get($entity, Velocity::class);
+		$velocity->x = cos($angle) * $speed;
+		$velocity->y = sin($angle) * $speed;
+		$velocity->z = $verticalSpeed;
+		$damage = (int)$definition->value('Damage', 3);
+		$splash = $definition->hasFlag('DEHEXPLOSION')
+			? (float)$definition->value('ExplosionDamage', 128)
+			: 0.0;
+
+		$registry->add($entity, new Projectile($owner, $damage, 12, true, $splash));
+		$this->actorSound($entity, $registry, 'SeeSound');
+
+		return $entity;
+	}
+
+	private function moveProjectile(Registry $registry, int $entity, float $dt): void
+	{
+		$projectile = $registry->get($entity, Projectile::class);
+		$projectile->ttl -= $dt;
+		$state = $registry->get($entity, ActorState::class);
+
+		if($projectile->ttl <= 0)
+		{
+			if($projectile->escapedSky)
+			$this->retireProjectile($registry, $entity);
+			elseif($projectile->active && $state->definition->state('Death'))
+			{
+				$projectile->ttl = 1;
+
+				$this->impactProjectile(
+					$registry
+					, $entity
+					, $projectile
+					, $state
+					, $registry->get($entity, Velocity::class)
+				);
+			}
+			else $this->retireProjectile($registry, $entity);
+
+			return;
+		}
+
+		if(!$projectile->active && $state->stopped)
+		{
+			$this->retireProjectile($registry, $entity);
+
+			return;
+		}
+
+		if(!$projectile->active)return;
+
+		$pose = $registry->get($entity, Transform::class);
+		$velocity = $registry->get($entity, Velocity::class);
+		$bounce = $registry->has($entity, ProjectileBounce::class)
+			? $registry->get($entity, ProjectileBounce::class)
+			: null;
+
+		if($bounce?->exhausted())
+		{
+			$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
+
+			return;
+		}
+
+		if($bounce?->resting)
+		{
+			$floor = $this->level->sectorAt($pose->x, $pose->y)->floor;
+
+			if(abs($pose->z - $floor) <= .05)
+			{
+				$pose->z = $floor;
+				$velocity->z = 0;
+			}
+			else $bounce->resting = false;
+		}
+
+		if(!($bounce?->resting ?? false) && $registry->has($entity, Gravity::class))
+		$velocity->z -= $this->gravity * $registry->get($entity, Gravity::class)->scale * max(0, $dt);
+
+		$dx = $velocity->x * $dt;
+		$dy = $velocity->y * $dt;
+		$dz = $velocity->z * $dt;
+		$body = $registry->get($entity, Body::class);
+
+		if($projectile->escapedSky)
+		{
+			$this->placeProjectile($pose, $dx, $dy, $dz, 1.0);
+
+			return;
+		}
+
+		$impact = $this->projectileTracer->trace($pose, $body, $dx, $dy, $dz);
+		$target = null;
+		$targetFraction = INF;
+
+		foreach($registry->query($this->damageable) as $other)
+		{
+			if($other === $entity || $other === $projectile->owner)continue;
+
+			$op = $registry->get($other, Transform::class);
+			$otherBody = $registry->get($other, Body::class);
+
+			if(!$otherBody->shootable)continue;
+
+			$fraction = $this->projectileContact($pose, $body, $dx, $dy, $dz, $op, $otherBody);
+
+			if($fraction !== null && $fraction < $targetFraction)
+			{
+				$target = $other;
+				$targetFraction = $fraction;
+			}
+		}
+
+		if($target !== null && (!$impact || $targetFraction <= $impact->fraction))
+		{
+			$this->damage($registry, $target, $projectile->owner, $projectile->damage * mt_rand(1, 8), $entity);
+			$this->placeProjectile($pose, $dx, $dy, $dz, $targetFraction);
+			$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
+
+			return;
+		}
+
+		if($impact)
+		{
+			if($impact->escapesIntoSky())
+			{
+				$projectile->escapeIntoSky();
+				$this->placeProjectile($pose, $dx, $dy, $dz, 1.0);
+
+				return;
+			}
+
+			$pose->x = $impact->x;
+			$pose->y = $impact->y;
+			$pose->z = $impact->z;
+
+			if($bounce)
+			{
+				$this->bounceProjectile(
+					$registry
+					, $entity
+					, $projectile
+					, $state
+					, $pose
+					, $velocity
+					, $bounce
+					, $impact
+					, $dt
+				);
+
+				return;
+			}
+
+			$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
+
+			return;
+		}
+
+		$this->placeProjectile($pose, $dx, $dy, $dz, 1.0);
+
+		if($bounce?->resting)
+		{
+			$floor = $this->level->sectorAt($pose->x, $pose->y)->floor;
+
+			if(abs($pose->z - $floor) > .05) $bounce->resting = false;
+			else $pose->z = $floor;
+		}
+	}
+
+	private function bounceProjectile(
+		Registry $registry
+		, int $entity
+		, Projectile $projectile
+		, ActorState $state
+		, Transform $pose
+		, Velocity $velocity
+		, ProjectileBounce $bounce
+		, ProjectileImpact $impact
+		, float $dt
+	): void {
+		$bounce->contact();
+
+		if($impact->surface === ProjectileImpact::WALL && $impact->line !== null)
+		{
+			$line = $this->level->map->linedefs[$impact->line];
+			$a = $this->level->map->vertices[$line['from']];
+			$b = $this->level->map->vertices[$line['to']];
+			$lineX = (float)$b['x'] - (float)$a['x'];
+			$lineY = (float)$b['y'] - (float)$a['y'];
+			$length = hypot($lineX, $lineY);
+
+			if($length <= 1e-9)
+			{
+				$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
+
+				return;
+			}
+
+			$normalX = -$lineY / $length;
+			$normalY = $lineX / $length;
+			$dot = $velocity->x * $normalX + $velocity->y * $normalY;
+			$velocity->x = ($velocity->x - 2 * $dot * $normalX) * $bounce->wallFactor;
+			$velocity->y = ($velocity->y - 2 * $dot * $normalY) * $bounce->wallFactor;
+			$speed = hypot($velocity->x, $velocity->y);
+
+			if($speed > 1e-9)
+			{
+				$pose->x += $velocity->x / $speed * .01;
+				$pose->y += $velocity->y / $speed * .01;
+				$pose->angle = atan2($velocity->y, $velocity->x);
+			}
+		}
+		elseif($impact->surface === ProjectileImpact::FLOOR)
+		{
+			$upward = abs($velocity->z) * $bounce->floorFactor;
+			$gravityStep = $registry->has($entity, Gravity::class)
+				? $this->gravity * $registry->get($entity, Gravity::class)->scale * max(0, $dt)
+				: 0.0;
+
+			if($upward <= max(.5, $gravityStep * 1.5))
+			{
+				$velocity->z = 0;
+				$bounce->resting = true;
+			}
+			else
+			{
+				$velocity->z = $upward;
+				$pose->z += .01;
+				$bounce->resting = false;
+			}
+		}
+		elseif($impact->surface === ProjectileImpact::CEILING)
+		{
+			$velocity->z = -abs($velocity->z) * $bounce->floorFactor;
+			$pose->z -= .01;
+			$bounce->resting = false;
+		}
+
+		$this->actorSound($entity, $registry, 'BounceSound');
+	}
+
+	private function impactProjectile(
+		Registry $registry
+		, int $entity
+		, Projectile $projectile
+		, ActorState $state
+		, Velocity $velocity
+	): void {
+		$projectile->active = false;
+		$velocity->x = $velocity->y = $velocity->z = 0;
+		$this->actorSound($entity, $registry, 'DeathSound');
+
+		if($state->definition->state('Death')) $state->enter('Death');
+		else
+		{
+			$projectile->ttl = 0;
+			$this->retireProjectile($registry, $entity);
+		}
+	}
+
+	private function retireProjectile(Registry $registry, int $entity): void
+	{
+		$registry->defer(static function(Registry $registry) use ($entity): void {
+			if($registry->alive($entity)) $registry->destroy($entity);
+		});
+	}
+
+	private function placeProjectile(
+		Transform $pose
+		, float $dx
+		, float $dy
+		, float $dz
+		, float $fraction
+	): void {
+		$pose->x += $dx * $fraction;
+		$pose->y += $dy * $fraction;
+		$pose->z += $dz * $fraction;
+	}
+
+	private function projectileContact(
+		Transform $projectile
+		, Body $projectileBody
+		, float $dx
+		, float $dy
+		, float $dz
+		, Transform $target
+		, Body $targetBody
+	): ?float {
+		$relativeX = $projectile->x - $target->x;
+		$relativeY = $projectile->y - $target->y;
+		$radius = $projectileBody->radius + $targetBody->radius;
+		$a = $dx * $dx + $dy * $dy;
+		$horizontalFrom = 0.0;
+		$horizontalTo = 1.0;
+
+		if($a < 1e-12)
+		{
+			if($relativeX * $relativeX + $relativeY * $relativeY > $radius * $radius) return null;
+		}
+		else
+		{
+			$b = 2 * ($relativeX * $dx + $relativeY * $dy);
+			$c = $relativeX * $relativeX + $relativeY * $relativeY - $radius * $radius;
+			$discriminant = $b * $b - 4 * $a * $c;
+
+			if($discriminant < 0) return null;
+
+			$root = sqrt($discriminant);
+			$horizontalFrom = max(0.0, (-$b - $root) / (2 * $a));
+			$horizontalTo = min(1.0, (-$b + $root) / (2 * $a));
+
+			if($horizontalFrom > $horizontalTo) return null;
+		}
+
+		$minimumZ = $target->z - $projectileBody->height;
+		$maximumZ = $target->z + $targetBody->height;
+		$verticalFrom = 0.0;
+		$verticalTo = 1.0;
+
+		if(abs($dz) < 1e-12)
+		{
+			if($projectile->z < $minimumZ || $projectile->z > $maximumZ) return null;
+		}
+		else
+		{
+			$a = ($minimumZ - $projectile->z) / $dz;
+			$b = ($maximumZ - $projectile->z) / $dz;
+			$verticalFrom = max(0.0, min($a, $b));
+			$verticalTo = min(1.0, max($a, $b));
+
+			if($verticalFrom > $verticalTo) return null;
+		}
+
+		$contact = max($horizontalFrom, $verticalFrom);
+
+		return $contact <= min($horizontalTo, $verticalTo) ? $contact : null;
+	}
+
+	private function hitscanTarget(
+		Registry $registry
+		, int $shooter
+		, float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $range
+		, float $slope = 0
+	): ?int {
+		return $this->hitscanResult($registry, $shooter, $x, $y, $z, $angle, $range, $slope)->target;
+	}
+
+	private function hitscanResult(
+		Registry $registry
+		, int $shooter
+		, float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $range
+		, float $slope = 0
+	): HitscanImpact {
+		$dx = cos($angle);
+		$dy = sin($angle);
+		$surface = $this->hitscanGeometry($x, $y, $z, $angle, $range, $slope);
+		$bestDistance = $surface->distance;
+		$best = null;
+
+		foreach($registry->query($this->damageable) as $entity)
+		{
+			if($entity === $shooter)continue;
+
+			$pose = $registry->get($entity, Transform::class);
+			$body = $registry->get($entity, Body::class);
+
+			if(!$body->shootable)continue;
+
+			$distance = $this->rayActorDistance($x, $y, $z, $dx, $dy, $slope, $pose, $body);
+
+			if($distance !== null && $distance < $bestDistance)
+			{
+				$best = $entity;
+				$bestDistance = $distance;
+			}}
+
+		if($best !== null)
+		return new HitscanImpact(
+			$bestDistance
+			, $x + $dx * $bestDistance
+			, $y + $dy * $bestDistance
+			, $z + $slope * $bestDistance
+			, $best
+		);
+
+		return $surface;
+	}
+
+	/** Resolve only the static surface at the end of a three-dimensional hitscan. */
+	private function hitscanGeometry(
+		float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $range
+		, float $slope = 0
+	): HitscanImpact {
+		$dx = cos($angle);
+		$dy = sin($angle);
+		$ray = new Transform($x, $y, $z, $angle);
+		$geometry = $this->projectileTracer->trace($ray, new Body(0, 0), $dx * $range, $dy * $range, $slope * $range);
+
+		if($geometry)
+		return new HitscanImpact(
+			$geometry->fraction * $range
+			, $geometry->x
+			, $geometry->y
+			, $geometry->z
+			, null
+			, $geometry
+		);
+
+		return new HitscanImpact($range, $x + $dx * $range, $y + $dy * $range, $z + $slope * $range);
+	}
+
+	private function rayActorDistance(
+		float $x
+		, float $y
+		, float $z
+		, float $dx
+		, float $dy
+		, float $slope
+		, Transform $pose
+		, Body $body
+	): ?float {
+		$offsetX = $x - $pose->x;
+		$offsetY = $y - $pose->y;
+		$along = $offsetX * $dx + $offsetY * $dy;
+		$discriminant = $along * $along
+			- ($offsetX * $offsetX + $offsetY * $offsetY - $body->radius * $body->radius);
+
+		if($discriminant < 0) return null;
+
+		$root = sqrt($discriminant);
+		$entry = -$along - $root;
+		$exit = -$along + $root;
+
+		if($exit <= 1e-5) return null;
+
+		$entry = max(1e-5, $entry);
+
+		if(abs($slope) < 1e-12)
+		{
+			if($z < $pose->z || $z > $pose->z + $body->height) return null;
+		}
+		else
+		{
+			$bottom = ($pose->z - $z) / $slope;
+			$top = ($pose->z + $body->height - $z) / $slope;
+			$entry = max($entry, min($bottom, $top));
+			$exit = min($exit, max($bottom, $top));
+		}
+
+		return $entry <= $exit ? $entry : null;
+	}
+
+	private function usesPuff(Registry $registry, int $target): bool
+	{
+		return $registry->has($target, ActorState::class)
+			&& $registry->get($target, ActorState::class)->definition->hasFlag('NOBLOOD');
+	}
+
+	private function spawnPuff(
+		Registry $registry
+		, string $name
+		, HitscanImpact $impact
+		, Transform $source
+	): ?int {
+		if($name === '' || strcasecmp($name, 'none') === 0) return null;
+
+		$definition = $this->actors->named($name);
+
+		if(!$definition)
+		throw new \UnexpectedValueException("Unknown DECORATE puff actor $name");
+
+		$sector = $impact->geometry
+			? $this->level->sectors[$impact->geometry->sector]
+			: $this->level->sectorAt($impact->x, $impact->y);
+
+		$angle = atan2($source->y - $impact->y, $source->x - $impact->x);
+
+		$entity = $this->factory->spawn(
+			$registry
+			, $definition
+			, [
+				'x' => $impact->x
+				, 'y' => $impact->y
+				, 'z' => $impact->z - $sector->floor
+				, 'angle' => rad2deg($angle)
+				, 'type' => 0
+				, 'index' => -1
+				, 'flags' => []
+			]
+			, ['floor' => $sector->floor, 'ceiling' => $sector->ceiling]
+		);
+
+		$pose = $registry->get($entity, Transform::class);
+		$pose->x = $pose->previousX = $impact->x;
+		$pose->y = $pose->previousY = $impact->y;
+		$pose->z = $pose->previousZ = $impact->z;
+		$pose->angle = $angle;
+		$velocity = $registry->get($entity, Velocity::class);
+		$velocity->z = (float)$definition->value('VSpeed', 0) * 35;
+
+		if($impact->geometry?->line !== null)
+		{
+			// The reference particle leaves a wall along its surface normal. Using the
+			// shot ray here makes oblique impacts appear to slide away from their mark.
+			[$normalX,$normalY] = $this->wallNormal($impact->geometry->line, $impact, $source);
+			$velocity->x = $normalX * 7;
+			$velocity->y = $normalY * 7;
+		}
+
+		$registry->add($entity, new TransientEffect);
+
+		return $entity;
+	}
+
+	/** @return array{float,float} Unit wall normal facing the hitscan originator. */
+	private function wallNormal(int $lineId, HitscanImpact $impact, Transform $source): array
+	{
+		$line = $this->level->map->linedefs[$lineId];
+		$from = $this->level->map->vertices[$line['from']];
+		$to = $this->level->map->vertices[$line['to']];
+		$dx = (float)$to['x'] - $from['x'];
+		$dy = (float)$to['y'] - $from['y'];
+		$length = hypot($dx, $dy);
+
+		if($length <= 1e-9)
+		{
+			$angle = atan2($source->y - $impact->y, $source->x - $impact->x);
+
+			return [cos($angle),sin($angle)];
+		}
+
+		$normalX = $dy / $length;
+		$normalY = -$dx / $length;
+		$towardSource = ($source->x - $impact->x) * $normalX + ($source->y - $impact->y) * $normalY;
+
+		if($towardSource < 0) return [-$normalX,-$normalY];
+
+		return [$normalX,$normalY];
+	}
+
+	private function blockingDistance(float $x, float $y, float $z, float $dx, float $dy, float $range): float
+	{
+		return $this->blockingHit($x, $y, $z, $dx, $dy, $range)[0];
+	}
+
+	/** @return array{float,?int} */
+	private function blockingHit(float $x, float $y, float $z, float $dx, float $dy, float $range): array
+	{
+		$current = $this->level->sectorAt($x, $y)->index;
+
+		foreach($this->level->spatial->cast($x, $y, $dx, $dy, $range) as $hit)
+		{
+			$sides = $this->level->sides($hit['line'], $current);
+
+			if($sides['front'] !== $current)continue;
+
+			if($sides['back'] === null)return [$hit['distance'],$hit['line']];
+
+			$front = $this->level->sectors[$current];
+			$back = $this->level->sectors[$sides['back']];
+
+			if($z < max($front->floor, $back->floor) || $z > min($front->ceiling, $back->ceiling))
+			return [$hit['distance'],$hit['line']];
+
+			$current = $back->index;
+		}
+
+		return [$range,null];
+	}
+
+	private function visible(Transform $a, Transform $b): bool
+	{
+		$dx = $b->x - $a->x;
+		$dy = $b->y - $a->y;
+		$distance = hypot($dx, $dy);
+
+		if($distance < .001)return true;
+
+		return $this->blockingDistance(
+			$a->x
+			, $a->y
+			, $a->z + 32
+			, $dx / $distance
+			, $dy / $distance
+			, $distance
+		) >= $distance - .5;
+	}
+
+	private function damage(
+		Registry $registry
+		, int $target
+		, int $source
+		, int $damage
+		, ?int $inflictor = null
+		, bool $thrust = true
+	): void {
+		$this->damageResolver->apply($registry, new DamageEvent($target, $source, $damage, $inflictor, $thrust));
+	}
+
+	private function explode(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, Transform::class)) return;
+
+		$pose = $registry->get($entity, Transform::class);
+		$definition = $registry->get($entity, ActorState::class)->definition;
+		$projectile = $registry->has($entity, Projectile::class)
+			? $registry->get($entity, Projectile::class)
+			: null;
+
+		$radius = $projectile && $projectile->splash > 0
+			? $projectile->splash
+			: (float)$definition->value('ExplosionDamage', 128);
+
+		$source = $projectile?->owner ?? $entity;
+
+		if($registry->has($entity, Velocity::class))
+		{
+			$velocity = $registry->get($entity, Velocity::class);
+			$velocity->x = $velocity->y = $velocity->z = 0;
+		}
+
+		foreach($registry->query($this->damageable) as $target)
+		{
+			if($target === $entity) continue;
+
+			$targetPose = $registry->get($target, Transform::class);
+			$body = $registry->get($target, Body::class);
+
+			if(!$body->shootable) continue;
+
+			$dx = $targetPose->x - $pose->x;
+			$dy = $targetPose->y - $pose->y;
+			$distance = max(0, hypot($dx, $dy) - $body->radius);
+			$damage = (int)ceil($radius - $distance);
+
+			if($damage <= 0 || !$this->visible($pose, $targetPose)) continue;
+
+			$this->damage($registry, $target, $source, $damage, $entity, false);
+
+			if($registry->has($target, Velocity::class) && $distance > .001)
+			{
+				$velocity = $registry->get($target, Velocity::class);
+				$impulse = 140 * (1 - min(1, $distance / $radius));
+				$velocity->x += $dx / $distance * $impulse;
+				$velocity->y += $dy / $distance * $impulse;
+			}
+		}
+	}
+
+	private function bfgSpray(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, Projectile::class) || !$registry->has($entity, Transform::class)) return;
+
+		$owner = $registry->get($entity, Projectile::class)->owner;
+
+		if(!$registry->alive($owner) || !$registry->has($owner, Transform::class)) return;
+
+		$pose = $registry->get($entity, Transform::class);
+		$ownerPose = $registry->get($owner, Transform::class);
+
+		for($ray = 0; $ray < 40; $ray++)
+		{
+			$angle = $ownerPose->angle - M_PI / 4 + (M_PI / 2) * $ray / 39;
+			$target = $this->hitscanTarget($registry, $owner, $pose->x, $pose->y, $pose->z, $angle, 1024);
+
+			if($target !== null) $this->damage($registry, $target, $owner, 15 * mt_rand(1, 8), $entity);
+		}
+	}
+
+	private function respawn(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, SpawnPoint::class)) return;
+
+		$origin = $registry->get($entity, SpawnPoint::class);
+		$pose = $registry->get($entity, Transform::class);
+		$pose->x = $pose->previousX = $origin->x;
+		$pose->y = $pose->previousY = $origin->y;
+		$pose->z = $pose->previousZ = $origin->z;
+		$pose->angle = $origin->angle;
+		$state = $registry->get($entity, ActorState::class);
+
+		if($registry->has($entity, HitPoints::class))
+		{
+			$health = $registry->get($entity, HitPoints::class);
+			$health->current = $health->maximum;
+		}
+
+		if($registry->has($entity, Body::class))
+		{
+			$body = $registry->get($entity, Body::class);
+			$body->solid = $state->definition->hasFlag('SOLID');
+			$body->shootable = $state->definition->hasFlag('SHOOTABLE');
+			$body->grounded = true;
+		}
+
+		if($registry->has($entity, MonsterBrain::class))
+		{
+			$brain = $registry->get($entity, MonsterBrain::class);
+			$brain->target = null;
+			$brain->awake = false;
+		}
+
+		if($registry->has($entity, FloorClip::class)) $registry->remove($entity, FloorClip::class);
+
+		if($registry->has($entity, ChargeAttack::class)) $registry->remove($entity, ChargeAttack::class);
+
+		$state->enter('Spawn');
+	}
+
+	private function removeBlocking(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, Body::class)) return;
+
+		$body = $registry->get($entity, Body::class);
+		$body->solid = false;
+		$body->shootable = false;
+	}
+
+	private function setFloorClip(int $entity, Registry $registry): void
+	{
+		if(!$registry->has($entity, FloorClip::class)) $registry->add($entity, new FloorClip);
+	}
+
+	private function unsetFloorClip(int $entity, Registry $registry): void
+	{
+		if($registry->has($entity, FloorClip::class)) $registry->remove($entity, FloorClip::class);
+	}
+
+	private function actorSound(int $entity, Registry $registry, string $property): void
+	{
+		if(!$registry->has($entity, ActorState::class)) return;
+
+		$logical = $registry->get($entity, ActorState::class)->definition->value($property);
+
+		if(is_string($logical) && $logical !== '') $this->playLogicalSound($entity, $registry, $logical);
+	}
+
+	private function playLogicalSound(int $entity, Registry $registry, string $logical): void
+	{
+		$lump = $this->sounds->resolve($logical, mt_rand());
+
+		if($lump === null) return;
+
+		$sourceEntity = $this->actionOwner($entity, $registry) ?? $entity;
+
+		if(!$registry->alive($sourceEntity) || !$registry->has($sourceEntity, Transform::class)) return;
+
+		$pose = $registry->get($sourceEntity, Transform::class);
+		$listener = null;
+
+		foreach($registry->query($this->players) as $player)
+		{
+			if($registry->has($player, NetworkPlayer::class)
+				&& !$registry->get($player, NetworkPlayer::class)->local
+			) continue;
+
+			$view = $registry->get($player, Transform::class);
+			$listener = new SoundListener($view->x, $view->y, $view->angle);
+			break;
+		}
+
+		$this->sound->play(new SoundEvent(SoundCue::fromLump($lump), new SoundSource($pose->x, $pose->y), $listener));
+	}
+
+	private function actionOwner(int $entity, Registry $registry): ?int
+	{
+		if($registry->has($entity, WeaponOwner::class))
+		return $registry->get($entity, WeaponOwner::class)->entity;
+
+		if($registry->has($entity, WeaponOverlay::class))
+		return $registry->get($entity, WeaponOverlay::class)->playerEntity;
+
+		return null;
+	}
+
+	private function bossDeath(int $entity, Registry $registry): void
+	{
+		foreach($registry->query(Query::all(MonsterBrain::class, HitPoints::class, ActorState::class)) as $other)
+		if($other !== $entity && $registry->get(
+			$other
+			, ActorState::class
+		)->definition->name === 'BaronOfHell' && $registry->get($other, HitPoints::class)->current > 0
+		)
+		return;
+
+		if($this->specials)
+		{
+			$this->specials->lowerBossFloor(666);
+
+			return;
+		}
+
+		foreach($this->level->tags[666] ?? [] as $sector)
+		{
+			$state = $this->level->sectors[$sector];
+			$state->moveFloor($this->level->lowestNeighborFloor($sector), 35);
+		}
+	}
+}

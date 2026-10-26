@@ -1,13 +1,16 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Effects;
+namespace Phonics\Effects;
 
-use PhpWasmEngine\Render\Camera;
+use Phonics\Render\Camera;
 
 /** Frame-rate-independent alternating camera displacement with exponential decay. */
 final class CameraShake
 {
-	public float $x = 0, $y = 0;
+	/** Current render-only horizontal displacement in world pixels. */
+	public float $x = 0;
+	/** Current render-only vertical displacement in world pixels. */
+	public float $y = 0;
 	private float $sourceX = 0, $sourceY = 0, $age = 0;
 
 	/**

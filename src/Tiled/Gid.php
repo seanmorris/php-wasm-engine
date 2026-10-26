@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Tiled;
+namespace Phonics\Tiled;
 
 /** Avoid unsigned-int casts: the WASM runtime has 32-bit PHP integers. */
 final class Gid

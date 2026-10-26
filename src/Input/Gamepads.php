@@ -1,14 +1,17 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Input;
+namespace Phonics\Input;
 
 /** SDL owns browser discovery and mappings. Handles are keyed by SDL instance ID. */
 final class Gamepads
 {
 	private array $handles = [], $axes = [], $buttons = [], $blockedAxes = [], $blockedButtons = [];
+	private array $rawAxes = [], $blockedRawAxes = [];
 	private float $deadZone;
 	private bool $closed = false;
+	/** SDL instance ID of the controller that most recently produced meaningful input. */
 	public ?int $activeId = null;
+	/** Monotonic count incremented whenever the active controller changes or supplies input. */
 	public int $activity = 0;
 	private array $names = [];
 
@@ -62,6 +65,16 @@ final class Gamepads
 	}
 
 	/**
+	 * Select a controller name for persistent binding artwork.
+	 *
+	 * @return string Most recently active controller, then the first connected controller, or empty.
+	 */
+	public function preferredName(): string
+	{
+		return $this->activeName() ?: (reset($this->names) ?: '');
+	}
+
+	/**
 	 * Request one dual-motor pulse on the controller that most recently supplied input.
 	 *
 	 * @param int $duration Nonnegative pulse duration in milliseconds.
@@ -84,7 +97,7 @@ final class Gamepads
 
 		$handle = $this->handles[$this->activeId];
 
-		// MB2 silences these pulses on PS3-era pads: they can latch an audible motor buzz
+		// Silence these pulses on PS3-era pads: they can latch an audible motor buzz
 		// instead of playing a very short weak vibration. SDL's duration-based request also
 		// makes an explicit zero pulse the correct way to stop any current browser effect.
 		if(preg_match('/playstation.{0,5}3/i', $this->activeName()) && $duration < 100 && $strong < .75)
@@ -154,7 +167,7 @@ final class Gamepads
 			}
 
 			SDL_GameControllerClose($handle);
-			unset($this->names[$id]);
+			unset($this->names[$id], $this->rawAxes[$id], $this->blockedRawAxes[$id]);
 
 			if($this->activeId === $id)
 			{
@@ -193,6 +206,10 @@ final class Gamepads
 			{
 				$raw = SDL_GameControllerGetAxis($handle, $axis);
 				$value = $raw / ($raw < 0?32768:32767);
+
+				if(abs($value) <= .08) unset($this->blockedRawAxes[$id][$axis]);
+
+				$this->rawAxes[$id][$axis] = empty($this->blockedRawAxes[$id][$axis]) ? $value : 0;
 
 				if($axis < SDL_CONTROLLER_AXIS_TRIGGERLEFT)
 				{
@@ -275,6 +292,15 @@ final class Gamepads
 	}
 
 	/**
+	 * Read normalized input before the legacy per-axis filter.
+	 *
+	 * @param int $axis SDL controller axis identifier.
+	 * @param int $id Connected SDL instance ID.
+	 * @return float Raw normalized value, or zero while blocked or disconnected.
+	 */
+	public function rawAxis(int $axis, int $id): float { return $this->rawAxes[$id][$axis] ?? 0; }
+
+	/**
 	 * Read a controller button or combine that button across all pads.
 	 *
 	 * @param int $button SDL_CONTROLLER_BUTTON_* identifier.
@@ -307,6 +333,11 @@ final class Gamepads
 	public function reset(): void
 	{
 		$this->poll();
+
+		foreach($this->rawAxes as $id => $axes)
+		foreach($axes as $axis => $value)
+		if(abs($value) > .08) $this->blockedRawAxes[$id][$axis] = true;
+		$this->rawAxes = [];
 
 		foreach($this->axes as $id => $axes)
 		{
@@ -346,6 +377,7 @@ final class Gamepads
 		}
 
 		$this->closed = true;
+		$this->rawAxes = $this->blockedRawAxes = [];
 		$this->names = [];
 		$this->activeId = null;
 

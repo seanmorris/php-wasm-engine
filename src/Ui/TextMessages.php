@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Render\BitmapFont;
+use Phonics\Render\BitmapFont;
 
-/** MB2-style transient text state, deliberately independent of DOM and GPU resources. */
+/** Transient text state deliberately independent of DOM and GPU resources. */
 final class TextMessages
 {
 	/** @var array<string,mixed>|null */
@@ -12,22 +12,42 @@ final class TextMessages
 	private float $time = 0;
 	private ?bool $focused = null;
 
-	/** Show a centered status line, optionally for a bounded number of UI seconds. */
+	/**
+	 * Show a centered status line, optionally for a bounded number of UI seconds.
+	 *
+	 * @param string $text Text content to display.
+	 * @param array{float,float,float,float} $color Normalized RGBA text color.
+	 * @param float|null $duration Nonnegative display seconds, or null to remain visible.
+	 * @return void Replaces the current centered callout.
+	 */
 	public function showCenter(string $text, array $color = [1, 1, 1, 1], ?float $duration = null): void
 	{
 		$this->center = $this->message($text, $color, $duration);
 	}
 
+	/**
+	 * Hide the centered status line.
+	 *
+	 * @return void Clears only centered callout state.
+	 */
 	public function hideCenter(): void { $this->center = null; }
 
 	/**
-	 * Show a typewriter dialog frame.  Speaker and side replace MB2's CSS portrait classes while
+	 * Show a typewriter dialog frame. Speaker and side let renderers select portrait presentation while
 	 * remaining usable without copying its character artwork.
 	 *
-	 * @param list<string>|string $lines
+	 * @param list<string>|string $lines Ordered dialog lines, or one line.
+	 * @param string $speaker Optional speaker label.
+	 * @param string $side Portrait/panel side: left or right.
+	 * @param array{float,float,float,float} $color Normalized RGBA text color.
+	 * @return void Replaces the active dialog and restarts its typewriter clock.
 	 */
-	public function showDialog(array|string $lines, string $speaker = '', string $side = 'left', array $color = [1, 1, 1, 1]): void
-	{
+	public function showDialog(
+		array|string $lines
+		, string $speaker = ''
+		, string $side = 'left'
+		, array $color = [1, 1, 1, 1]
+	): void {
 		$lines = is_string($lines) ? [$lines] : array_values($lines);
 
 		if($lines === [] || !in_array($side, ['left', 'right'], true))
@@ -47,22 +67,55 @@ final class TextMessages
 
 		BitmapFont::characters($speaker);
 		$this->dialog = $this->message('', $color, null) + [
-			'lines' => $lines, 'speaker' => $speaker, 'side' => $side, 'started' => $this->time
+			'lines' => $lines
+			, 'speaker' => $speaker
+			, 'side' => $side
+			, 'started' => $this->time
 		];
 	}
 
+	/**
+	 * Hide the active dialog.
+	 *
+	 * @return void Clears only dialog state.
+	 */
 	public function hideDialog(): void { $this->dialog = null; }
+
+	/**
+	 * Clear centered and dialog messages while retaining focus and demo badges.
+	 *
+	 * @return void Removes the two primary message channels.
+	 */
 	public function clear(): void { $this->center = $this->dialog = null; }
 
-	/** Display a keyboard/controller focus prompt. */
-	public function showFocus(string $text = 'Click the game to enable keyboard control.', ?float $duration = null): void
-	{
+	/**
+	 * Display a keyboard/controller focus prompt.
+	 *
+	 * @param string $text Text content to display.
+	 * @param float|null $duration Nonnegative display seconds, or null to remain visible.
+	 * @return void Replaces the focus prompt with the warning color.
+	 */
+	public function showFocus(
+		string $text = 'Click the game to enable keyboard control.'
+		, ?float $duration = null
+	): void {
 		$this->focus = $this->message($text, [1, .88, .35, 1], $duration);
 	}
 
+	/**
+	 * Hide the keyboard/controller focus prompt.
+	 *
+	 * @return void Clears only focus-prompt state.
+	 */
 	public function hideFocus(): void { $this->focus = null; }
 
-	/** Show MB2's demo state badge without assuming a recording implementation exists. */
+	/**
+	 * Show a demo-state badge without assuming a recording implementation exists.
+	 *
+	 * @param string $mode Record/recording/rec or play/playing/replay.
+	 * @param float|null $duration Nonnegative display seconds, or null to remain visible.
+	 * @return void Replaces the demo badge with normalized mode and color.
+	 */
 	public function showDemo(string $mode, ?float $duration = null): void
 	{
 		$mode = strtolower($mode);
@@ -76,9 +129,19 @@ final class TextMessages
 		$this->demo = $this->message($text, $color, $duration) + ['mode' => $mode];
 	}
 
+	/**
+	 * Hide the demo recording/playback badge.
+	 *
+	 * @return void Clears only demo-badge state.
+	 */
 	public function hideDemo(): void { $this->demo = null; }
 
-	/** Advance real UI time, including pause-menu frames, and expire timed callouts. */
+	/**
+	 * Advance real UI time, including pause-menu frames, and expire timed callouts.
+	 *
+	 * @param float $elapsed Elapsed time in seconds.
+	 * @return void Advances timers by at most one quarter second and clears expired channels.
+	 */
 	public function update(float $elapsed): void
 	{
 		if(!is_finite($elapsed) || $elapsed < 0)
@@ -97,7 +160,12 @@ final class TextMessages
 		}
 	}
 
-	/** Mirror MB2's focus warning: show on blur, then dismiss shortly after focus returns. */
+	/**
+	 * Show a focus warning on blur, then dismiss it shortly after focus returns.
+	 *
+	 * @param bool $focused Whether the UI owns focus.
+	 * @return void Updates focus state and schedules the restored-focus prompt to expire.
+	 */
 	public function setFocused(bool $focused): void
 	{
 		$previous = $this->focused;
@@ -118,7 +186,11 @@ final class TextMessages
 		}
 	}
 
-	/** @return array<string,mixed> Stable inspection state for browser diagnostics and tests. */
+	/**
+	 * Return observable state without transferring ownership.
+	 *
+	 * @return array<string,mixed> Stable inspection state for browser diagnostics and tests.
+	 */
 	public function snapshot(): array
 	{
 		$dialog = $this->dialog;
@@ -138,7 +210,14 @@ final class TextMessages
 		];
 	}
 
-	/** @return array<string,mixed> */
+	/**
+	 * Normalize message content and display options.
+	 *
+	 * @param string $text Text content to display.
+	 * @param array $color Text or panel color.
+	 * @param float|null $duration Duration in seconds.
+	 * @return array<string,mixed> Result of this operation.
+	 */
 	private function message(string $text, array $color, ?float $duration): array
 	{
 		BitmapFont::characters($text);
@@ -161,10 +240,19 @@ final class TextMessages
 			}
 		}
 
-		return ['text' => $text, 'color' => array_map('floatval', $color), 'until' => $duration === null ? null : $this->time + $duration];
+		return [
+			'text' => $text
+			, 'color' => array_map('floatval', $color)
+			, 'until' => $duration === null ? null : $this->time + $duration
+		];
 	}
 
-	/** @return array<string,mixed>|null */
+	/**
+	 * Return the public fields of one retained message.
+	 *
+	 * @param array|null $message Message state to inspect or render.
+	 * @return array<string,mixed>|null Result of this operation.
+	 */
 	private function snapshotMessage(?array $message): ?array
 	{
 		if($message === null)

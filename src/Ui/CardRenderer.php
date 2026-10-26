@@ -1,17 +1,19 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
-use PhpWasmEngine\Render\Atlas;
-use PhpWasmEngine\Render\BitmapFont;
-use PhpWasmEngine\Render\Camera;
-use PhpWasmEngine\Render\RectRenderer;
-use PhpWasmEngine\Render\SpriteRenderer;
+use Phonics\Render\Atlas;
+use Phonics\Render\BitmapFont;
+use Phonics\Render\Camera;
+use Phonics\Render\RectRenderer;
+use Phonics\Render\SpriteRenderer;
 
 /** Bitmap card headings, text, prompts, and file progress over an optional scene backdrop. */
 final class CardRenderer
 {
+	/** Font glyph atlas, either owned here or borrowed from the caller. */
 	public Atlas $atlas;
+	/** @var array<string,mixed> Mutable card typography, spacing, color, and panel settings. */
 	public array $style = [
 		'scale' => 2
 		, 'align' => 'center'
@@ -120,7 +122,7 @@ final class CardRenderer
 	 * @param float $scale Output pixels per source font pixel.
 	 * @param array{float,float,float,float} $color Text tint before the card fade.
 	 * @param string $align Left, center, or right alignment for each wrapped line.
-	 * @return list<\PhpWasmEngine\Render\Sprite> Cached glyphs; callers must not mutate them.
+	 * @return list<\Phonics\Render\Sprite> Cached glyphs; callers must not mutate them.
 	 */
 	private function text(
 		string $text

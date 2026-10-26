@@ -1,9 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
+/** Restorable linked GLES shader program with cached uniform locations. */
 final class Program
 {
+	/** Live GL program handle, replaced after context restoration and zero after closure. */
 	public int $id = 0;
 	private array $locations = [];
 	private bool $closed = false;

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "name": "@seanmorris/tiled-phonics",
+  "version": "0.1.0",
+  "requires": {
+    "phonics": "^0.1.0",
+    "tiled": "1.12.2"
+  },
+  "dependencies": {},
+  "php": {
+    "files": [],
+    "autoload": {}
+  },
+  "browser": {
+    "files": []
+  },
+  "assets": [
+    "extension/phonics.mjs",
+    "lib/authoring.mjs",
+    "bin/tiled-phonics.mjs"
+  ],
+  "exports": {
+    "extension": {
+      "type": "asset",
+      "path": "extension/phonics.mjs"
+    }
+  },
+  "integrity": {
+    "extension/phonics.mjs": "sha256-RNuYGBeU3n/5E6RbLJmG24Prm1tcbdYlyfWQXKnfb2M=",
+    "lib/authoring.mjs": "sha256-KABXNvEMfpenNeauqPf+/vUbaKLen6EparAVFbxmRf8=",
+    "bin/tiled-phonics.mjs": "sha256-B0GiVPKKCUHmfTWODvGzybWK2xiWjv2WJHXV+2a4vkQ="
+  }
+}

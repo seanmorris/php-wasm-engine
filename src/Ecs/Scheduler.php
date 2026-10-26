@@ -1,11 +1,14 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ecs;
+namespace Phonics\Ecs;
 
+/** Execute named ECS systems in dependency order and flush deferred entity changes. */
 final class Scheduler
 {
 	private array $systems = [];
 	private ?array $ordered = null;
+	/** CPU milliseconds used by each system during the latest update. */
+	public array $timings = [];
 
 	/**
 	 * Bind an ordered system scheduler to an entity registry.
@@ -28,6 +31,13 @@ final class Scheduler
 		$this->systems[$name] = [$system,$after];
 		$this->ordered = null;
 	}
+
+	/**
+	 * Check whether a system name is already owned by this scheduler.
+	 * @param string $name System registration name.
+	 * @return bool Whether the system exists.
+	 */
+	public function has(string $name): bool { return isset($this->systems[$name]); }
 
 	/**
 	 * Remove a named system and invalidate the cached execution order.
@@ -100,7 +110,9 @@ final class Scheduler
 
 		foreach($this->ordered as $name)
 		{
+			$started = hrtime(true);
 			($this->systems[$name][0])($this->registry, $dt);
+			$this->timings[$name] = (hrtime(true) - $started) / 1e6;
 		}
 
 		$this->registry->flush();

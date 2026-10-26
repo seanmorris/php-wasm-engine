@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Render;
+namespace Phonics\Render;
 
 /** Captures terrain and applies a one-dimensional Gaussian blur along camera travel. */
 final class MotionBlurRenderer
@@ -9,6 +9,7 @@ final class MotionBlurRenderer
 	private array $vao = [], $framebuffer = [], $depthBuffer = [];
 	private int $sceneTexture = 0, $targetFramebuffer = 0;
 	private bool $closed = false, $capturing = false;
+	/** Composite draw calls submitted by the latest capture. */
 	public int $draws = 0;
 
 	/**

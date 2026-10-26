@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Ui;
+namespace Phonics\Ui;
 
 /** A screen's content, timing, readiness gate, and optional application lifecycle hooks. */
 final class Card

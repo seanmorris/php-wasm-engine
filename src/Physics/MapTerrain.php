@@ -1,21 +1,19 @@
 <?php
 declare(strict_types=1);
-namespace PhpWasmEngine\Physics;
-use PhpWasmEngine\Tiled\
-{
-	TileMap,Loader
-};
+namespace Phonics\Physics;
+use Phonics\Tiled\TileMap;
+use Phonics\Tiled\Loader;
 
+/** Compile loaded Tiled collision objects and tiles into game-neutral Terrain geometry. */
 final class MapTerrain
 {
 
 	/**
-	 * Convert Tiled collision shapes and directional gates into shared world-space terrain.
+	 * Convert Tiled collision shapes and surface metadata into shared world-space terrain.
 	 *
 	 * @param TileMap ...$maps Loaded maps whose world placement and inherited layer offsets are
 	 * applied.
-	 * @return Terrain Spatially indexed polygons, selected collision planes, and layer-switch
-	 * regions.
+	 * @return Terrain Spatially indexed polygons, selected collision planes, and contact metadata.
 	 */
 	public static function build(TileMap ...$maps): Terrain
 	{
@@ -41,7 +39,7 @@ final class MapTerrain
 
 				$ox = $map->x + $layer->offsetX;
 				$oy = $map->y + $layer->offsetY;
-				$layerGrinding = (bool)($layer->properties['grinding'] ?? $layer->properties['grind'] ?? false);
+				$surface = (array)($layer->properties['surface'] ?? []);
 
 				foreach($layer->chunks as $chunk)
 				{
@@ -91,10 +89,7 @@ final class MapTerrain
 								}
 
 								$props = Loader::properties($shape['properties'] ?? []);
-								$grinding = (bool)($props['grinding'] ?? $props['grind']
-									?? $tile['properties']['grinding'] ?? $tile['properties']['grind']
-									?? $layerGrinding
-								);
+								$metadata = (array)($props['surface'] ?? $tile['properties']['surface'] ?? $surface);
 
 								$terrain->add(
 									$transformed
@@ -102,7 +97,7 @@ final class MapTerrain
 										?? $layer->properties['oneWay'] ?? false
 									)
 									, $collisionLayer
-									, $grinding
+									, $metadata
 								);
 							}
 						}
@@ -111,35 +106,11 @@ final class MapTerrain
 
 				foreach($layer->objects as $object)
 				{
-					if(\PhpWasmEngine\Gameplay\VehicleLoader::matches($object)
-						|| \PhpWasmEngine\Gameplay\Platforms::matches($object)
-						|| \PhpWasmEngine\Gameplay\BendableBridges::matches($object)
-						|| in_array(strtolower(($object['class'] ?? '') ?: ($object['type'] ?? '')), [
-							'grapple-point', 'grapplepoint', 'rope-anchor', 'ropeanchor'
-						], true
-						)
-					){
-						continue;
-					}
-
 					$props = Loader::properties($object['properties'] ?? []);
 
-					$class = ($object['class'] ?? '')?:($object['type'] ?? '');
-					$switch = in_array($class, ['layer-switch', 'LayerSwitch'], true);
-					$grinding = in_array(strtolower($class), ['rail', 'grinding'], true)
-						|| (bool)($props['grinding'] ?? $props['grind'] ?? $layerGrinding);
-
-					if(!$switch && !$grinding && !($props['solid'] ?? $layer->properties['solid'] ?? false))
+					if(!($props['solid'] ?? $layer->properties['solid'] ?? false))
 					{
 						continue;
-					}
-
-					if($switch && isset($object['gid']))
-					{
-						// Tiled tile objects rotate around their bottom-left anchor.
-						$angle = deg2rad($object['rotation'] ?? 0);
-						$object['x'] += sin($angle) * ($object['height'] ?? 0);
-						$object['y'] -= cos($angle) * ($object['height'] ?? 0);
 					}
 
 					$points = self::points($object);
@@ -173,34 +144,17 @@ final class MapTerrain
 						, $points
 					);
 
-					if($switch)
+					$plane = (int)($props['collisionLayer'] ?? $collisionLayer);
+					$metadata = (array)($props['surface'] ?? $surface);
+					$oneWay = (bool)($props['oneWay'] ?? $layer->properties['oneWay'] ?? false);
+
+					if(isset($object['polyline']))
 					{
-						$terrain->addSwitch(
-							new LayerSwitch(
-								$points
-								, (int)($props['fromLayer'] ?? 1)
-								, (int)($props['toLayer'] ?? 2)
-								, (bool)(int)($props['back'] ?? 0)
-								, (bool)(int)($props['roll'] ?? 0)
-							)
-						);
+						$terrain->addPathShape($points, $oneWay, $plane, $metadata);
 					}
 					else
 					{
-						$plane = (int)($props['collisionLayer'] ?? $collisionLayer);
-
-						if($grinding && isset($object['polyline']))
-						{
-							$terrain->addRail($points, $plane);
-						}
-						elseif(isset($object['polyline']))
-						{
-							$terrain->addPathShape($points, (bool)($props['oneWay'] ?? false), $plane);
-						}
-						else
-						{
-							$terrain->add($points, (bool)($props['oneWay'] ?? $grinding), $plane, $grinding);
-						}
+						$terrain->add($points, $oneWay, $plane, $metadata);
 					}
 				}
 			}

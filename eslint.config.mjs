@@ -4,6 +4,7 @@ export default [
 	{
 		ignores: [
 			'node_modules/**'
+			, 'site/.cache/**'
 			, 'vendor/**'
 			, '.runtime/**'
 			, '.runtime-staging/**'

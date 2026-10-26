@@ -348,6 +348,20 @@ foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
 	}
 }
 
+$hintData = $data;
+$hintData['tiles'][3]['properties'][] = ['name' => 'glyph.offsetY', 'value' => -2];
+$hintFont = new BitmapFont(
+	new Loader(new Assets(fn() => json_encode($hintData)))
+	, __DIR__ . '/assets/font.tsj'
+);
+$hintFont->theme = 'keyboard';
+$hintRenderer = new MenuRenderer($hintFont);
+$device->begin([0, 0, 0, 1]);
+$hintRenderer->renderHint('⓿', 320, 180, [20, 20, 10, 10]);
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+$checks['standalone hint preserves negative top bearing'] = menuPixel($pixels, 20, 18) === 'ffff00ff';
+$hintRenderer->close();
+
 $renderer->close();
 $checks['atlas released'] = !glIsTexture($renderer->atlas->texture);
 $error = glGetError();
