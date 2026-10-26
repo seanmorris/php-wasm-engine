@@ -1,0 +1,366 @@
+SEARCH_ENABLED: 0
+STYLES:
+  - /site.css
+BODY_SCRIPTS:
+  - /vendor/highlight.js/highlight.min.js
+  - /syntax-highlight.js
+  - /__smgen-assistant/loader.js?site=phonics
+LLMS:
+  title: Phonics
+  summary: Build game worlds in PHP and run them through WebAssembly in the browser.
+  details: |
+    The documentation covers installation, world and package authoring,
+    framework architecture, browser services, and the complete programming API.
+  sections:
+    start:
+      title: Start Here
+      weight: 0
+    guides:
+      title: Guides
+      weight: 10
+    reference:
+      title: Reference
+      weight: 20
+    games:
+      title: Games
+      weight: 25
+    project:
+      title: Release and Contribute
+      weight: 30
+MENUS:
+  primary:
+    label: Primary navigation
+    renderer: flat
+    links:
+      - page: index.md
+        title: Documentation
+        weight: 10
+      - page: games.md
+        title: Games
+        weight: 20
+  documentation:
+    label: Documentation
+    renderer: tree
+    hierarchy: manual
+    links:
+      - id: begin
+        group: true
+        title: Get started
+        weight: 10
+        expanded: true
+      - id: author
+        group: true
+        title: Build a world
+        weight: 20
+        expanded: true
+      - id: extend
+        group: true
+        title: Extend Phonics
+        weight: 30
+        expanded: true
+      - id: reference
+        group: true
+        title: Reference
+        weight: 40
+        expanded: true
+      - id: api
+        group: true
+        title: Programming API
+        parent: reference
+        weight: 60
+        expanded: false
+      - id: api-core
+        group: true
+        title: Core runtime
+        parent: api
+        weight: 10
+        expanded: false
+      - id: api-asset
+        group: true
+        title: Assets
+        parent: api
+        weight: 20
+        expanded: false
+      - id: api-ecs
+        group: true
+        title: ECS
+        parent: api
+        weight: 30
+        expanded: false
+      - id: api-effects
+        group: true
+        title: Effects
+        parent: api
+        weight: 40
+        expanded: false
+      - id: api-input
+        group: true
+        title: Input
+        parent: api
+        weight: 50
+        expanded: false
+      - id: api-network
+        group: true
+        title: Networking
+        parent: api
+        weight: 60
+        expanded: false
+      - id: api-network-component
+        group: true
+        title: Network components
+        parent: api-network
+        weight: 10
+        expanded: false
+      - id: api-package
+        group: true
+        title: Packages
+        parent: api
+        weight: 70
+        expanded: false
+      - id: api-physics
+        group: true
+        title: Physics
+        parent: api
+        weight: 80
+        expanded: false
+      - id: api-render
+        group: true
+        title: Rendering
+        parent: api
+        weight: 90
+        expanded: false
+      - id: api-spatial
+        group: true
+        title: Spatial indexing
+        parent: api
+        weight: 100
+        expanded: false
+      - id: api-tiled
+        group: true
+        title: Tiled data
+        parent: api
+        weight: 110
+        expanded: false
+      - id: api-ui
+        group: true
+        title: UI
+        parent: api
+        weight: 120
+        expanded: false
+      - id: api-world
+        group: true
+        title: World runtime
+        parent: api
+        weight: 130
+        expanded: false
+      - id: api-browser
+        group: true
+        title: Browser API
+        parent: api
+        weight: 140
+        expanded: false
+      - id: games
+        group: true
+        title: Games
+        weight: 45
+        expanded: false
+      - id: game-sane-phonics
+        group: true
+        title: Sane-Phonics
+        parent: games
+        weight: 10
+        expanded: false
+      - id: game-sane-phonics-api
+        group: true
+        title: PHP API
+        parent: game-sane-phonics
+        weight: 100
+        expanded: false
+      - id: game-sane-phonics-api-effects
+        group: true
+        title: Effects
+        parent: game-sane-phonics-api
+        weight: 10
+        expanded: false
+      - id: game-sane-phonics-api-gameplay
+        group: true
+        title: Gameplay
+        parent: game-sane-phonics-api
+        weight: 20
+        expanded: false
+      - id: game-sane-phonics-api-physics
+        group: true
+        title: Physics
+        parent: game-sane-phonics-api
+        weight: 30
+        expanded: false
+      - id: game-sane-phonics-api-render
+        group: true
+        title: Rendering
+        parent: game-sane-phonics-api
+        weight: 40
+        expanded: false
+      - id: game-php-noid
+        group: true
+        title: PHP-Noid
+        parent: games
+        weight: 20
+        expanded: false
+      - id: game-php-noid-api
+        group: true
+        title: PHP API
+        parent: game-php-noid
+        weight: 100
+        expanded: false
+      - id: game-php-noid-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-noid-api
+        weight: 10
+        expanded: false
+      - id: game-php-noid-api-component
+        group: true
+        title: Components
+        parent: game-php-noid-api
+        weight: 20
+        expanded: false
+      - id: game-php-noid-api-render
+        group: true
+        title: Rendering
+        parent: game-php-noid-api
+        weight: 30
+        expanded: false
+      - id: game-php-noid-api-system
+        group: true
+        title: Systems
+        parent: game-php-noid-api
+        weight: 40
+        expanded: false
+      - id: game-php-tris
+        group: true
+        title: PHPTris
+        parent: games
+        weight: 30
+        expanded: false
+      - id: game-php-tris-api
+        group: true
+        title: PHP API
+        parent: game-php-tris
+        weight: 100
+        expanded: false
+      - id: game-php-tris-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-tris-api
+        weight: 10
+        expanded: false
+      - id: game-php-tris-api-component
+        group: true
+        title: Components
+        parent: game-php-tris-api
+        weight: 20
+        expanded: false
+      - id: game-php-tris-api-render
+        group: true
+        title: Rendering
+        parent: game-php-tris-api
+        weight: 30
+        expanded: false
+      - id: game-php-tris-api-system
+        group: true
+        title: Systems
+        parent: game-php-tris-api
+        weight: 40
+        expanded: false
+      - id: game-doom-phonics
+        group: true
+        title: Doom-Phonics
+        parent: games
+        weight: 40
+        expanded: false
+      - id: game-doom-phonics-api
+        group: true
+        title: PHP API
+        parent: game-doom-phonics
+        weight: 100
+        expanded: false
+      - id: game-doom-phonics-api-adapter
+        group: true
+        title: Adapters
+        parent: game-doom-phonics-api
+        weight: 10
+        expanded: false
+      - id: game-doom-phonics-api-archive
+        group: true
+        title: Archives
+        parent: game-doom-phonics-api
+        weight: 20
+        expanded: false
+      - id: game-doom-phonics-api-audio
+        group: true
+        title: Audio
+        parent: game-doom-phonics-api
+        weight: 30
+        expanded: false
+      - id: game-doom-phonics-api-component
+        group: true
+        title: Components
+        parent: game-doom-phonics-api
+        weight: 40
+        expanded: false
+      - id: game-doom-phonics-api-definition
+        group: true
+        title: Definitions
+        parent: game-doom-phonics-api
+        weight: 50
+        expanded: false
+      - id: game-doom-phonics-api-game
+        group: true
+        title: Game
+        parent: game-doom-phonics-api
+        weight: 60
+        expanded: false
+      - id: game-doom-phonics-api-graphics
+        group: true
+        title: Graphics
+        parent: game-doom-phonics-api
+        weight: 70
+        expanded: false
+      - id: game-doom-phonics-api-input
+        group: true
+        title: Input
+        parent: game-doom-phonics-api
+        weight: 80
+        expanded: false
+      - id: game-doom-phonics-api-map
+        group: true
+        title: Maps
+        parent: game-doom-phonics-api
+        weight: 90
+        expanded: false
+      - id: game-doom-phonics-api-menu
+        group: true
+        title: Menus
+        parent: game-doom-phonics-api
+        weight: 100
+        expanded: false
+      - id: game-doom-phonics-api-render
+        group: true
+        title: Rendering
+        parent: game-doom-phonics-api
+        weight: 110
+        expanded: false
+      - id: game-doom-phonics-api-system
+        group: true
+        title: Systems
+        parent: game-doom-phonics-api
+        weight: 120
+        expanded: false
+      - id: maintain
+        group: true
+        title: Release & contribute
+        weight: 50
+        expanded: true
+MENU_REGIONS:
+  header: [primary]
+  sidebar: [documentation]
