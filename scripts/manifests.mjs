@@ -167,6 +167,44 @@ definitions.push(
 );
 
 definitions.push(
+	['packages/php-slalom'
+		, {
+			name: '@seanmorris/php-slalom'
+			, php: {autoload: {'PhpSlalom\\': 'src/'}, bootstrap: ['autoload.php']}
+			, exports: {
+				game: {type: 'game', php: 'game.php', browser: 'browser/game.mjs', modules: []}
+				, slalom: {type: 'asset', path: 'worlds/slalom.world'}
+			}
+			, tiled: {previews: ['assets/jiki.png', 'assets/jiki2.png']}
+			, preload: ['assets/bomb.wav', 'assets/jiki.png', 'assets/jiki2.png', 'assets/craft.tsj']
+			, directories: ['src','browser','assets','worlds']
+			, files: ['autoload.php','game.php']
+		}
+	]
+);
+
+definitions.push(
+	['packages/php-buster'
+		, {
+			name: '@seanmorris/php-buster'
+			, php: {autoload: {'PhpBuster\\': 'src/'}, bootstrap: ['autoload.php']}
+			, exports: {
+				game: {type: 'game', php: 'game.php', browser: 'browser/game.mjs', modules: []}
+				, buster: {type: 'asset', path: 'worlds/buster.world'}
+			}
+			, tiled: {previews: ['assets/sprites.png']}
+			, preload: ['assets/explosion.wav'
+				, 'assets/sprites.png'
+				, 'assets/sprites.tsj'
+				, 'assets/starfield.png', 'assets/starfield.tsj'
+			]
+			, directories: ['src','browser','assets','worlds']
+			, files: ['autoload.php','game.php']
+		}
+	]
+);
+
+definitions.push(
 	['packages/doom-phonics'
 		, {
 			name: '@seanmorris/doom-phonics'

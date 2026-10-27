@@ -7,7 +7,8 @@ final class CheatSequence
 {
 	/** @var array<string,array{string,?string}> Longest forms come first for explicit auditability. */
 	private const CODES = [
-		'idspispopd' => [CheatCommand::NO_CLIP, null]
+		'idoopsallgibs' => [CheatCommand::OOPS_ALL_GIBS, null]
+		, 'idspispopd' => [CheatCommand::NO_CLIP, null]
 		, 'idbeholdv' => [CheatCommand::POWER, 'Invulnerable']
 		, 'idbeholds' => [CheatCommand::POWER, 'Strength']
 		, 'idbeholdi' => [CheatCommand::POWER, 'Invisibility']
@@ -73,7 +74,6 @@ final class CheatSequence
 
 			foreach(array_keys(self::CODES) as $code)
 			if(str_starts_with($code, $suffix)) return true;
-
 			if(preg_match('/^idclev(?:[1-9])?$/', $suffix)) return true;
 		}
 

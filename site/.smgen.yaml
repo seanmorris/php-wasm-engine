@@ -1,4 +1,6 @@
-SEARCH_ENABLED: 0
+SEARCH_ENABLED: 1
+SEARCH_READER: /vendor/smgen-search/SearchReader.mjs
+SMG_SEARCH: ../node_modules/.bin/smgen-search
 STYLES:
   - /site.css
 BODY_SCRIPTS:
@@ -35,7 +37,7 @@ MENUS:
       - page: index.md
         title: Documentation
         weight: 10
-      - page: games.md
+      - page: games/index.md
         title: Games
         weight: 20
   documentation:
@@ -272,11 +274,71 @@ MENUS:
         parent: game-php-tris-api
         weight: 40
         expanded: false
+      - id: game-php-slalom
+        group: true
+        title: PHP Slalom
+        parent: games
+        weight: 35
+        expanded: false
+      - id: game-php-slalom-api
+        group: true
+        title: PHP API
+        parent: game-php-slalom
+        weight: 100
+        expanded: false
+      - id: game-php-slalom-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-slalom-api
+        weight: 10
+        expanded: false
+      - id: game-php-slalom-api-input
+        group: true
+        title: Input
+        parent: game-php-slalom-api
+        weight: 20
+        expanded: false
+      - id: game-php-slalom-api-render
+        group: true
+        title: Rendering
+        parent: game-php-slalom-api
+        weight: 30
+        expanded: false
+      - id: game-php-buster
+        group: true
+        title: PHP Buster
+        parent: games
+        weight: 40
+        expanded: false
+      - id: game-php-buster-api
+        group: true
+        title: PHP API
+        parent: game-php-buster
+        weight: 100
+        expanded: false
+      - id: game-php-buster-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-buster-api
+        weight: 10
+        expanded: false
+      - id: game-php-buster-api-input
+        group: true
+        title: Input
+        parent: game-php-buster-api
+        weight: 20
+        expanded: false
+      - id: game-php-buster-api-render
+        group: true
+        title: Rendering
+        parent: game-php-buster-api
+        weight: 30
+        expanded: false
       - id: game-doom-phonics
         group: true
         title: Doom-Phonics
         parent: games
-        weight: 40
+        weight: 50
         expanded: false
       - id: game-doom-phonics-api
         group: true

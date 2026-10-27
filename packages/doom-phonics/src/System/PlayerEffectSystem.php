@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace DoomPhonics\System;
 
+use DoomPhonics\Component\HitPoints;
 use DoomPhonics\Component\ViewEffects;
 use DoomPhonics\Game\PlayerState;
 use Phonics\Ecs\Query;
@@ -29,6 +30,10 @@ final class PlayerEffectSystem
 		foreach($registry->query($this->players) as $entity)
 		{
 			$player = $registry->get($entity, PlayerState::class);
+			$dead = $registry->has($entity, HitPoints::class)
+				&& $registry->get($entity, HitPoints::class)->current <= 0;
+
+			if($dead) $player->advanceDeath($elapsed);
 
 			foreach($player->powers as $name => $remaining)
 			{
@@ -38,8 +43,13 @@ final class PlayerEffectSystem
 				else $player->powers[$name] = $remaining;
 			}
 
-			if($tics > 0 && $registry->has($entity, ViewEffects::class))
-			$registry->get($entity, ViewEffects::class)->advance($tics);
+			if($registry->has($entity, ViewEffects::class))
+			{
+				$effects = $registry->get($entity, ViewEffects::class);
+
+				if($dead) $effects->recordDeath();
+				if($tics > 0) $effects->advance($tics);
+			}
 		}
 	}
 }

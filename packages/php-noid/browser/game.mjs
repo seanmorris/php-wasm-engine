@@ -284,17 +284,11 @@ export function activate({module, canvas, onClose, session, services, assets, pa
 
 	const scoresList = ui.querySelector('ol');
 
-	const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
+	const storage = new services.SafeStorage;
 
-	const write = (key, value) => {
-		try
-		{
-			localStorage.setItem(key, value);
-		}
-		catch
-		{
-			/* Keep this session playable. */
-		} };
+	const read = key => storage.get(key);
+
+	const write = (key, value) => storage.set(key, value);
 
 	const scoreKey = `php-noid.scores.v1:${session.url}`;
 	let scores = [];

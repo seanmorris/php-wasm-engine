@@ -10,16 +10,19 @@ use DoomPhonics\Component\StatusFace;
 use DoomPhonics\Component\Transform;
 use DoomPhonics\Component\ViewEffects;
 use DoomPhonics\Definition\ActorCatalog;
+use DoomPhonics\Definition\ActorDefinition;
+use DoomPhonics\Definition\WeaponAmmo;
 use DoomPhonics\Game\PlayerState;
 use Phonics\Ecs\Query;
 use Phonics\Ecs\Registry;
+use Phonics\Network\Component\NetworkIdentity;
 
 /** Applies DECORATE inventory semantics when a player overlaps a pickup actor. */
 final class PickupSystem
 {
 	private Query $players;
 
-	public function __construct(public ActorCatalog $actors)
+	public function __construct(public ActorCatalog $actors, public bool $authoritative = true)
 	{
 		$this->players = Query::all(PlayerStart::class, PlayerState::class, Transform::class, HitPoints::class);
 	}
@@ -36,7 +39,10 @@ final class PickupSystem
 
 			foreach($pickups as $entity)
 			{
-				if(!$registry->alive($entity) || $entity === $playerEntity) continue;
+				if(!$registry->alive($entity) || $entity === $playerEntity
+					|| !$registry->has($entity, InventoryPickup::class)
+					|| (!$this->authoritative && $registry->has($entity, NetworkIdentity::class))
+				) continue;
 
 				$pickupPose = $registry->get($entity, Transform::class);
 				$radius = $registry->has($entity, Body::class) ? $registry->get($entity, Body::class)->radius : 20;
@@ -52,7 +58,11 @@ final class PickupSystem
 				$newWeapon = $definition && $this->actors->isA($definition, 'Weapon')
 					&& empty($player->weapons[$definition->name]);
 
-				if(!$definition || !$this->apply($definition, $player, $health)) continue;
+				if(!$definition || !$this->apply($definition, $pickup, $player, $health)) continue;
+
+				// Remove collectability now so two players cannot claim one pickup in the
+				// same tick and network snapshots can retire it without a duplicate claim.
+				$registry->remove($entity, InventoryPickup::class);
 
 				if($newWeapon && $registry->has($playerEntity, StatusFace::class))
 				$registry->get($playerEntity, StatusFace::class)->recordWeaponPickup();
@@ -72,9 +82,14 @@ final class PickupSystem
 		}
 	}
 
-	private function apply(object $definition, PlayerState $player, HitPoints $health): bool
+	private function apply(
+		ActorDefinition $definition
+		, InventoryPickup $pickup
+		, PlayerState $player
+		, HitPoints $health
+	): bool
 	{
-		$amount = (int)$definition->value('Inventory.Amount', 1);
+		$amount = $pickup->amount;
 
 		if($this->actors->isA($definition, 'Health'))
 		{
@@ -108,16 +123,7 @@ final class PickupSystem
 		if($this->actors->isA($definition, 'Ammo'))
 		{
 			// Derived pickups supply their own amount to the base ammo class's inventory pool.
-			$ammo = $definition;
-
-			while($ammo->parent !== null && strcasecmp($ammo->parent, 'Ammo') !== 0)
-			{
-				$parent = $this->actors->named($ammo->parent);
-
-				if(!$parent) break;
-
-				$ammo = $parent;
-			}
+			$ammo = WeaponAmmo::pool($this->actors, $definition->name) ?? $definition;
 
 			return $this->giveAmmo($player, $ammo->name, $amount, (int)$ammo->value('Inventory.MaxAmount', 0));
 		}
@@ -126,11 +132,24 @@ final class PickupSystem
 		{
 			$new = empty($player->weapons[$definition->name]);
 			$player->weapons[$definition->name] = true;
-			$type = (string)$definition->value('Weapon.AmmoType', '');
-			$give = (int)$definition->value('Weapon.AmmoGive', 0);
-			$ammo = $type !== '' && $give > 0
-				? $this->giveAmmo($player, $type, $give, (int)($player->ammoMaximum[$type] ?? 0))
-				: false;
+			$ammo = false;
+
+			foreach([1,2] as $channel)
+			{
+				$type = WeaponAmmo::type($definition, $channel);
+				$give = WeaponAmmo::give($definition, $channel);
+
+				if($type === '' || $give <= 0) continue;
+				if($pickup->dropped) $give = max(1, intdiv($give, 2));
+
+				$pool = WeaponAmmo::pool($this->actors, $type);
+				$name = $pool?->name ?? $type;
+				$maximum = (int)($pool?->value(
+					'Inventory.MaxAmount'
+					, $player->ammoMaximum[$name] ?? 0
+				) ?? ($player->ammoMaximum[$name] ?? 0));
+				$ammo = $this->giveAmmo($player, $name, $give, $maximum) || $ammo;
+			}
 
 			if($new) $player->requestWeapon($definition->name);
 

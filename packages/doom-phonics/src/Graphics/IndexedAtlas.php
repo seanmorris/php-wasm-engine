@@ -23,10 +23,19 @@ final class IndexedAtlas
 		, TextureCatalog $textures
 		, int $targetWidth = 1024
 		, ?ActorCatalog $actors = null
+		, ?Palette $palette = null
 	): self {
 		$images = [
 			'ui:backdrop' => new IndexedImage(1, 1, "\0", "\xff")
 		];
+
+		if($palette)
+		$images['ui:reticle'] = new IndexedImage(
+			1
+			, 1
+			, chr($palette->closestIndex(255, 128, 0))
+			, "\xff"
+		);
 
 		foreach($level->map->sidedefs as $side)
 		foreach(['upper','lower','middle'] as $position)

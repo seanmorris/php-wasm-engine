@@ -24,6 +24,8 @@ try
 		, 'packages/sane-phonics'
 		, 'packages/php-noid'
 		, 'packages/php-tris'
+		, 'packages/php-slalom'
+		, 'packages/php-buster'
 		, 'packages/doom-phonics'
 		, 'packages/phonics-matrix'
 		, 'packages/tiled-phonics'
@@ -79,6 +81,8 @@ try
 		, 'sane-phonics'
 		, 'php-noid'
 		, 'php-tris'
+		, 'php-slalom'
+		, 'php-buster'
 		, 'doom-phonics'
 		, 'phonics-matrix'
 		, 'tiled-phonics'
@@ -112,6 +116,8 @@ try
 		, require: {
 			'seanmorris/phonics': '0.1.0'
 			, 'seanmorris/php-tris': '0.1.0'
+			, 'seanmorris/php-slalom': '0.1.0'
+			, 'seanmorris/php-buster': '0.1.0'
 			, 'seanmorris/php-noid': '0.1.0'
 			, 'seanmorris/sane-phonics': '0.1.0'
 			, 'seanmorris/doom-phonics': '0.1.0'
@@ -125,7 +131,7 @@ try
 
 	execute(
 		'php'
-		, ['-r', `require 'vendor/autoload.php'; $r=new Phonics\\Ecs\\Registry; $id=$r->create(new SanePhonics\\Physics\\Body); if(!$r->has($id, PhpWasmEngine\\Physics\\Body::class)) exit(2); $c=new Phonics\\Package\\Context; PhpNoid\\Module::factories($c); new DoomPhonics\\Archive\\Archive('PWAD'.pack('V2',0,12),'fixture.wad');`]
+		, ['-r', `require 'vendor/autoload.php'; $r=new Phonics\\Ecs\\Registry; $id=$r->create(new SanePhonics\\Physics\\Body); if(!$r->has($id, PhpWasmEngine\\Physics\\Body::class)) exit(2); $c=new Phonics\\Package\\Context; PhpNoid\\Module::factories($c); new PhpSlalom\\Simulation(1); new PhpBuster\\Simulation(1); new DoomPhonics\\Archive\\Archive('PWAD'.pack('V2',0,12),'fixture.wad');`]
 		, composer
 	);
 
@@ -176,6 +182,48 @@ try
 		'php'
 		, ['-r',"require 'vendor/autoload.php'; $c=new Phonics\\Package\\Context; PhpTris\\Module::systems($c); $id=$c->entities->create(...PhpTris\\Module::components()); $c->systems->update(1/60); if(class_exists('PhpNoid\\Playfield') || class_exists('SanePhonics\\Physics\\Body')) exit(2);"]
 		, tris
+	);
+
+	const slalom = path.join(temporary, 'php-slalom-only');
+	await fs.mkdir(slalom);
+
+	await fs.writeFile(
+		path.join(slalom, 'composer.json')
+		, JSON.stringify(
+			{
+				require: {'seanmorris/phonics': '0.1.0','seanmorris/php-slalom': '0.1.0'}
+				, repositories: [{type: 'artifact',url: destination}]
+			}
+		)
+	);
+
+	execute('composer', ['install','--no-scripts','--no-interaction','--prefer-dist'], slalom);
+
+	execute(
+		'php'
+		, ['-r',"require 'vendor/autoload.php'; $game=new PhpSlalom\\Simulation(7); $game->step(true,false); $bytes=PhpSlalom\\Replay::encode(0,7,0,[1]); $replay=PhpSlalom\\Replay::decode($bytes); if($game->velocity<=0 || $replay['inputs']!==[1] || class_exists('PhpTris\\Module')) exit(2);"]
+		, slalom
+	);
+
+	const buster = path.join(temporary, 'php-buster-only');
+	await fs.mkdir(buster);
+
+	await fs.writeFile(
+		path.join(buster, 'composer.json')
+		, JSON.stringify(
+			{
+				require: {'seanmorris/phonics': '0.1.0','seanmorris/php-buster': '0.1.0'}
+				, repositories: [{type: 'artifact',url: destination}]
+			}
+		)
+	);
+
+	execute('composer', ['install','--no-scripts','--no-interaction','--prefer-dist'], buster);
+
+	execute(
+		'php'
+		, ['-r',"require 'vendor/autoload.php'; $game=new PhpBuster\\Simulation(7); $game->step(1,0,true); if($game->player->x<=130 || $game->shots!==1 || class_exists('PhpSlalom\\Replay')) exit(2);"]
+		, buster
 	);
 
 	const doom = path.join(temporary, 'doom-only');

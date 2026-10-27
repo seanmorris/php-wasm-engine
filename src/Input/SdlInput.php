@@ -934,7 +934,16 @@ final class SdlInput
 			$buttons['back'] = (!$editing && $this->held(SDLK_ESCAPE, SDLK_x, SDLK_LCTRL, SDLK_RCTRL))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_B);
 
-			$buttons['pause'] = (!$editing && ($this->held(SDLK_p) || (!$open && $this->held(SDLK_ESCAPE))))
+			$pauseKeys = $this->bindings[InputCode::PAUSE] ?? [];
+			$escapePauses = in_array(SDLK_ESCAPE, $pauseKeys, true);
+			$pauseKeys = array_values(array_filter(
+				$pauseKeys
+				, static fn(int $key): bool => $key !== SDLK_ESCAPE
+			));
+
+			$buttons['pause'] = (!$editing && (
+				$this->held(...$pauseKeys) || (!$open && $escapePauses && $this->held(SDLK_ESCAPE))
+			))
 				|| $this->gamepads->button(SDL_CONTROLLER_BUTTON_START);
 
 			$buttons['revert'] = (!$editing && $this->held(SDLK_z))

@@ -18,6 +18,8 @@ final class DamageResolver
 	private const TICS_PER_SECOND = 35;
 	private const THRUST_PER_DAMAGE_TIC = 12.5;
 
+	public function __construct(private ?ActorDropper $drops = null) {}
+
 	/** Return true only when this event changed the target. */
 	public function apply(Registry $registry, DamageEvent $event): bool
 	{
@@ -68,11 +70,18 @@ final class DamageResolver
 
 		if($health->current <= 0)
 		{
+			if($registry->has($event->target, PlayerState::class))
+			$registry->get($event->target, PlayerState::class)->beginDeath();
+
+			if($registry->has($event->target, ViewEffects::class))
+			$registry->get($event->target, ViewEffects::class)->recordDeath();
+
 			if($registry->has($event->target, Body::class))
 			$registry->get($event->target, Body::class)->shootable = false;
 
 			$label = $this->deathLabel($state, $health);
 			if($label !== null) $state->enter($label);
+			$this->drops?->spawn($registry, $event->target);
 
 			if($registry->has($event->target, MonsterBrain::class)
 				&& $registry->alive($event->source)

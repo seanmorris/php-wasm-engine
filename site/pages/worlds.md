@@ -74,10 +74,16 @@ Worlds can activate content that does not come from Tiled. This example uses Doo
       "to": {"source": "episode", "scope": "E1M2"}
     }
   ],
+  "init": {
+    "startMap": "E1M1",
+    "cheats": ["iddqd", "idkfa"]
+  },
   "start": {"source": "episode", "scope": "E1M1"},
   "view": {"width": 960, "height": 540}
 }
 ```
+
+`init` is an optional game-owned object. The engine validates and copies it into the browser module context and PHP package context without assigning meaning to its keys. This lets a world configure a game without adding game-specific fields to the neutral world schema. Doom-Phonics accepts `startMap` plus either one classic cheat string or an ordered `cheats` string list. It applies the cheats after creating the player for a new game. `startMap` overrides `start.scope` for Doom's initial title and new-game flow, while `start.source` still selects the content source.
 
 Replace the example manifest URL with an immutable published URL and generate the integrity value from the WAD you are licensed to use. Package manifests provide code; worlds provide content URLs. The package archive does not contain the repository's reference WAD.
 
@@ -85,7 +91,7 @@ Replace the example manifest URL with an immutable published URL and generate th
 
 A resource slot with `multiple: true` expands into an ordered sequence at the slot's position in `sources.*.resources`. A slot may declare `stack.first` and `stack.following` requirements when position changes what makes a resource valid. Doom-Phonics uses this to require an IWAD first, accept later IWAD or PWAD archives, and resolve duplicate lumps and whole maps from the last archive. Its reusable launcher previews the declared inspector metadata, builds the effective map list, and passes the selected map as the world's replacement `start.scope`. The same binding path serves local single-player launches and negotiated online matches.
 
-[Play the repository example](doom-phonics/) or inspect its [complete world definition](https://github.com/seanmorris/php-wasm-engine/blob/HEAD/packages/doom-phonics/demo/episode-one-online.phonics-world.json).
+[Play the repository example](games/doom-phonics/) or inspect its [complete world definition](https://github.com/seanmorris/php-wasm-engine/blob/HEAD/packages/doom-phonics/demo/episode-one-online.phonics-world.json).
 
 ## Launch a session
 

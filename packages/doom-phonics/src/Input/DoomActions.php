@@ -13,6 +13,7 @@ final class DoomActions
 {
 	public const FORWARD = InputCode::GAME_START, STRAFE = 0x10001, TURN = 0x10002, LOOK_PITCH = 0x10003;
 	public const FIRE = 0x10004, USE = 0x10005, PREVIOUS_WEAPON = 0x10006, NEXT_WEAPON = 0x10007;
+	public const ALT_FIRE = 0x10008;
 	public const SLOT_0 = 0x10010, SLOT_1 = 0x10011, SLOT_2 = 0x10012, SLOT_3 = 0x10013, SLOT_4 = 0x10014;
 	public const SLOT_5 = 0x10015, SLOT_6 = 0x10016, SLOT_7 = 0x10017, SLOT_8 = 0x10018, SLOT_9 = 0x10019;
 	public const SLOTS = [
@@ -39,6 +40,7 @@ final class DoomActions
 			, 'look-up' => [self::LOOK_PITCH, 1, 'Look up']
 			, 'look-down' => [self::LOOK_PITCH, -1, 'Look down']
 			, 'fire' => [self::FIRE, 1, 'Fire']
+			, 'alt-fire' => [self::ALT_FIRE, 1, 'Alt fire']
 			, 'use' => [self::USE, 1, 'Use']
 			, 'previous-weapon' => [self::PREVIOUS_WEAPON, 1, 'Previous weapon']
 			, 'next-weapon' => [self::NEXT_WEAPON, 1, 'Next weapon']
@@ -82,10 +84,13 @@ final class DoomActions
 					, $key(Key::KEYPAD_ENTER)
 					, $key(Key::LEFT_CTRL)
 					, new Source(Source::MOUSE_BUTTON, Source::PRIMARY)
-					, $button(Pad::RB)
+					, $axis(Pad::RT, 1)
 				]
 			]
-			, self::USE => [1 => [$key('e'),new Source(Source::MOUSE_BUTTON, Source::SECONDARY),$button(Pad::A)]]
+			, self::ALT_FIRE => [
+				1 => [new Source(Source::MOUSE_BUTTON, Source::SECONDARY),$axis(Pad::LT, 1)]
+			]
+			, self::USE => [1 => [$key('e'),$button(Pad::A)]]
 			, self::PREVIOUS_WEAPON => [
 				1 => [new Source(Source::WHEEL, Source::Y, 1),$button(Pad::LEFT),$button(Pad::DOWN)]
 			]

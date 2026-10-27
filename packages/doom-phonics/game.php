@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use DoomPhonics\Game\EpisodeGame;
+use DoomPhonics\Game\DoomInitialization;
 use DoomPhonics\Game\GameSettings;
 use DoomPhonics\Menu\DoomMenuController;
 use DoomPhonics\Menu\DoomOptions;
@@ -10,6 +11,7 @@ use DoomPhonics\Render\ScreenWipe;
 use Phonics\Engine;
 use Phonics\Asset\Resource;
 use Phonics\FixedStep;
+use Phonics\Input\InputCode;
 use Phonics\Render\BitmapFont;
 use Phonics\Render\Device;
 use Phonics\Render\FramePipeline;
@@ -24,6 +26,8 @@ $engine->systems = $phonics->systems;
 $engine->clock = new FixedStep(1 / 35, 4);
 $pipeline = new FramePipeline($engine->device);
 $start = $phonics->world['start'] ?? ['source' => 'episode','scope' => 'E1M1'];
+$initialization = DoomInitialization::fromWorld($phonics->world);
+$startMap = $initialization->startMap ?? (string)$start['scope'];
 $settings = new GameSettings;
 $options = new DoomOptions(
 	$settings
@@ -38,9 +42,23 @@ $inputSettings = new \DoomPhonics\Input\InputSettings(
 );
 
 $engine->input->useBindings($inputSettings->bindings);
+
+// In the browser, printable P reaches the cheat parser first so IDSPISPOPD and
+// IDOOPSALLGIBS cannot race the fixed pause shortcut. Unmatched P presses are
+// returned as pause requests by the same bridge; Escape and Start remain direct.
+if(vrzno_env('doomInput')) $engine->input->bindButton(InputCode::PAUSE, [SDLK_ESCAPE]);
+
 $engine->input->lookDeadZone = $settings->controllerDeadZone;
 $wipe = new ScreenWipe($width, $height);
-$game = new EpisodeGame($phonics, $engine, $pipeline, (string)$start['source'], $settings, $wipe);
+$game = new EpisodeGame(
+	$phonics
+	, $engine
+	, $pipeline
+	, (string)$start['source']
+	, $settings
+	, $wipe
+	, $initialization
+);
 $engine->setFrameInputHandler([$game, 'frameInput']);
 
 $phpInfoHints = new MenuRenderer(
@@ -68,7 +86,7 @@ $menu = new DoomMenuController(
 	$engine
 	, $game
 	, $settings
-	, (string)$start['scope']
+	, $startMap
 	, $phpInfo
 	, $phpInfoHints
 	, static fn(): string => (string)(vrzno_env('doomAction'))()
@@ -79,7 +97,7 @@ $menu = new DoomMenuController(
 );
 
 $phonics->runtime->service('doom-menu', $menu);
-$game->enter((string)$start['scope'], false, false);
+$game->enter($startMap, false, false);
 $game->playTitleMusic();
 (vrzno_env('sceneReady'))(null);
 $lastStatus = 0;

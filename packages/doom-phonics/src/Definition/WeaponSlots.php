@@ -11,11 +11,18 @@ final class WeaponSlots
 
 	/**
 	 * Build banks with Player.WeaponSlot declarations taking precedence over each weapon's
-	 * Weapon.SlotNumber fallback. The optional predicate can hide actors whose assets are absent.
+	 * Weapon.SlotNumber fallback, then append KEYCONF declarations. A weapon keeps its first
+	 * case-insensitive assignment across all three sources. The optional predicate can hide
+	 * actors whose assets are absent.
 	 *
 	 * @param callable(ActorDefinition):bool|null $available
+	 * @param array<string,string> $keyconf Layered KEYCONF documents in WAD precedence order.
 	 */
-	public static function fromCatalog(ActorCatalog $actors, ?callable $available = null): self
+	public static function fromCatalog(
+		ActorCatalog $actors
+		, ?callable $available = null
+		, array $keyconf = []
+	): self
 	{
 		$slots = [];
 		$assigned = [];
@@ -58,6 +65,21 @@ final class WeaponSlots
 
 			self::append($slots, $slot, $definition->name);
 		}
+
+		foreach(KeyConfParser::weaponSlots($keyconf) as $command)
+		{
+			$slot = $command['slot'];
+
+			foreach($command['weapons'] as $name)
+			{
+				$definition = $actors->named($name);
+				if(!$definition || !$actors->isA($definition, 'Weapon') || !$accept($definition)) continue;
+				if(self::contains($slots, $definition->name)) continue;
+				self::append($slots, $slot, $definition->name);
+			}
+		}
+
+		$slots = array_filter($slots, static fn(array $weapons): bool => $weapons !== []);
 
 		return new self($slots);
 	}
@@ -148,4 +170,15 @@ final class WeaponSlots
 
 		$slots[$slot][] = $weapon;
 	}
+
+	/** @param array<int,list<string>> $slots */
+	private static function contains(array $slots, string $weapon): bool
+	{
+		foreach($slots as $weapons)
+		foreach($weapons as $existing)
+		if(strcasecmp($existing, $weapon) === 0) return true;
+
+		return false;
+	}
+
 }

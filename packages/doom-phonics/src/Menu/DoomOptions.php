@@ -91,6 +91,18 @@ final class DoomOptions
 		$this->write(['pitchMode' => $value->value]);
 	}
 
+	public function setReticle(bool $value): void
+	{
+		$this->settings->setReticle($value);
+		$this->write(['reticle' => $value]);
+	}
+
+	public function setBloodSplatter(float $value): void
+	{
+		$this->settings->setBloodSplatter($value);
+		$this->write(['bloodSplatter' => $this->settings->bloodSplatter()]);
+	}
+
 	public function message(): string
 	{
 		if($this->fullscreenError !== '') return $this->fullscreenError;
@@ -110,6 +122,8 @@ final class DoomOptions
 			, 'fullscreenBusy' => $this->fullscreenBusy
 			, 'fullscreenError' => $this->fullscreenError
 			, 'sessionOnly' => $this->sessionOnly
+			, 'reticle' => $this->settings->reticle()
+			, 'bloodSplatter' => $this->settings->bloodSplatter()
 		];
 	}
 
@@ -159,6 +173,12 @@ final class DoomOptions
 
 		if(is_string($data['pitchMode'] ?? null) && ($mode = PitchMode::tryFrom($data['pitchMode'])))
 		$this->settings->setPitchMode($mode);
+
+		if(is_bool($data['reticle'] ?? null)) $this->settings->setReticle($data['reticle']);
+
+		$blood = $data['bloodSplatter'] ?? null;
+		if((is_int($blood) || is_float($blood)) && is_finite((float)$blood) && $blood >= 0 && $blood <= 2)
+		$this->settings->setBloodSplatter((float)$blood);
 
 		foreach(['fullscreen','fullscreenAvailable','fullscreenBusy','sessionOnly'] as $name)
 		if(is_bool($data[$name] ?? null)) $this->$name = $data[$name];

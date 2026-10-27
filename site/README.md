@@ -1,6 +1,6 @@
 # Phonics documentation site
 
-SMGen renders the framework guide at the site root alongside the existing playable routes. Markdown source, PHP templates, declarative navigation, a documentation sidebar, and per-page contents lists produce static output. The build also emits a curated `llms.txt`, JSON-LD on the homepage, and a private in-browser documentation assistant. No game runtime loads while reading documentation.
+SMGen renders the framework guide and playable game manuals in one documentation tree. Markdown source, PHP templates, declarative navigation, a documentation sidebar, and per-page contents lists produce static output. The build also emits a curated `llms.txt`, JSON-LD on the homepage, and a private in-browser documentation assistant. Game runtimes load only when a reader activates the poster on a game overview.
 
 ## Build
 
@@ -15,11 +15,11 @@ npm run test:site:browser # Requires Playwright Chromium or /usr/bin/chromium
 npm run serve:docs
 ```
 
-Open <http://localhost:9140/>. `serve:docs` rebuilds the complete site, including game code, assets, and runtime, on startup and serves the generated `index.html` directly. The local and published sites use the same static entry point. Use `npm run build:site` for documentation-only edits; it does not refresh playable demos. Neither command watches for subsequent edits.
+Open <http://localhost:9140/>. `serve:docs` rebuilds the complete site, including game code, assets, and runtime, on startup and serves the generated `index.html` directly. The local and published sites use the same static entry point. Use `npm run build:site` for documentation-only edits; it does not refresh packaged game code. Neither command watches for subsequent edits.
 
-`site/.smgen-version` pins `e0404765733b08fdb92f82e18de223c61d615e1d`, the verified `seanmorris/smgen` revision used by this site. The wrapper fetches that exact revision into ignored `site/.cache/smgen/`. `SMGEN_BIN` allows an explicit local generator override. To update, inspect `git ls-remote https://github.com/seanmorris/smgen.git HEAD`, update the pin, rebuild, and run the checks. The test's expected revision should change with an intentional update.
+`site/.smgen-version` pins `11d7984173cc796a652eee324f85897a545ba7c9`, the verified `seanmorris/smgen` revision used by this site. The wrapper fetches that exact revision into ignored `site/.cache/smgen/`. `SMGEN_BIN` allows an explicit local generator override. To update, inspect `git ls-remote https://github.com/seanmorris/smgen.git HEAD`, update the pin, rebuild, and run the checks. The test's expected revision should change with an intentional update.
 
-The root npm dependency pins `smgen-assistant` at `44f182245c476179c68e2b454785854863b1bc9d`. SMGen runs `site/after-smgen.sh` only after it has installed a complete render, and restores the previous render if the assistant build fails. The generated assistant, corpus, and `llms.txt` are published with `docs/dist/`; edit their source configuration and Markdown rather than generated files. The assistant checks WebGPU before offering compatible models. Questions and retrieved documentation stay in the visitor's browser.
+The root npm dependency pins `smgen-assistant` at `289e2eaa35f3a1cd5698e7d485700f201e13d0e2`. SMGen runs `site/after-smgen.sh` only after it has installed a complete render, and restores the previous render if the assistant build fails. The generated assistant, corpus, and `llms.txt` are published with `docs/dist/`; edit their source configuration and Markdown rather than generated files. The assistant checks WebGPU before offering compatible models. Questions and retrieved documentation stay in the visitor's browser.
 
 ## Content and drafting
 
@@ -37,7 +37,7 @@ The Harvard outlines are drafting tools, not public numbering. API landing and s
 
 ## Deployment
 
-Publish all of `docs/dist/` as a static tree. The documentation homepage is at `/`, with Sane-Phonics at `/sane-phonics/`, PHP-Noid at `/php-noid/`, and the generic loader at `/preview/`. The guide does not require PHP on the production host.
+Publish all of `docs/dist/` as a static tree. The documentation homepage is at `/`, game overviews and their lazy playable surfaces live under `/games/`, and the generic world loader remains at `/preview/`. The guide does not require PHP on the production host.
 
 For a prefixed deployment, build with the site's public URL prefix:
 

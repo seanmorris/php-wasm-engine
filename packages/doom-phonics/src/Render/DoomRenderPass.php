@@ -126,6 +126,7 @@ final class DoomRenderPass implements RenderPass
 		if($this->registry->has($entity, PlayerState::class))
 		{
 			$player = $this->registry->get($entity, PlayerState::class);
+			$z += $player->viewHeightAt($alpha) - PlayerState::VIEW_HEIGHT;
 
 			if(isset($player->powers['LightAmp'])) $extraLight = max($extraLight, 255);
 
@@ -141,7 +142,7 @@ final class DoomRenderPass implements RenderPass
 		$this->renderer->renderActors($this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha);
 		$this->renderer->renderBeams($this->registry, $x, $y, $z, $angle, $pitch, $alpha);
 		$this->target?->compose();
-		$this->renderer->renderOverlay($this->registry);
+		$this->renderer->renderOverlay($this->registry, $this->settings->reticle());
 		$this->menu?->render($this->renderer);
 	}
 

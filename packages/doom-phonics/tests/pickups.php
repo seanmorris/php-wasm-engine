@@ -25,6 +25,11 @@ ACTOR TestAmmoCrate : TestAmmo
 {
   Inventory.Amount 8
 }
+ACTOR NumberedAmmoGun : Weapon
+{
+  Weapon.AmmoType1 "TestAmmo"
+  Weapon.AmmoGive1 6
+}
 DEC
 	]);
 
@@ -116,5 +121,15 @@ DEC
 			'TestAmmoCrate'
 		])
 		, 'custom ammo classes share a pool with their derived pickups'
+	);
+
+	$player->ammo['TestAmmo'] = 0;
+	$collect('NumberedAmmoGun');
+
+	verifyWad(
+		!empty($player->weapons['NumberedAmmoGun'])
+			&& $player->ammo['TestAmmo'] === 6
+			&& $player->ammoMaximum['TestAmmo'] === 30
+		, 'weapon pickups support numbered DECORATE primary-ammo properties and initialize custom pools'
 	);
 })();

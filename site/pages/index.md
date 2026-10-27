@@ -47,7 +47,7 @@ await session.dispose();
 ## Choose your starting point
 
 - **Build your first game:** follow the [quickstart tutorial](quickstart.html), from a new package to a playable world.
-- **Play and inspect:** explore [Sane-Phonics and PHP-Noid](games.html).
+- **Play and inspect:** explore the [complete game packages](games/), from platforming and puzzles to PHP Slalom and Doom.
 - **Design a world:** [add package URLs in Tiled](tiled.html), place entities, and launch your saved world.
 - **Start your own game:** use the [game-package CLI](cli.html) to scaffold, preview, validate, and build.
 - **Write a module:** [register PHP systems and factories](modules.html) against the shared session context.
@@ -56,4 +56,4 @@ await session.dispose();
 
 Phonics owns ECS scheduling, Tiled parsing and streaming, asset lifetimes, geometry queries, rendering, input, text, menus, and generic effects. Game packages own movement rules, cameras, HUDs, enemies, and courses.
 
-Sane-Phonics and PHP-Noid are independent peers. PHP-Noid does not need the platformer's code or assets. Legacy `PhpWasmEngine\` aliases remain until Phonics 1.0; install Sane-Phonics when using its old gameplay aliases.
+Every game package is an independent peer and declares its own code and assets. Legacy `PhpWasmEngine\` aliases remain until Phonics 1.0; install Sane-Phonics when using its old gameplay aliases.

@@ -55,6 +55,141 @@ if(themeToggle)
 	updateThemeToggle();
 }
 
+const siteSearch = document.querySelector('[data-site-search]');
+
+if(siteSearch)
+{
+	const toggle = siteSearch.querySelector('[data-search-toggle]');
+	const panel = siteSearch.querySelector('[data-search-panel]');
+	const input = siteSearch.querySelector('#search-query');
+	const resultsElement = siteSearch.querySelector(input?.dataset.searchResults ?? '#search-results');
+	const baseUrl = document.querySelector('meta[name="smgen-base-url"]')?.content.replace(/\/$/, '') ?? '';
+	let readerPromise;
+	let searchRequest = 0;
+
+	const setOpen = open => {
+		siteSearch.toggleAttribute('data-open', open);
+		toggle?.setAttribute('aria-expanded', String(open));
+		panel?.setAttribute('aria-hidden', String(!open));
+
+		if(open) requestAnimationFrame(() => input?.focus());
+	};
+
+	const showMessage = message => {
+		if(!resultsElement) return;
+
+		const item = document.createElement('li');
+		const label = document.createElement('span');
+		label.textContent = message;
+		item.append(label);
+		resultsElement.replaceChildren(item);
+	};
+
+	const resultHref = path => {
+		const cleanPath = String(path).replace(/^\/+|\/+$/g, '');
+
+		if(cleanPath === 'index') return `${baseUrl}/`;
+
+		if(cleanPath.endsWith('/index')) return `${baseUrl}/${cleanPath.slice(0, -5)}`;
+
+		return `${baseUrl}/${cleanPath}.html`;
+	};
+
+	const loadReader = () => {
+		if(readerPromise) return readerPromise;
+
+		const indexUrl = input?.dataset.searchIndex;
+		const readerUrl = input?.dataset.searchReader;
+
+		if(!indexUrl || !readerUrl) return Promise.reject(new Error('Search assets are not configured.'));
+
+		readerPromise = Promise.all([
+			import(readerUrl)
+			, fetch(indexUrl).then(response => {
+				if(!response.ok) throw new Error(`Search index returned ${response.status}.`);
+
+				return response.arrayBuffer();
+			})
+		]).then(([module, buffer]) => new module.SearchReader(buffer));
+
+		return readerPromise;
+	};
+
+	const runSearch = async() => {
+		const request = ++searchRequest;
+		const query = input?.value.trim() ?? '';
+
+		if(query.length < 3)
+		{
+			resultsElement?.replaceChildren();
+
+			return;
+		}
+
+		try
+		{
+			const reader = await loadReader();
+
+			if(request !== searchRequest) return;
+
+			const matches = reader.search(query, .5).slice(0, 10);
+
+			if(!matches.length)
+			{
+				showMessage('No results.');
+
+				return;
+			}
+
+			const items = matches.map(([result]) => {
+				const item = document.createElement('li');
+				const link = document.createElement('a');
+				link.textContent = result.title;
+				link.href = resultHref(result.path);
+				item.append(link);
+
+				return item;
+			});
+
+			resultsElement?.replaceChildren(...items);
+		}
+		catch(error)
+		{
+			if(request !== searchRequest) return;
+
+			console.error('Unable to load search.', error);
+			showMessage('Search unavailable.');
+		}
+	};
+
+	toggle?.addEventListener('click', () => setOpen(!siteSearch.hasAttribute('data-open')));
+	input?.addEventListener('focus', () => loadReader().catch(() => {}), {once: true});
+	input?.addEventListener('input', runSearch);
+
+	input?.addEventListener('keydown', event => {
+		if(event.key !== 'ArrowDown') return;
+
+		const firstResult = resultsElement?.querySelector('a');
+
+		if(firstResult)
+		{
+			event.preventDefault();
+			firstResult.focus();
+		}
+	});
+
+	document.addEventListener('pointerdown', event => {
+		if(siteSearch.hasAttribute('data-open') && !siteSearch.contains(event.target)) setOpen(false);
+	});
+
+	document.addEventListener('keydown', event => {
+		if(event.key !== 'Escape' || !siteSearch.hasAttribute('data-open')) return;
+
+		setOpen(false);
+		toggle?.focus();
+	});
+}
+
 const fitNavigation = () => {
 	for(const menu of menus) menu.open = !narrow.matches;
 };
@@ -226,20 +361,38 @@ if(apiFilter)
 	update();
 }
 
-for(const embed of document.querySelectorAll('[data-game-embed]'))
+for(const embed of document.querySelectorAll('.game-embed[data-title]'))
 {
-	const trigger = embed.querySelector('button');
+	const trigger = embed.querySelector('.game-embed-poster');
+	const runtime = embed.querySelector('[data-game-runtime]');
 
-	trigger?.addEventListener('click', () => {
-		if(embed.querySelector('iframe')) return;
+	trigger?.addEventListener('click', async() => {
+		if(!runtime || embed.dataset.loading !== undefined) return;
 
-		const frame = document.createElement('iframe');
-		frame.src = embed.dataset.src;
-		frame.title = `${embed.dataset.title} playable game`;
-		frame.allow = 'autoplay; fullscreen; gamepad';
-		frame.allowFullscreen = true;
-		frame.loading = 'eager';
-		trigger.replaceWith(frame);
-		frame.addEventListener('load', () => frame.focus(), {once: true});
+		embed.dataset.loading = '';
+		trigger.disabled = true;
+
+		try
+		{
+			const host = new URL(embed.dataset.host, location.href).href;
+			const world = new URL(embed.dataset.world, location.href).href;
+			const dataOrigins = embed.dataset.dataOrigins?.split(',').filter(Boolean);
+			const {mountPreview} = await import(host);
+			runtime.hidden = false;
+			trigger.remove();
+			mountPreview(runtime, {world, title: embed.dataset.title, dataOrigins});
+		}
+		catch(error)
+		{
+			delete embed.dataset.loading;
+			trigger.disabled = false;
+			const status = runtime?.querySelector('#status');
+
+			if(runtime) runtime.hidden = false;
+
+			if(status) status.textContent = `Could not start ${embed.dataset.title}: ${error.message}`;
+
+			console.error(error);
+		}
 	});
 }

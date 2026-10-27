@@ -4,6 +4,8 @@ import {SessionAssets} from './SessionAssets.mjs';
 import {DomTexture} from './DomTexture.mjs';
 import {SdlAudio} from './SdlAudio.mjs';
 import {QuickControls} from './QuickControls.mjs';
+import {SafeStorage} from './SafeStorage.mjs';
+import {SamplePlayer} from './SamplePlayer.mjs';
 import {GameLauncher} from './launcher/GameLauncher.mjs';
 import {cacheProgramValidation} from './GlesPrograms.mjs';
 import {cachePixelStoreQueries} from './GlesPixelStore.mjs';
@@ -134,7 +136,8 @@ export class LoadProgress
  * @property {string|object} start Canonical starting-map URL or neutral source/scope selector.
  * @property {SessionAssets} assets Session resource and mount adapter.
  * @property {function(string, string=): string} resolve Resolve an asset export or URL against its declarer.
- * @property {{SdlAudio: typeof SdlAudio, QuickControls: typeof QuickControls,
+ * @property {{SdlAudio: typeof SdlAudio, QuickControls: typeof QuickControls, SafeStorage: typeof SafeStorage,
+ * SamplePlayer: typeof SamplePlayer,
  * cacheProgramValidation: typeof cacheProgramValidation,
  * cachePixelStoreQueries: typeof cachePixelStoreQueries}} services Shared browser services.
  * @property {function(function(): (void|Promise<void>)): void} onClose Register reverse-order cleanup.
@@ -575,6 +578,8 @@ export async function loadWorld(worldUrl, options = {})
 		const services = {
 			SdlAudio
 			, QuickControls
+			, SafeStorage
+			, SamplePlayer
 			, cacheProgramValidation
 			, cachePixelStoreQueries
 			, register: serviceRegistry.register.bind(serviceRegistry)

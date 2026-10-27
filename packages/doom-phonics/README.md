@@ -12,6 +12,14 @@ World effects use the WAD's DMX samples through a map-scoped audio service. Door
 
 DECORATE actions dispatch into ECS combat primitives. Weapon fire creates an independent `WeaponOverlay` entity for the `Flash` state, applies `A_Light0`–`A_Light2` through `ViewLighting`, and retires the layer when its state flow completes. Actor actions cover the reference renderer's hitscan, projectile, charge, explosion, respawn, floor-clip, pain, death, and boss behaviors. Inline `Goto`, `Loop`, `Wait`, and `Stop` edges remain attached to the frame that declares them, so alternate chaingun and plasma flashes do not run as one long sequence.
 
+Weapon banks combine `Player.WeaponSlot`, each weapon's `Weapon.SlotNumber`, and embedded or loose `KEYCONF` documents in that order. KEYCONF `setslot`, `addslot`, and `addslotdefault` declarations append to the effective banks; the first case-insensitive occurrence of a weapon name keeps its assignment so layered add-ons cannot duplicate or move an already configured weapon.
+
+The optional WRW compatibility harness accepts a locally supplied archive and keeps the parser and slot assertions independent of whether the WAD ships with the repository:
+
+```sh
+php packages/doom-phonics/tests/wrw-stress.php /path/to/wrw.wad [/path/to/base.wad]
+```
+
 The demo worlds load [SKULLTAG_ACTORS.lmp](demo/SKULLTAG_ACTORS.lmp) as a standalone resource with `role: "decorate"`. Its 103 actor definitions are read directly as text, without a WAD container. It precedes `SKULLTAG-WEAPONS.DEC` so the existing weapon definitions retain precedence. Maps, sprites, and sounds still come from the selected WAD stack; the online world pins the actor lump's integrity so both peers use the same definitions.
 
 [wiki-actors.dec](resources/wiki-actors.dec) fills missing Doom, Doom II, and Skulltag classes and their referenced dependencies. It loads with the built-in definitions before WAD and sidecar overrides. The import includes the Doom II monsters, their projectile/effect actors, stealth variants, scripted marines, team items, and missing powerup parents. Definitions supply properties and states; native actions, invasion spawning, scoring, and ZScript-only features still require engine implementations.
@@ -30,9 +38,11 @@ The host simulates projectiles from both players' fire commands and replicates t
 
 Starting or restarting a game, changing maps, warping, and returning to the title use the classic staggered-column screen melt. A session-owned compositor retains the outgoing complete frame while map-owned render resources are replaced, then reveals the incoming 3D scene, HUD, or title at the original 35 Hz logical timing. Gameplay input and simulation remain paused until the transition finishes.
 
-During play, WASD or the left stick moves forward/back and strafes, the left and right arrows or right stick turn, and the mouse looks. Left click, Space, or controller RB/R1 fires. **E**, right click, or controller A/Cross opens doors and uses switches. Number keys 1–7 select weapons; the mouse wheel and D-pad cycle owned weapons (left/down for previous, right/up for next). The Controls screen shows button hints for the last-used input device.
+During play, WASD or the left stick moves forward/back and strafes, the left and right arrows or right stick turn, and the mouse looks. Left click, Space, or controller RT/R2 fires; right click or controller LT/L2 uses a weapon's alternate fire. **E** or controller A/Cross opens doors and uses switches. Number keys 1–7 select weapons; the mouse wheel and D-pad cycle owned weapons (left/down for previous, right/up for next). The Controls screen shows button hints for the last-used input device.
 
-Classic keyboard sequences are recognized during play. `IDFA` and the accepted `IDFFA` alias grant weapons, full ammo, and armor; `IDKFA` also grants every key. `IDDQD` toggles damage immunity, while `IDCLIP` and `IDSPISPOPD` toggle collision. `IDBEHOLD` shows the power suffixes and `V`, `S`, `I`, `R`, `A`, or `L` toggles its corresponding power. `IDCHOPPERS`, `IDMYPOS`, and `IDCLEV` followed by an episode and map number are also active. Cheat input is matched incrementally without taking ordinary movement keys away from the input system.
+Classic keyboard sequences are recognized during play. `IDFA` and the accepted `IDFFA` alias grant weapons, full ammo, and armor; `IDKFA` also grants every key. `IDDQD` toggles damage immunity, while `IDCLIP` and `IDSPISPOPD` toggle collision. `IDBEHOLD` shows the power suffixes and `V`, `S`, `I`, `R`, `A`, or `L` toggles its corresponding power. `IDCHOPPERS`, `IDMYPOS`, and `IDCLEV` followed by an episode and map number are also active. With a Railgun in the active WAD stack, `IDOOPSALLGIBS` leaves the player with that weapon and infinite cells and redirects gun-bearing monsters to runtime rail attacks. It changes live state rather than replacing DECORATE. Cheat input is matched incrementally without taking ordinary movement keys away from the input system.
+
+Lethal damage now enters the player's DECORATE death sequence while the simulation continues. Control and the view weapon are removed, the camera lowers, the player scream and held red PLAYPAL effect play, and Fire or Use restarts after the death delay.
 
 The repository demo uses the unmodified shareware data file under its own redistribution terms. That data is not part of the published npm or Composer package.
 

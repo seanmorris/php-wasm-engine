@@ -5,7 +5,11 @@ use DoomPhonics\Adapter\ActorFactory;
 use DoomPhonics\Audio\NullSoundEmitter;
 use DoomPhonics\Component\ActorState;
 use DoomPhonics\Component\Body;
+use DoomPhonics\Component\HitPoints;
+use DoomPhonics\Component\InventoryPickup;
+use DoomPhonics\Component\MapThing;
 use DoomPhonics\Component\NetworkPlayer;
+use DoomPhonics\Component\PlayerStart;
 use DoomPhonics\Component\Projectile;
 use DoomPhonics\Component\ProjectileBounce;
 use DoomPhonics\Component\RemoteProjectile;
@@ -17,9 +21,11 @@ use DoomPhonics\Definition\DecorateParser;
 use DoomPhonics\Game\Collision;
 use DoomPhonics\Game\DoomMatch;
 use DoomPhonics\Game\Level;
+use DoomPhonics\Game\PlayerState;
 use DoomPhonics\System\ActorStateSystem;
 use DoomPhonics\System\CombatSystem;
 use DoomPhonics\System\EpisodeNetworkSystem;
+use DoomPhonics\System\PickupSystem;
 use DoomPhonics\System\SectorMotionSystem;
 use Phonics\Ecs\Registry;
 use Phonics\Input\Controls;
@@ -194,6 +200,60 @@ DEC
 		!$guest->alive($replica) && $guest->query(RemoteProjectile::class) === []
 		, 'host projectile retirement removes the remote sprite'
 	);
+
+	$dropSector = (new Level($stack->map('E1M1')))->sectorAt(3440, -3420);
+	$drop = $factory->spawn(
+		$host
+		, $actors->named('Clip')
+		, ['x' => 3440, 'y' => -3420, 'z' => 0, 'angle' => 0, 'index' => -1, 'flags' => []]
+		, [
+			'floor' => $dropSector->floorZ(3440, -3420)
+			, 'ceiling' => $dropSector->ceilingZ(3440, -3420)
+		]
+	);
+	$hostDrop = $host->get($drop, InventoryPickup::class);
+	$hostDrop->amount = 5;
+	$hostDrop->dropped = true;
+	$step();
+	$step();
+
+	$remoteDrops = array_values(array_filter(
+		$guest->query(InventoryPickup::class)
+		, static fn(int $entity): bool => $guest->has($entity, NetworkIdentity::class)
+			&& $guest->has($entity, MapThing::class)
+			&& $guest->get($entity, MapThing::class)->index === -1
+	));
+	verifyWad(count($remoteDrops) === 1, 'host-created enemy drop appears once on the guest');
+	$remoteDrop = $remoteDrops[0];
+	$guestDrop = $guest->get($remoteDrop, InventoryPickup::class);
+
+	verifyWad(
+		$guestDrop->actorName === 'Clip' && $guestDrop->amount === 5 && $guestDrop->dropped
+			&& $guest->get($remoteDrop, ActorState::class)->definition->name === 'Clip'
+		, 'enemy drop replication preserves its DECORATE actor and dropped amount'
+	);
+
+	$guestDropPose = $guest->get($remoteDrop, Transform::class);
+	$guestPlayerState = new PlayerState;
+	$guestPlayerState->ammo['Clip'] = 0;
+	$guestPlayer = $guest->create(
+		new PlayerStart(99)
+		, $guestPlayerState
+		, new Transform($guestDropPose->x, $guestDropPose->y, $guestDropPose->z)
+		, new HitPoints(100, 100)
+	);
+	(new PickupSystem($actors, false))->update($guest, 1 / 35);
+	$guest->flush();
+
+	verifyWad(
+		$guest->alive($remoteDrop) && $guest->has($remoteDrop, InventoryPickup::class)
+		, 'guest prediction cannot consume a host-owned enemy drop'
+	);
+
+	$host->destroy($drop);
+	$step();
+	$step();
+	verifyWad(!$guest->alive($remoteDrop), 'host enemy-drop pickup retires its guest replica');
 
 	// Exercise every installed missile definition through real collision and state systems.
 	$level = new Level($stack->map('E1M1'));

@@ -22,10 +22,14 @@ final class WadSource implements ContentSource
 	private ?WeaponSlots $weapons = null;
 	private bool $closed = false;
 
-	/** @param array<string,string> $decorate @param array<string,string> $sndinfo */
-	public function __construct(public Stack $wad, array $decorate = [], array $sndinfo = [])
+	/**
+	 * @param array<string,string> $decorate
+	 * @param array<string,string> $sndinfo
+	 * @param array<string,string> $keyconf
+	 */
+	public function __construct(public Stack $wad, array $decorate = [], array $sndinfo = [], array $keyconf = [])
 	{
-		$this->definitions = new WadDefinitions($decorate, $sndinfo);
+		$this->definitions = new WadDefinitions($decorate, $sndinfo, $keyconf);
 	}
 
 	public function catalog(): iterable
@@ -55,6 +59,7 @@ final class WadSource implements ContentSource
 		$this->weapons ??= WeaponSlots::fromCatalog(
 			$this->definitions->actors
 			, fn(ActorDefinition $weapon): bool => $this->weaponAssetsExist($weapon)
+			, $this->definitions->keyconf
 		);
 		$content = new WadLevel(
 			$this->wad,

@@ -10,6 +10,7 @@ use DoomPhonics\Graphics\Palette;
 use DoomPhonics\Graphics\TextureCatalog;
 use DoomPhonics\Graphics\ViewColorState;
 use DoomPhonics\Definition\ActorCatalog;
+use DoomPhonics\Definition\WeaponAmmo;
 use DoomPhonics\Component\ActorState;
 use DoomPhonics\Component\BeamEffect;
 use DoomPhonics\Component\FloorClip;
@@ -41,6 +42,7 @@ final class GlesMapRenderer
 	private ViewProjection $projection;
 	private RenderViewport $viewport;
 	private PitchMode $pitchMode;
+	private IndexedImage $reticleImage;
 	/** @var list<int> */
 	private array $vao = [], $buffers = [];
 	/** @var list<int> */
@@ -89,7 +91,8 @@ final class GlesMapRenderer
 		$this->pitchMode = PitchMode::Perspective;
 		$this->actorQuery = Query::all(Transform::class, ActorState::class);
 		$this->beamQuery = Query::all(BeamEffect::class);
-		$this->atlas = IndexedAtlas::forLevel($level, $catalog, 2048, $actors);
+		$this->reticleImage = new IndexedImage(1, 1, chr($palette->closestIndex(255, 128, 0)), "\xff");
+		$this->atlas = IndexedAtlas::forLevel($level, $catalog, 2048, $actors, $palette);
 		$this->mesh = (new MapMeshBuilder($level, $this->atlas))->build();
 
 		$this->program = new Program(
@@ -813,7 +816,7 @@ final class GlesMapRenderer
 	}
 
 	/** Draw the view weapon and classic status patches as one batched GLES overlay. */
-	public function renderOverlay(Registry $registry): void
+	public function renderOverlay(Registry $registry, bool $reticle = true): void
 	{
 		$started = hrtime(true);
 		$players = $registry->query(Query::all(PlayerStart::class, PlayerState::class, HitPoints::class));
@@ -834,7 +837,7 @@ final class GlesMapRenderer
 		$health = $registry->get($entity, HitPoints::class);
 		$patches = [];
 
-		if($player->weaponEntity !== null && $registry->alive($player->weaponEntity)
+		if($health->current > 0 && $player->weaponEntity !== null && $registry->alive($player->weaponEntity)
 			&& $registry->has($player->weaponEntity, ActorState::class)
 		){
 			$offsetY = $registry->has($player->weaponEntity, \DoomPhonics\Component\WeaponOwner::class)
@@ -846,7 +849,7 @@ final class GlesMapRenderer
 
 		$overlays = [];
 
-		foreach($registry->query(Query::all(WeaponOverlay::class, ActorState::class)) as $overlayEntity)
+		foreach($health->current > 0 ? $registry->query(Query::all(WeaponOverlay::class, ActorState::class)) : [] as $overlayEntity)
 		{
 			$overlay = $registry->get($overlayEntity, WeaponOverlay::class);
 			$state = $registry->get($overlayEntity, ActorState::class);
@@ -924,6 +927,25 @@ final class GlesMapRenderer
 			$bottom = $top + $image->height * $scale;
 
 			$this->appendOverlayQuad($values, $left, $top, $right, $bottom, $image, $id, 1.0, $fixedColormap);
+		}
+
+		if($reticle && $health->current > 0)
+		{
+			$id = $this->atlas->id('ui', 'reticle');
+
+			if($id >= 0)
+			{
+				$thickness = max(1.0, $scale);
+				$length = max($thickness, 4 * $scale);
+				$left = $this->width / 2 - $thickness / 2;
+				$top = $this->height / 2 - $thickness / 2;
+				$this->appendOverlayQuad(
+					$values, $left, $top, $left + $length, $top + $thickness, $this->reticleImage, $id
+				);
+				$this->appendOverlayQuad(
+					$values, $left, $top, $left + $thickness, $top + $length, $this->reticleImage, $id
+				);
+			}
 		}
 
 		$this->submitOverlay($values);
@@ -1106,7 +1128,8 @@ final class GlesMapRenderer
 	private function readyAmmo(PlayerState $player): int
 	{
 		$weapon = $this->actors?->named($player->weapon);
-		$type = (string)($weapon?->value('Weapon.AmmoType', '') ?? '');
+		$type = $weapon ? WeaponAmmo::type($weapon) : '';
+		$type = $this->actors ? (WeaponAmmo::pool($this->actors, $type)?->name ?? $type) : $type;
 
 		return $type === '' ? 0 : (int)($player->ammo[$type] ?? 0);
 	}

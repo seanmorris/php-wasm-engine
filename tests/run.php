@@ -539,6 +539,24 @@ test('climbers detach when a ledge top has no standing clearance', function() {
 	check($body->x < 100, 'blocked clearance must not place the climber inside the ledge');
 });
 
+test('logical viewports letterbox and convert pointer coordinates', function() {
+	$viewport = \Phonics\Render\LogicalViewport::contain(320, 480, 960, 600);
+	near($viewport->scale, 1.25);
+	near($viewport->x, 280);
+	near($viewport->y, 0);
+	check($viewport->contains(280, 0) && $viewport->contains(680, 600));
+	check(!$viewport->contains(279, 300));
+	[$x,$y] = $viewport->toLogical(480, 300);
+	near($x, 160);
+	near($y, 240);
+	[$x,$y] = $viewport->toLogical(0, 900);
+	near($x, 0);
+	near($y, 480);
+	[$x,$y] = $viewport->toLogical(0, 900, false);
+	check($x < 0 && $y > 480);
+	rejects(fn() => \Phonics\Render\LogicalViewport::contain(0, 480, 960, 600));
+});
+
 require dirname(__DIR__) . '/packages/sane-phonics/tests/physics.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/loops.php';
 require __DIR__ . '/integration.php';

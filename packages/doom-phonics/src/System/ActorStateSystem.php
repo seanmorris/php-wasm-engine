@@ -4,6 +4,7 @@ namespace DoomPhonics\System;
 
 use Phonics\Ecs\Registry;
 use DoomPhonics\Component\ActorState;
+use DoomPhonics\Component\Body;
 use DoomPhonics\Component\RemoteProjectile;
 use DoomPhonics\Component\TransientEffect;
 use DoomPhonics\Component\Transform;
@@ -37,6 +38,7 @@ final class ActorStateSystem
 			if($registry->has($entity, TransientEffect::class)
 				&& $registry->has($entity, Transform::class)
 				&& $registry->has($entity, Velocity::class)
+				&& !$registry->has($entity, Body::class)
 			){
 				$pose = $registry->get($entity, Transform::class);
 				$velocity = $registry->get($entity, Velocity::class);

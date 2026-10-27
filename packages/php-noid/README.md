@@ -1,6 +1,6 @@
 # PHP-Noid
 
-An original-art brick-breaker campaign built on Phonics, playable at `/php-noid/` or by loading `worlds/campaign.world`. Install `@seanmorris/php-noid` with `@seanmorris/phonics`, or `seanmorris/php-noid` through Composer. Its PHP namespace is `PhpNoid\`. It has no Sane-Phonics code or asset dependency.
+An original-art brick-breaker campaign built on Phonics, playable at `/games/php-noid/` or by loading `worlds/campaign.world`. Install `@seanmorris/php-noid` with `@seanmorris/phonics`, or `seanmorris/php-noid` through Composer. Its PHP namespace is `PhpNoid\`. It has no Sane-Phonics code or asset dependency.
 
 Move with the mouse, Left/Right, A/D, or a controller. Left click, Space, or controller A launches, releases a caught ball, and fires equipped weapons. Right click, P, Escape, or controller Start pauses. R restarts. Fire after game over continues from the current stage; fire after the finale restarts the campaign. The HUD includes controls, a capsule legend, active powers and individual timers, and a persistent Top 10 for the current world on this browser. Sounds are original synthesized effects unlocked by a keyboard or pointer gesture. Scores remain usable in memory when browser storage is unavailable.
 

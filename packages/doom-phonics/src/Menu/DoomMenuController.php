@@ -153,11 +153,15 @@ final class DoomMenuController implements MenuOverlay
 			$this->generation = $frame['generation'];
 		}
 
-		$browserCaptured = !$this->menu->isOpen && !$this->atTitle
-			? $this->game->browserInput()
-			: false;
+		$browserInput = $this->game->browserInput();
+		$browserPause = !$this->atTitle && $this->game->consumePauseRequest();
+		$browserCaptured = !$this->menu->isOpen && !$this->atTitle && $browserInput;
 
-		if(!$browserCaptured && !$this->menu->isOpen && !$this->atTitle && ($frame['buttons']['pause'] ?? 0) >= .5)
+		if($browserPause) $frame['buttons']['pause'] = 1;
+
+		if((!$browserCaptured || $browserPause) && !$this->menu->isOpen && !$this->atTitle
+			&& ($frame['buttons']['pause'] ?? 0) >= .5
+		)
 		$this->installRoot('Paused', $this->pauseItems(), false, false, 'resume');
 
 		$this->time += min(.25, max(0, $elapsed));
@@ -243,6 +247,8 @@ final class DoomMenuController implements MenuOverlay
 			, 'skill' => $this->settings->skill()->label()
 			, 'renderResolution' => $this->settings->renderResolution()->value
 			, 'pitchMode' => $this->settings->pitchMode()->value
+			, 'reticle' => $this->settings->reticle()
+			, 'bloodSplatter' => $this->settings->bloodSplatter()
 			, 'options' => $this->options->state()
 			, 'font' => $this->renderer->font()
 			, 'inputTheme' => $this->engine->input->inputTheme
@@ -462,6 +468,23 @@ final class DoomMenuController implements MenuOverlay
 				, 'get' => fn(): string => $this->settings->pitchMode()->value
 				, 'set' => function(string $value): void { $this->changePitchMode($value); }
 			]
+			, 'reticle' => [
+				'label' => 'Target Reticle'
+				, 'input' => 'boolean'
+				, 'get' => fn(): bool => $this->settings->reticle()
+				, 'set' => function(bool $value): void { $this->changeReticle($value); }
+			]
+			, 'blood-splatter' => [
+				'label' => 'Blood Splatter'
+				, 'input' => 'number'
+				, 'subType' => 'range'
+				, 'min' => 0
+				, 'max' => 2
+				, 'step' => .25
+				, 'format' => 'percent'
+				, 'get' => fn(): float => $this->settings->bloodSplatter()
+				, 'set' => function(float $value): void { $this->changeBloodSplatter($value); }
+			]
 			, 'settings-message' => ['hidden' => true, 'get' => fn(): string => $this->options->message()]
 		];
 	}
@@ -604,6 +627,18 @@ final class DoomMenuController implements MenuOverlay
 	private function changePitchMode(string $value): void
 	{
 		$this->options->setPitchMode(PitchMode::from($value));
+		$this->actionSound(SoundCue::menuMove());
+	}
+
+	private function changeReticle(bool $value): void
+	{
+		$this->options->setReticle($value);
+		$this->actionSound(SoundCue::menuMove());
+	}
+
+	private function changeBloodSplatter(float $value): void
+	{
+		$this->options->setBloodSplatter($value);
 		$this->actionSound(SoundCue::menuMove());
 	}
 

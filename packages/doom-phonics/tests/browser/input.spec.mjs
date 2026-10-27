@@ -158,12 +158,19 @@ test('Doom controller bindings separate movement, turning, use, fire and weapon 
 	await page.waitForTimeout(80);
 
 	await clear();
-	await pad({buttons: [5]});
+	await pad({buttons: [7]});
 	await expect.poll(async() => (await frame()).ammo).toBeLessThan(baselineAmmo);
-	expect(await frame()).toMatchObject({fire: true, use: false});
+	expect(await frame()).toMatchObject({fire: true, altFire: false, use: false});
 	expect(await page.evaluate(() => doomInputFrames.some(frame => frame.use))).toBe(false);
 	await pad({});
 	await expect.poll(async() => (await frame()).fire).toBe(false);
+
+	await clear();
+	await pad({buttons: [6]});
+	await expect.poll(async() => (await frame()).altFire).toBe(true);
+	expect(await frame()).toMatchObject({fire: false, use: false});
+	await pad({});
+	await expect.poll(async() => (await frame()).altFire).toBe(false);
 
 	await pad({axes: [.6]});
 	await expect.poll(async() => (await frame()).strafe).toBeCloseTo(.5, 3);
@@ -322,6 +329,18 @@ test('Doom binding capture, conflicts and saved alternatives use physical input'
 	await select('pitch-mode');
 	await key('ArrowRight');
 	await expect.poll(menu).toMatchObject({pitchMode: 'classic'});
+	await select('reticle');
+	await key('Enter');
+	await expect.poll(menu).toMatchObject({reticle: false});
+	await select('blood-splatter');
+	await key('ArrowRight');
+	await expect.poll(menu).toMatchObject({bloodSplatter: 1.25});
+
+	expect(await page.evaluate(() => JSON.parse(localStorage.getItem('doom-phonics.options.v1')))).toMatchObject({
+		reticle: false
+		, bloodSplatter: 1.25
+	});
+
 	await key('Escape');
 	await enter('input');
 	await expect.poll(async() => (await menu()).controlsRows).toHaveProperty('keyboard');
@@ -330,7 +349,8 @@ test('Doom binding capture, conflicts and saved alternatives use physical input'
 
 	await expect.poll(async() => (await menu()).controlsRows).toMatchObject({
 		forward: {value: '🡩'}
-		, fire: {value: '❺'}
+		, fire: {value: '❼'}
+		, 'alt-fire': {value: '❻'}
 		, use: {value: '⓿'}
 		, 'previous-weapon': {value: '←  ↓'}
 	});
@@ -351,7 +371,7 @@ test('Doom binding capture, conflicts and saved alternatives use physical input'
 	await enter('share');
 	await expect.poll(async() => (await menu()).controlsRows).toHaveProperty('remove-key:119:1');
 	let data = await saved();
-	expect(data.version).toBe(1);
+	expect(data.version).toBe(2);
 	expect(data.bindings[0x10004][1].keyboard).toContainEqual({kind: 'key', code: 119, sign: 1});
 	expect(data.bindings[0x10000][1].keyboard).toContainEqual({kind: 'key', code: 119, sign: 1});
 

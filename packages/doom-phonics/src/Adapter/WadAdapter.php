@@ -17,6 +17,7 @@ final class WadAdapter implements ContentAdapter
 		$archives = [];
 		$decorate = [];
 		$sndinfo = [];
+		$keyconf = [];
 		foreach($definition->resources as $index => $resource)
 		{
 			$url = (string)($resource['sourceUrl'] ?? $resource['url']);
@@ -27,6 +28,7 @@ final class WadAdapter implements ContentAdapter
 
 				if($role === 'decorate') { $decorate[$url] = $bytes; continue; }
 				if($role === 'sndinfo') { $sndinfo[$url] = $bytes; continue; }
+				if($role === 'keyconf') { $keyconf[$url] = $bytes; continue; }
 				if(!in_array($role, ['wad','iwad','pwad'], true))
 				throw new \UnexpectedValueException("unsupported WAD resource role $role");
 
@@ -39,6 +41,7 @@ final class WadAdapter implements ContentAdapter
 
 				foreach($archive->lumps('DECORATE') as $lump) $decorate[$lump->identity()] = $lump->bytes();
 				foreach($archive->lumps('SNDINFO') as $lump) $sndinfo[$lump->identity()] = $lump->bytes();
+				foreach($archive->lumps('KEYCONF') as $lump) $keyconf[$lump->identity()] = $lump->bytes();
 			}
 			catch(\Throwable $error)
 			{
@@ -54,6 +57,6 @@ final class WadAdapter implements ContentAdapter
 		$stack = new Stack(array_shift($archives));
 		foreach($archives as $archive) $stack->add($archive);
 
-		return new WadSource($stack, $decorate, $sndinfo);
+		return new WadSource($stack, $decorate, $sndinfo, $keyconf);
 	}
 }

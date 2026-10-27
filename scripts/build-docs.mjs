@@ -8,6 +8,8 @@ for(const directory of [''
 	, 'packages/sane-phonics/'
 	, 'packages/php-noid/'
 	, 'packages/php-tris/'
+	, 'packages/php-slalom/'
+	, 'packages/php-buster/'
 	, 'packages/doom-phonics/'
 	, 'packages/phonics-matrix/'
 	, 'packages/tiled-phonics/'
@@ -84,4 +86,4 @@ await fs.mkdir(path.join(root, 'docs/dist/runtime/extensions/zlib'), {recursive:
 
 for(const name of ['8.4.mjs','php8.4-zlib.so','libz.so','LICENSE','LICENSE-GPL','NOTICE','package.json'])
 	await fs.copyFile(path.join(zlib, name), path.join(root, 'docs/dist/runtime/extensions/zlib', name));
-console.log('Built Phonics preview, all game pages, package manifests and runtime in docs/dist.');
+console.log('Built the Phonics preview, embedded game documentation, package manifests and runtime in docs/dist.');

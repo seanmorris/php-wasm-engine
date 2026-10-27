@@ -75,6 +75,7 @@ ACTOR PlayerPawn native
   Player.SideMove 1,1
   Player.ColorRange 0,0
   Player.SoundClass "player"
+  DeathSound "player/death"
   Player.DamageScreenColor "ff 00 00"
   Player.MugShotMaxHealth 0
   Player.FlechetteType "ArtiPoisonBag3"

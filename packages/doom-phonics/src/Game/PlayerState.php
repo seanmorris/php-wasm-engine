@@ -5,14 +5,22 @@ namespace DoomPhonics\Game;
 /** Persistent single-player inventory and episode statistics. */
 final class PlayerState
 {
+	public const VIEW_HEIGHT = 41.0;
+	public const DEATH_VIEW_HEIGHT = 6.0;
+	public const DEATH_VIEW_SPEED = 35.0;
+	public const DEATH_RESTART_DELAY = 1.0;
 	/** @var array<string,int> */
 	public array $ammo = ['Clip' => 50, 'Shell' => 0, 'RocketAmmo' => 0, 'Cell' => 0];
 	/** @var array<string,int> */
 	public array $ammoMaximum = ['Clip' => 200, 'Shell' => 50, 'RocketAmmo' => 50, 'Cell' => 300];
+	/** @var array<string,bool> Ammo types granted without consumption by a cheat or game rule. */
+	public array $infiniteAmmo = [];
 	/** @var array<string,bool> */
 	public array $weapons = ['Fist' => true, 'Pistol' => true];
 	/** @var array<string,bool> */
 	public array $keys = [];
+	/** @var array<string,int> DECORATE counters which are neither ammo, weapons, nor keys. */
+	public array $inventory = [];
 	/** @var array<string,float> Active power name to remaining seconds. */
 	public array $powers = [];
 	public string $weapon = 'Pistol';
@@ -29,6 +37,9 @@ final class PlayerState
 	public bool $secretExit = false;
 	public int $reactionTics = 0;
 	public string $message = '';
+	public ?float $deathTime = null;
+	public float $viewHeight = self::VIEW_HEIGHT;
+	public float $previousViewHeight = self::VIEW_HEIGHT;
 
 	/** Queue a first-person lowering transition without changing the active weapon early. */
 	public function requestWeapon(string $weapon): void
@@ -36,5 +47,38 @@ final class PlayerState
 		if($weapon === '') return;
 
 		$this->pendingWeapon = strcasecmp($weapon, $this->weapon) === 0 ? null : $weapon;
+	}
+
+	/** Start the local death camera exactly once. */
+	public function beginDeath(): void
+	{
+		if($this->deathTime !== null) return;
+
+		$this->deathTime = 0;
+		$this->previousViewHeight = $this->viewHeight = self::VIEW_HEIGHT;
+	}
+
+	/** Lower the dead player's view while preserving a render-interpolation endpoint. */
+	public function advanceDeath(float $elapsed): void
+	{
+		$this->beginDeath();
+		$this->previousViewHeight = $this->viewHeight;
+		$this->deathTime += max(0, $elapsed);
+		$this->viewHeight = max(
+			self::DEATH_VIEW_HEIGHT
+			, $this->viewHeight - self::DEATH_VIEW_SPEED * max(0, $elapsed)
+		);
+	}
+
+	public function viewHeightAt(float $alpha): float
+	{
+		$alpha = max(0, min(1, $alpha));
+
+		return $this->previousViewHeight + ($this->viewHeight - $this->previousViewHeight) * $alpha;
+	}
+
+	public function canRestart(): bool
+	{
+		return $this->deathTime !== null && $this->deathTime >= self::DEATH_RESTART_DELAY;
 	}
 }

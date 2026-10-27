@@ -22,6 +22,12 @@ const pages = (await files(new URL('../.cache/pages/', import.meta.url)))
 
 const guidePages = pages.filter(name => !/^api-phonics-/.test(name) && !/^games\/[^/]+\/api\//.test(name));
 
+async function openGame(page, slug, title)
+{
+	await page.goto(`/games/${slug}/`);
+	await page.getByRole('button', {name: `Load and play ${title}`, exact: true}).click();
+}
+
 test('all guide pages fit desktop, tablet and mobile without loading a game runtime', async({page}) => {
 	test.setTimeout(180000);
 
@@ -140,7 +146,7 @@ test('documentation follows the system theme and saves an explicit preference', 
 		};
 	});
 
-	await page.goto('/php-noid/');
+	await page.goto('/games/php-noid/');
 	const gameToggle = page.locator('[data-theme-toggle]');
 
 	await expect(gameToggle).toBeVisible();
@@ -158,6 +164,54 @@ test('documentation follows the system theme and saves an explicit preference', 
 			, width: style.width
 		};
 	})).toEqual(toggleStyle);
+});
+
+test('header search overlays the page and resolves live results', async({page}) => {
+	await page.setViewportSize({width: 1440, height: 900});
+	await page.goto('/');
+
+	const searchToggle = page.locator('[data-search-toggle]');
+	const themeToggle = page.locator('[data-theme-toggle]');
+	const panel = page.locator('[data-search-panel]');
+	const input = page.locator('#search-query');
+	const layout = page.locator('.layout');
+	const layoutTop = await layout.evaluate(element => element.getBoundingClientRect().top);
+	const searchBox = await searchToggle.boundingBox();
+	const themeBox = await themeToggle.boundingBox();
+
+	expect(searchBox.x).toBeLessThan(themeBox.x);
+	await expect(panel).toBeHidden();
+	await searchToggle.click();
+	await expect(searchToggle).toHaveAttribute('aria-expanded', 'true');
+	await expect(panel).toBeVisible();
+	await expect(input).toBeFocused();
+	expect(await layout.evaluate(element => element.getBoundingClientRect().top)).toBe(layoutTop);
+
+	await input.fill('CommandValidator');
+	const commandResult = page.getByRole('link', {name: 'Phonics\\Network\\CommandValidator', exact: true});
+	await expect(commandResult).toBeVisible();
+	await commandResult.click();
+	await expect(page).toHaveURL(/api-phonics-network-command-validator\.html$/);
+
+	await page.locator('[data-search-toggle]').click();
+	await page.locator('#search-query').fill('Doom-Phonics');
+	const gameResult = page.locator('#search-results a').filter({hasText: 'Doom-Phonics'}).first();
+	await expect(gameResult).toHaveAttribute('href', '/games/doom-phonics/');
+	await page.keyboard.press('Escape');
+	await expect(page.locator('[data-search-panel]')).toBeHidden();
+});
+
+test('input reference uses accessible Xbox and PlayStation controller art', async({page}) => {
+	await page.goto('/input.html');
+
+	await expect(page.locator('img.controller-glyph')).toHaveCount(32);
+	await expect(page.getByAltText('Xbox A button', {exact: true})).toBeVisible();
+	await expect(page.getByAltText('PlayStation Cross button', {exact: true})).toBeVisible();
+
+	for(const image of await page.locator('img.controller-glyph').all())
+	{
+		expect(await image.evaluate(element => element.naturalWidth)).toBeGreaterThan(0);
+	}
 });
 
 test('documentation menu expansion survives navigation and reloads', async({page}) => {
@@ -290,60 +344,90 @@ test('the programming reference filters symbols without a round trip', async({pa
 	await expect(status).toHaveText(`1 of ${total} API entries`);
 });
 
-test('documentation preview opens the guide and retains dedicated game routes', async({page}) => {
+test('production exposes the unified documentation and generic preview', async({page}) => {
 	const failed = [];
+	const retired = /\/(?:sane-phonics|php-noid|php-tris|php-slalom|php-buster|doom-phonics)\/$/;
 
 	page.on('response', response => {
-		if(response.status() >= 400) failed.push(response.url());
+		if(response.status() >= 400 && !retired.test(response.url()))
+			failed.push(response.url());
 	});
 
-	for(const route of ['/sane-phonics/', '/php-noid/', '/php-tris/', '/doom-phonics/', '/preview/'])
+	for(const route of ['/sane-phonics/', '/php-noid/', '/php-tris/', '/php-slalom/', '/php-buster/', '/doom-phonics/'])
 	{
 		const response = await page.goto(route);
-		expect(response.status()).toBe(200);
+		expect(response.status()).toBe(404);
 	}
+
+	const preview = await page.goto('/preview/');
+	expect(preview.status()).toBe(200);
 
 	await page.goto('/');
 	await expect(page).toHaveURL('http://127.0.0.1:9141/');
 	await expect(page.locator('h1')).toHaveText('Phonics');
 
-	await page.goto('/php-tris/');
-	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
-	await page.locator('[data-action="start"]').click();
-	await expect(page.locator('[data-action="pause"]')).toBeVisible();
-	await page.locator('#stop').click();
-	await expect(page.locator('.php-tris-ui')).toHaveCount(0);
-
-	await page.goto('/sane-phonics/');
-	await page.getByRole('link', {name: 'Documentation', exact: true}).click();
-	await expect(page.locator('h1')).toHaveText('Phonics');
-
 	expect(failed).toEqual([]);
 });
 
-test('game selector uses gameplay captures and loads an embed only on activation', async({page}) => {
+test('game selector uses gameplay captures and mounts a game only on activation', async({page}) => {
 	const wasm = [];
 
 	page.on('request', request => {
 		if(/\.wasm(?:\?|$)/.test(request.url())) wasm.push(request.url());
 	});
 
-	await page.goto('/games.html');
-	await expect(page.locator('.game-selector li')).toHaveCount(4);
-	await expect(page.locator('.game-selector img')).toHaveCount(4);
+	await page.goto('/games/');
+	await expect(page).toHaveURL(/\/games\/$/);
+	await expect(page.locator('h1')).toHaveText('Games');
+	await expect(page.locator('.game-selector li')).toHaveCount(6);
+	await expect(page.locator('.game-selector img')).toHaveCount(6);
 	await expect(page.locator('.game-selector img').first()).toHaveCSS('color', 'rgb(244, 247, 251)');
 	expect(wasm).toEqual([]);
 
 	await page.getByRole('link', {name: /PHPTris/}).click();
 	await expect(page).toHaveURL(/games\/php-tris\/$/);
-	await expect(page.locator('[data-game-embed] iframe')).toHaveCount(0);
+	await expect(page.locator('[data-game-runtime]')).toBeHidden();
 	expect(wasm).toEqual([]);
 
 	await page.getByRole('button', {name: 'Load and play PHPTris'}).click();
-	const game = page.frameLocator('[data-game-embed] iframe');
+	const game = page.locator('[data-game-runtime]');
 	await expect(game.locator('#status')).toHaveText('Ready', {timeout: 60000});
-	await expect(game.locator('html')).toHaveAttribute('data-game-embed', 'true');
+	await expect(game).toHaveAttribute('data-game-embed', 'true');
+	await expect(page.locator('.sidebar')).toBeVisible();
+	await expect(page.locator('iframe')).toHaveCount(0);
 	expect(wasm.length).toBeGreaterThan(0);
+});
+
+test('PHP Buster starts, moves, fires, pauses, and cleans up in its documentation page', async({page}) => {
+	test.setTimeout(120000);
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/games/php-buster/');
+	await expect(page.locator('h1')).toHaveText('PHP Buster');
+	await expect(page.locator('[data-game-runtime]')).toBeHidden();
+	await page.getByRole('button', {name: 'Load and play PHP Buster'}).click();
+	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
+	await page.locator('[data-action="new-game"]').click();
+
+	const state = () => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpBuster));
+
+	await expect.poll(async() => (await state()).page).toBe('play');
+	const startX = (await state()).player[0];
+	await page.locator('canvas').focus();
+	await page.keyboard.down('ArrowLeft');
+	await page.keyboard.down('Space');
+	await page.waitForTimeout(350);
+	await page.keyboard.up('Space');
+	await page.keyboard.up('ArrowLeft');
+	await expect.poll(async() => (await state()).player[0]).toBeLessThan(startX);
+	await expect.poll(async() => (await state()).shots).toBeGreaterThan(0);
+	await expect.poll(async() => (await state()).actors).toBeGreaterThan(1);
+	await page.keyboard.press('Escape');
+	await expect.poll(async() => (await state()).page).toBe('pause');
+	await page.locator('#stop').click();
+	await expect(page.locator('#status')).toHaveText('Stopped');
+	await expect(page.locator('.php-buster-ui')).toHaveCount(0);
+	expect(errors).toEqual([]);
 });
 
 test('Matrix OAuth returns through a popup without navigating the running host', async({page}) => {
@@ -385,7 +469,7 @@ test('Matrix OAuth returns through a popup without navigating the running host',
 });
 
 test('all games start and clean up inside the shared site design', async({page}) => {
-	test.setTimeout(120000);
+	test.setTimeout(240000);
 
 	const errors = [];
 
@@ -410,29 +494,28 @@ test('all games start and clean up inside the shared site design', async({page})
 
 	page.on('pageerror', error => errors.push(error.message));
 
-	await page.goto('/php-noid/');
+	await openGame(page, 'php-noid', 'PHP-Noid');
 	await expect(page.locator('.masthead .brand')).toBeVisible();
 	await expect(page.locator('.masthead .brand-label')).toHaveText('docs');
 	await expect(page.locator('.masthead [data-theme-toggle]')).toBeVisible();
-	await expect(page.locator('.masthead').getByRole('link', {name: 'Games'})).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('.masthead').getByRole('link', {name: 'Games'})).toHaveAttribute('href', '/games/');
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 	await page.locator('[data-action="start"]').click();
 	await expect(page.locator('.php-noid-title')).toBeHidden();
 	await page.locator('#stop').click();
 	await expect(page.locator('#status')).toHaveText('Stopped');
 
-	await page.goto('/php-tris/');
+	await openGame(page, 'php-tris', 'PHPTris');
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 	await page.locator('[data-action="start"]').click();
 	await expect(page.locator('[data-action="pause"]')).toBeVisible();
 	await page.locator('#stop').click();
 	await expect(page.locator('.php-tris-ui')).toHaveCount(0);
 
-	await page.goto('/sane-phonics/');
+	await openGame(page, 'sane-phonics', 'Sane-Phonics');
 	await expect(page.locator('.masthead .brand')).toBeVisible();
-	await page.locator('#start').click();
 	await page.waitForFunction(() => Boolean(document.querySelector('canvas').dataset.intro));
-	await page.evaluate(() => window.stopEngine());
+	await page.locator('#stop').click();
 	await expect(page.locator('#status')).toContainText('Stopped');
 
 	await page.route('**/DOOM1.WAD', async route => {
@@ -440,7 +523,7 @@ test('all games start and clean up inside the shared site design', async({page})
 		await route.continue();
 	}, {times: 1});
 
-	await page.goto('/doom-phonics/');
+	await openGame(page, 'doom-phonics', 'Doom-Phonics');
 	await expect(page.locator('.phonics-preloader')).toBeVisible();
 	await expect(page.locator('.phonics-preloader')).toHaveAttribute('data-phase', 'assets', {timeout: 30000});
 	await expect(page.locator('.phonics-preloader')).toHaveAttribute('aria-label', /Loading episode resource/);
@@ -485,6 +568,7 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).menu?.font).toBe('DBIGFONT');
 	await expect.poll(async() => (await doomState()).renderResolution).toBe('native');
 	await expect.poll(async() => (await doomState()).pitchMode).toBe('perspective');
+	await expect.poll(async() => (await doomState()).reticle).toBe(true);
 	await expect.poll(physicalCanvas).toBe(true);
 
 	const initialBuffer = await canvasBuffer();
@@ -577,17 +661,22 @@ test('all games start and clean up inside the shared site design', async({page})
 	await page.locator('canvas').focus();
 
 	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('options');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('settings');
 
 	await expect.poll(() => page.evaluate(() => window.doomAudioStarts)).toBeGreaterThan(soundsBeforeMenu);
 	await expect.poll(() => page.evaluate(() => window.doomAudioPeak)).toBeGreaterThan(.1);
 	await expect.poll(() => page.evaluate(() => window.doomAudioStates.at(-1))).toBe('running');
 
 	await press('Enter');
-	await expect.poll(async() => (await doomState()).menu?.screen).toBe('options');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('look-sensitivity');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('settings');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('input');
 	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('invert-look');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('sound');
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('video');
+	await press('Enter');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('video');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('fullscreen');
 	await press('ArrowDown');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('render-resolution');
 	await press('ArrowRight');
@@ -600,6 +689,17 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).pitchMode).toBe('classic');
 	await press('ArrowLeft');
 	await expect.poll(async() => (await doomState()).pitchMode).toBe('perspective');
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('reticle');
+	await press('Enter');
+	await expect.poll(async() => (await doomState()).reticle).toBe(false);
+	await expect.poll(() => page.evaluate(
+		() => JSON.parse(localStorage.getItem('doom-phonics.options.v1')).reticle
+	)).toBe(false);
+	await press('Enter');
+	await expect.poll(async() => (await doomState()).reticle).toBe(true);
+	await press('ArrowUp');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('pitch-mode');
 	await press('ArrowUp');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('render-resolution');
 	await press('ArrowLeft');
@@ -607,10 +707,13 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).render?.scene?.slice(0, 2)).toEqual(await canvasBuffer());
 
 	await press('Escape');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('settings');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('video');
+	await press('Escape');
 	await expect.poll(async() => (await doomState()).menu?.screen).toBe('title');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('options');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('settings');
 	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('controls');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('read-this');
 	await press('ArrowDown');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('php-info');
 
@@ -629,9 +732,9 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).wipe?.active, {timeout: 5000}).toBe(false);
 
 	await press('ArrowUp');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('controls');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('read-this');
 	await press('ArrowUp');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('options');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('settings');
 	await press('ArrowUp');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('wad-stack');
 	await press('ArrowUp');
@@ -690,6 +793,27 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).noClip).toBe(true);
 	await page.keyboard.type('idspispopd');
 	await expect.poll(async() => (await doomState()).noClip).toBe(false);
+	await page.keyboard.type('idoopsallgibs', {delay: 140});
+	await expect.poll(async() => (await doomState()).menu?.open).toBe(false);
+	await expect.poll(async() => (await doomState()).message).toBe('OOPS! ALL GIBS');
+	await expect.poll(async() => (await doomState()).weapons).toEqual(['Railgun']);
+	await expect.poll(async() => (await doomState()).oopsAllGibs).toBe(true);
+
+	await press('Escape');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('pause');
+	await press('ArrowDown');
+	await press('ArrowDown');
+	await press('ArrowDown');
+	await press('Enter');
+	await expect.poll(async() => (await doomState()).menu?.open).toBe(false);
+	await expect.poll(async() => (await doomState()).weapons).toEqual(['Railgun']);
+	await expect.poll(async() => (await doomState()).oopsAllGibs).toBe(true);
+	await page.keyboard.type('idoopsallgibs');
+	await expect.poll(async() => (await doomState()).message).toBe('OOPS! ALL GIBS OFF');
+	await expect.poll(async() => (await doomState()).oopsAllGibs).toBe(false);
+	await expect.poll(async() => (await doomState()).weapons).toEqual(expect.arrayContaining([
+		'Minigun','GrenadeLauncher','Railgun','BFG10K'
+	]));
 
 	await page.keyboard.type('idclev12');
 	await expect.poll(async() => (await doomState()).map).toBe('E1M2');
@@ -699,6 +823,11 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(physicalCanvas).toBe(true);
 	await expect.poll(async() => (await doomState()).render?.framebuffer).toEqual(await canvasBuffer());
 	await expect.poll(async() => (await doomState()).wipe?.active, {timeout: 5000}).toBe(false);
+	await press('KeyP');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('pause');
+	await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('game-frame');
+	await press('KeyP');
+	await expect.poll(async() => (await doomState()).menu?.open).toBe(false);
 	await page.getByRole('button', {name: 'Exit fullscreen', exact: true}).click();
 	await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
 
@@ -788,7 +917,7 @@ test('Doom native framebuffer follows a high-density display through fullscreen'
 
 	try
 	{
-		await page.goto('/doom-phonics/');
+		await openGame(page, 'doom-phonics', 'Doom-Phonics');
 		await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 
 		const canvas = page.locator('canvas');

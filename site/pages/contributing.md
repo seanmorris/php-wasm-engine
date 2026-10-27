@@ -24,7 +24,7 @@ npm run setup:runtime
 npm start
 ```
 
-Open `http://localhost:9130/`. The homepage is the documentation; `/sane-phonics/` and `/php-noid/` run the bundled games. Their source lives in `packages/`; framework services live in `src/` and `browser/`.
+Open `http://localhost:9130/`. The homepage is the documentation; bundled games run directly from their `/games/<name>/` overview pages. Their source lives in `packages/`; framework services live in `src/` and `browser/`.
 
 For development of the Tiled extension, expose the workspace helper with `npm link --workspace @seanmorris/tiled-phonics`.
 
@@ -71,7 +71,7 @@ npm run serve:docs    # Rebuild the complete site and serve http://localhost:914
 
 `serve:docs` rebuilds the documentation, game packages, assets, and runtime on startup and serves the same static homepage used in production. It does not watch for subsequent edits.
 
-The complete static distribution lives in `docs/dist`. Documentation is at the site root; games have their own `/sane-phonics/` and `/php-noid/` pages. To deploy beneath a path, build the site with its full public prefix, for example `BASE_URL=/phonics npm run build:site`. Publish the entire `docs/dist` tree under `/phonics/`.
+The complete static distribution lives in `docs/dist`. Documentation is at the site root and every game runs inside its overview under `/games/`. To deploy beneath a path, build the site with its full public prefix, for example `BASE_URL=/phonics npm run build:site`. Publish the entire `docs/dist` tree under `/phonics/`.
 
 ## Maintain the content
 

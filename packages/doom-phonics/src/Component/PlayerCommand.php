@@ -19,6 +19,7 @@ final class PlayerCommand
 		, public float $turn = 0
 		, public float $pitch = 0
 		, public bool $fire = false
+		, public bool $altFire = false
 	){
 	}
 
@@ -31,6 +32,7 @@ final class PlayerCommand
 		$this->yaw = $view->consumeYaw();
 		$this->pitch = $view->pitch;
 		$this->fire = $controls->down(DoomActions::FIRE);
+		$this->altFire = $controls->down(DoomActions::ALT_FIRE);
 		$this->use = $controls->pressed(DoomActions::USE);
 		$this->weaponSlot = null;
 
@@ -65,6 +67,7 @@ final class PlayerCommand
 		$this->yaw = ($accumulate ? $this->yaw : 0) + max(-1.5, min(1.5, (float)($actions['yaw'] ?? 0)));
 		$this->pitch = max(-.75, min(.75, (float)($actions['pitch'] ?? 0)));
 		$this->fire = (bool)($actions['fire'] ?? false);
+		$this->altFire = (bool)($actions['altFire'] ?? false);
 		$this->use = ($accumulate && $this->use) || (bool)($actions['use'] ?? false);
 		$slot = $actions['weaponSlot'] ?? null;
 		$this->weaponSlot = is_int($slot) && $slot >= 0 && $slot <= 9
@@ -89,6 +92,7 @@ final class PlayerCommand
 			, 'yaw' => $this->yaw
 			, 'pitch' => $this->pitch
 			, 'fire' => $this->fire
+			, 'altFire' => $this->altFire
 			, 'use' => $this->use
 			, 'weaponSlot' => $this->weaponSlot
 			, 'weaponSteps' => $this->weaponSteps
@@ -125,6 +129,15 @@ final class PlayerCommand
 		$this->yaw = 0;
 
 		return $value;
+	}
+
+	/** Clear every actionable value when the owning player cannot accept control. */
+	public function release(): void
+	{
+		$this->forward = $this->strafe = $this->turn = $this->yaw = 0;
+		$this->fire = $this->altFire = $this->use = false;
+		$this->weaponSlot = null;
+		$this->weaponSteps = 0;
 	}
 
 	private function axis(float $value): float { return max(-1, min(1, is_finite($value) ? $value : 0)); }

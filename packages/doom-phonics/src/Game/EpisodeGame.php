@@ -37,6 +37,9 @@ final class EpisodeGame
 	private SoundEmitter $sound;
 	private CheatSequence $cheatSequence;
 	private CheatSystem $cheats;
+	private bool $applyingInitialCheats = false;
+	private bool $pauseRequested = false;
+	private DoomInitialization $initialization;
 	private ?ScreenWipe $wipe;
 	private ?DoomMatch $match = null;
 	private ?ViewInput $viewOwner = null;
@@ -55,16 +58,19 @@ final class EpisodeGame
 		, public string $source = 'episode'
 		, ?GameSettings $settings = null
 		, ?ScreenWipe $wipe = null
+		, ?DoomInitialization $initialization = null
 	){
 		$this->boundWorld = $phonics->world;
 		$this->settings = $settings ?? new GameSettings;
 		$this->wipe = $wipe;
+		$this->initialization = $initialization ?? new DoomInitialization;
 		$phonics->runtime->pipeline = $pipeline;
 		$phonics->runtime->service('controls', $engine->controls);
 		$phonics->runtime->service('doom-settings', $this->settings);
 		$this->sound = new SdlSoundEmitter;
 		$this->cheatSequence = new CheatSequence;
 		$this->cheats = new CheatSystem;
+		$phonics->runtime->service('doom-cheats', $this->cheats);
 		$phonics->runtime->service('doom-sound', $this->sound);
 
 		if($wipe) $phonics->runtime->service('doom-wipe', $wipe);
@@ -98,9 +104,14 @@ final class EpisodeGame
 
 			$content = $this->lease->context->content();
 
-			if($content instanceof WadLevel) $this->cheats = new CheatSystem($content->weapons);
+			if($content instanceof WadLevel)
+			$this->cheats->configure($content->weapons, $content->actors);
 
 			$this->restorePlayer();
+
+			if(($entity = $this->player()) !== null)
+			$this->cheats->applyActive($this->phonics->entities, $entity);
+
 			$this->cheatSequence->reset();
 			$this->engine->input->reset();
 			$this->engine->controls->reset();
@@ -117,12 +128,33 @@ final class EpisodeGame
 	public function newGame(string $startMap, bool $startMusic = true): void
 	{
 		$this->enter($startMap, false, $startMusic);
+		$this->applyInitialCheats();
 	}
 
 	/** Recreate the current map and its scoped systems with the current settings. */
 	public function restart(): void
 	{
-		if($this->map !== '') $this->enter($this->map, false);
+		if($this->map !== '') $this->newGame($this->map);
+	}
+
+	/** Apply each configured classic sequence independently after the player exists. */
+	private function applyInitialCheats(): void
+	{
+		$this->applyingInitialCheats = true;
+
+		try
+		{
+			foreach($this->initialization->cheats as $cheat)
+			{
+				$this->cheatSequence->reset();
+				$this->typeCheats($cheat);
+			}
+		}
+		finally
+		{
+			$this->applyingInitialCheats = false;
+			$this->cheatSequence->reset();
+		}
 	}
 
 	/** Bind the verified peer-selected world and stage its start map behind the open menu. */
@@ -233,6 +265,7 @@ final class EpisodeGame
 		{
 			$view = $this->phonics->entities->get($entity, ViewInput::class);
 			$view->fire = false;
+			$view->altFire = false;
 			$view->consumeYaw();
 			$view->consumeUse();
 			$view->consumeWeaponSteps();
@@ -254,9 +287,9 @@ final class EpisodeGame
 
 		if($health->current <= 0)
 		{
-			if($this->engine->controls->pressed(DoomActions::FIRE) || $this->engine->controls->pressed(
+			if($player->canRestart() && ($this->engine->controls->pressed(DoomActions::FIRE) || $this->engine->controls->pressed(
 				DoomActions::USE
-			))
+			)))
 			$this->enter($this->map, false);
 
 			return;
@@ -288,6 +321,8 @@ final class EpisodeGame
 	/** Consume the cheat text stream; physical gameplay inputs use the shared binding profile. */
 	public function browserInput(): bool
 	{
+		$this->pauseRequested = false;
+
 		if(!function_exists('vrzno_env')) return false;
 
 		$read = vrzno_env('doomInput');
@@ -298,11 +333,22 @@ final class EpisodeGame
 
 		if(!is_array($value)) return false;
 
+		$this->pauseRequested = is_numeric($value['pause'] ?? null) && (int)$value['pause'] > 0;
+
 		$cheatInput = is_string($value['cheats'] ?? null)
 			? $this->typeCheats($value['cheats'])
 			: false;
 
 		return $cheatInput;
+	}
+
+	/** Consume one browser P press that was not part of a recognized cheat prefix. */
+	public function consumePauseRequest(): bool
+	{
+		$requested = $this->pauseRequested;
+		$this->pauseRequested = false;
+
+		return $requested;
 	}
 
 	/** Sample local look after UI gating, including frames without a simulation update. */
@@ -343,13 +389,31 @@ final class EpisodeGame
 
 		if(!$view) return;
 
+		if($this->phonics->entities->get($entity, HitPoints::class)->current <= 0)
+		{
+			$view->release();
+
+			return;
+		}
+
 		\DoomPhonics\Input\LookInput::advance($view, $frame, $elapsed, $this->settings);
 	}
 
 	/** Feed text from a browser or native host into the incremental classic-cheat matcher. */
 	public function typeCheats(string $characters): bool
 	{
-		$commands = $this->cheatSequence->feed($characters);
+		$commands = [];
+
+		foreach(str_split($characters) as $character)
+		{
+			$matched = $this->cheatSequence->feed($character);
+
+			if(strtolower($character) === 'p' && !$matched && !$this->cheatSequence->awaiting())
+			$this->pauseRequested = true;
+
+			array_push($commands, ...$matched);
+		}
+
 		$captured = (bool)$commands || $this->cheatSequence->awaiting();
 
 		foreach($commands as $command)
@@ -357,6 +421,16 @@ final class EpisodeGame
 			$entity = $this->player();
 
 			if($entity === null) return $captured;
+
+			if($this->applyingInitialCheats
+				&& $command->type === CheatCommand::OOPS_ALL_GIBS
+				&& $this->cheats->oopsAllGibsEnabled()
+			)
+			{
+				$this->cheats->applyActive($this->phonics->entities, $entity);
+
+				continue;
+			}
 
 			$result = $this->cheats->apply($command, $this->phonics->entities, $entity);
 
@@ -416,6 +490,8 @@ final class EpisodeGame
 			, 'wipe' => $wipe
 			, 'renderResolution' => $this->settings->renderResolution()->value
 			, 'pitchMode' => $this->settings->pitchMode()->value
+			, 'reticle' => $this->settings->reticle()
+			, 'bloodSplatter' => $this->settings->bloodSplatter()
 		];
 
 		$player = $this->phonics->entities->get($entity, PlayerState::class);
@@ -451,6 +527,7 @@ final class EpisodeGame
 			, 'powers' => array_keys($player->powers)
 			, 'godMode' => $player->godMode
 			, 'noClip' => $player->noClip
+			, 'oopsAllGibs' => $this->cheats->oopsAllGibsEnabled()
 			, 'kills' => $player->kills
 			, 'items' => $player->items
 			, 'secrets' => $player->secrets
@@ -461,6 +538,8 @@ final class EpisodeGame
 			, 'skill' => $this->settings->skill()->label()
 			, 'renderResolution' => $this->settings->renderResolution()->value
 			, 'pitchMode' => $this->settings->pitchMode()->value
+			, 'reticle' => $this->settings->reticle()
+			, 'bloodSplatter' => $this->settings->bloodSplatter()
 			, 'position' => [$pose->x,$pose->y,$pose->z,$pose->angle]
 			, 'render' => $content instanceof \DoomPhonics\Adapter\WadLevel ? $content->renderer?->metrics() : null
 			, 'skippedThings' => $content instanceof \DoomPhonics\Adapter\WadLevel ? $content->skippedThings : []
@@ -515,6 +594,8 @@ final class EpisodeGame
 
 		$this->carry->weaponEntity = null;
 		$this->carry->exited = $this->carry->secretExit = false;
+		$this->carry->deathTime = null;
+		$this->carry->viewHeight = $this->carry->previousViewHeight = PlayerState::VIEW_HEIGHT;
 		$this->carry->keys = [];
 		$this->carryHealth = max(1, $this->phonics->entities->get($entity, HitPoints::class)->current);
 	}

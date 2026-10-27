@@ -5,6 +5,7 @@ namespace DoomPhonics\System;
 use DoomPhonics\Component\ActorState;
 use DoomPhonics\Component\BeamEffect;
 use DoomPhonics\Component\HitPoints;
+use DoomPhonics\Component\InventoryPickup;
 use DoomPhonics\Component\MapThing;
 use DoomPhonics\Component\NetworkPlayer;
 use DoomPhonics\Component\PlayerCommand;
@@ -97,7 +98,7 @@ final class EpisodeNetworkSystem
 
 	public function validCommand(InputCommand $command): bool
 	{
-		$allowed = ['forward','strafe','turn','yaw','pitch','fire','use','weaponSlot','weaponSteps'];
+		$allowed = ['forward','strafe','turn','yaw','pitch','fire','altFire','use','weaponSlot','weaponSteps'];
 
 		if(array_diff(array_keys($command->actions()), $allowed)) return false;
 
@@ -189,6 +190,22 @@ final class EpisodeNetworkSystem
 			)
 		));
 
+		$result->register(new CallbackComponentCodec(
+			'doom.inventory-pickup'
+			, 1
+			, InventoryPickup::class
+			, static fn(InventoryPickup $value): array => [
+				'actor' => $value->actorName
+				, 'amount' => $value->amount
+				, 'dropped' => $value->dropped
+			]
+			, static fn(array $value): InventoryPickup => new InventoryPickup(
+				(string)$value['actor']
+				, (int)$value['amount']
+				, (bool)$value['dropped']
+			)
+		));
+
 		$result->register(
 			new CallbackComponentCodec(
 				'doom.player-state'
@@ -234,6 +251,10 @@ final class EpisodeNetworkSystem
 		));
 
 		$result->prefab('doom.beam', static fn(Registry $registry): int => $registry->create(new RemoteBeam));
+		$result->prefab(
+			'doom.pickup'
+			, static fn(Registry $registry): int => $registry->create(new MapThing(-1, 0))
+		);
 
 		$result->prefab(
 			'doom.player'
@@ -295,12 +316,26 @@ final class EpisodeNetworkSystem
 		foreach([Projectile::class => 'doom.projectile', BeamEffect::class => 'doom.beam'] as $type => $prefab)
 		foreach($this->world->query($type) as $entity)
 		{
-			if($this->world->has($entity, NetworkIdentity::class)) continue;
-
-			$id = $this->entities->allocate($entity);
-			$this->world->add($entity, new NetworkIdentity($id, $this->scope));
-			$this->world->add($entity, new NetworkPrefab($prefab));
+			$this->bindEffect($entity, $prefab);
 		}
+
+		foreach($this->world->query(InventoryPickup::class) as $entity)
+		{
+			if(!$this->world->has($entity, MapThing::class)
+				|| $this->world->get($entity, MapThing::class)->index >= 0
+			) continue;
+
+			$this->bindEffect($entity, 'doom.pickup');
+		}
+	}
+
+	private function bindEffect(int $entity, string $prefab): void
+	{
+		if($this->world->has($entity, NetworkIdentity::class)) return;
+
+		$id = $this->entities->allocate($entity);
+		$this->world->add($entity, new NetworkIdentity($id, $this->scope));
+		$this->world->add($entity, new NetworkPrefab($prefab));
 	}
 
 	private function bindPlayers(ReplicationScope $scope): void
@@ -347,8 +382,10 @@ final class EpisodeNetworkSystem
 		return [
 			'ammo' => $value->ammo
 			, 'ammoMaximum' => $value->ammoMaximum
+			, 'infiniteAmmo' => $value->infiniteAmmo
 			, 'weapons' => $value->weapons
 			, 'keys' => $value->keys
+			, 'inventory' => $value->inventory
 			, 'powers' => $value->powers
 			, 'weapon' => $value->weapon
 			, 'pendingWeapon' => $value->pendingWeapon
@@ -363,12 +400,18 @@ final class EpisodeNetworkSystem
 			, 'secretExit' => $value->secretExit
 			, 'reactionTics' => $value->reactionTics
 			, 'message' => $value->message
+			, 'deathTime' => $value->deathTime
+			, 'viewHeight' => $value->viewHeight
+			, 'previousViewHeight' => $value->previousViewHeight
 		];
 	}
 
 	/** @param array<string,mixed> $value */
 	private static function restorePlayer(array $value, ?PlayerState $current): PlayerState
 	{
+		$previousDeathTime = $current?->deathTime;
+		$previousViewHeight = $current?->viewHeight ?? PlayerState::VIEW_HEIGHT;
+		$previousViewStart = $current?->previousViewHeight ?? PlayerState::VIEW_HEIGHT;
 		$player = $current ?? new PlayerState;
 
 		foreach(['ammo','ammoMaximum','weapons','keys','powers'] as $property)
@@ -377,6 +420,10 @@ final class EpisodeNetworkSystem
 
 			$player->$property = $value[$property];
 		}
+
+		$player->inventory = is_array($value['inventory'] ?? null) ? $value['inventory'] : [];
+
+		$player->infiniteAmmo = is_array($value['infiniteAmmo'] ?? null) ? $value['infiniteAmmo'] : [];
 
 		$player->weapon = (string)($value['weapon'] ?? 'Pistol');
 		$pending = $value['pendingWeapon'] ?? null;
@@ -389,6 +436,30 @@ final class EpisodeNetworkSystem
 		$player->$property = (bool)($value[$property] ?? false);
 
 		$player->message = substr((string)($value['message'] ?? ''), 0, 160);
+		$deathTime = $value['deathTime'] ?? null;
+		$viewHeight = is_numeric($value['viewHeight'] ?? null)
+			? max(PlayerState::DEATH_VIEW_HEIGHT, min(PlayerState::VIEW_HEIGHT, (float)$value['viewHeight']))
+			: PlayerState::VIEW_HEIGHT;
+		$viewStart = is_numeric($value['previousViewHeight'] ?? null)
+			? max(PlayerState::DEATH_VIEW_HEIGHT, min(PlayerState::VIEW_HEIGHT, (float)$value['previousViewHeight']))
+			: $viewHeight;
+
+		if(is_numeric($deathTime))
+		{
+			$player->deathTime = max(0, (float)$deathTime, $previousDeathTime ?? 0);
+			$player->viewHeight = $previousDeathTime === null
+				? $viewHeight
+				: min($previousViewHeight, $viewHeight);
+			$player->previousViewHeight = $previousDeathTime === null
+				? max($player->viewHeight, $viewStart)
+				: max($player->viewHeight, min($previousViewStart, $viewStart));
+		}
+		else
+		{
+			$player->deathTime = null;
+			$player->viewHeight = $viewHeight;
+			$player->previousViewHeight = $viewStart;
+		}
 
 		return $player;
 	}

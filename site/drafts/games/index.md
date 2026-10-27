@@ -20,3 +20,7 @@ IV. Doom-Phonics
 V. Study the implementations
     A. Package-owned assets
     B. Reference guides
+VI. PHP Buster
+    A. Original four-stage wave loop
+    B. Pointer, touch, keyboard, and controller input
+    C. Logical viewport and sample playback utilities

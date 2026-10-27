@@ -22,20 +22,20 @@ Numbers follow the standard browser gamepad layout. SDL's own button enum has
 a different order; `SdlInput` translates it. Existing engine keyboard bindings
 remain available, including Z for jump and left Shift for action.
 
-| Button | Xbox / PlayStation | Keyboard | Action alias |
-| --- | --- | --- | --- |
-| 0 | A / Cross | Space, Z, Enter, keypad Enter | `jump` |
-| 1 | B / Circle | X, left Shift, either Ctrl | `action` |
-| 2 | X / Square | C | |
-| 3 | Y / Triangle | V | |
-| 4, 5 | LB, RB / L1, R1 | Q, E | |
-| 6, 7 | LT, RT / L2, R2 | 1, 3 | |
-| 8 | Back / Select | R | `reset` |
-| 9 | Start / Options | P, Escape | `pause` |
-| 10, 11 | Left, right stick click | Tab, Backspace | |
-| 12, 13 | D-pad up, down | Up/W, Down/S | `up`, `down` |
-| 14, 15 | D-pad left, right | Left/A, Right/D | `left`, `right` |
-| 16 | Guide / PS | None | |
+| Button | Xbox | PlayStation | Keyboard | Action alias |
+| --- | --- | --- | --- | --- |
+| 0 | <img class="controller-glyph" src="images/controllers/xbox-button-a.svg" alt="Xbox A button"> | <img class="controller-glyph" src="images/controllers/playstation-button-x.svg" alt="PlayStation Cross button"> | Space, Z, Enter, keypad Enter | `jump` |
+| 1 | <img class="controller-glyph" src="images/controllers/xbox-button-b.svg" alt="Xbox B button"> | <img class="controller-glyph" src="images/controllers/playstation-button-circle.svg" alt="PlayStation Circle button"> | X, left Shift, either Ctrl | `action` |
+| 2 | <img class="controller-glyph" src="images/controllers/xbox-button-x.svg" alt="Xbox X button"> | <img class="controller-glyph" src="images/controllers/playstation-button-square.svg" alt="PlayStation Square button"> | C | |
+| 3 | <img class="controller-glyph" src="images/controllers/xbox-button-y.svg" alt="Xbox Y button"> | <img class="controller-glyph" src="images/controllers/playstation-button-triangle.svg" alt="PlayStation Triangle button"> | V | |
+| 4, 5 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lb.svg" alt="Xbox LB button"><img class="controller-glyph" src="images/controllers/xbox-button-rb.svg" alt="Xbox RB button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l1.svg" alt="PlayStation L1 button"><img class="controller-glyph" src="images/controllers/playstation-button-r1.svg" alt="PlayStation R1 button"></span> | Q, E | |
+| 6, 7 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lt.svg" alt="Xbox LT button"><img class="controller-glyph" src="images/controllers/xbox-button-rt.svg" alt="Xbox RT button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l2.svg" alt="PlayStation L2 button"><img class="controller-glyph" src="images/controllers/playstation-button-r2.svg" alt="PlayStation R2 button"></span> | 1, 3 | |
+| 8 | <img class="controller-glyph" src="images/controllers/xbox-button-back.svg" alt="Xbox Back button"> | <img class="controller-glyph" src="images/controllers/playstation-button-select.svg" alt="PlayStation Select button"> | R | `reset` |
+| 9 | <img class="controller-glyph" src="images/controllers/xbox-button-start.svg" alt="Xbox Start button"> | <img class="controller-glyph" src="images/controllers/playstation-button-start.svg" alt="PlayStation Options button"> | P, Escape | `pause` |
+| 10, 11 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lsb.svg" alt="Xbox left stick click"><img class="controller-glyph" src="images/controllers/xbox-button-rsb.svg" alt="Xbox right stick click"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l3.svg" alt="PlayStation L3 button"><img class="controller-glyph" src="images/controllers/playstation-button-r3.svg" alt="PlayStation R3 button"></span> | Tab, Backspace | |
+| 12, 13 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-up.svg" alt="Xbox D-pad up"><img class="controller-glyph" src="images/controllers/xbox-button-down.svg" alt="Xbox D-pad down"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-up.svg" alt="PlayStation D-pad up"><img class="controller-glyph" src="images/controllers/playstation-button-down.svg" alt="PlayStation D-pad down"></span> | Up/W, Down/S | `up`, `down` |
+| 14, 15 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-left.svg" alt="Xbox D-pad left"><img class="controller-glyph" src="images/controllers/xbox-button-right.svg" alt="Xbox D-pad right"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-left.svg" alt="PlayStation D-pad left"><img class="controller-glyph" src="images/controllers/playstation-button-right.svg" alt="PlayStation D-pad right"></span> | Left/A, Right/D | `left`, `right` |
+| 16 | Guide | PS | None | |
 
 The left stick also supplies buttons 12–15 at proportional strength after the
 configured dead zone. D-pad input overrides that stick axis. Triggers retain

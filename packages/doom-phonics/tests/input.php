@@ -24,18 +24,43 @@ verifyWad((new Source(Source::PAD_AXIS, Pad::LEFT_Y, -1))->hint() === '🡩', 'l
 verifyWad((new Source(Source::PAD_AXIS, Pad::RIGHT_X, 1))->hint() === '🡲', 'right-stick directions use shared hint symbols');
 verifyWad((new Source(Source::KEY, ord('w')))->hint() === null, 'keyboard bindings remain textual');
 
+$defaultBindings = DoomActions::defaults();
+$firePad = $defaultBindings->sources(DoomActions::FIRE, 1, Source::CONTROLLER);
+$altFireMouse = $defaultBindings->sources(DoomActions::ALT_FIRE, 1, Source::KEYBOARD);
+$altFirePad = $defaultBindings->sources(DoomActions::ALT_FIRE, 1, Source::CONTROLLER);
+$useKeyboard = $defaultBindings->sources(DoomActions::USE, 1, Source::KEYBOARD);
+
+verifyWad(
+	count($firePad) === 1 && $firePad[0]->kind === Source::PAD_AXIS && $firePad[0]->code === Pad::RT
+		&& count($altFirePad) === 1 && $altFirePad[0]->kind === Source::PAD_AXIS && $altFirePad[0]->code === Pad::LT
+	, 'controller fire modes default to RT and LT'
+);
+verifyWad(
+	count($altFireMouse) === 1 && $altFireMouse[0]->kind === Source::MOUSE_BUTTON
+		&& $altFireMouse[0]->code === Source::SECONDARY
+		&& count($useKeyboard) === 1 && $useKeyboard[0]->kind === Source::KEY
+		&& $useKeyboard[0]->code === ord('e')
+	, 'Mouse 2 defaults to Alt Fire while E remains Use'
+);
+
 foreach(DoomActions::rows() as [$code])
 verifyWad($code > InputCode::RESERVED_MAX, 'Doom gameplay codes are outside the reserved engine range');
 $inputControls = new Controls;
 $inputView = new ViewInput;
 $inputCommand = new PlayerCommand;
-$inputControls->set(new ActionFrame([DoomActions::STRAFE => -.5, DoomActions::FORWARD => .25, DoomActions::FIRE => 1]));
+$inputControls->set(new ActionFrame([
+	DoomActions::STRAFE => -.5
+	, DoomActions::FORWARD => .25
+	, DoomActions::FIRE => 1
+	, DoomActions::ALT_FIRE => 1
+]));
 $inputView->look(.12, .2);
 $inputCommand->sample($inputControls, $inputView);
 
 verifyWad(
-	$inputCommand->strafe === -.5 && $inputCommand->forward === .25 && $inputCommand->fire
-	, 'signed movement and fire survive command sampling'
+	$inputCommand->strafe === -.5 && $inputCommand->forward === .25
+		&& $inputCommand->fire && $inputCommand->altFire
+	, 'signed movement and both fire modes survive command sampling'
 );
 
 verifyWad(
@@ -220,6 +245,31 @@ verifyWad($remote->consumeYaw() === 0.0, 'batched yaw is consumed only once');
 $saved = '';
 $writes = 0;
 
+$legacyBindings = json_decode(json_encode(DoomActions::defaults()), true);
+$legacyBindings[DoomActions::FIRE][1][Source::CONTROLLER] = [[
+	'kind' => Source::PAD_BUTTON
+	, 'code' => Pad::RB
+	, 'sign' => 1
+]];
+$legacyBindings[DoomActions::USE][1][Source::KEYBOARD][] = [
+	'kind' => Source::MOUSE_BUTTON
+	, 'code' => Source::SECONDARY
+	, 'sign' => 1
+];
+unset($legacyBindings[DoomActions::ALT_FIRE]);
+$legacy = new InputSettings(new GameSettings, static fn(): string => json_encode([
+	'version' => 1
+	, 'bindings' => $legacyBindings
+	, 'look' => []
+]));
+
+verifyWad(
+	$legacy->bindings->sources(DoomActions::FIRE, 1, Source::CONTROLLER)[0]->code === Pad::RT
+		&& $legacy->bindings->sources(DoomActions::ALT_FIRE, 1, Source::KEYBOARD)[0]->code === Source::SECONDARY
+		&& count($legacy->bindings->sources(DoomActions::USE, 1, Source::KEYBOARD)) === 1
+	, 'v1 defaults migrate RB to RT and move Mouse 2 from Use to Alt Fire'
+);
+
 $preferences = new InputSettings(new GameSettings, null, function(string $json) use (&$saved, &$writes): bool {
 	$saved = $json;
 	$writes++;
@@ -232,6 +282,7 @@ $preferences->bindings->bind(DoomActions::FIRE, 1, new Source(Source::KEY, ord('
 $preferences->preference('controllerHorizontal', 2.5);
 $restored = new InputSettings(new GameSettings, fn(): string => $saved);
 verifyWad($restored->settings->controllerHorizontal === 2.5, 'controller preferences survive storage');
+verifyWad((json_decode($saved, true)['version'] ?? null) === 2, 'input profiles save the current binding version');
 
 verifyWad(
 	json_encode($restored->bindings) === json_encode($preferences->bindings)
@@ -287,6 +338,8 @@ $browserOptions = [
 	, 'musicVolume' => .4
 	, 'renderResolution' => 'classic'
 	, 'pitchMode' => 'invalid'
+	, 'reticle' => false
+	, 'bloodSplatter' => 'invalid'
 	, 'fullscreen' => false
 	, 'fullscreenAvailable' => true
 	, 'fullscreenBusy' => false
@@ -311,6 +364,8 @@ verifyWad(
 	$options->muted() && $options->effectsVolume() === 1.0 && $options->musicVolume() === .4
 		&& $optionSettings->renderResolution() === RenderResolution::Classic
 		&& $optionSettings->pitchMode() === PitchMode::Perspective
+		&& !$optionSettings->reticle()
+		&& $optionSettings->bloodSplatter() === 1.0
 	, 'browser options restore valid fields without accepting invalid neighbors'
 );
 
@@ -319,11 +374,14 @@ $options->setMusicVolume(.7);
 $options->setMuted(false);
 $options->setRenderResolution(RenderResolution::Native);
 $options->setPitchMode(PitchMode::ClassicShear);
+$options->setReticle(true);
+$options->setBloodSplatter(.5);
 $options->setFullscreen(true);
 
 verifyWad(
 	$options->effectsVolume() === .6 && $options->musicVolume() === .7 && !$options->muted()
-		&& $options->fullscreen() && count($optionWrites) === 6
+		&& $options->fullscreen() && $optionSettings->reticle()
+		&& $optionSettings->bloodSplatter() === .5 && count($optionWrites) === 8
 	, 'sound and video menu changes cross the browser options bridge'
 );
 

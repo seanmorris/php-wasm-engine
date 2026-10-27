@@ -148,6 +148,19 @@ final class TextureCatalog
 		return $this->menuFont = $lump ? Fon2Font::decode($lump, new Palette($this->wad)) : null;
 	}
 
+	/** Select the raw blood sprite supplied by the base IWAD, independent of overlays. */
+	public function iwadBloodSprite(): string
+	{
+		$sprites = $this->wad->archives[0]->namespace(['S_START','SS_START'], ['S_END','SS_END']);
+
+		foreach(['BLUD','BLOD'] as $prefix)
+		foreach(array_keys($sprites) as $name)
+		if(str_starts_with($name, $prefix)) return $prefix;
+
+		// Doom's canonical spelling is the safest fallback for marker-less IWADs.
+		return 'BLUD';
+	}
+
 	/**
 	 * Resolve one sprite frame and closest rotation.
 	 *

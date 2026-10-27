@@ -7,6 +7,8 @@ use DoomPhonics\Component\Transform;
 use DoomPhonics\Game\CheatCommand;
 use DoomPhonics\Game\CheatResult;
 use DoomPhonics\Game\PlayerState;
+use DoomPhonics\Definition\ActorCatalog;
+use DoomPhonics\Definition\WeaponAmmo;
 use DoomPhonics\Definition\WeaponSlots;
 use Phonics\Ecs\Registry;
 
@@ -35,13 +37,81 @@ final class CheatSystem
 	];
 	/** @var list<string> */
 	private array $weapons;
+	/** @var array<string,int> Active stack ammo pool name to maximum carried amount. */
+	private array $ammoMaximum = [];
+	private bool $oopsAllGibs = false;
+	/** @var array{weapons:array<string,bool>,ammo:array<string,int>,infiniteAmmo:array<string,bool>,weapon:string}|null */
+	private ?array $oopsLoadout = null;
 
-	public function __construct(?WeaponSlots $slots = null)
+	public function __construct(?WeaponSlots $slots = null, ?ActorCatalog $actors = null)
+	{
+		$this->configure($slots, $actors);
+	}
+
+	/** Refresh stack-dependent weapons without replacing the session's active cheat state. */
+	public function configure(?WeaponSlots $slots = null, ?ActorCatalog $actors = null): void
 	{
 		$this->weapons = array_values(array_unique([
 			...self::WEAPONS
 			, ...($slots?->weapons() ?? [])
 		]));
+		$this->ammoMaximum = [];
+
+		if($actors)
+		{
+			// IDFA/IDKFA promise all ammo in the active game, including mod-defined
+			// helper pools that are manipulated with inventory actions rather than
+			// named directly by a weapon's AmmoType property.
+			foreach($actors->resolved() as $definition)
+			{
+				if(!$actors->isA($definition, 'Ammo')) continue;
+
+				$pool = WeaponAmmo::pool($actors, $definition->name);
+
+				if(!$pool) continue;
+
+				$maximum = max(0, (int)$pool->value('Inventory.MaxAmount', 0));
+
+				if($maximum > 0) $this->ammoMaximum[$pool->name] = max(
+					$this->ammoMaximum[$pool->name] ?? 0
+					, $maximum
+				);
+			}
+		}
+
+		if($this->railgun() === null)
+		{
+			$this->oopsAllGibs = false;
+			$this->oopsLoadout = null;
+		}
+	}
+
+	/** The weapon currently replacing gun-bearing monster attacks, if any. */
+	public function monsterWeapon(): ?string { return $this->oopsAllGibs ? 'Railgun' : null; }
+
+	public function oopsAllGibsEnabled(): bool { return $this->oopsAllGibs; }
+
+	/** Reapply session-owned cheat rules after a map load or player respawn. */
+	public function applyActive(Registry $registry, int $entity): bool
+	{
+		if(!$this->oopsAllGibs) return false;
+
+		if(!$registry->has($entity, PlayerState::class))
+		throw new \InvalidArgumentException('Active cheats require a player entity');
+
+		$railgun = $this->railgun();
+
+		if($railgun === null)
+		{
+			$this->oopsAllGibs = false;
+			$this->oopsLoadout = null;
+
+			return false;
+		}
+
+		$this->equipOopsAllGibs($registry->get($entity, PlayerState::class), $railgun);
+
+		return true;
 	}
 
 	public function apply(CheatCommand $command, Registry $registry, int $entity): CheatResult
@@ -110,6 +180,10 @@ final class CheatSystem
 
 				return CheatResult::warp($map);
 
+			case CheatCommand::OOPS_ALL_GIBS:
+				$this->oopsAllGibs($player);
+				break;
+
 			default:
 				throw new \UnexpectedValueException('Unsupported cheat command ' . $command->type);
 		}
@@ -117,9 +191,70 @@ final class CheatSystem
 		return CheatResult::applied();
 	}
 
+	private function oopsAllGibs(PlayerState $player): void
+	{
+		if($this->oopsAllGibs)
+		{
+			$this->oopsAllGibs = false;
+			$loadout = $this->oopsLoadout;
+			$this->oopsLoadout = null;
+
+			if($loadout !== null)
+			{
+				$player->weapons = $loadout['weapons'];
+				$player->ammo = $loadout['ammo'];
+				$player->infiniteAmmo = $loadout['infiniteAmmo'];
+				$player->pendingWeapon = null;
+				$player->requestWeapon($loadout['weapon']);
+			}
+			else $player->infiniteAmmo = [];
+
+			$player->message = 'OOPS! ALL GIBS OFF';
+
+			return;
+		}
+
+		$railgun = $this->railgun();
+
+		if($railgun === null)
+		{
+			$player->message = 'RAILGUN NOT AVAILABLE';
+
+			return;
+		}
+
+		$this->oopsLoadout = [
+			'weapons' => $player->weapons
+			, 'ammo' => $player->ammo
+			, 'infiniteAmmo' => $player->infiniteAmmo
+			, 'weapon' => $player->pendingWeapon ?? $player->weapon
+		];
+		$this->oopsAllGibs = true;
+		$this->equipOopsAllGibs($player, $railgun);
+		$player->message = 'OOPS! ALL GIBS';
+	}
+
+	private function equipOopsAllGibs(PlayerState $player, string $railgun): void
+	{
+		$player->weapons = [$railgun => true];
+		$player->requestWeapon($railgun);
+		$player->infiniteAmmo = ['Cell' => true];
+		$player->ammo['Cell'] = $player->ammoMaximum['Cell'] ?? PHP_INT_MAX;
+	}
+
+	private function railgun(): ?string
+	{
+		foreach($this->weapons as $weapon)
+		if(strcasecmp($weapon, 'Railgun') === 0) return $weapon;
+
+		return null;
+	}
+
 	private function arsenal(PlayerState $player): void
 	{
 		foreach($this->weapons as $weapon) $player->weapons[$weapon] = true;
+		foreach($this->ammoMaximum as $type => $maximum)
+		$player->ammoMaximum[$type] = max($player->ammoMaximum[$type] ?? 0, $maximum);
 
 		foreach($player->ammoMaximum as $type => $maximum) $player->ammo[$type] = $maximum;
 		$player->armor = 200;

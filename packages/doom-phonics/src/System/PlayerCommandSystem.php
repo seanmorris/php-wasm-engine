@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace DoomPhonics\System;
 
+use DoomPhonics\Component\HitPoints;
 use DoomPhonics\Component\NetworkPlayer;
 use DoomPhonics\Component\PlayerCommand;
 use DoomPhonics\Component\ViewInput;
@@ -25,6 +26,15 @@ final class PlayerCommandSystem
 		{
 			if($registry->has($entity, NetworkPlayer::class) && !$registry->get($entity, NetworkPlayer::class)->local)
 			continue;
+
+			if($registry->has($entity, HitPoints::class)
+				&& $registry->get($entity, HitPoints::class)->current <= 0
+			){
+				$registry->get($entity, PlayerCommand::class)->release();
+				$registry->get($entity, ViewInput::class)->release();
+
+				continue;
+			}
 
 			$registry->get($entity, PlayerCommand::class)->sample(
 				$this->controls

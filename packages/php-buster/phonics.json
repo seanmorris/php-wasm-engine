@@ -1,0 +1,84 @@
+{
+  "name": "@seanmorris/php-buster",
+  "php": {
+    "autoload": {
+      "PhpBuster\\": "src/"
+    },
+    "bootstrap": [
+      "autoload.php"
+    ],
+    "files": [
+      "autoload.php",
+      "game.php",
+      "src/Actor.php",
+      "src/Input/BusterActions.php",
+      "src/Input/InputSettings.php",
+      "src/Random.php",
+      "src/Render/Scene.php",
+      "src/Simulation.php"
+    ]
+  },
+  "exports": {
+    "game": {
+      "type": "game",
+      "php": "game.php",
+      "browser": "browser/game.mjs",
+      "modules": []
+    },
+    "buster": {
+      "type": "asset",
+      "path": "worlds/buster.world"
+    }
+  },
+  "tiled": {
+    "previews": [
+      "assets/sprites.png"
+    ]
+  },
+  "preload": [
+    "assets/explosion.wav",
+    "assets/sprites.png",
+    "assets/sprites.tsj",
+    "assets/starfield.png",
+    "assets/starfield.tsj"
+  ],
+  "schemaVersion": 1,
+  "version": "0.1.0",
+  "requires": {
+    "phonics": "^0.1.0",
+    "php": ">=8.0.0"
+  },
+  "dependencies": {},
+  "browser": {
+    "files": [
+      "browser/game.mjs"
+    ]
+  },
+  "assets": [
+    "assets/explosion.wav",
+    "assets/sprites.png",
+    "assets/sprites.tsj",
+    "assets/starfield.png",
+    "assets/starfield.tsj",
+    "worlds/buster.tmj",
+    "worlds/buster.world"
+  ],
+  "integrity": {
+    "autoload.php": "sha256-CnC7WLaRuLfFPie9b0e98pXrZ69gkgjz++xI2FtzNFY=",
+    "game.php": "sha256-x1eAWvxUraWRHqAsNsIzdL5Pvzx8WHXViH7P+w5NIlg=",
+    "src/Actor.php": "sha256-JVcvbdYn4bUuOtTDysuMSYvL6gPMoInL0z2yeWAhScw=",
+    "src/Input/BusterActions.php": "sha256-q1liGe7gtaFEcP/Iqi408ItzKXGi87LXM8wu2fe7GkU=",
+    "src/Input/InputSettings.php": "sha256-emcPKeKnxKWtr5jDoNTey7YtJmB668nxLHbEq8+t6Lk=",
+    "src/Random.php": "sha256-YnRD0MaTp48W7t4eF/79aYeS/7HX0OHjzjIneqjHIDU=",
+    "src/Render/Scene.php": "sha256-QUA8xcxkRkEmUaxqG5p5SV2ZM/3Ppt7t75HgfERWGmU=",
+    "src/Simulation.php": "sha256-ZvevKWqhOq2bRkgWpNs51PgoJccWmLprbf4rmbNu53g=",
+    "browser/game.mjs": "sha256-s5iTaGb5jIs1NKzbcBnbkPknEL6CZJnZip0LetBMsm0=",
+    "assets/explosion.wav": "sha256-fsPSL6tXRcZ1UU8DyBIRySagdoXjevOi0yGt1wGWQjI=",
+    "assets/sprites.png": "sha256-x2WDcLFHZNBBJLFwxp6FkizXvVBePuDRZq91RxylX2c=",
+    "assets/sprites.tsj": "sha256-PaevvBs87J3aclx1RbYVPqZRajur681JDhR1aFoO6YM=",
+    "assets/starfield.png": "sha256-vww4roUoUkfMxM2axL2BEjzTRt3s/O+19iMOgMoDN+I=",
+    "assets/starfield.tsj": "sha256-Bbokl3i7SJiorOThQFdtzmDWiqJqpoBaO6ujeWNW8ls=",
+    "worlds/buster.tmj": "sha256-ZTaFRkBb1GbpAgrjA5FUW4Cp8Hz3nxadnpTpRqoinOs=",
+    "worlds/buster.world": "sha256-UePjUYGXayrABZGU8c6xroezam+Xe9Xztg1HfOlWE1Q="
+  }
+}

@@ -1,4 +1,4 @@
-let SdlAudio, QuickControls;
+let SdlAudio, QuickControls, SafeStorage;
 
 /** Browser actions shared by the PHP pause menu and the two corner shortcuts. */
 export class DemoControls
@@ -7,8 +7,12 @@ export class DemoControls
 	/**
 * Bind accessible shortcuts without starting PHP or opening an audio device.
 */
-	constructor(audioClass = SdlAudio, canvas = document.querySelector('canvas'), shortcutsClass = QuickControls)
-	{
+	constructor(
+		audioClass = SdlAudio
+		, canvas = document.querySelector('canvas')
+		, shortcutsClass = QuickControls
+		, storage = new SafeStorage
+	){
 		this.AudioClass = audioClass;
 		this.scene = 'platformer';
 		this.abort = new AbortController();
@@ -22,15 +26,8 @@ export class DemoControls
 		this.muteButton = this.shortcuts.muteButton;
 		this.fullscreenButton = this.shortcuts.fullscreenButton;
 		this.error = this.shortcuts.error;
-
-		try
-		{
-			this.muted = localStorage.getItem('php-wasm-engine-muted') === 'true';
-		}
-		catch
-		{
-			// Storage can be disabled; the preference still works for this page.
-		}
+		this.storage = storage;
+		this.muted = this.storage.get('php-wasm-engine-muted') === 'true';
 
 		this.muteButton.addEventListener('click', () => {
 			this.setMuted(!this.muted);
@@ -84,14 +81,7 @@ export class DemoControls
 		this.muted = Boolean(muted);
 		this.audio?.setMuted(this.muted);
 
-		try
-		{
-			localStorage.setItem('php-wasm-engine-muted', String(this.muted));
-		}
-		catch
-		{
-			// A blocked store does not prevent changing audio.
-		}
+		this.storage.set('php-wasm-engine-muted', String(this.muted));
 
 		this.update();
 	}
@@ -155,6 +145,7 @@ export function activate(context)
 {
 	SdlAudio = context.services.SdlAudio;
 	QuickControls = context.services.QuickControls;
+	SafeStorage = context.services.SafeStorage;
 	const shared = globalThis[Symbol.for('sane-phonics.legacy-controls')];
 	const controls = shared ?? new DemoControls(SdlAudio, context.canvas);
 	controls.scene = context.config['sane.scene'] ?? 'platformer';

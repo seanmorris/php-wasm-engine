@@ -206,6 +206,7 @@ $alias brain/spawn	misc/teleport
 world/barrelx		dsbarexp
 
 // Misc
+player/death			dspldeth
 misc/gibbed			dsslop
 misc/secret			dssecret
 misc/w_pkup			dswpnup

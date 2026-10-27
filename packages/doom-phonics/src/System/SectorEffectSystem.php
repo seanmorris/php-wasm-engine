@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace DoomPhonics\System;
 
 use DoomPhonics\Component\ActorState;
+use DoomPhonics\Component\Body;
 use DoomPhonics\Component\StatusFace;
 use DoomPhonics\Component\HitPoints;
 use DoomPhonics\Component\PlayerStart;
@@ -172,10 +173,13 @@ final class SectorEffectSystem
 	private function damage(Registry $registry, int $entity, int $damage, bool $exit): void
 	{
 		$player = $registry->get($entity, PlayerState::class);
+		$hp = $registry->get($entity, HitPoints::class);
 
+		// A corpse can remain on a damaging floor indefinitely. Do not keep subtracting
+		// health or re-enter its first death frame on every 32-tic damage pulse.
+		if($hp->current <= 0) return;
 		if(($player->godMode || isset($player->powers['Invulnerable'])) && !$exit)return;
 
-		$hp = $registry->get($entity, HitPoints::class);
 		$absorb = min($player->armor, (int)floor($damage * $player->armorClass / 100));
 		$player->armor -= $absorb;
 		$inflicted = $damage - $absorb;
@@ -198,6 +202,14 @@ final class SectorEffectSystem
 
 		if($hp->current <= 0)
 		{
+			$player->beginDeath();
+
+			if($registry->has($entity, ViewEffects::class))
+			$registry->get($entity, ViewEffects::class)->recordDeath();
+
+			if($registry->has($entity, Body::class))
+			$registry->get($entity, Body::class)->shootable = false;
+
 			$state = $registry->get($entity, ActorState::class);
 
 			if($state->definition->state('Death'))$state->enter('Death');

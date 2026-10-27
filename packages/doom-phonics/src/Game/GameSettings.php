@@ -13,6 +13,8 @@ final class GameSettings
 	public bool $controllerInvertY = false;
 	private RenderResolution $renderResolution = RenderResolution::Native;
 	private PitchMode $pitchMode = PitchMode::Perspective;
+	private bool $reticle = true;
+	private float $bloodSplatter = 1.0;
 
 	public function __construct(?SkillLevel $skill = null)
 	{
@@ -57,4 +59,18 @@ final class GameSettings
 	public function pitchMode(): PitchMode { return $this->pitchMode; }
 
 	public function setPitchMode(PitchMode $mode): void { $this->pitchMode = $mode; }
+
+	public function reticle(): bool { return $this->reticle; }
+
+	public function setReticle(bool $visible): void { $this->reticle = $visible; }
+
+	public function bloodSplatter(): float { return $this->bloodSplatter; }
+
+	public function setBloodSplatter(float $amount): void
+	{
+		if(!is_finite($amount) || $amount < 0 || $amount > 2)
+		throw new \OutOfRangeException('Blood splatter must be between zero and two');
+
+		$this->bloodSplatter = (float)sprintf('%.2f', $amount);
+	}
 }

@@ -371,14 +371,15 @@ final class DoomMenuRenderer
 		$lines = [
 			['MOVE + STRAFE', '⬲', '⬲']
 			, ['LOOK', 'MOUSE', '▦']
-			, ['FIRE', 'MOUSE 1  ⓿', '❺']
-			, ['USE', 'MOUSE 2  ❺', '⓿']
+			, ['FIRE', 'MOUSE 1', '❼']
+			, ['ALT FIRE', 'MOUSE 2', '❻']
+			, ['USE', 'E', '⓿']
 			, ['WEAPONS', 'WHEEL  0-9', '✚']
 		];
 
 		foreach($lines as $index => [$action,$keyboard,$controller])
 		{
-			$y = 45 + $index * 18;
+			$y = 43 + $index * 15;
 			$this->text($renderer, $patches, $action, 19, $y + 3, .65);
 			$this->buttonHint($renderer, $hints, $keyboard, 'keyboard', 103, $y, 104, 15, .53);
 			$this->buttonHint($renderer, $hints, $controller, $controllerTheme, 230, $y, 72, 15, .53);

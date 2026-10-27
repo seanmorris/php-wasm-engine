@@ -5,6 +5,7 @@ use DoomPhonics\Input\DoomActions;
 
 use DoomPhonics\Component\Body;
 use DoomPhonics\Component\Gravity;
+use DoomPhonics\Component\HitPoints;
 use DoomPhonics\Component\NetworkPlayer;
 use DoomPhonics\Component\PlayerStart;
 use DoomPhonics\Component\PlayerCommand;
@@ -64,14 +65,22 @@ final class PlayerMovementSystem
 			$command = $registry->has($entity, PlayerCommand::class)
 				? $registry->get($entity, PlayerCommand::class)
 				: null;
+			$dead = $registry->has($entity, HitPoints::class)
+				&& $registry->get($entity, HitPoints::class)->current <= 0;
+
+			if($dead)
+			{
+				$command?->release();
+				$view?->release();
+			}
 
 			$floorBefore = $this->collision->level->sectorAt($pose->x, $pose->y)->floorZ($pose->x, $pose->y);
 			$body->grounded = $pose->z <= $floorBefore + .01 && $velocity->z <= 0;
-			$pose->angle -= ($command?->turn ?? $this->controls->value(DoomActions::TURN)) * 2.5 * $dt;
-			$pose->angle += $command?->consumeYaw() ?? ($view?->consumeYaw() ?? 0);
-			$frozen = $player->reactionTics > 0;
+			$pose->angle -= ($dead ? 0 : ($command?->turn ?? $this->controls->value(DoomActions::TURN))) * 2.5 * $dt;
+			$pose->angle += $dead ? 0 : ($command?->consumeYaw() ?? ($view?->consumeYaw() ?? 0));
+			$frozen = $dead || $player->reactionTics > 0;
 
-			if($frozen) $player->reactionTics--;
+			if($player->reactionTics > 0) $player->reactionTics--;
 
 			$forward = $frozen ? 0.0 : ($command?->forward ?? $this->controls->value(DoomActions::FORWARD));
 			$strafe = $frozen ? 0.0 : ($command?->strafe ?? $this->controls->value(DoomActions::STRAFE));
@@ -119,11 +128,11 @@ final class PlayerMovementSystem
 				: 1.0;
 
 			$this->verticalPhysics->step($pose, $velocity, $body, $dt, $gravityScale);
-			$this->specials->cross($pose->previousX, $pose->previousY, $pose, $player);
+			if(!$dead) $this->specials->cross($pose->previousX, $pose->previousY, $pose, $player);
 
-			$use = $command
+			$use = !$dead && ($command
 				? $command->consumeUse()
-				: $this->controls->pressed(DoomActions::USE) || ($view?->consumeUse() ?? false);
+				: $this->controls->pressed(DoomActions::USE) || ($view?->consumeUse() ?? false));
 
 			if($use)
 			$this->specials->use($pose, $player);

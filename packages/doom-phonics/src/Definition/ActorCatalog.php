@@ -85,8 +85,9 @@ final class ActorCatalog
 
 		foreach($raw->properties as $name => $occurrences)
 		{
-			// Properties that are lists accumulate; ordinary DECORATE properties override.
-			if(in_array($name, ['dropitem','player.startitem','player.weaponslot','player.colorset'], true))
+			// Player declarations extend inherited lists. A class's first DropItem declaration
+			// replaces its parent's list, which lets `DropItem None` suppress corpse loot.
+			if(in_array($name, ['player.startitem','player.weaponslot','player.colorset'], true))
 				$actor->properties[$name] = [...($actor->properties[$name] ?? []), ...$occurrences];
 			else $actor->properties[$name] = $occurrences;
 		}

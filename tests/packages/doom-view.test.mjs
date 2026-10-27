@@ -152,7 +152,9 @@ test('indexed menu overlays sample the final source row and column', async() => 
 	assert.match(helper, /\$sourceRight = \(float\)\$image->width;/);
 	assert.match(helper, /\$sourceBottom = \(float\)\$image->height;/);
 	assert.doesNotMatch(helper, /(?:width|height)\s*-\s*1/);
-	assert.equal(renderer.match(/\$this->appendOverlayQuad\(/g)?.length, 2);
+	assert.equal(renderer.match(/\$this->appendOverlayQuad\(/g)?.length, 4);
+	assert.match(renderer, /closestIndex\(255, 128, 0\)/);
+	assert.match(renderer, /\$reticle && \$health->current > 0/);
 	assert.match(fragment, /ivec2\(floor\(textureUv\)\)/);
 	assert.match(fragment, /clamp\([\s\S]*size - 1\)/);
 

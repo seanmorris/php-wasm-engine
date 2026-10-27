@@ -279,7 +279,7 @@
   "integrity": {
     "autoload.php": "sha256-vmxWysNHasLeZZgr5hVR5S85BHLsOK430ASnicB/RA8=",
     "legacy.php": "sha256-F3EQwDIW4JEgI9jbDrYAU+wp0vs0rQmHHZ3Y9XESDjU=",
-    "src/Effects/Rumble.php": "sha256-K6fRvZ/JF/g6lVhyKSXZzHpx5ImQekYpKfFb7R7iEZ0=",
+    "src/Effects/Rumble.php": "sha256-6JW8hgqDNgAAg0AQU9fesWqdK13MoxWOVQFAbq4HyAs=",
     "src/Gameplay/Badnik.php": "sha256-0wXncw889vBKPWkIhn6tZiuEYb7TdfKOLfibFumC2XU=",
     "src/Gameplay/BadnikBehavior.php": "sha256-ZjstwVCz1yqEerYpOpZ9euYinDlWF+QZ7KSn6ZyuOSY=",
     "src/Gameplay/BadnikExplosion.php": "sha256-zZI7DaKxqzbcM1B/SSIx53rmh4FiI8Dc55mK/IBXR5Q=",
@@ -362,7 +362,7 @@
     "src/Physics/WaterRegion.php": "sha256-+0rp2gAu6NpVyWrDbnFUPYxAEYMeAWDqgPEgDeJHL/U=",
     "src/Physics/WaterRegions.php": "sha256-EoaMs6xKJlJe44hJDaMCUi/Qpy7efPj/+9rMHVy0F1k=",
     "src/Render/WaterRenderer.php": "sha256-usF4z2wOVwZc6QboCxovN3S6LST26ncSE0RWoY4t5/I=",
-    "browser/game.mjs": "sha256-HzmtgcAyRjhJTVEiuwekbp5pSYLRLBzYb3Bizp8EOGg=",
+    "browser/game.mjs": "sha256-tMwD+XMk6ecJtsHwISArSR6sIAZjYyTZPLtGfnfwFBk=",
     "shaders/water.frag": "sha256-4qDK993Cm8YGBkFRwdFROD6kroZMDvG6xM/3lXoiPek=",
     "shaders/water.vert": "sha256-cm9xHMcXaQN1nWTnBmR8CNxRhX2AMWbNORb8FBMiKtQ=",
     "modules/platformer.php": "sha256-jese0OZDpZZNAZ7FBMJkWI8XnO2qSaa7SD8V5NsEQuM=",

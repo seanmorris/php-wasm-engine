@@ -33,6 +33,16 @@ const gamePackages = [
 		, description: 'Falling-block game state, challenges, systems, and rendering.'
 	}
 	, {
+		directory: 'packages/php-slalom', slug: 'php-slalom', title: 'PHP Slalom'
+		, rootNamespace: 'PhpSlalom'
+		, description: 'Deterministic slalom simulation, replay codec, input settings, and rendering.'
+	}
+	, {
+		directory: 'packages/php-buster', slug: 'php-buster', title: 'PHP Buster'
+		, rootNamespace: 'PhpBuster'
+		, description: 'Blockade waves, actors, scoring, input settings, and interpolated rendering.'
+	}
+	, {
 		directory: 'packages/doom-phonics'
 		, slug: 'doom-phonics'
 		, title: 'Doom-Phonics'
@@ -48,6 +58,8 @@ const browserSources = [
 	, {file: 'browser/QuickControls.mjs', slug: 'api-browser-quick-controls', title: 'QuickControls', context: true}
 	, {file: 'browser/SdlAudio.mjs', slug: 'api-browser-sdl-audio', title: 'SdlAudio', context: true}
 	, {file: 'browser/SessionAssets.mjs', slug: 'api-browser-session-assets', title: 'SessionAssets', context: true}
+	, {file: 'browser/SafeStorage.mjs', slug: 'api-browser-safe-storage', title: 'SafeStorage', npm: '@seanmorris/phonics/storage'}
+	, {file: 'browser/SamplePlayer.mjs', slug: 'api-browser-sample-player', title: 'SamplePlayer', npm: '@seanmorris/phonics/audio-samples'}
 	, {file: 'browser/launcher/GameLauncher.mjs', slug: 'api-browser-game-launcher', title: 'GameLauncher', npm: '@seanmorris/phonics/launcher'}
 ];
 

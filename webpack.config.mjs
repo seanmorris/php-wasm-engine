@@ -7,29 +7,30 @@ import {runtimeDirectory} from './scripts/runtime.mjs';
 
 export default async (_env, argv) => {
 	const development = argv.mode!=='production';
+	const previewPatterns = [{from: 'preview', to: 'preview'}];
+
+	if(development)
+	previewPatterns.push(
+		{from: 'packages/php-tris/index.html', to: 'php-tris/index.html'}
+		, {from: 'packages/php-slalom/index.html', to: 'php-slalom/index.html'}
+		, {from: 'packages/doom-phonics/index.html', to: 'doom-phonics/index.html'}
+		, {from: 'packages/php-noid/index.html', to: 'php-noid/index.html'}
+	);
 
 	const config = {
 		context: root
-		, entry: './docs/bootstrap.mjs'
+		, entry: development ? './docs/bootstrap.mjs' : {}
 		, output: {path: path.join(root, 'docs/dist'),filename: 'demo.[contenthash].js',publicPath: 'auto',clean: true}
 		, devtool: development ? 'eval-source-map' : false
 		, module: {rules: [{test: /\.css$/,use: ['style-loader','css-loader']}]}
 		, plugins: [
-			new HtmlWebpackPlugin(
-				{template: './docs/index.html', filename: 'sane-phonics/index.html', sitePrefix: '../'}
+			...(development
+				? [new HtmlWebpackPlugin(
+					{template: './docs/index.html', filename: 'sane-phonics/index.html', sitePrefix: '../'}
+				)]
+				: []
 			)
-			, new CopyPlugin(
-				{
-					patterns: [{from: 'preview', to: 'preview'}
-						, {from: 'packages/php-tris/index.html', to: 'php-tris/index.html'}
-						, {from: 'packages/doom-phonics/index.html', to: 'doom-phonics/index.html'}
-						, {
-							from: 'packages/php-noid/index.html'
-							, to: 'php-noid/index.html'
-						}
-					]
-				}
-			)
+			, new CopyPlugin({patterns: previewPatterns})
 		]
 	};
 

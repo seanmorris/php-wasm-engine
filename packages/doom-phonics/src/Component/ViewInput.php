@@ -6,6 +6,7 @@ namespace DoomPhonics\Component;
 final class ViewInput
 {
 	public bool $fire = false;
+	public bool $altFire = false;
 	private bool $use = false;
 	private ?int $weaponSlot = null;
 	private int $weaponSteps = 0;
@@ -63,6 +64,15 @@ final class ViewInput
 		$this->yaw = 0;
 
 		return $value;
+	}
+
+	/** Drop pending gameplay actions and look motion after control has been lost. */
+	public function release(): void
+	{
+		$this->yaw = 0;
+		$this->fire = $this->altFire = $this->use = false;
+		$this->weaponSlot = null;
+		$this->weaponSteps = 0;
 	}
 
 	public function aimSlope(): float { return tan($this->pitch); }

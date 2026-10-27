@@ -16,6 +16,7 @@ use DoomPhonics\Component\WeaponOwner;
 use DoomPhonics\Definition\ActionDispatcher;
 use DoomPhonics\Game\Collision;
 use DoomPhonics\Game\ActorObstacles;
+use DoomPhonics\Game\BloodEffects;
 use DoomPhonics\Game\DoomGravity;
 use DoomPhonics\Game\DoomMatch;
 use DoomPhonics\Game\GameSettings;
@@ -71,6 +72,10 @@ final class EpisodeSystems implements SystemSet
 		throw new \LogicException('doom-match service must be a DoomMatch value');
 
 		$host = $match?->network->host() ?? true;
+		$cheats = $scope->service('doom-cheats');
+
+		if($cheats !== null && !$cheats instanceof CheatSystem)
+		throw new \LogicException('doom-cheats service must be a CheatSystem value');
 
 		$result = $factory->populate(
 			$scope->registry
@@ -139,6 +144,14 @@ final class EpisodeSystems implements SystemSet
 			, $content->weapons
 			, $host
 			, $host
+			, $cheats
+			, new BloodEffects(
+				$content->level
+				, $actors
+				, $factory
+				, $content->textures->iwadBloodSprite()
+				, $settings
+			)
 		);
 
 		$movement = new PlayerMovementSystem(
@@ -152,7 +165,7 @@ final class EpisodeSystems implements SystemSet
 			, $host
 		);
 
-		$pickups = new PickupSystem($actors);
+		$pickups = new PickupSystem($actors, $host);
 		$states = new ActorStateSystem($actions);
 		$beams = new BeamEffectSystem;
 		$physics = new ActorPhysicsSystem($collision, (float)($motion['gravity'] ?? DoomGravity::ACCELERATION));

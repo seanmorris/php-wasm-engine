@@ -25,6 +25,8 @@
 			"php tests/network-timing.php",
       "php packages/php-noid/tests/run.php",
       "php packages/php-tris/tests/run.php",
+			"php packages/php-slalom/tests/run.php",
+			"php packages/php-buster/tests/run.php",
       "php packages/doom-phonics/tests/run.php"
     ],
     "bench:ecs": "php benchmarks/ecs.php",
@@ -33,7 +35,7 @@
       "@lint:docs",
       "@lint:readability"
     ],
-    "lint:docs": "php scripts/check-phpdoc.php src packages/sane-phonics/src packages/php-noid/src packages/php-tris/src",
+    "lint:docs": "php scripts/check-phpdoc.php src packages/sane-phonics/src packages/php-noid/src packages/php-tris/src packages/php-slalom/src packages/php-buster/src",
     "lint:fix": "php-cs-fixer fix",
     "lint:readability": "sm-no-saccade-style --max-line-length=120 src packages tests examples benchmarks autoload.php scripts/check-phpdoc.php .php-cs-fixer.php"
   },

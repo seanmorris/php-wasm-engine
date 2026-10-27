@@ -14,6 +14,7 @@ final class CheatCommand
 	public const CHOPPERS = 'choppers';
 	public const POSITION = 'position';
 	public const WARP = 'warp';
+	public const OOPS_ALL_GIBS = 'oops-all-gibs';
 
 	private function __construct(public string $type, public ?string $argument = null) {}
 
@@ -22,4 +23,5 @@ final class CheatCommand
 	public static function power(string $name): self { return new self(self::POWER, $name); }
 
 	public static function warp(string $map): self { return new self(self::WARP, strtoupper($map)); }
+
 }

@@ -4,6 +4,7 @@ namespace DoomPhonics\Input;
 
 use DoomPhonics\Game\GameSettings;
 use Phonics\Input\Bindings;
+use Phonics\Input\Pad;
 use Phonics\Input\Source;
 
 /** Versioned gameplay bindings and look preferences, with optional browser persistence. */
@@ -23,7 +24,9 @@ final class InputSettings
 			$json = $read ? $read() : '';
 			$data = is_string($json) && strlen($json) <= 1048576 ? json_decode($json, true) : null;
 
-			if(!is_array($data) || ($data['version'] ?? null) !== 1) return;
+			if(!is_array($data) || !in_array($data['version'] ?? null, [1,2], true)) return;
+
+			if($data['version'] === 1) $data = $this->migrateV1($data);
 
 			if(is_array($data['bindings'] ?? null))
 			$this->bindings->restore($data['bindings'], [DoomActions::class, 'allowed']);
@@ -69,7 +72,7 @@ final class InputSettings
 		try
 		{
 			$this->sessionOnly = !$this->write || ($this->write)(json_encode([
-				'version' => 1
+				'version' => 2
 				, 'bindings' => $this->bindings
 				, 'look' => [
 					'mouseSensitivity' => $this->settings->lookSensitivity()
@@ -85,6 +88,39 @@ final class InputSettings
 		{
 			$this->sessionOnly = true;
 		}
+	}
+
+	/** Preserve edited v1 profiles while moving untouched old defaults to the new fire layout. */
+	private function migrateV1(array $data): array
+	{
+		$bindings = is_array($data['bindings'] ?? null) ? $data['bindings'] : [];
+		$fire = $bindings[DoomActions::FIRE][1][Source::CONTROLLER] ?? null;
+
+		if(is_array($fire) && count($fire) === 1
+			&& ($fire[0]['kind'] ?? null) === Source::PAD_BUTTON
+			&& ($fire[0]['code'] ?? null) === Pad::RB
+		){
+			$bindings[DoomActions::FIRE][1][Source::CONTROLLER] = [[
+				'kind' => Source::PAD_AXIS
+				, 'code' => Pad::RT
+				, 'sign' => 1
+			]];
+		}
+
+		$use = $bindings[DoomActions::USE][1][Source::KEYBOARD] ?? null;
+
+		if(is_array($use))
+		$bindings[DoomActions::USE][1][Source::KEYBOARD] = array_values(array_filter(
+			$use
+			, static fn(mixed $source): bool => !is_array($source)
+				|| ($source['kind'] ?? null) !== Source::MOUSE_BUTTON
+				|| ($source['code'] ?? null) !== Source::SECONDARY
+		));
+
+		$data['bindings'] = $bindings;
+		$data['version'] = 2;
+
+		return $data;
 	}
 
 	public function reset(string $device): void

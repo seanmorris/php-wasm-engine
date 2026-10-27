@@ -34,11 +34,21 @@ final class StatusFaceSystem
 
 		foreach($registry->query($this->players) as $entity)
 		{
-			$attacking = $registry->has($entity, PlayerCommand::class)
-				? $registry->get($entity, PlayerCommand::class)->fire
-				: $this->controls->down(DoomActions::FIRE) || ($registry->has($entity, ViewInput::class)
-					&& $registry->get($entity, ViewInput::class)->fire
-				);
+			if($registry->has($entity, PlayerCommand::class))
+			{
+				$command = $registry->get($entity, PlayerCommand::class);
+				$attacking = $command->fire || $command->altFire;
+			}
+			else
+			{
+				$view = $registry->has($entity, ViewInput::class)
+					? $registry->get($entity, ViewInput::class)
+					: null;
+				$attacking = $this->controls->down(DoomActions::FIRE)
+					|| $this->controls->down(DoomActions::ALT_FIRE)
+					|| ($view?->fire ?? false)
+					|| ($view?->altFire ?? false);
+			}
 
 			$registry->get($entity, StatusFace::class)->advance($attacking, $tics);
 		}

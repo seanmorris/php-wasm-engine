@@ -1,6 +1,6 @@
 # Phonics
 
-Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The repository contains two peer games: [Sane-Phonics](packages/sane-phonics/README.md) and [PHP-Noid](packages/php-noid/README.md), plus the [Tiled integration](packages/tiled-phonics/README.md).
+Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The repository contains [Sane-Phonics](packages/sane-phonics/README.md), [PHP-Noid](packages/php-noid/README.md), [PHPTris](packages/php-tris/README.md), [PHP Slalom](packages/php-slalom/README.md), [PHP Buster](packages/php-buster/README.md), and [Doom-Phonics](packages/doom-phonics/README.md), plus the [Tiled integration](packages/tiled-phonics/README.md).
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
@@ -13,7 +13,7 @@ const session = await Phonics.loadWorld('https://your-host/game.world', {
 await session.dispose();
 ```
 
-The loader reads `phonics.game`, `phonics.import.<alias>`, `phonics.start`, and optional `phonics.modules` from **Tiled custom properties** on a `.world` file. Imports are resolved before the game. `phonics.modules` is a JSON array stored as a string. A game is an export reference such as `@php-noid/game` or an absolute manifest URL with `#game`. The host has no game selection table. `/preview/` is the generic host; the site homepage provides documentation, `/sane-phonics/` plays Sane-Phonics; `/php-noid/` plays PHP-Noid.
+The loader reads `phonics.game`, `phonics.import.<alias>`, `phonics.start`, and optional `phonics.modules` from **Tiled custom properties** on a `.world` file. Imports are resolved before the game. `phonics.modules` is a JSON array stored as a string. A game is an export reference such as `@php-noid/game` or an absolute manifest URL with `#game`. The host has no game selection table. `/preview/` is the generic host, and each bundled game mounts lazily in its documentation overview under `/games/`.
 
 ## Author a world
 
@@ -90,4 +90,8 @@ npm pack ./dist
 
 Run `phonics --help` for all commands. The CLI ships in the packed npm artifact and works without this checkout; before registry publication, install that tarball locally and use `npx phonics`. Builds include declared runtime files, not arbitrary project contents. Publishing is a separate operation. See the [CLI guide](site/pages/cli.md).
 
-PHPTris is the independent falling-block puzzle package in `packages/php-tris`, playable at `/php-tris/`. Its three solo modes and five progressive challenge tracks use the same world loader, ECS, SDL rendering, and package contracts. See [its reference](packages/php-tris/README.md).
+PHPTris is the independent falling-block puzzle package in `packages/php-tris`, playable at `/games/php-tris/`. Its three solo modes and five progressive challenge tracks use the same world loader, ECS, SDL rendering, and package contracts. See [its reference](packages/php-tris/README.md).
+
+PHP Slalom is the deterministic Jet Slalom preservation port in `packages/php-slalom`, playable at `/games/php-slalom/`. Its simulation, checkpoint runs, score tables, input bindings, and compact replay codec are independent of the other games. See [its reference](packages/php-slalom/README.md).
+
+PHP Buster is the deterministic Blockade Buster port in `packages/php-buster`, playable at `/games/php-buster/`. It preserves the original wave loop and credits while adding editable input, pointer/touch play, interpolation, and a local score table. See [its reference](packages/php-buster/README.md).

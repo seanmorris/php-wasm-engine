@@ -90,10 +90,11 @@ export async function activate({module,canvas,world,assets,loadData,services,ses
 	const pointers = new Map(), buttons = new Map();
 	let records = {};
 	const recordKey = 'phptris:v1:' + source;
+	const storage = new services.SafeStorage;
 
 	try
 	{
-		records = JSON.parse(localStorage.getItem(recordKey)??'{}');
+		records = JSON.parse(storage.get(recordKey)??'{}');
 
 		if(!records || typeof records!=='object') records = {};
 	}
@@ -347,14 +348,8 @@ export async function activate({module,canvas,world,assets,loadData,services,ses
 			{
 				records[s.mode] = {score: s.score,elapsed: s.elapsed,level: s.level};
 
-				try
-				{
-					localStorage.setItem(recordKey, JSON.stringify(records));
-				}
-				catch
-				{
-					/* In-memory scores remain usable. */
-				} }
+				storage.set(recordKey, JSON.stringify(records));
+			}
 		}
 	};
 

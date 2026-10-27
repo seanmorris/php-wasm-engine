@@ -456,7 +456,12 @@ final class MenuRenderer
 			);
 		}
 
-		$region = ['id' => $id, 'rect' => $visible];
+		$region = [
+			'id' => $id
+			, 'label' => (string)$item['label']
+			, 'disabled' => (bool)$item['disabled']
+			, 'rect' => $visible
+		];
 
 		if($type !== '')
 		{

@@ -204,7 +204,7 @@ export function activate({module, canvas, services, session})
 	const quick = new services.QuickControls(frame, frame);
 
 	let fullscreenBusy = false, fullscreenError = '', menuOpen = true;
-	let cheats = '', pointerX = 0, pointerY = 0;
+	let cheats = '', pause = 0, pointerX = 0, pointerY = 0;
 
 	const logicalWidth = canvas.width, logicalHeight = canvas.height;
 	const aspect = logicalWidth / logicalHeight;
@@ -267,6 +267,7 @@ export function activate({module, canvas, services, session})
 	};
 
 	const optionsKey = 'doom-phonics.options.v1';
+	const storage = new services.SafeStorage;
 	const options = {
 		version: 1
 		, muted: false
@@ -274,14 +275,15 @@ export function activate({module, canvas, services, session})
 		, musicVolume: 1
 		, renderResolution: 'native'
 		, pitchMode: 'perspective'
+		, reticle: true
+		, bloodSplatter: 1
 	};
 
 	let optionsSessionOnly = false, migrateOptions = false;
 
-	try
 	{
 		let saved = null;
-		const raw = localStorage.getItem(optionsKey);
+		const raw = storage.get(optionsKey);
 
 		try { saved = raw ? JSON.parse(raw) : null; } catch {}
 
@@ -297,10 +299,16 @@ export function activate({module, canvas, services, session})
 			options.renderResolution = saved.renderResolution;
 
 			if(['perspective', 'classic'].includes(saved.pitchMode)) options.pitchMode = saved.pitchMode;
+
+			if(typeof saved.reticle === 'boolean') options.reticle = saved.reticle;
+
+			if(typeof saved.bloodSplatter === 'number' && Number.isFinite(saved.bloodSplatter)
+				&& saved.bloodSplatter >= 0 && saved.bloodSplatter <= 2
+			) options.bloodSplatter = saved.bloodSplatter;
 		}
 		else
 		{
-			const legacyMuted = localStorage.getItem('phonics-muted');
+			const legacyMuted = storage.get('phonics-muted');
 
 			if(legacyMuted === 'true' || legacyMuted === 'false')
 			{
@@ -309,10 +317,8 @@ export function activate({module, canvas, services, session})
 			}
 		}
 	}
-	catch
-	{
-		optionsSessionOnly = true;
-	}
+
+	optionsSessionOnly = storage.sessionOnly;
 
 	const audio = new services.SdlAudio(module, options.muted);
 	const wadAudio = new WadAudio(options.muted, options.effectsVolume);
@@ -375,18 +381,13 @@ export function activate({module, canvas, services, session})
 		, musicVolume: options.musicVolume
 		, renderResolution: options.renderResolution
 		, pitchMode: options.pitchMode
+		, reticle: options.reticle
+		, bloodSplatter: options.bloodSplatter
 	});
 
 	const saveOptions = () => {
-		try
-		{
-			localStorage.setItem(optionsKey, JSON.stringify(persistentOptions()));
-			optionsSessionOnly = false;
-		}
-		catch
-		{
-			optionsSessionOnly = true;
-		}
+		storage.set(optionsKey, JSON.stringify(persistentOptions()));
+		optionsSessionOnly = storage.sessionOnly;
 	};
 
 	if(migrateOptions) saveOptions();
@@ -459,6 +460,19 @@ export function activate({module, canvas, services, session})
 		if(['perspective', 'classic'].includes(patch?.pitchMode))
 		{
 			options.pitchMode = patch.pitchMode;
+			persist = true;
+		}
+
+		if(typeof patch?.reticle === 'boolean')
+		{
+			options.reticle = patch.reticle;
+			persist = true;
+		}
+
+		if(typeof patch?.bloodSplatter === 'number' && Number.isFinite(patch.bloodSplatter)
+			&& patch.bloodSplatter >= 0 && patch.bloodSplatter <= 2
+		) {
+			options.bloodSplatter = patch.bloodSplatter;
 			persist = true;
 		}
 
@@ -616,7 +630,16 @@ export function activate({module, canvas, services, session})
 	}, {signal: abort.signal});
 
 	window.addEventListener('keydown', event => {
-		if(menuOpen || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+		if(event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+
+		if(menuOpen && event.key.toLowerCase() === 'p')
+		{
+			pause++;
+
+			return;
+		}
+
+		if(menuOpen) return;
 
 		if(!/^[a-z0-9]$/i.test(event.key)) return;
 
@@ -626,32 +649,17 @@ export function activate({module, canvas, services, session})
 	const controlsKey = 'doom-phonics.controls.v1';
 
 	module.doomReadControls = () => {
-		try
-		{
-			return localStorage.getItem(controlsKey) ?? '';
-		}
-		catch
-		{
-			return '';
-		}
+		return storage.get(controlsKey) ?? '';
 	};
 
 	module.doomWriteControls = value => {
-		try
-		{
-			localStorage.setItem(controlsKey, value);
-
-			return true;
-		}
-		catch
-		{
-			return false;
-		}
+		return storage.set(controlsKey, value);
 	};
 
 	module.doomInput = () => {
-		const value = JSON.stringify({cheats});
+		const value = JSON.stringify({cheats, pause});
 		cheats = '';
+		pause = 0;
 
 		return value;
 	};

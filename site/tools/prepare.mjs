@@ -16,7 +16,10 @@ const games = [
 		slug: 'sane-phonics'
 		, title: 'Sane-Phonics'
 		, description: 'A streamed platformer with loops, vehicles, water, enemies, and three movement profiles.'
-		, chapters: [['index', 'Overview']
+		, world: 'sane-phonics/worlds/demo.world'
+		, canvas: [960, 540]
+		, canvasLabel: 'Sane-Phonics game canvas'
+		, chapters: [['index', 'Sane-Phonics']
 			, ['gameplay', 'Gameplay systems']
 			, ['loops', 'Loops and collision layers']
 			, [
@@ -29,7 +32,10 @@ const games = [
 		slug: 'php-noid'
 		, title: 'PHP-Noid'
 		, description: 'A 25-stage brick-breaker with stackable powers, enemy ships, and an arcade HUD.'
-		, chapters: [['index', 'Overview']
+		, world: 'php-noid/worlds/campaign.world'
+		, canvas: [960, 540]
+		, canvasLabel: 'PHP-Noid game canvas'
+		, chapters: [['index', 'PHP-Noid']
 			, ['playing', 'Playing PHP-Noid']
 			, ['campaign', 'Campaign authoring']
 			, [
@@ -41,7 +47,10 @@ const games = [
 		slug: 'php-tris'
 		, title: 'PHPTris'
 		, description: 'Three solo modes and five progressive falling-block challenge tracks.'
-		, chapters: [['index', 'Overview']
+		, world: 'php-tris/worlds/arcade.world'
+		, canvas: [960, 540]
+		, canvasLabel: 'PHPTris game canvas'
+		, chapters: [['index', 'PHPTris']
 			, ['playing', 'Playing and scoring']
 			, ['challenges', 'Challenge tracks']
 			, [
@@ -51,10 +60,41 @@ const games = [
 		]
 	}
 	, {
+		slug: 'php-slalom'
+		, title: 'PHP Slalom'
+		, description: 'A deterministic PHP port of the rare Jet Slalom game with saved bindings and compact replays.'
+		, world: 'php-slalom/worlds/slalom.world'
+		, canvas: [960, 600]
+		, canvasLabel: 'PHP Slalom game canvas'
+		, aspectClass: 'game-aspect-8-5'
+		, chapters: [['index', 'PHP Slalom']
+			, ['playing', 'Playing and replays']
+			, ['architecture', 'Architecture']
+		]
+	}
+	, {
+		slug: 'php-buster'
+		, title: 'PHP Buster'
+		, description:
+			'A deterministic PHP port of Blockade Buster with original waves, editable input, and local scores.'
+		, world: 'php-buster/worlds/buster.world'
+		, canvas: [800, 720]
+		, canvasLabel: 'PHP Buster game canvas'
+		, aspectClass: 'game-aspect-2-3'
+		, chapters: [['index', 'PHP Buster']
+			, ['playing', 'Playing and scoring']
+			, ['architecture', 'Architecture']
+		]
+	}
+	, {
 		slug: 'doom-phonics'
 		, title: 'Doom-Phonics'
 		, description: 'A WAD adapter, DECORATE actor runtime, multiplayer simulation, and direct GLES renderer.'
-		, chapters: [['index', 'Overview']
+		, world: 'doom-phonics/demo/episode-one-online.phonics-world.json'
+		, canvas: [960, 540]
+		, canvasLabel: 'Doom-Phonics game canvas'
+		, dataOrigins: ['*']
+		, chapters: [['index', 'Doom-Phonics']
 			, ['playing', 'Playing and controls']
 			, ['launcher', 'WAD stacks and launcher']
 			, ['wad-and-decorate', 'WAD and DECORATE']
@@ -110,6 +150,9 @@ for(const game of games)
 			if(clean.endsWith('.md') && chapterNames.has(local))
 			return `${start}${local === 'index' ? './' : local + '.html'}${fragment}${end}`;
 
+			if(clean === 'api/index.html')
+			return `${start}api/${fragment}${end}`;
+
 			if(clean.endsWith('loop-layout.svg'))
 			return `${start}../../images/games/sane-loop-layout.svg${fragment}${end}`;
 
@@ -130,8 +173,13 @@ for(const game of games)
 			slug === 'index' ? game.description : `${title} in ${game.title}.`
 		)}\nllms: games\nmenus:\n  documentation:\n    parent: game-${game.slug}\n    weight: ${weight}\n---\n`;
 
+		const embedClass = game.aspectClass ? ` ${game.aspectClass}` : '';
+		const dataOrigins = game.dataOrigins
+			? ` data-data-origins="${game.dataOrigins.join(',')}"`
+			: '';
+
 		const embed = slug === 'index'
-			? `\n<div class="game-embed" data-game-embed data-src="../../${game.slug}/?embed=1" data-title="${game.title}">\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}.png" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<p><a href="../../${game.slug}/" target="_blank" rel="noopener noreferrer">Open the standalone game <span aria-hidden="true">↗</span></a></p>\n</div>\n\n`
+			? `\n<div class="game-embed${embedClass}" data-game-embed data-world="../../engine/packages/${game.world}" data-host="../../preview/host.mjs" data-title="${game.title}"${dataOrigins}>\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}.png" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime" data-game-runtime data-game-embed="true" hidden>\n<div id="game-frame"><canvas width="${game.canvas[0]}" height="${game.canvas[1]}" tabindex="0" aria-label="${game.canvasLabel}"></canvas></div>\n<p id="fullscreen-error" role="alert"></p>\n<div class="game-embed-controls"><p id="status" role="status">Preparing ${game.title}…</p><button id="stop" type="button">Stop</button></div>\n</div>\n</div>\n\n`
 			: '';
 
 		await fs.writeFile(path.join(targetDirectory, `${slug}.md`), header + embed + body);

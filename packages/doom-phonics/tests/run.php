@@ -40,6 +40,7 @@ use DoomPhonics\Component\TransientEffect;
 use DoomPhonics\Component\Velocity;
 use DoomPhonics\Component\ViewLighting;
 use DoomPhonics\Component\ViewEffects;
+use DoomPhonics\Component\ViewInput;
 use DoomPhonics\Component\WeaponOverlay;
 use DoomPhonics\Definition\ActionDispatcher;
 use DoomPhonics\Definition\StateFrame;
@@ -52,12 +53,15 @@ use DoomPhonics\System\EpisodeNetworkSystem;
 use DoomPhonics\System\PickupSystem;
 use DoomPhonics\System\PlayerMovementSystem;
 use DoomPhonics\System\PlayerEffectSystem;
+use DoomPhonics\System\PlayerCommandSystem;
 use DoomPhonics\System\SectorEffectSystem;
 use DoomPhonics\Game\Collision;
 use DoomPhonics\Game\ActorObstacles;
+use DoomPhonics\Game\BloodEffects;
 use DoomPhonics\Game\DamageEvent;
 use DoomPhonics\Game\DamageResolver;
 use DoomPhonics\Game\FaceDirection;
+use DoomPhonics\Game\HitscanImpact;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Game\LineSpecials;
 use DoomPhonics\Game\PlayerState;
@@ -73,6 +77,7 @@ use DoomPhonics\Game\RenderResolution;
 use DoomPhonics\Game\SkillLevel;
 use DoomPhonics\Game\CheatCommand;
 use DoomPhonics\Game\CheatSequence;
+use DoomPhonics\Game\DoomInitialization;
 use DoomPhonics\Render\MapMeshBuilder;
 use DoomPhonics\Render\MapMesh;
 use DoomPhonics\Render\CameraHeight;
@@ -387,6 +392,7 @@ verifyWad(
 
 $palette = new Palette($stack);
 $textures = new TextureCatalog($stack);
+verifyWad($textures->iwadBloodSprite() === 'BLUD', 'base IWAD selects its available blood sprite spelling');
 $wall = $textures->texture('STARTAN3');
 $flat = $textures->flat('FLOOR4_8');
 $title = $textures->picture('TITLEPIC');
@@ -600,6 +606,8 @@ verifyWad(
 	$settings->skill()->index() === 2 && $settings->lookSensitivity() === 1.0
 		&& $settings->renderResolution() === RenderResolution::Native
 		&& $settings->pitchMode() === PitchMode::Perspective
+		&& $settings->reticle()
+		&& $settings->bloodSplatter() === 1.0
 	, 'game settings use campaign defaults'
 );
 
@@ -608,11 +616,15 @@ $settings->setLookSensitivity(1.5);
 $settings->setInvertVerticalLook(true);
 $settings->setRenderResolution(RenderResolution::Classic);
 $settings->setPitchMode(PitchMode::ClassicShear);
+$settings->setReticle(false);
+$settings->setBloodSplatter(1.75);
 
 verifyWad(
 	$settings->skill()->index() === 4 && $settings->lookSensitivity() === 1.5 && $settings->invertVerticalLook()
 		&& $settings->renderResolution() === RenderResolution::Classic
 		&& $settings->pitchMode() === PitchMode::ClassicShear
+		&& !$settings->reticle()
+		&& $settings->bloodSplatter() === 1.75
 	, 'menu settings retain typed choices'
 );
 
@@ -624,6 +636,16 @@ try
 catch(OutOfRangeException $error)
 {
 	verifyWad(true, 'invalid sensitivity rejected');
+}
+
+try
+{
+	$settings->setBloodSplatter(2.25);
+	verifyWad(false, 'invalid blood splatter amount rejected');
+}
+catch(OutOfRangeException $error)
+{
+	verifyWad(true, 'invalid blood splatter amount rejected');
 }
 
 $melt = new MeltColumns(160, 200);
@@ -666,6 +688,30 @@ verifyWad(
 	, 'screen melt reaches the full logical height and emits one R32F offset per column'
 );
 
+$doomInit = DoomInitialization::fromWorld(['init' => [
+	'startMap' => 'map04'
+	, 'cheats' => ['iddqd', 'idkfa']
+	, 'scenario' => 'game-owned extension data'
+]]);
+
+verifyWad(
+	$doomInit->startMap === 'MAP04' && $doomInit->cheats === ['iddqd','idkfa']
+	, 'Doom initialization reads a normalized start map and ordered cheat list from world init data'
+);
+
+$singleCheatInit = DoomInitialization::fromWorld(['init' => ['cheats' => 'idfa']]);
+verifyWad(
+	$singleCheatInit->startMap === null && $singleCheatInit->cheats === ['idfa']
+	, 'Doom initialization accepts one cheat string and leaves the generic start scope intact'
+);
+
+$invalidInitRejected = false;
+
+try { DoomInitialization::fromWorld(['init' => ['cheats' => ['iddqd', 7]]]); }
+catch(UnexpectedValueException) { $invalidInitRejected = true; }
+
+verifyWad($invalidInitRejected, 'Doom initialization rejects malformed game-owned cheat data');
+
 $cheatSequence = new CheatSequence;
 verifyWad($cheatSequence->feed('ordinarymovementidff') === [], 'normal key input does not resemble a cheat');
 $commands = $cheatSequence->feed('a');
@@ -685,6 +731,12 @@ verifyWad(
 
 $commands = $cheatSequence->feed('idclev19');
 verifyWad(count($commands) === 1 && $commands[0]->argument === 'E1M9', 'IDCLEV parses a typed episode map target');
+
+$commands = $cheatSequence->feed('IDOOPSALLGIBS');
+verifyWad(
+	count($commands) === 1 && $commands[0]->type === CheatCommand::OOPS_ALL_GIBS
+	, 'IDOOPSALLGIBS is recognized as a runtime cheat command'
+);
 
 $cheatSequence->feed('idsp');
 verifyWad($cheatSequence->awaiting(), 'partial IDSPISPOPD input reserves P for the cheat rather than pause');
@@ -730,6 +782,12 @@ verifyWad(
 
 $warp = $cheats->apply(CheatCommand::warp('E1M9'), $cheatRegistry, $cheatEntity);
 verifyWad($warp->warpMap === 'E1M9', 'IDCLEV returns a lifecycle-owned warp request');
+
+$cheats->apply(CheatCommand::named(CheatCommand::OOPS_ALL_GIBS), $cheatRegistry, $cheatEntity);
+verifyWad(
+	$cheatPlayer->message === 'RAILGUN NOT AVAILABLE' && $cheats->monsterWeapon() === null
+	, 'IDOOPSALLGIBS remains inactive when the current WAD stack has no Railgun'
+);
 
 $resource = dirname(__DIR__) . '/resources/';
 
@@ -779,8 +837,9 @@ verifyWad(
 
 $stackCheatRegistry = new Registry;
 $stackCheatEntity = $stackCheatRegistry->create(new PlayerState, new HitPoints(100, 100));
+$stackCheatSystem = new CheatSystem($weaponSlots);
 
-(new CheatSystem($weaponSlots))->apply(
+$stackCheatSystem->apply(
 	CheatCommand::named(CheatCommand::ARSENAL)
 	, $stackCheatRegistry
 	, $stackCheatEntity
@@ -793,10 +852,54 @@ verifyWad(
 	, 'all-weapons cheats grant every weapon available from the active WAD stack'
 );
 
+$stackCheatSystem->apply(
+	CheatCommand::named(CheatCommand::OOPS_ALL_GIBS)
+	, $stackCheatRegistry
+	, $stackCheatEntity
+);
+$stackCheatPlayer = $stackCheatRegistry->get($stackCheatEntity, PlayerState::class);
+
+verifyWad(
+	array_keys(array_filter($stackCheatPlayer->weapons)) === ['Railgun']
+		&& $stackCheatPlayer->pendingWeapon === 'Railgun'
+		&& $stackCheatPlayer->ammo['Cell'] === $stackCheatPlayer->ammoMaximum['Cell']
+		&& isset($stackCheatPlayer->infiniteAmmo['Cell'])
+		&& $stackCheatSystem->monsterWeapon() === 'Railgun'
+	, 'IDOOPSALLGIBS replaces player guns and activates infinite-cell runtime rail attacks'
+);
+
+$respawnCheatEntity = $stackCheatRegistry->create(new PlayerState, new HitPoints(100, 100));
+$stackCheatSystem->applyActive($stackCheatRegistry, $respawnCheatEntity);
+$respawnCheatPlayer = $stackCheatRegistry->get($respawnCheatEntity, PlayerState::class);
+
+verifyWad(
+	array_keys(array_filter($respawnCheatPlayer->weapons)) === ['Railgun']
+		&& isset($respawnCheatPlayer->infiniteAmmo['Cell'])
+		&& $stackCheatSystem->monsterWeapon() === 'Railgun'
+	, 'IDOOPSALLGIBS reapplies its player and monster rules after a player respawn'
+);
+
+$stackCheatSystem->apply(
+	CheatCommand::named(CheatCommand::OOPS_ALL_GIBS)
+	, $stackCheatRegistry
+	, $respawnCheatEntity
+);
+
+verifyWad(
+	array_keys(array_filter($respawnCheatPlayer->weapons)) === $stackCheatWeapons
+		&& $respawnCheatPlayer->infiniteAmmo === []
+		&& $stackCheatSystem->monsterWeapon() === null
+		&& $respawnCheatPlayer->message === 'OOPS! ALL GIBS OFF'
+	, 'entering IDOOPSALLGIBS a second time restores the saved loadout and disables the ruleset'
+);
+
 $slotPrecedence = DecorateParser::catalog([
 	'slots.dec' => <<<'DECORATE'
 ACTOR Weapon {}
 ACTOR TestGun : Weapon { Weapon.SlotNumber 7 }
+ACTOR OtherGun : Weapon { Weapon.SlotNumber 5 }
+ACTOR KeyOnlyGun : Weapon {}
+ACTOR LaterKeyGun : Weapon {}
 ACTOR DoomPlayer { Player.WeaponSlot 2, TestGun }
 DECORATE
 ]);
@@ -805,11 +908,60 @@ $precedenceSlots = WeaponSlots::fromCatalog($slotPrecedence);
 verifyWad($precedenceSlots->slot(2) === ['TestGun'], 'DoomPlayer weapon slots take precedence');
 verifyWad($precedenceSlots->slot(7) === [], 'Weapon.SlotNumber is only a fallback');
 
+$keyconfSlots = WeaponSlots::fromCatalog($slotPrecedence, null, [
+	'first.wad#KEYCONF' => <<<'KEYCONF'
+weaponsection Stress
+setslot 2 TestGun KeyOnlyGun
+addslot 6 LaterKeyGun
+KEYCONF
+	, 'second.wad#KEYCONF' => <<<'KEYCONF'
+setslot 9 OtherGun KeyOnlyGun
+addslotdefault 4 LaterKeyGun
+KEYCONF
+]);
+
+verifyWad(
+	$keyconfSlots->slot(2) === ['TestGun','KeyOnlyGun']
+		&& $keyconfSlots->slot(5) === ['OtherGun']
+		&& $keyconfSlots->slot(6) === ['LaterKeyGun']
+		&& $keyconfSlots->slot(9) === []
+	, 'KEYCONF appends to existing slots while the first global weapon-name assignment wins'
+);
+
+verifyWad(
+	count(array_filter(
+		array_merge(...array_values($keyconfSlots->all()))
+		, static fn(string $weapon): bool => strcasecmp($weapon, 'KeyOnlyGun') === 0
+	)) === 1
+	, 'layered KEYCONF documents cannot assign one weapon name more than once'
+);
+
 $demo = dirname(__DIR__) . '/demo/';
+$keyconfFixtureLumps = [
+	'DECORATE' => "ACTOR KeyConfFixtureGun : Pistol\n{\n}\n"
+	, 'KEYCONF' => "weaponsection Fixture\nsetslot 9 KeyConfFixtureGun Pistol\n"
+];
+$keyconfFixtureData = '';
+$keyconfFixtureDirectory = '';
+$keyconfFixtureOffset = 12;
+
+foreach($keyconfFixtureLumps as $name => $data)
+{
+	$keyconfFixtureData .= $data;
+	$keyconfFixtureDirectory .= pack('V2a8', $keyconfFixtureOffset, strlen($data), $name);
+	$keyconfFixtureOffset += strlen($data);
+}
+
+$keyconfFixtureWad = 'PWAD'
+	. pack('V2', count($keyconfFixtureLumps), 12 + strlen($keyconfFixtureData))
+	. $keyconfFixtureData
+	. $keyconfFixtureDirectory;
+$keyconfFixtureUrl = 'memory:keyconf-fixture.wad';
 
 $sourceDefinition = new SourceDefinition('episode', '@doom/wad', [
 	['url' => $path, 'role' => 'iwad']
 	, ['url' => $weaponPath, 'role' => 'pwad']
+	, ['url' => $keyconfFixtureUrl, 'role' => 'pwad']
 	, ['url' => $demo . 'SKULLTAG-WEAPONS.DEC', 'role' => 'decorate']
 	, ['url' => $demo . 'SKULLTAG-WEAPONS.SNDINFO', 'role' => 'sndinfo']
 	, ['url' => $fontPath, 'role' => 'pwad']
@@ -818,7 +970,9 @@ $sourceDefinition = new SourceDefinition('episode', '@doom/wad', [
 
 $source = (new WadAdapter)->open(
 	$sourceDefinition
-	, new AdapterContext(null, static function(string $url): string {
+	, new AdapterContext(null, static function(string $url) use ($keyconfFixtureUrl, $keyconfFixtureWad): string {
+		if($url === $keyconfFixtureUrl) return $keyconfFixtureWad;
+
 		$bytes = file_get_contents($url);
 
 		if(!is_string($bytes)) throw new RuntimeException("Cannot read $url");
@@ -841,6 +995,15 @@ verifyWad(
 verifyWad(
 	$stackedContent->weapons->slot(4) === ['Chaingun','Minigun']
 	, 'active WAD scope owns its composed weapon banks'
+);
+
+verifyWad(
+	$stackedContent->weapons->slot(9) === ['KeyConfFixtureGun']
+		&& count(array_filter(
+			$stackedContent->weapons->weapons()
+			, static fn(string $weapon): bool => strcasecmp($weapon, 'Pistol') === 0
+		)) === 1
+	, 'WAD adapter loads embedded KEYCONF after DECORATE without duplicating an existing weapon'
 );
 
 $plainSource = new WadSource($stack);
@@ -934,6 +1097,144 @@ $effectStart = array_values(array_filter($effectMap->things, static fn(array $th
 $effectSector = $effectMap->sectors[$effectMap->sectorAt($effectStart['x'], $effectStart['y'])];
 $effectRegistry = new Registry;
 
+$bloodActors = DecorateParser::catalog(['blood-fixture.dec' => <<<'DECORATE'
+ACTOR Actor
+{
+}
+ACTOR BloodTarget : Actor
+{
+	BloodType NormalBlood, SplatterBlood
+}
+ACTOR NoBloodTarget : BloodTarget
+{
+	+NOBLOOD
+}
+ACTOR SplatterAttack : Actor
+{
+	+BLOODSPLATTER
+}
+ACTOR NormalBlood : Actor
+{
+	States
+	{
+	Spawn:
+		BLUD A 8
+		Stop
+	}
+}
+ACTOR SplatterBlood : Actor
+{
+	States
+	{
+	Spawn:
+		BLUD C 8
+		Stop
+	}
+}
+DECORATE]);
+$bloodFactory = new ActorFactory($bloodActors);
+$bloodRegistry = new Registry;
+$bloodTarget = $bloodRegistry->create(
+	new Transform($effectStart['x'], $effectStart['y'], 32)
+	, new ActorState($bloodActors->named('BloodTarget'))
+);
+$noBloodTarget = $bloodRegistry->create(new ActorState($bloodActors->named('NoBloodTarget')));
+$bloodAttack = $bloodRegistry->create(
+	new Transform($effectStart['x'] - 16, $effectStart['y'], 32)
+	, new ActorState($bloodActors->named('SplatterAttack'))
+);
+$bloodSettings = new GameSettings;
+$bloodEffects = new BloodEffects(new Level($effectMap), $bloodActors, $bloodFactory, 'BLUD', $bloodSettings);
+$bloodImpact = new HitscanImpact(16, $effectStart['x'], $effectStart['y'], 32, $bloodTarget);
+$splatterDrops = $bloodEffects->spawn(
+	$bloodRegistry
+	, $bloodTarget
+	, $bloodImpact
+	, $bloodRegistry->get($bloodAttack, Transform::class)
+	, $bloodAttack
+);
+
+verifyWad(
+	count($splatterDrops) === 5 && !array_filter(
+		$splatterDrops
+		, static fn(int $entity): bool => $bloodRegistry->get($entity, ActorState::class)->definition->name !== 'SplatterBlood'
+	)
+	, 'BLOODSPLATTER selects the second DECORATE BloodType actor'
+);
+
+$normalDrops = $bloodEffects->spawn(
+		$bloodRegistry
+		, $bloodTarget
+		, $bloodImpact
+		, $bloodRegistry->get($bloodAttack, Transform::class)
+	);
+verifyWad(
+	count($normalDrops) === 5 && !array_filter(
+		$normalDrops
+		, static fn(int $entity): bool => $bloodRegistry->get($entity, ActorState::class)->definition->name !== 'NormalBlood'
+	)
+	, 'ordinary damage selects the first DECORATE BloodType actor'
+);
+
+verifyWad(
+	$bloodEffects->spawn(
+		$bloodRegistry
+		, $noBloodTarget
+		, $bloodImpact
+		, $bloodRegistry->get($bloodAttack, Transform::class)
+		, $bloodAttack
+	) === []
+	, 'NOBLOOD suppresses damage spray'
+);
+
+$bloodSettings->setBloodSplatter(2);
+verifyWad(
+	count($bloodEffects->spawn(
+		$bloodRegistry
+		, $bloodTarget
+		, $bloodImpact
+		, $bloodRegistry->get($bloodAttack, Transform::class)
+	)) === 10
+	, 'blood splatter setting scales the live droplet count upward'
+);
+$bloodSettings->setBloodSplatter(0);
+verifyWad(
+	$bloodEffects->spawn(
+		$bloodRegistry
+		, $bloodTarget
+		, $bloodImpact
+		, $bloodRegistry->get($bloodAttack, Transform::class)
+	) === []
+	, 'zero blood splatter disables the effect'
+);
+
+$fallbackActors = DecorateParser::catalog(['blood-fallback.dec' => <<<'DECORATE'
+ACTOR Actor
+{
+}
+ACTOR MissingBloodTarget : Actor
+{
+	BloodType MissingBlood
+}
+DECORATE]);
+$fallbackRegistry = new Registry;
+$fallbackTarget = $fallbackRegistry->create(new ActorState($fallbackActors->named('MissingBloodTarget')));
+$fallbackSource = new Transform($effectStart['x'] - 16, $effectStart['y'], 32);
+$fallbackDrops = (new BloodEffects(
+	new Level($effectMap), $fallbackActors, new ActorFactory($fallbackActors), 'BLOD'
+))->spawn(
+	$fallbackRegistry
+	, $fallbackTarget
+	, new HitscanImpact(16, $effectStart['x'], $effectStart['y'], 32, $fallbackTarget)
+	, $fallbackSource
+);
+
+verifyWad(
+	count($fallbackDrops) === 5
+		&& $fallbackRegistry->get($fallbackDrops[0], ActorState::class)->current()?->sprite === 'BLOD'
+	, 'missing blood actors fall back to the selected base-IWAD sprite'
+);
+
 $effectEntity = $factory->spawn(
 	$effectRegistry
 	, $bulletPuff
@@ -1022,6 +1323,27 @@ verifyWad(
 $replication = EpisodeNetworkSystem::replication();
 require __DIR__ . '/network-projectiles.php';
 require __DIR__ . '/network-beams.php';
+$networkDeath = new PlayerState;
+$networkDeath->deathTime = .8;
+$networkDeath->viewHeight = 13;
+$networkDeath->previousViewHeight = 14;
+$staleDeath = new PlayerState;
+$staleDeath->deathTime = .2;
+$staleDeath->viewHeight = 34;
+$staleDeath->previousViewHeight = 35;
+$decodedDeath = $replication->codec('doom.player-state')->decode(
+	$replication->codec('doom.player-state')->encode($staleDeath)
+	, $networkDeath
+);
+
+verifyWad(
+	$decodedDeath === $networkDeath
+		&& $networkDeath->deathTime === .8
+		&& $networkDeath->viewHeight === 13.0
+		&& $networkDeath->previousViewHeight === 14.0
+	, 'stale player snapshots cannot restart an in-progress network death camera'
+);
+
 $remotePose = new Transform(10, 20, 30, .25);
 $remoteVelocity = new Velocity(1, 2, 3);
 
@@ -1347,8 +1669,9 @@ foreach([194 => [166,170],197 => [170,173]] as $lineIndex => [$firstLeaf,$second
 }
 
 $e1m1Level = new Level($e1m1);
-$e1m1Atlas = IndexedAtlas::forLevel($e1m1Level, $textures);
+$e1m1Atlas = IndexedAtlas::forLevel($e1m1Level, $textures, 1024, null, $palette);
 verifyWad($e1m1Atlas->id('ui', 'backdrop') >= 0, 'menu backdrop is packed with the map atlas');
+verifyWad($e1m1Atlas->id('ui', 'reticle') >= 0, 'palette-matched target reticle is packed with the map atlas');
 verifyWad($e1m1Atlas->id('picture', 'TITLEPIC') >= 0, 'title screen is packed with the map atlas');
 verifyWad($e1m1Atlas->id('picture', 'M_NGAME') >= 0, 'menu labels are packed with the map atlas');
 verifyWad($e1m1Atlas->id('picture', 'STCFN065') >= 0, 'menu text font is packed with the map atlas');
@@ -1745,6 +2068,7 @@ verifyWad(
 );
 
 require __DIR__ . '/pickups.php';
+require __DIR__ . '/drops.php';
 
 $facePickupRegistry = new Registry;
 
@@ -1788,12 +2112,12 @@ verifyWad($player->ammo['Clip'] < 60, 'weapon action consumed DECORATE ammo');
 $referenceActions = [
 	'A_BFG10K_FIRE_LAUNCH','A_BFG10K_FIRE_START','A_BFG10K_IDLE'
 	, 'A_BFG9K_FIRE_LAUNCH','A_BFG9K_FIRE_START','A_BarrelDestroy','A_BruisAttack'
-	, 'A_CHAINGUN_FIRE','A_Chase','A_CyberAttack','A_Explode','A_FaceTarget'
+	, 'A_CHAINGUN_FIRE','A_CPosAttack','A_CPosRefire','A_Chase','A_CyberAttack','A_Explode','A_FaceTarget'
 	, 'A_GRENADE_FIRE','A_HeadAttack','A_Look','A_NoBlocking','A_PISTOL_FIRE'
 	, 'A_PLASMA_FIRE','A_PUNCH_MELEE','A_Pain','A_PosAttack','A_RAILGUN_FIRE'
 	, 'A_ROCKET_FIRE','A_Respawn','A_SAW_IDLE','A_SAW_INIT','A_SAW_MELEE'
 	, 'A_SAW_MELEE_SILENT','A_SHOTGUN_FIRE','A_SPosAttackUseAtkSound'
-	, 'A_SUPERSHOTGUN_FIRE','A_SUPERSHOTGUN_RELOAD','A_SargAttack','A_Scream'
+	, 'A_SUPERSHOTGUN_FIRE','A_SUPERSHOTGUN_RELOAD','A_SargAttack','A_Scream','A_PlayerScream'
 	, 'A_SetFloorClip','A_SkullAttack','A_SpidRefire','A_TroopAttack'
 	, 'A_UnSetFloorClip','A_XScream','A_GunFlash'
 ];
@@ -2159,6 +2483,54 @@ verifyWad(
 	, 'damage at the DECORATE gib threshold selects the Former Human XDeath sequence'
 );
 
+$deadPlayer = $spawnTarget($deathRegistry, $playerDefinition, 160, 1);
+$deathRegistry->add($deadPlayer, new PlayerCommand);
+$deathRegistry->add($deadPlayer, new ViewInput);
+$deadCommand = $deathRegistry->get($deadPlayer, PlayerCommand::class);
+$deadCommand->apply([
+	'forward' => 1
+	, 'strafe' => 1
+	, 'turn' => 1
+	, 'yaw' => .5
+	, 'pitch' => .25
+	, 'fire' => true
+	, 'altFire' => true
+	, 'use' => true
+	, 'weaponSlot' => 5
+	, 'weaponSteps' => 1
+]);
+$damageResolver->apply($deathRegistry, new DamageEvent($deadPlayer, $damageSource, 101));
+$deadState = $deathRegistry->get($deadPlayer, PlayerState::class);
+$deadEffects = $deathRegistry->get($deadPlayer, ViewEffects::class);
+
+verifyWad(
+	$deadState->deathTime === 0.0
+		&& $deathRegistry->get($deadPlayer, ActorState::class)->label === 'Death'
+		&& !$deathRegistry->get($deadPlayer, Body::class)->shootable
+		&& $deadEffects->damageTics() === 100
+		&& $deadEffects->colors($deadState)->palettePage === ViewColorState::FIRST_DAMAGE_PALETTE
+			+ ViewColorState::DAMAGE_PALETTE_COUNT - 1
+	, 'lethal player damage begins the corpse state and holds the strongest red PLAYPAL page'
+);
+
+(new PlayerEffectSystem)->update($deathRegistry, .5);
+(new PlayerCommandSystem(new Controls))->update($deathRegistry, 1 / 35);
+$deadActions = $deadCommand->actions();
+
+verifyWad(
+	abs($deadState->deathTime - .5) < 1e-9
+		&& $deadState->viewHeight < PlayerState::VIEW_HEIGHT
+		&& $deadState->viewHeight > PlayerState::DEATH_VIEW_HEIGHT
+		&& !$deadState->canRestart()
+		&& $deadActions['forward'] === 0.0 && $deadActions['strafe'] === 0.0
+		&& $deadActions['turn'] === 0.0 && $deadActions['yaw'] === 0.0
+		&& !$deadActions['fire'] && !$deadActions['altFire'] && !$deadActions['use']
+	, 'dead players lose gameplay control while their camera descends'
+);
+
+(new PlayerEffectSystem)->update($deathRegistry, .6);
+verifyWad($deadState->canRestart(), 'dead players can restart after the death presentation delay');
+
 $thrustBarrel = $spawnTarget($deathRegistry, $barrelDefinition, 32, 2035);
 $thrustPose = $deathRegistry->get($thrustBarrel, Transform::class);
 $thrustVelocity = $deathRegistry->get($thrustBarrel, Velocity::class);
@@ -2381,6 +2753,16 @@ verifyWad(
 	, 'railgun action emits its stack-local sound'
 );
 
+$railCheat = new CheatSystem($weaponSlots);
+$railCheat->apply(CheatCommand::named(CheatCommand::OOPS_ALL_GIBS), $railRegistry, $railPlayerEntity);
+$infiniteCells = $railPlayer->ammo['Cell'];
+$railActions->dispatch($railWeapon, new StateFrame('RLGG', 'E', 12, false, 'A_RAILGUN_FIRE'), $railRegistry);
+
+verifyWad(
+	$railPlayer->ammo['Cell'] === $infiniteCells
+	, 'IDOOPSALLGIBS Railgun attacks do not consume the player cell reserve'
+);
+
 $beamSystem = new BeamEffectSystem;
 $beamSystem->update($railRegistry, .375);
 
@@ -2431,6 +2813,73 @@ verifyWad(
 $sound->events = [];
 $enemyActions->dispatch($enemy, new StateFrame('POSS', 'F', 8, false, 'A_PosAttack'), $enemySoundRegistry);
 verifyWad($sound->events[0]->cue->lump() === 'DSPISTOL', 'Former Human attacks emit their DECORATE AttackSound');
+
+$sound->events = [];
+$enemyActions->dispatch($enemyPlayer, new StateFrame('PLAY', 'I', 10, false, 'A_PlayerScream'), $enemySoundRegistry);
+verifyWad($sound->events[0]->cue->lump() === 'DSPLDETH', 'A_PlayerScream emits the player death sound');
+
+$sound->events = [];
+
+$monsterRailRegistry = new Registry;
+$monsterRailPlayer = $railFactory->spawn(
+	$monsterRailRegistry
+	, $railPlayerDefinition
+	, $start
+	, $map->sectors[$map->sectorAt($start['x'], $start['y'])]
+);
+$monsterRailEnemy = $railFactory->spawn(
+	$monsterRailRegistry
+	, $addonDefinitions->actors->named('ZombieMan')
+	, [
+		'x' => $start['x'] + 64
+		, 'y' => $start['y']
+		, 'z' => 0
+		, 'angle' => 180
+		, 'type' => 3004
+		, 'index' => -1
+		, 'flags' => []
+	]
+	, $map->sectors[$map->sectorAt($start['x'] + 64, $start['y'])]
+);
+$monsterRailCheat = new CheatSystem($weaponSlots);
+$monsterRailCheat->apply(
+	CheatCommand::named(CheatCommand::OOPS_ALL_GIBS)
+	, $monsterRailRegistry
+	, $monsterRailPlayer
+);
+$monsterRailRegistry->get($monsterRailEnemy, MonsterBrain::class)->target = $monsterRailPlayer;
+$monsterRailActions = new ActionDispatcher;
+
+new CombatSystem(
+	$level
+	, $addonDefinitions->actors
+	, $railFactory
+	, new Collision($level)
+	, new Controls
+	, $monsterRailActions
+	, null
+	, $sound
+	, $addonDefinitions->sounds
+	, \DoomPhonics\Game\DoomGravity::ACCELERATION
+	, null
+	, $weaponSlots
+	, true
+	, true
+	, $monsterRailCheat
+);
+
+$monsterRailActions->dispatch(
+	$monsterRailEnemy
+	, new StateFrame('POSS', 'F', 8, false, 'A_PosAttack')
+	, $monsterRailRegistry
+);
+
+verifyWad(
+	$monsterRailRegistry->get($monsterRailPlayer, HitPoints::class)->current === 0
+		&& count($monsterRailRegistry->query(BeamEffect::class)) === 1
+		&& $sound->events[array_key_last($sound->events)]->cue->lump() === 'RAILGF1'
+	, 'IDOOPSALLGIBS redirects gun-bearing monster attacks through the Railgun runtime primitive'
+);
 
 $sound->events = [];
 
@@ -2705,6 +3154,39 @@ verifyWad(
 	, 'oblique bullet puff drift follows the struck wall normal'
 );
 
+$shootWeapon = $shootRegistry->get($shooter, PlayerState::class)->weaponEntity;
+verifyWad($shootWeapon !== null, 'hitscan test player has an equipped weapon actor');
+$puffsBeforeFallbacks = count($shootRegistry->query(TransientEffect::class));
+
+$shootActions->dispatch(
+	$shootWeapon
+	, new StateFrame('TEST', 'A', 0, false, 'A_FireBullets', [0,0,1,1,0,1])
+	, $shootRegistry
+);
+$zeroPuffs = $shootRegistry->query(TransientEffect::class);
+
+verifyWad(
+	count($zeroPuffs) === $puffsBeforeFallbacks + 1
+		&& $shootRegistry->get($zeroPuffs[array_key_last($zeroPuffs)], ActorState::class)->definition->name === 'BulletPuff'
+	, 'numeric zero A_FireBullets puff argument uses the default BulletPuff actor'
+);
+
+$shootActions->dispatch(
+	$shootWeapon
+	, new StateFrame('TEST', 'A', 0, false, 'A_FireBullets', [0,0,1,1,'UnavailablePuff',1])
+	, $shootRegistry
+);
+$missingPuffs = $shootRegistry->query(TransientEffect::class);
+
+verifyWad(
+	count($missingPuffs) === count($zeroPuffs) + 1
+		&& $shootRegistry->get(
+			$missingPuffs[array_key_last($missingPuffs)]
+			, ActorState::class
+		)->definition->name === 'BulletPuff'
+	, 'unknown optional puff actors fall back without interrupting combat'
+);
+
 verifyWad(
 	$shootSpecials->activate(572, 'shoot', 183, $shootRegistry->get($shooter, PlayerState::class))
 	, 'gun trigger remains responsive while its tagged door is busy'
@@ -2759,6 +3241,33 @@ $effects->update($damageRegistry, 1 / 35);
 verifyWad(
 	$damageRegistry->get($damageEntity, PlayerState::class)->secrets === 1 && $effectLevel->sectors[68]->special === 0
 	, 'secret sector is claimed and cleared once'
+);
+
+$damagePose->x = $damageX;
+$damagePose->y = $damageY;
+$damagePose->z = $effectLevel->sectors[13]->floor;
+$damageHealth = $damageRegistry->get($damageEntity, HitPoints::class);
+$damageHealth->current = 1;
+
+for($i = 0; $i < 31; $i++)$effects->update($damageRegistry, 1 / 35);
+
+$floorDeath = $damageRegistry->get($damageEntity, PlayerState::class);
+$floorDeathState = $damageRegistry->get($damageEntity, ActorState::class);
+$floorDeath->advanceDeath(.25);
+$floorDeathState->frame = 2;
+$floorDeathState->ticks = 3;
+$floorDeathState->entered = true;
+$fallenHeight = $floorDeath->viewHeight;
+
+for($i = 0; $i < 32; $i++)$effects->update($damageRegistry, 1 / 35);
+
+verifyWad(
+	$damageHealth->current === -4
+		&& $floorDeath->deathTime === .25
+		&& $floorDeath->viewHeight === $fallenHeight
+		&& $floorDeathState->frame === 2
+		&& $floorDeathState->ticks === 3.0
+	, 'repeated damaging-floor pulses cannot replay a dead player camera or death state'
 );
 
 $exitLevel = new Level($stack->map('E1M8'));

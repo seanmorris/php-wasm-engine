@@ -45,6 +45,7 @@ const hybrid = {
 		, from: {source: 'platformer', scope: 'zone', entry: 'ring'}
 		, to: {source: 'specials', scope: 'E1M1', entry: 'start'}
 	}]
+	, init: {startMap: 'E1M2', cheats: ['iddqd','idkfa']}
 	, start: {source: 'platformer', scope: 'zone'}
 	, view: {width: 960, height: 540}
 };
@@ -56,6 +57,18 @@ test('neutral worlds canonicalize each declared import and source resource', () 
 	assert.equal(world.sources.specials.resources[0].url, origin + 'data/DOOM1.WAD');
 	assert.equal(world.start.source, 'platformer');
 	assert.equal(world.transitions[0].to.scope, 'E1M1');
+	assert.deepEqual(world.init, {startMap: 'E1M2', cheats: ['iddqd','idkfa']});
+	assert.notEqual(world.init, hybrid.init);
+});
+
+test('neutral worlds expose an empty game-owned init object and reject other shapes', () => {
+	const world = normalizeWorld({...hybrid, init: undefined}, origin + 'world.json');
+
+	assert.deepEqual(world.init, {});
+	assert.throws(
+		() => normalizeWorld({...hybrid, init: ['iddqd']}, origin + 'world.json')
+		, /init must be an object/
+	);
 });
 
 test('phonics.json launches an inline or referenced world with correct provenance', async () => {

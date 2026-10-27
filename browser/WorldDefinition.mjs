@@ -324,6 +324,7 @@ export function normalizeWorld(value, declaring)
 		...structuredClone(value)
 		, imports: {}
 		, sources: {}
+		, init: structuredClone(object(value.init ?? {}, `${declaring}: init must be an object`))
 		, resourceSlots: normalizeResourceSlots(value.resourceSlots, declaring)
 		, network: normalizeNetwork(value.network, declaring)
 		, bindings: []

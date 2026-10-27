@@ -15,11 +15,19 @@ final class ViewEffects
 
 	private int $damageTics = 0;
 	private int $bonusTics = 0;
+	private bool $dead = false;
 
 	/** Add post-armor player damage to the red PLAYPAL counter. */
 	public function recordDamage(int $damage): void
 	{
 		$this->damageTics = min(self::MAX_COUNTER, $this->damageTics + max(0, $damage));
+	}
+
+	/** Hold the strongest red PLAYPAL page throughout the death camera. */
+	public function recordDeath(): void
+	{
+		$this->dead = true;
+		$this->damageTics = self::MAX_COUNTER;
 	}
 
 	/** Add the standard pickup flash, allowing rapidly collected items to accumulate. */
@@ -33,7 +41,7 @@ final class ViewEffects
 	{
 		if($tics <= 0) return;
 
-		$this->damageTics = max(0, $this->damageTics - $tics);
+		if(!$this->dead) $this->damageTics = max(0, $this->damageTics - $tics);
 		$this->bonusTics = max(0, $this->bonusTics - $tics);
 	}
 
