@@ -9,12 +9,15 @@ import {snappyApproach} from './Easing.mjs';
 export class DomTexture
 {
 
-	constructor(canvas)
+	constructor(canvas, parent = null)
 	{
 		if(!(canvas instanceof HTMLCanvasElement)) throw Error('DomTexture requires a canvas');
 
 		this.canvas = canvas;
 		this.context = null;
+		this.parent = parent;
+		this.children = new Set;
+		this.disposed = false;
 
 		this.opened = false;
 		this.title = '';
@@ -54,6 +57,17 @@ export class DomTexture
 
 		canvas.addEventListener('webglcontextlost', this.lost);
 		canvas.addEventListener('webglcontextrestored', this.restored);
+	}
+
+	/** Create an independently controlled document that shares this texture's canvas and GL context. */
+	fork()
+	{
+		if(this.disposed) throw Error('Cannot fork a disposed DomTexture');
+
+		const child = new DomTexture(this.canvas, this);
+		this.children.add(child);
+
+		return child;
 	}
 
 	/** Let the game choose context attributes before this optional overlay first draws. */
@@ -107,10 +121,18 @@ export class DomTexture
 	/** Permanently remove event listeners and browser-owned GL resources. */
 	dispose()
 	{
+		if(this.disposed) return;
+
+		this.disposed = true;
+
+		for(const child of [...this.children]) child.dispose();
+		this.children.clear();
 		this.close();
 		this.canvas.removeEventListener('webglcontextlost', this.lost);
 		this.canvas.removeEventListener('webglcontextrestored', this.restored);
 		this.destroyResources();
+		this.parent?.children.delete(this);
+		this.parent = null;
 	}
 
 	/** Move the desired document offset, clamping at its measured bounds. */
@@ -184,7 +206,7 @@ export class DomTexture
 			const resources = this.createResources();
 			const gl = this.gl;
 
-			gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+			gl.viewport(0, 0, layout.width, layout.height);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			gl.disable(gl.SCISSOR_TEST);
@@ -196,7 +218,7 @@ export class DomTexture
 			gl.bindVertexArray(resources.vao);
 			gl.activeTexture(gl.TEXTURE0);
 			gl.uniform1i(resources.sampler, 0);
-			gl.uniform2f(resources.viewport, this.canvas.width, this.canvas.height);
+			gl.uniform2f(resources.viewport, layout.width, layout.height);
 
 			if(!this.overlayUploaded)
 			{
@@ -210,7 +232,7 @@ export class DomTexture
 				this.uploads++;
 			}
 
-			this.drawTexture(resources.overlay, 0, 0, this.canvas.width, this.canvas.height);
+			this.drawTexture(resources.overlay, 0, 0, layout.width, layout.height);
 			this.drawTiles(layout);
 			this.draws++;
 		}
@@ -560,7 +582,7 @@ void main() { color = texture(source, uv); }`
 
 		gl.scissor(
 			layout.contentX
-			, this.canvas.height - layout.contentY - layout.contentHeight
+			, layout.height - layout.contentY - layout.contentHeight
 			, layout.contentWidth
 			, layout.contentHeight
 		);
@@ -572,7 +594,7 @@ void main() { color = texture(source, uv); }`
 			const start = Math.max(tile.start, this.scroll);
 			const end = Math.min(tile.start + tile.height, bottom);
 			const height = (end - start) * scale;
-			const y = this.canvas.height - layout.contentY - (start - this.scroll) * scale - height;
+			const y = layout.height - layout.contentY - (start - this.scroll) * scale - height;
 			const sourceY = (start - tile.start) / tile.height;
 			const sourceHeight = (end - start) / tile.height;
 

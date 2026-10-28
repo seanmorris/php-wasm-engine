@@ -91,6 +91,8 @@
     "src/Game/Collision.php",
     "src/Game/DamageEvent.php",
     "src/Game/DamageResolver.php",
+    "src/Game/DomTextureBinding.php",
+    "src/Game/DomTextureSetup.php",
     "src/Game/DoomGravity.php",
     "src/Game/DoomInitialization.php",
     "src/Game/DoomMatch.php",

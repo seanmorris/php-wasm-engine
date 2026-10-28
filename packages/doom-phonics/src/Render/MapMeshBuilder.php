@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace DoomPhonics\Render;
 
 use DoomPhonics\Game\CameraTextureBinding;
+use DoomPhonics\Game\DomTextureBinding;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Graphics\IndexedAtlas;
 
@@ -57,12 +58,12 @@ final class MapMeshBuilder
 				$floor = [$points[0],$points[$i],$points[$i + 1]];
 				$floorPortal = $this->level->cameraPortalForPlane($sector, 0);
 				if($floorPortal) $this->mesh->cameraPortals->plane($floor, $sector, 0, $floorPortal);
-				else $this->triangle($floor, $floorTexture, $sector, 0, $this->level->cameraTextureBinding($definition->floorTexture));
+				else $this->triangle($floor, $floorTexture, $sector, 0, $this->level->surfaceTextureBinding($definition->floorTexture));
 
 				$ceiling = [$points[0],$points[$i + 1],$points[$i]];
 				$ceilingPortal = $this->level->cameraPortalForPlane($sector, 1);
 				if($ceilingPortal) $this->mesh->cameraPortals->plane($ceiling, $sector, 1, $ceilingPortal);
-				else $this->triangle($ceiling, $ceilingTexture, $sector, 1, $this->level->cameraTextureBinding($definition->ceilingTexture));
+				else $this->triangle($ceiling, $ceilingTexture, $sector, 1, $this->level->surfaceTextureBinding($definition->ceilingTexture));
 			}
 		}
 	}
@@ -202,8 +203,8 @@ final class MapMeshBuilder
 	): void {
 		$rightTexture = $right ? $this->atlas->id('wall', $this->level->sideTextures[$rightSideId][$slot]) : -1;
 		$leftTexture = $left ? $this->atlas->id('wall', $this->level->sideTextures[$leftSideId][$slot]) : -1;
-		$rightBinding = $right ? $this->level->cameraTextureBinding($this->level->sideTextures[$rightSideId][$slot]) : null;
-		$leftBinding = $left ? $this->level->cameraTextureBinding($this->level->sideTextures[$leftSideId][$slot]) : null;
+		$rightBinding = $right ? $this->level->surfaceTextureBinding($this->level->sideTextures[$rightSideId][$slot]) : null;
+		$leftBinding = $left ? $this->level->surfaceTextureBinding($this->level->sideTextures[$leftSideId][$slot]) : null;
 
 		if($rightTexture < 0 && $leftTexture < 0) return;
 
@@ -267,7 +268,7 @@ final class MapMeshBuilder
 	/** @param list<array{0:float,1:float}> $points */
 	private function triangle(
 		array $points, int $texture, int $sector, int $plane
-		, ?CameraTextureBinding $binding = null
+		, CameraTextureBinding|DomTextureBinding|null $binding = null
 	): void
 	{
 		if($texture < 0) return;

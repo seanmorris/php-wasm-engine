@@ -354,7 +354,7 @@
     "src/World/SystemSet.php": "sha256-qztHhXsddo4dgeRPAFkCWKYqSSrkR59YaNjSClglYg8=",
     "src/World/WorldRuntime.php": "sha256-ulQdf1eSD4KQvJQo/x39lN+1s3vqB51Kn89gPDr056E=",
     "browser/AssetLoader.mjs": "sha256-wwcjlAbHdE3LVr/Fkk+qyQuyjL7Rmnnc6PXlRpGbeMc=",
-    "browser/DomTexture.mjs": "sha256-m0ROuVb00hZEy6GAA5TczZCYfdlWdup37Y3wwI+GfKY=",
+    "browser/DomTexture.mjs": "sha256-3j4KRQzs+Xf/2K/2heSU1/vrGUsAI0yzMtLv8a3iDp0=",
     "browser/Easing.mjs": "sha256-kANubl9qqf93twWAXC/eoW7X8VAsKtG1CFRZ4HAqZwM=",
     "browser/GlesPixelStore.mjs": "sha256-0TxSQKSdFO8rYWrFdKICqtfuIV1eF90xn60ZckgZzGU=",
     "browser/GlesPrograms.mjs": "sha256-DUmWqT7hxkFpnqOmTnVyXGN7TAVRNi1rIKwugtH2YS4=",

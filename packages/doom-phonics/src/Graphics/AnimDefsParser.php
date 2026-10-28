@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace DoomPhonics\Graphics;
 
-/** Extract CAMERA/CANVASTEXTURE declarations from layered ANIMDEFS text. */
+/** Extract CAMERA/CANVAS/DOMTEXTURE declarations from layered ANIMDEFS text. */
 final class AnimDefsParser
 {
 	/** @return array<string,CameraTextureDefinition> Last declaration wins. */
@@ -16,7 +16,7 @@ final class AnimDefsParser
 		for($i = 0, $count = count($tokens); $i < $count; $i++)
 		{
 			$kind = strtoupper($tokens[$i]);
-			if(!in_array($kind, ['CAMERATEXTURE','CANVASTEXTURE'], true)) continue;
+			if(!in_array($kind, ['CAMERATEXTURE','CANVASTEXTURE','DOMTEXTURE'], true)) continue;
 			$name = self::text($tokens[++$i] ?? '');
 			$width = self::integer($tokens[++$i] ?? '');
 			$height = self::integer($tokens[++$i] ?? '');
@@ -26,7 +26,7 @@ final class AnimDefsParser
 			while($i + 1 < $count)
 			{
 				$option = strtoupper($tokens[$i + 1]);
-				if(in_array($option, ['CAMERATEXTURE','CANVASTEXTURE','TEXTURE','FLAT','SWITCH','WARP','PIC'], true)) break;
+				if(in_array($option, ['CAMERATEXTURE','CANVASTEXTURE','DOMTEXTURE','TEXTURE','FLAT','SWITCH','WARP','PIC'], true)) break;
 				$i++;
 				if($option === 'FIT')
 				{
@@ -38,7 +38,14 @@ final class AnimDefsParser
 			}
 
 			try {
-				$definition = new CameraTextureDefinition($name, $width, $height, $fitWidth, $fitHeight, $worldPanning);
+				$type = match($kind) {
+					'CANVASTEXTURE' => CameraTextureDefinition::CANVAS,
+					'DOMTEXTURE' => CameraTextureDefinition::DOM,
+					default => CameraTextureDefinition::CAMERA
+				};
+				$definition = new CameraTextureDefinition(
+					$name, $width, $height, $fitWidth, $fitHeight, $worldPanning, $type
+				);
 				$result[$definition->name] = $definition;
 			} catch(\InvalidArgumentException) {}
 		}

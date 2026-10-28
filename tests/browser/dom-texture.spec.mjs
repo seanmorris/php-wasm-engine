@@ -9,11 +9,14 @@ test('DOM texture overlays retain the caller render target', async({page}) => {
 		canvas.width = 320;
 		canvas.height = 200;
 		const gl = canvas.getContext('webgl2', {preserveDrawingBuffer: true});
-		const modal = new DomTexture(canvas);
+		const root = new DomTexture(canvas);
+		const modal = root.fork();
+		const targetWidth = 160;
+		const targetHeight = 100;
 
 		const image = document.createElement('canvas');
-		image.width = 320;
-		image.height = 200;
+		image.width = targetWidth;
+		image.height = targetHeight;
 		image.getContext('2d').fillStyle = '#00ff00';
 		image.getContext('2d').fillRect(0, 0, image.width, image.height);
 
@@ -24,7 +27,7 @@ test('DOM texture overlays retain the caller render target', async({page}) => {
 
 		modal.opened = true;
 		modal.dirty = false;
-		modal.layout = modal.resolveLayout(canvas.width, canvas.height, 38);
+		modal.layout = modal.resolveLayout(targetWidth, targetHeight, 38);
 		modal.overlayImage = image;
 		modal.contentImage = content;
 		modal.contentWidth = modal.contentHeight = modal.viewportHeight = 1;
@@ -32,7 +35,7 @@ test('DOM texture overlays retain the caller render target', async({page}) => {
 		const texture = gl.createTexture();
 		gl.bindTexture(gl.TEXTURE_2D, texture);
 
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, targetWidth, targetHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
 		const framebuffer = gl.createFramebuffer();
 		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -45,23 +48,25 @@ test('DOM texture overlays retain the caller render target', async({page}) => {
 		gl.clearColor(0, 0, 1, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
-		const rendered = modal.render(canvas.width, canvas.height, 38);
+		const rendered = modal.render(targetWidth, targetHeight, 38);
 		const retained = gl.getParameter(gl.DRAW_FRAMEBUFFER_BINDING) === framebuffer;
 		const target = new Uint8Array(4);
 		gl.readPixels(4, 4, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, target);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 		const screen = new Uint8Array(4);
 		gl.readPixels(4, 4, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, screen);
-		modal.dispose();
+		root.dispose();
+		const childDisposed = modal.disposed;
 		gl.deleteFramebuffer(framebuffer);
 		gl.deleteTexture(texture);
 
-		return {rendered,retained,target: [...target],screen: [...screen]};
+		return {rendered,retained,childDisposed,target: [...target],screen: [...screen]};
 	});
 
 	expect(result).toEqual({
 		rendered: true
 		, retained: true
+		, childDisposed: true
 		, target: [0,255,0,255]
 		, screen: [255,0,0,255]
 	});

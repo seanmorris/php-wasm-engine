@@ -387,7 +387,8 @@ $buildCameraRoom = static function(): array {
 	$sides = $lines = $segs = '';
 	foreach([[0,1],[1,2],[2,3],[3,0]] as $index => [$from,$to])
 	{
-		$middle = $index === 2 ? 'CAMTEX' : ($index === 3 ? '-' : 'STARTAN3');
+		$middle = $index === 1 ? 'PHPINFO'
+			: ($index === 2 ? 'CAMTEX' : ($index === 3 ? '-' : 'STARTAN3'));
 		$side = intdiv(strlen($sides),30);
 		$sides .= pack('v2a8a8a8v',0,0,'STARTAN3','STARTAN3',$middle,0);
 		$lines .= pack('v3C6v2', ...[
@@ -416,7 +417,10 @@ $buildCameraRoom = static function(): array {
 	];
 };
 
-$lumps = [['ANIMDEFS', "cameratexture CAMTEX 128 128 FIT 128 128 WorldPanning\n"]];
+$lumps = [['ANIMDEFS', <<<ANIMDEFS
+cameratexture CAMTEX 128 128 FIT 128 128 WorldPanning
+domtexture PHPINFO 512 256 FIT 512 128 WorldPanning
+ANIMDEFS]];
 foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom()] as $mapLumps)
 foreach($mapLumps as $name => $bytes) $lumps[] = [$name,$bytes];
 $data = $directory = '';

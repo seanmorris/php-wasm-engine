@@ -82,6 +82,7 @@ final class GlesMapRenderer
 	private int $cameraPortalViewBudget = 0;
 	public int $cameraPortalViewsRendered = 0;
 	public int $cameraTextureViewsRendered = 0;
+	public int $domTextureViewsRendered = 0;
 	public int $mirrorViewsRendered = 0;
 	/** @var array<int,array{pose:Transform,state:ActorState,x:float,y:float,sector:int}> */
 	private array $actorCache = [];
@@ -962,6 +963,7 @@ final class GlesMapRenderer
 		$this->cameraPortalVisible = [];
 		$this->cameraPortalViewsRendered = 0;
 		$this->cameraTextureViewsRendered = 0;
+		$this->domTextureViewsRendered = 0;
 		$this->mirrorViewsRendered = 0;
 		$this->cameraPortalTargetCursor = 0;
 		$this->cameraPortalViewBudget = self::CAMERA_PORTAL_VIEW_BUDGET;
@@ -971,6 +973,7 @@ final class GlesMapRenderer
 
 		$width = $this->viewport->sceneWidth;
 		$height = $this->viewport->sceneHeight;
+		$this->renderDomTextureViews();
 		$this->renderCameraTextureViews($registry, $viewEntity, $extraLight, $alpha);
 		$this->renderMirrorViews($registry, $x, $y, $z, $angle, $pitch, $extraLight, $alpha);
 		if(!$this->mesh->cameraPortals->vertexCount())
@@ -1014,6 +1017,35 @@ final class GlesMapRenderer
 		}
 
 		glViewport(0, 0, $width, $height);
+	}
+
+	/** Rasterize trusted host DOM documents into targets named by custom ANIMDEFS DOMTexture entries. */
+	private function renderDomTextureViews(): void
+	{
+		foreach($this->level->domTextureBindings() as $name => $binding)
+		{
+			$definition = $binding->texture;
+			$target = $this->cameraTextureTargets[$name] ??= new CameraPortalTarget(
+				$definition->width, $definition->height
+			);
+			$target->resize($definition->width, $definition->height);
+			$target->begin();
+			$ready = false;
+			try
+			{
+				$ready = (bool)$binding->bridge->render($definition->width, $definition->height, 38);
+			}
+			catch(\Throwable)
+			{
+				// Browser-backed documents can be temporarily unavailable while rasterizing
+				// or recovering a context. Leave the ordinary placeholder visible this frame.
+			}
+			finally { $target->end(); }
+			if(!$ready) continue;
+			$this->cameraTextureViews[$name] = $target;
+			$this->domTextureViewsRendered++;
+		}
+		$this->configureViewport();
 	}
 
 	/** Capture every bound ANIMDEFS camera texture before drawing the player's view. */
@@ -1636,6 +1668,7 @@ final class GlesMapRenderer
 			, 'cameraPortalViews' => $this->cameraPortalViewsRendered
 			, 'cameraTextureVertices' => $this->mesh->cameraTextures->vertexCount()
 			, 'cameraTextureViews' => $this->cameraTextureViewsRendered
+			, 'domTextureViews' => $this->domTextureViewsRendered
 			, 'mirrorVertices' => $this->mesh->mirrors->vertexCount()
 			, 'mirrorViews' => $this->mirrorViewsRendered
 			, 'cameraPortalFrame' => $this->cameraPortalFrame
@@ -1834,7 +1867,7 @@ final class GlesMapRenderer
 		$this->spriteCapacity = $this->overlayCapacity = $this->beamCapacity = 0;
 		$this->beamVertices = 0;
 		$this->cameraPortalViewsRendered = 0;
-		$this->cameraTextureViewsRendered = $this->mirrorViewsRendered = 0;
+		$this->cameraTextureViewsRendered = $this->domTextureViewsRendered = $this->mirrorViewsRendered = 0;
 		$this->actorCache = [];
 	}
 

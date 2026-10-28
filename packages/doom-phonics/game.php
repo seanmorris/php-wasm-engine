@@ -67,7 +67,14 @@ $phpInfoHints = new MenuRenderer(
 	])
 );
 
-$phpInfo = new DomTextureModal(vrzno_env('domTexture'), $phpInfoHints);
+$domTexture = vrzno_env('domTexture');
+$phpInfo = new DomTextureModal($domTexture, $phpInfoHints);
+$phpInfoSurface = $domTexture->fork();
+ob_start();
+phpinfo();
+$phpInfoMarkup = (string)ob_get_clean();
+$phpInfoSurface->show('PHP Info', $phpInfoMarkup, 'Live browser DOM texture');
+$phonics->runtime->service('doom-dom-textures', ['PHPINFO' => $phpInfoSurface]);
 $networkSettings = null;
 
 if(isset($phonics->world['network']))

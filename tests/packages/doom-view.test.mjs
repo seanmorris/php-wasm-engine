@@ -68,19 +68,23 @@ test('GLES maps, sprites, beams, portals, and skies share perspective and classi
 	assert.equal(raycaster.match(/\$angle - atan\(/g)?.length, 3);
 });
 
-test('camera textures and mirrors capture live views into dedicated surfaces', async() => {
-	const [renderer, builder, cameraFragment, mirrorFragment, setup, mirror] = await Promise.all([
+test('camera, DOM textures and mirrors capture live views into dedicated surfaces', async() => {
+	const [renderer, builder, cameraFragment, mirrorFragment, setup, domSetup, mirror] = await Promise.all([
 		source('src/Render/GlesMapRenderer.php')
 		, source('src/Render/MapMeshBuilder.php')
 		, source('shaders/camera-texture.frag')
 		, source('shaders/mirror.frag')
 		, source('src/Game/CameraTextureSetup.php')
+		, source('src/Game/DomTextureSetup.php')
 		, source('src/Game/MirrorView.php')
 	]);
 
 	assert.match(setup, /SetCameraToTexture/);
-	assert.match(builder, /cameraTextureBinding/);
+	assert.match(domSetup, /CameraTextureDefinition::DOM/);
+	assert.match(builder, /surfaceTextureBinding/);
 	assert.match(builder, /mirrorForLine/);
+	assert.match(renderer, /function renderDomTextureViews\(/);
+	assert.match(renderer, /\$binding->bridge->render\(\$definition->width, \$definition->height, 38\)/);
 	assert.match(renderer, /function renderCameraTextureViews\(/);
 	assert.match(renderer, /function renderMirrorViews\(/);
 	assert.match(renderer, /new ViewProjection\(\$definition->width, \$definition->height, \$binding->fov\)/);

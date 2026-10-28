@@ -169,7 +169,7 @@ test('every public game type has a nested package reference page', async() => {
 		}
 	}
 
-	assert.equal(total, 287);
+	assert.equal(total, 289);
 });
 
 test('the static Doom-Phonics example includes its integrity-matched content stack', async() => {

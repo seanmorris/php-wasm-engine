@@ -271,25 +271,33 @@ $cameraDefinitions = AnimDefsParser::cameraTextures(<<<'ANIMDEFS'
 // A layered declaration may replace the original logical dimensions.
 CameraTexture monitor 64 32 HDR
 CameraTexture "MONITOR" 128 64 FIT 256 128 WorldPanning
+DOMTexture PHPINFO 512 256 FIT 512 128 WorldPanning
 ANIMDEFS);
-verifyWad(count($cameraDefinitions) === 1
+verifyWad(count($cameraDefinitions) === 2
 	&& $cameraDefinitions['MONITOR']->width === 128
 	&& $cameraDefinitions['MONITOR']->height === 64
 	&& $cameraDefinitions['MONITOR']->displayWidth() === 256
 	&& $cameraDefinitions['MONITOR']->worldPanning
-	, 'ANIMDEFS camera textures support layering, FIT, HDR and WorldPanning');
+	&& $cameraDefinitions['PHPINFO']->kind === DoomPhonics\Graphics\CameraTextureDefinition::DOM
+	, 'ANIMDEFS dynamic textures support layering, DOMTexture, FIT, HDR and WorldPanning');
 
 $cameraMap = new DoomPhonics\Map\MapData('CAMERAS', $portalDemoArchive->mapLumps('CAMERAS'));
 $cameraLevel = new Level($cameraMap);
 $cameraCatalog = new TextureCatalog(new Stack($archive,$portalDemoArchive));
 CameraTextureSetup::apply($cameraLevel,$cameraCatalog);
+$domBridge = new class {
+	public function render(int $width, int $height, int $headerHeight): bool { return true; }
+};
+DoomPhonics\Game\DomTextureSetup::apply($cameraLevel,$cameraCatalog,['phpinfo' => $domBridge]);
 $camera = $cameraLevel->camera(100);
 $cameraBinding = $cameraLevel->cameraTextureBinding('camtex');
+$domBinding = $cameraLevel->domTextureBinding('phpinfo');
 verifyWad($cameraMap->format === 'HEXEN' && count($cameraLevel->cameras()) === 1
 	&& $camera?->type === DoomPhonics\Game\CameraViewpoint::SECURITY
 	&& $cameraBinding?->camera === $camera && $cameraBinding->fov === 90.0
 	&& $cameraBinding->texture->width === 128 && count($cameraLevel->mirrors()) === 1
-	, 'camera objects and constant OPEN SetCameraToTexture calls bind generated camera surfaces');
+	&& $domBinding?->bridge === $domBridge && $domBinding->texture->width === 512
+	, 'camera objects, OPEN camera calls and trusted DOM providers bind generated dynamic surfaces');
 $cameraAngle = $camera->angle;
 $cameraLevel->update(.125);
 verifyWad(abs($camera->angle - $cameraAngle) > .01
@@ -300,9 +308,9 @@ verifyWad(abs($mirrorCamera['x'] - 128) < .001 && abs($mirrorCamera['y'] + 128) 
 	, 'Line_Mirror reflects camera position and heading across its linedef');
 $cameraAtlas = IndexedAtlas::forLevel($cameraLevel,$cameraCatalog);
 $cameraMesh = (new MapMeshBuilder($cameraLevel,$cameraAtlas))->build();
-verifyWad($cameraMesh->cameraTextures->vertexCount() === 6
+verifyWad($cameraMesh->cameraTextures->vertexCount() === 12
 	&& $cameraMesh->mirrors->vertexCount() === 6
-	, 'camera-texture walls and mirrors build distinct live render surfaces');
+	, 'camera, DOM-texture and mirror walls build distinct live render surfaces');
 $cameraRegistry = new Registry;
 $cameraPopulation = (new ActorFactory((new WadDefinitions)->actors))->populate(
 	$cameraRegistry,$cameraMap,2,false,null,null,$cameraLevel

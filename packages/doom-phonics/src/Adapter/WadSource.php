@@ -7,6 +7,7 @@ use DoomPhonics\Definition\ActorDefinition;
 use DoomPhonics\Definition\WeaponSlots;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Game\CameraTextureSetup;
+use DoomPhonics\Game\DomTextureSetup;
 use DoomPhonics\Graphics\Palette;
 use DoomPhonics\Graphics\TextureCatalog;
 use Phonics\World\ActiveScope;
@@ -64,6 +65,10 @@ final class WadSource implements ContentSource
 		);
 		$level = new Level($this->wad->map($id));
 		CameraTextureSetup::apply($level, $this->textures);
+		$domTextures = $context->service('doom-dom-textures', []);
+		if(!is_array($domTextures))
+		throw new \LogicException('doom-dom-textures service must be an array of trusted browser bridges');
+		DomTextureSetup::apply($level, $this->textures, $domTextures);
 		$content = new WadLevel(
 			$this->wad,
 			$level,

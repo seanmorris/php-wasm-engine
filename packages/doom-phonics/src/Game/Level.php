@@ -34,6 +34,8 @@ final class Level
 	private array $thingsByTid = [];
 	/** @var array<string,CameraTextureBinding> */
 	private array $cameraTextures = [];
+	/** @var array<string,DomTextureBinding> */
+	private array $domTextures = [];
 	/** @var list<MirrorView> */
 	private array $mirrors = [];
 	/** @var array<int,MirrorView> */
@@ -128,6 +130,26 @@ final class Level
 
 	/** @return array<string,CameraTextureBinding> */
 	public function cameraTextureBindings(): array { return $this->cameraTextures; }
+
+	public function bindDomTexture(DomTextureBinding $binding): void
+	{
+		$this->domTextures[$binding->texture->name] = $binding;
+	}
+
+	public function domTextureBinding(string $name): ?DomTextureBinding
+	{
+		return $this->domTextures[strtoupper($name)] ?? null;
+	}
+
+	/** @return array<string,DomTextureBinding> */
+	public function domTextureBindings(): array { return $this->domTextures; }
+
+	public function surfaceTextureBinding(string $name): CameraTextureBinding|DomTextureBinding|null
+	{
+		$name = strtoupper($name);
+
+		return $this->cameraTextures[$name] ?? $this->domTextures[$name] ?? null;
+	}
 
 	public function addMirror(MirrorView $mirror): void
 	{
