@@ -53,11 +53,15 @@ final class MapMeshBuilder
 
 			for($i = 1; $i < count($points) - 1; $i++)
 			{
-				$this->triangle([$points[0],$points[$i],$points[$i + 1]], $floorTexture, $sector, 0);
+				$floor = [$points[0],$points[$i],$points[$i + 1]];
+				$floorPortal = $this->level->cameraPortalForPlane($sector, 0);
+				if($floorPortal) $this->mesh->cameraPortals->plane($floor, $sector, 0, $floorPortal);
+				else $this->triangle($floor, $floorTexture, $sector, 0);
 
 				$ceiling = [$points[0],$points[$i + 1],$points[$i]];
-
-				$this->triangle($ceiling, $ceilingTexture, $sector, 1);
+				$ceilingPortal = $this->level->cameraPortalForPlane($sector, 1);
+				if($ceilingPortal) $this->mesh->cameraPortals->plane($ceiling, $sector, 1, $ceilingPortal);
+				else $this->triangle($ceiling, $ceilingTexture, $sector, 1);
 			}
 		}
 	}
@@ -73,6 +77,16 @@ final class MapMeshBuilder
 			$right = $rightSide ? $rightSide['sector'] : null;
 			$left = $leftSide ? $leftSide['sector'] : null;
 			$length = hypot($b['x'] - $a['x'], $b['y'] - $a['y']);
+			$cameraPortal = $this->level->cameraPortalForLine($line['index']);
+
+			if($cameraPortal)
+			{
+				$sector = $right ?? $left;
+				$backSector = $right !== null ? $left : null;
+				if($sector !== null)
+				$this->mesh->cameraPortals->line($a, $b, $sector, $backSector, $cameraPortal);
+				continue;
+			}
 
 			if($right === null || $left === null)
 			{

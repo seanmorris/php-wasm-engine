@@ -204,7 +204,7 @@ export function activate({module, canvas, services, session})
 	const quick = new services.QuickControls(frame, frame);
 
 	let fullscreenBusy = false, fullscreenError = '', menuOpen = true;
-	let cheats = '', pause = 0, pointerX = 0, pointerY = 0;
+	let cheats = '', pause = 0, pointerX = 0, pointerY = 0, pointerCapture = 0;
 
 	const logicalWidth = canvas.width, logicalHeight = canvas.height;
 	const aspect = logicalWidth / logicalHeight;
@@ -596,6 +596,11 @@ export function activate({module, canvas, services, session})
 
 	canvas.addEventListener('pointerdown', () => {
 		canvas.focus({preventScroll: true});
+
+		// Mouse 1 is also Fire. Remember the gesture that focuses an unlocked arena so
+		// PHP can discard that physical press before the next simulation step. Without
+		// this handoff, the click used to acquire pointer lock fires one hidden shot.
+		if(!menuOpen && document.pointerLockElement !== canvas) pointerCapture++;
 	}, {signal: abort.signal});
 
 	canvas.addEventListener('click', () => {
@@ -665,8 +670,8 @@ export function activate({module, canvas, services, session})
 	};
 
 	module.doomPointerInput = () => {
-		const value = JSON.stringify([pointerX, pointerY]);
-		pointerX = pointerY = 0;
+		const value = JSON.stringify([pointerX, pointerY, pointerCapture]);
+		pointerX = pointerY = pointerCapture = 0;
 
 		return value;
 	};

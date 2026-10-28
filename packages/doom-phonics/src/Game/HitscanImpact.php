@@ -12,6 +12,7 @@ final class HitscanImpact
 		, public float $z
 		, public ?int $target = null
 		, public ?ProjectileImpact $geometry = null
+		, public ?WorldPoint $origin = null
 	) {}
 
 	public function hit(): bool { return $this->target !== null || $this->geometry !== null; }

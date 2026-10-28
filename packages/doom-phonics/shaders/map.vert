@@ -13,12 +13,14 @@ uniform vec3 camera;
 uniform vec2 forward;
 uniform vec2 projection;
 uniform float cameraPitch;
+uniform float nearPlane;
 uniform int pitchMode;
 
 out vec4 textureUvs;
 out float viewDepth;
 flat out ivec2 textureIds;
 flat out ivec2 lightLevels;
+flat out ivec2 sectorComponents;
 
 float sectorPlaneHeight(int sector, int plane)
 {
@@ -61,7 +63,6 @@ void main()
 		: horizontalDepth * pitchCos + height * pitchSin;
 	float vertical = classicPitch ? height - tan(cameraPitch) * horizontalDepth
 		: height * pitchCos - horizontalDepth * pitchSin;
-	float nearPlane = 1.0;
 	float farPlane = 16384.0;
 	float clipZ = ((farPlane + nearPlane) / (farPlane - nearPlane)) * depth
 		- (2.0 * farPlane * nearPlane / (farPlane - nearPlane));
@@ -71,6 +72,10 @@ void main()
 	textureIds = ivec2(round(aTextures));
 	int rightSector = int(round(aSideSectors.x));
 	int leftSector = int(round(aSideSectors.y));
+	sectorComponents = ivec2(
+		int(round(texelFetch(sectorHeights, ivec2(rightSector, 0), 0).a)),
+		int(round(texelFetch(sectorHeights, ivec2(leftSector, 0), 0).a))
+	);
 	if(aRightAnchor.x < 0.0 && aLeftAnchor.x < 0.0)
 	{
 		rightSector = int(texelFetch(sectorHeights, ivec2(rightSector, plane + 1), 0).w + .5);

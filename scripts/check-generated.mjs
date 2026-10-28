@@ -24,6 +24,13 @@ try
 				, 'hud.tsj'
 			]
 		]
+		, ['doom-phonics'
+			, 'demo'
+			, 'php'
+			, ['tools/generate-portals.php']
+			, 'doom-phonics-portals'
+			, ['PORTALS.WAD']
+		]
 	]){
 		const source = path.join(root, 'packages', name), target = path.join(directory, targetName);
 		await fs.cp(source, target, {recursive: true,dereference: true});

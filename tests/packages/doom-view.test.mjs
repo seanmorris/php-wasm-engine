@@ -22,20 +22,22 @@ test('pointer movement follows the canonical WAD view axes', () => {
 	assert.ok(down.pitch < 0, 'moving down lowers the view');
 });
 
-test('GLES maps, sprites, beams, and skies share perspective and classic pitch modes', async() => {
-	const [map, sprite, beam, sky, skyOcclusion, renderer, raycaster] = await Promise.all([
+test('GLES maps, sprites, beams, portals, and skies share perspective and classic pitch modes', async() => {
+	const [map, sprite, beam, portal, sky, skyOcclusion, renderer, raycaster] = await Promise.all([
 		source('shaders/map.vert')
 		, source('shaders/sprite.vert')
 		, source('shaders/beam.vert')
+		, source('shaders/camera-portal.vert')
 		, source('shaders/sky.frag')
 		, source('shaders/sky-occlusion.vert')
 		, source('src/Render/GlesMapRenderer.php')
 		, source('src/Render/Raycaster.php')
 	]);
 
-	for(const shader of [map, sprite, beam, skyOcclusion])
+	for(const shader of [map, sprite, beam, portal, skyOcclusion])
 	{
 		assert.match(shader, /vec2 right = vec2\(forward\.y, -forward\.x\);/);
+		assert.match(shader, /uniform float nearPlane;/);
 		assert.match(shader, /uniform int pitchMode;/);
 		assert.match(shader, /classicPitch \? horizontalDepth[\s\S]*horizontalDepth \* pitchCos \+ height \* pitchSin/);
 
@@ -57,8 +59,12 @@ test('GLES maps, sprites, beams, and skies share perspective and classic pitch m
 	assert.doesNotMatch(sky, /pitchOffset/);
 
 	assert.match(renderer, /\$rightX = sin\(\$angle\);\s+\$rightY = -cos\(\$angle\);/);
-	assert.equal(renderer.match(/location\('cameraPitch'\)/g)?.length, 5);
-	assert.equal(renderer.match(/location\('pitchMode'\)/g)?.length, 5);
+	assert.equal(renderer.match(/location\('cameraPitch'\)/g)?.length, 6);
+	assert.equal(renderer.match(/location\('nearPlane'\)/g)?.length, 5);
+	assert.equal(renderer.match(/location\('pitchMode'\)/g)?.length, 6);
+	assert.match(renderer, /private const NEAR_PLANE = 1\.0;/);
+	assert.match(renderer, /CameraPortalMesh::LINE_NEAR_PLANE/);
+	assert.match(renderer, /\$distance < self::NEAR_PLANE \? CameraPortalMesh::LINE_NEAR_PLANE : self::NEAR_PLANE/);
 	assert.equal(raycaster.match(/\$angle - atan\(/g)?.length, 3);
 });
 
@@ -109,7 +115,7 @@ test('indexed rendering composes PLAYPAL flashes with fixed COLORMAP effects', a
 	assert.match(renderer, /intdiv\(count\(\$values\), 7\)/);
 });
 
-test('railgun beams use the resolved world ray and a depth-tested pixel-width ribbon', async() => {
+test('railgun beams follow portal-segmented world rays with depth-tested pixel-width ribbons', async() => {
 	const [vertex, fragment, renderer, pass, combat] = await Promise.all([
 		source('shaders/beam.vert')
 		, source('shaders/beam.frag')
@@ -124,7 +130,51 @@ test('railgun beams use the resolved world ray and a depth-tested pixel-width ri
 	assert.match(renderer, /function renderBeams\(/);
 	assert.match(renderer, /glEnable\(GL_DEPTH_TEST\);[\s\S]*glDepthMask\(false\);[\s\S]*glDrawArrays\(GL_TRIANGLES/);
 	assert.match(pass, /renderActors[\s\S]*renderBeams[\s\S]*compose/);
-	assert.match(combat, /new BeamEffect\([\s\S]*new WorldPoint\(\$end->x, \$end->y, \$end->z\)/);
+	assert.match(combat, /function spawnBeamPath\(/);
+	assert.match(combat, /new BeamEffect\([\s\S]*\$segment\['x'\] \+ \$segment\['dx'\][\s\S]*\$segment\['y'\] \+ \$segment\['dy'\][\s\S]*\$segment\['z'\] \+ \$segment\['dz'\]/);
+});
+
+test('camera portals recurse through destination spaces and occlude unresolved views', async() => {
+	const [renderer, mesh, pass, mapData, vertex, fragment, skyOcclusion, portalFragment] = await Promise.all([
+		source('src/Render/GlesMapRenderer.php')
+		, source('src/Render/CameraPortalMesh.php')
+		, source('src/Render/DoomRenderPass.php')
+		, source('src/Map/MapData.php')
+		, source('shaders/map.vert')
+		, source('shaders/map.frag')
+		, source('shaders/sky-occlusion.vert')
+		, source('shaders/camera-portal.frag')
+	]);
+	const portalSurfaces = renderer.slice(
+		renderer.indexOf('private function renderCameraPortalSurfaces(')
+		, renderer.indexOf('/** Keep the usual depth precision')
+	);
+
+	assert.match(renderer, /function renderCameraPortalView\(/);
+	assert.match(renderer, /intdiv\(\$this->cameraPortalViewBudget, \$linkCount\)/);
+	assert.match(renderer, /intdiv\(\$availableChildViews, \$childCount\)/);
+	assert.match(renderer, /\|\| \$branchBudget <= 0/);
+	assert.match(renderer, /\$link->destinationSector/);
+	assert.match(renderer, /\$link->reciprocalId/);
+	assert.doesNotMatch(renderer, /isset\(\$path\[\$link->id\]\)/);
+	assert.match(renderer, /\$connectedSectors = \$this->level->map->connectedSectors\(\$cameraSector\)/);
+	assert.match(renderer, /\$link->destinationSector, \$nearPlane\s*\n\s*\);\s*\n\s*\$this->renderActors/);
+	assert.match(portalSurfaces, /location\('portalReady'\), 0/);
+	assert.doesNotMatch(portalSurfaces, /glColorMask\(false, false, false, false\)/);
+	assert.match(renderer, /location\('cameraComponent'\)/);
+	assert.match(pass, /\$cameraSector = \$this->renderer->level->map->sectorAt/);
+	assert.equal(pass.match(/, \$cameraSector/g)?.length, 3);
+	assert.match(mapData, /function sectorComponent\(int \$origin\): int/);
+	assert.match(vertex, /flat out ivec2 sectorComponents;/);
+	assert.match(fragment, /if\(sectorComponent != cameraComponent\) discard;/);
+	assert.match(skyOcclusion, /if\(int\(round\(sectorData\.a\)\) != cameraComponent\)/);
+	assert.match(portalFragment, /portalReady \? texture\(portalView, coordinate\) : vec4\(0\.0, 0\.0, 0\.0, 1\.0\)/);
+	assert.match(mesh, /function spanInHorizontalView\(/);
+	assert.match(mesh, /connectedSectors\(\$cameraSector\)/);
+	assert.match(mesh, /public const LINE_NEAR_PLANE = \.01;/);
+	assert.match(mesh, /\$surface->kind === CameraPortalSurface::LINE \? self::LINE_NEAR_PLANE : 1\.0/);
+	assert.match(mesh, /ksort\(\$candidates, SORT_NUMERIC\)/);
+	assert.doesNotMatch(mesh, /\$dx \* \$dx \+ \$dy \* \$dy/);
 });
 
 test('view weapons retain the full-screen psprite origin behind the status bar', async() => {

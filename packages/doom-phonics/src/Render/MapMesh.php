@@ -10,6 +10,7 @@ final class MapMesh
 	public const FLOOR = 0, CEILING = 1;
 	public const MIN_FLOOR = 2, MAX_FLOOR = 3, MIN_CEILING = 4, MAX_CEILING = 5;
 	public SkyOcclusionMesh $sky;
+	public CameraPortalMesh $cameraPortals;
 	/** @var list<float> x,y,right u,left u,textures,height selector,right V anchor,left V anchor,side sectors. */
 	public array $vertices = [];
 	/** @var list<array{first:int,count:int,sector:int,plane:int}> */
@@ -34,7 +35,11 @@ final class MapMesh
 		$this->wallRevision = $level->appearanceRevision;
 	}
 
-	public function __construct() { $this->sky = new SkyOcclusionMesh; }
+	public function __construct()
+	{
+		$this->sky = new SkyOcclusionMesh;
+		$this->cameraPortals = new CameraPortalMesh;
+	}
 
 	public function vertexCount(): int { return intdiv(count($this->vertices), self::FLOATS); }
 

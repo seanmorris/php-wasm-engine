@@ -44,8 +44,11 @@ for(const name of files)
 const demoFiles = ['episode-one.phonics-world.json'
 	, 'episode-one-online.phonics-world.json'
 	, 'skulltag-stress.phonics-world.json'
+	, 'portal-demo.phonics-world.json'
+	, 'portal-rooms.phonics-world.json'
 
 	, 'DOOM1.WAD'
+	, 'PORTALS.WAD'
 	, 'SKULLTAG-WEAPONS.WAD'
 	, 'SKULLTAG_ACTORS.lmp'
 	, 'SKULLTAG-WEAPONS.DEC'

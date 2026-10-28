@@ -18,6 +18,281 @@ final class ProjectileTracer
 		, float $dy
 		, float $dz
 	): ?ProjectileImpact {
+		return $this->tracePath($pose, $body, $dx, $dy, $dz)['impact'];
+	}
+
+	/**
+	 * Trace through passable camera portals while retaining each map-space segment.
+	 *
+	 * Fractions remain relative to the original displacement, so callers can compare
+	 * transformed actor contacts with the final static impact.
+	 *
+	 * @return array{
+	 *   segments:list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}>,
+	 *   impact:?ProjectileImpact,
+	 *   portals:list<CameraPortalLink>
+	 * }
+	 */
+	public function tracePath(
+		Transform $pose
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+	): array {
+		$segments = [];
+		$portals = [];
+		$x = $pose->x;
+		$y = $pose->y;
+		$z = $pose->z;
+		$remainingX = $dx;
+		$remainingY = $dy;
+		$remainingZ = $dz;
+		$from = 0.0;
+
+		for($guard = 0; $guard < 8; $guard++)
+		{
+			$ray = new Transform($x, $y, $z, $pose->angle);
+			$impact = $this->traceStraight($ray, $body, $remainingX, $remainingY, $remainingZ);
+			$portalHit = $this->cameraPortalHit(
+				$x, $y, $z, $body, $remainingX, $remainingY, $remainingZ, $impact?->fraction ?? 1.0
+			);
+
+			if($portalHit === null)
+			{
+				$local = $impact?->fraction ?? 1.0;
+				$to = $from + (1.0 - $from) * $local;
+				$segments[] = [
+					'x' => $x, 'y' => $y, 'z' => $z
+					, 'dx' => $remainingX * $local
+					, 'dy' => $remainingY * $local
+					, 'dz' => $remainingZ * $local
+					, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+				];
+
+				if($impact) $impact->fraction = $to;
+
+				return ['segments' => $segments,'impact' => $impact,'portals' => $portals];
+			}
+
+			$local = $portalHit['fraction'];
+			$to = $from + (1.0 - $from) * $local;
+			$segments[] = [
+				'x' => $x, 'y' => $y, 'z' => $z
+				, 'dx' => $remainingX * $local
+				, 'dy' => $remainingY * $local
+				, 'dz' => $remainingZ * $local
+				, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+			];
+
+			$link = $portalHit['portal'];
+			$crossX = $x + $remainingX * $local;
+			$crossY = $y + $remainingY * $local;
+			$crossZ = $z + $remainingZ * $local;
+			[$x,$y] = $link->point($crossX, $crossY);
+			$z = $link->bodyZ($crossZ, $body->height, $this->level);
+			[$remainingX,$remainingY] = $link->vector(
+				$remainingX * (1.0 - $local), $remainingY * (1.0 - $local)
+			);
+			$remainingZ *= 1.0 - $local;
+			$from = $to;
+			$portals[] = $link;
+
+			if(1.0 - $from <= 1e-9)
+			return ['segments' => $segments,'impact' => null,'portals' => $portals];
+		}
+
+		// Malformed cyclic portals are bounded. Finish the remaining displacement in
+		// the last coordinate space instead of hanging a simulation step.
+		$ray = new Transform($x, $y, $z, $pose->angle);
+		$impact = $this->traceStraight($ray, $body, $remainingX, $remainingY, $remainingZ);
+		$local = $impact?->fraction ?? 1.0;
+		$to = $from + (1.0 - $from) * $local;
+		$segments[] = [
+			'x' => $x, 'y' => $y, 'z' => $z
+			, 'dx' => $remainingX * $local, 'dy' => $remainingY * $local, 'dz' => $remainingZ * $local
+			, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+		];
+		if($impact) $impact->fraction = $to;
+
+		return ['segments' => $segments,'impact' => $impact,'portals' => $portals];
+	}
+
+	/**
+	 * @return array{fraction:float,portal:CameraPortalLink}|null
+	 */
+	private function cameraPortalHit(
+		float $x
+		, float $y
+		, float $z
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+		, float $limit
+	): ?array {
+		$line = $this->lineCameraPortalHit($x, $y, $z, $body, $dx, $dy, $dz, $limit);
+		$plane = $this->planeCameraPortalHit($x, $y, $z, $body, $dx, $dy, $dz, $limit);
+
+		if($line === null) return $plane;
+		if($plane === null) return $line;
+
+		return $line['fraction'] <= $plane['fraction'] ? $line : $plane;
+	}
+
+	/** @return array{fraction:float,portal:CameraPortalLink}|null */
+	private function lineCameraPortalHit(
+		float $x
+		, float $y
+		, float $z
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+		, float $limit
+	): ?array {
+		$distance = hypot($dx, $dy);
+		if($distance <= 1e-9) return null;
+
+		foreach($this->level->spatial->cast($x, $y, $dx, $dy, $distance) as $hit)
+		{
+			$fraction = $hit['distance'] / $distance;
+			if($fraction > $limit + 1e-7) break;
+			$surface = $this->level->cameraPortalForLine($hit['line']);
+			if(!$surface?->link->passable()) continue;
+			$line = $this->level->map->linedefs[$hit['line']];
+			$a = $this->level->map->vertices[$line['from']];
+			$b = $this->level->map->vertices[$line['to']];
+			$side = ((float)$b['x'] - $a['x']) * ($y - $a['y'])
+				- ((float)$b['y'] - $a['y']) * ($x - $a['x']);
+
+			// Line portals only traverse from their authored front side, matching actor
+			// movement. The physical opening still decides whether a solid wall wins.
+			if($side > 1e-7) continue;
+
+			$physical = $this->level->portal($hit['line']);
+			$crossZ = $z + $dz * $fraction;
+			if(!$physical?->admitsProjectile($crossZ, $body->height, .001, $hit['x'], $hit['y'])) continue;
+
+			return ['fraction' => $fraction,'portal' => $surface->link];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Find the first passable floor or ceiling portal before the solid impact.
+	 * Sector intervals follow the center ray so sloped planes and portals reached
+	 * after an ordinary two-sided line use the correct live sector geometry.
+	 *
+	 * @return array{fraction:float,portal:CameraPortalLink}|null
+	 */
+	private function planeCameraPortalHit(
+		float $x
+		, float $y
+		, float $z
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+		, float $limit
+	): ?array {
+		$current = $this->level->sectorAt($x, $y)->index;
+		$distance = hypot($dx, $dy);
+		$from = 0.0;
+		$hits = $distance > 1e-9
+			? $this->level->spatial->cast($x, $y, $dx, $dy, $distance)
+			: [];
+
+		foreach($hits as $hit)
+		{
+			$fraction = min(1.0, max(0.0, $hit['distance'] / $distance));
+			if($fraction > $limit + 1e-7) break;
+			if($fraction < $from) continue;
+
+			$plane = $this->planeCameraPortalInSector(
+				$x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $fraction
+			);
+			if($plane !== null) return $plane;
+
+			$portal = $this->level->portal($hit['line']);
+			$back = $portal?->opposite($current);
+			$bottom = $z + $dz * $fraction;
+			$surface = $this->lineSurface(
+				$hit['line'], $bottom, $body->height
+				, $x + $dx * $fraction, $y + $dy * $fraction
+			);
+			if($portal && $back === null) $surface = ProjectileImpact::WALL;
+			if($surface !== null || $back === null) break;
+
+			$current = $back;
+			$from = $fraction;
+		}
+
+		return $this->planeCameraPortalInSector(
+			$x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $limit
+		);
+	}
+
+	/** @return array{fraction:float,portal:CameraPortalLink}|null */
+	private function planeCameraPortalInSector(
+		float $x
+		, float $y
+		, float $z
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+		, int $sectorId
+		, float $from
+		, float $to
+	): ?array {
+		$sector = $this->level->sectors[$sectorId];
+		$center = $z + $body->height * .5;
+		$floor = $center - $sector->floorZ($x, $y);
+		$ceiling = $center - $sector->ceilingZ($x, $y);
+		$floorRate = $dz - $sector->floorSlope[0] * $dx - $sector->floorSlope[1] * $dy;
+		$ceilingRate = $dz - $sector->ceilingSlope[0] * $dx - $sector->ceilingSlope[1] * $dy;
+		$candidates = [];
+
+		if($floorRate < -1e-9)
+		{
+			$fraction = -$floor / $floorRate;
+			if($fraction >= $from - 1e-7 && $fraction <= $to + 1e-7)
+			$candidates[] = [0,$fraction];
+		}
+		if($ceilingRate > 1e-9)
+		{
+			$fraction = -$ceiling / $ceilingRate;
+			if($fraction >= $from - 1e-7 && $fraction <= $to + 1e-7)
+			$candidates[] = [1,$fraction];
+		}
+
+		usort($candidates, static fn(array $left, array $right): int => $left[1] <=> $right[1]);
+
+		foreach($candidates as [$plane,$fraction])
+		{
+			$fraction = min($to, max($from, $fraction));
+			$crossX = $x + $dx * $fraction;
+			$crossY = $y + $dy * $fraction;
+			if(!$this->level->boundsWithinCameraPortalPlane(
+				$crossX, $crossY, $body->radius, $sectorId, $plane
+			)) continue;
+			$link = $this->level->cameraPortalForPlane($sectorId, $plane)?->link;
+			if($link?->passable()) return ['fraction' => $fraction,'portal' => $link];
+		}
+
+		return null;
+	}
+
+	/** Trace one displacement without applying camera-portal transforms. */
+	private function traceStraight(
+		Transform $pose
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+	): ?ProjectileImpact {
 		$distance = hypot($dx, $dy);
 		$current = $this->level->sectorAt($pose->x, $pose->y)->index;
 		$from = 0.0;
@@ -244,7 +519,7 @@ final class ProjectileTracer
 		$fraction = null;
 		$surface = null;
 
-		if($floor + $floorRate * $from < -.001)
+		if($floorRate <= 0 && $floor + $floorRate * $from < -.001)
 		{
 			$fraction = $from;
 			$surface = ProjectileImpact::FLOOR;
@@ -254,7 +529,9 @@ final class ProjectileTracer
 			$fraction = -$floor / $floorRate;
 			$surface = ProjectileImpact::FLOOR;
 		}
-		elseif(!$sector->hasSkyCeiling() && $ceiling + $ceilingRate * $from > .001)
+		elseif(!$sector->hasSkyCeiling() && $ceilingRate >= 0
+			&& $ceiling + $ceilingRate * $from > .001
+		)
 		{
 			$fraction = $from;
 			$surface = ProjectileImpact::CEILING;
@@ -268,12 +545,23 @@ final class ProjectileTracer
 		if($fraction === null || $fraction < $from - 1e-7 || $fraction > $to + 1e-7) return null;
 
 		$fraction = min($to, max($from, $fraction));
+		$plane = $surface === ProjectileImpact::FLOOR ? 0 : 1;
+		$crossX = $pose->x + $dx * $fraction;
+		$crossY = $pose->y + $dy * $fraction;
+		$portal = $this->level->cameraPortalForPlane($sectorId, $plane)?->link;
+
+		// A body starts intersecting a portal before its center changes map space.
+		// Keep that aperture non-solid while the complete horizontal footprint fits;
+		// planeCameraPortalInSector() performs the actual center-anchor traversal.
+		if($portal?->passable() && $this->level->boundsWithinCameraPortalPlane(
+			$crossX, $crossY, $body->radius, $sectorId, $plane
+		)) return null;
 
 		return new ProjectileImpact(
 			$surface
 			, $fraction
-			, $pose->x + $dx * $fraction
-			, $pose->y + $dy * $fraction
+			, $crossX
+			, $crossY
 			, $pose->z + $dz * $fraction
 			, $sectorId
 		);

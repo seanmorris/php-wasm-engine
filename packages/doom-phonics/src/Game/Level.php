@@ -20,6 +20,16 @@ final class Level
 	public SpatialIndex $spatial;
 	/** @var array<int,LinePortal|null> */
 	private array $portals = [];
+	/** @var list<CameraPortalLink> */
+	private array $cameraPortalLinks = [];
+	/** @var list<CameraPortalSurface> */
+	private array $cameraPortalSurfaces = [];
+	/** @var array<int,CameraPortalSurface> */
+	private array $lineCameraPortals = [];
+	/** @var array<int,array<int,CameraPortalSurface>> */
+	private array $planeCameraPortals = [];
+	/** @var array<int,list<int>> Hexen line IDs, which are distinct from array indexes. */
+	private array $lineIds = [];
 	/** @var array<int,int> Unimplemented Hexen specials and their line counts. */
 	public array $unsupportedSpecials = [];
 
@@ -46,8 +56,151 @@ final class Level
 		{
 			HexenMapSetup::apply($this);
 			foreach($map->linedefs as $line)
-			if(!in_array($line['action'], [0,12,70,100,101,181,206,210,211], true))
+			if(!in_array($line['action'], [0,12,57,70,100,101,107,121,156,181,206,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
+		}
+	}
+
+	public function nextCameraPortalId(): int { return count($this->cameraPortalLinks); }
+
+	public function addCameraPortalLink(CameraPortalLink $link): void
+	{
+		$this->cameraPortalLinks[$link->id] = $link;
+	}
+
+	public function addCameraPortalSurface(CameraPortalSurface $surface): void
+	{
+		if($surface->kind === CameraPortalSurface::LINE) $this->lineCameraPortals[$surface->index] = $surface;
+		else $this->planeCameraPortals[$surface->index][$surface->plane()] = $surface;
+		$this->cameraPortalSurfaces[] = $surface;
+	}
+
+	/** @return list<CameraPortalLink> */
+	public function cameraPortalLinks(): array { return array_values($this->cameraPortalLinks); }
+
+	/** @return list<CameraPortalSurface> */
+	public function cameraPortalSurfaces(): array { return $this->cameraPortalSurfaces; }
+
+	public function cameraPortalForLine(int $line): ?CameraPortalSurface
+	{
+		return $this->lineCameraPortals[$line] ?? null;
+	}
+
+	public function cameraPortalForPlane(int $sector, int $plane): ?CameraPortalSurface
+	{
+		return $this->planeCameraPortals[$sector][$plane] ?? null;
+	}
+
+	/** Whether the complete square actor footprint lies over one passable plane portal. */
+	public function boundsWithinCameraPortalPlane(
+		float $x, float $y, float $radius, int $sector, int $plane
+	): bool {
+		$portal = $this->cameraPortalForPlane($sector, $plane)?->link;
+		if(!$portal?->passable()) return false;
+		if($radius <= 0) return true;
+
+		// Map point queries use integer coordinates. Sampling just inside the square
+		// treats a footprint touching the portal rim as contained instead of letting
+		// BSP tie-breaking choose the neighboring sector.
+		$edge = max(0.0, $radius - .51);
+		foreach([[-$edge,-$edge],[-$edge,$edge],[$edge,-$edge],[$edge,$edge]] as [$dx,$dy])
+		{
+			$sample = $this->sectorAt($x + $dx, $y + $dy);
+			if($this->cameraPortalForPlane($sample->index, $plane)?->link !== $portal) return false;
+		}
+
+		return true;
+	}
+
+	/** Whether an actor's square footprint intersects an active, passable line camera portal. */
+	public function boundsCrossCameraPortal(float $x, float $y, float $radius): bool
+	{
+		if($radius <= 0) return false;
+		$minX = $x - $radius; $minY = $y - $radius;
+		$maxX = $x + $radius; $maxY = $y + $radius;
+
+		foreach($this->spatial->near($minX, $minY, $maxX, $maxY) as $lineId)
+		{
+			$surface = $this->lineCameraPortals[$lineId] ?? null;
+			if(!$surface?->link->passable()) continue;
+			$line = $this->map->linedefs[$lineId];
+			$a = $this->map->vertices[$line['from']];
+			$b = $this->map->vertices[$line['to']];
+
+			if(self::segmentIntersectsBounds(
+				(float)$a['x'], (float)$a['y'], (float)$b['x'], (float)$b['y']
+				, $minX, $minY, $maxX, $maxY
+			)) return true;
+		}
+
+		return false;
+	}
+
+	/** Liang-Barsky segment clipping against an axis-aligned actor footprint. */
+	private static function segmentIntersectsBounds(
+		float $fromX, float $fromY, float $toX, float $toY
+		, float $minX, float $minY, float $maxX, float $maxY
+	): bool {
+		$minimum = 0.0; $maximum = 1.0;
+
+		foreach([[$fromX,$toX - $fromX,$minX,$maxX],[$fromY,$toY - $fromY,$minY,$maxY]] as [$origin,$delta,$low,$high])
+		{
+			if(abs($delta) < 1e-9)
+			{
+				if($origin < $low || $origin > $high) return false;
+				continue;
+			}
+
+			$enter = ($low - $origin) / $delta;
+			$leave = ($high - $origin) / $delta;
+			if($enter > $leave) [$enter,$leave] = [$leave,$enter];
+			$minimum = max($minimum, $enter);
+			$maximum = min($maximum, $leave);
+			if($minimum > $maximum) return false;
+		}
+
+		return true;
+	}
+
+	public function addLineId(int $id, int $line): void { $this->lineIds[$id][] = $line; }
+
+	public function firstLineWithId(int $id, ?int $except = null): ?int
+	{
+		foreach($this->lineIds[$id] ?? [] as $line) if($line !== $except) return $line;
+
+		return null;
+	}
+
+	/** Implement Hexen Line_SetPortalTarget(thisid, destid). */
+	public function retargetCameraPortals(int $thisId, int $destinationId, ?int $activatingLine = null): bool
+	{
+		$origins = $thisId === 0 && $activatingLine !== null ? [$activatingLine] : ($this->lineIds[$thisId] ?? []);
+		$changed = false;
+
+		foreach($origins as $origin)
+		{
+			$link = $this->lineCameraPortals[$origin]->link ?? null;
+			if(!$link) continue;
+			$destination = $destinationId ? $this->firstLineWithId($destinationId, $origin) : null;
+			$changed = $link->retarget($this, $destination) || $changed;
+		}
+		if($changed) $this->refreshLineCameraPortalReciprocals();
+
+		return $changed;
+	}
+
+	/** Recompute inverse pairs after Line_SetPortalTarget changes either endpoint. */
+	private function refreshLineCameraPortalReciprocals(): void
+	{
+		foreach($this->lineCameraPortals as $surface) $surface->link->reciprocalId = null;
+
+		foreach($this->lineCameraPortals as $surface)
+		{
+			$link = $surface->link;
+			if(!$link->active || $link->originLine === null || $link->destinationLine === null) continue;
+			$reverse = $this->lineCameraPortals[$link->destinationLine]->link ?? null;
+			if($reverse?->active && $reverse->destinationLine === $link->originLine)
+				$link->reciprocalId = $reverse->id;
 		}
 	}
 

@@ -22,7 +22,18 @@ export async function manifest(filename, {write = false} = {})
 
 	for(const entry of Object.values(data.exports ?? {}))
 	{
-		if(!['game', 'module', 'factory', 'component', 'asset'].includes(entry.type))
+		if(![
+			'game'
+			, 'module'
+			, 'factory'
+			, 'component'
+			, 'asset'
+			, 'adapter'
+			, 'system-set'
+			, 'lobby-provider'
+			, 'transport'
+			, 'resource-inspector'
+		].includes(entry.type))
 			throw Error(`${location}: unsupported export type ${entry.type}`);
 
 		for(const key of ['php', 'browser', 'path']) if(entry[key]) files.add(entry[key]);

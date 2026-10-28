@@ -11,6 +11,7 @@ uniform vec2 forward;
 uniform vec2 projection;
 uniform vec2 viewport;
 uniform float cameraPitch;
+uniform float nearPlane;
 uniform int pitchMode;
 
 out float across;
@@ -29,7 +30,6 @@ vec4 projectPoint(vec3 point)
 		: horizontalDepth * pitchCos + height * pitchSin;
 	float vertical = classicPitch ? height - tan(cameraPitch) * horizontalDepth
 		: height * pitchCos - horizontalDepth * pitchSin;
-	float nearPlane = 1.0;
 	float farPlane = 16384.0;
 	float clipZ = ((farPlane + nearPlane) / (farPlane - nearPlane)) * depth
 		- (2.0 * farPlane * nearPlane / (farPlane - nearPlane));

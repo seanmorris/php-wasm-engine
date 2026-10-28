@@ -14,7 +14,7 @@
     "files": ["autoload.php"]
   },
   "archive": {
-    "exclude": ["/demo", "/tests", "/benchmarks", "/node_modules", "/dist"]
+    "exclude": ["/demo", "/tests", "/tools", "/benchmarks", "/node_modules", "/dist"]
   },
   "version": "0.1.0"
 }

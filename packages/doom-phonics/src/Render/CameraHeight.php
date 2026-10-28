@@ -19,10 +19,10 @@ final class CameraHeight
 		throw new \InvalidArgumentException('Camera snap distance cannot be negative');
 	}
 
-	/** Follow a physical foot height and return the smoothed render height. */
-	public function follow(float $target): float
+	/** Follow a physical foot height, optionally snapping across a discontinuity. */
+	public function follow(float $target, bool $smooth = true): float
 	{
-		if($this->height === null)
+		if($this->height === null || !$smooth)
 		{
 			$this->target = $target;
 

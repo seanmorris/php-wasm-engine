@@ -7,6 +7,8 @@ final class HexenMapSetup
 {
 	public static function apply(Level $level): void
 	{
+		HexenCameraPortalSetup::apply($level);
+
 		foreach($level->map->linedefs as $line)
 		{
 			$args = $line['args'];

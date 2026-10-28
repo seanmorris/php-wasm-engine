@@ -127,7 +127,9 @@ final class PlayerMovementSystem
 				? $registry->get($entity, Gravity::class)->scale
 				: 1.0;
 
-			$this->verticalPhysics->step($pose, $velocity, $body, $dt, $gravityScale);
+			$this->verticalPhysics->step(
+				$pose, $velocity, $body, $dt, $gravityScale, $player->viewHeight
+			);
 			if(!$dead) $this->specials->cross($pose->previousX, $pose->previousY, $pose, $player);
 
 			$use = !$dead && ($command

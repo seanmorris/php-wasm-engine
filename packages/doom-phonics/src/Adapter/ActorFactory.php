@@ -26,6 +26,7 @@ use DoomPhonics\Game\PlayerState;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Game\DoomMatch;
 use DoomPhonics\Game\MultiplayerMode;
+use DoomPhonics\Game\HexenCameraPortalSetup;
 use DoomPhonics\Map\MapData;
 use Phonics\Network\PlayerSlot;
 
@@ -56,6 +57,7 @@ final class ActorFactory
 		foreach($map->things as $thing)
 		{
 			$type = (int)($thing['type'] ?? 0);
+			if($map->format === 'HEXEN' && HexenCameraPortalSetup::structuralThing($type)) continue;
 			if($playerStartType === $type && $customStart === null) $customStart = $thing;
 			if($playerStartType === $type) continue;
 			$teamStart = in_array($type, [5080,5081,5082], true);

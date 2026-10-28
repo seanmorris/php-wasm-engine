@@ -1240,7 +1240,7 @@ final class CombatSystem
 				if($impact->geometry->line !== null && $this->specials)
 				$this->specials->shoot(
 					$impact->geometry->line
-					, $this->level->sectorAt($pose->x, $pose->y)->index
+					, $impact->geometry->sector
 					, $player
 					, $pose
 				);
@@ -1283,50 +1283,19 @@ final class CombatSystem
 
 		$range = 6400.0;
 		$originZ = $pose->z + 41;
-		$end = $this->hitscanGeometry($pose->x, $pose->y, $originZ, $pose->angle, $range, $slope);
-		$dx = cos($pose->angle);
-		$dy = sin($pose->angle);
-		$targets = [];
+		$trace = $this->hitscanTrace($pose->x, $pose->y, $originZ, $pose->angle, $range, $slope);
+		$end = $trace['surface'];
+		$targets = $this->hitscanActorImpacts(
+			$registry, $owner, $trace['path']['segments'], $range, $end->distance
+		);
 
-		foreach($registry->query($this->damageable) as $entity)
+		foreach($targets as $targetHit)
 		{
-			if($entity === $owner) continue;
-
-			$body = $registry->get($entity, Body::class);
-
-			if(!$body->shootable) continue;
-
-			$distance = $this->rayActorDistance(
-				$pose->x
-				, $pose->y
-				, $originZ
-				, $dx
-				, $dy
-				, $slope
-				, $registry->get($entity, Transform::class)
-				, $body
-			);
-
-			if($distance !== null && $distance < $end->distance) $targets[] = [$distance,$entity];
-		}
-
-		usort($targets, static fn(array $left, array $right): int => $left[0] <=> $right[0]);
-
-		foreach($targets as [$distance,$target])
-		{
+			$impact = $targetHit['impact'];
+			$target = $impact->target;
+			if($target === null) continue;
 			if($this->usesPuff($registry, $target))
-			$this->spawnPuff(
-				$registry
-				, 'BulletPuff'
-				, new HitscanImpact(
-					$distance
-					, $pose->x + $dx * $distance
-					, $pose->y + $dy * $distance
-					, $originZ + $slope * $distance
-					, $target
-				)
-				, $pose
-			);
+			$this->spawnPuff($registry, 'BulletPuff', $impact, $targetHit['source']);
 
 			// The reference rail passes through actors and applies one fixed 100-point hit.
 			$this->damage(
@@ -1336,13 +1305,7 @@ final class CombatSystem
 				, 100
 				, null
 				, true
-				, new HitscanImpact(
-					$distance
-					, $pose->x + $dx * $distance
-					, $pose->y + $dy * $distance
-					, $originZ + $slope * $distance
-					, $target
-				)
+				, $impact
 				, $weapon
 			);
 		}
@@ -1354,21 +1317,15 @@ final class CombatSystem
 			if($end->geometry->line !== null && $this->specials)
 			$this->specials->shoot(
 				$end->geometry->line
-				, $this->level->sectorAt($pose->x, $pose->y)->index
+				, $end->geometry->sector
 				, $player
 				, $pose
 			);
 		}
 
-		$registry->create(new BeamEffect(
-			// The reference line begins eight units below its view camera. Preserve that
-			// relationship with Doom-Phonics' 41-unit camera rather than copying its
-			// renderer-specific absolute height.
-			new WorldPoint($pose->x, $pose->y, $pose->z + 33)
-			, new WorldPoint($end->x, $end->y, $end->z)
-			, .75
-			, 8
-		));
+		// The reference line begins eight units below its view camera. Preserve that
+		// relationship on the first segment; later segments begin at the portal exit.
+		$this->spawnBeamPath($registry, $trace['path']['segments'], 8);
 	}
 
 	private function playerMissile(
@@ -1614,50 +1571,19 @@ final class CombatSystem
 		$originZ = $pose->z + 32;
 		$slope = ($targetPose->z + ($targetBody?->height ?? 56) * .5 - $originZ) / $distance;
 		$range = 6400.0;
-		$end = $this->hitscanGeometry($pose->x, $pose->y, $originZ, $angle, $range, $slope);
-		$dx = cos($angle);
-		$dy = sin($angle);
-		$targets = [];
+		$trace = $this->hitscanTrace($pose->x, $pose->y, $originZ, $angle, $range, $slope);
+		$end = $trace['surface'];
+		$targets = $this->hitscanActorImpacts(
+			$registry, $entity, $trace['path']['segments'], $range, $end->distance
+		);
 
-		foreach($registry->query($this->damageable) as $target)
+		foreach($targets as $targetHit)
 		{
-			if($target === $entity) continue;
-
-			$body = $registry->get($target, Body::class);
-
-			if(!$body->shootable) continue;
-
-			$hitDistance = $this->rayActorDistance(
-				$pose->x
-				, $pose->y
-				, $originZ
-				, $dx
-				, $dy
-				, $slope
-				, $registry->get($target, Transform::class)
-				, $body
-			);
-
-			if($hitDistance !== null && $hitDistance < $end->distance) $targets[] = [$hitDistance,$target];
-		}
-
-		usort($targets, static fn(array $left, array $right): int => $left[0] <=> $right[0]);
-
-		foreach($targets as [$hitDistance,$target])
-		{
+			$impact = $targetHit['impact'];
+			$target = $impact->target;
+			if($target === null) continue;
 			if($this->usesPuff($registry, $target))
-			$this->spawnPuff(
-				$registry
-				, 'BulletPuff'
-				, new HitscanImpact(
-					$hitDistance
-					, $pose->x + $dx * $hitDistance
-					, $pose->y + $dy * $hitDistance
-					, $originZ + $slope * $hitDistance
-					, $target
-				)
-				, $pose
-			);
+			$this->spawnPuff($registry, 'BulletPuff', $impact, $targetHit['source']);
 
 			$this->damage(
 				$registry
@@ -1666,13 +1592,7 @@ final class CombatSystem
 				, 100
 				, null
 				, true
-				, new HitscanImpact(
-					$hitDistance
-					, $pose->x + $dx * $hitDistance
-					, $pose->y + $dy * $hitDistance
-					, $originZ + $slope * $hitDistance
-					, $target
-				)
+				, $impact
 				, $entity
 			);
 		}
@@ -1680,12 +1600,7 @@ final class CombatSystem
 		if($end->geometry !== null && !$end->geometry->escapesIntoSky())
 		$this->spawnPuff($registry, 'BulletPuff', $end, $pose);
 
-		$registry->create(new BeamEffect(
-			new WorldPoint($pose->x, $pose->y, $pose->z + 24)
-			, new WorldPoint($end->x, $end->y, $end->z)
-			, .75
-			, 8
-		));
+		$this->spawnBeamPath($registry, $trace['path']['segments'], 8);
 	}
 
 	private function monsterMelee(int $entity, Registry $registry, int $base): void
@@ -1995,36 +1910,58 @@ final class CombatSystem
 			return;
 		}
 
-		$impact = $this->projectileTracer->trace($pose, $body, $dx, $dy, $dz);
+		$path = $this->projectileTracer->tracePath($pose, $body, $dx, $dy, $dz);
+		$impact = $path['impact'];
 		$target = null;
 		$targetFraction = INF;
+		$targetPoint = null;
+		$targetOrigin = null;
+		$targetPortalCount = 0;
 
-		foreach($registry->query($this->damageable) as $other)
+		foreach($path['segments'] as $segment)
 		{
-			if($other === $entity || $other === $projectile->owner)continue;
+			$segmentPose = new Transform($segment['x'], $segment['y'], $segment['z'], $pose->angle);
 
-			$op = $registry->get($other, Transform::class);
-			$otherBody = $registry->get($other, Body::class);
-
-			if(!$otherBody->shootable)continue;
-
-			$fraction = $this->projectileContact($pose, $body, $dx, $dy, $dz, $op, $otherBody);
-
-			if($fraction !== null && $fraction < $targetFraction)
+			foreach($registry->query($this->damageable) as $other)
 			{
-				$target = $other;
-				$targetFraction = $fraction;
+				if($other === $entity || $other === $projectile->owner) continue;
+				$otherBody = $registry->get($other, Body::class);
+				if(!$otherBody->shootable) continue;
+				$fraction = $this->projectileContact(
+					$segmentPose, $body, $segment['dx'], $segment['dy'], $segment['dz']
+					, $registry->get($other, Transform::class), $otherBody
+				);
+
+				if($fraction === null) continue;
+				$total = $segment['from'] + ($segment['to'] - $segment['from']) * $fraction;
+
+				if($total < $targetFraction)
+				{
+					$target = $other;
+					$targetFraction = $total;
+					$targetPortalCount = $segment['portalCount'];
+					$targetOrigin = new WorldPoint($segment['x'], $segment['y'], $segment['z']);
+					$targetPoint = [
+						$segment['x'] + $segment['dx'] * $fraction
+						, $segment['y'] + $segment['dy'] * $fraction
+						, $segment['z'] + $segment['dz'] * $fraction
+					];
+				}
 			}
 		}
 
-		if($target !== null && (!$impact || $targetFraction <= $impact->fraction))
+		if($target !== null && $targetPoint !== null && (!$impact || $targetFraction <= $impact->fraction))
 		{
+			$this->applyProjectilePortals($pose, $velocity, $body, $path['portals'], $targetPortalCount);
+			[$pose->x,$pose->y,$pose->z] = $targetPoint;
 			$bloodImpact = new HitscanImpact(
 				0
-				, $pose->x + $dx * $targetFraction
-				, $pose->y + $dy * $targetFraction
-				, $pose->z + $dz * $targetFraction
+				, $pose->x
+				, $pose->y
+				, $pose->z
 				, $target
+				, null
+				, $targetOrigin
 			);
 			$this->damage(
 				$registry
@@ -2036,7 +1973,6 @@ final class CombatSystem
 				, $bloodImpact
 				, $entity
 			);
-			$this->placeProjectile($pose, $dx, $dy, $dz, $targetFraction);
 			$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
 
 			return;
@@ -2044,17 +1980,21 @@ final class CombatSystem
 
 		if($impact)
 		{
-			if($impact->escapesIntoSky())
-			{
-				$projectile->escapeIntoSky();
-				$this->placeProjectile($pose, $dx, $dy, $dz, 1.0);
-
-				return;
-			}
-
+			$this->applyProjectilePortals($pose, $velocity, $body, $path['portals'], count($path['portals']));
 			$pose->x = $impact->x;
 			$pose->y = $impact->y;
 			$pose->z = $impact->z;
+
+			if($impact->escapesIntoSky())
+			{
+				$projectile->escapeIntoSky();
+				$remaining = max(0.0, 1.0 - $impact->fraction);
+				$this->placeProjectile(
+					$pose, $velocity->x * $dt, $velocity->y * $dt, $velocity->z * $dt, $remaining
+				);
+
+				return;
+			}
 
 			if($bounce)
 			{
@@ -2078,7 +2018,11 @@ final class CombatSystem
 			return;
 		}
 
-		$this->placeProjectile($pose, $dx, $dy, $dz, 1.0);
+		$this->applyProjectilePortals($pose, $velocity, $body, $path['portals'], count($path['portals']));
+		$last = $path['segments'][array_key_last($path['segments'])];
+		$pose->x = $last['x'] + $last['dx'];
+		$pose->y = $last['y'] + $last['dy'];
+		$pose->z = $last['z'] + $last['dz'];
 
 		if($bounce?->resting)
 		{
@@ -2086,6 +2030,24 @@ final class CombatSystem
 
 			if(abs($pose->z - $floor) > .05) $bounce->resting = false;
 			else $pose->z = $floor;
+		}
+	}
+
+	/** Rotate projectile interpolation and velocity through portals already crossed. */
+	private function applyProjectilePortals(
+		Transform $pose
+		, Velocity $velocity
+		, Body $body
+		, array $portals
+		, int $count
+	): void {
+		for($index = 0; $index < $count; $index++)
+		{
+			$portal = $portals[$index];
+			[$pose->previousX,$pose->previousY] = $portal->point($pose->previousX, $pose->previousY);
+			$pose->previousZ = $portal->bodyZ($pose->previousZ, $body->height, $this->level);
+			$pose->angle = $portal->angle($pose->angle);
+			[$velocity->x,$velocity->y] = $portal->vector($velocity->x, $velocity->y);
 		}
 	}
 
@@ -2281,66 +2243,151 @@ final class CombatSystem
 		, float $range
 		, float $slope = 0
 	): HitscanImpact {
-		$dx = cos($angle);
-		$dy = sin($angle);
-		$surface = $this->hitscanGeometry($x, $y, $z, $angle, $range, $slope);
-		$bestDistance = $surface->distance;
-		$best = null;
-
-		foreach($registry->query($this->damageable) as $entity)
-		{
-			if($entity === $shooter)continue;
-
-			$pose = $registry->get($entity, Transform::class);
-			$body = $registry->get($entity, Body::class);
-
-			if(!$body->shootable)continue;
-
-			$distance = $this->rayActorDistance($x, $y, $z, $dx, $dy, $slope, $pose, $body);
-
-			if($distance !== null && $distance < $bestDistance)
-			{
-				$best = $entity;
-				$bestDistance = $distance;
-			}}
-
-		if($best !== null)
-		return new HitscanImpact(
-			$bestDistance
-			, $x + $dx * $bestDistance
-			, $y + $dy * $bestDistance
-			, $z + $slope * $bestDistance
-			, $best
+		$trace = $this->hitscanTrace($x, $y, $z, $angle, $range, $slope);
+		$targets = $this->hitscanActorImpacts(
+			$registry, $shooter, $trace['path']['segments'], $range, $trace['surface']->distance
 		);
 
-		return $surface;
+		return $targets[0]['impact'] ?? $trace['surface'];
 	}
 
-	/** Resolve only the static surface at the end of a three-dimensional hitscan. */
-	private function hitscanGeometry(
+	/**
+	 * @return array{
+	 *   path:array{segments:list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}>,impact:?ProjectileImpact,portals:list<\DoomPhonics\Game\CameraPortalLink>},
+	 *   surface:HitscanImpact
+	 * }
+	 */
+	private function hitscanTrace(
 		float $x
 		, float $y
 		, float $z
 		, float $angle
 		, float $range
 		, float $slope = 0
-	): HitscanImpact {
+	): array {
 		$dx = cos($angle);
 		$dy = sin($angle);
 		$ray = new Transform($x, $y, $z, $angle);
-		$geometry = $this->projectileTracer->trace($ray, new Body(0, 0), $dx * $range, $dy * $range, $slope * $range);
+		$path = $this->projectileTracer->tracePath(
+			$ray, new Body(0, 0), $dx * $range, $dy * $range, $slope * $range
+		);
+		$geometry = $path['impact'];
+		$segment = $path['segments'][array_key_last($path['segments'])];
+		$origin = new WorldPoint($segment['x'], $segment['y'], $segment['z']);
 
 		if($geometry)
-		return new HitscanImpact(
+		$surface = new HitscanImpact(
 			$geometry->fraction * $range
 			, $geometry->x
 			, $geometry->y
 			, $geometry->z
 			, null
 			, $geometry
+			, $origin
+		);
+		else
+		{
+			$surface = new HitscanImpact(
+				$segment['to'] * $range
+				, $segment['x'] + $segment['dx']
+				, $segment['y'] + $segment['dy']
+				, $segment['z'] + $segment['dz']
+				, null
+				, null
+				, $origin
+			);
+		}
+
+		return ['path' => $path,'surface' => $surface];
+	}
+
+	/**
+	 * Find each shootable actor on a transformed ray, once, ordered by total travel.
+	 *
+	 * @param list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}> $segments
+	 * @return list<array{impact:HitscanImpact,source:Transform}>
+	 */
+	private function hitscanActorImpacts(
+		Registry $registry
+		, int $shooter
+		, array $segments
+		, float $range
+		, float $limit
+	): array {
+		$targets = [];
+
+		foreach($registry->query($this->damageable) as $entity)
+		{
+			if($entity === $shooter) continue;
+			$body = $registry->get($entity, Body::class);
+			if(!$body->shootable) continue;
+			$target = $registry->get($entity, Transform::class);
+
+			foreach($segments as $segment)
+			{
+				$length = hypot($segment['dx'], $segment['dy']);
+				if($length <= 1e-9) continue;
+				$dx = $segment['dx'] / $length;
+				$dy = $segment['dy'] / $length;
+				$slope = $segment['dz'] / $length;
+				$distance = $this->rayActorDistance(
+					$segment['x'], $segment['y'], $segment['z'], $dx, $dy, $slope, $target, $body
+				);
+
+				if($distance === null || $distance > $length + 1e-7) continue;
+				$total = $segment['from'] * $range + $distance;
+				if($total >= $limit || isset($targets[$entity])) continue;
+
+				$targets[$entity] = [
+					'impact' => new HitscanImpact(
+						$total
+						, $segment['x'] + $dx * $distance
+						, $segment['y'] + $dy * $distance
+						, $segment['z'] + $slope * $distance
+						, $entity
+						, null
+						, new WorldPoint($segment['x'], $segment['y'], $segment['z'])
+					)
+					, 'source' => new Transform($segment['x'], $segment['y'], $segment['z'])
+				];
+				break;
+			}
+		}
+
+		usort($targets, static fn(array $left, array $right): int =>
+			$left['impact']->distance <=> $right['impact']->distance
 		);
 
-		return new HitscanImpact($range, $x + $dx * $range, $y + $dy * $range, $z + $slope * $range);
+		return array_values($targets);
+	}
+
+	/**
+	 * Render a rail as one beam per portal-space segment so it never spans the void
+	 * between a portal entrance and its destination.
+	 *
+	 * @param list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}> $segments
+	 */
+	private function spawnBeamPath(Registry $registry, array $segments, float $firstZOffset): void
+	{
+		$first = true;
+
+		foreach($segments as $segment)
+		{
+			if(abs($segment['dx']) + abs($segment['dy']) + abs($segment['dz']) <= 1e-9) continue;
+			$registry->create(new BeamEffect(
+				new WorldPoint(
+					$segment['x'], $segment['y'], $segment['z'] - ($first ? $firstZOffset : 0)
+				)
+				, new WorldPoint(
+					$segment['x'] + $segment['dx']
+					, $segment['y'] + $segment['dy']
+					, $segment['z'] + $segment['dz']
+				)
+				, .75
+				, 8
+			));
+			$first = false;
+		}
 	}
 
 	private function rayActorDistance(
@@ -2412,6 +2459,9 @@ final class CombatSystem
 		$sector = $impact->geometry
 			? $this->level->sectors[$impact->geometry->sector]
 			: $this->level->sectorAt($impact->x, $impact->y);
+
+		if($impact->origin)
+		$source = new Transform($impact->origin->x, $impact->origin->y, $impact->origin->z);
 
 		$angle = atan2($source->y - $impact->y, $source->x - $impact->x);
 
@@ -2550,6 +2600,8 @@ final class CombatSystem
 		if(!$registry->alive($effectSource) || !$registry->has($effectSource, Transform::class)) return $changed;
 
 		$sourcePose = $registry->get($effectSource, Transform::class);
+		if($impact?->origin)
+		$sourcePose = new Transform($impact->origin->x, $impact->origin->y, $impact->origin->z);
 		$this->blood->spawn(
 			$registry
 			, $target

@@ -9,12 +9,21 @@ uniform vec3 camera;
 uniform vec2 forward;
 uniform vec2 projection;
 uniform float cameraPitch;
+uniform float nearPlane;
 uniform int pitchMode;
+uniform int cameraComponent;
 
 void main()
 {
-	float ceiling = texelFetch(sectorHeights, ivec2(int(aSector + .5), 0), 0).g;
-	ceiling += dot(texelFetch(sectorHeights, ivec2(int(aSector + .5), 2), 0).xyz, vec3(aPosition, 1.0));
+	int sector = int(aSector + .5);
+	vec4 sectorData = texelFetch(sectorHeights, ivec2(sector, 0), 0);
+	if(int(round(sectorData.a)) != cameraComponent)
+	{
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
+	float ceiling = sectorData.g;
+	ceiling += dot(texelFetch(sectorHeights, ivec2(sector, 2), 0).xyz, vec3(aPosition, 1.0));
 	float worldZ = ceiling + aUpperExtent * 16384.0;
 	vec2 relative = aPosition - camera.xy;
 	vec2 right = vec2(forward.y, -forward.x);
@@ -28,7 +37,6 @@ void main()
 		: horizontalDepth * pitchCos + height * pitchSin;
 	float vertical = classicPitch ? height - tan(cameraPitch) * horizontalDepth
 		: height * pitchCos - horizontalDepth * pitchSin;
-	float nearPlane = 1.0;
 	float farPlane = 16384.0;
 	float clipZ = ((farPlane + nearPlane) / (farPlane - nearPlane)) * depth
 		- (2.0 * farPlane * nearPlane / (farPlane - nearPlane));

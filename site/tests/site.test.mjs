@@ -169,7 +169,7 @@ test('every public game type has a nested package reference page', async() => {
 		}
 	}
 
-	assert.equal(total, 271);
+	assert.equal(total, 277);
 });
 
 test('the static Doom-Phonics example includes its integrity-matched content stack', async() => {
@@ -198,6 +198,25 @@ test('the static Doom-Phonics example includes its integrity-matched content sta
 
 	assert.equal(world.start.scope, 'E1M1');
 	await fs.access(path.join(directory, 'SHAREWARE-LICENSE.txt'));
+
+	for(const [file,source,scope] of [
+		['portal-demo.phonics-world.json','portal-demo','PORTALS']
+		, ['portal-rooms.phonics-world.json','portal-rooms','PORTAL2']
+	])
+	{
+		const portalWorld = JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));
+		for(const [index,name] of ['DOOM1.WAD','PORTALS.WAD'].entries())
+		{
+			const bytes = await fs.readFile(path.join(directory, name));
+			assert.equal(portalWorld.sources[source].resources[index].url, './' + name);
+			assert.equal(
+				portalWorld.sources[source].resources[index].integrity
+				, 'sha256-' + createHash('sha256').update(bytes).digest('base64')
+			);
+		}
+		assert.deepEqual(portalWorld.sources[source].resources.map(resource => resource.role), ['iwad','pwad']);
+		assert.equal(portalWorld.start.scope, scope);
+	}
 });
 
 test('all local documentation links, fragments, and styles resolve', async() => {

@@ -46,6 +46,21 @@ Lethal damage now enters the player's DECORATE death sequence while the simulati
 
 The repository demo uses the unmodified shareware data file under its own redistribution terms. That data is not part of the published npm or Composer package.
 
+## Portal demonstration world
+
+The checked-in [portal demonstration](demo/portal-demo.phonics-world.json) loads the generated, geometry-only [PORTALS.WAD](demo/PORTALS.WAD) over the shareware IWAD. It chains six rooms through paired passable `Line_SetPortal` walls, uses a seventh off-route room for the Skulltag 9077/9078 stacked-sector pair, and an eighth for the reciprocal `Sector_SetPortal` floor and ceiling views. Keeping both plane-portal destinations outside the line route prevents one actor from appearing through multiple overlapping paths. The rooms deliberately use different floor heights, light levels, and decorations so incorrect camera transforms are visible immediately.
+
+The PWAD also contains `PORTAL2`. Its [direct-launch world](demo/portal-rooms.phonics-world.json) joins two large rooms through a recessed center floor/ceiling portal and a reciprocal pair of passable hallway portals. The rooms occupy separate map-space components, making the map a focused test for nested plane and line portal rendering.
+
+Regenerate the PWAD deterministically and verify it with the package checks:
+
+```sh
+php packages/doom-phonics/tools/generate-portals.php
+npm run test:generated
+```
+
+The PWAD contains only original map records and references assets supplied by `DOOM1.WAD`; it does not embed IWAD data.
+
 ## Skulltag D2ST9 stress world
 
 The local [stress world](demo/skulltag-stress.phonics-world.json) loads **Skulltag v0.97d5's D2ST9** over Doom II. Prepare locally owned archives, start the development server, and open the printed world URL:

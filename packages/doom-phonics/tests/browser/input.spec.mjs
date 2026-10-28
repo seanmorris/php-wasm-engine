@@ -99,7 +99,10 @@ test('Doom controller bindings separate movement, turning, use, fire and weapon 
 	const beforeMouse = await frame();
 	const canvas = page.locator('canvas');
 	const bounds = await canvas.boundingBox();
-	await canvas.click({position: {x: bounds.width / 2, y: bounds.height / 2}});
+	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+	await page.mouse.down();
+	await expect.poll(frame).toMatchObject({fire: false});
+	await page.mouse.up();
 	await page.waitForFunction(() => document.pointerLockElement?.tagName === 'CANVAS');
 	await page.mouse.move(bounds.x + bounds.width / 2 + 70, bounds.y + bounds.height / 2 + 45);
 	await expect.poll(async() => Math.abs((await frame()).position[2] - beforeMouse.position[2])).toBeGreaterThan(.02);

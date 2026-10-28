@@ -11,8 +11,10 @@ use Phonics\Ecs\Registry;
 final class ActorObstacles
 {
 	private Query $solids;
+	/** @var array<int,array{x:float,y:float,sector:int}> */
+	private array $sectors = [];
 
-	public function __construct(public Registry $registry)
+	public function __construct(public Registry $registry, public ?Level $level = null)
 	{
 		$this->solids = Query::all(Transform::class, Body::class);
 	}
@@ -27,6 +29,7 @@ final class ActorObstacles
 		if(!$body->solid) return null;
 
 		$nearest = null;
+		$connected = $this->connectedSectors($mover, $pose);
 
 		foreach($this->registry->query($this->solids) as $entity)
 		{
@@ -36,6 +39,7 @@ final class ActorObstacles
 			if(!$otherBody->solid) continue;
 
 			$other = $this->registry->get($entity, Transform::class);
+			if(!$this->sharesSpace($entity, $other, $connected)) continue;
 			if(!$this->verticalOverlap($pose, $body, $other, $otherBody)) continue;
 
 			$contact = $this->expandedBoxHit(
@@ -61,6 +65,7 @@ final class ActorObstacles
 		if(!$body->solid) return [$x,$y,false];
 
 		$hit = false;
+		$connected = $this->connectedSectors($mover, $pose);
 
 		for($iteration = 0; $iteration < 8; $iteration++)
 		{
@@ -74,6 +79,7 @@ final class ActorObstacles
 				if(!$otherBody->solid) continue;
 
 				$other = $this->registry->get($entity, Transform::class);
+				if(!$this->sharesSpace($entity, $other, $connected)) continue;
 				if(!$this->verticalOverlap($pose, $body, $other, $otherBody)) continue;
 
 				$extent = $body->radius + $otherBody->radius;
@@ -96,6 +102,35 @@ final class ActorObstacles
 		}
 
 		return [$x,$y,$hit];
+	}
+
+	/** @return array<int,true>|null */
+	private function connectedSectors(int $entity, Transform $pose): ?array
+	{
+		if(!$this->level) return null;
+
+		return $this->level->map->connectedSectors($this->sector($entity, $pose));
+	}
+
+	/** @param array<int,true>|null $connected */
+	private function sharesSpace(int $entity, Transform $other, ?array $connected): bool
+	{
+		if($connected === null || !$this->level) return true;
+
+		return isset($connected[$this->sector($entity, $other)]);
+	}
+
+	private function sector(int $entity, Transform $pose): int
+	{
+		$cached = $this->sectors[$entity] ?? null;
+
+		if($cached && $cached['x'] === $pose->x && $cached['y'] === $pose->y)
+		return $cached['sector'];
+
+		$sector = $this->level?->map->sectorAt((int)round($pose->x), (int)round($pose->y)) ?? 0;
+		$this->sectors[$entity] = ['x' => $pose->x,'y' => $pose->y,'sector' => $sector];
+
+		return $sector;
 	}
 
 	private function verticalOverlap(Transform $a, Body $aBody, Transform $b, Body $bBody): bool

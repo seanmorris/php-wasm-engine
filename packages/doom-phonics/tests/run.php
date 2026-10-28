@@ -1448,6 +1448,8 @@ verifyWad($cameraHeight->follow(40) === 34.0, 'vertical camera eases upward over
 verifyWad($cameraHeight->follow(40) === 35.5, 'vertical camera retains upward easing across render frames');
 verifyWad($cameraHeight->follow(40) === 36.625, 'vertical camera approaches an elevated floor gradually');
 verifyWad($cameraHeight->follow(40) === 40.0, 'vertical camera snaps the final four map units');
+verifyWad($cameraHeight->follow(72, false) === 72.0, 'vertical camera smoothing can snap across a portal discontinuity');
+verifyWad($cameraHeight->follow(80) === 74.0, 'vertical camera smoothing resumes from the snapped portal height');
 verifyWad($cameraHeight->follow(16) === 16.0, 'vertical camera follows downward motion immediately');
 $reversingCamera = new CameraHeight;
 $reversingCamera->follow(32);

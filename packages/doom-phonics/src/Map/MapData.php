@@ -20,6 +20,10 @@ final class MapData
 	public array $sectorLines = [];
 	/** @var array<int,list<int>> Sector adjacency. */
 	public array $neighbors = [];
+	/** @var array<int,array<int,true>> Normal-geometry components keyed by their starting sector. */
+	private array $sectorComponents = [];
+	/** @var array<int,int> Canonical normal-geometry component ID keyed by sector. */
+	private array $sectorComponentIds = [];
 	/** @var array{minX:int,minY:int,maxX:int,maxY:int,width:int,height:int} */
 	public array $bounds;
 	public string $format;
@@ -263,6 +267,41 @@ final class MapData
 		$byte = intdiv($bit, 8);
 
 		return isset($this->reject[$byte]) && (ord($this->reject[$byte]) & (1 << ($bit & 7))) !== 0;
+	}
+
+	/** @return array<int,true> Sectors reachable through ordinary two-sided geometry. */
+	public function connectedSectors(int $origin): array
+	{
+		if(isset($this->sectorComponents[$origin])) return $this->sectorComponents[$origin];
+
+		$component = [];
+		$pending = isset($this->sectors[$origin]) ? [$origin] : [];
+
+		while($pending)
+		{
+			$sector = array_pop($pending);
+			if(isset($component[$sector])) continue;
+			$component[$sector] = true;
+			foreach($this->neighbors[$sector] ?? [] as $neighbor)
+			if(!isset($component[$neighbor])) $pending[] = $neighbor;
+		}
+
+		foreach(array_keys($component) as $sector) $this->sectorComponents[$sector] = $component;
+
+		return $component;
+	}
+
+	/** Return a stable ID shared by sectors joined through ordinary two-sided geometry. */
+	public function sectorComponent(int $origin): int
+	{
+		if(isset($this->sectorComponentIds[$origin])) return $this->sectorComponentIds[$origin];
+
+		$component = $this->connectedSectors($origin);
+		$id = $component ? min(array_keys($component)) : $origin;
+
+		foreach(array_keys($component) as $sector) $this->sectorComponentIds[$sector] = $id;
+
+		return $this->sectorComponentIds[$origin] = $id;
 	}
 
 	/**

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace DoomPhonics\Render;
 
+use DoomPhonics\Component\Body;
 use DoomPhonics\Component\PlayerStart;
 use DoomPhonics\Component\NetworkPlayer;
 use DoomPhonics\Component\Transform;
@@ -109,7 +110,12 @@ final class DoomRenderPass implements RenderPass
 		$alpha = max(0, min(1, $frame->alpha));
 		$x = $pose->xAt($alpha);
 		$y = $pose->yAt($alpha);
-		$z = $this->cameraHeight->follow($pose->zAt($alpha));
+		$cameraSector = $this->renderer->level->map->sectorAt((int)$pose->x, (int)$pose->y);
+		$smoothHeight = !$this->registry->has($entity, Body::class)
+			|| !$this->renderer->level->boundsCrossCameraPortal(
+				$x, $y, $this->registry->get($entity, Body::class)->radius
+			);
+		$z = $this->cameraHeight->follow($pose->zAt($alpha), $smoothHeight);
 		$pitch = $this->registry->has($entity, ViewInput::class)
 			? $this->registry->get($entity, ViewInput::class)->pitch
 			: 0.0;
@@ -138,8 +144,13 @@ final class DoomRenderPass implements RenderPass
 
 		if(!$this->target) glViewport(0, 0, $frame->device->width, $frame->device->height);
 
-		$this->renderer->render($x, $y, $z, $angle, $pitch, $extraLight, $alpha);
-		$this->renderer->renderActors($this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha);
+		$this->renderer->renderCameraPortals(
+			$this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha, $cameraSector
+		);
+		$this->renderer->render($x, $y, $z, $angle, $pitch, $extraLight, $alpha, $cameraSector);
+		$this->renderer->renderActors(
+			$this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha, $cameraSector
+		);
 		$this->renderer->renderBeams($this->registry, $x, $y, $z, $angle, $pitch, $alpha);
 		$this->target?->compose();
 		$this->renderer->renderOverlay($this->registry, $this->settings->reticle());

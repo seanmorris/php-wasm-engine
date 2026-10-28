@@ -10,6 +10,7 @@ uniform vec3 camera;
 uniform vec2 forward;
 uniform vec2 projection;
 uniform float cameraPitch;
+uniform float nearPlane;
 uniform int pitchMode;
 
 out vec2 textureUv;
@@ -33,7 +34,6 @@ void main()
 		: horizontalDepth * pitchCos + height * pitchSin;
 	float vertical = classicPitch ? height - tan(cameraPitch) * horizontalDepth
 		: height * pitchCos - horizontalDepth * pitchSin;
-	float nearPlane = 1.0;
 	float farPlane = 16384.0;
 	float clipZ = ((farPlane + nearPlane) / (farPlane - nearPlane)) * depth
 		- (2.0 * farPlane * nearPlane / (farPlane - nearPlane));

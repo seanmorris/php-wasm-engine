@@ -10,11 +10,13 @@ uniform int paletteRows;
 uniform int palettePage;
 uniform int fixedLightMap;
 uniform int extraLight;
+uniform int cameraComponent;
 
 in vec4 textureUvs;
 in float viewDepth;
 flat in ivec2 textureIds;
 flat in ivec2 lightLevels;
+flat in ivec2 sectorComponents;
 out vec4 color;
 
 void main()
@@ -22,6 +24,8 @@ void main()
 	vec2 textureUv = gl_FrontFacing ? textureUvs.xy : textureUvs.zw;
 	int textureId = gl_FrontFacing ? textureIds.x : textureIds.y;
 	int lightLevel = gl_FrontFacing ? lightLevels.x : lightLevels.y;
+	int sectorComponent = gl_FrontFacing ? sectorComponents.x : sectorComponents.y;
+	if(sectorComponent != cameraComponent) discard;
 	if(textureId < 0) discard;
 	vec4 rectValue = texelFetch(atlasRects, ivec2(textureId, 0), 0);
 	ivec2 origin = ivec2(round(rectValue.xy));

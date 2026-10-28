@@ -22,6 +22,8 @@ use Phonics\Ecs\Registry;
 /** Data-driven dispatcher for supported Doom and Hexen linedef actions. */
 final class LineSpecials
 {
+	/** Keep a freshly warped render endpoint beyond the portal renderer's near plane. */
+	private const PORTAL_EXIT_INSET = .02;
 	/** @var array<int,bool> */
 	public array $consumed = [];
 	/** @var array<int,float> Horizontal texture offsets for scrolling walls. */
@@ -195,7 +197,8 @@ final class LineSpecials
 		){
 			$line = $this->level->map->linedefs[$lineId];
 
-			if(!$line['action'] || !self::segmentsCross($fromX, $fromY, $actor->x, $actor->y, $line, $this->level))
+			if((!$line['action'] && !$this->level->cameraPortalForLine($lineId))
+				|| !self::segmentsCross($fromX, $fromY, $actor->x, $actor->y, $line, $this->level))
 			continue;
 
 			$hits[$lineId] = self::intersectionFraction($fromX, $fromY, $actor->x, $actor->y, $line, $this->level);
@@ -211,6 +214,15 @@ final class LineSpecials
 			$a = $this->level->map->vertices[$line['from']];
 			$b = $this->level->map->vertices[$line['to']];
 			$frontCrossing = self::orient($a['x'], $a['y'], $b['x'], $b['y'], $fromX, $fromY) <= 0;
+			$portal = $this->level->cameraPortalForLine($lineId)?->link;
+
+			if($portal && $portal->passable() && $frontCrossing)
+			{
+				$this->crossCameraPortal($portal, $actor, $fromX, $fromY, $hits[$lineId]);
+				$count++;
+				// Remaining fractions belong to the coordinate space before the portal.
+				break;
+			}
 
 			if($this->activate($lineId, 'walk', $sector, $player, $actor, $frontCrossing)) $count++;
 		}
@@ -343,6 +355,10 @@ final class LineSpecials
 				$activated = $this->startMover($mover) || $activated;
 			}
 		}
+		elseif($number === 107)
+		{
+			$activated = $this->level->retargetCameraPortals($tag, $speed, $id);
+		}
 
 		if($activated)
 		{
@@ -354,6 +370,56 @@ final class LineSpecials
 		}
 
 		return $activated;
+	}
+
+	/** Move an actor continuously through a passable line camera portal. */
+	private function crossCameraPortal(
+		CameraPortalLink $portal
+		, Transform $actor
+		, float $fromX
+		, float $fromY
+		, float $fraction
+	): void
+	{
+		// The pre-crossing pose belongs to the origin component. Transforming that
+		// whole point places render interpolation behind the destination portal,
+		// even though the renderer has already switched to the destination
+		// component. Begin destination-space history at the crossing instead.
+		$fraction = max(0.0, min(1.0, $fraction));
+		$crossingX = $fromX + ($actor->x - $fromX) * $fraction;
+		$crossingY = $fromY + ($actor->y - $fromY) * $fraction;
+		$crossingZ = $actor->previousZ + ($actor->z - $actor->previousZ) * $fraction;
+		[$travelX,$travelY] = $portal->vector($actor->x - $fromX, $actor->y - $fromY);
+		[$previousX,$previousY] = $portal->point($crossingX, $crossingY);
+		[$x,$y] = $portal->point($actor->x, $actor->y);
+		$travelDistance = hypot($travelX, $travelY);
+		if($travelDistance > 0)
+		{
+			$directionX = $travelX / $travelDistance;
+			$directionY = $travelY / $travelDistance;
+			$exitDepth = ($x - $previousX) * $directionX + ($y - $previousY) * $directionY;
+			$previousX += $directionX * self::PORTAL_EXIT_INSET;
+			$previousY += $directionY * self::PORTAL_EXIT_INSET;
+			if($exitDepth < self::PORTAL_EXIT_INSET)
+			{
+				$x += $directionX * (self::PORTAL_EXIT_INSET - $exitDepth);
+				$y += $directionY * (self::PORTAL_EXIT_INSET - $exitDepth);
+			}
+		}
+		$actor->previousX = $previousX;
+		$actor->previousY = $previousY;
+		$actor->previousZ = $portal->z($crossingZ, $this->level);
+		$actor->x = $x;
+		$actor->y = $y;
+		$actor->z = $portal->z($actor->z, $this->level);
+		$actor->angle = $portal->angle($actor->angle);
+		$entity = $this->entityForTransform($actor);
+
+		if($entity !== null && $this->registry->has($entity, Velocity::class))
+		{
+			$velocity = $this->registry->get($entity, Velocity::class);
+			[$velocity->x,$velocity->y] = $portal->vector($velocity->x, $velocity->y);
+		}
 	}
 
 	/** Used by E1M8's boss-death action without manufacturing a linedef trigger. */

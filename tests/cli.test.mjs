@@ -17,6 +17,34 @@ const execute = (file, args, cwd = temporary) => execFileSync(file, args, {cwd, 
 
 test.after(async() => { await fs.rm(temporary, {recursive: true, force: true}); });
 
+test('integrity accepts every runtime export type', async() => {
+	const directory = path.join(temporary, 'export-types');
+	await fs.mkdir(directory);
+	const types = [
+		'game'
+		, 'module'
+		, 'factory'
+		, 'component'
+		, 'asset'
+		, 'adapter'
+		, 'system-set'
+		, 'lobby-provider'
+		, 'transport'
+		, 'resource-inspector'
+	];
+	const exports = Object.fromEntries(types.map((type, index) => [String(index), {type}]));
+	const filename = path.join(directory, 'phonics.json');
+
+	await fs.writeFile(filename, JSON.stringify({
+		schemaVersion: 1
+		, name: '@fixture/export-types'
+		, version: '1.0.0'
+		, exports
+	}));
+
+	assert.equal(await manifest(filename, {write: true}), 0);
+});
+
 test('static server preserves PHP bytes, supports HEAD, and confines files to declared roots', async() => {
 	const directory = path.join(temporary, 'static');
 	await fs.mkdir(directory);

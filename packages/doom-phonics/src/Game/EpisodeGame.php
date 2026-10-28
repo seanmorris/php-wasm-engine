@@ -361,8 +361,14 @@ final class EpisodeGame
 		{
 			$motion = json_decode((string)$read(), true);
 
-			if(is_array($motion) && count($motion) === 2)
+			if(is_array($motion) && count($motion) >= 2)
 			{
+				// The click that focuses an unlocked canvas is an activation gesture, not
+				// gameplay. SDL has already queued its mouse-down by this point, so release
+				// mouse actions before fixed-step command sampling can turn it into Fire.
+				if(is_numeric($motion[2] ?? null) && (int)$motion[2] > 0)
+				$engine->input->actions?->release(Source::MOUSE_BUTTON);
+
 				if(is_numeric($motion[0])) $engine->input->actions?->move(
 					Source::MOUSE_AXIS, Source::X, (float)$motion[0]
 				);
@@ -541,6 +547,7 @@ final class EpisodeGame
 			, 'reticle' => $this->settings->reticle()
 			, 'bloodSplatter' => $this->settings->bloodSplatter()
 			, 'position' => [$pose->x,$pose->y,$pose->z,$pose->angle]
+			, 'previousPosition' => [$pose->previousX,$pose->previousY,$pose->previousZ]
 			, 'render' => $content instanceof \DoomPhonics\Adapter\WadLevel ? $content->renderer?->metrics() : null
 			, 'skippedThings' => $content instanceof \DoomPhonics\Adapter\WadLevel ? $content->skippedThings : []
 			, 'unsupportedSpecials' => $content instanceof \DoomPhonics\Adapter\WadLevel

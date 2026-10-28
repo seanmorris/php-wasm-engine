@@ -116,7 +116,7 @@ final class EpisodeSystems implements SystemSet
 		$collision = new Collision(
 			$content->level
 			, (float)($motion['maxStep'] ?? 24)
-			, new ActorObstacles($scope->registry)
+			, new ActorObstacles($scope->registry, $content->level)
 		);
 
 		$sound = $scope->service('doom-sound', new \DoomPhonics\Audio\NullSoundEmitter);
