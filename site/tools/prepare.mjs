@@ -140,6 +140,10 @@ for(const game of games)
 		const source = `packages/${game.slug}/docs/${slug}.md`;
 		let body = await fs.readFile(path.join(root, source), 'utf8');
 		body = body.replace(/^# .+\r?\n/, '');
+		body = body.replace(
+			/(<img\b[^>]*\bsrc=["'])\.\.\/\.\.\/\.\.\/art\/controllers\/([^"']+)(["'])/g
+			, '$1../../images/controllers/$2$3'
+		);
 
 		body = body.replace(/(!?\[[^\]]*\]\()([^\s)]+)(\))/g, (match, start, target, end) => {
 			if(/^(?:[a-z]+:|\/\/|#)/i.test(target)) return match;

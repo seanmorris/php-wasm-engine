@@ -4,6 +4,21 @@ PHP-Noid is an original-art, 25-stage brick-breaker campaign. It demonstrates ho
 
 The package imports no Sane-Phonics code or assets. Load `worlds/campaign.world` or import `phonics.json` in Tiled and select the `@php-noid/game` module.
 
+## How to play
+
+Launch the ball, keep it above the paddle, and clear every destructible brick. Copper and silver bricks need extra hits, gold bricks are permanent, and green metal requires red energy. Catch capsules to resize the paddle, split or alter the ball, equip lasers or missiles, gain another life, or advance the stage. Enemy ships can change the board, fire back, home in on the paddle, obstruct the arena, or drop helpful supplies.
+
+Move with the pointer, keyboard, or controller. The same Fire control launches a waiting ball, releases a caught ball, and fires the active paddle weapon. On touch devices, the game supplies its own playfield controls.
+
+## Controls
+
+| Action | Xbox | PlayStation | Keyboard and mouse |
+| --- | --- | --- | --- |
+| Move paddle | <span class="controller-glyphs"><img class="controller-glyph" src="../../../art/controllers/xbox-button-ls.svg" alt="Xbox left stick"><span>or</span><img class="controller-glyph" src="../../../art/controllers/xbox-dpad.svg" alt="Xbox D-pad"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../../../art/controllers/playstation-button-ls.svg" alt="PlayStation left stick"><span>or</span><img class="controller-glyph" src="../../../art/controllers/playstation-dpad.svg" alt="PlayStation D-pad"></span> | Mouse, Left/Right, or A/D |
+| Launch, release, or fire | <img class="controller-glyph" src="../../../art/controllers/xbox-button-a.svg" alt="Xbox A button"> | <img class="controller-glyph" src="../../../art/controllers/playstation-button-x.svg" alt="PlayStation Cross button"> | Left click or Space |
+| Pause | <img class="controller-glyph" src="../../../art/controllers/xbox-button-start.svg" alt="Xbox Start button"> | <img class="controller-glyph" src="../../../art/controllers/playstation-button-start.svg" alt="PlayStation Options button"> | Right click, P, or Escape |
+| Restart | — | — | R |
+
 ## What to study
 
 - [Playing PHP-Noid](playing.md) explains controls, scoring, powers, and enemy ships.
