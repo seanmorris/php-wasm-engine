@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace DoomPhonics\Render;
 
+use DoomPhonics\Game\CameraTextureBinding;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Graphics\IndexedAtlas;
 
@@ -56,12 +57,12 @@ final class MapMeshBuilder
 				$floor = [$points[0],$points[$i],$points[$i + 1]];
 				$floorPortal = $this->level->cameraPortalForPlane($sector, 0);
 				if($floorPortal) $this->mesh->cameraPortals->plane($floor, $sector, 0, $floorPortal);
-				else $this->triangle($floor, $floorTexture, $sector, 0);
+				else $this->triangle($floor, $floorTexture, $sector, 0, $this->level->cameraTextureBinding($definition->floorTexture));
 
 				$ceiling = [$points[0],$points[$i + 1],$points[$i]];
 				$ceilingPortal = $this->level->cameraPortalForPlane($sector, 1);
 				if($ceilingPortal) $this->mesh->cameraPortals->plane($ceiling, $sector, 1, $ceilingPortal);
-				else $this->triangle($ceiling, $ceilingTexture, $sector, 1);
+				else $this->triangle($ceiling, $ceilingTexture, $sector, 1, $this->level->cameraTextureBinding($definition->ceilingTexture));
 			}
 		}
 	}
@@ -78,6 +79,7 @@ final class MapMeshBuilder
 			$left = $leftSide ? $leftSide['sector'] : null;
 			$length = hypot($b['x'] - $a['x'], $b['y'] - $a['y']);
 			$cameraPortal = $this->level->cameraPortalForLine($line['index']);
+			$mirror = $this->level->mirrorForLine($line['index']);
 
 			if($cameraPortal)
 			{
@@ -101,6 +103,11 @@ final class MapMeshBuilder
 						? $this->mesh->sky->boundary($a, $b, $sector, $line['index'])
 						: $this->mesh->sky->boundary($b, $a, $sector, $line['index']);
 				}
+			if($mirror)
+			{
+				$this->mesh->mirrors->line($a, $b, $mirror->sector, $mirror);
+				continue;
+			}
 
 				$this->quad(
 					$a
@@ -195,6 +202,8 @@ final class MapMeshBuilder
 	): void {
 		$rightTexture = $right ? $this->atlas->id('wall', $this->level->sideTextures[$rightSideId][$slot]) : -1;
 		$leftTexture = $left ? $this->atlas->id('wall', $this->level->sideTextures[$leftSideId][$slot]) : -1;
+		$rightBinding = $right ? $this->level->cameraTextureBinding($this->level->sideTextures[$rightSideId][$slot]) : null;
+		$leftBinding = $left ? $this->level->cameraTextureBinding($this->level->sideTextures[$leftSideId][$slot]) : null;
 
 		if($rightTexture < 0 && $leftTexture < 0) return;
 
@@ -230,6 +239,8 @@ final class MapMeshBuilder
 			, $leftSector
 		);
 		$this->mesh->wallSpan($first, 6, $lineId, $slot, $rightSideId, $leftSideId);
+		if($rightBinding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 6, $rightBinding, 0);
+		if($leftBinding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 6, $leftBinding, 1);
 	}
 
 	/** @param array<string,mixed>|null $side @param array{int,int} $top @param array{int,int} $bottom @return array{float,float,float} */
@@ -254,7 +265,10 @@ final class MapMeshBuilder
 	}
 
 	/** @param list<array{0:float,1:float}> $points */
-	private function triangle(array $points, int $texture, int $sector, int $plane): void
+	private function triangle(
+		array $points, int $texture, int $sector, int $plane
+		, ?CameraTextureBinding $binding = null
+	): void
 	{
 		if($texture < 0) return;
 
@@ -276,6 +290,7 @@ final class MapMeshBuilder
 			, $sector
 		);
 		$this->mesh->planeSpan($first, 3, $sector, $plane);
+		if($binding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 3, $binding, 2);
 	}
 
 	/** @param array{float,float,float} $rightAnchor @param array{float,float,float} $leftAnchor */

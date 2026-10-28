@@ -377,8 +377,47 @@ $buildPortalRooms = static function(): array {
 		, 'BEHAVIOR' => "ACS\0" . pack('V2',8,0)
 	];
 };
-$lumps = [];
-foreach([$firstMapLumps,$buildPortalRooms()] as $mapLumps)
+
+/** @return array<string,string> One room exercising camera textures and Line_Mirror. */
+$buildCameraRoom = static function(): array {
+	$vertices = '';
+	foreach([[0,0],[0,512],[512,512],[512,0]] as [$x,$y])
+	$vertices .= pack('v2',$x,$y);
+
+	$sides = $lines = $segs = '';
+	foreach([[0,1],[1,2],[2,3],[3,0]] as $index => [$from,$to])
+	{
+		$middle = $index === 2 ? 'CAMTEX' : ($index === 3 ? '-' : 'STARTAN3');
+		$side = intdiv(strlen($sides),30);
+		$sides .= pack('v2a8a8a8v',0,0,'STARTAN3','STARTAN3',$middle,0);
+		$lines .= pack('v3C6v2', ...[
+			$from,$to,1,$index === 3 ? 182 : 0,0,0,0,0,0,$side,0xffff
+		]);
+		$segs .= pack('v6',$from,$to,0,$index,0,0);
+	}
+
+	$things = '';
+	$thing = static function(
+		int $id, int $x, int $y, int $z, int $angle, int $type, array $args = [0,0,0,0,0]
+	) use (&$things): void {
+		$things .= pack('v7C6',$id,$x,$y,$z,$angle,$type,1799,0,...$args);
+	};
+	$thing(0,256,256,0,0,1); // Face the camera monitor on the east wall.
+	$thing(100,384,128,56,135,9025,[0,45,4,0,0]);
+	$thing(0,128,384,0,0,2035);
+	$thing(0,384,384,0,0,35);
+
+	return [
+		'CAMERAS' => '', 'THINGS' => $things, 'LINEDEFS' => $lines, 'SIDEDEFS' => $sides
+		, 'VERTEXES' => $vertices, 'SEGS' => $segs, 'SSECTORS' => pack('v2',4,0)
+		, 'NODES' => '', 'SECTORS' => pack('v2a8a8v3',0,128,'FLOOR0_1','CEIL3_5',176,0,0)
+		, 'REJECT' => '', 'BLOCKMAP' => '', 'BEHAVIOR' => "ACS\0" . pack('V2',8,0)
+		, 'SCRIPTS' => "script 1 OPEN\n{\n\tSetCameraToTexture(100, \"CAMTEX\", 90);\n}\n"
+	];
+};
+
+$lumps = [['ANIMDEFS', "cameratexture CAMTEX 128 128 FIT 128 128 WorldPanning\n"]];
+foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom()] as $mapLumps)
 foreach($mapLumps as $name => $bytes) $lumps[] = [$name,$bytes];
 $data = $directory = '';
 

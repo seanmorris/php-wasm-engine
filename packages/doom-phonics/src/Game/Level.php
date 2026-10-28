@@ -28,6 +28,16 @@ final class Level
 	private array $lineCameraPortals = [];
 	/** @var array<int,array<int,CameraPortalSurface>> */
 	private array $planeCameraPortals = [];
+	/** @var array<int,CameraViewpoint> */
+	private array $cameras = [];
+	/** @var array<int,array<string,mixed>> */
+	private array $thingsByTid = [];
+	/** @var array<string,CameraTextureBinding> */
+	private array $cameraTextures = [];
+	/** @var list<MirrorView> */
+	private array $mirrors = [];
+	/** @var array<int,MirrorView> */
+	private array $lineMirrors = [];
 	/** @var array<int,list<int>> Hexen line IDs, which are distinct from array indexes. */
 	private array $lineIds = [];
 	/** @var array<int,int> Unimplemented Hexen specials and their line counts. */
@@ -52,11 +62,13 @@ final class Level
 			, 'sector' => (int)$side['sector']
 		];
 		$this->spatial = new SpatialIndex($map);
+		foreach($map->things as $thing)
+		if(($tid = (int)($thing['id'] ?? 0)) !== 0) $this->thingsByTid[$tid] = $thing;
 		if($map->format === 'HEXEN')
 		{
 			HexenMapSetup::apply($this);
 			foreach($map->linedefs as $line)
-			if(!in_array($line['action'], [0,12,57,70,100,101,107,121,156,181,206,210,211], true))
+			if(!in_array($line['action'], [0,12,57,70,100,101,107,121,156,181,182,206,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
 		}
 	}
@@ -90,6 +102,43 @@ final class Level
 	{
 		return $this->planeCameraPortals[$sector][$plane] ?? null;
 	}
+
+	public function addCamera(CameraViewpoint $camera): void
+	{
+		if($camera->tid) $this->cameras[$camera->tid] = $camera;
+	}
+
+	public function camera(int $tid): ?CameraViewpoint { return $this->cameras[$tid] ?? null; }
+
+	/** @return list<CameraViewpoint> */
+	public function cameras(): array { return array_values($this->cameras); }
+
+	/** @return array<string,mixed>|null */
+	public function thingWithTid(int $tid): ?array { return $this->thingsByTid[$tid] ?? null; }
+
+	public function bindCameraTexture(CameraTextureBinding $binding): void
+	{
+		$this->cameraTextures[$binding->texture->name] = $binding;
+	}
+
+	public function cameraTextureBinding(string $name): ?CameraTextureBinding
+	{
+		return $this->cameraTextures[strtoupper($name)] ?? null;
+	}
+
+	/** @return array<string,CameraTextureBinding> */
+	public function cameraTextureBindings(): array { return $this->cameraTextures; }
+
+	public function addMirror(MirrorView $mirror): void
+	{
+		$this->mirrors[] = $mirror;
+		$this->lineMirrors[$mirror->line] = $mirror;
+	}
+
+	/** @return list<MirrorView> */
+	public function mirrors(): array { return $this->mirrors; }
+
+	public function mirrorForLine(int $line): ?MirrorView { return $this->lineMirrors[$line] ?? null; }
 
 	/** Whether the complete square actor footprint lies over one passable plane portal. */
 	public function boundsWithinCameraPortalPlane(
@@ -204,7 +253,11 @@ final class Level
 		}
 	}
 
-	public function update(float $dt): void { foreach($this->sectors as $sector) $sector->update($dt); }
+	public function update(float $dt): void
+	{
+		foreach($this->sectors as $sector) $sector->update($dt);
+		foreach($this->cameras as $camera) $camera->update($dt, $this);
+	}
 
 	/** Snapshot mutable planes once before the fixed-step geometry systems advance them. */
 	public function beginStep(): void { foreach($this->sectors as $sector) $sector->beginStep(); }

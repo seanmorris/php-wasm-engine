@@ -59,13 +59,36 @@ test('GLES maps, sprites, beams, portals, and skies share perspective and classi
 	assert.doesNotMatch(sky, /pitchOffset/);
 
 	assert.match(renderer, /\$rightX = sin\(\$angle\);\s+\$rightY = -cos\(\$angle\);/);
-	assert.equal(renderer.match(/location\('cameraPitch'\)/g)?.length, 6);
-	assert.equal(renderer.match(/location\('nearPlane'\)/g)?.length, 5);
-	assert.equal(renderer.match(/location\('pitchMode'\)/g)?.length, 6);
+	assert.equal(renderer.match(/location\('cameraPitch'\)/g)?.length, 8);
+	assert.equal(renderer.match(/location\('nearPlane'\)/g)?.length, 7);
+	assert.equal(renderer.match(/location\('pitchMode'\)/g)?.length, 8);
 	assert.match(renderer, /private const NEAR_PLANE = 1\.0;/);
 	assert.match(renderer, /CameraPortalMesh::LINE_NEAR_PLANE/);
 	assert.match(renderer, /\$distance < self::NEAR_PLANE \? CameraPortalMesh::LINE_NEAR_PLANE : self::NEAR_PLANE/);
 	assert.equal(raycaster.match(/\$angle - atan\(/g)?.length, 3);
+});
+
+test('camera textures and mirrors capture live views into dedicated surfaces', async() => {
+	const [renderer, builder, cameraFragment, mirrorFragment, setup, mirror] = await Promise.all([
+		source('src/Render/GlesMapRenderer.php')
+		, source('src/Render/MapMeshBuilder.php')
+		, source('shaders/camera-texture.frag')
+		, source('shaders/mirror.frag')
+		, source('src/Game/CameraTextureSetup.php')
+		, source('src/Game/MirrorView.php')
+	]);
+
+	assert.match(setup, /SetCameraToTexture/);
+	assert.match(builder, /cameraTextureBinding/);
+	assert.match(builder, /mirrorForLine/);
+	assert.match(renderer, /function renderCameraTextureViews\(/);
+	assert.match(renderer, /function renderMirrorViews\(/);
+	assert.match(renderer, /new ViewProjection\(\$definition->width, \$definition->height, \$binding->fov\)/);
+	assert.match(renderer, /\$mirror->camera\(\$this->level, \$x, \$y, \$z, \$angle\)/);
+	assert.match(cameraFragment, /cameraReady == 0/);
+	assert.match(cameraFragment, /surfaceSide == 0 && !gl_FrontFacing/);
+	assert.match(mirrorFragment, /gl_FragCoord\.xy \/ viewport/);
+	assert.match(mirror, /'angle' => 2 \* \$lineAngle - \$angle/);
 });
 
 test('Doom viewport resizing uses a physical framebuffer with an optional half-scale scene', async() => {

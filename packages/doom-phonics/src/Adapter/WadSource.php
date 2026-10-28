@@ -6,6 +6,7 @@ use DoomPhonics\Archive\Stack;
 use DoomPhonics\Definition\ActorDefinition;
 use DoomPhonics\Definition\WeaponSlots;
 use DoomPhonics\Game\Level;
+use DoomPhonics\Game\CameraTextureSetup;
 use DoomPhonics\Graphics\Palette;
 use DoomPhonics\Graphics\TextureCatalog;
 use Phonics\World\ActiveScope;
@@ -61,9 +62,11 @@ final class WadSource implements ContentSource
 			, fn(ActorDefinition $weapon): bool => $this->weaponAssetsExist($weapon)
 			, $this->definitions->keyconf
 		);
+		$level = new Level($this->wad->map($id));
+		CameraTextureSetup::apply($level, $this->textures);
 		$content = new WadLevel(
 			$this->wad,
-			new Level($this->wad->map($id)),
+			$level,
 			$this->textures,
 			$this->palette,
 			$this->definitions->actors,

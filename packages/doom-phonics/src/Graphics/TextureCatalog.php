@@ -12,6 +12,8 @@ final class TextureCatalog
 {
 	/** @var array<string,array<string,mixed>> */
 	private array $definitions = [];
+	/** @var array<string,CameraTextureDefinition> */
+	private array $cameraTextures = [];
 	/** @var array<string,IndexedImage> */
 	private array $cache = [];
 	/** @var array<string,array{image:IndexedImage,flipped:bool,name:string}|false> */
@@ -40,6 +42,25 @@ final class TextureCatalog
 		}
 
 		$this->loadDefinitions();
+		foreach($wad->lumps('ANIMDEFS') as $lump)
+		foreach(AnimDefsParser::cameraTextures($lump->bytes()) as $name => $definition)
+		{
+			$this->cameraTextures[$name] = $definition;
+			// A transparent placeholder reserves the name and its logical dimensions
+			// until SetCameraToTexture supplies live pixels at render time.
+			$this->definitions[$name] = [
+				'name' => $name, 'width' => $definition->displayWidth()
+				, 'height' => $definition->displayHeight(), 'patches' => []
+			];
+		}
+	}
+
+	/** @return array<string,CameraTextureDefinition> */
+	public function cameraTextures(): array { return $this->cameraTextures; }
+
+	public function cameraTexture(string $name): ?CameraTextureDefinition
+	{
+		return $this->cameraTextures[strtoupper($name)] ?? null;
 	}
 
 	/** @return list<string> Available composite wall texture names. */

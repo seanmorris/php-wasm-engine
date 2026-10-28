@@ -11,6 +11,8 @@ final class MapMesh
 	public const MIN_FLOOR = 2, MAX_FLOOR = 3, MIN_CEILING = 4, MAX_CEILING = 5;
 	public SkyOcclusionMesh $sky;
 	public CameraPortalMesh $cameraPortals;
+	public CameraTextureMesh $cameraTextures;
+	public MirrorMesh $mirrors;
 	/** @var list<float> x,y,right u,left u,textures,height selector,right V anchor,left V anchor,side sectors. */
 	public array $vertices = [];
 	/** @var list<array{first:int,count:int,sector:int,plane:int}> */
@@ -39,6 +41,8 @@ final class MapMesh
 	{
 		$this->sky = new SkyOcclusionMesh;
 		$this->cameraPortals = new CameraPortalMesh;
+		$this->cameraTextures = new CameraTextureMesh;
+		$this->mirrors = new MirrorMesh;
 	}
 
 	public function vertexCount(): int { return intdiv(count($this->vertices), self::FLOATS); }

@@ -22,6 +22,7 @@ use DoomPhonics\Definition\ActorDefinition;
 use DoomPhonics\Definition\StateFrame;
 use DoomPhonics\Game\ActorObstacles;
 use DoomPhonics\Game\Collision;
+use DoomPhonics\Game\CameraTextureSetup;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Game\LineSpecials;
 use DoomPhonics\Game\PlayerState;
@@ -29,6 +30,7 @@ use DoomPhonics\Game\ProjectileImpact;
 use DoomPhonics\Game\ProjectileTracer;
 use DoomPhonics\Game\VerticalPhysics;
 use DoomPhonics\Graphics\IndexedAtlas;
+use DoomPhonics\Graphics\AnimDefsParser;
 use DoomPhonics\Graphics\Palette;
 use DoomPhonics\Graphics\PngDecoder;
 use DoomPhonics\Graphics\TextureCatalog;
@@ -253,7 +255,7 @@ $portalDemoArchive = new DoomPhonics\Archive\Archive(
 );
 $portalDemoMap = new DoomPhonics\Map\MapData('PORTALS', $portalDemoArchive->mapLumps('PORTALS'));
 $portalDemoLevel = new Level($portalDemoMap);
-verifyWad($portalDemoArchive->maps() === ['PORTALS','PORTAL2'] && $portalDemoMap->format === 'HEXEN'
+verifyWad($portalDemoArchive->maps() === ['PORTALS','PORTAL2','CAMERAS'] && $portalDemoMap->format === 'HEXEN'
 	&& array_map(static fn(array $point): int => $portalDemoMap->sectorAt(...$point), [
 		[128,128],[640,128],[1152,128],[128,640],[640,640],[1152,640],[640,1152],[1152,1152]
 	]) === [0,1,2,3,4,5,6,7]
@@ -264,6 +266,49 @@ verifyWad(count($portalDemoLevel->cameraPortalLinks()) === 14
 	&& $portalDemoLevel->cameraPortalForPlane(7,0)?->link->alignment === DoomPhonics\Game\CameraPortalLink::ALIGN_FLOOR
 	&& $portalDemoLevel->cameraPortalForPlane(6,1)?->link->alignment === DoomPhonics\Game\CameraPortalLink::ALIGN_CEILING
 	, 'generated portal demo exercises line, sector and stacked-sector camera portals');
+
+$cameraDefinitions = AnimDefsParser::cameraTextures(<<<'ANIMDEFS'
+// A layered declaration may replace the original logical dimensions.
+CameraTexture monitor 64 32 HDR
+CameraTexture "MONITOR" 128 64 FIT 256 128 WorldPanning
+ANIMDEFS);
+verifyWad(count($cameraDefinitions) === 1
+	&& $cameraDefinitions['MONITOR']->width === 128
+	&& $cameraDefinitions['MONITOR']->height === 64
+	&& $cameraDefinitions['MONITOR']->displayWidth() === 256
+	&& $cameraDefinitions['MONITOR']->worldPanning
+	, 'ANIMDEFS camera textures support layering, FIT, HDR and WorldPanning');
+
+$cameraMap = new DoomPhonics\Map\MapData('CAMERAS', $portalDemoArchive->mapLumps('CAMERAS'));
+$cameraLevel = new Level($cameraMap);
+$cameraCatalog = new TextureCatalog(new Stack($archive,$portalDemoArchive));
+CameraTextureSetup::apply($cameraLevel,$cameraCatalog);
+$camera = $cameraLevel->camera(100);
+$cameraBinding = $cameraLevel->cameraTextureBinding('camtex');
+verifyWad($cameraMap->format === 'HEXEN' && count($cameraLevel->cameras()) === 1
+	&& $camera?->type === DoomPhonics\Game\CameraViewpoint::SECURITY
+	&& $cameraBinding?->camera === $camera && $cameraBinding->fov === 90.0
+	&& $cameraBinding->texture->width === 128 && count($cameraLevel->mirrors()) === 1
+	, 'camera objects and constant OPEN SetCameraToTexture calls bind generated camera surfaces');
+$cameraAngle = $camera->angle;
+$cameraLevel->update(.125);
+verifyWad(abs($camera->angle - $cameraAngle) > .01
+	, 'SecurityCamera things sweep their captured view over time');
+$mirrorCamera = $cameraLevel->mirrors()[0]->camera($cameraLevel,128,128,41,M_PI_2);
+verifyWad(abs($mirrorCamera['x'] - 128) < .001 && abs($mirrorCamera['y'] + 128) < .001
+	&& abs($mirrorCamera['angle'] - M_PI * 1.5) < .001
+	, 'Line_Mirror reflects camera position and heading across its linedef');
+$cameraAtlas = IndexedAtlas::forLevel($cameraLevel,$cameraCatalog);
+$cameraMesh = (new MapMeshBuilder($cameraLevel,$cameraAtlas))->build();
+verifyWad($cameraMesh->cameraTextures->vertexCount() === 6
+	&& $cameraMesh->mirrors->vertexCount() === 6
+	, 'camera-texture walls and mirrors build distinct live render surfaces');
+$cameraRegistry = new Registry;
+$cameraPopulation = (new ActorFactory((new WadDefinitions)->actors))->populate(
+	$cameraRegistry,$cameraMap,2,false,null,null,$cameraLevel
+);
+verifyWad($cameraPopulation['missing'] === [] && count($cameraPopulation['entities']) === 3
+	, 'camera things remain structural while the camera demonstration spawns gameplay actors');
 $portalDemoLineDestination = $portalDemoLevel->cameraPortalForLine(18)?->link->destinationSector;
 $portalDemoStackDestination = $portalDemoLevel->cameraPortalForPlane(4,0)?->link->destinationSector;
 verifyWad($portalDemoLineDestination === 5 && $portalDemoStackDestination === 6
@@ -426,6 +471,25 @@ verifyWad(count($portalRoomProjectileRegistry->query(Projectile::class)) === 1
 	&& abs($portalRoomProjectilePose->previousZ - 160) < .001
 	&& abs($portalRoomProjectilePose->zAt(.5) - 110) < .001
 	, 'rockets cross floor portals without a vertical interpolation discontinuity');
+$portalRoomRemotePose = new Transform(384,384,160,0);
+$portalRoomRemotePose->reconcile(484,1920,60,0);
+$portalRoomRemotePortal = (new DoomPhonics\Game\PortalInterpolation($portalRoomLevel))->restore(
+	$portalRoomRemotePose, 8
+);
+verifyWad($portalRoomRemotePortal === $portalRoomDown
+	&& abs($portalRoomRemotePose->previousX - 384) < .001
+	&& abs($portalRoomRemotePose->previousY - 1920) < .001
+	&& abs($portalRoomRemotePose->previousZ - 160) < .001
+	&& abs($portalRoomRemotePose->xAt(.5) - 434) < .001
+	&& abs($portalRoomRemotePose->yAt(.5) - 1920) < .001
+	&& abs($portalRoomRemotePose->zAt(.5) - 110) < .001
+	, 'remote rockets rebase snapshot interpolation through the crossed floor portal');
+$portalRoomOrdinaryPose = new Transform(300,384,160,0);
+$portalRoomOrdinaryPose->reconcile(340,384,160,0);
+verifyWad((new DoomPhonics\Game\PortalInterpolation($portalRoomLevel))->restore(
+	$portalRoomOrdinaryPose, 8
+) === null && $portalRoomOrdinaryPose->previousX === 300.0
+	, 'ordinary remote projectile corrections retain their local interpolation endpoint');
 verifyWad(!$portalRoomLevel->boundsWithinCameraPortalPlane(260,384,16,4,0)
 	&& $portalRoomLevel->boundsWithinCameraPortalPlane(272,384,16,4,0)
 	&& !$portalRoomLevel->boundsWithinCameraPortalPlane(260,1920,16,14,1)

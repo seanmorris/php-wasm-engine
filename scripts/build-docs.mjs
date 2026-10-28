@@ -46,6 +46,7 @@ const demoFiles = ['episode-one.phonics-world.json'
 	, 'skulltag-stress.phonics-world.json'
 	, 'portal-demo.phonics-world.json'
 	, 'portal-rooms.phonics-world.json'
+	, 'camera-mirrors.phonics-world.json'
 
 	, 'DOOM1.WAD'
 	, 'PORTALS.WAD'

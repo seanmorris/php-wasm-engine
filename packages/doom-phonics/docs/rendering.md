@@ -10,6 +10,8 @@ The checked-in [portal demonstration world](../demo/portal-demo.phonics-world.js
 
 The same PWAD includes `PORTAL2`, launched directly by the [two-room portal world](../demo/portal-rooms.phonics-world.json). It has two 768-square rooms in disconnected map space. A recessed 256-square linked floor portal occupies the upper room's center ninth, looks into the lower room's matching ceiling portal, and permits vertical traversal in both directions. The upper room opens into an east hallway and the lower room into a west hallway; their ends form a reciprocal passable line-portal pair. This combines plane and line portals in one traversable layout while keeping the ordinary sector components separate. Regenerate the freely distributable geometry-only PWAD with `php tools/generate-portals.php` from the package directory.
 
+`CAMERAS`, launched by the [camera and mirror world](../demo/camera-mirrors.phonics-world.json), tests `CAMERATEXTURE` declarations, a sweeping `SecurityCamera`, source-level `SetCameraToTexture`, and a one-sided `Line_Mirror`. Camera textures use their declared capture resolution and optional `FIT` dimensions. Mirrors capture the scene from the player camera reflected across the mirror linedef.
+
 Use the browser benchmark scripts to separate world-load cost, PHP simulation time, visibility traversal, draw submission, and browser composition. D2ST9 is the package stress map because it combines a large layout with extended actors and renderer conditionals.
 
 Context restoration rebuilds GPU resources from mounted archive data. Map changes and session disposal release the old map's buffers, textures, audio, DOM overlays, and scoped actors.

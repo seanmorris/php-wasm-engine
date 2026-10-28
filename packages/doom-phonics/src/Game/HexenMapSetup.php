@@ -8,11 +8,17 @@ final class HexenMapSetup
 	public static function apply(Level $level): void
 	{
 		HexenCameraPortalSetup::apply($level);
+		HexenCameraObjectSetup::apply($level);
 
 		foreach($level->map->linedefs as $line)
 		{
 			$args = $line['args'];
 			$sides = $level->sides($line['index']);
+			if($line['action'] === 182 && ($sides['front'] !== null) !== ($sides['back'] !== null))
+			{
+				$level->addMirror(new MirrorView($line['index'], $sides['front'] ?? $sides['back']));
+				continue;
+			}
 			if($line['action'] === 181 && $sides['front'] !== null && $sides['back'] !== null)
 			{
 				foreach(['floor','ceiling'] as $plane => $name)
@@ -30,6 +36,11 @@ final class HexenMapSetup
 				foreach($level->tags[$args[0]] ?? [] as $id) $level->sectors[$id]->$field = $sides['front'];
 			}
 		}
+	}
+
+	public static function structuralThing(int $type): bool
+	{
+		return HexenCameraPortalSetup::structuralThing($type) || HexenCameraObjectSetup::structuralThing($type);
 	}
 
 	/** Anchor the shared edge to the neighbor and retain the farthest target vertex's height. */

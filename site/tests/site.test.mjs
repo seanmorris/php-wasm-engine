@@ -169,7 +169,7 @@ test('every public game type has a nested package reference page', async() => {
 		}
 	}
 
-	assert.equal(total, 277);
+	assert.equal(total, 287);
 });
 
 test('the static Doom-Phonics example includes its integrity-matched content stack', async() => {
@@ -202,6 +202,7 @@ test('the static Doom-Phonics example includes its integrity-matched content sta
 	for(const [file,source,scope] of [
 		['portal-demo.phonics-world.json','portal-demo','PORTALS']
 		, ['portal-rooms.phonics-world.json','portal-rooms','PORTAL2']
+		, ['camera-mirrors.phonics-world.json','camera-mirrors','CAMERAS']
 	])
 	{
 		const portalWorld = JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));

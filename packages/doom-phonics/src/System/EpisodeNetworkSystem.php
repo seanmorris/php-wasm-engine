@@ -17,7 +17,9 @@ use DoomPhonics\Component\Velocity;
 use DoomPhonics\Component\ViewInput;
 use DoomPhonics\Definition\ActorCatalog;
 use DoomPhonics\Game\DoomMatch;
+use DoomPhonics\Game\Level;
 use DoomPhonics\Game\PlayerState;
+use DoomPhonics\Game\PortalInterpolation;
 use DoomPhonics\Game\WorldPoint;
 use Phonics\Ecs\Registry;
 use Phonics\Network\AuthorityOwner;
@@ -43,6 +45,7 @@ final class EpisodeNetworkSystem
 	private NetworkEntityAllocator $entities;
 	private ReplicationSession $session;
 	private ReplicationScope $scope;
+	private ?PortalInterpolation $portalInterpolation;
 
 	public function __construct(
 		private Registry $world
@@ -50,9 +53,11 @@ final class EpisodeNetworkSystem
 		, string $scope
 		, ActorCatalog $actors
 		, ?BrowserBridge $bridge = null
+		, ?Level $level = null
 	){
 		$this->entities = new NetworkEntityAllocator;
 		$this->scope = new ReplicationScope($scope);
+		$this->portalInterpolation = $level ? new PortalInterpolation($level) : null;
 		$replication = self::replication($actors);
 		$this->bindPlayers($this->scope);
 
@@ -85,7 +90,22 @@ final class EpisodeNetworkSystem
 		);
 	}
 
-	public function receive(Registry $registry, float $dt): void { $this->session->beforeStep($registry, $dt); }
+	public function receive(Registry $registry, float $dt): void
+	{
+		$this->session->beforeStep($registry, $dt);
+		if(!$this->portalInterpolation) return;
+
+		foreach($registry->query(RemoteProjectile::class) as $entity)
+		{
+			if(!$registry->has($entity, Transform::class) || !$registry->has($entity, ActorState::class)) continue;
+
+			$state = $registry->get($entity, ActorState::class);
+			$this->portalInterpolation->restore(
+				$registry->get($entity, Transform::class)
+				, max(0.0, (float)$state->definition->value('Height', 0))
+			);
+		}
+	}
 
 	public function send(Registry $registry, float $dt): void
 	{
