@@ -69,7 +69,7 @@ test('GLES maps, sprites, beams, portals, and skies share perspective and classi
 });
 
 test('camera, DOM textures and mirrors capture live views into dedicated surfaces', async() => {
-	const [renderer, builder, cameraFragment, mirrorFragment, setup, domSetup, mirror] = await Promise.all([
+	const [renderer, builder, cameraFragment, mirrorFragment, setup, domSetup, mirror, game] = await Promise.all([
 		source('src/Render/GlesMapRenderer.php')
 		, source('src/Render/MapMeshBuilder.php')
 		, source('shaders/camera-texture.frag')
@@ -77,10 +77,13 @@ test('camera, DOM textures and mirrors capture live views into dedicated surface
 		, source('src/Game/CameraTextureSetup.php')
 		, source('src/Game/DomTextureSetup.php')
 		, source('src/Game/MirrorView.php')
+		, source('game.php')
 	]);
 
 	assert.match(setup, /SetCameraToTexture/);
 	assert.match(domSetup, /CameraTextureDefinition::DOM/);
+	assert.match(game, /\.center table\{margin:0 auto!important\}/);
+	assert.match(game, /\$phpInfoSurface->showSurface\(\$phpInfoMarkup\)/);
 	assert.match(builder, /surfaceTextureBinding/);
 	assert.match(builder, /mirrorForLine/);
 	assert.match(renderer, /function renderDomTextureViews\(/);
@@ -92,6 +95,7 @@ test('camera, DOM textures and mirrors capture live views into dedicated surface
 	assert.match(cameraFragment, /cameraReady == 0/);
 	assert.match(cameraFragment, /surfaceSide == 0 && !gl_FrontFacing/);
 	assert.match(mirrorFragment, /gl_FragCoord\.xy \/ viewport/);
+	assert.match(mirrorFragment, /coordinate\.x = 1\.0 - coordinate\.x/);
 	assert.match(mirror, /'angle' => 2 \* \$lineAngle - \$angle/);
 });
 

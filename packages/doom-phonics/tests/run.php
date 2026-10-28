@@ -1441,6 +1441,10 @@ $movement = new PlayerMovementSystem(
 $movement->update($registry, 1 / 35);
 $rightTravel = ($pose->x - $beforeX) * sin($pose->angle) - ($pose->y - $beforeY) * cos($pose->angle);
 verifyWad($rightTravel > 0, 'right strafe follows screen-right view basis');
+verifyWad(
+	strcasecmp($registry->get($playerEntity, ActorState::class)->label, 'See') === 0
+	, 'moving player selects the third-person walking animation'
+);
 
 $cameraHeight = new CameraHeight;
 verifyWad($cameraHeight->follow(32) === 32.0, 'vertical camera initializes at the physical view height');
@@ -1474,6 +1478,13 @@ $coastMomentum = $velocity->x * sin($pose->angle) - $velocity->y * cos($pose->an
 verifyWad(
 	$coastTravel > 0 && $coastMomentum > 0 && $coastMomentum < $rightMomentum
 	, 'released movement coasts under fixed-tic friction'
+);
+
+$velocity->x = $velocity->y = 0;
+$movement->update($registry, 0);
+verifyWad(
+	strcasecmp($registry->get($playerEntity, ActorState::class)->label, 'Spawn') === 0
+	, 'stationary player returns to the third-person idle frame'
 );
 
 $beforeAngle = $pose->angle;

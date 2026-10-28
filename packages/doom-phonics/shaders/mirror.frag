@@ -8,5 +8,10 @@ out vec4 color;
 void main()
 {
 	if(!gl_FrontFacing) discard;
-	color = texture(portalView, gl_FragCoord.xy / viewport);
+	// Reflecting the camera reverses its handedness. The world renderer derives a
+	// conventional right vector from the reflected heading, so its capture is
+	// horizontally opposite the basis a physical mirror presents to this view.
+	vec2 coordinate = gl_FragCoord.xy / viewport;
+	coordinate.x = 1.0 - coordinate.x;
+	color = texture(portalView, coordinate);
 }

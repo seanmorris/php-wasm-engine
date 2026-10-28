@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace DoomPhonics\System;
 use DoomPhonics\Input\DoomActions;
 
+use DoomPhonics\Component\ActorState;
 use DoomPhonics\Component\Body;
 use DoomPhonics\Component\Gravity;
 use DoomPhonics\Component\HitPoints;
@@ -123,6 +124,8 @@ final class PlayerMovementSystem
 				}
 			}
 
+			$this->animatePlayerActor($registry, $entity, hypot($velocity->x, $velocity->y), $dead);
+
 			$gravityScale = $registry->has($entity, Gravity::class)
 				? $registry->get($entity, Gravity::class)->scale
 				: 1.0;
@@ -139,6 +142,20 @@ final class PlayerMovementSystem
 			if($use)
 			$this->specials->use($pose, $player);
 		}
+	}
+
+	/** Select the third-person idle/walk states without interrupting attacks, pain, or death. */
+	private function animatePlayerActor(
+		Registry $registry, int $entity, float $horizontalSpeed, bool $dead
+	): void {
+		if($dead || !$registry->has($entity, ActorState::class)) return;
+		$state = $registry->get($entity, ActorState::class);
+		$label = strtolower($state->label);
+
+		if($horizontalSpeed > .01 && $label === 'spawn' && $state->definition->state('See'))
+		$state->enter('See');
+		elseif($horizontalSpeed <= .01 && $label === 'see' && $state->definition->state('Spawn'))
+		$state->enter('Spawn');
 	}
 
 	/** @return array{collided:bool,dx:float,dy:float,normals:list<array{0:float,1:float}>} */
