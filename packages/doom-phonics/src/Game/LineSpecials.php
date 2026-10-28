@@ -359,6 +359,10 @@ final class LineSpecials
 		{
 			$activated = $this->level->retargetCameraPortals($tag, $speed, $id);
 		}
+		elseif($number === 80)
+		{
+			$activated = $this->level->runDomTextureScript($tag);
+		}
 
 		if($activated)
 		{

@@ -380,22 +380,194 @@ $buildPortalRooms = static function(): array {
 
 /** @return array<string,string> One room exercising camera textures and Line_Mirror. */
 $buildCameraRoom = static function(): array {
-	$vertices = '';
-	foreach([[0,0],[0,512],[512,512],[512,0]] as [$x,$y])
-	$vertices .= pack('v2',$x,$y);
+	// Keep the UDB-authored sector indices stable. Four short sectors bridge the
+	// recessed camera trench to the room; the middle pair carries the south
+	// PHPINFO controls and the north pair carries the matching controls.
+	$cells = [
+		['x0'=>0,   'y0'=>0,   'x1'=>128, 'y1'=>192, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>128,'y0'=>192, 'x1'=>192, 'y1'=>480, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>192,'y0'=>224, 'x1'=>320, 'y1'=>480, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>320,'y0'=>192, 'x1'=>384, 'y1'=>480, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>384,'y0'=>192, 'x1'=>512, 'y1'=>480, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>0,   'y0'=>480, 'x1'=>128, 'y1'=>512, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>128,'y0'=>480, 'x1'=>192, 'y1'=>512, 'floor'=>48,  'ceiling'=>256]
+		, ['x0'=>192,'y0'=>480, 'x1'=>320, 'y1'=>512, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>320,'y0'=>480, 'x1'=>384, 'y1'=>512, 'floor'=>48,  'ceiling'=>256]
+		, ['x0'=>384,'y0'=>480, 'x1'=>512, 'y1'=>512, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>192,'y0'=>192, 'x1'=>224, 'y1'=>224, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>288,'y0'=>192, 'x1'=>320, 'y1'=>224, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>192,'y0'=>0,   'x1'=>320, 'y1'=>192, 'floor'=>-32, 'ceiling'=>256]
+		, ['x0'=>128,'y0'=>0,   'x1'=>192, 'y1'=>192, 'floor'=>-16, 'ceiling'=>256]
+		, ['x0'=>0,   'y0'=>192, 'x1'=>128, 'y1'=>480, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>384,'y0'=>0,   'x1'=>512, 'y1'=>192, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>320,'y0'=>0,   'x1'=>384, 'y1'=>192, 'floor'=>-16, 'ceiling'=>256]
+		, ['x0'=>224,'y0'=>192, 'x1'=>256, 'y1'=>224, 'floor'=>0,   'ceiling'=>256]
+		, ['x0'=>256,'y0'=>192, 'x1'=>288, 'y1'=>224, 'floor'=>0,   'ceiling'=>256]
+	];
 
-	$sides = $lines = $segs = '';
-	foreach([[0,1],[1,2],[2,3],[3,0]] as $index => [$from,$to])
+	$vertexRows = []; $vertexIds = [];
+	$vertex = static function(int $x, int $y) use (&$vertexRows,&$vertexIds): int {
+		$key = "$x:$y";
+		if(!isset($vertexIds[$key]))
+		{
+			$vertexIds[$key] = count($vertexRows);
+			$vertexRows[] = [$x,$y];
+		}
+		return $vertexIds[$key];
+	};
+	$edgeKey = static fn(int $a,int $b): string => min($a,$b) . ':' . max($a,$b);
+	$edges = [];
+	$cellSegments = array_fill(0,count($cells),[]);
+	foreach($cells as $cell)
+	foreach([[$cell['x0'],$cell['y0']],[$cell['x0'],$cell['y1']],[$cell['x1'],$cell['y1']],[$cell['x1'],$cell['y0']]] as [$x,$y])
+	$vertex($x,$y);
+
+	// Build the recessed sector first so every switch line's front/right side is
+	// the lower, usable face. Subsector output remains in numeric sector order.
+	$edgeBuildOrder = [12,...array_values(array_diff(array_keys($cells),[12]))];
+	foreach($edgeBuildOrder as $sector)
 	{
-		$middle = $index === 1 ? 'PHPINFO'
-			: ($index === 2 ? 'CAMTEX' : ($index === 3 ? '-' : 'STARTAN3'));
-		$side = intdiv(strlen($sides),30);
-		$sides .= pack('v2a8a8a8v',0,0,'STARTAN3','STARTAN3',$middle,0);
-		$lines .= pack('v3C6v2', ...[
-			$from,$to,1,$index === 3 ? 182 : 0,0,0,0,0,0,$side,0xffff
-		]);
-		$segs .= pack('v6',$from,$to,0,$index,0,0);
+		$cell = $cells[$sector];
+		$corners = [
+			[$cell['x0'],$cell['y0']], [$cell['x0'],$cell['y1']]
+			, [$cell['x1'],$cell['y1']], [$cell['x1'],$cell['y0']]
+		];
+
+		foreach([[0,1],[1,2],[2,3],[3,0]] as [$from,$to])
+		{
+			[$fromX,$fromY] = $corners[$from]; [$toX,$toY] = $corners[$to];
+			$points = array_values(array_filter(
+				$vertexRows
+				, static fn(array $point): bool => ($fromX === $toX
+					? $point[0] === $fromX && $point[1] >= min($fromY,$toY) && $point[1] <= max($fromY,$toY)
+					: $point[1] === $fromY && $point[0] >= min($fromX,$toX) && $point[0] <= max($fromX,$toX))
+			));
+			usort($points, static function(array $a,array $b) use ($fromX,$fromY,$toX,$toY): int {
+				$axis = $fromX === $toX ? 1 : 0;
+				$direction = ($axis ? $toY - $fromY : $toX - $fromX) <=> 0;
+				return $direction * ($a[$axis] <=> $b[$axis]);
+			});
+
+			for($point = 0; $point + 1 < count($points); $point++)
+			{
+			$a = $vertex(...$points[$point]); $b = $vertex(...$points[$point + 1]);
+			$key = $edgeKey($a,$b);
+
+			if(!isset($edges[$key]))
+			{
+				$edges[$key] = [
+					'start' => $a, 'end' => $b, 'right' => $sector, 'left' => null
+					, 'action' => 0, 'args' => [0,0,0,0,0], 'flags' => 1
+					, 'rightXOffset' => 0, 'rightYOffset' => 0, 'leftXOffset' => 0
+					, 'rightTextures' => ['upper'=>'STARTAN3','lower'=>'STARTAN3','middle'=>'STARTAN3']
+					, 'leftTextures' => ['upper'=>'STARTAN3','lower'=>'STARTAN3','middle'=>'-']
+				];
+				$direction = 0;
+			}
+			else
+			{
+				if($edges[$key]['start'] !== $b || $edges[$key]['end'] !== $a || $edges[$key]['left'] !== null)
+				throw new RuntimeException("Invalid shared edge $key in CAMERAS");
+				$edges[$key]['left'] = $sector;
+				$edges[$key]['flags'] = 4;
+				$edges[$key]['rightTextures']['middle'] = '-';
+				$direction = 1;
+			}
+
+			$cellSegments[$sector][] = ['edge' => $key, 'direction' => $direction];
+			}
+		}
 	}
+
+	foreach($edges as &$edge)
+	{
+		[$ax,$ay] = $vertexRows[$edge['start']]; [$bx,$by] = $vertexRows[$edge['end']];
+		$minX = min($ax,$bx); $maxX = max($ax,$bx);
+		$minY = min($ay,$by); $maxY = max($ay,$by);
+
+		if($edge['left'] === null && $minY === 512)
+		{
+			$edge['rightTextures']['middle'] = 'PHPINFO';
+			// The north wall is split around the raised switches. Continue the
+			// 512-unit DOM texture instead of restarting it on every linedef.
+			$edge['rightXOffset'] = $minX;
+		}
+		elseif($edge['left'] === null && $minX === 512)
+		$edge['rightTextures']['middle'] = 'CAMTEX';
+		elseif($edge['left'] === null && $ay === $by && $minY === 0
+			&& $minX === 192 && $maxX === 320)
+		{
+			$edge['rightTextures']['middle'] = '-';
+			$edge['action'] = 182;
+		}
+
+		if($edge['left'] !== null && $ay === $by)
+		{
+			$script = $minY === 480 && $minX === 128 && $maxX === 192 ? 2
+				: ($minY === 480 && $minX === 320 && $maxX === 384 ? 3
+				: ($minY === 192 && $minX === 224 && $maxX === 256 ? 2
+				: ($minY === 192 && $minX === 256 && $maxX === 288 ? 3 : 0)));
+			if($script)
+			{
+				$edge['action'] = 80; // ACS_Execute: safe source parser binds ScrollDomTexture.
+				$edge['args'] = [$script,0,0,0,0];
+				$edge['flags'] = 4 | 512 | (1 << 10); // two-sided, repeatable, player-use.
+				$edge['rightTextures']['lower'] = 'SW1COMP';
+				$edge['rightXOffset'] = $minY === 192 ? 16 : 0;
+				$edge['rightYOffset'] = $minY === 192 ? 72 : 64;
+			}
+		}
+	}
+	unset($edge);
+
+	$vertices = '';
+	foreach($vertexRows as [$x,$y]) $vertices .= pack('v2',$x & 0xffff,$y & 0xffff);
+
+	$sides = $lines = '';
+	$lineIds = [];
+	foreach($edges as $key => $edge)
+	{
+		$lineIds[$key] = intdiv(strlen($lines),16);
+		$right = intdiv(strlen($sides),30);
+		$texture = $edge['rightTextures'];
+		$sides .= pack(
+			'v2a8a8a8v', $edge['rightXOffset'] & 0xffff, $edge['rightYOffset'] & 0xffff
+			, $texture['upper'], $texture['lower'], $texture['middle'], $edge['right']
+		);
+		$left = 0xffff;
+		if($edge['left'] !== null)
+		{
+			$left = intdiv(strlen($sides),30);
+			$texture = $edge['leftTextures'];
+			$sides .= pack(
+				'v2a8a8a8v', $edge['leftXOffset'] & 0xffff, 0
+				, $texture['upper'], $texture['lower'], $texture['middle'], $edge['left']
+			);
+		}
+		$lines .= pack('v3C6v2', ...[
+			$edge['start'],$edge['end'],$edge['flags'],$edge['action'],...$edge['args'],$right,$left
+		]);
+	}
+
+	$segs = $subsectors = '';
+	foreach($cellSegments as $segments)
+	{
+		$first = intdiv(strlen($segs),12);
+		foreach($segments as $segment)
+		{
+			$edge = $edges[$segment['edge']];
+			$start = $segment['direction'] ? $edge['end'] : $edge['start'];
+			$end = $segment['direction'] ? $edge['start'] : $edge['end'];
+			$segs .= pack('v6',$start,$end,0,$lineIds[$segment['edge']],$segment['direction'],0);
+		}
+		$subsectors .= pack('v2',count($segments),$first);
+	}
+
+	$sectors = '';
+	foreach($cells as $cell)
+	$sectors .= pack(
+		'v2a8a8v3',$cell['floor'],$cell['ceiling'],'FLOOR0_1','CEIL3_5',176,0,0
+	);
 
 	$things = '';
 	$thing = static function(
@@ -403,23 +575,77 @@ $buildCameraRoom = static function(): array {
 	) use (&$things): void {
 		$things .= pack('v7C6',$id,$x,$y,$z,$angle,$type,1799,0,...$args);
 	};
-	$thing(0,256,256,0,0,1); // Face the camera monitor on the east wall.
-	$thing(100,384,128,56,135,9025,[0,45,4,0,0]);
+	$thing(0,256,96,0,0,1); // Face the camera monitor on the east wall.
+	$thing(100,384,128,56,135,9025,[0,45,16,0,0]);
 	$thing(0,128,384,0,0,2035);
 	$thing(0,384,384,0,0,35);
 
+	$nodeRows = [];
+	$buildNode = null;
+	$buildNode = static function(array $ids) use (&$buildNode,&$nodeRows,$cells): int {
+		if(count($ids) === 1) return 0x8000 | $ids[0];
+		$candidates = []; $xValues = $yValues = [];
+		foreach($ids as $id)
+		{
+			$xValues[] = $cells[$id]['x0']; $xValues[] = $cells[$id]['x1'];
+			$yValues[] = $cells[$id]['y0']; $yValues[] = $cells[$id]['y1'];
+		}
+		foreach(array_values(array_unique($xValues)) as $split)
+		{
+			$west = $east = []; $valid = true;
+			foreach($ids as $id)
+			{
+				if($cells[$id]['x1'] <= $split) $west[] = $id;
+				elseif($cells[$id]['x0'] >= $split) $east[] = $id;
+				else { $valid = false; break; }
+			}
+			if($valid && $west && $east)
+			$candidates[] = ['score'=>abs(count($west)-count($east)),'axis'=>'x','split'=>$split,'low'=>$west,'high'=>$east];
+		}
+		foreach(array_values(array_unique($yValues)) as $split)
+		{
+			$south = $north = []; $valid = true;
+			foreach($ids as $id)
+			{
+				if($cells[$id]['y1'] <= $split) $south[] = $id;
+				elseif($cells[$id]['y0'] >= $split) $north[] = $id;
+				else { $valid = false; break; }
+			}
+			if($valid && $south && $north)
+			$candidates[] = ['score'=>abs(count($south)-count($north)),'axis'=>'y','split'=>$split,'low'=>$south,'high'=>$north];
+		}
+		if(!$candidates) throw new RuntimeException('Cannot partition CAMERAS cells');
+		usort($candidates, static fn(array $a,array $b): int => $a['score'] <=> $b['score']);
+		$choice = $candidates[0];
+		$low = $buildNode($choice['low']); $high = $buildNode($choice['high']);
+		if($choice['axis'] === 'x') $nodeRows[] = [$choice['split'],0,0,1,$high,$low];
+		else $nodeRows[] = [0,$choice['split'],1,0,$low,$high];
+		return count($nodeRows) - 1;
+	};
+	$buildNode(array_keys($cells));
+	$bounds = [512,0,0,512];
+	$nodes = '';
+	foreach($nodeRows as [$x,$y,$dx,$dy,$right,$left])
+	$nodes .= pack('v14', ...[
+		$x & 0xffff,$y & 0xffff,$dx & 0xffff,$dy & 0xffff
+		, ...array_map(static fn(int $value): int => $value & 0xffff,[...$bounds,...$bounds])
+		, $right,$left
+	]);
+
 	return [
 		'CAMERAS' => '', 'THINGS' => $things, 'LINEDEFS' => $lines, 'SIDEDEFS' => $sides
-		, 'VERTEXES' => $vertices, 'SEGS' => $segs, 'SSECTORS' => pack('v2',4,0)
-		, 'NODES' => '', 'SECTORS' => pack('v2a8a8v3',0,128,'FLOOR0_1','CEIL3_5',176,0,0)
+		, 'VERTEXES' => $vertices, 'SEGS' => $segs, 'SSECTORS' => $subsectors
+		, 'NODES' => $nodes, 'SECTORS' => $sectors
 		, 'REJECT' => '', 'BLOCKMAP' => '', 'BEHAVIOR' => "ACS\0" . pack('V2',8,0)
 		, 'SCRIPTS' => "script 1 OPEN\n{\n\tSetCameraToTexture(100, \"CAMTEX\", 90);\n}\n"
+			. "script 2 (void)\n{\n\tScrollDomTexture(\"PHPINFO\", -96);\n}\n"
+			. "script 3 (void)\n{\n\tScrollDomTexture(\"PHPINFO\", 96);\n}\n"
 	];
 };
 
 $lumps = [['ANIMDEFS', <<<ANIMDEFS
 cameratexture CAMTEX 128 128 FIT 128 128 WorldPanning
-domtexture PHPINFO 512 256 FIT 512 128 WorldPanning
+domtexture PHPINFO 512 256 FIT 512 256 WorldPanning
 ANIMDEFS]];
 foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom()] as $mapLumps)
 foreach($mapLumps as $name => $bytes) $lumps[] = [$name,$bytes];

@@ -73,7 +73,12 @@ $phpInfoSurface = $domTexture->fork();
 ob_start();
 phpinfo();
 $phpInfoMarkup = (string)ob_get_clean();
-$phpInfoSurface->show('PHP Info', $phpInfoMarkup, 'Live browser DOM texture');
+$phpInfoMarkup = str_replace(
+	'</head>',
+	'<style>.center table{margin:0 auto!important}</style></head>',
+	$phpInfoMarkup
+);
+$phpInfoSurface->showSurface($phpInfoMarkup);
 $phonics->runtime->service('doom-dom-textures', ['PHPINFO' => $phpInfoSurface]);
 $networkSettings = null;
 

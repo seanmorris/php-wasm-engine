@@ -286,7 +286,10 @@ $cameraLevel = new Level($cameraMap);
 $cameraCatalog = new TextureCatalog(new Stack($archive,$portalDemoArchive));
 CameraTextureSetup::apply($cameraLevel,$cameraCatalog);
 $domBridge = new class {
+	/** @var list<float> */
+	public array $scrolls = [];
 	public function render(int $width, int $height, int $headerHeight): bool { return true; }
+	public function scrollBy(float $amount): void { $this->scrolls[] = $amount; }
 };
 DoomPhonics\Game\DomTextureSetup::apply($cameraLevel,$cameraCatalog,['phpinfo' => $domBridge]);
 $camera = $cameraLevel->camera(100);
@@ -294,10 +297,31 @@ $cameraBinding = $cameraLevel->cameraTextureBinding('camtex');
 $domBinding = $cameraLevel->domTextureBinding('phpinfo');
 verifyWad($cameraMap->format === 'HEXEN' && count($cameraLevel->cameras()) === 1
 	&& $camera?->type === DoomPhonics\Game\CameraViewpoint::SECURITY
+	&& $camera->args[2] === 16
+	&& count($cameraMap->sectors) === 19
+	&& $cameraLevel->sectorAt(256,96)->floorZ(256,96) === -32.0
+	&& $cameraLevel->sectorAt(240,208)->floorZ(240,208) === 0.0
+	&& $cameraLevel->sectorAt(272,208)->floorZ(272,208) === 0.0
 	&& $cameraBinding?->camera === $camera && $cameraBinding->fov === 90.0
 	&& $cameraBinding->texture->width === 128 && count($cameraLevel->mirrors()) === 1
 	&& $domBinding?->bridge === $domBridge && $domBinding->texture->width === 512
-	, 'camera objects, OPEN camera calls and trusted DOM providers bind generated dynamic surfaces');
+	&& $domBinding->texture->displayHeight() === 256
+	, 'camera objects, edited trench geometry, OPEN camera calls and trusted DOM providers bind generated dynamic surfaces');
+$scrollLines = array_values(array_filter(
+	$cameraMap->linedefs, static fn(array $line): bool => $line['action'] === 80
+));
+usort($scrollLines, static fn(array $a,array $b): int => $a['args'][0] <=> $b['args'][0]);
+$cameraSpecials = new LineSpecials($cameraLevel);
+$cameraPlayer = new PlayerState;
+foreach($scrollLines as $line)
+verifyWad($cameraSpecials->activate($line['index'],'use',0,$cameraPlayer), 'DOM-texture switch activates');
+$scrolls = $domBridge->scrolls;
+sort($scrolls);
+verifyWad(count($scrollLines) === 4
+	&& $scrolls === [-96.0,-96.0,96.0,96.0]
+	&& array_reduce($scrollLines, static fn(bool $valid,array $line): bool => $valid
+		&& $cameraLevel->sideTextures[$line['right']]['lower'] === 'SW2COMP', true)
+	, 'raised repeatable switches execute safe ACS DOM-texture scroll calls');
 $cameraAngle = $camera->angle;
 $cameraLevel->update(.125);
 verifyWad(abs($camera->angle - $cameraAngle) > .01
@@ -309,10 +333,10 @@ verifyWad(abs($mirrorCamera['x'] - 128) < .001 && abs($mirrorCamera['y'] + 128) 
 $cameraAtlas = IndexedAtlas::forLevel($cameraLevel,$cameraCatalog);
 $cameraMesh = (new MapMeshBuilder($cameraLevel,$cameraAtlas))->build();
 verifyWad(count($cameraMap->subsectorPolygons()[0] ?? []) === 4
-	&& count($cameraMesh->planeSpans) === 4
-	&& $cameraMesh->cameraTextures->vertexCount() === 12
+	&& count($cameraMesh->planeSpans) >= 4
+	&& $cameraMesh->cameraTextures->vertexCount() >= 12
 	&& $cameraMesh->mirrors->vertexCount() === 6
-	, 'single-subsector floors, ceilings, camera, DOM-texture and mirror walls build distinct surfaces');
+	, 'partitioned floors, ceilings, camera, DOM-texture and mirror walls build distinct surfaces');
 $cameraRegistry = new Registry;
 $cameraPopulation = (new ActorFactory((new WadDefinitions)->actors))->populate(
 	$cameraRegistry,$cameraMap,2,false,null,null,$cameraLevel
@@ -718,8 +742,8 @@ $scrollMap->linedefs[0]['args'] = [32,0,0,0,0]; $scrollMap->linedefs[2]['action'
 $scrollMap->linedefs[3]['action'] = 121;
 $scrollLevel = new Level($scrollMap); $scrollSpecials = new LineSpecials($scrollLevel);
 $scrollSpecials->update(1/35);
-verifyWad($scrollLevel->wallScroll[0] === -.5 && $scrollLevel->unsupportedSpecials === [80=>1], 'Hexen texture scrolling uses fractional tics and recognizes line identification');
-verifyWad(!$scrollSpecials->activate(2,'walk',0,$portPlayer), 'unsupported Hexen actions never fall through to Doom dispatch');
+verifyWad($scrollLevel->wallScroll[0] === -.5 && $scrollLevel->unsupportedSpecials === [], 'Hexen texture scrolling recognizes ACS execution and line identification');
+verifyWad(!$scrollSpecials->activate(2,'walk',0,$portPlayer), 'unbound ACS execution never falls through to Doom dispatch');
 
 $portAtlas = IndexedAtlas::forLevel($portLevel, new TextureCatalog($stack));
 $portMesh = (new MapMeshBuilder($portLevel,$portAtlas))->build();

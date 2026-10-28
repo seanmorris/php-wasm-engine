@@ -36,6 +36,8 @@ final class Level
 	private array $cameraTextures = [];
 	/** @var array<string,DomTextureBinding> */
 	private array $domTextures = [];
+	/** @var array<int,list<array{binding:DomTextureBinding,amount:float}>> */
+	private array $domTextureScrollScripts = [];
 	/** @var list<MirrorView> */
 	private array $mirrors = [];
 	/** @var array<int,MirrorView> */
@@ -70,7 +72,7 @@ final class Level
 		{
 			HexenMapSetup::apply($this);
 			foreach($map->linedefs as $line)
-			if(!in_array($line['action'], [0,12,57,70,100,101,107,121,156,181,182,206,210,211], true))
+			if(!in_array($line['action'], [0,12,57,70,80,100,101,107,121,156,181,182,206,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
 		}
 	}
@@ -143,6 +145,33 @@ final class Level
 
 	/** @return array<string,DomTextureBinding> */
 	public function domTextureBindings(): array { return $this->domTextures; }
+
+	public function bindDomTextureScroll(int $script, DomTextureBinding $binding, float $amount): void
+	{
+		$this->domTextureScrollScripts[$script][] = ['binding' => $binding, 'amount' => $amount];
+	}
+
+	/** Run the safe ScrollDomTexture subset attached to an ACS_Execute switch. */
+	public function runDomTextureScript(int $script): bool
+	{
+		$controls = $this->domTextureScrollScripts[$script] ?? [];
+		$activated = false;
+
+		foreach($controls as $control)
+		{
+			try
+			{
+				$control['binding']->bridge->scrollBy($control['amount']);
+				$activated = true;
+			}
+			catch(\Throwable)
+			{
+				// Browser-owned surfaces may be unavailable during context recovery.
+			}
+		}
+
+		return $activated;
+	}
 
 	public function surfaceTextureBinding(string $name): CameraTextureBinding|DomTextureBinding|null
 	{
