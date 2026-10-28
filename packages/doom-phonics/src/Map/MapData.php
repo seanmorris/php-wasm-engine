@@ -316,7 +316,7 @@ final class MapData
 	public function subsectorPolygons(): array
 	{
 		if($this->subsectorPolygons !== null) return $this->subsectorPolygons;
-		if(!$this->nodes || !$this->subsectors || !$this->segs) return $this->subsectorPolygons = [];
+		if(!$this->subsectors || !$this->segs) return $this->subsectorPolygons = [];
 
 		$bounds = $this->bounds;
 		$root = [
@@ -325,8 +325,11 @@ final class MapData
 			, [(float)$bounds['maxX'], (float)$bounds['maxY']]
 			, [(float)$bounds['minX'], (float)$bounds['maxY']]
 		];
-		$pending = [[count($this->nodes) - 1, $root]];
-		$leaves = [];
+		// A convex map with one subsector has no partition to encode, so an empty
+		// NODES lump is valid. Its sole leaf starts with the complete map bounds and
+		// is trimmed by the ordinary SEGS below just like every BSP-derived leaf.
+		$leaves = !$this->nodes && count($this->subsectors) === 1 ? [0 => $root] : [];
+		$pending = $this->nodes ? [[count($this->nodes) - 1, $root]] : [];
 
 		while($pending)
 		{

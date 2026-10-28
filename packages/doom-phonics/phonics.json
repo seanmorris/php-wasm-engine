@@ -389,7 +389,7 @@
     "src/Input/DoomActions.php": "sha256-ONsvPgCOCA66Oo7DqYVl+hEnyG+2+Y/S88xo2JQd+CE=",
     "src/Input/InputSettings.php": "sha256-+GVNv+X05VWPj9ob64NJ46wgw6a0nFqzj9/h0ZZBaiU=",
     "src/Input/LookInput.php": "sha256-J7HKh2f+whtALiyeK0dF04G9mK2wVndk34awRUwo8eE=",
-    "src/Map/MapData.php": "sha256-FJdhqb+1QEOURmT/8TkDTxGYJnbE8RRVqXPqBrPpyQk=",
+    "src/Map/MapData.php": "sha256-Sk5R/Bnsob9cf8rqAofu1Jy50oxck+0RVlC2xnWw1kc=",
     "src/Map/SpatialIndex.php": "sha256-l7UMclu30Ww72z9mMTmdDbCWtCDkvSmdKqUra9WPVqA=",
     "src/Menu/DoomControlsMenu.php": "sha256-r7qQvkZmWuCea5mdE17wFofB83MVla+1GouvtkbZSOQ=",
     "src/Menu/DoomMenuController.php": "sha256-AV3ZWdKVaLOHshQ7BEwtDlDGbXS+pnTwmr0Ay/mSH3E=",

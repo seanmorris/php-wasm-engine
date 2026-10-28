@@ -308,9 +308,11 @@ verifyWad(abs($mirrorCamera['x'] - 128) < .001 && abs($mirrorCamera['y'] + 128) 
 	, 'Line_Mirror reflects camera position and heading across its linedef');
 $cameraAtlas = IndexedAtlas::forLevel($cameraLevel,$cameraCatalog);
 $cameraMesh = (new MapMeshBuilder($cameraLevel,$cameraAtlas))->build();
-verifyWad($cameraMesh->cameraTextures->vertexCount() === 12
+verifyWad(count($cameraMap->subsectorPolygons()[0] ?? []) === 4
+	&& count($cameraMesh->planeSpans) === 4
+	&& $cameraMesh->cameraTextures->vertexCount() === 12
 	&& $cameraMesh->mirrors->vertexCount() === 6
-	, 'camera, DOM-texture and mirror walls build distinct live render surfaces');
+	, 'single-subsector floors, ceilings, camera, DOM-texture and mirror walls build distinct surfaces');
 $cameraRegistry = new Registry;
 $cameraPopulation = (new ActorFactory((new WadDefinitions)->actors))->populate(
 	$cameraRegistry,$cameraMap,2,false,null,null,$cameraLevel
