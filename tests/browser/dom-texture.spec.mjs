@@ -71,3 +71,36 @@ test('DOM texture overlays retain the caller render target', async({page}) => {
 		, screen: [255,0,0,255]
 	});
 });
+
+test('DOM texture surfaces use every target pixel without modal chrome', async({page}) => {
+	await page.goto('/preview/');
+
+	const result = await page.evaluate(async() => {
+		const {DomTexture} = await import('/engine/browser/DomTexture.mjs');
+		const canvas = document.createElement('canvas');
+		const texture = new DomTexture(canvas);
+		texture.showSurface('<main>Edge to edge</main>');
+		const layout = texture.resolveLayout(512, 256, 38);
+		const state = JSON.parse(texture.state());
+		texture.dispose();
+
+		return {layout,state};
+	});
+
+	expect(result.layout).toMatchObject({
+		width: 512
+		, height: 256
+		, margin: 0
+		, panelX: 0
+		, panelY: 0
+		, panelWidth: 512
+		, panelHeight: 256
+		, headerHeight: 0
+		, footerHeight: 0
+		, contentX: 0
+		, contentY: 0
+		, contentWidth: 512
+		, contentHeight: 256
+	});
+	expect(result.state).toMatchObject({open: true,surface: true});
+});

@@ -20,6 +20,7 @@ export class DomTexture
 		this.disposed = false;
 
 		this.opened = false;
+		this.surface = false;
 		this.title = '';
 		this.html = '';
 		this.headerHint = '';
@@ -83,8 +84,20 @@ export class DomTexture
 	/** Open fresh trusted HTML at its initial scroll position. */
 	show(title, html, headerHint = 'Esc / B: Back')
 	{
+		this.openDocument(title, html, headerHint, false);
+	}
+
+	/** Open trusted HTML as an edge-to-edge texture without modal chrome. */
+	showSurface(html)
+	{
+		this.openDocument('', html, '', true);
+	}
+
+	openDocument(title, html, headerHint, surface)
+	{
 		this.clearTiles();
 		this.opened = true;
+		this.surface = Boolean(surface);
 		this.title = String(title || 'Information');
 		this.html = String(html || '');
 		this.headerHint = String(headerHint || '');
@@ -107,6 +120,7 @@ export class DomTexture
 	{
 		this.clearTiles();
 		this.opened = false;
+		this.surface = false;
 		this.title = this.html = this.headerHint = '';
 		this.contentImage = this.overlayImage = this.pendingImages = null;
 		this.tiles = [];
@@ -159,6 +173,7 @@ export class DomTexture
 	{
 		return JSON.stringify({
 			open: this.opened
+			, surface: this.surface
 			, ready: this.opened && this.tiles.length > 0 && this.overlayUploaded
 			, scroll: this.scroll
 			, targetScroll: this.targetScroll
@@ -277,6 +292,23 @@ export class DomTexture
 	{
 		width = Math.max(1, Math.floor(Number(width) || this.canvas.width || 1));
 		height = Math.max(1, Math.floor(Number(height) || this.canvas.height || 1));
+
+		if(this.surface) return {
+			width
+			, height
+			, margin: 0
+			, panelWidth: width
+			, panelHeight: height
+			, panelX: 0
+			, panelY: 0
+			, headerHeight: 0
+			, footerHeight: 0
+			, contentWidth: width
+			, contentHeight: height
+			, contentX: 0
+			, contentY: 0
+		};
+
 		const margin = Math.max(12, Math.round(Math.min(width, height) * .035));
 		const panelWidth = Math.max(160, Math.min(920, width - margin * 2));
 		const panelHeight = Math.max(120, height - margin * 2);
@@ -451,6 +483,9 @@ export class DomTexture
 
 	overlaySvg(layout)
 	{
+		if(this.surface) return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout
+			.height}" viewBox="0 0 ${layout.width} ${layout.height}"><rect width="100%" height="100%" fill="#fff"/></svg>`;
+
 		const body = `<div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${layout.width}px;height:${layout.height}px;background:rgba(0,0,0,.58);font-family:system-ui,sans-serif;">
 	<div style="position:absolute;left:${layout.panelX}px;top:${layout.panelY}px;width:${layout.panelWidth}px;height:${layout.panelHeight}px;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 12px 45px rgba(0,0,0,.48);display:flex;flex-direction:column;">
 		<div style="height:${layout.headerHeight}px;flex:0 0 ${layout.headerHeight}px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#1c2638;color:#f7f9ff;font-weight:700;font-size:15px;"><span>${escapeXml(
