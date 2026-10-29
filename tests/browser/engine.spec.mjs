@@ -237,10 +237,34 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 	expect((await water()).features).toBeNull();
 	await expect.poll(async() => (await water()).draws, {timeout: 10000}).toBe(2);
 
-	const splash = '<?php $game->level->waterParticles->splash($body->x, $body->water->y);';
-	await page.evaluate(source => enginePhp.run(source), splash);
+	// A splash lives 0.32 simulated seconds, so read its count in the same step rather than from a later frame.
+	const splash = `<?php
+		$particles = $game->level->waterParticles;
+		$particles->splash($body->x, $body->water->y);
+		echo json_encode($particles->snapshot()), "\n";
+	`;
 
-	await expect.poll(async() => (await water()).particles?.splashes).toBe(1);
+	const output = await page.evaluate(async source => {
+		let output = '';
+
+		const listener = event => output += event.detail.join('');
+
+		enginePhp.addEventListener('output', listener);
+
+		try
+		{
+			await enginePhp.run(source);
+
+			return output;
+		}
+		finally
+		{
+			enginePhp.removeEventListener('output', listener);
+		}
+	}, splash
+	);
+
+	expect(JSON.parse(output).splashes).toBe(1);
 	const initial = await body();
 	await expect.poll(async() => (await body()).y).toBeLessThan(initial.y - 3);
 	expect(errors).toEqual([]);

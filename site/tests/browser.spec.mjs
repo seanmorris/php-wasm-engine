@@ -592,7 +592,9 @@ test('Matrix OAuth returns through a popup without navigating the running host',
 	});
 
 	const opened = page.waitForEvent('popup');
-	await page.getByRole('button', {name: 'Test Matrix popup'}).click();
+	// A synthetic click keeps the opener out of Blink's event-timing bookkeeping, which has aborted
+	// Chromium 156 renderers on CI runners (window_performance.cc processing_start_time check).
+	await page.getByRole('button', {name: 'Test Matrix popup'}).dispatchEvent('click');
 	const popup = await opened;
 
 	// The popup relays only after its own preview host imports the browser runtime.

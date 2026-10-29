@@ -118,7 +118,7 @@ jobs:
         if: always()
         with:
           name: site-test-results
-          path: site/test-results/
+          path: test-results/
           if-no-files-found: ignore
 
   artifacts:
