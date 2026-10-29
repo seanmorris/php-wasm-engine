@@ -2,9 +2,9 @@
 declare(strict_types=1);
 namespace PhpWasmEngine\Benchmarks;
 
-use PhpWasmEngine\Ecs\Query;
-use PhpWasmEngine\Ecs\Registry;
-use PhpWasmEngine\Ecs\Scheduler;
+use Phonics\Ecs\Query;
+use Phonics\Ecs\Registry;
+use Phonics\Ecs\Scheduler;
 
 interface Located {}
 
@@ -39,7 +39,20 @@ class Marker {}
 function scene(int $size): Registry
 {
 	$registry = new Registry;
+	populate($registry, $size);
 
+	return $registry;
+}
+
+/**
+ * Add the deterministic benchmark fixture to an existing registry.
+ *
+ * @param Registry $registry Registry that receives the fixture entities.
+ * @param int $size Number of entities to create.
+ * @return void Populates the supplied registry in stable ID order.
+ */
+function populate(Registry $registry, int $size): void
+{
 	for($i = 0; $i < $size; $i++)
 	{
 		$components = [new Position];
@@ -66,8 +79,6 @@ function scene(int $size): Registry
 
 		$registry->create(...$components);
 	}
-
-	return $registry;
 }
 
 /**
@@ -146,6 +157,81 @@ function measure(callable $run, int $expected, int $iterations, int $samples): a
 }
 
 /**
+ * Measure only the requested lifecycle phase while rebuilding its fixture outside the timer.
+ *
+ * @param callable():mixed $prepare Build the state required by one invocation.
+ * @param callable(mixed):int $run Timed phase returning a deterministic checksum.
+ * @param int $expected Expected checksum for one invocation.
+ * @param int $iterations Invocations per measured sample.
+ * @param int $samples Number of separately accumulated samples.
+ * @return array<string,mixed> Per-invocation microsecond timings and checksum.
+ */
+function measurePrepared(
+	callable $prepare
+	, callable $run
+	, int $expected
+	, int $iterations
+	, int $samples
+): array {
+	for($warm = 0; $warm < 2; $warm++)
+	{
+		if($run($prepare()) !== $expected)
+		{
+			throw new \RuntimeException('Prepared warmup checksum mismatch');
+		}
+	}
+
+	$probeElapsed = 0;
+
+	for($probe = 0; $probe < $iterations; $probe++)
+	{
+		$state = $prepare();
+		$start = hrtime(true);
+		$run($state);
+		$probeElapsed += hrtime(true) - $start;
+	}
+
+	$probeElapsed = max(1, $probeElapsed);
+	$iterations = min(1000, max($iterations, (int)ceil($iterations * 20000000 / $probeElapsed)));
+	$times = [];
+
+	for($sample = 0; $sample < $samples; $sample++)
+	{
+		$checksum = 0;
+		$elapsed = 0;
+
+		for($iteration = 0; $iteration < $iterations; $iteration++)
+		{
+			$state = $prepare();
+			$start = hrtime(true);
+			$checksum += $run($state);
+			$elapsed += hrtime(true) - $start;
+		}
+
+		$times[] = $elapsed / $iterations / 1000;
+
+		if($checksum !== $expected * $iterations)
+		{
+			throw new \RuntimeException('Prepared timed workload checksum mismatch');
+		}
+	}
+
+	$sorted = $times;
+	sort($sorted);
+	$middle = intdiv(count($sorted), 2);
+	$median = count($sorted) % 2 ? $sorted[$middle] : ($sorted[$middle - 1] + $sorted[$middle]) / 2;
+
+	return [
+		'median_us' => $median
+		, 'min_us' => min($times)
+		, 'max_us' => max($times)
+		, 'samples_us' => $times
+		, 'checksum' => $expected
+		, 'iterations' => $iterations
+	];
+}
+
+/**
  * Run query, component, lifecycle, and system workloads against the selected engine.
  *
  * @param array<string,mixed> $options Entity count, sample count, and repetition overrides.
@@ -177,6 +263,7 @@ function benchmark(array $options): array
 	];
 
 	$cases = [];
+	$preparedCases = [];
 	$counts = [];
 
 	foreach($queries as $name => $query)
@@ -212,6 +299,16 @@ function benchmark(array $options): array
 	$cases['all_fresh_description'] = [
 		fn() => fingerprint($registry->query(Query::all(Position::class, Velocity::class, Query::not(Frozen::class))))
 		, $cases['all_common'][1], 1
+	];
+
+	$cases['string_after_mutation'] = [
+		function() use ($registry): int {
+			$registry->add(1, new Marker);
+			$registry->remove(1, Marker::class);
+
+			return fingerprint($registry->query(Position::class));
+		}
+		, $cases['string_snapshot'][1], 1
 	];
 
 	$cases['all_after_mutation'] = [
@@ -250,6 +347,20 @@ function benchmark(array $options): array
 			, $size, $size
 		];
 	}
+
+	$cases['has_sparse'] = [
+		function() use ($registry, $size): int {
+			$found = 0;
+
+			for($id = 1; $id <= $size; $id++)
+			{
+				$found += $registry->has($id, Rare::class) ? 1 : 0;
+			}
+
+			return $found;
+		}
+		, intdiv($size - 1, 1000) + 1, $size
+	];
 
 	$cases['add_remove_1000'] = [
 		function() use ($registry): int {
@@ -293,6 +404,114 @@ function benchmark(array $options): array
 		, 0, 1000
 	];
 
+	$preparedCases['add_1000'] = [
+		fn() => scene(1000)
+		, function(Registry $registry): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->add($id, new Marker);
+			}
+
+			return $registry->has(1000, Marker::class) ? 1000 : 0;
+		}
+		, 1000, 1000
+	];
+
+	$preparedCases['remove_1000'] = [
+		function(): Registry {
+			$registry = scene(1000);
+
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->add($id, new Marker);
+			}
+
+			return $registry;
+		}
+		, function(Registry $registry): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->remove($id, Marker::class);
+			}
+
+			return $registry->has(1, Marker::class) || $registry->has(1000, Marker::class) ? 1 : 0;
+		}
+		, 0, 1000
+	];
+
+	$preparedCases['create_1000'] = [
+		fn() => new Registry
+		, function(Registry $registry): int {
+			populate($registry, 1000);
+
+			return $registry->alive(1000) ? 1000 : 0;
+		}
+		, 1000, 1000
+	];
+
+	$preparedCases['destroy_1000'] = [
+		fn() => scene(1000)
+		, function(Registry $registry): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->destroy($id);
+			}
+
+			return $registry->alive(1000) ? 1 : 0;
+		}
+		, 0, 1000
+	];
+
+	$listener = static function(Registry $registry, int $id, object $component): void {};
+	$observedRegistry = scene($size);
+	$observedRegistry->on('added', $listener);
+	$observedRegistry->on('removed', $listener);
+
+	$cases['add_remove_1000_observed'] = [
+		function() use ($observedRegistry): int {
+			$found = 0;
+
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$observedRegistry->add($id, new Marker);
+				$found += $observedRegistry->has($id, Marker::class) ? 1 : 0;
+				$observedRegistry->remove($id, Marker::class);
+			}
+
+			return $found;
+		}
+		, 1000, 1000
+	];
+
+	$cases['replace_1000_observed'] = [
+		function() use ($observedRegistry, $size): int {
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$observedRegistry->add($id, new Position);
+			}
+
+			return count($observedRegistry->query(Position::class));
+		}
+		, $size, 1000
+	];
+
+	$cases['create_destroy_1000_observed'] = [
+		function() use ($listener): int {
+			$registry = new Registry;
+			$registry->on('added', $listener);
+			$registry->on('removed', $listener);
+			populate($registry, 1000);
+
+			for($id = 1; $id <= 1000; $id++)
+			{
+				$registry->destroy($id);
+			}
+
+			return count($registry->query(Query::all()));
+		}
+		, 0, 1000
+	];
+
 	$scheduler = new Scheduler($registry);
 	$moved = 0;
 
@@ -320,6 +539,12 @@ function benchmark(array $options): array
 	foreach($cases as $name => [$run, $expected, $units])
 	{
 		$results[$name] = measure($run, $expected, $iterations, $samples) + ['units_per_call' => $units];
+	}
+
+	foreach($preparedCases as $name => [$prepare, $run, $expected, $units])
+	{
+		$results[$name] = measurePrepared($prepare, $run, $expected, $iterations, $samples)
+			+ ['units_per_call' => $units, 'fixture_setup_timed' => false];
 	}
 
 	// Report retained query storage separately from entity/component storage.

@@ -1,0 +1,268 @@
+{
+  "php": "8.4.1",
+  "int_bytes": 4,
+  "sapi": "embed",
+  "jit": false,
+  "entities": 10000,
+  "samples": 7,
+  "registry_bytes": null,
+  "query_cache_bytes": null,
+  "results": {
+    "string_snapshot": {
+      "median_us": 77.90262172284643,
+      "min_us": 75.28089887640449,
+      "max_us": 82.39700374531834,
+      "samples_us": [
+        79.7752808988764,
+        75.28089887640449,
+        75.65543071161049,
+        77.90262172284643,
+        82.39700374531834,
+        79.02621722846442,
+        76.02996254681648
+      ],
+      "checksum": 20001,
+      "iterations": 267,
+      "units_per_call": 1
+    },
+    "all_common": {
+      "median_us": 5.9,
+      "min_us": 5.25,
+      "max_us": 8.4,
+      "samples_us": [
+        8.4,
+        6.95,
+        6.05,
+        5.8,
+        5.45,
+        5.25,
+        5.9
+      ],
+      "checksum": 14002,
+      "iterations": 2000,
+      "units_per_call": 1
+    },
+    "all_rare": {
+      "median_us": 5.475,
+      "min_us": 3.825,
+      "max_us": 6.325,
+      "samples_us": [
+        5.7,
+        5.475,
+        3.825,
+        5.225,
+        5.925,
+        5.1,
+        6.325
+      ],
+      "checksum": 9012,
+      "iterations": 4000,
+      "units_per_call": 1
+    },
+    "any": {
+      "median_us": 5.625,
+      "min_us": 5.5,
+      "max_us": 5.675,
+      "samples_us": [
+        5.5,
+        5.525,
+        5.625,
+        5.575,
+        5.675,
+        5.675,
+        5.65
+      ],
+      "checksum": 20001,
+      "iterations": 4000,
+      "units_per_call": 1
+    },
+    "not": {
+      "median_us": 5.6,
+      "min_us": 5.5,
+      "max_us": 5.725,
+      "samples_us": [
+        5.65,
+        5.725,
+        5.575,
+        5.6,
+        5.65,
+        5.5,
+        5.6
+      ],
+      "checksum": 14002,
+      "iterations": 4000,
+      "units_per_call": 1
+    },
+    "nested": {
+      "median_us": 8.45,
+      "min_us": 8.35,
+      "max_us": 8.5,
+      "samples_us": [
+        8.35,
+        8.45,
+        8.45,
+        8.45,
+        8.4,
+        8.5,
+        8.45
+      ],
+      "checksum": 18002,
+      "iterations": 2000,
+      "units_per_call": 1
+    },
+    "all_fresh_description": {
+      "median_us": 11.8125,
+      "min_us": 11.5625,
+      "max_us": 12.3125,
+      "samples_us": [
+        12.3125,
+        11.875,
+        11.875,
+        11.8125,
+        11.6875,
+        11.5625,
+        11.5625
+      ],
+      "checksum": 14002,
+      "iterations": 1600,
+      "units_per_call": 1
+    },
+    "all_after_mutation": {
+      "median_us": 882.5,
+      "min_us": 750,
+      "max_us": 1105,
+      "samples_us": [
+        882.5,
+        750,
+        1052.5,
+        1105,
+        970,
+        782.5,
+        867.5
+      ],
+      "checksum": 14002,
+      "iterations": 40,
+      "units_per_call": 1
+    },
+    "nested_after_mutation": {
+      "median_us": 2042.5,
+      "min_us": 1997.5,
+      "max_us": 2365,
+      "samples_us": [
+        2365,
+        2042.5,
+        2070,
+        2010,
+        2110,
+        2010,
+        1997.5
+      ],
+      "checksum": 18002,
+      "iterations": 40,
+      "units_per_call": 1
+    },
+    "get_exact": {
+      "median_us": 21495,
+      "min_us": 19745,
+      "max_us": 22395,
+      "samples_us": [
+        22387.5,
+        22395,
+        19745,
+        21495,
+        20370,
+        20562.5,
+        22287.5
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 10000
+    },
+    "get_interface": {
+      "median_us": 21905,
+      "min_us": 20920,
+      "max_us": 22805,
+      "samples_us": [
+        22805,
+        22557.5,
+        21747.5,
+        21422.5,
+        20920,
+        21905,
+        22292.5
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 10000
+    },
+    "add_remove_1000": {
+      "median_us": 11720,
+      "min_us": 11182.5,
+      "max_us": 12350,
+      "samples_us": [
+        11515,
+        12350,
+        11182.5,
+        11720,
+        11530,
+        12062.5,
+        11987.5
+      ],
+      "checksum": 1000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "replace_1000": {
+      "median_us": 12002.5,
+      "min_us": 11375,
+      "max_us": 12265,
+      "samples_us": [
+        12265,
+        12070,
+        12002.5,
+        11910,
+        12112.5,
+        11880,
+        11375
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "create_destroy_1000": {
+      "median_us": 29910,
+      "min_us": 29552.5,
+      "max_us": 31895,
+      "samples_us": [
+        29775,
+        31895,
+        29910,
+        30010,
+        29807.5,
+        29552.5,
+        30187.5
+      ],
+      "checksum": 0,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "system_update": {
+      "median_us": 15642.5,
+      "min_us": 15220,
+      "max_us": 16137.5,
+      "samples_us": [
+        15220,
+        15642.5,
+        15382.5,
+        15940,
+        15577.5,
+        16137.5,
+        16080
+      ],
+      "checksum": 4000,
+      "iterations": 40,
+      "units_per_call": 1
+    }
+  },
+  "browser": "152.0.7977.75"
+}

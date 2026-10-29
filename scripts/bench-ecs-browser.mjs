@@ -59,7 +59,7 @@ try
 
 	const files = Object.fromEntries(
 		await Promise.all(
-			['autoload.php', 'src/Ecs/Registry.php', 'src/Ecs/Query.php', 'src/Ecs/Scheduler.php'].map(
+			['autoload.php', 'legacy.php', 'src/Ecs/Registry.php', 'src/Ecs/Query.php', 'src/Ecs/Scheduler.php'].map(
 				async file => [file, await fs.readFile(path.join(source, file), 'utf8')]
 			)
 		)

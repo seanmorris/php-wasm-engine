@@ -18,6 +18,7 @@ test('ECS type lookups preserve aliases, case variants and types defined after a
 	$id = $r->create($component);
 	check(Registry::canonical('EcsLateAlias') === 'EcsLateAlias');
 	check(!$r->has($id, 'EcsLateAlias'));
+	check($r->query('EcsLateAlias') === []);
 	class_alias(EcsChild::class, 'EcsLateAlias');
 	class_alias(EcsTagged::class, 'EcsTaggedAlias');
 
@@ -42,9 +43,13 @@ test('ECS snapshots stay independent across callers, mutations and registries', 
 	$a = $r->create(new EcsBase);
 	$query = Query::all(EcsBase::class);
 	$snapshot = $r->query($query);
+	$directSnapshot = $r->query(EcsBase::class);
 	$edited = $r->query(Query::all(EcsBase::class));
+	$editedDirect = $r->query(EcsBase::class);
 	$edited[] = 999;
+	$editedDirect[] = 999;
 	check($r->query($query) === [$a]);
+	check($r->query(EcsBase::class) === [$a]);
 	check((new Registry)->query($query) === []);
 	check($r->query(Query::all()) === [$empty, $a]);
 	check($r->query(Query::any()) === []);
@@ -58,6 +63,7 @@ test('ECS snapshots stay independent across callers, mutations and registries', 
 	check($r->query($query) === [$b]);
 	check($r->query(Query::not(EcsOther::class)) === [$b]);
 	check($snapshot === [$a]);
+	check($directSnapshot === [$a]);
 });
 
 test('ECS query descriptions remain mutable, including shared nested terms', function() {
@@ -91,12 +97,15 @@ test('ECS snapshots remain correct when many query descriptions exceed cache cap
 
 	for($i = 0; $i < 100; $i++)
 	{
-		$query = Query::all(EcsBase::class, Query::not('MissingEcsComponent' . $i));
+		$missing = 'MissingEcsComponent' . $i;
+		$query = Query::all(EcsBase::class, Query::not($missing));
+		check($r->query($missing) === []);
 		check($r->query($query) === $ids);
 	}
 
 	$r->destroy($ids[0]);
 	check($snapshot === $ids);
+	check($r->query(EcsBase::class) === array_slice($ids, 1));
 	check($r->query(Query::all(EcsBase::class)) === array_slice($ids, 1));
 	check($r->query(Query::all('MissingEcsComponent0')) === []);
 });
@@ -142,6 +151,17 @@ test('ECS shared ancestor indexes survive sibling removal and keep get precedenc
 	check(!$r->has($id, EcsTagged::class));
 	check($r->query(Query::all()) === [$id]);
 	rejects(fn() => $r->get($id, EcsTagged::class));
+	$r->destroy($id);
+
+	try
+	{
+		$r->get($id, EcsBase::class);
+		check(false, 'dead exact lookup did not throw');
+	}
+	catch(OutOfBoundsException $error)
+	{
+		check($error->getMessage() === "Entity $id is not alive");
+	}
 });
 
 test('ECS lifecycle listeners see fresh queries during replacement and destruction', function() {
@@ -358,4 +378,11 @@ test('ECS listeners can detach without retaining retired scene closures', functi
 	check($weak->get() === null);
 	$id = $registry->create(new stdClass);
 	check($events === [$id]);
+	$registry->off('added', $keep);
+	$replacement = new stdClass;
+	$registry->add($id, $replacement);
+	check($events === [$id]);
+	check($registry->get($id, stdClass::class) === $replacement);
+	$registry->destroy($id);
+	check($registry->query(stdClass::class) === []);
 });
