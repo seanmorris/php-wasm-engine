@@ -128,6 +128,7 @@ final class DoomMenuController implements MenuOverlay
 			$activation = ($frame['buttons']['confirm'] ?? 0) >= .5
 				|| abs($actions->value(DoomActions::FIRE)) >= .5
 				|| abs($actions->value(DoomActions::USE)) >= .5;
+
 			$this->game->advanceIntermission(min(.25, max(0, $elapsed)), $activation);
 
 			if($this->game->complete && !$this->atTitle) $this->showTitle();
@@ -255,6 +256,7 @@ final class DoomMenuController implements MenuOverlay
 			, $this->engine->input->inputTheme
 			, $this->engine->input->controllerTheme()
 		);
+
 		$this->phpInfo?->render($renderer->width, $renderer->height, 2);
 	}
 
@@ -690,10 +692,10 @@ final class DoomMenuController implements MenuOverlay
 			'New Game' => 'skill',
 			'Online Play' => 'online',
 			'Networking' => 'networking',
-				'Settings' => 'settings',
-				'Input' => 'input',
-				'Sound' => 'sound',
-				'Video' => 'video',
+			'Settings' => 'settings',
+			'Input' => 'input',
+			'Sound' => 'sound',
+			'Video' => 'video',
 			'Read This' => 'read-this',
 			'Rebind' => 'controls',
 			'Controls' => 'controls',

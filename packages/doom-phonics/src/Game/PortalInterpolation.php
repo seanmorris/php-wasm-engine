@@ -7,6 +7,7 @@ use DoomPhonics\Component\Transform;
 /** Rebase replicated render history across disconnected portal map space. */
 final class PortalInterpolation
 {
+
 	public function __construct(private Level $level) {}
 
 	/**
@@ -16,14 +17,17 @@ final class PortalInterpolation
 	public function restore(Transform $pose, float $height): ?CameraPortalLink
 	{
 		$rawError = self::distanceSquared(
-			$pose->previousX, $pose->previousY, $pose->previousZ
-			, $pose->x, $pose->y, $pose->z
+			$pose->previousX
+			, $pose->previousY
+			, $pose->previousZ
+			, $pose->x
+			, $pose->y
+			, $pose->z
 		);
+
 		if($rawError < 64 * 64) return null;
 
-		$previousSector = $this->level->map->sectorAt(
-			(int)round($pose->previousX), (int)round($pose->previousY)
-		);
+		$previousSector = $this->level->map->sectorAt((int)round($pose->previousX), (int)round($pose->previousY));
 		$currentSector = $this->level->map->sectorAt((int)round($pose->x), (int)round($pose->y));
 		$best = null;
 		$bestPoint = null;
@@ -39,6 +43,7 @@ final class PortalInterpolation
 			[$x,$y] = $link->point($pose->previousX, $pose->previousY);
 			$z = $link->bodyZ($pose->previousZ, $height, $this->level);
 			$error = self::distanceSquared($x, $y, $z, $pose->x, $pose->y, $pose->z);
+
 			if($error >= $bestError) continue;
 
 			$best = $link;
@@ -56,7 +61,12 @@ final class PortalInterpolation
 	}
 
 	private static function distanceSquared(
-		float $ax, float $ay, float $az, float $bx, float $by, float $bz
+		float $ax
+		, float $ay
+		, float $az
+		, float $bx
+		, float $by
+		, float $bz
 	): float {
 		return ($bx - $ax) ** 2 + ($by - $ay) ** 2 + ($bz - $az) ** 2;
 	}

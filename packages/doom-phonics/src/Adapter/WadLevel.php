@@ -20,13 +20,14 @@ final class WadLevel
 	public array $skippedThings = [];
 
 	public function __construct(
-		public Stack $wad,
-		public Level $level,
-		public TextureCatalog $textures,
-		public Palette $palette,
-		public ActorCatalog $actors,
-		public SoundCatalog $sounds,
-		public WeaponSlots $weapons,
-		public LanguageCatalog $language
-	) {}
+		public Stack $wad
+		, public Level $level
+		, public TextureCatalog $textures
+		, public Palette $palette
+		, public ActorCatalog $actors
+		, public SoundCatalog $sounds
+		, public WeaponSlots $weapons
+		, public LanguageCatalog $language
+	){
+	}
 }

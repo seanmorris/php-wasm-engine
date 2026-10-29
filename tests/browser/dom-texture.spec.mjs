@@ -102,5 +102,6 @@ test('DOM texture surfaces use every target pixel without modal chrome', async({
 		, contentWidth: 512
 		, contentHeight: 256
 	});
+
 	expect(result.state).toMatchObject({open: true,surface: true});
 });

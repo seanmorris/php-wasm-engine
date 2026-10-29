@@ -13,10 +13,12 @@ final class ProjectileBounce
 		, public float $floorFactor = .7
 		, public float $wallFactor = .75
 		, public int $maximum = -1
-	) {
+	){
 		if($type === '') throw new \InvalidArgumentException('Projectile bounce type cannot be empty');
+
 		if($floorFactor < 0 || $wallFactor < 0)
 		throw new \InvalidArgumentException('Projectile bounce factors cannot be negative');
+
 		if($maximum < -1) throw new \InvalidArgumentException('Projectile bounce count must be -1 or greater');
 	}
 

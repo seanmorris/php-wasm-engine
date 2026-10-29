@@ -20,8 +20,17 @@ use Phonics\Input\Pad;
 
 verifyWad((new Source(Source::PAD_BUTTON, Pad::A))->hint() === '⓿', 'controller face buttons use shared hint symbols');
 verifyWad((new Source(Source::PAD_BUTTON, Pad::RB))->hint() === '❺', 'controller shoulders use shared hint symbols');
-verifyWad((new Source(Source::PAD_AXIS, Pad::LEFT_Y, -1))->hint() === '🡩', 'left-stick directions use shared hint symbols');
-verifyWad((new Source(Source::PAD_AXIS, Pad::RIGHT_X, 1))->hint() === '🡲', 'right-stick directions use shared hint symbols');
+
+verifyWad(
+	(new Source(Source::PAD_AXIS, Pad::LEFT_Y, -1))->hint() === '🡩'
+	, 'left-stick directions use shared hint symbols'
+);
+
+verifyWad(
+	(new Source(Source::PAD_AXIS, Pad::RIGHT_X, 1))->hint() === '🡲'
+	, 'right-stick directions use shared hint symbols'
+);
+
 verifyWad((new Source(Source::KEY, ord('w')))->hint() === null, 'keyboard bindings remain textual');
 
 $defaultBindings = DoomActions::defaults();
@@ -35,6 +44,7 @@ verifyWad(
 		&& count($altFirePad) === 1 && $altFirePad[0]->kind === Source::PAD_AXIS && $altFirePad[0]->code === Pad::LT
 	, 'controller fire modes default to RT and LT'
 );
+
 verifyWad(
 	count($altFireMouse) === 1 && $altFireMouse[0]->kind === Source::MOUSE_BUTTON
 		&& $altFireMouse[0]->code === Source::SECONDARY
@@ -48,12 +58,14 @@ verifyWad($code > InputCode::RESERVED_MAX, 'Doom gameplay codes are outside the 
 $inputControls = new Controls;
 $inputView = new ViewInput;
 $inputCommand = new PlayerCommand;
+
 $inputControls->set(new ActionFrame([
 	DoomActions::STRAFE => -.5
 	, DoomActions::FORWARD => .25
 	, DoomActions::FIRE => 1
 	, DoomActions::ALT_FIRE => 1
 ]));
+
 $inputView->look(.12, .2);
 $inputCommand->sample($inputControls, $inputView);
 
@@ -246,17 +258,22 @@ $saved = '';
 $writes = 0;
 
 $legacyBindings = json_decode(json_encode(DoomActions::defaults()), true);
-$legacyBindings[DoomActions::FIRE][1][Source::CONTROLLER] = [[
-	'kind' => Source::PAD_BUTTON
-	, 'code' => Pad::RB
-	, 'sign' => 1
-]];
+$legacyBindings[DoomActions::FIRE][1][Source::CONTROLLER] = [
+	[
+		'kind' => Source::PAD_BUTTON
+		, 'code' => Pad::RB
+		, 'sign' => 1
+	]
+];
+
 $legacyBindings[DoomActions::USE][1][Source::KEYBOARD][] = [
 	'kind' => Source::MOUSE_BUTTON
 	, 'code' => Source::SECONDARY
 	, 'sign' => 1
 ];
+
 unset($legacyBindings[DoomActions::ALT_FIRE]);
+
 $legacy = new InputSettings(new GameSettings, static fn(): string => json_encode([
 	'version' => 1
 	, 'bindings' => $legacyBindings
@@ -346,8 +363,10 @@ $browserOptions = [
 	, 'fullscreenError' => ''
 	, 'sessionOnly' => false
 ];
+
 $optionWrites = [];
 $optionSettings = new GameSettings;
+
 $options = new DoomOptions(
 	$optionSettings
 	, static fn(): string => json_encode($browserOptions)
@@ -388,6 +407,7 @@ verifyWad(
 $sessionOptions = new DoomOptions(new GameSettings, null, static function(): string {
 	throw new RuntimeException('Storage denied');
 });
+
 $sessionOptions->setMusicVolume(.5);
 verifyWad($sessionOptions->state()['sessionOnly'], 'unavailable option storage preserves session-only changes');
 

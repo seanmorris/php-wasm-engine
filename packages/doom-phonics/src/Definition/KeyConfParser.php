@@ -5,6 +5,7 @@ namespace DoomPhonics\Definition;
 /** Parses the weapon-slot subset of layered ZDoom KEYCONF documents. */
 final class KeyConfParser
 {
+
 	/**
 	 * @param array<string,string> $documents Documents in increasing WAD-stack precedence.
 	 * @return list<array{command:string,slot:int,weapons:list<string>}>
@@ -23,7 +24,9 @@ final class KeyConfParser
 			foreach(preg_split('/\R/', $text) ?: [] as $line => $statement)
 			{
 				$statement = trim($statement, " \t\0\x0B;");
+
 				if($statement === '') continue;
+
 				if(!preg_match('/^(setslot|addslot|addslotdefault)\b(.*)$/i', $statement, $match)) continue;
 
 				$command = strtolower($match[1]);
@@ -36,6 +39,7 @@ final class KeyConfParser
 				);
 
 				$weapons = [];
+
 				foreach($arguments as $weapon)
 				if(preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $weapon)) $weapons[] = $weapon;
 

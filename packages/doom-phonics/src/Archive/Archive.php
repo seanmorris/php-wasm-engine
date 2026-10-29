@@ -105,9 +105,17 @@ final class Archive
 
 		$allowed = array_flip([
 			'THINGS','LINEDEFS','SIDEDEFS','VERTEXES','SEGS','SSECTORS','NODES','SECTORS'
-			, 'REJECT','BLOCKMAP','BLOCKMP','BEHAVIOR','SCRIPTS','TEXTMAP','ENDMAP','ZNODES'
+			, 'REJECT'
+			, 'BLOCKMAP'
+			, 'BLOCKMP'
+			, 'BEHAVIOR'
+			, 'SCRIPTS'
+			, 'TEXTMAP'
+			, 'ENDMAP'
+			, 'ZNODES'
 			, 'GL_LEVEL','GL_VERT','GL_SEGS','GL_SSECT','GL_NODES','GL_PVS'
 		]);
+
 		$result = ['HEADER' => $header];
 
 		for($i = $header->index + 1, $count = count($this->lumps); $i < $count; $i++)
@@ -115,6 +123,7 @@ final class Archive
 			$lump = $this->lumps[$i];
 
 			if(isset($markers[$lump->name])) break;
+
 			if(!isset($allowed[$lump->name]) && !str_starts_with($lump->name, 'GL_')) break;
 
 			$result[$lump->name] = $lump;
@@ -139,8 +148,18 @@ final class Archive
 
 		foreach($this->lumps as $lump)
 		{
-			if(isset($starts[$lump->name])) { $inside = true; continue; }
-			if(isset($ends[$lump->name])) { $inside = false; continue; }
+			if(isset($starts[$lump->name]))
+			{
+				$inside = true;
+				continue;
+			}
+
+			if(isset($ends[$lump->name]))
+			{
+				$inside = false;
+				continue;
+			}
+
 			if($inside && $lump->size > 0) $result[$lump->name] = $lump;
 		}
 

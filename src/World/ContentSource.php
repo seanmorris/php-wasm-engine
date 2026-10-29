@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Catalog and activate stable scopes from one opened content source. */
 interface ContentSource
 {
+
 	/**
 	 * Enumerate known scopes without activating gameplay or render systems.
 	 *

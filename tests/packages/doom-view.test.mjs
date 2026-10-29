@@ -163,7 +163,11 @@ test('railgun beams follow portal-segmented world rays with depth-tested pixel-w
 	assert.match(renderer, /glEnable\(GL_DEPTH_TEST\);[\s\S]*glDepthMask\(false\);[\s\S]*glDrawArrays\(GL_TRIANGLES/);
 	assert.match(pass, /renderActors[\s\S]*renderBeams[\s\S]*compose/);
 	assert.match(combat, /function spawnBeamPath\(/);
-	assert.match(combat, /new BeamEffect\([\s\S]*\$segment\['x'\] \+ \$segment\['dx'\][\s\S]*\$segment\['y'\] \+ \$segment\['dy'\][\s\S]*\$segment\['z'\] \+ \$segment\['dz'\]/);
+
+	assert.match(
+		combat
+		, /new BeamEffect\([\s\S]*\$segment\['x'\] \+ \$segment\['dx'\][\s\S]*\$segment\['y'\] \+ \$segment\['dy'\][\s\S]*\$segment\['z'\] \+ \$segment\['dz'\]/
+	);
 });
 
 test('camera portals recurse through destination spaces and occlude unresolved views', async() => {
@@ -177,6 +181,7 @@ test('camera portals recurse through destination spaces and occlude unresolved v
 		, source('shaders/sky-occlusion.vert')
 		, source('shaders/camera-portal.frag')
 	]);
+
 	const portalSurfaces = renderer.slice(
 		renderer.indexOf('private function renderCameraPortalSurfaces(')
 		, renderer.indexOf('/** Keep the usual depth precision')
@@ -190,7 +195,7 @@ test('camera portals recurse through destination spaces and occlude unresolved v
 	assert.match(renderer, /\$link->reciprocalId/);
 	assert.doesNotMatch(renderer, /isset\(\$path\[\$link->id\]\)/);
 	assert.match(renderer, /\$connectedSectors = \$this->level->map->connectedSectors\(\$cameraSector\)/);
-	assert.match(renderer, /\$link->destinationSector, \$nearPlane\s*\n\s*\);\s*\n\s*\$this->renderActors/);
+	assert.match(renderer, /\$link->destinationSector\s*,\s*\$nearPlane\s*\);\s*\$this->renderActors/);
 	assert.match(portalSurfaces, /location\('portalReady'\), 0/);
 	assert.doesNotMatch(portalSurfaces, /glColorMask\(false, false, false, false\)/);
 	assert.match(renderer, /location\('cameraComponent'\)/);

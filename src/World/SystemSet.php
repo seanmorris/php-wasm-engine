@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Register a reusable group of systems and render passes for one active scope. */
 interface SystemSet
 {
+
 	/**
 	 * Activate this set inside a scope-owned lifecycle boundary.
 	 *

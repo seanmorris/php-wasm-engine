@@ -13,12 +13,13 @@ final class ActorDefinition
 	public array $states = [];
 
 	public function __construct(
-		public string $name,
-		public ?string $parent = null,
-		public ?int $editorNumber = null,
-		public bool $native = false,
-		public ?string $source = null
-	) {}
+		public string $name
+		, public ?string $parent = null
+		, public ?int $editorNumber = null
+		, public bool $native = false
+		, public ?string $source = null
+	){
+	}
 
 	/** @param string $name Property name. @param list<string|int|float> $values One occurrence. */
 	public function addProperty(string $name, array $values): void

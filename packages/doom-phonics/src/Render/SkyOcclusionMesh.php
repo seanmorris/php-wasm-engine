@@ -21,13 +21,8 @@ final class SkyOcclusionMesh
 		foreach([
 			[$a,0],[$b,0],[$b,1]
 			, [$a,0],[$b,1],[$a,1]
-		] as [$point,$upper]) array_push(
-			$this->vertices
-			, $point['x']
-			, $point['y']
-			, (float)$sector
-			, (float)$upper
-		);
+		] as [$point,$upper])
+		array_push($this->vertices, $point['x'], $point['y'], (float)$sector, (float)$upper);
 
 		$this->boundarySpans[] = compact('first', 'line', 'sector') + ['count' => 6];
 	}

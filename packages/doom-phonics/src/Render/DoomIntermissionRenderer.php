@@ -7,6 +7,7 @@ use DoomPhonics\Game\LevelIntermission;
 /** Draws classic WAD intermission art and animated level statistics. */
 final class DoomIntermissionRenderer
 {
+
 	public function render(GlesMapRenderer $renderer, LevelIntermission $intermission): void
 	{
 		$renderer->renderMenuPanel(0, 0, 320, 200, 1);
@@ -20,13 +21,15 @@ final class DoomIntermissionRenderer
 		if($intermission->phase() === 'entering')
 		{
 			$this->center($renderer, $patches, 'WIENTER', 24);
+
 			$this->mapTitle(
-				$renderer,
-				$patches,
-				$intermission->nextMap ?? $intermission->map,
-				$intermission->nextMapTitle ?? $intermission->mapTitle,
-				48
+				$renderer
+				, $patches
+				, $intermission->nextMap ?? $intermission->map
+				, $intermission->nextMapTitle ?? $intermission->mapTitle
+				, 48
 			);
+
 			$renderer->renderMenuPatches($patches);
 
 			return;
@@ -69,9 +72,12 @@ final class DoomIntermissionRenderer
 
 	/** @param list<WadPatch> $patches */
 	private function mapTitle(
-		GlesMapRenderer $renderer, array &$patches, string $map, ?string $title, float $y
-	): void
-	{
+		GlesMapRenderer $renderer
+		, array &$patches
+		, string $map
+		, ?string $title
+		, float $y
+	): void {
 		$name = null;
 		$map = strtoupper($map);
 
@@ -128,7 +134,12 @@ final class DoomIntermissionRenderer
 
 	/** @param list<WadPatch> $patches */
 	private function number(
-		GlesMapRenderer $renderer, array &$patches, int $value, float $right, float $y, int $minimumDigits = 1
+		GlesMapRenderer $renderer
+		, array &$patches
+		, int $value
+		, float $right
+		, float $y
+		, int $minimumDigits = 1
 	): void {
 		$digits = str_pad((string)max(0, $value), $minimumDigits, '0', STR_PAD_LEFT);
 
@@ -159,9 +170,13 @@ final class DoomIntermissionRenderer
 		$width = 0;
 
 		foreach(str_split($text) as $character)
-		$width += $character === ' ' ? 4 : (($renderer->catalog->picture(
-			'STCFN' . str_pad((string)ord($character), 3, '0', STR_PAD_LEFT)
-		)?->width ?? 4) + 1);
+		$width += $character === ' '
+			? 4
+			: (($renderer->catalog->picture(
+				'STCFN' . str_pad((string)ord($character), 3, '0', STR_PAD_LEFT)
+			)?->width ?? 4
+			) + 1
+			);
 
 		$x = $center ? (320 - $width) / 2 : 0;
 		$patches = [];

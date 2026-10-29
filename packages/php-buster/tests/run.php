@@ -30,17 +30,30 @@ $motion->step(1, 1);
 check(abs($motion->player->x - (130 + 4 / sqrt(2))) < 1e-9, 'diagonal keyboard motion is normalized');
 check(abs($motion->player->y - (400 + 4 / sqrt(2))) < 1e-9, 'vertical keyboard motion uses seconds');
 $motion->step(pointerX: 10, pointerY: 10);
-check($motion->player->x === 0.0 && $motion->player->y === 0.0, 'pointer targets clamp the complete craft inside the playfield');
+
+check(
+	$motion->player->x === 0.0 && $motion->player->y === 0.0
+	, 'pointer targets clamp the complete craft inside the playfield'
+);
+
 $motion->step(fire: true);
 check($motion->shots === 1, 'held fire emits the first shot immediately');
-check(count(array_filter($motion->actors, fn(Actor $actor): bool => $actor->type === 'missile')) === 1, 'shot creates a missile');
+
+check(
+	count(array_filter($motion->actors, fn(Actor $actor): bool => $actor->type === 'missile')) === 1
+	, 'shot creates a missile'
+);
 
 $wave = new Simulation(1);
 $wave->step();
 $wave->step();
 check(count($wave->actors) === 1, 'first fighter waits for the original scheduled time');
 $wave->step();
-check(count($wave->actors) === 2 && $wave->actors[1]->type === 'midi', 'first fighter appears at the original wave tick');
+
+check(
+	count($wave->actors) === 2 && $wave->actors[1]->type === 'midi'
+	, 'first fighter appears at the original wave tick'
+);
 
 $damage = new Simulation(2);
 $damage->actors[] = new Actor(999, 'rock', $damage->player->x, $damage->player->y, 50, 50, team: 1, hits: 100);
@@ -59,8 +72,20 @@ check($accuracy->accuracy === 0 && $accuracy->bonus === 0, 'zero recorded shots 
 
 $settings = new InputSettings;
 $fire = $settings->bindings->sources(BusterActions::FIRE);
-check(count(array_filter($fire, fn(Source $source): bool => $source->device() === Source::KEYBOARD)) === 2, 'fire has keyboard and mouse defaults');
-check(count(array_filter($fire, fn(Source $source): bool => $source->device() === Source::CONTROLLER)) === 2, 'fire has controller defaults');
-check(BusterActions::MOVE_X > 0xFFFF && BusterActions::MOVE_Y > 0xFFFF && BusterActions::FIRE > 0xFFFF, 'game actions are above the engine-reserved range');
+
+check(
+	count(array_filter($fire, fn(Source $source): bool => $source->device() === Source::KEYBOARD)) === 2
+	, 'fire has keyboard and mouse defaults'
+);
+
+check(
+	count(array_filter($fire, fn(Source $source): bool => $source->device() === Source::CONTROLLER)) === 2
+	, 'fire has controller defaults'
+);
+
+check(
+	BusterActions::MOVE_X > 0xFFFF && BusterActions::MOVE_Y > 0xFFFF && BusterActions::FIRE > 0xFFFF
+	, 'game actions are above the engine-reserved range'
+);
 
 echo "PHP Buster: $checks checks passed.\n";

@@ -34,7 +34,7 @@ final class ScopeContext
 		, public ?FramePipeline $pipeline = null
 		, private array $state = []
 		, private array $services = []
-	) {
+	){
 		$this->assertSerializable($state);
 	}
 
@@ -99,6 +99,7 @@ final class ScopeContext
 		$this->requireOpen();
 		$prefix = $this->key() . '/';
 		$id = $prefix . $name;
+
 		/**
 		 * Qualify a local dependency with this scope's prefix; names containing a colon are absolute.
 		 *
@@ -150,7 +151,9 @@ final class ScopeContext
 	public function own(int $id): int
 	{
 		$this->requireOpen();
+
 		if(!$this->registry->alive($id)) throw new \OutOfBoundsException("Cannot own missing entity $id");
+
 		if(!in_array($id, $this->entities, true)) $this->entities[] = $id;
 
 		return $id;

@@ -5,6 +5,7 @@ namespace DoomPhonics\Game;
 /** Classic episode/map routing and par times shared by exits and intermission screens. */
 final class LevelProgression
 {
+
 	/** @param list<string> $available */
 	public static function next(string $map, bool $secretExit, array $available): ?string
 	{
@@ -20,6 +21,7 @@ final class LevelProgression
 			$secretReturn = [1 => 4,2 => 6,3 => 7,4 => 3];
 
 			if($mission === 8) return null;
+
 			if($mission === 9)
 			$candidate = 'E' . $episode . 'M' . ($secretReturn[$episode] ?? 4);
 			elseif($secretExit && ($secretFrom[$episode] ?? null) === $mission)
@@ -52,18 +54,18 @@ final class LevelProgression
 	{
 		$map = strtoupper($map);
 		$episodes = [
-			1 => [30,75,120,90,165,180,180,30,165],
-			2 => [90,90,90,120,90,360,240,30,170],
-			3 => [90,45,90,150,90,90,165,30,135],
-			4 => [165,255,135,150,180,390,135,360,180],
+			1 => [30,75,120,90,165,180,180,30,165]
+			, 2 => [90,90,90,120,90,360,240,30,170]
+			, 3 => [90,45,90,150,90,90,165,30,135]
+			, 4 => [165,255,135,150,180,390,135,360,180]
 		];
 
 		if(preg_match('/^E([1-4])M([1-9])$/', $map, $match))
 		return $episodes[(int)$match[1]][(int)$match[2] - 1];
 
 		$doomTwo = [
-			30,90,120,120,90,150,120,120,270,90,210,150,150,150,210,150,
-			420,150,200,150,240,150,180,150,150,300,330,420,300,180,120,30,
+			30,90,120,120,90,150,120,120,270,90,210,150,150,150,210,150
+			, 420,150,200,150,240,150,180,150,150,300,330,420,300,180,120,30
 		];
 
 		if(preg_match('/^MAP(\d\d)$/', $map, $match))

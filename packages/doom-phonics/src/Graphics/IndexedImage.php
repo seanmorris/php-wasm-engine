@@ -5,6 +5,7 @@ namespace DoomPhonics\Graphics;
 /** Compact palette-indexed image with a separate alpha byte for transparent patch pixels. */
 final class IndexedImage
 {
+
 	/**
 	 * Store validated row-major indexed pixels.
 	 *
@@ -23,7 +24,7 @@ final class IndexedImage
 		, public string $alpha
 		, public int $leftOffset = 0
 		, public int $topOffset = 0
-	) {
+	){
 		$length = $width * $height;
 
 		if($width <= 0 || $height <= 0 || strlen($pixels) !== $length || strlen($alpha) !== $length)

@@ -30,6 +30,7 @@ final class SectorEffectSystem
 	public function __construct(public Level $level, public LineSpecials $specials, ?LanguageCatalog $language = null)
 	{
 		$this->language = $language ?? LanguageCatalog::documents([]);
+
 		foreach($level->sectors as $sector)
 		{
 			$this->high[$sector->index] = $sector->light;
@@ -181,6 +182,7 @@ final class SectorEffectSystem
 		// A corpse can remain on a damaging floor indefinitely. Do not keep subtracting
 		// health or re-enter its first death frame on every 32-tic damage pulse.
 		if($hp->current <= 0) return;
+
 		if(($player->godMode || isset($player->powers['Invulnerable'])) && !$exit)return;
 
 		$absorb = min($player->armor, (int)floor($damage * $player->armorClass / 100));
@@ -235,6 +237,7 @@ final class SectorEffectSystem
 	private function special(int $number): int
 	{
 		if($this->level->map->format !== 'HEXEN') return $number;
+
 		return match($number) { 65 => 1, 66 => 2, 67 => 3, 72 => 8, default => 0 };
 	}
 }

@@ -5,6 +5,7 @@ namespace Phonics\Render;
 /** Aspect-preserving placement and pointer conversion for a fixed logical canvas. */
 final class LogicalViewport
 {
+
 	/**
 	 * Store a validated fit between logical and output coordinates.
 	 *

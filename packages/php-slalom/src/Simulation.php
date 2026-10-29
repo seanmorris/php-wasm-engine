@@ -29,6 +29,13 @@ final class Simulation
 	public bool $impact = false;
 	private Random $random;
 
+	/**
+	 * Create a deterministic run from a seed and one of the selectable starting stages.
+	 *
+	 * @param int $seed Random seed shared by native and WebAssembly runs.
+	 * @param int $startStage Index into START_SCORES for the first stage.
+	 * @return void Invalid starting stages throw before any state is created.
+	 */
 	public function __construct(public readonly int $seed, int $startStage = 0)
 	{
 		if($startStage < 0 || $startStage >= count(self::START_SCORES))
@@ -49,7 +56,13 @@ final class Simulation
 		$this->random = new Random($seed);
 	}
 
-	/** Advance one 55ms gameplay tick from held left and right actions. */
+	/**
+	 * Advance one 55ms gameplay tick from held left and right actions.
+	 *
+	 * @param bool $left Whether steer-left is held.
+	 * @param bool $right Whether steer-right is held.
+	 * @return void Score, obstacles, and crash state are updated in place.
+	 */
 	public function step(bool $left, bool $right): void
 	{
 		$this->impact = false;
@@ -72,12 +85,15 @@ final class Simulation
 		$this->previousVelocity = $this->velocity;
 
 		if($right) $this->velocity -= .1;
+
 		if($left) $this->velocity += .1;
+
 		$this->velocity = max(-.6, min(.6, $this->velocity));
 
 		if(!$left && !$right)
 		{
 			if($this->velocity < 0) $this->velocity = min(0, $this->velocity + .025);
+
 			if($this->velocity > 0) $this->velocity = max(0, $this->velocity - .025);
 		}
 
@@ -119,7 +135,12 @@ final class Simulation
 		}
 	}
 
-	/** Current bank sine and cosine in the original 128-entry response table. */
+	/**
+	 * Compute the bank sine and cosine from the original 128-entry response table.
+	 *
+	 * @param float $alpha Interpolation between the previous and current tick.
+	 * @return array{float,float} Bank sine and cosine.
+	 */
 	public function bank(float $alpha = 1): array
 	{
 		$velocity = $this->previousVelocity + ($this->velocity - $this->previousVelocity) * $alpha;
@@ -131,7 +152,11 @@ final class Simulation
 		return [$sin, cos($angle)];
 	}
 
-	/** Sky RGB blended from the prior stage for its first 32 ticks. */
+	/**
+	 * Blend the sky from the prior stage over a new stage's first 32 ticks.
+	 *
+	 * @return array{int,int,int} Sky RGB color.
+	 */
 	public function sky(): array
 	{
 		$current = $this->stages[$this->stage];
@@ -148,9 +173,19 @@ final class Simulation
 		];
 	}
 
-	/** Ground RGB changes immediately when a stage begins. */
+	/**
+	 * Report the current stage's ground, which changes immediately when a stage begins.
+	 *
+	 * @return array{int,int,int} Ground RGB color.
+	 */
 	public function ground(): array { return $this->stages[$this->stage]->ground; }
 
+	/**
+	 * Spawn this tick's gates from open-field timing or the winding road pattern.
+	 *
+	 * @param Stage $stage Current stage whose generator state advances.
+	 * @return void New obstacles are added to the far end of the course.
+	 */
 	private function generate(Stage $stage): void
 	{
 		$stage->time++;
@@ -213,10 +248,26 @@ final class Simulation
 		$this->spawn($x, $width);
 	}
 
+	/**
+	 * Add one randomly colored gate at the horizon.
+	 *
+	 * @param float $x Lateral course position.
+	 * @param float $width Gate width in course units.
+	 * @return void The gate becomes the newest, farthest obstacle.
+	 */
 	private function spawn(float $x, float $width): void
 	{
 		$rgb = self::PALETTE[$this->random->next() % count(self::PALETTE)];
-		$color = array_map(static fn(int $channel): float => $channel / 255, $rgb);
+
+		/**
+		 * Normalize one 8-bit color channel.
+		 *
+		 * @param int $channel Channel value from 0 to 255.
+		 * @return float Channel value from 0 to 1.
+		 */
+		$normalize = static fn(int $channel): float => $channel / 255;
+
+		$color = array_map($normalize, $rgb);
 		array_unshift($this->obstacles, new Obstacle($x, $width, 25, $color));
 	}
 }

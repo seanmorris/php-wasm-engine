@@ -65,10 +65,8 @@ test('neutral worlds expose an empty game-owned init object and reject other sha
 	const world = normalizeWorld({...hybrid, init: undefined}, origin + 'world.json');
 
 	assert.deepEqual(world.init, {});
-	assert.throws(
-		() => normalizeWorld({...hybrid, init: ['iddqd']}, origin + 'world.json')
-		, /init must be an object/
-	);
+
+	assert.throws(() => normalizeWorld({...hybrid, init: ['iddqd']}, origin + 'world.json'), /init must be an object/);
 });
 
 test('phonics.json launches an inline or referenced world with correct provenance', async () => {

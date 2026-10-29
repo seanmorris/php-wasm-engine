@@ -24,66 +24,86 @@ final class SectorMover
 	public int $waitRemaining = 0;
 
 	private function __construct(
-		public int $sector,
-		private string $plane,
-		private string $kind,
-		public float $target,
-		public float $speed,
-		public ?float $returnTarget = null,
-		public int $waitTics = 0,
-		private bool $reverseWhenBlocked = false,
-		public ?string $completionTexture = null,
-		public ?int $completionSpecial = null
-	) {
+		public int $sector
+		, private string $plane
+		, private string $kind
+		, public float $target
+		, public float $speed
+		, public ?float $returnTarget = null
+		, public int $waitTics = 0
+		, private bool $reverseWhenBlocked = false
+		, public ?string $completionTexture = null
+		, public ?int $completionSpecial = null
+	){
 		if(!in_array($plane, [self::FLOOR,self::CEILING], true))
 		throw new \InvalidArgumentException("Unknown sector plane $plane");
 	}
 
-	public static function normalDoor(int $sector,float $openTarget,float $closedTarget): self
+	public static function normalDoor(int $sector, float $openTarget, float $closedTarget): self
 	{
-		return new self($sector,self::CEILING,self::DOOR_NORMAL,$openTarget,70,$closedTarget,150,true);
+		return new self($sector, self::CEILING, self::DOOR_NORMAL, $openTarget, 70, $closedTarget, 150, true);
 	}
 
-	public static function delayedOpenDoor(int $sector,float $closedTarget,float $openTarget): self
+	public static function delayedOpenDoor(int $sector, float $closedTarget, float $openTarget): self
 	{
-		return new self($sector,self::CEILING,self::DOOR_DELAYED_OPEN,$closedTarget,70,$openTarget,1050,true);
+		return new self($sector, self::CEILING, self::DOOR_DELAYED_OPEN, $closedTarget, 70, $openTarget, 1050, true);
 	}
 
-	public static function openDoor(int $sector,float $openTarget): self
+	public static function openDoor(int $sector, float $openTarget): self
 	{
-		return new self($sector,self::CEILING,self::DOOR_OPEN,$openTarget,70);
+		return new self($sector, self::CEILING, self::DOOR_OPEN, $openTarget, 70);
 	}
 
-	public static function platform(int $sector,float $target,float $speed): self
+	public static function platform(int $sector, float $target, float $speed): self
 	{
-		return new self($sector,self::FLOOR,self::PLATFORM,$target,$speed);
+		return new self($sector, self::FLOOR, self::PLATFORM, $target, $speed);
 	}
 
-	public static function stairs(int $sector,float $target): self
+	public static function stairs(int $sector, float $target): self
 	{
-		return new self($sector,self::FLOOR,self::STAIRS,$target,8.75);
+		return new self($sector, self::FLOOR, self::STAIRS, $target, 8.75);
 	}
 
-	public static function donut(int $sector,float $target,?string $completionTexture=null,?int $completionSpecial=null): self
-	{
-		return new self($sector,self::FLOOR,self::DONUT,$target,17.5,null,0,false,$completionTexture,$completionSpecial);
+	public static function donut(
+		int $sector
+		, float $target
+		, ?string $completionTexture = null
+		, ?int $completionSpecial = null
+	): self {
+		return new self(
+			$sector
+			, self::FLOOR
+			, self::DONUT
+			, $target
+			, 17.5
+			, null
+			, 0
+			, false
+			, $completionTexture
+			, $completionSpecial
+		);
 	}
 
-	public static function lift(int $sector,float $target,float $returnTarget): self
+	public static function lift(int $sector, float $target, float $returnTarget): self
 	{
-		return new self($sector,self::FLOOR,self::LIFT,$target,140,$returnTarget,105);
+		return new self($sector, self::FLOOR, self::LIFT, $target, 140, $returnTarget, 105);
 	}
 
 	public function isDoor(): bool
 	{
-		return in_array($this->kind,[self::DOOR_NORMAL,self::DOOR_DELAYED_OPEN,self::DOOR_OPEN],true);
+		return in_array($this->kind, [self::DOOR_NORMAL,self::DOOR_DELAYED_OPEN,self::DOOR_OPEN], true);
 	}
 
 	public function isNormalDoor(): bool { return $this->kind === self::DOOR_NORMAL; }
+
 	public function isLift(): bool { return $this->kind === self::LIFT; }
+
 	public function movesFloor(): bool { return $this->plane === self::FLOOR; }
+
 	public function movesCeiling(): bool { return $this->plane === self::CEILING; }
+
 	public function reversesWhenBlocked(): bool { return $this->reverseWhenBlocked; }
+
 	public function isWaiting(): bool { return $this->waiting; }
 
 	public function beginWaiting(): void

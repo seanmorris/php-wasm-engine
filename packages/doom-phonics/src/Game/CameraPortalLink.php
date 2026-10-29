@@ -28,9 +28,11 @@ final class CameraPortalLink
 		, public ?int $destinationLine = null
 		, public ?int $reciprocalId = null
 		, ?int $destinationAlignment = null
-	) {
+	){
 		if(!CameraPortalType::valid($type)) throw new \InvalidArgumentException("Unknown camera portal type $type");
+
 		$this->destinationAlignment = $destinationAlignment ?? $alignment;
+
 		foreach([$alignment,$this->destinationAlignment] as $portalAlignment)
 		if($portalAlignment < self::ALIGN_ABSOLUTE || $portalAlignment > self::ALIGN_CEILING)
 		throw new \InvalidArgumentException("Unknown camera portal alignment $portalAlignment");
@@ -87,11 +89,14 @@ final class CameraPortalLink
 		$originPlane = $this->alignment === self::ALIGN_FLOOR ? 'floorZ' : 'ceilingZ';
 		$destinationPlane = $this->destinationAlignment === self::ALIGN_FLOOR ? 'floorZ' : 'ceilingZ';
 		$origin = $level->sectors[$this->originSector]->$originPlane($this->originX, $this->originY);
+
 		$destination = $level->sectors[$this->destinationSector]->$destinationPlane(
 			$this->destinationX
 			, $this->destinationY
 		);
+
 		$offset = $z - $origin;
+
 		if($this->flipsVertical()) $offset = -$offset;
 
 		return $destination + $offset;
@@ -127,6 +132,7 @@ final class CameraPortalLink
 		$originPlane = $this->alignment === self::ALIGN_FLOOR ? 'floorZ' : 'ceilingZ';
 		$destinationPlane = $this->destinationAlignment === self::ALIGN_FLOOR ? 'floorZ' : 'ceilingZ';
 		$origin = $level->sectors[$this->originSector]->$originPlane($this->originX, $this->originY);
+
 		$destination = $level->sectors[$this->destinationSector]->$destinationPlane(
 			$this->destinationX
 			, $this->destinationY
@@ -143,8 +149,7 @@ final class CameraPortalLink
 		, float $angle
 		, Level $level
 		, float $viewHeight = 0.0
-	): array
-	{
+	): array {
 		[$x,$y] = $this->point($x, $y);
 		// Transform the eye rather than the actor origin, then return the base height
 		// expected by the renderer. Opposite plane portals retain the eye on the
@@ -158,6 +163,7 @@ final class CameraPortalLink
 	public function retarget(Level $level, ?int $lineId): bool
 	{
 		if($this->originLine === null || $this->type === CameraPortalType::LINKED) return false;
+
 		if($lineId === null)
 		{
 			$this->destinationLine = null;
@@ -183,6 +189,7 @@ final class CameraPortalLink
 		$this->destinationY = (float)$d['y'];
 		$this->angleDelta = atan2($d['y'] - $c['y'], $d['x'] - $c['x'])
 			- atan2($b['y'] - $a['y'], $b['x'] - $a['x']) + M_PI;
+
 		$this->active = true;
 
 		return true;

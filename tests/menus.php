@@ -69,6 +69,7 @@ test('horizontal submenus rotate navigation, adjustment, and wheel input', funct
 			]
 		]
 	]);
+
 	$menu->open();
 	$menu->activate();
 	$input = new MenuInput;
@@ -314,6 +315,7 @@ test('one pointer press cannot activate two nested menu levels through its confi
 			]
 		]
 	]);
+
 	$menu->open();
 	$input = new MenuInput;
 	$regions = [['id' => 'read-this', 'rect' => [0, 0, 150, 30]]];

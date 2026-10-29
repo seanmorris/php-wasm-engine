@@ -316,7 +316,7 @@ export function activate({module, canvas, services, session})
 				migrateOptions = true;
 			}
 		}
-	}
+}
 
 	optionsSessionOnly = storage.sessionOnly;
 

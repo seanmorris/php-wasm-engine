@@ -344,6 +344,7 @@ final class MenuRenderer
 			if($rect[2] <= 0 || $rect[3] <= 0) continue;
 
 			$this->font->theme = $hint['theme'] ?? $theme;
+
 			$this->text(
 				$hint['text']
 				, $rect[0]

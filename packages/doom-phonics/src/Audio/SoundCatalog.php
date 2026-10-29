@@ -16,18 +16,23 @@ final class SoundCatalog
 		$text = (string)preg_replace('/\/\/[^\r\n]*/', '', $text);
 
 		preg_match_all('/\$random\s+(\S+)\s*\{([^}]*)\}/i', $text, $groups, PREG_SET_ORDER);
+
 		foreach($groups as $group)
 		{
 			$names = preg_split('/\s+/', trim($group[2])) ?: [];
 			$self->random[strtolower($group[1])] = array_values(array_filter($names, 'strlen'));
 		}
+
 		$text = (string)preg_replace('/\$random\s+\S+\s*\{[^}]*\}/i', '', $text);
 
 		foreach(preg_split('/\R/', $text) ?: [] as $line)
 		{
 			$line = trim($line);
+
 			if($line === '' || $line[0] === '$') continue;
+
 			$parts = preg_split('/\s+/', $line);
+
 			if(count($parts) >= 2) $self->aliases[strtolower($parts[0])] = strtoupper($parts[1]);
 		}
 
@@ -42,6 +47,7 @@ final class SoundCatalog
 		foreach($documents as $source => $text)
 		{
 			if(!is_string($text)) throw new \InvalidArgumentException("SNDINFO document $source must contain text");
+
 			$result->overlay(self::parse($text));
 		}
 
@@ -68,10 +74,13 @@ final class SoundCatalog
 	public function resolve(string $name, int $choice = 0): ?string
 	{
 		$key = strtolower($name);
+
 		if(isset($this->random[$key]))
 		{
 			$group = $this->random[$key];
+
 			if(!$group) return null;
+
 			$key = strtolower($group[(($choice % count($group)) + count($group)) % count($group)]);
 		}
 

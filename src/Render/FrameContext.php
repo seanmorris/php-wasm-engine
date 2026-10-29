@@ -5,6 +5,7 @@ namespace Phonics\Render;
 /** Values shared by ordered render passes for one presented frame. */
 final class FrameContext
 {
+
 	/**
 	 * Describe the current render frame.
 	 *
@@ -17,5 +18,6 @@ final class FrameContext
 		public object $device
 		, public float $alpha
 		, public int $generation
-	) {}
+	){
+	}
 }

@@ -56,8 +56,11 @@ final class ActorCatalog
 		while(isset($this->actors[strtolower($name)]))
 		{
 			$key = strtolower($name);
+
 			if($key === $target) return true;
+
 			if(isset($seen[$key])) return false;
+
 			$seen[$key] = true;
 			$name = $this->actors[$key]->parent ?? '';
 		}
@@ -69,7 +72,9 @@ final class ActorCatalog
 	private function resolve(string $key, array $chain): ActorDefinition
 	{
 		if(isset($this->resolved[$key])) return $this->resolved[$key];
-		if(isset($chain[$key])) throw new \UnexpectedValueException('DECORATE inheritance cycle at ' . $this->actors[$key]->name);
+
+		if(isset($chain[$key]))
+		throw new \UnexpectedValueException('DECORATE inheritance cycle at ' . $this->actors[$key]->name);
 
 		$raw = $this->actors[$key];
 		$chain[$key] = true;
@@ -88,7 +93,7 @@ final class ActorCatalog
 			// Player declarations extend inherited lists. A class's first DropItem declaration
 			// replaces its parent's list, which lets `DropItem None` suppress corpse loot.
 			if(in_array($name, ['player.startitem','player.weaponslot','player.colorset'], true))
-				$actor->properties[$name] = [...($actor->properties[$name] ?? []), ...$occurrences];
+			$actor->properties[$name] = [...($actor->properties[$name] ?? []), ...$occurrences];
 			else $actor->properties[$name] = $occurrences;
 		}
 

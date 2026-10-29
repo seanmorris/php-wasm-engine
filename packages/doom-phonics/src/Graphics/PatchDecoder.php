@@ -8,6 +8,7 @@ use DoomPhonics\Archive\Lump;
 /** Decode Doom column/post pictures used for patches, sprites, HUD art, and title images. */
 final class PatchDecoder
 {
+
 	/** @param Lump $lump Picture lump. @return IndexedImage Decoded transparent image. */
 	public static function decode(Lump $lump): IndexedImage
 	{
@@ -34,7 +35,8 @@ final class PatchDecoder
 
 			while(true)
 			{
-				if(++$guard > $height + 256) throw new \UnexpectedValueException("$source: unterminated patch column $x");
+				if(++$guard > $height + 256)
+				throw new \UnexpectedValueException("$source: unterminated patch column $x");
 
 				$topDelta = Binary::u8($bytes, $offset, $source);
 				$offset++;

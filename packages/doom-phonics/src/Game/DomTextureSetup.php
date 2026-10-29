@@ -8,6 +8,7 @@ use DoomPhonics\Graphics\TextureCatalog;
 /** Match WAD DOMTexture declarations to trusted documents registered by the game host. */
 final class DomTextureSetup
 {
+
 	/** @param array<string,object> $providers Browser DomTexture bridges keyed by texture name. */
 	public static function apply(Level $level, TextureCatalog $textures, array $providers): void
 	{
@@ -16,8 +17,11 @@ final class DomTextureSetup
 		foreach($textures->cameraTextures() as $name => $definition)
 		{
 			if($definition->kind !== CameraTextureDefinition::DOM) continue;
+
 			$bridge = $providers[$name] ?? null;
+
 			if(!is_object($bridge)) continue;
+
 			$level->bindDomTexture(new DomTextureBinding($definition, $bridge));
 		}
 
@@ -28,7 +32,9 @@ final class DomTextureSetup
 	private static function bindScrollScripts(Level $level): void
 	{
 		$lump = $level->map->lumps['SCRIPTS'] ?? null;
+
 		if(!$lump) return;
+
 		$source = preg_replace('~/\*.*?\*/|//[^\r\n]*~s', ' ', $lump->bytes()) ?? $lump->bytes();
 		preg_match_all('/\bscript\s+(\d+)\s*(?:\([^)]*\))?\s*\{(.*?)\}/is', $source, $scripts, PREG_SET_ORDER);
 
@@ -36,7 +42,9 @@ final class DomTextureSetup
 		{
 			preg_match_all(
 				'/\bScrollDomTexture\s*\(\s*"([^"]+)"\s*,\s*([-+]?\d+(?:\.\d+)?)\s*\)/i'
-				, $script[2], $calls, PREG_SET_ORDER
+				, $script[2]
+				, $calls
+				, PREG_SET_ORDER
 			);
 
 			foreach($calls as $call)

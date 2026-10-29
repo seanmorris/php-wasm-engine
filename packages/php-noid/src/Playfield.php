@@ -134,7 +134,9 @@ final class Playfield
 
 		foreach([Ball::class, Capsule::class, Projectile::class] as $type)
 		foreach($this->registry()->query($type) as $id) $this->registry()->destroy($id);
+
 		if(!$this->state->infiniteLives) $this->state->lives--;
+
 		$this->state->events[] = 'loss';
 		$this->state->flash = .4;
 		$this->state->confirmReady = false;

@@ -11,9 +11,14 @@ final class WadActiveScope implements ActiveScope
 	private bool $closed = false;
 
 	public function __construct(private ScopeDescriptor $scope, private WadLevel $level) {}
+
 	public function descriptor(): ScopeDescriptor { return $this->scope; }
+
 	public function content(): WadLevel { return $this->level; }
+
 	public function snapshot(): array { return ['map' => $this->scope->id]; }
+
 	public function close(): void { $this->closed = true; }
+
 	public function closed(): bool { return $this->closed; }
 }

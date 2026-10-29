@@ -9,6 +9,7 @@ test('SafeStorage persists strings and keeps a session overlay', () => {
 		, setItem: (key, value) => values.set(key, value)
 		, removeItem: key => values.delete(key)
 	};
+
 	const safe = new SafeStorage(storage);
 
 	assert.equal(safe.get('old'), 'disk');
@@ -26,6 +27,7 @@ test('SafeStorage contains backing-store failures for the rest of the session', 
 		, setItem: () => { throw new Error('quota'); }
 		, removeItem: () => { throw new Error('blocked'); }
 	};
+
 	const safe = new SafeStorage(storage);
 
 	assert.equal(safe.get('missing'), null);

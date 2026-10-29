@@ -19,15 +19,19 @@ final readonly class CameraTextureDefinition
 		, public int $fitHeight = 0
 		, public bool $worldPanning = false
 		, public string $kind = self::CAMERA
-	) {
+	){
 		if($width < 1 || $height < 1 || $width > 4096 || $height > 4096)
 		throw new \InvalidArgumentException('Camera texture dimensions must be within 1..4096');
+
 		$this->name = strtoupper(substr($name, 0, 8));
+
 		if($this->name === '') throw new \InvalidArgumentException('Camera texture name cannot be empty');
+
 		if(!in_array($this->kind, [self::CAMERA,self::CANVAS,self::DOM], true))
 		throw new \InvalidArgumentException("Unknown dynamic texture kind {$this->kind}");
 	}
 
 	public function displayWidth(): int { return $this->fitWidth > 0 ? $this->fitWidth : $this->width; }
+
 	public function displayHeight(): int { return $this->fitHeight > 0 ? $this->fitHeight : $this->height; }
 }

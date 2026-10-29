@@ -38,6 +38,7 @@ final class BusterActions
 	 */
 	public static function defaults(): Bindings
 	{
+
 		/**
 		 * Convert a named or numeric key into a physical input source.
 		 *

@@ -28,7 +28,8 @@ final class HexenCameraPortalSetup
 	{
 		foreach($level->map->linedefs as $line)
 		{
-			$id = match($line['action']) {
+			$id = match($line['action'])
+			{
 				self::LINE_SET_IDENTIFICATION => $line['args'][0] + 256 * $line['args'][4]
 				, self::LINE_SET_PORTAL => $line['args'][1]
 				, 208, 215, 222 => $line['args'][0]
@@ -53,18 +54,27 @@ final class HexenCameraPortalSetup
 		foreach($level->cameraPortalLinks() as $link)
 		{
 			if($link->originLine === null || $link->destinationLine === null) continue;
+
 			$reverse = $level->cameraPortalForLine($link->destinationLine)?->link;
+
 			if($reverse && $reverse->destinationLine === $link->originLine)
-				$link->reciprocalId = $reverse->id;
+			$link->reciprocalId = $reverse->id;
 
 			if($link->type === CameraPortalType::LINKED
-				&& (!$reverse || $reverse->destinationLine !== $link->originLine || $reverse->type !== CameraPortalType::LINKED)
+				&& (!$reverse || $reverse->destinationLine !== $link->originLine || $reverse
+					->type !== CameraPortalType::LINKED
+				)
 			) $link->type = CameraPortalType::TELEPORTER;
 		}
 	}
 
-	private static function lineLink(Level $level, int $originId, ?int $destinationId, int $type, int $alignment): CameraPortalLink
-	{
+	private static function lineLink(
+		Level $level
+		, int $originId
+		, ?int $destinationId
+		, int $type
+		, int $alignment
+	): CameraPortalLink {
 		$origin = $level->map->linedefs[$originId];
 		$a = $level->map->vertices[$origin['from']];
 		$b = $level->map->vertices[$origin['to']];
@@ -82,23 +92,38 @@ final class HexenCameraPortalSetup
 			$destinationSector = $level->sides($destinationId)['front'] ?? $originSector;
 			$destinationX = (float)$d['x'];
 			$destinationY = (float)$d['y'];
-			$angle = $type === CameraPortalType::LINKED ? 0.0
+			$angle = $type === CameraPortalType::LINKED
+				? 0.0
 				: atan2($d['y'] - $c['y'], $d['x'] - $c['x'])
 					- atan2($b['y'] - $a['y'], $b['x'] - $a['x']) + M_PI;
 		}
 
 		if($type === CameraPortalType::LINKED) $alignment = CameraPortalLink::ALIGN_ABSOLUTE;
+
 		if($alignment < CameraPortalLink::ALIGN_ABSOLUTE || $alignment > CameraPortalLink::ALIGN_CEILING)
 		$alignment = CameraPortalLink::ALIGN_ABSOLUTE;
+
 		if($type === CameraPortalType::INTERACTIVE && $alignment !== CameraPortalLink::ALIGN_ABSOLUTE)
 		$type = CameraPortalType::TELEPORTER;
+
 		if($type !== CameraPortalType::VISUAL && $level->sides($originId)['back'] === null)
 		$type = CameraPortalType::VISUAL;
 
 		$link = new CameraPortalLink(
-			$level->nextCameraPortalId(), $type, $alignment, $originSector, $destinationSector
-			, (float)$a['x'], (float)$a['y'], $destinationX, $destinationY, $angle, $originId, $destinationId
+			$level->nextCameraPortalId()
+			, $type
+			, $alignment
+			, $originSector
+			, $destinationSector
+			, (float)$a['x']
+			, (float)$a['y']
+			, $destinationX
+			, $destinationY
+			, $angle
+			, $originId
+			, $destinationId
 		);
+
 		$link->active = $destinationId !== null;
 		$level->addCameraPortalLink($link);
 
@@ -119,17 +144,23 @@ final class HexenCameraPortalSetup
 			) continue;
 
 			$reference = null;
+
 			foreach($level->map->linedefs as $candidate)
 			if($candidate['action'] === self::SECTOR_SET_PORTAL && $candidate['args'][0] === $args[0]
 				&& $candidate['args'][1] === $args[1] && $candidate['args'][2] === $args[2]
 				&& $candidate['args'][3] === 1
-			){ $reference = $candidate; break; }
+			){
+				$reference = $candidate;
+				break;
+			}
 
 			if(!$reference) continue;
 
 			$originSector = $level->sides($line['index'])['front'];
 			$destinationSector = $level->sides($reference['index'])['front'];
+
 			if($originSector === null || $destinationSector === null) continue;
+
 			[$originX,$originY] = self::lineCenter($level, $line);
 			[$destinationX,$destinationY] = self::lineCenter($level, $reference);
 			$overlayAlpha = max(0.0, min(1.0, $args[4] / 255));
@@ -139,46 +170,73 @@ final class HexenCameraPortalSetup
 			{
 				$sourceAlignment = $plane ? CameraPortalLink::ALIGN_CEILING : CameraPortalLink::ALIGN_FLOOR;
 				$destinationAlignment = $plane ? CameraPortalLink::ALIGN_FLOOR : CameraPortalLink::ALIGN_CEILING;
+
 				$link = new CameraPortalLink(
 					$level->nextCameraPortalId()
 					, $args[1] === 6 ? CameraPortalType::LINKED : CameraPortalType::VISUAL
 					, $sourceAlignment
-					, $originSector, $destinationSector, $originX, $originY, $destinationX, $destinationY
-					, 0.0, null, null, null, $destinationAlignment
+					, $originSector
+					, $destinationSector
+					, $originX
+					, $originY
+					, $destinationX
+					, $destinationY
+					, 0.0
+					, null
+					, null
+					, null
+					, $destinationAlignment
 				);
+
 				$level->addCameraPortalLink($link);
 				$links[] = $link;
 				$key = $args[0] . ':' . $plane;
 				$definitions[$key] = ['link' => $link,'overlayAlpha' => $overlayAlpha];
+
 				foreach($level->tags[$args[0]] ?? [] as $sector)
-				$level->addCameraPortalSurface(new CameraPortalSurface(
-					$plane ? CameraPortalSurface::CEILING : CameraPortalSurface::FLOOR
-					, $sector
-					, $link
-					, $overlayAlpha
-				));
+				$level->addCameraPortalSurface(
+					new CameraPortalSurface(
+						$plane ? CameraPortalSurface::CEILING : CameraPortalSurface::FLOOR
+						, $sector
+						, $link
+						, $overlayAlpha
+					)
+				);
 			}
 		}
 
 		foreach($level->map->linedefs as $line)
 		{
 			$args = $line['args'];
+
 			if($line['action'] !== self::SECTOR_SET_PORTAL || $args[1] !== 1) continue;
+
 			$planes = $args[2] === 3 ? [0,1] : [$args[2]];
+
 			foreach($planes as $plane)
 			{
 				$definition = $definitions[$args[3] . ':' . $plane] ?? null;
+
 				if(!$definition) continue;
+
 				$link = $definition['link'];
 				$overlayAlpha = $definition['overlayAlpha'];
-				$targets = $args[0] ? ($level->tags[$args[0]] ?? [])
-					: array_values(array_filter([$level->sides($line['index'])['front']], static fn($v): bool => $v !== null));
-				foreach($targets as $sector) $level->addCameraPortalSurface(new CameraPortalSurface(
-					$plane ? CameraPortalSurface::CEILING : CameraPortalSurface::FLOOR
-					, $sector
-					, $link
-					, $overlayAlpha
-				));
+
+				$targets = $args[0]
+					? ($level->tags[$args[0]] ?? [])
+					: array_values(
+						array_filter([$level->sides($line['index'])['front']], static fn($v): bool => $v !== null)
+					);
+
+				foreach($targets as $sector)
+				$level->addCameraPortalSurface(
+					new CameraPortalSurface(
+						$plane ? CameraPortalSurface::CEILING : CameraPortalSurface::FLOOR
+						, $sector
+						, $link
+						, $overlayAlpha
+					)
+				);
 			}
 		}
 
@@ -192,7 +250,9 @@ final class HexenCameraPortalSetup
 		foreach($level->map->things as $thing)
 		{
 			$id = (int)($thing['id'] ?? 0);
+
 			if(!$id) continue;
+
 			if($thing['type'] === self::UPPER_STACK_LOOK_ONLY) $upper[$id][] = $thing;
 			elseif($thing['type'] === self::LOWER_STACK_LOOK_ONLY) $lower[$id][] = $thing;
 		}
@@ -204,28 +264,56 @@ final class HexenCameraPortalSetup
 			$topSector = $level->map->sectorAt((int)$top['x'], (int)$top['y']);
 			$bottomSector = $level->map->sectorAt((int)$bottom['x'], (int)$bottom['y']);
 			$alpha = max(0.0, min(1.0, (int)($top['args'][0] ?? 0) / 255));
+
 			$down = new CameraPortalLink(
-				$level->nextCameraPortalId(), CameraPortalType::VISUAL, CameraPortalLink::ALIGN_FLOOR
-				, $topSector, $bottomSector, (float)$top['x'], (float)$top['y'], (float)$bottom['x'], (float)$bottom['y']
-				, 0.0, null, null, null, CameraPortalLink::ALIGN_CEILING
+				$level->nextCameraPortalId()
+				, CameraPortalType::VISUAL
+				, CameraPortalLink::ALIGN_FLOOR
+				, $topSector
+				, $bottomSector
+				, (float)$top['x']
+				, (float)$top['y']
+				, (float)$bottom['x']
+				, (float)$bottom['y']
+				, 0.0
+				, null
+				, null
+				, null
+				, CameraPortalLink::ALIGN_CEILING
 			);
+
 			$level->addCameraPortalLink($down);
-			$level->addCameraPortalSurface(new CameraPortalSurface(
-				CameraPortalSurface::FLOOR, $topSector, $down, $alpha
-			));
+
+			$level->addCameraPortalSurface(
+				new CameraPortalSurface(CameraPortalSurface::FLOOR, $topSector, $down, $alpha)
+			);
 
 			$alpha = max(0.0, min(1.0, (int)($bottom['args'][0] ?? 0) / 255));
+
 			$up = new CameraPortalLink(
-				$level->nextCameraPortalId(), CameraPortalType::VISUAL, CameraPortalLink::ALIGN_CEILING
-				, $bottomSector, $topSector, (float)$bottom['x'], (float)$bottom['y'], (float)$top['x'], (float)$top['y']
-				, 0.0, null, null, null, CameraPortalLink::ALIGN_FLOOR
+				$level->nextCameraPortalId()
+				, CameraPortalType::VISUAL
+				, CameraPortalLink::ALIGN_CEILING
+				, $bottomSector
+				, $topSector
+				, (float)$bottom['x']
+				, (float)$bottom['y']
+				, (float)$top['x']
+				, (float)$top['y']
+				, 0.0
+				, null
+				, null
+				, null
+				, CameraPortalLink::ALIGN_FLOOR
 			);
+
 			$level->addCameraPortalLink($up);
 			$down->reciprocalId = $up->id;
 			$up->reciprocalId = $down->id;
-			$level->addCameraPortalSurface(new CameraPortalSurface(
-				CameraPortalSurface::CEILING, $bottomSector, $up, $alpha
-			));
+
+			$level->addCameraPortalSurface(
+				new CameraPortalSurface(CameraPortalSurface::CEILING, $bottomSector, $up, $alpha)
+			);
 		}
 	}
 
@@ -239,6 +327,7 @@ final class HexenCameraPortalSetup
 			$offsetY = $link->destinationY - $link->originY;
 			$reverseOffsetX = $reverse->destinationX - $reverse->originX;
 			$reverseOffsetY = $reverse->destinationY - $reverse->originY;
+
 			if($reverse->id === $link->id
 				|| $reverse->originSector !== $link->destinationSector
 				|| $reverse->destinationSector !== $link->originSector

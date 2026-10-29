@@ -116,8 +116,10 @@ final class CombatSystem
 			if($registry->get($entity, HitPoints::class)->current <= 0)
 			{
 				$this->unequip($registry, $entity, $player);
+
 				if($registry->has($entity, PlayerCommand::class))
 				$registry->get($entity, PlayerCommand::class)->release();
+
 				if($registry->has($entity, ViewInput::class))
 				$registry->get($entity, ViewInput::class)->release();
 
@@ -239,6 +241,7 @@ final class CombatSystem
 				$puff = $puffArgument === 0 || $puffArgument === 0.0
 					? 'BulletPuff'
 					: (string)$puffArgument;
+
 				$flags = (int)($frame->arguments[5] ?? 1);
 				$range = (float)($frame->arguments[6] ?? 0);
 				$attackSound = $registry->has($entity, ActorState::class)
@@ -290,11 +293,7 @@ final class CombatSystem
 
 		$register(
 			'A_JumpIfNoAmmo'
-			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->jumpIfNoAmmo(
-				$entity
-				, $frame
-				, $registry
-			)
+			, fn(int $entity, StateFrame $frame, Registry $registry) => $this->jumpIfNoAmmo($entity, $frame, $registry)
 		);
 
 		$register(
@@ -929,6 +928,7 @@ final class CombatSystem
 		$command = $registry->has($owner, PlayerCommand::class)
 			? $registry->get($owner, PlayerCommand::class)
 			: null;
+
 		$view = $registry->has($owner, ViewInput::class) ? $registry->get($owner, ViewInput::class) : null;
 		$fire = $command?->fire ?? ($this->controls->down(DoomActions::FIRE) || ($view?->fire ?? false));
 		$altFire = $command?->altFire ?? ($this->controls->down(DoomActions::ALT_FIRE) || ($view?->altFire ?? false));
@@ -942,8 +942,7 @@ final class CombatSystem
 		{
 			if($state->definition->hasFlag('ammo_optional')
 				|| $this->hasAmmo($registry->get($owner, PlayerState::class), $state->definition, 2)
-			)
-			{
+			){
 				$this->awareness->alert($registry, $owner, $owner);
 				$state->enter('AltFire');
 			}
@@ -955,8 +954,7 @@ final class CombatSystem
 
 		if($state->definition->hasFlag('ammo_optional')
 			|| $this->hasAmmo($registry->get($owner, PlayerState::class), $state->definition)
-		)
-		{
+		){
 			$this->awareness->alert($registry, $owner, $owner);
 			$state->enter('Fire');
 		}
@@ -1052,6 +1050,7 @@ final class CombatSystem
 		if($definition !== null && $this->actors->isA($definition, 'Weapon'))
 		{
 			$key = $this->inventoryKey($player->weapons, $definition->name) ?? $definition->name;
+
 			if($direction > 0) $player->weapons[$key] = true;
 			else unset($player->weapons[$key]);
 
@@ -1184,11 +1183,7 @@ final class CombatSystem
 		$state = $registry->get($weapon, ActorState::class);
 		$player = $registry->get($owner, PlayerState::class);
 
-		if($useAmmo && !$this->consumeAmmo(
-			$player
-			, $state->definition
-			, $this->ammoChannel($actionEntity, $registry)
-		))
+		if($useAmmo && !$this->consumeAmmo($player, $state->definition, $this->ammoChannel($actionEntity, $registry)))
 		{
 			$state->enter('Ready');
 
@@ -1248,12 +1243,7 @@ final class CombatSystem
 				$this->spawnPuff($registry, $puff, $impact, $pose);
 
 				if($impact->geometry->line !== null && $this->specials)
-				$this->specials->shoot(
-					$impact->geometry->line
-					, $impact->geometry->sector
-					, $player
-					, $pose
-				);
+				$this->specials->shoot($impact->geometry->line, $impact->geometry->sector, $player, $pose);
 			}
 		}
 	}
@@ -1295,29 +1285,20 @@ final class CombatSystem
 		$originZ = $pose->z + 41;
 		$trace = $this->hitscanTrace($pose->x, $pose->y, $originZ, $pose->angle, $range, $slope);
 		$end = $trace['surface'];
-		$targets = $this->hitscanActorImpacts(
-			$registry, $owner, $trace['path']['segments'], $range, $end->distance
-		);
+		$targets = $this->hitscanActorImpacts($registry, $owner, $trace['path']['segments'], $range, $end->distance);
 
 		foreach($targets as $targetHit)
 		{
 			$impact = $targetHit['impact'];
 			$target = $impact->target;
+
 			if($target === null) continue;
+
 			if($this->usesPuff($registry, $target))
 			$this->spawnPuff($registry, 'BulletPuff', $impact, $targetHit['source']);
 
 			// The reference rail passes through actors and applies one fixed 100-point hit.
-			$this->damage(
-				$registry
-				, $target
-				, $owner
-				, 100
-				, null
-				, true
-				, $impact
-				, $weapon
-			);
+			$this->damage($registry, $target, $owner, 100, null, true, $impact, $weapon);
 		}
 
 		if($end->geometry !== null && !$end->geometry->escapesIntoSky())
@@ -1325,12 +1306,7 @@ final class CombatSystem
 			$this->spawnPuff($registry, 'BulletPuff', $end, $pose);
 
 			if($end->geometry->line !== null && $this->specials)
-			$this->specials->shoot(
-				$end->geometry->line
-				, $end->geometry->sector
-				, $player
-				, $pose
-			);
+			$this->specials->shoot($end->geometry->line, $end->geometry->sector, $player, $pose);
 		}
 
 		// The reference line begins eight units below its view camera. Preserve that
@@ -1354,16 +1330,13 @@ final class CombatSystem
 		if($weapon === null) return;
 
 		$owner = $registry->get($weapon, WeaponOwner::class)->entity;
+
 		if(!$registry->alive($owner)) return;
 
 		$state = $registry->get($weapon, ActorState::class);
 		$player = $registry->get($owner, PlayerState::class);
 
-		if($useAmmo && !$this->consumeAmmo(
-			$player
-			, $state->definition
-			, $this->ammoChannel($actionEntity, $registry)
-		))
+		if($useAmmo && !$this->consumeAmmo($player, $state->definition, $this->ammoChannel($actionEntity, $registry)))
 		{
 			$state->enter('Ready');
 
@@ -1376,6 +1349,7 @@ final class CombatSystem
 		$aimPitch = $registry->has($owner, ViewInput::class)
 			? $registry->get($owner, ViewInput::class)->pitch
 			: 0.0;
+
 		$angle = $pose->angle + deg2rad($angleOffset);
 		$sideAngle = $pose->angle - M_PI / 2;
 
@@ -1411,10 +1385,17 @@ final class CombatSystem
 		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Transform::class)) return null;
 
 		$players = $registry->query($this->players);
-		usort($players, static fn(int $a, int $b): int => $registry->get(
-			$a, PlayerStart::class
-		)->number <=> $registry->get($b, PlayerStart::class)->number);
+
+		usort(
+			$players
+			, static fn(int $a, int $b): int => $registry->get($a, PlayerStart::class)->number <=> $registry->get(
+				$b
+				, PlayerStart::class
+			)->number
+		);
+
 		$count = count($players);
+
 		if($count === 0) return null;
 
 		$brain = $registry->get($entity, MonsterBrain::class);
@@ -1426,9 +1407,11 @@ final class CombatSystem
 			$index = $brain->lastLook % $count;
 			$player = $players[$index];
 			$brain->lastLook = ($index + 1) % $count;
+
 			if(!$this->validTarget($registry, $player)) continue;
 
 			$target = $registry->get($player, Transform::class);
+
 			if(!$this->visible($source, $target)) continue;
 
 			if(!$allAround)
@@ -1460,9 +1443,11 @@ final class CombatSystem
 		$brain = $registry->get($entity, MonsterBrain::class);
 		$brain->target = $target;
 		$brain->awake = true;
+
 		if($sightSound) $this->actorSound($entity, $registry, 'SeeSound');
 
 		$state = $registry->get($entity, ActorState::class);
+
 		if($state->definition->state('See')) $state->enter('See');
 	}
 
@@ -1478,6 +1463,7 @@ final class CombatSystem
 		if($heard !== null && $this->validTarget($registry, $heard))
 		{
 			$brain->target = $heard;
+
 			if(!$brain->ambush || $this->visible($pose, $registry->get($heard, Transform::class)))
 			{
 				$this->wake($entity, $heard, $registry, true);
@@ -1487,6 +1473,7 @@ final class CombatSystem
 		}
 
 		$player = $this->lookForPlayer($entity, $registry, false);
+
 		if($player !== null) $this->wake($entity, $player, $registry, true);
 	}
 
@@ -1495,12 +1482,14 @@ final class CombatSystem
 		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Body::class))return;
 
 		$brain = $registry->get($entity, MonsterBrain::class);
+
 		if($brain->threshold > 0) $brain->threshold--;
 
 		if($brain->target === null || !$this->validTarget($registry, $brain->target))
 		{
 			$brain->threshold = 0;
 			$player = $this->lookForPlayer($entity, $registry, true);
+
 			if($player !== null)
 			{
 				$brain->target = $player;
@@ -1612,16 +1601,7 @@ final class CombatSystem
 				if($this->usesPuff($registry, $impact->target))
 				$this->spawnPuff($registry, 'BulletPuff', $impact, $pose);
 
-				$this->damage(
-					$registry
-					, $impact->target
-					, $entity
-					, 3 * mt_rand(1, 5)
-					, null
-					, true
-					, $impact
-					, $entity
-				);
+				$this->damage($registry, $impact->target, $entity, 3 * mt_rand(1, 5), null, true, $impact, $entity);
 			}
 			elseif($impact->geometry !== null && !$impact->geometry->escapesIntoSky())
 			$this->spawnPuff($registry, 'BulletPuff', $impact, $pose);
@@ -1639,6 +1619,7 @@ final class CombatSystem
 		$sound = $definition->value('AttackSound');
 
 		if(is_string($sound) && $sound !== '') $this->playLogicalSound($entity, $registry, $sound);
+
 		if(!$this->simulateBeams) return;
 
 		$pose = $registry->get($entity, Transform::class);
@@ -1646,6 +1627,7 @@ final class CombatSystem
 		$targetBody = $registry->has($brain->target, Body::class)
 			? $registry->get($brain->target, Body::class)
 			: null;
+
 		$angle = $this->aimAngle($registry, $brain->target, $pose);
 		$distance = max(1.0, hypot($targetPose->x - $pose->x, $targetPose->y - $pose->y));
 		$originZ = $pose->z + 32;
@@ -1653,28 +1635,19 @@ final class CombatSystem
 		$range = 6400.0;
 		$trace = $this->hitscanTrace($pose->x, $pose->y, $originZ, $angle, $range, $slope);
 		$end = $trace['surface'];
-		$targets = $this->hitscanActorImpacts(
-			$registry, $entity, $trace['path']['segments'], $range, $end->distance
-		);
+		$targets = $this->hitscanActorImpacts($registry, $entity, $trace['path']['segments'], $range, $end->distance);
 
 		foreach($targets as $targetHit)
 		{
 			$impact = $targetHit['impact'];
 			$target = $impact->target;
+
 			if($target === null) continue;
+
 			if($this->usesPuff($registry, $target))
 			$this->spawnPuff($registry, 'BulletPuff', $impact, $targetHit['source']);
 
-			$this->damage(
-				$registry
-				, $target
-				, $entity
-				, 100
-				, null
-				, true
-				, $impact
-				, $entity
-			);
+			$this->damage($registry, $target, $entity, 100, null, true, $impact, $entity);
 		}
 
 		if($end->geometry !== null && !$end->geometry->escapesIntoSky())
@@ -2005,14 +1978,23 @@ final class CombatSystem
 			foreach($registry->query($this->damageable) as $other)
 			{
 				if($other === $entity || $other === $projectile->owner) continue;
+
 				$otherBody = $registry->get($other, Body::class);
+
 				if(!$otherBody->shootable) continue;
+
 				$fraction = $this->projectileContact(
-					$segmentPose, $body, $segment['dx'], $segment['dy'], $segment['dz']
-					, $registry->get($other, Transform::class), $otherBody
+					$segmentPose
+					, $body
+					, $segment['dx']
+					, $segment['dy']
+					, $segment['dz']
+					, $registry->get($other, Transform::class)
+					, $otherBody
 				);
 
 				if($fraction === null) continue;
+
 				$total = $segment['from'] + ($segment['to'] - $segment['from']) * $fraction;
 
 				if($total < $targetFraction)
@@ -2034,15 +2016,8 @@ final class CombatSystem
 		{
 			$this->applyProjectilePortals($pose, $velocity, $body, $path['portals'], $targetPortalCount);
 			[$pose->x,$pose->y,$pose->z] = $targetPoint;
-			$bloodImpact = new HitscanImpact(
-				0
-				, $pose->x
-				, $pose->y
-				, $pose->z
-				, $target
-				, null
-				, $targetOrigin
-			);
+			$bloodImpact = new HitscanImpact(0, $pose->x, $pose->y, $pose->z, $target, null, $targetOrigin);
+
 			$this->damage(
 				$registry
 				, $target
@@ -2053,6 +2028,7 @@ final class CombatSystem
 				, $bloodImpact
 				, $entity
 			);
+
 			$this->impactProjectile($registry, $entity, $projectile, $state, $velocity);
 
 			return;
@@ -2069,9 +2045,7 @@ final class CombatSystem
 			{
 				$projectile->escapeIntoSky();
 				$remaining = max(0.0, 1.0 - $impact->fraction);
-				$this->placeProjectile(
-					$pose, $velocity->x * $dt, $velocity->y * $dt, $velocity->z * $dt, $remaining
-				);
+				$this->placeProjectile($pose, $velocity->x * $dt, $velocity->y * $dt, $velocity->z * $dt, $remaining);
 
 				return;
 			}
@@ -2324,8 +2298,13 @@ final class CombatSystem
 		, float $slope = 0
 	): HitscanImpact {
 		$trace = $this->hitscanTrace($x, $y, $z, $angle, $range, $slope);
+
 		$targets = $this->hitscanActorImpacts(
-			$registry, $shooter, $trace['path']['segments'], $range, $trace['surface']->distance
+			$registry
+			, $shooter
+			, $trace['path']['segments']
+			, $range
+			, $trace['surface']->distance
 		);
 
 		return $targets[0]['impact'] ?? $trace['surface'];
@@ -2333,7 +2312,11 @@ final class CombatSystem
 
 	/**
 	 * @return array{
-	 *   path:array{segments:list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}>,impact:?ProjectileImpact,portals:list<\DoomPhonics\Game\CameraPortalLink>},
+	 *   path:array{
+	 *     segments:list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}>,
+	 *     impact:?ProjectileImpact,
+	 *     portals:list<\DoomPhonics\Game\CameraPortalLink>
+	 *   },
 	 *   surface:HitscanImpact
 	 * }
 	 */
@@ -2348,9 +2331,7 @@ final class CombatSystem
 		$dx = cos($angle);
 		$dy = sin($angle);
 		$ray = new Transform($x, $y, $z, $angle);
-		$path = $this->projectileTracer->tracePath(
-			$ray, new Body(0, 0), $dx * $range, $dy * $range, $slope * $range
-		);
+		$path = $this->projectileTracer->tracePath($ray, new Body(0, 0), $dx * $range, $dy * $range, $slope * $range);
 		$geometry = $path['impact'];
 		$segment = $path['segments'][array_key_last($path['segments'])];
 		$origin = new WorldPoint($segment['x'], $segment['y'], $segment['z']);
@@ -2384,7 +2365,9 @@ final class CombatSystem
 	/**
 	 * Find each shootable actor on a transformed ray, once, ordered by total travel.
 	 *
-	 * @param list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}> $segments
+	 * @param list<array{
+	 *   x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int
+	 * }> $segments
 	 * @return list<array{impact:HitscanImpact,source:Transform}>
 	 */
 	private function hitscanActorImpacts(
@@ -2399,23 +2382,38 @@ final class CombatSystem
 		foreach($registry->query($this->damageable) as $entity)
 		{
 			if($entity === $shooter) continue;
+
 			$body = $registry->get($entity, Body::class);
+
 			if(!$body->shootable) continue;
+
 			$target = $registry->get($entity, Transform::class);
 
 			foreach($segments as $segment)
 			{
 				$length = hypot($segment['dx'], $segment['dy']);
+
 				if($length <= 1e-9) continue;
+
 				$dx = $segment['dx'] / $length;
 				$dy = $segment['dy'] / $length;
 				$slope = $segment['dz'] / $length;
+
 				$distance = $this->rayActorDistance(
-					$segment['x'], $segment['y'], $segment['z'], $dx, $dy, $slope, $target, $body
+					$segment['x']
+					, $segment['y']
+					, $segment['z']
+					, $dx
+					, $dy
+					, $slope
+					, $target
+					, $body
 				);
 
 				if($distance === null || $distance > $length + 1e-7) continue;
+
 				$total = $segment['from'] * $range + $distance;
+
 				if($total >= $limit || isset($targets[$entity])) continue;
 
 				$targets[$entity] = [
@@ -2430,12 +2428,14 @@ final class CombatSystem
 					)
 					, 'source' => new Transform($segment['x'], $segment['y'], $segment['z'])
 				];
+
 				break;
 			}
 		}
 
-		usort($targets, static fn(array $left, array $right): int =>
-			$left['impact']->distance <=> $right['impact']->distance
+		usort(
+			$targets
+			, static fn(array $left, array $right): int => $left['impact']->distance <=> $right['impact']->distance
 		);
 
 		return array_values($targets);
@@ -2445,7 +2445,9 @@ final class CombatSystem
 	 * Render a rail as one beam per portal-space segment so it never spans the void
 	 * between a portal entrance and its destination.
 	 *
-	 * @param list<array{x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int}> $segments
+	 * @param list<array{
+	 *   x:float,y:float,z:float,dx:float,dy:float,dz:float,from:float,to:float,portalCount:int
+	 * }> $segments
 	 */
 	private function spawnBeamPath(Registry $registry, array $segments, float $firstZOffset): void
 	{
@@ -2454,18 +2456,20 @@ final class CombatSystem
 		foreach($segments as $segment)
 		{
 			if(abs($segment['dx']) + abs($segment['dy']) + abs($segment['dz']) <= 1e-9) continue;
-			$registry->create(new BeamEffect(
-				new WorldPoint(
-					$segment['x'], $segment['y'], $segment['z'] - ($first ? $firstZOffset : 0)
+
+			$registry->create(
+				new BeamEffect(
+					new WorldPoint($segment['x'], $segment['y'], $segment['z'] - ($first ? $firstZOffset : 0))
+					, new WorldPoint(
+						$segment['x'] + $segment['dx']
+						, $segment['y'] + $segment['dy']
+						, $segment['z'] + $segment['dz']
+					)
+					, .75
+					, 8
 				)
-				, new WorldPoint(
-					$segment['x'] + $segment['dx']
-					, $segment['y'] + $segment['dy']
-					, $segment['z'] + $segment['dz']
-				)
-				, .75
-				, 8
-			));
+			);
+
 			$first = false;
 		}
 	}
@@ -2524,6 +2528,7 @@ final class CombatSystem
 		, Transform $source
 	): ?int {
 		$name = trim($name);
+
 		if($name === '' || strcasecmp($name, 'none') === 0) return null;
 
 		$definition = $this->actors->named($name);
@@ -2674,14 +2679,17 @@ final class CombatSystem
 		if(!$changed || !$this->blood->bleeds($registry, $target)) return $changed;
 
 		$effectSource = $attack ?? $inflictor ?? $source;
+
 		if(!$registry->alive($effectSource) || !$registry->has($effectSource, Transform::class))
 		$effectSource = $source;
 
 		if(!$registry->alive($effectSource) || !$registry->has($effectSource, Transform::class)) return $changed;
 
 		$sourcePose = $registry->get($effectSource, Transform::class);
+
 		if($impact?->origin)
 		$sourcePose = new Transform($impact->origin->x, $impact->origin->y, $impact->origin->z);
+
 		$this->blood->spawn(
 			$registry
 			, $target
@@ -2904,6 +2912,7 @@ final class CombatSystem
 	private function actionWeapon(int $entity, Registry $registry): ?int
 	{
 		if($registry->has($entity, WeaponOwner::class)) return $entity;
+
 		if(!$registry->has($entity, WeaponOverlay::class)) return null;
 
 		$weapon = $registry->get($entity, WeaponOverlay::class)->weaponEntity;

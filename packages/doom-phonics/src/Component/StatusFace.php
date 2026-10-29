@@ -28,11 +28,7 @@ final class StatusFace
 	{
 		if($damage <= 0) return;
 
-		$this->show(
-			$damage > self::MUCH_PAIN ? 'ouch' : $direction->expression()
-			, 7
-			, self::PAIN_TICS
-		);
+		$this->show($damage > self::MUCH_PAIN ? 'ouch' : $direction->expression(), 7, self::PAIN_TICS);
 	}
 
 	/** Smile when a genuinely new weapon enters the player's inventory. */
@@ -69,6 +65,7 @@ final class StatusFace
 	public function patch(int $health, bool $invulnerable = false): string
 	{
 		if($health <= 0) return 'STFDEAD0';
+
 		if($invulnerable) return 'STFGOD0';
 
 		$pain = min(4, intdiv((100 - min(100, max(0, $health))) * 5, 101));

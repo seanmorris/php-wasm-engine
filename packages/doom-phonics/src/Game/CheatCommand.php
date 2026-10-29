@@ -23,5 +23,4 @@ final class CheatCommand
 	public static function power(string $name): self { return new self(self::POWER, $name); }
 
 	public static function warp(string $map): self { return new self(self::WARP, strtoupper($map)); }
-
 }

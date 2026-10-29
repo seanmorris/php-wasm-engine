@@ -29,24 +29,29 @@ final class DamageResolver
 		) return false;
 
 		$health = $registry->get($event->target, HitPoints::class);
+
 		if($health->current <= 0) return false;
 
 		$state = $registry->get($event->target, ActorState::class);
 		$damage = max(0, (int)round($event->amount * (float)$state->definition->value('DamageFactor', 1)));
+
 		if($damage === 0) return false;
 
 		if($registry->has($event->target, PlayerState::class))
 		{
 			$player = $registry->get($event->target, PlayerState::class);
+
 			if($player->godMode || isset($player->powers['Invulnerable'])) return false;
 
 			$absorbed = min($player->armor, (int)floor($damage * $player->armorClass / 100));
 			$player->armor -= $absorbed;
 			$damage -= $absorbed;
+
 			if($damage === 0) return false;
 		}
 
 		if($event->thrust) $this->applyThrust($registry, $event, $damage, $state);
+
 		$health->current -= $damage;
 
 		if($registry->has($event->target, PlayerState::class)
@@ -60,7 +65,8 @@ final class DamageResolver
 			if($registry->has($event->target, Transform::class)
 				&& $registry->alive($event->source)
 				&& $registry->has($event->source, Transform::class)
-			) $direction = FaceDirection::toward(
+			)
+			$direction = FaceDirection::toward(
 				$registry->get($event->target, Transform::class)
 				, $registry->get($event->source, Transform::class)
 			);
@@ -80,7 +86,9 @@ final class DamageResolver
 			$registry->get($event->target, Body::class)->shootable = false;
 
 			$label = $this->deathLabel($state, $health);
+
 			if($label !== null) $state->enter($label);
+
 			$this->drops?->spawn($registry, $event->target);
 
 			if($registry->has($event->target, MonsterBrain::class)
@@ -106,6 +114,7 @@ final class DamageResolver
 
 		$brain = $registry->get($event->target, MonsterBrain::class);
 		$brain->reaction = 0;
+
 		if(!$registry->alive($event->source) || $event->source === $event->target
 			|| !$registry->has($event->source, Transform::class)
 		) return;
@@ -113,11 +122,13 @@ final class DamageResolver
 		$targetIsVile = strcasecmp($state->definition->name, 'Archvile') === 0;
 		$sourceIsVile = $registry->has($event->source, ActorState::class)
 			&& strcasecmp($registry->get($event->source, ActorState::class)->definition->name, 'Archvile') === 0;
+
 		if(($brain->threshold > 0 && !$targetIsVile) || $sourceIsVile) return;
 
 		$brain->target = $event->source;
 		$brain->threshold = 100;
 		$brain->awake = true;
+
 		if(strcasecmp($state->label, 'Spawn') === 0 && $state->definition->state('See')) $state->enter('See');
 	}
 
@@ -129,6 +140,7 @@ final class DamageResolver
 			&& $state->definition->state('XDeath') !== null;
 
 		if($extreme) return 'XDeath';
+
 		if($state->definition->state('Death')) return 'Death';
 
 		return !$state->definition->hasFlag('DONTGIB') && $state->definition->state('XDeath')
@@ -148,6 +160,7 @@ final class DamageResolver
 		) return;
 
 		$source = $event->thrustSource();
+
 		if($source === $event->target || !$registry->alive($source)
 			|| !$registry->has($source, Transform::class)
 		) return;
@@ -157,6 +170,7 @@ final class DamageResolver
 		$dx = $targetPose->x - $sourcePose->x;
 		$dy = $targetPose->y - $sourcePose->y;
 		$distance = hypot($dx, $dy);
+
 		if($distance < 1e-7) return;
 
 		$mass = max(1.0, (float)$state->definition->value('Mass', 100));

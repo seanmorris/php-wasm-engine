@@ -11,6 +11,13 @@ final class InputSettings
 	public bool $sessionOnly = false;
 	private ?\Closure $write;
 
+	/**
+	 * Restore a versioned profile while keeping safe defaults on failure.
+	 *
+	 * @param null|callable():mixed $read Browser persistence reader.
+	 * @param null|callable(string):mixed $write Browser persistence writer.
+	 * @return void The mutable binding profile is exposed through $bindings.
+	 */
 	public function __construct(?callable $read = null, ?callable $write = null)
 	{
 		$this->bindings = SlalomActions::defaults();
@@ -29,7 +36,11 @@ final class InputSettings
 		}
 	}
 
-	/** Save the complete binding profile without failing gameplay when storage is unavailable. */
+	/**
+	 * Save the complete binding profile without failing gameplay when storage is unavailable.
+	 *
+	 * @return void Failure switches the profile to session-only mode.
+	 */
 	public function save(): void
 	{
 		try
@@ -45,7 +56,12 @@ final class InputSettings
 		}
 	}
 
-	/** Restore only the selected device family. */
+	/**
+	 * Restore only the selected device family and persist the result.
+	 *
+	 * @param string $device Physical device family to reset.
+	 * @return void The existing binding object is updated in place.
+	 */
 	public function reset(string $device): void
 	{
 		$this->bindings->reset($device);

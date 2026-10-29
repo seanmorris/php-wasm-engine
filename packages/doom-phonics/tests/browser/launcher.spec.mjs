@@ -144,9 +144,11 @@ test('launcher starts local game modes, recovers from invalid starts, and opens 
 	await expect(map.locator('option[value="D2ST9"]')).toHaveCount(1);
 	const start = dialog.getByRole('button', {name: 'Start locally', exact: true});
 	await map.selectOption('MAP01');
+
 	expect(await page.evaluate(async() => {
 		window.launcherGameplayFire = 0;
 		const module = await previewSession.php.binary;
+
 		module.launcherGameplayFire = () => {window.launcherGameplayFire++;};
 
 		return previewSession.php.run(String.raw`<?php
@@ -154,8 +156,10 @@ test('launcher starts local game modes, recovers from invalid starts, and opens 
 				if($engine->controls->down(DoomPhonics\Input\DoomActions::FIRE))
 				(vrzno_env('launcherGameplayFire'))();
 			});
-		`);
+		`
+		);
 	})).toBe(0);
+
 	await start.click();
 	await expect(dialog).toBeHidden({timeout: 45000});
 	await expect.poll(async() => (await state())?.map).toBe('MAP01');
@@ -186,7 +190,8 @@ test('launcher starts local game modes, recovers from invalid starts, and opens 
 
 	expect(await page.evaluate(() => previewSession.php.run(String.raw`<?php
 		$engine->systems->remove('launcher-gameplay-fire-probe');
-	`))).toBe(0);
+	`
+	))).toBe(0);
 
 	expect((await state()).mode).toBe('singleplayer');
 	expect(await state()).toMatchObject({skill: 'Hey, not too rough', health: 100, paused: false});
@@ -202,7 +207,9 @@ test('launcher starts local game modes, recovers from invalid starts, and opens 
 	expect(await page.evaluate(() => previewSession.php.run(String.raw`<?php
 		$players = iterator_to_array($engine->entities->query(DoomPhonics\Game\PlayerState::class));
 		$engine->entities->get($players[0], DoomPhonics\Game\PlayerState::class)->exited = true;
-	`))).toBe(0);
+	`
+	))).toBe(0);
+
 	await expect.poll(async() => (await state()).intermission?.map).toBe('MAP01');
 	await expect.poll(async() => (await state()).wipe.active).toBe(true);
 	await expect.poll(async() => (await state()).wipe.active, {timeout: 10000}).toBe(false);

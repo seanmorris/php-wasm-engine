@@ -293,7 +293,8 @@ export class DomTexture
 		width = Math.max(1, Math.floor(Number(width) || this.canvas.width || 1));
 		height = Math.max(1, Math.floor(Number(height) || this.canvas.height || 1));
 
-		if(this.surface) return {
+		if(this.surface)
+		return {
 			width
 			, height
 			, margin: 0
@@ -483,8 +484,10 @@ export class DomTexture
 
 	overlaySvg(layout)
 	{
-		if(this.surface) return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout
-			.height}" viewBox="0 0 ${layout.width} ${layout.height}"><rect width="100%" height="100%" fill="#fff"/></svg>`;
+		if(this.surface)
+		return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.width}" height="${layout
+			.height}" viewBox="0 0 ${layout.width} ${layout
+				.height}"><rect width="100%" height="100%" fill="#fff"/></svg>`;
 
 		const body = `<div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${layout.width}px;height:${layout.height}px;background:rgba(0,0,0,.58);font-family:system-ui,sans-serif;">
 	<div style="position:absolute;left:${layout.panelX}px;top:${layout.panelY}px;width:${layout.panelWidth}px;height:${layout.panelHeight}px;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 12px 45px rgba(0,0,0,.48);display:flex;flex-direction:column;">

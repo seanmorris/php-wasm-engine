@@ -32,19 +32,17 @@ $engine->input->sequences->add('php-noid.konami.pad', [...$konami, 1, 0], 2);
 Module::systems($field);
 $rects = new RectRenderer;
 $camera = new Camera(Hud::PLAYFIELD_LEFT, 0, Hud::PLAYFIELD_WIDTH, Hud::HEIGHT);
-$hud = new Hud(new BitmapFont(
-	$phonics->loader
-	, __DIR__ . '/assets/font.tsj'
-	, [__DIR__ . '/assets/hud.tsj']
-));
+$hud = new Hud(new BitmapFont($phonics->loader, __DIR__ . '/assets/font.tsj', [__DIR__ . '/assets/hud.tsj']));
 $background = null;
 $backgroundMap = null;
 $assets = (vrzno_env('createAssetScope'))();
-$hintRenderer = new MenuRenderer(new BitmapFont(
-	$phonics->loader
-	, Resource::framework('resources/font.tsj')
-	, [Resource::framework('resources/buttons.tsj')]
-));
+
+$hintRenderer = new MenuRenderer(
+	new BitmapFont($phonics->loader, Resource::framework('resources/font.tsj'), [
+		Resource::framework('resources/buttons.tsj')
+	])
+);
+
 $phpInfo = new DomTextureModal(vrzno_env('domTexture'), $hintRenderer);
 $title = true;
 $ready = false;

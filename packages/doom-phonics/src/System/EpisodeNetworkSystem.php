@@ -93,6 +93,7 @@ final class EpisodeNetworkSystem
 	public function receive(Registry $registry, float $dt): void
 	{
 		$this->session->beforeStep($registry, $dt);
+
 		if(!$this->portalInterpolation) return;
 
 		foreach($registry->query(RemoteProjectile::class) as $entity)
@@ -100,6 +101,7 @@ final class EpisodeNetworkSystem
 			if(!$registry->has($entity, Transform::class) || !$registry->has($entity, ActorState::class)) continue;
 
 			$state = $registry->get($entity, ActorState::class);
+
 			$this->portalInterpolation->restore(
 				$registry->get($entity, Transform::class)
 				, max(0.0, (float)$state->definition->value('Height', 0))
@@ -271,10 +273,7 @@ final class EpisodeNetworkSystem
 		));
 
 		$result->prefab('doom.beam', static fn(Registry $registry): int => $registry->create(new RemoteBeam));
-		$result->prefab(
-			'doom.pickup'
-			, static fn(Registry $registry): int => $registry->create(new MapThing(-1, 0))
-		);
+		$result->prefab('doom.pickup', static fn(Registry $registry): int => $registry->create(new MapThing(-1, 0)));
 
 		$result->prefab(
 			'doom.player'
@@ -457,14 +456,15 @@ final class EpisodeNetworkSystem
 		$player->$property = (bool)($value[$property] ?? false);
 
 		$player->message = substr((string)($value['message'] ?? ''), 0, 160);
-		$player->messageTics = $player->message === '' ? 0 : max(0, min(
-			PlayerState::MESSAGE_TICS
-			, (int)($value['messageTics'] ?? PlayerState::MESSAGE_TICS)
-		));
+		$player->messageTics = $player->message === ''
+			? 0
+			: max(0, min(PlayerState::MESSAGE_TICS, (int)($value['messageTics'] ?? PlayerState::MESSAGE_TICS)));
+
 		$deathTime = $value['deathTime'] ?? null;
 		$viewHeight = is_numeric($value['viewHeight'] ?? null)
 			? max(PlayerState::DEATH_VIEW_HEIGHT, min(PlayerState::VIEW_HEIGHT, (float)$value['viewHeight']))
 			: PlayerState::VIEW_HEIGHT;
+
 		$viewStart = is_numeric($value['previousViewHeight'] ?? null)
 			? max(PlayerState::DEATH_VIEW_HEIGHT, min(PlayerState::VIEW_HEIGHT, (float)$value['previousViewHeight']))
 			: $viewHeight;
@@ -475,6 +475,7 @@ final class EpisodeNetworkSystem
 			$player->viewHeight = $previousDeathTime === null
 				? $viewHeight
 				: min($previousViewHeight, $viewHeight);
+
 			$player->previousViewHeight = $previousDeathTime === null
 				? max($player->viewHeight, $viewStart)
 				: max($player->viewHeight, min($previousViewStart, $viewStart));

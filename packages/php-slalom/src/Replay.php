@@ -48,7 +48,8 @@ final class Replay
 	 * Validate and unpack a replay before it can drive the simulation.
 	 *
 	 * @param string $bytes Complete binary `.pslr` contents.
-	 * @return array{stage:int,seed:int,startingScore:int,tickCount:int,inputs:list<int>} Validated run metadata and tick inputs.
+	 * @return array{stage:int,seed:int,startingScore:int,tickCount:int,inputs:list<int>} Validated run metadata and
+	 * tick inputs.
 	 */
 	public static function decode(string $bytes): array
 	{
@@ -57,6 +58,7 @@ final class Replay
 		if($length < 25 || $length > self::MAX_BYTES) throw new \UnexpectedValueException('Invalid replay size');
 
 		$body = substr($bytes, 0, -4);
+
 		if(!hash_equals(substr($bytes, -4), hash('crc32b', $body, true)))
 		throw new \UnexpectedValueException('Replay checksum does not match');
 
@@ -92,6 +94,13 @@ final class Replay
 		];
 	}
 
+	/**
+	 * Require a replay header to name a real starting stage with its matching score.
+	 *
+	 * @param int $stage Starting stage index from the replay.
+	 * @param int $startingScore Score recorded for that starting stage.
+	 * @return void Mismatched headers throw before any input is decoded.
+	 */
 	private static function validateHeader(int $stage, int $startingScore): void
 	{
 		if(!isset(Simulation::START_SCORES[$stage]) || Simulation::START_SCORES[$stage] !== $startingScore)

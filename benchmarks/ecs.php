@@ -463,6 +463,7 @@ function benchmark(array $options): array
 	];
 
 	$listener = static function(Registry $registry, int $id, object $component): void {};
+
 	$observedRegistry = scene($size);
 	$observedRegistry->on('added', $listener);
 	$observedRegistry->on('removed', $listener);

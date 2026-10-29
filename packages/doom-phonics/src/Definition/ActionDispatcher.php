@@ -23,6 +23,7 @@ final class ActionDispatcher
 	public function dispatch(int $entity, StateFrame $frame, Registry $registry): void
 	{
 		if($frame->action === null) return;
+
 		$key = strtolower($frame->action);
 
 		if(isset($this->actions[$key])) ($this->actions[$key])($entity, $frame, $registry);

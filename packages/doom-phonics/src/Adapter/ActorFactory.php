@@ -33,6 +33,7 @@ use Phonics\Network\PlayerSlot;
 /** Converts WAD THING records and DECORATE archetypes into composable ECS entities. */
 final class ActorFactory
 {
+
 	public function __construct(public ActorCatalog $catalog) {}
 
 	/** Spawn every eligible thing; unresolved editor numbers are returned for diagnostics. */
@@ -45,21 +46,27 @@ final class ActorFactory
 		, ?int $playerStartType = null
 		, ?Level $level = null
 		, ?MultiplayerMode $mode = null
-	): array
-	{
+	): array {
 		if($playerStartType !== null && $match)
 		throw new \LogicException('A custom player start is only supported for local map inspection');
+
 		$mode = $match?->mode ?? $mode ?? ($multiplayer ? MultiplayerMode::from(MultiplayerMode::COOPERATIVE) : null);
 		$level ??= $map->format === 'HEXEN' ? new Level($map) : null;
-		$entities = []; $missing = []; $starts = [];
+		$entities = [];
+		$missing = [];
+		$starts = [];
 		$customStart = null;
 
 		foreach($map->things as $thing)
 		{
 			$type = (int)($thing['type'] ?? 0);
+
 			if($map->format === 'HEXEN' && HexenMapSetup::structuralThing($type)) continue;
+
 			if($playerStartType === $type && $customStart === null) $customStart = $thing;
+
 			if($playerStartType === $type) continue;
+
 			$teamStart = in_array($type, [5080,5081,5082], true);
 
 			// Spawn markers select occupied slots; they never create extra player actors.
@@ -70,23 +77,41 @@ final class ActorFactory
 			}
 
 			if($teamStart) continue;
+
 			if($playerStartType !== null && $type >= 1 && $type <= 4) continue;
+
 			if(!$this->eligible($thing, $skill, $mode !== null)) continue;
+
 			if($map->format === 'HEXEN')
 			{
 				if(empty($thing['flags'][$mode?->value() ?? 'single'])) continue;
 			}
+
 			$definition = $this->catalog->numbered((int)$thing['type']);
-			if(!$definition) { $missing[(int)$thing['type']] = true; continue; }
+
+			if(!$definition)
+			{
+				$missing[(int)$thing['type']] = true;
+				continue;
+			}
+
 			$entities[] = $this->spawn($registry, $definition, $thing, $this->spawnPlanes($map, $thing, $level));
 		}
 
 		if($playerStartType !== null)
 		{
 			if($customStart === null) throw new \UnexpectedValueException("Map has no start of type $playerStartType");
+
 			$definition = $this->catalog->numbered(1);
+
 			if(!$definition) $missing[1] = true;
-			else $entities[] = $this->spawn($registry, $definition, $customStart, $this->spawnPlanes($map, $customStart, $level));
+			else
+			$entities[] = $this->spawn(
+				$registry
+				, $definition
+				, $customStart
+				, $this->spawnPlanes($map, $customStart, $level)
+			);
 		}
 
 		if($mode && $playerStartType === null)
@@ -94,21 +119,26 @@ final class ActorFactory
 			$definition = $this->catalog->numbered(1);
 
 			if(!$definition) $missing[1] = true;
-			else foreach($match ? [new PlayerSlot(1),new PlayerSlot(2)] : [new PlayerSlot(1)] as $slot)
+			else
+			foreach($match ? [new PlayerSlot(1),new PlayerSlot(2)] : [new PlayerSlot(1)] as $slot)
 			{
 				$thing = $this->playerStart($starts, $slot, $mode);
+
 				$entity = $this->spawn(
 					$registry
 					, $definition
 					, $thing + ['flags' => [],'index' => -1]
 					, $this->spawnPlanes($map, $thing, $level)
 				);
+
 				$registry->add($entity, new PlayerStart($slot->value()));
+
 				if($match)
 				{
 					$registry->add($entity, new NetworkPlayer($slot, $match->peer($slot), $match->local($slot)));
 					$registry->add($entity, new PlayerCommand);
 				}
+
 				$entities[] = $entity;
 			}
 		}
@@ -122,8 +152,13 @@ final class ActorFactory
 		if($level)
 		{
 			$sector = $level->sectorAt($thing['x'], $thing['y']);
-			return ['floor' => $sector->floorZ($thing['x'], $thing['y']), 'ceiling' => $sector->ceilingZ($thing['x'], $thing['y'])];
+
+			return [
+				'floor' => $sector->floorZ($thing['x'], $thing['y'])
+				, 'ceiling' => $sector->ceilingZ($thing['x'], $thing['y'])
+			];
 		}
+
 		return $map->sectors[$map->sectorAt((int)$thing['x'], (int)$thing['y'])] ?? ['floor' => 0, 'ceiling' => 128];
 	}
 
@@ -140,10 +175,9 @@ final class ActorFactory
 		}
 		else
 		{
-			$deathmatch = array_values(array_filter(
-				$starts
-				, static fn(array $thing): bool => (int)($thing['type'] ?? 0) === 11
-			));
+			$deathmatch = array_values(
+				array_filter($starts, static fn(array $thing): bool => (int)($thing['type'] ?? 0) === 11)
+			);
 
 			if($deathmatch) return $deathmatch[($slot->value() - 1) % count($deathmatch)];
 		}
@@ -151,6 +185,7 @@ final class ActorFactory
 		// Team-only arenas such as D2ST9 have no ordinary starts. Alternate bases so
 		// both peers choose distinct origins even when all blue markers precede red.
 		$teams = [];
+
 		foreach($starts as $thing)
 		if(in_array((int)($thing['type'] ?? 0), [5080,5081,5082], true))
 		$teams[(int)$thing['type']][] = $thing;
@@ -160,6 +195,7 @@ final class ActorFactory
 			ksort($teams);
 			$teams = array_values($teams);
 			$team = $teams[($slot->value() - 1) % count($teams)];
+
 			return $team[intdiv($slot->value() - 1, count($teams)) % count($team)];
 		}
 
@@ -174,16 +210,24 @@ final class ActorFactory
 	{
 		$height = (float)$definition->value('Height', 16);
 		$z = (float)($thing['z'] ?? 0) + (float)$sector['floor'];
+
 		if($definition->hasFlag('SPAWNCEILING')) $z = (float)$sector['ceiling'] - $height;
+
 		$components = [
-			new Transform((float)$thing['x'], (float)$thing['y'], $z, deg2rad((float)($thing['angle'] ?? 0))),
-			new SpawnPoint((float)$thing['x'], (float)$thing['y'], $z, deg2rad((float)($thing['angle'] ?? 0))),
-			new Velocity,
-			new ActorState($definition),
-			new MapThing((int)($thing['index'] ?? -1), (int)($thing['type'] ?? $definition->editorNumber ?? 0), $thing['flags'] ?? []),
+			new Transform((float)$thing['x'], (float)$thing['y'], $z, deg2rad((float)($thing['angle'] ?? 0)))
+			, new SpawnPoint((float)$thing['x'], (float)$thing['y'], $z, deg2rad((float)($thing['angle'] ?? 0)))
+			, new Velocity
+			, new ActorState($definition)
+			, new MapThing(
+				(int)($thing['index'] ?? -1)
+				, (int)($thing['type'] ?? $definition->editorNumber ?? 0)
+				, $thing['flags'] ?? []
+			)
 		];
+
 		$solid = $definition->hasFlag('SOLID');
 		$shootable = $definition->hasFlag('SHOOTABLE');
+
 		if($solid || $shootable || $definition->hasFlag('MISSILE'))
 		{
 			$components[] = new Body(
@@ -206,6 +250,7 @@ final class ActorFactory
 
 		if($definition->hasFlag('MONSTER'))
 		$components[] = new MonsterBrain((bool)($thing['flags']['ambush'] ?? false));
+
 		$bounceType = (string)$definition->value('BounceType', '');
 
 		if($bounceType !== '' && strcasecmp($bounceType, 'None') !== 0)
@@ -225,9 +270,11 @@ final class ActorFactory
 
 		if($this->catalog->isA($definition, 'Inventory'))
 		$components[] = new InventoryPickup($definition->name, (int)$definition->value('Inventory.Amount', 1));
+
 		if(($definition->editorNumber ?? 0) >= 1 && ($definition->editorNumber ?? 0) <= 4)
 		{
 			$components[] = new PlayerStart((int)$definition->editorNumber);
+
 			if($definition->editorNumber === 1)
 			{
 				$components[] = new PlayerState;
@@ -240,12 +287,14 @@ final class ActorFactory
 		$entity = $registry->create(...$components);
 		$state = $registry->get($entity, ActorState::class);
 		$frame = $state->current();
+
 		if($frame && $frame->ticks > 1)
 		{
 			// Doom offsets initial actor tics. Keep map populations from executing every DECORATE
 			// action on the same fixed update while retaining deterministic replays.
 			$seed = ((int)($thing['index'] ?? $entity) + 1) * 1103
 				+ (int)($thing['type'] ?? $definition->editorNumber ?? 0) * 97;
+
 			$state->entered = true;
 			$state->ticks = 1 + abs($seed % $frame->ticks);
 		}
@@ -258,8 +307,11 @@ final class ActorFactory
 	{
 		$flags = $thing['flags'] ?? [];
 		$type = (int)($thing['type'] ?? 0);
+
 		if(!$multiplayer && ($type === 11 || ($type >= 2 && $type <= 4))) return false;
+
 		if(!$multiplayer && !empty($flags['multiplayer'])) return false;
+
 		$key = $skill <= 1 ? 'easy' : ($skill >= 3 ? 'hard' : 'medium');
 
 		return !array_key_exists($key, $flags) || (bool)$flags[$key];

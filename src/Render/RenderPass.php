@@ -5,6 +5,7 @@ namespace Phonics\Render;
 /** Ordered, restorable renderer owned by a session or active content scope. */
 interface RenderPass
 {
+
 	/**
 	 * Return the globally unique pass ID.
 	 * @return string Stable pipeline registration key.

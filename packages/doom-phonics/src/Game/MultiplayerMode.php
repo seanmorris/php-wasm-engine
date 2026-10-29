@@ -21,8 +21,12 @@ final class MultiplayerMode implements \JsonSerializable
 	}
 
 	public function cooperative(): bool { return $this->value === self::COOPERATIVE; }
+
 	public function deathmatch(): bool { return $this->value === self::DEATHMATCH; }
+
 	public function value(): string { return $this->value; }
+
 	public function jsonSerialize(): string { return $this->value; }
+
 	public function __toString(): string { return $this->value; }
 }

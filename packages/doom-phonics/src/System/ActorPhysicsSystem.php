@@ -26,13 +26,14 @@ final class ActorPhysicsSystem
 		Collision $collision
 		, float $acceleration = DoomGravity::ACCELERATION
 		, public float $friction = .90625
-		) {
+	){
 		$this->actors = Query::all(
 			Transform::class
 			, Velocity::class
 			, Body::class
 			, Query::not(PlayerStart::class, Projectile::class, ChargeAttack::class)
 		);
+
 		$this->collision = $collision;
 		$this->physics = new VerticalPhysics($collision->level, $collision->maxStep, $acceleration);
 	}
@@ -44,6 +45,7 @@ final class ActorPhysicsSystem
 			$pose = $registry->get($entity, Transform::class);
 			$velocity = $registry->get($entity, Velocity::class);
 			$body = $registry->get($entity, Body::class);
+
 			if(hypot($velocity->x, $velocity->y) > .01)
 			{
 				$motion = $this->collision->moveAndSlide(
@@ -57,6 +59,7 @@ final class ActorPhysicsSystem
 				foreach($motion['normals'] as [$normalX,$normalY])
 				{
 					$into = $velocity->x * $normalX + $velocity->y * $normalY;
+
 					if($into < 0)
 					{
 						$velocity->x -= $normalX * $into;
@@ -75,13 +78,7 @@ final class ActorPhysicsSystem
 			}
 
 			if($registry->has($entity, Gravity::class))
-			$this->physics->step(
-				$pose
-				, $velocity
-				, $body
-				, $dt
-				, $registry->get($entity, Gravity::class)->scale
-			);
+			$this->physics->step($pose, $velocity, $body, $dt, $registry->get($entity, Gravity::class)->scale);
 		}
 	}
 }

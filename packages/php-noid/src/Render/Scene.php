@@ -27,8 +27,7 @@ final class Scene
 		, RectRenderer $rects
 		, float $offsetX = 0
 		, ?int $viewportWidth = null
-	): void
-	{
+	): void {
 		$r = $field->registry();
 		$width = $field->state->width;
 		$height = $field->state->height;
@@ -94,6 +93,7 @@ final class Scene
 			// Snap artwork only. Physics keeps its subpixel position and radius; corners remain clear.
 			$x = round($b->x);
 			$y = round($b->y);
+
 			foreach(self::sphere($color) as $pixel)
 			{
 				$pixel[0] += $x;
@@ -209,7 +209,16 @@ final class Scene
 			$inset = $step === 0 ? $cut : 0;
 			$batch[] = [$x + $inset, $y + $step * $depth, $width - 2 * $inset, $depth, 1, 1, 1, $light];
 			$shade = [.42, .26, .12][$step];
-			$batch[] = [$x + $inset, $y + $height - ($step + 1) * $depth, $width - 2 * $inset, $depth, .015, .025, .05, $shade];
+			$batch[] = [
+				$x + $inset
+				, $y + $height - ($step + 1) * $depth
+				, $width - 2 * $inset
+				, $depth
+				, .015
+				, .025
+				, .05
+				, $shade
+			];
 		}
 
 		foreach([.20, .10] as $step => $light)
@@ -231,11 +240,15 @@ final class Scene
 	{
 		static $cache = [];
 		$key = implode(',', $color);
+
 		if(isset($cache[$key])) return $cache[$key];
+
 		$runs = [];
+
 		foreach([2, 4, 4, 5, 5, 5, 5, 4, 4, 2] as $row => $half)
 		{
 			$last = null;
+
 			for($column = -$half; $column < $half; $column++)
 			{
 				$nx = ($column + .5) / 5;
@@ -243,17 +256,25 @@ final class Scene
 				$nz = sqrt(max(0, 1 - $nx * $nx - $ny * $ny));
 				$light = max(0, min(1, -.45 * $nx - .55 * $ny + .70 * $nz));
 				$tone = (int)round($light * 6);
+
 				if($last === $tone)
 				{
 					$runs[count($runs) - 1][2]++;
 					continue;
 				}
+
 				$last = $tone;
 				$brightness = .38 + .62 * $tone / 6;
-				$runs[] = [$column, $row - 5, 1, 1,
-					$color[0] * $brightness, $color[1] * $brightness, $color[2] * $brightness, 1];
+				$runs[] = [
+					$column, $row - 5, 1, 1
+					, $color[0] * $brightness
+					, $color[1] * $brightness
+					, $color[2] * $brightness
+					, 1
+				];
 			}
 		}
+
 		return $cache[$key] = $runs;
 	}
 

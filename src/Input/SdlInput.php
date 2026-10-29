@@ -975,6 +975,7 @@ final class SdlInput
 
 			$pauseKeys = $this->bindings[InputCode::PAUSE] ?? [];
 			$escapePauses = in_array(SDLK_ESCAPE, $pauseKeys, true);
+
 			$pauseKeys = array_values(array_filter(
 				$pauseKeys
 				, /**

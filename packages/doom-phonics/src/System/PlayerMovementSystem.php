@@ -66,6 +66,7 @@ final class PlayerMovementSystem
 			$command = $registry->has($entity, PlayerCommand::class)
 				? $registry->get($entity, PlayerCommand::class)
 				: null;
+
 			$dead = $registry->has($entity, HitPoints::class)
 				&& $registry->get($entity, HitPoints::class)->current <= 0;
 
@@ -130,14 +131,14 @@ final class PlayerMovementSystem
 				? $registry->get($entity, Gravity::class)->scale
 				: 1.0;
 
-			$this->verticalPhysics->step(
-				$pose, $velocity, $body, $dt, $gravityScale, $player->viewHeight
-			);
+			$this->verticalPhysics->step($pose, $velocity, $body, $dt, $gravityScale, $player->viewHeight);
+
 			if(!$dead) $this->specials->cross($pose->previousX, $pose->previousY, $pose, $player);
 
 			$use = !$dead && ($command
 				? $command->consumeUse()
-				: $this->controls->pressed(DoomActions::USE) || ($view?->consumeUse() ?? false));
+				: $this->controls->pressed(DoomActions::USE) || ($view?->consumeUse() ?? false)
+			);
 
 			if($use)
 			$this->specials->use($pose, $player);
@@ -146,9 +147,13 @@ final class PlayerMovementSystem
 
 	/** Select the third-person idle/walk states without interrupting attacks, pain, or death. */
 	private function animatePlayerActor(
-		Registry $registry, int $entity, float $horizontalSpeed, bool $dead
+		Registry $registry
+		, int $entity
+		, float $horizontalSpeed
+		, bool $dead
 	): void {
 		if($dead || !$registry->has($entity, ActorState::class)) return;
+
 		$state = $registry->get($entity, ActorState::class);
 		$label = strtolower($state->label);
 

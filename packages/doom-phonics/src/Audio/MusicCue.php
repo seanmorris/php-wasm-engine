@@ -5,6 +5,7 @@ namespace DoomPhonics\Audio;
 /** Selects one canonical Doom music lump without depending on port-specific aliases. */
 final class MusicCue
 {
+
 	private function __construct(private string $lump) {}
 
 	public static function title(): self { return new self('D_INTRO'); }

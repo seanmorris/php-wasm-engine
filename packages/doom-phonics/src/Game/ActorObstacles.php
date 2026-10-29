@@ -36,10 +36,13 @@ final class ActorObstacles
 			if($entity === $mover) continue;
 
 			$otherBody = $this->registry->get($entity, Body::class);
+
 			if(!$otherBody->solid) continue;
 
 			$other = $this->registry->get($entity, Transform::class);
+
 			if(!$this->sharesSpace($entity, $other, $connected)) continue;
+
 			if(!$this->verticalOverlap($pose, $body, $other, $otherBody)) continue;
 
 			$contact = $this->expandedBoxHit(
@@ -76,10 +79,13 @@ final class ActorObstacles
 				if($entity === $mover) continue;
 
 				$otherBody = $this->registry->get($entity, Body::class);
+
 				if(!$otherBody->solid) continue;
 
 				$other = $this->registry->get($entity, Transform::class);
+
 				if(!$this->sharesSpace($entity, $other, $connected)) continue;
+
 				if(!$this->verticalOverlap($pose, $body, $other, $otherBody)) continue;
 
 				$extent = $body->radius + $otherBody->radius;

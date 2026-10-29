@@ -18,19 +18,24 @@ $engine = new Engine(new Device(800, 720, 'PHP Buster'));
 $engine->entities = $phonics->entities;
 $engine->systems = $phonics->systems;
 $engine->clock = new FixedStep(Simulation::STEP, 5);
+
 $settings = new InputSettings(
 	static fn(): string => (string)(vrzno_env('busterStorageRead'))()
 	, static fn(string $json): bool => (bool)(vrzno_env('busterStorageWrite'))($json)
 );
+
 $engine->input->useBindings($settings->bindings);
+
 $font = new BitmapFont(
 	$phonics->loader
 	, Resource::framework('resources/font.tsj')
 	, [Resource::framework('resources/buttons.tsj')]
 );
+
 $scene = new Scene($font, $phonics->loader->map(__DIR__ . '/worlds/buster.tmj'));
 $menu = new Menu([], 'PHP BUSTER');
 $navigation = new MenuInput;
+
 $bindings = new BindingMenu(
 	$settings->bindings
 	, BusterActions::rows()
@@ -39,6 +44,7 @@ $bindings = new BindingMenu(
 	, BusterActions::allowed(...)
 	, status: static fn(): string => $settings->sessionOnly ? 'Changes apply to this session' : ''
 );
+
 $game = new Simulation(1);
 $page = 'title';
 $uiTime = 0.0;
@@ -70,8 +76,14 @@ $scoreItems = static function(): array {
 	foreach($rows as $index => $score)
 	{
 		$initials = strtoupper(substr(preg_replace('/[^A-Z0-9]/', '', (string)($score['initials'] ?? 'AAA')), 0, 3));
+
 		$items['score-' . $index] = [
-			'label' => sprintf('%2d. %-3s %08d', $index + 1, str_pad($initials, 3, 'A'), max(0, (int)($score['score'] ?? 0)))
+			'label' => sprintf(
+				'%2d. %-3s %08d'
+				, $index + 1
+				, str_pad($initials, 3, 'A')
+				, max(0, (int)($score['score'] ?? 0))
+			)
 			, 'disabled' => true
 		];
 	}
@@ -111,7 +123,9 @@ $titleItems = static function() use (&$startGame, $scoreItems, $bindings): array
 	];
 };
 
-$setPage = static function(string $next) use (
+$setPage = static function(
+	string $next
+) use (
 	&$setPage, &$startGame, &$page, &$game, $titleItems, $scoreItems, $menu, $engine
 ): void {
 	$page = $next;
@@ -126,7 +140,8 @@ $setPage = static function(string $next) use (
 	};
 
 	if($next === 'title') $items = $titleItems();
-	elseif($next === 'pause') $items = [
+	elseif($next === 'pause')
+	$items = [
 		'resume' => [
 			'label' => 'Resume'
 			, 'callback' => static function() use (&$page, $menu, $engine): void {
@@ -158,6 +173,7 @@ $setPage = static function(string $next) use (
 				, 'callback' => static function() use (&$setPage, &$game, $menu): void {
 					$initials = (string)$menu->value('initial-1')
 						. (string)$menu->value('initial-2') . (string)$menu->value('initial-3');
+
 					(vrzno_env('busterSubmitScore'))($initials, $game->score);
 					$setPage('scores');
 				}
@@ -168,7 +184,8 @@ $setPage = static function(string $next) use (
 			]
 		];
 	}
-	else $items = array_merge($scoreItems(), [
+	else
+	$items = array_merge($scoreItems(), [
 		'title' => [
 			'label' => 'Return to title'
 			, 'callback' => static function() use (&$setPage): void { $setPage('title'); }
@@ -191,6 +208,7 @@ $engine->systems->add('php-buster.simulation', static function() use (
 	$pointerX = $active ? (float)($pointer['x'] ?? NAN) : null;
 	$pointerY = $active ? (float)($pointer['y'] ?? NAN) : null;
 	$fire = $engine->controls->down(BusterActions::FIRE) || !empty($pointer['fire']);
+
 	$game->step(
 		$engine->controls->value(BusterActions::MOVE_X)
 		, $engine->controls->value(BusterActions::MOVE_Y)
@@ -202,7 +220,10 @@ $engine->systems->add('php-buster.simulation', static function() use (
 	foreach($game->consumeEvents() as $event) if($event === 'explosion') $explosions++;
 });
 
-$engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
+$engine->setInputHandler(static function(
+	Engine $engine
+	, float $elapsed
+) use (
 	&$game, &$page, &$uiTime, &$setPage, $menu, $navigation, $bindings, $scene
 ): bool {
 	$uiTime += min(.25, max(0, $elapsed));
@@ -241,13 +262,7 @@ $engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
 	$bindingCaptured = $bindings->update($menu, $engine->input->actions, $frame['focused']);
 
 	if(!$bindingCaptured)
-	$navigation->update(
-		$menu
-		, $frame['buttons']
-		, min(.25, max(0, $elapsed))
-		, $frame['events']
-		, $scene->regions
-	);
+	$navigation->update($menu, $frame['buttons'], min(.25, max(0, $elapsed)), $frame['events'], $scene->regions);
 
 	if($page === 'play')
 	{
@@ -277,7 +292,10 @@ $engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
 
 (vrzno_env('sceneReady'))(null);
 
-$engine->start(static function(Engine $engine, float $alpha) use (
+$engine->start(static function(
+	Engine $engine
+	, float $alpha
+) use (
 	&$game, &$page, &$uiTime, &$runId, &$explosions, $scene, $font, $menu
 ): void {
 	[$width,$height] = json_decode((string)(vrzno_env('busterViewport'))(), true);

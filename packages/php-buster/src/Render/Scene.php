@@ -74,13 +74,7 @@ final class Scene
 
 		foreach([-1,0,1] as $copy)
 		{
-			$star = new Sprite(
-				101
-				, $viewport->x
-				, $viewport->y + $scroll + $copy * $viewport->height
-				, 0
-				, 0
-			);
+			$star = new Sprite(101, $viewport->x, $viewport->y + $scroll + $copy * $viewport->height, 0, 0);
 			$star->scaleX = $star->scaleY = $viewport->scale;
 			$star->animated = $star->outline = $star->smooth = false;
 			$sprites[] = $star;
@@ -89,6 +83,7 @@ final class Scene
 		foreach($game->actors as $actor)
 		{
 			if($actor === $game->player && $page !== 'play') continue;
+
 			if($actor === $game->player && $game->hitGrace > 0
 				&& ((int)floor($game->hitGrace / .06) % 2) === 0
 			) continue;
@@ -99,7 +94,15 @@ final class Scene
 		$this->sprites->render($sprites, $camera);
 		$labels = [];
 		$textScale = max(.75, $viewport->scale * .78);
-		$this->label($labels, 'SCORE ' . $game->score, $viewport->x + 5 * $viewport->scale, $viewport->y + 5, $textScale);
+
+		$this->label(
+			$labels
+			, 'SCORE ' . $game->score
+			, $viewport->x + 5 * $viewport->scale
+			, $viewport->y + 5
+			, $textScale
+		);
+
 		$this->label(
 			$labels
 			, 'SHIELDS ' . $game->shields
@@ -108,6 +111,7 @@ final class Scene
 			, $textScale
 			, 'center'
 		);
+
 		$this->label(
 			$labels
 			, $game->level . '-' . $game->stage
@@ -119,7 +123,15 @@ final class Scene
 
 		if($page === 'play' && $game->phase === 'intermission')
 		{
-			$this->label($labels, 'LEVEL ' . $game->level . ' STAGE ' . $game->stage . ' COMPLETE', $width / 2, $height * .44, $textScale, 'center');
+			$this->label(
+				$labels
+				, 'LEVEL ' . $game->level . ' STAGE ' . $game->stage . ' COMPLETE'
+				, $width / 2
+				, $height * .44
+				, $textScale
+				, 'center'
+			);
+
 			$this->label($labels, 'ACCURACY ' . $game->accuracy . '%', $width / 2, $height * .49, $textScale, 'center');
 			$this->label($labels, 'BONUS ' . $game->bonus, $width / 2, $height * .54, $textScale, 'center');
 		}
@@ -157,8 +169,10 @@ final class Scene
 			, 'explosion' => 44 + $actor->frame
 			, default => 1
 		};
+
 		$x = $actor->previousX + ($actor->x - $actor->previousX) * $alpha;
 		$y = $actor->previousY + ($actor->y - $actor->previousY) * $alpha;
+
 		$sprite = new Sprite(
 			$gid
 			, $viewport->x + ($x + $actor->width / 2) * $viewport->scale
@@ -166,6 +180,7 @@ final class Scene
 			, .5
 			, .5
 		);
+
 		$sprite->scaleX = $sprite->scaleY = $viewport->scale;
 		$sprite->animated = $sprite->outline = $sprite->smooth = false;
 

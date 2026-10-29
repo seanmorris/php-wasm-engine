@@ -10,6 +10,7 @@ use Phonics\Ui\BindingMenu;
 /** Doom configuration for the engine's shared gameplay binding menu. */
 final class DoomControlsMenu extends BindingMenu
 {
+
 	public function __construct(InputSettings $settings)
 	{
 		parent::__construct(
@@ -27,6 +28,7 @@ final class DoomControlsMenu extends BindingMenu
 	private static function settings(InputSettings $input, string $device): array
 	{
 		$s = $input->settings;
+
 		$choice = static function(string $label, string $name, ?array $options, callable $get) use ($input): array {
 			return [
 				'label' => $label
@@ -42,6 +44,7 @@ final class DoomControlsMenu extends BindingMenu
 		if($device === Source::CONTROLLER)
 		{
 			$steps = array_map(static fn(int $i): float => $i / 4, range(1, 12));
+
 			$rows = [
 				'horizontal' => $choice(
 					'Horizontal sensitivity'
@@ -61,13 +64,9 @@ final class DoomControlsMenu extends BindingMenu
 					, array_map(static fn(int $i): float => $i / 100, range(0, 30))
 					, fn() => $s->controllerDeadZone
 				)
-				, 'invert' => $choice(
-					'Invert vertical look'
-					, 'controllerInvertY'
-					, null
-					, fn() => $s->controllerInvertY
-				)
+				, 'invert' => $choice('Invert vertical look', 'controllerInvertY', null, fn() => $s->controllerInvertY)
 			];
+
 			$rows['deadzone']['format'] = 'percent';
 
 			return $rows;
@@ -80,12 +79,7 @@ final class DoomControlsMenu extends BindingMenu
 				, [.5,.75,1.0,1.25,1.5,1.75,2.0]
 				, fn() => $s->lookSensitivity()
 			)
-			, 'invert' => $choice(
-				'Invert mouse look'
-				, 'mouseInvertY'
-				, null
-				, fn() => $s->invertVerticalLook()
-			)
+			, 'invert' => $choice('Invert mouse look', 'mouseInvertY', null, fn() => $s->invertVerticalLook())
 		];
 	}
 }

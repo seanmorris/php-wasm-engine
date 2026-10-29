@@ -24,7 +24,7 @@ final class DoomOptions
 		private readonly GameSettings $settings
 		, ?callable $reader = null
 		, ?callable $writer = null
-	) {
+	){
 		$this->reader = $reader === null ? null : \Closure::fromCallable($reader);
 		$this->writer = $writer === null ? null : \Closure::fromCallable($writer);
 		$this->sessionOnly = $writer === null;
@@ -32,10 +32,15 @@ final class DoomOptions
 	}
 
 	public function muted(): bool { return $this->muted; }
+
 	public function effectsVolume(): float { return $this->effectsVolume; }
+
 	public function musicVolume(): float { return $this->musicVolume; }
+
 	public function fullscreen(): bool { return $this->fullscreen; }
+
 	public function fullscreenAvailable(): bool { return $this->fullscreenAvailable; }
+
 	public function fullscreenBusy(): bool { return $this->fullscreenBusy; }
 
 	/** Poll live browser state so the in-game controls mirror the corner controls. */
@@ -177,6 +182,7 @@ final class DoomOptions
 		if(is_bool($data['reticle'] ?? null)) $this->settings->setReticle($data['reticle']);
 
 		$blood = $data['bloodSplatter'] ?? null;
+
 		if((is_int($blood) || is_float($blood)) && is_finite((float)$blood) && $blood >= 0 && $blood <= 2)
 		$this->settings->setBloodSplatter((float)$blood);
 

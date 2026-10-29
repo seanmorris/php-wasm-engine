@@ -66,11 +66,14 @@ final class Level
 			, 'sector' => (int)$side['sector']
 		];
 		$this->spatial = new SpatialIndex($map);
+
 		foreach($map->things as $thing)
 		if(($tid = (int)($thing['id'] ?? 0)) !== 0) $this->thingsByTid[$tid] = $thing;
+
 		if($map->format === 'HEXEN')
 		{
 			HexenMapSetup::apply($this);
+
 			foreach($map->linedefs as $line)
 			if(!in_array($line['action'], [0,12,57,70,80,100,101,107,121,156,181,182,206,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
@@ -88,6 +91,7 @@ final class Level
 	{
 		if($surface->kind === CameraPortalSurface::LINE) $this->lineCameraPortals[$surface->index] = $surface;
 		else $this->planeCameraPortals[$surface->index][$surface->plane()] = $surface;
+
 		$this->cameraPortalSurfaces[] = $surface;
 	}
 
@@ -193,19 +197,27 @@ final class Level
 
 	/** Whether the complete square actor footprint lies over one passable plane portal. */
 	public function boundsWithinCameraPortalPlane(
-		float $x, float $y, float $radius, int $sector, int $plane
+		float $x
+		, float $y
+		, float $radius
+		, int $sector
+		, int $plane
 	): bool {
 		$portal = $this->cameraPortalForPlane($sector, $plane)?->link;
+
 		if(!$portal?->passable()) return false;
+
 		if($radius <= 0) return true;
 
 		// Map point queries use integer coordinates. Sampling just inside the square
 		// treats a footprint touching the portal rim as contained instead of letting
 		// BSP tie-breaking choose the neighboring sector.
 		$edge = max(0.0, $radius - .51);
+
 		foreach([[-$edge,-$edge],[-$edge,$edge],[$edge,-$edge],[$edge,$edge]] as [$dx,$dy])
 		{
 			$sample = $this->sectorAt($x + $dx, $y + $dy);
+
 			if($this->cameraPortalForPlane($sample->index, $plane)?->link !== $portal) return false;
 		}
 
@@ -216,20 +228,31 @@ final class Level
 	public function boundsCrossCameraPortal(float $x, float $y, float $radius): bool
 	{
 		if($radius <= 0) return false;
-		$minX = $x - $radius; $minY = $y - $radius;
-		$maxX = $x + $radius; $maxY = $y + $radius;
+
+		$minX = $x - $radius;
+		$minY = $y - $radius;
+		$maxX = $x + $radius;
+		$maxY = $y + $radius;
 
 		foreach($this->spatial->near($minX, $minY, $maxX, $maxY) as $lineId)
 		{
 			$surface = $this->lineCameraPortals[$lineId] ?? null;
+
 			if(!$surface?->link->passable()) continue;
+
 			$line = $this->map->linedefs[$lineId];
 			$a = $this->map->vertices[$line['from']];
 			$b = $this->map->vertices[$line['to']];
 
 			if(self::segmentIntersectsBounds(
-				(float)$a['x'], (float)$a['y'], (float)$b['x'], (float)$b['y']
-				, $minX, $minY, $maxX, $maxY
+				(float)$a['x']
+				, (float)$a['y']
+				, (float)$b['x']
+				, (float)$b['y']
+				, $minX
+				, $minY
+				, $maxX
+				, $maxY
 			)) return true;
 		}
 
@@ -238,24 +261,35 @@ final class Level
 
 	/** Liang-Barsky segment clipping against an axis-aligned actor footprint. */
 	private static function segmentIntersectsBounds(
-		float $fromX, float $fromY, float $toX, float $toY
-		, float $minX, float $minY, float $maxX, float $maxY
+		float $fromX
+		, float $fromY
+		, float $toX
+		, float $toY
+		, float $minX
+		, float $minY
+		, float $maxX
+		, float $maxY
 	): bool {
-		$minimum = 0.0; $maximum = 1.0;
+		$minimum = 0.0;
+		$maximum = 1.0;
 
 		foreach([[$fromX,$toX - $fromX,$minX,$maxX],[$fromY,$toY - $fromY,$minY,$maxY]] as [$origin,$delta,$low,$high])
 		{
 			if(abs($delta) < 1e-9)
 			{
 				if($origin < $low || $origin > $high) return false;
+
 				continue;
 			}
 
 			$enter = ($low - $origin) / $delta;
 			$leave = ($high - $origin) / $delta;
+
 			if($enter > $leave) [$enter,$leave] = [$leave,$enter];
+
 			$minimum = max($minimum, $enter);
 			$maximum = min($maximum, $leave);
+
 			if($minimum > $maximum) return false;
 		}
 
@@ -280,10 +314,13 @@ final class Level
 		foreach($origins as $origin)
 		{
 			$link = $this->lineCameraPortals[$origin]->link ?? null;
+
 			if(!$link) continue;
+
 			$destination = $destinationId ? $this->firstLineWithId($destinationId, $origin) : null;
 			$changed = $link->retarget($this, $destination) || $changed;
 		}
+
 		if($changed) $this->refreshLineCameraPortalReciprocals();
 
 		return $changed;
@@ -297,16 +334,20 @@ final class Level
 		foreach($this->lineCameraPortals as $surface)
 		{
 			$link = $surface->link;
+
 			if(!$link->active || $link->originLine === null || $link->destinationLine === null) continue;
+
 			$reverse = $this->lineCameraPortals[$link->destinationLine]->link ?? null;
+
 			if($reverse?->active && $reverse->destinationLine === $link->originLine)
-				$link->reciprocalId = $reverse->id;
+			$link->reciprocalId = $reverse->id;
 		}
 	}
 
 	public function update(float $dt): void
 	{
 		foreach($this->sectors as $sector) $sector->update($dt);
+
 		foreach($this->cameras as $camera) $camera->update($dt, $this);
 	}
 

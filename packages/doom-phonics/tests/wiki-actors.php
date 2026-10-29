@@ -20,9 +20,15 @@ foreach($wikiCatalog->all() as $wikiActor)
 $wikiDefinitions = new WadDefinitions;
 
 foreach([
-	64 => ['Archvile',700], 65 => ['ChaingunGuy',70], 66 => ['Revenant',300],
-	67 => ['Fatso',600], 68 => ['Arachnotron',500], 69 => ['HellKnight',500],
-	71 => ['PainElemental',400], 72 => ['CommanderKeen',100], 84 => ['WolfensteinSS',50],
+	64 => ['Archvile',700]
+	, 65 => ['ChaingunGuy',70]
+	, 66 => ['Revenant',300]
+	, 67 => ['Fatso',600]
+	, 68 => ['Arachnotron',500]
+	, 69 => ['HellKnight',500]
+	, 71 => ['PainElemental',400]
+	, 72 => ['CommanderKeen',100]
+	, 84 => ['WolfensteinSS',50]
 ] as $wikiNumber => [$wikiName,$wikiHealth])
 {
 	$wikiActor = $wikiDefinitions->actors->numbered($wikiNumber);
@@ -45,22 +51,43 @@ foreach(['FatShot','ArachnotronPlasma','RevenantTracer'] as $wikiProjectile)
 }
 
 $wikiAddonDefinitions = new WadDefinitions([
-	'Skulltag actors' => file_get_contents(dirname(__DIR__) . '/demo/SKULLTAG_ACTORS.lmp'),
-	'Skulltag weapons' => file_get_contents(dirname(__DIR__) . '/demo/SKULLTAG-WEAPONS.DEC'),
+	'Skulltag actors' => file_get_contents(dirname(__DIR__) . '/demo/SKULLTAG_ACTORS.lmp')
+	, 'Skulltag weapons' => file_get_contents(dirname(__DIR__) . '/demo/SKULLTAG-WEAPONS.DEC')
 ]);
 
-verifyWad($wikiAddonDefinitions->actors->named('Hectebus')->state('See') !== null, 'Hectebus inherits missing Mancubus states');
-verifyWad($wikiAddonDefinitions->actors->named('PowerTurbo')->value('Powerup.Duration') === -45, 'Skulltag power inherits the wiki parent duration');
-verifyWad($wikiAddonDefinitions->actors->named('GrenadeLauncher')->source === 'Skulltag weapons', 'weapon sidecar still overrides the Skulltag lump');
+verifyWad(
+	$wikiAddonDefinitions->actors->named('Hectebus')->state('See') !== null
+	, 'Hectebus inherits missing Mancubus states'
+);
+
+verifyWad(
+	$wikiAddonDefinitions->actors->named('PowerTurbo')->value('Powerup.Duration') === -45
+	, 'Skulltag power inherits the wiki parent duration'
+);
+
+verifyWad(
+	$wikiAddonDefinitions->actors->named('GrenadeLauncher')->source === 'Skulltag weapons'
+	, 'weapon sidecar still overrides the Skulltag lump'
+);
 
 $wikiOverride = new WadDefinitions(['custom' => "ACTOR ChaingunGuy 65\n{\n Health 123\n}"]);
 verifyWad($wikiOverride->actors->numbered(65)->value('Health') === 123, 'user DECORATE overrides imported defaults');
 
-$wikiSources = json_decode(file_get_contents(dirname(__DIR__) . '/resources/wiki-actors.sources.json'), true, 512, JSON_THROW_ON_ERROR);
+$wikiSources = json_decode(
+	file_get_contents(dirname(__DIR__) . '/resources/wiki-actors.sources.json')
+	, true
+	, 512
+	, JSON_THROW_ON_ERROR
+);
+
 verifyWad(count($wikiSources['actors']) === count($wikiCatalog->all()), 'each imported actor has provenance');
 
 foreach($wikiSources['actors'] as $wikiSource)
 {
 	verifyWad(isset($wikiNames[strtolower($wikiSource['name'])]), 'provenance names an imported actor');
-	verifyWad(str_contains($wikiSource['url'], 'oldid=' . $wikiSource['revision']), 'provenance pins the wiki revision');
+
+	verifyWad(
+		str_contains($wikiSource['url'], 'oldid=' . $wikiSource['revision'])
+		, 'provenance pins the wiki revision'
+	);
 }

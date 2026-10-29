@@ -25,23 +25,26 @@ final class LevelIntermission
 	public int $displayPar = 0;
 
 	public function __construct(
-		public readonly string $map,
-		public readonly ?string $nextMap,
-		public readonly bool $secretExit,
-		public readonly int $kills,
-		public readonly int $killTotal,
-		public readonly int $items,
-		public readonly int $itemTotal,
-		public readonly int $secrets,
-		public readonly int $secretTotal,
-		public readonly int $time,
-		public readonly ?int $par,
-		public readonly ?string $mapTitle = null,
-		public readonly ?string $nextMapTitle = null
-	) {}
+		public readonly string $map
+		, public readonly ?string $nextMap
+		, public readonly bool $secretExit
+		, public readonly int $kills
+		, public readonly int $killTotal
+		, public readonly int $items
+		, public readonly int $itemTotal
+		, public readonly int $secrets
+		, public readonly int $secretTotal
+		, public readonly int $time
+		, public readonly ?int $par
+		, public readonly ?string $mapTitle = null
+		, public readonly ?string $nextMapTitle = null
+	){
+	}
 
 	public function killPercent(): int { return self::percent($this->kills, $this->killTotal); }
+
 	public function itemPercent(): int { return self::percent($this->items, $this->itemTotal); }
+
 	public function secretPercent(): int { return self::percent($this->secrets, $this->secretTotal); }
 
 	public function phase(): string
@@ -109,13 +112,18 @@ final class LevelIntermission
 	public function status(): array
 	{
 		return [
-			'map' => $this->map,'mapTitle' => $this->mapTitle,
-			'nextMap' => $this->nextMap,'nextMapTitle' => $this->nextMapTitle,'secretExit' => $this->secretExit,
-			'phase' => $this->phase(),'ready' => $this->ready,
-			'kills' => [$this->displayKills,$this->killPercent(),$this->kills,$this->killTotal],
-			'items' => [$this->displayItems,$this->itemPercent(),$this->items,$this->itemTotal],
-			'secrets' => [$this->displaySecrets,$this->secretPercent(),$this->secrets,$this->secretTotal],
-			'time' => [$this->displayTime,$this->time],'par' => [$this->displayPar,$this->par],
+			'map' => $this->map
+			, 'mapTitle' => $this->mapTitle
+			, 'nextMap' => $this->nextMap
+			, 'nextMapTitle' => $this->nextMapTitle
+			, 'secretExit' => $this->secretExit
+			, 'phase' => $this->phase()
+			, 'ready' => $this->ready
+			, 'kills' => [$this->displayKills,$this->killPercent(),$this->kills,$this->killTotal]
+			, 'items' => [$this->displayItems,$this->itemPercent(),$this->items,$this->itemTotal]
+			, 'secrets' => [$this->displaySecrets,$this->secretPercent(),$this->secrets,$this->secretTotal]
+			, 'time' => [$this->displayTime,$this->time]
+			, 'par' => [$this->displayPar,$this->par]
 		];
 	}
 

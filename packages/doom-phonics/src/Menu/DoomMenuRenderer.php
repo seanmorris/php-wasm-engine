@@ -73,8 +73,15 @@ final class DoomMenuRenderer
 			case 'Networking': $this->networkingPage($renderer, $menu, $patches, $seconds);
 				break;
 			case 'Controls': $this->controlsPage(
-				$renderer, $menu, $patches, $seconds, $inputTheme, $controllerTheme, $hints
+				$renderer
+				, $menu
+				, $patches
+				, $seconds
+				, $inputTheme
+				, $controllerTheme
+				, $hints
 			);
+
 				break;
 			default: $this->rootPage($renderer, $menu, $patches, $seconds, $atTitle);
 		}
@@ -202,10 +209,7 @@ final class DoomMenuRenderer
 		, string $theme
 		, array &$hints
 	): void {
-		$this->compactPage(
-			$renderer, $menu, $patches, $hints, $theme, 'generic'
-			, '✚ CHANGE    ⓿ SELECT    ❶ BACK'
-		);
+		$this->compactPage($renderer, $menu, $patches, $hints, $theme, 'generic', '✚ CHANGE    ⓿ SELECT    ❶ BACK');
 	}
 
 	/** @param list<WadPatch> $patches @param list<array<string,mixed>> $hints */
@@ -218,9 +222,16 @@ final class DoomMenuRenderer
 		, array &$hints
 	): void {
 		$message = (string)($menu->value('settings-message') ?? '');
+
 		$this->compactPage(
-			$renderer, $menu, $patches, $hints, $theme, 'generic'
-			, '✚ MOVE    ← → CHANGE    ❶ BACK', $message
+			$renderer
+			, $menu
+			, $patches
+			, $hints
+			, $theme
+			, 'generic'
+			, '✚ MOVE    ← → CHANGE    ❶ BACK'
+			, $message
 		);
 	}
 
@@ -240,9 +251,16 @@ final class DoomMenuRenderer
 		, string $message = ''
 	): void {
 		$heading = strtoupper($menu->title);
+
 		$this->menuText(
-			$renderer, $patches, $heading, (320 - $this->menuTextWidth($renderer, $heading, 1.25)) / 2, 8, 1.25
+			$renderer
+			, $patches
+			, $heading
+			, (320 - $this->menuTextWidth($renderer, $heading, 1.25)) / 2
+			, 8
+			, 1.25
 		);
+
 		$y = self::COMPACT_ROWS_Y;
 
 		foreach($this->compactRows($menu) as $id => $row)
@@ -253,7 +271,12 @@ final class DoomMenuRenderer
 
 		if($message !== '')
 		$this->text(
-			$renderer, $patches, $this->fitText($renderer, $message, 288, .55), 16, self::COMPACT_MESSAGE_Y, .55
+			$renderer
+			, $patches
+			, $this->fitText($renderer, $message, 288, .55)
+			, 16
+			, self::COMPACT_MESSAGE_Y
+			, .55
 		);
 
 		$this->buttonHints($renderer, $hints, $footer, $theme, self::COMPACT_HINT_Y);
@@ -293,12 +316,12 @@ final class DoomMenuRenderer
 		$range = ($row['input'] ?? '') === 'number' && ($row['subType'] ?? '') === 'range'
 			&& isset($row['min'], $row['max']) && is_numeric($row['min']) && is_numeric($row['max'])
 			&& (float)$row['max'] > (float)$row['min'];
+
 		$hasValue = $value !== '' || $range;
 		$labelWidth = $range ? 125.0 : ($hasValue ? 150.0 : 255.0);
 
-		if($selected) $renderer->renderMenuPanel(
-			self::COMPACT_ROW_X, $y - 4, self::COMPACT_ROW_WIDTH, self::COMPACT_ROW_HEIGHT, .65
-		);
+		if($selected)
+		$renderer->renderMenuPanel(self::COMPACT_ROW_X, $y - 4, self::COMPACT_ROW_WIDTH, self::COMPACT_ROW_HEIGHT, .65);
 
 		$this->text(
 			$renderer
@@ -313,13 +336,18 @@ final class DoomMenuRenderer
 
 		if($range)
 		{
-			$this->thermometer(
-				$patches, (float)$value, 160, $y + 1, (float)$row['min'], (float)$row['max']
-			);
+			$this->thermometer($patches, (float)$value, 160, $y + 1, (float)$row['min'], (float)$row['max']);
 			$this->rightText($renderer, $patches, $display, self::COMPACT_VALUE_RIGHT, $y + 1, .7);
+
 			$this->sliderRegion(
-				$renderer, $id, self::COMPACT_ROW_X, $y - 4, self::COMPACT_ROW_WIDTH
-				, self::COMPACT_ROW_HEIGHT, 168, 80
+				$renderer
+				, $id
+				, self::COMPACT_ROW_X
+				, $y - 4
+				, self::COMPACT_ROW_WIDTH
+				, self::COMPACT_ROW_HEIGHT
+				, 168
+				, 80
 			);
 
 			return;
@@ -335,9 +363,7 @@ final class DoomMenuRenderer
 			$this->rightText($renderer, $patches, $display, self::COMPACT_VALUE_RIGHT, $y + 1, .7);
 		}
 
-		$this->region(
-			$renderer, $id, self::COMPACT_ROW_X, $y - 4, self::COMPACT_ROW_WIDTH, self::COMPACT_ROW_HEIGHT
-		);
+		$this->region($renderer, $id, self::COMPACT_ROW_X, $y - 4, self::COMPACT_ROW_WIDTH, self::COMPACT_ROW_HEIGHT);
 	}
 
 	/** @param array<string,mixed> $row */
@@ -452,15 +478,21 @@ final class DoomMenuRenderer
 		, array &$hints
 	): void {
 		$footer = (string)($menu->value('controls-message') ?? '');
+
 		$this->compactPage(
-			$renderer, $menu, $patches, $hints, $theme, $controllerTheme
+			$renderer
+			, $menu
+			, $patches
+			, $hints
+			, $theme
+			, $controllerTheme
 			, $menu->value('controls-message') === 'Escape / Start cancels'
 				? match($theme)
 				{
 					'keyboard' => 'ESC CANCEL',
 					default => '❾ CANCEL',
 				}
-				: '✚ CHANGE    ⓿ SELECT    ❶ BACK'
+			: '✚ CHANGE    ⓿ SELECT    ❶ BACK'
 			, $footer
 		);
 	}
@@ -604,8 +636,7 @@ final class DoomMenuRenderer
 		, float $y
 		, float $min = .5
 		, float $max = 2.0
-	): void
-	{
+	): void {
 		$patches[] = new WadPatch('M_THERML', $x, $y);
 
 		for($index = 0; $index < 10; $index++) $patches[] = new WadPatch('M_THERMM', $x + 8 + $index * 8, $y);

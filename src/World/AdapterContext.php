@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Host services available while a content adapter opens a source. */
 final class AdapterContext
 {
+
 	/**
 	 * Create an adapter context around canonical resource callbacks and host services.
 	 *
@@ -17,7 +18,8 @@ final class AdapterContext
 		private $resolve = null
 		, private $read = null
 		, private array $services = []
-	) {}
+	){
+	}
 
 	/**
 	 * Resolve a resource reference while retaining the declaring source as provenance.

@@ -30,7 +30,13 @@ final class Scene
 	private MenuRenderer $menus;
 	private array $cache = [];
 
-	/** Allocate the course, craft, text, and shared menu renderers. */
+	/**
+	 * Allocate the course, craft, text, and shared menu renderers.
+	 *
+	 * @param BitmapFont $font Font shared by the HUD and menus.
+	 * @param TileMap $craftMap Tileset holding the player craft frames.
+	 * @return void Renderers stay owned by the scene until close().
+	 */
 	public function __construct(private BitmapFont $font, TileMap $craftMap)
 	{
 		$this->craftAtlas = new Atlas($craftMap);
@@ -47,7 +53,15 @@ final class Scene
 	/**
 	 * Render an interpolated course, HUD, craft or explosion, and an optional menu overlay.
 	 *
+	 * @param Simulation $game Simulation state to draw.
+	 * @param Menu $menu Menu drawn over the course when it is open.
 	 * @param string $page title, play, pause, results, help, scores, or replays.
+	 * @param int $width Drawable width in pixels.
+	 * @param int $height Drawable height in pixels.
+	 * @param float $alpha Interpolation between the previous and current tick.
+	 * @param float $seconds Elapsed time for menu animation.
+	 * @param bool $touch Whether to label the on-screen steering halves.
+	 * @return void Hit regions and the viewport are refreshed for the browser.
 	 */
 	public function render(
 		Simulation $game
@@ -66,13 +80,23 @@ final class Scene
 		$this->viewport = $viewport->rectangle();
 		$triangles = [];
 		[$sin,$cos] = $game->bank($alpha);
-		$ground = array_map(static fn(int $channel): float => $channel / 255, $game->ground());
+
+		/**
+		 * Normalize one 8-bit color channel.
+		 *
+		 * @param int $channel Channel value from 0 to 255.
+		 * @return float Channel value from 0 to 1.
+		 */
+		$normalize = static fn(int $channel): float => $channel / 255;
+
+		$ground = array_map($normalize, $game->ground());
 		$points = [
 			$this->project(-100, 2, 28, $sin, $cos, $left, $top, $scale)
 			, $this->project(-100, 2, .1, $sin, $cos, $left, $top, $scale)
 			, $this->project(100, 2, .1, $sin, $cos, $left, $top, $scale)
 			, $this->project(100, 2, 28, $sin, $cos, $left, $top, $scale)
 		];
+
 		$this->quad($triangles, $points, [...$ground,1]);
 
 		foreach($game->obstacles as $obstacle)
@@ -98,14 +122,7 @@ final class Scene
 
 		$glyphs = [];
 		$this->label($glyphs, 'SCORE ' . $game->score, $left + 6 * $scale, $top + 5 * $scale, $scale);
-		$this->label(
-			$glyphs
-			, 'STAGE ' . ($game->stage + 1)
-			, $left + 314 * $scale
-			, $top + 5 * $scale
-			, $scale
-			, 'right'
-		);
+		$this->label($glyphs, 'STAGE ' . ($game->stage + 1), $left + 314 * $scale, $top + 5 * $scale, $scale, 'right');
 
 		if($page === 'play' && $touch)
 		{
@@ -118,7 +135,19 @@ final class Scene
 		$this->regions = $this->menus->regions;
 	}
 
-	/** Project one world point with the original banking and perspective equations. */
+	/**
+	 * Project one world point with the original banking and perspective equations.
+	 *
+	 * @param float $x Lateral world position.
+	 * @param float $y Vertical world position.
+	 * @param float $z Depth ahead of the player.
+	 * @param float $sin Bank sine.
+	 * @param float $cos Bank cosine.
+	 * @param float $left Viewport left edge in pixels.
+	 * @param float $top Viewport top edge in pixels.
+	 * @param float $scale Viewport scale from the 320 by 200 course.
+	 * @return array{float,float} Screen-space point.
+	 */
 	private function project(
 		float $x
 		, float $y
@@ -136,7 +165,19 @@ final class Scene
 		return [$left + (160 + $rx * $perspective) * $scale,$top + (100 + $ry * $perspective) * $scale];
 	}
 
-	/** Append one tetrahedral obstacle using its interpolated fixed-step pose. */
+	/**
+	 * Append one tetrahedral obstacle using its interpolated fixed-step pose.
+	 *
+	 * @param array $triangles Frame triangle batch to extend.
+	 * @param Obstacle $obstacle Gate to draw.
+	 * @param float $alpha Interpolation between the previous and current tick.
+	 * @param float $sin Bank sine.
+	 * @param float $cos Bank cosine.
+	 * @param float $left Viewport left edge in pixels.
+	 * @param float $top Viewport top edge in pixels.
+	 * @param float $scale Viewport scale from the 320 by 200 course.
+	 * @return void Two shaded faces are appended to the batch.
+	 */
 	private function obstacle(
 		array &$triangles
 		, Obstacle $obstacle
@@ -155,37 +196,74 @@ final class Scene
 			, [$x + $obstacle->width,2,$z + .5]
 			, [$x,2,$z - .5]
 		];
-		$projected = array_map(
-			fn(array $point): array => $this->project(
-				$point[0], $point[1], $point[2], $sin, $cos, $left, $top, $scale
-			)
-			, $world
+
+		/**
+		 * Project one obstacle vertex with this frame's bank and viewport.
+		 *
+		 * @param array{float,float,float} $point World-space vertex.
+		 * @return array{float,float} Screen-space vertex.
+		 */
+		$projectPoint = fn(array $point): array => $this->project(
+			$point[0]
+			, $point[1]
+			, $point[2]
+			, $sin
+			, $cos
+			, $left
+			, $top
+			, $scale
 		);
+
+		$projected = array_map($projectPoint, $world);
 
 		foreach([[[3,0,1], true],[[3,2,1], false]] as [$face,$bright])
 		{
 			$a = $world[$face[0]];
 			$b = $world[$face[1]];
 			$c = $world[$face[2]];
-			$u = [$b[0]-$a[0],$b[1]-$a[1],$b[2]-$a[2]];
-			$v = [$c[0]-$a[0],$c[1]-$a[1],$c[2]-$a[2]];
+			$u = [$b[0] - $a[0],$b[1] - $a[1],$b[2] - $a[2]];
+			$v = [$c[0] - $a[0],$c[1] - $a[1],$c[2] - $a[2]];
 			$normal = [
-				$u[1]*$v[2]-$u[2]*$v[1]
-				, $u[2]*$v[0]-$u[0]*$v[2]
-				, $u[0]*$v[1]-$u[1]*$v[0]
+				$u[1] * $v[2] - $u[2] * $v[1]
+				, $u[2] * $v[0] - $u[0] * $v[2]
+				, $u[0] * $v[1] - $u[1] * $v[0]
 			];
+
 			$length = sqrt($normal[0] ** 2 + $normal[1] ** 2 + $normal[2] ** 2);
 			$shade = abs($normal[2]) / max(1e-9, $length);
-			$color = array_map(
-				static fn(float $channel): float => min(1, ($bright ? $channel / .7 : $channel) * $shade)
-				, $obstacle->color
-			);
-			$p = array_map(static fn(int $index): array => $projected[$index], $face);
+
+			/**
+			 * Light one color channel for this face.
+			 *
+			 * @param float $channel Normalized base channel.
+			 * @return float Shaded channel clamped to 1.
+			 */
+			$light = static fn(float $channel): float => min(1, ($bright ? $channel / .7 : $channel) * $shade);
+
+			/**
+			 * Look up one projected face vertex.
+			 *
+			 * @param int $index Vertex index within the obstacle.
+			 * @return array{float,float} Screen-space vertex.
+			 */
+			$vertex = static fn(int $index): array => $projected[$index];
+
+			$color = array_map($light, $obstacle->color);
+			$p = array_map($vertex, $face);
 			$triangles[] = [$p[0][0],$p[0][1],$p[1][0],$p[1][1],$p[2][0],$p[2][1],...$color,1];
 		}
 	}
 
-	/** Approximate the original expanding oval as a small triangle fan. */
+	/**
+	 * Approximate the original expanding oval as a small triangle fan.
+	 *
+	 * @param array $triangles Frame triangle batch to extend.
+	 * @param int $tick Ticks since the crash, which sets the oval's size and color.
+	 * @param float $left Viewport left edge in pixels.
+	 * @param float $top Viewport top edge in pixels.
+	 * @param float $scale Viewport scale from the 320 by 200 course.
+	 * @return void Fan triangles are appended to the batch.
+	 */
 	private function explosion(array &$triangles, int $tick, float $left, float $top, float $scale): void
 	{
 		$x = $left + 160 * $scale;
@@ -198,18 +276,42 @@ final class Scene
 		{
 			$a = 2 * M_PI * $i / 24;
 			$b = 2 * M_PI * ($i + 1) / 24;
-			$triangles[] = [$x,$y,$x + cos($a)*$rx,$y + sin($a)*$ry,$x + cos($b)*$rx,$y + sin($b)*$ry,...$color];
+			$triangles[] = [
+				$x,$y
+				, $x + cos($a) * $rx
+				, $y + sin($a) * $ry
+				, $x + cos($b) * $rx
+				, $y + sin($b) * $ry
+				, ...$color
+			];
 		}
 	}
 
-	/** Split a screen-space quad into two triangles. */
+	/**
+	 * Split a screen-space quad into two triangles.
+	 *
+	 * @param array $triangles Frame triangle batch to extend.
+	 * @param array $points Four screen-space corners in winding order.
+	 * @param array $color Normalized RGBA color.
+	 * @return void Two triangles are appended to the batch.
+	 */
 	private function quad(array &$triangles, array $points, array $color): void
 	{
 		$triangles[] = [$points[0][0],$points[0][1],$points[1][0],$points[1][1],$points[2][0],$points[2][1],...$color];
 		$triangles[] = [$points[0][0],$points[0][1],$points[2][0],$points[2][1],$points[3][0],$points[3][1],...$color];
 	}
 
-	/** Append a cached bitmap-font label to the frame batch. */
+	/**
+	 * Append a cached bitmap-font label to the frame batch.
+	 *
+	 * @param array $batch Frame sprite batch to extend.
+	 * @param string $text Label text.
+	 * @param float $x Anchor x position in pixels.
+	 * @param float $y Top y position in pixels.
+	 * @param float $scale Glyph scale.
+	 * @param string $align left or right, relative to the anchor.
+	 * @return void Positioned glyph sprites are appended to the batch.
+	 */
 	private function label(
 		array &$batch
 		, string $text
@@ -234,7 +336,11 @@ final class Scene
 		}
 	}
 
-	/** Recreate every GPU object after a WebGL context restoration. */
+	/**
+	 * Recreate every GPU object after a WebGL context restoration.
+	 *
+	 * @return void Renderers and atlases are rebuilt in dependency order.
+	 */
 	public function restore(): void
 	{
 		$this->craftAtlas->restore();
@@ -245,7 +351,11 @@ final class Scene
 		$this->menus->restore();
 	}
 
-	/** Release all scene-owned GPU objects. */
+	/**
+	 * Release all scene-owned GPU objects.
+	 *
+	 * @return void The scene must not render after closing.
+	 */
 	public function close(): void
 	{
 		$this->menus->close();

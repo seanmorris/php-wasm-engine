@@ -19,19 +19,24 @@ $engine = new Engine(new Device(960, 600, 'PHP Slalom'));
 $engine->entities = $phonics->entities;
 $engine->systems = $phonics->systems;
 $engine->clock = new FixedStep(Simulation::STEP, 5);
+
 $settings = new InputSettings(
 	static fn(): string => (string)(vrzno_env('slalomStorageRead'))()
 	, static fn(string $json): bool => (bool)(vrzno_env('slalomStorageWrite'))($json)
 );
+
 $engine->input->useBindings($settings->bindings);
+
 $font = new BitmapFont(
 	$phonics->loader
 	, Resource::framework('resources/font.tsj')
 	, [Resource::framework('resources/buttons.tsj')]
 );
+
 $scene = new Scene($font, $phonics->loader->map(__DIR__ . '/worlds/slalom.tmj'));
 $menu = new Menu([], 'JET SLALOM');
 $navigation = new MenuInput;
+
 $bindings = new BindingMenu(
 	$settings->bindings
 	, SlalomActions::rows()
@@ -40,6 +45,7 @@ $bindings = new BindingMenu(
 	, SlalomActions::allowed(...)
 	, status: static fn(): string => $settings->sessionOnly ? 'Changes apply to this session' : ''
 );
+
 $game = new Simulation(1);
 $page = 'title';
 $inputs = [];
@@ -170,7 +176,9 @@ $titleItems = static function() use (
 	];
 };
 
-$setPage = static function(string $next) use (
+$setPage = static function(
+	string $next
+) use (
 	&$setPage, &$startRun, &$page, &$game, &$inputs, &$result, &$runStage, &$replayMode
 	, $titleItems, $menu, $engine
 ): void {
@@ -182,7 +190,8 @@ $setPage = static function(string $next) use (
 	};
 
 	if($next === 'title') $items = $titleItems();
-	elseif($next === 'pause') $items = [
+	elseif($next === 'pause')
+	$items = [
 		'resume' => [
 			'label' => 'Resume'
 			, 'callback' => static function() use (&$page, $menu, $engine): void {
@@ -201,7 +210,8 @@ $setPage = static function(string $next) use (
 			, 'callback' => static function() use (&$setPage): void { $setPage('title'); }
 		]
 	];
-	else $items = [
+	else
+	$items = [
 		'score' => ['label' => 'Score', 'value' => (string)$game->score, 'disabled' => true]
 		, 'again' => [
 			'label' => 'Play again'
@@ -257,7 +267,10 @@ $engine->systems->add('php-slalom.simulation', static function() use (
 	$game->step($left, $right);
 });
 
-$engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
+$engine->setInputHandler(static function(
+	Engine $engine
+	, float $elapsed
+) use (
 	&$game, &$page, &$inputs, &$runId, &$continued, &$replayMode, &$result, &$uiTime, &$setPage
 	, &$runStage
 	, $watchReplay, $menu, $navigation, $bindings, $scene
@@ -276,12 +289,9 @@ $engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
 				'runId' => $runId
 				, 'score' => $game->score
 				, 'continued' => $continued
-				, 'replay' => base64_encode(Replay::encode(
-					$runStage
-					, $game->seed
-					, Simulation::START_SCORES[$runStage]
-					, $inputs
-				))
+				, 'replay' => base64_encode(
+					Replay::encode($runStage, $game->seed, Simulation::START_SCORES[$runStage], $inputs)
+				)
 			];
 		}
 
@@ -323,13 +333,7 @@ $engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
 	$bindingCaptured = $bindings->update($menu, $engine->input->actions, $frame['focused']);
 
 	if(!$bindingCaptured)
-	$navigation->update(
-		$menu
-		, $frame['buttons']
-		, min(.25, max(0, $elapsed))
-		, $frame['events']
-		, $scene->regions
-	);
+	$navigation->update($menu, $frame['buttons'], min(.25, max(0, $elapsed)), $frame['events'], $scene->regions);
 
 	if($page === 'play')
 	{
@@ -359,7 +363,10 @@ $engine->setInputHandler(static function(Engine $engine, float $elapsed) use (
 
 (vrzno_env('sceneReady'))(null);
 
-$engine->start(static function(Engine $engine, float $alpha) use (
+$engine->start(static function(
+	Engine $engine
+	, float $alpha
+) use (
 	&$game, &$page, &$result, &$uiTime, &$runId, &$replayMode, $scene, $font, $menu
 ): void {
 	[$width,$height,$dpr,$touch] = json_decode((string)(vrzno_env('slalomViewport'))(), true);

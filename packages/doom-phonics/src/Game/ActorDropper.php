@@ -37,13 +37,16 @@ final class ActorDropper
 		foreach($state->definition->values('DropItem') as $values)
 		{
 			$name = (string)($values[0] ?? 'None');
+
 			if($name === '' || strcasecmp($name, 'None') === 0) continue;
 
 			$chance = max(0, min(255, (int)($values[1] ?? 255)));
 			$roll = $this->randomByte ? ($this->randomByte)() : mt_rand(0, 255);
+
 			if($chance < 255 && $roll > $chance) continue;
 
 			$definition = $this->factory->catalog->named($name);
+
 			if(!$definition) continue;
 
 			$entity = $this->factory->spawn(

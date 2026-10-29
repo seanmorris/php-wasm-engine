@@ -42,6 +42,7 @@ final class ViewEffects
 		if($tics <= 0) return;
 
 		if(!$this->dead) $this->damageTics = max(0, $this->damageTics - $tics);
+
 		$this->bonusTics = max(0, $this->bonusTics - $tics);
 	}
 

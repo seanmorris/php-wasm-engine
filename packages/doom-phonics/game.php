@@ -29,11 +29,7 @@ $start = $phonics->world['start'] ?? ['source' => 'episode','scope' => 'E1M1'];
 $initialization = DoomInitialization::fromWorld($phonics->world);
 $startMap = $initialization->startMap ?? (string)$start['scope'];
 $settings = new GameSettings;
-$options = new DoomOptions(
-	$settings
-	, vrzno_env('doomReadOptions')
-	, vrzno_env('doomWriteOptions')
-);
+$options = new DoomOptions($settings, vrzno_env('doomReadOptions'), vrzno_env('doomWriteOptions'));
 
 $inputSettings = new \DoomPhonics\Input\InputSettings(
 	$settings
@@ -50,15 +46,7 @@ if(vrzno_env('doomInput')) $engine->input->bindButton(InputCode::PAUSE, [SDLK_ES
 
 $engine->input->lookDeadZone = $settings->controllerDeadZone;
 $wipe = new ScreenWipe($width, $height);
-$game = new EpisodeGame(
-	$phonics
-	, $engine
-	, $pipeline
-	, (string)$start['source']
-	, $settings
-	, $wipe
-	, $initialization
-);
+$game = new EpisodeGame($phonics, $engine, $pipeline, (string)$start['source'], $settings, $wipe, $initialization);
 $engine->setFrameInputHandler([$game, 'frameInput']);
 
 $phpInfoHints = new MenuRenderer(
@@ -73,11 +61,7 @@ $phpInfoSurface = $domTexture->fork();
 ob_start();
 phpinfo();
 $phpInfoMarkup = (string)ob_get_clean();
-$phpInfoMarkup = str_replace(
-	'</head>',
-	'<style>.center table{margin:0 auto!important}</style></head>',
-	$phpInfoMarkup
-);
+$phpInfoMarkup = str_replace('</head>', '<style>.center table{margin:0 auto!important}</style></head>', $phpInfoMarkup);
 $phpInfoSurface->showSurface($phpInfoMarkup);
 $phonics->runtime->service('doom-dom-textures', ['PHPINFO' => $phpInfoSurface]);
 $networkSettings = null;

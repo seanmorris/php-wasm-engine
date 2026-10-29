@@ -26,8 +26,9 @@ final class BloodEffects
 		, private ActorFactory $factory
 		, private string $fallbackSprite = 'BLUD'
 		, private ?GameSettings $settings = null
-	) {
+	){
 		$this->fallbackSprite = strtoupper(substr($fallbackSprite, 0, 4));
+
 		if($this->fallbackSprite === '') $this->fallbackSprite = 'BLUD';
 	}
 
@@ -54,6 +55,7 @@ final class BloodEffects
 		, ?int $attack = null
 	): array {
 		if(!$this->bleeds($registry, $target)) return [];
+
 		$count = (int)round(5 * ($this->settings?->bloodSplatter() ?? 1));
 
 		if($count === 0) return [];
@@ -63,6 +65,7 @@ final class BloodEffects
 			&& $registry->alive($attack)
 			&& $registry->has($attack, ActorState::class)
 			&& $registry->get($attack, ActorState::class)->definition->hasFlag('BLOODSPLATTER');
+
 		$name = $this->bloodType($targetDefinition, $splatter ? 1 : 0);
 
 		if($name === '' || strcasecmp($name, 'none') === 0) return [];
@@ -99,6 +102,7 @@ final class BloodEffects
 			// DECORATE gravity and initial spray velocity can be integrated.
 			if(!$registry->has($entity, Body::class))
 			$registry->add($entity, new Body(2, 4));
+
 			if(!$registry->has($entity, Gravity::class) && !$definition->hasFlag('NOGRAVITY'))
 			$registry->add($entity, new Gravity((float)$definition->value('Gravity', 1)));
 
@@ -120,6 +124,7 @@ final class BloodEffects
 		$values = $occurrences ? $occurrences[array_key_last($occurrences)] : [];
 
 		if(isset($values[$index])) return trim((string)$values[$index]);
+
 		if(isset($values[0])) return trim((string)$values[0]);
 
 		return $index === 1 ? 'BloodSplatter' : 'Blood';
@@ -136,6 +141,7 @@ final class BloodEffects
 			, 'dropoff' => true
 			, 'noteleport' => true
 		];
+
 		$sequence = new StateSequence;
 
 		foreach(str_split('CBA') as $frame)

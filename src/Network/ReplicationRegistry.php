@@ -67,7 +67,8 @@ final class ReplicationRegistry
 	 *
 	 * @param Registry $registry ECS registry whose replicated state is read or changed.
 	 * @param int $entity Local ECS entity ID to capture, update, or remove.
-	 * @return array<string,array{version:int,payload:array<string,mixed>}> Encoded components or an authoritative world snapshot.
+	 * @return array<string,array{version:int,payload:array<string,mixed>}> Encoded components or an authoritative world
+	 * snapshot.
 	 */
 	public function capture(Registry $registry, int $entity): array
 	{
@@ -95,7 +96,8 @@ final class ReplicationRegistry
 	 *
 	 * @param Registry $registry ECS registry whose replicated state is read or changed.
 	 * @param int $entity Local ECS entity ID to capture, update, or remove.
-	 * @param array<string,array{version:int,payload:array<string,mixed>}> $components Validated components used by this replication registry.
+	 * @param array<string,array{version:int,payload:array<string,mixed>}> $components Validated components used by this
+	 * replication registry.
 	 * @return void No value is returned.
 	 */
 	public function apply(Registry $registry, int $entity, array $components): void
@@ -151,7 +153,8 @@ final class ReplicationRegistry
 	/**
 	 * Describe every registered component schema and policy.
 	 *
-	 * @return array<string,array{version:int,policy:ReplicationPolicy}> The stable schema ID or the ordered registered schema catalog.
+	 * @return array<string,array{version:int,policy:ReplicationPolicy}> The stable schema ID or the ordered registered
+	 * schema catalog.
 	 */
 	public function schema(): array
 	{

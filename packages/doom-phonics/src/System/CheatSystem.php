@@ -41,32 +41,34 @@ final class CheatSystem
 	/** @var array<string,int> Active stack ammo pool name to maximum carried amount. */
 	private array $ammoMaximum = [];
 	private bool $oopsAllGibs = false;
-	/** @var array{weapons:array<string,bool>,ammo:array<string,int>,infiniteAmmo:array<string,bool>,weapon:string}|null */
+	/**
+	 * @var array{weapons:array<string,bool>,ammo:array<string,int>,infiniteAmmo:array<string,bool>,weapon:string}|null
+	 */
 	private ?array $oopsLoadout = null;
 	private LanguageCatalog $language;
 
 	public function __construct(
-		?WeaponSlots $slots = null,
-		?ActorCatalog $actors = null,
-		?LanguageCatalog $language = null
-	)
-	{
+		?WeaponSlots $slots = null
+		, ?ActorCatalog $actors = null
+		, ?LanguageCatalog $language = null
+	){
 		$this->language = $language ?? LanguageCatalog::documents([]);
 		$this->configure($slots, $actors, $language);
 	}
 
 	/** Refresh stack-dependent weapons without replacing the session's active cheat state. */
 	public function configure(
-		?WeaponSlots $slots = null,
-		?ActorCatalog $actors = null,
-		?LanguageCatalog $language = null
-	): void
-	{
+		?WeaponSlots $slots = null
+		, ?ActorCatalog $actors = null
+		, ?LanguageCatalog $language = null
+	): void {
 		if($language !== null) $this->language = $language;
+
 		$this->weapons = array_values(array_unique([
 			...self::WEAPONS
 			, ...($slots?->weapons() ?? [])
 		]));
+
 		$this->ammoMaximum = [];
 
 		if($actors)
@@ -84,10 +86,8 @@ final class CheatSystem
 
 				$maximum = max(0, (int)$pool->value('Inventory.MaxAmount', 0));
 
-				if($maximum > 0) $this->ammoMaximum[$pool->name] = max(
-					$this->ammoMaximum[$pool->name] ?? 0
-					, $maximum
-				);
+				if($maximum > 0)
+				$this->ammoMaximum[$pool->name] = max($this->ammoMaximum[$pool->name] ?? 0, $maximum);
 			}
 		}
 
@@ -141,10 +141,13 @@ final class CheatSystem
 
 				if($player->godMode) $health->current = max($health->current, min(100, $health->maximum));
 
-				$player->showMessage($this->language->text(
-					$player->godMode ? 'STSTR_DQDON' : 'STSTR_DQDOFF',
-					'DEGREELESSNESS MODE ' . ($player->godMode ? 'ON' : 'OFF')
-				));
+				$player->showMessage(
+					$this->language->text(
+						$player->godMode ? 'STSTR_DQDON' : 'STSTR_DQDOFF'
+						, 'DEGREELESSNESS MODE ' . ($player->godMode ? 'ON' : 'OFF')
+					)
+				);
+
 				break;
 
 			case CheatCommand::ARSENAL:
@@ -161,16 +164,21 @@ final class CheatSystem
 
 			case CheatCommand::NO_CLIP:
 				$player->noClip = !$player->noClip;
-				$player->showMessage($this->language->text(
-					$player->noClip ? 'STSTR_NCON' : 'STSTR_NCOFF',
-					'NO CLIPPING MODE ' . ($player->noClip ? 'ON' : 'OFF')
-				));
+
+				$player->showMessage(
+					$this->language->text(
+						$player->noClip ? 'STSTR_NCON' : 'STSTR_NCOFF'
+						, 'NO CLIPPING MODE ' . ($player->noClip ? 'ON' : 'OFF')
+					)
+				);
+
 				break;
 
 			case CheatCommand::BEHOLD:
-				$player->showMessage($this->language->text(
-					'STSTR_BEHOLD', 'INvuln, Str, Invis, Rad, Allmap, or Lite-amp'
-				));
+				$player->showMessage(
+					$this->language->text('STSTR_BEHOLD', 'INvuln, Str, Invis, Rad, Allmap, or Lite-amp')
+				);
+
 				break;
 
 			case CheatCommand::POWER:
@@ -189,9 +197,7 @@ final class CheatSystem
 				{
 					$pose = $registry->get($entity, Transform::class);
 					$angle = fmod(rad2deg($pose->angle) + 360, 360);
-					$player->showMessage(sprintf(
-						'X %.0f Y %.0f Z %.0f A %.0f', $pose->x, $pose->y, $pose->z, $angle
-					));
+					$player->showMessage(sprintf('X %.0f Y %.0f Z %.0f A %.0f', $pose->x, $pose->y, $pose->z, $angle));
 				}
 
 				break;
@@ -251,6 +257,7 @@ final class CheatSystem
 			, 'infiniteAmmo' => $player->infiniteAmmo
 			, 'weapon' => $player->pendingWeapon ?? $player->weapon
 		];
+
 		$this->oopsAllGibs = true;
 		$this->equipOopsAllGibs($player, $railgun);
 		$player->showMessage('OOPS! ALL GIBS');
@@ -275,6 +282,7 @@ final class CheatSystem
 	private function arsenal(PlayerState $player): void
 	{
 		foreach($this->weapons as $weapon) $player->weapons[$weapon] = true;
+
 		foreach($this->ammoMaximum as $type => $maximum)
 		$player->ammoMaximum[$type] = max($player->ammoMaximum[$type] ?? 0, $maximum);
 

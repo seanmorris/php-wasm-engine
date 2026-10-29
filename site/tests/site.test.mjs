@@ -11,7 +11,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const output = path.resolve(root, process.env.SITE_OUTPUT ?? 'docs/dist');
 const base = new URL((process.env.BASE_URL ?? '') + '/', 'http://phonics.test');
 
-const publicPath = target => new URL(target, base).pathname;
+const publicPath = target => new URL(target.replace(/^\/+/, ''), base).pathname;
 
 async function files(directory, prefix = '')
 {

@@ -26,10 +26,12 @@ final class ScaledSceneTarget
 		throw new \InvalidArgumentException('Scaled scene target requires positive dimensions and a scale below one');
 
 		$this->setViewport($viewport);
+
 		$this->program = new Program(
-			file_get_contents(dirname(__DIR__, 2) . '/shaders/upscale.vert'),
-			file_get_contents(dirname(__DIR__, 2) . '/shaders/upscale.frag')
+			file_get_contents(dirname(__DIR__, 2) . '/shaders/upscale.vert')
+			, file_get_contents(dirname(__DIR__, 2) . '/shaders/upscale.frag')
 		);
+
 		$this->create();
 	}
 
@@ -40,6 +42,7 @@ final class ScaledSceneTarget
 		throw new \InvalidArgumentException('Scaled scene target requires a scale below one');
 
 		if($this->viewport->equals($viewport)) return false;
+
 		if($this->capturing) throw new \LogicException('Scaled scene target cannot resize while capturing');
 
 		$this->release();
@@ -72,8 +75,10 @@ final class ScaledSceneTarget
 		glBindRenderbuffer(GL_RENDERBUFFER, $this->depthBuffer[0]);
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, $this->width, $this->height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, $this->depthBuffer[0]);
+
 		if(glCheckFramebufferStatus(GL_FRAMEBUFFER) !== GL_FRAMEBUFFER_COMPLETE)
 		throw new \RuntimeException('Doom-Phonics scaled scene framebuffer is incomplete');
+
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glGenVertexArrays(1, $this->vao);
@@ -86,6 +91,7 @@ final class ScaledSceneTarget
 	public function begin(): void
 	{
 		if($this->closed || $this->capturing) throw new \LogicException('Scaled scene target cannot begin');
+
 		$this->parentFramebuffer = glGetIntegerv(GL_FRAMEBUFFER_BINDING);
 		$this->capturing = true;
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
@@ -100,6 +106,7 @@ final class ScaledSceneTarget
 	public function compose(): void
 	{
 		if(!$this->capturing) throw new \LogicException('Scaled scene target must begin before compose');
+
 		$this->capturing = false;
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->parentFramebuffer);
 		glViewport(0, 0, $this->outputWidth, $this->outputHeight);
@@ -119,6 +126,7 @@ final class ScaledSceneTarget
 	public function restore(): void
 	{
 		if($this->closed) return;
+
 		$this->capturing = false;
 		$this->release();
 		$this->program->restore();
@@ -128,6 +136,7 @@ final class ScaledSceneTarget
 	public function close(): void
 	{
 		if($this->closed) return;
+
 		$this->closed = true;
 		$this->capturing = false;
 		$this->release();
@@ -137,9 +146,13 @@ final class ScaledSceneTarget
 	private function release(): void
 	{
 		if($this->texture) glDeleteTextures(1, [$this->texture]);
+
 		if($this->framebuffer) glDeleteFramebuffers(1, $this->framebuffer);
+
 		if($this->depthBuffer) glDeleteRenderbuffers(1, $this->depthBuffer);
+
 		if($this->vao) glDeleteVertexArrays(1, $this->vao);
+
 		$this->texture = 0;
 		$this->framebuffer = $this->depthBuffer = $this->vao = [];
 	}

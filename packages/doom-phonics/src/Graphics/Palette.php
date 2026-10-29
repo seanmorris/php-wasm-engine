@@ -57,7 +57,12 @@ final class Palette
 		}
 	}
 
-	/** @param int $index Source palette index. @param int $lightMap COLORMAP row. @param int $palettePage PLAYPAL page. @return int Little-endian packed RGBA. */
+	/**
+	 * @param int $index Source palette index.
+	 * @param int $lightMap COLORMAP row.
+	 * @param int $palettePage PLAYPAL page.
+	 * @return int Little-endian packed RGBA.
+	 */
 	public function rgba(int $index, int $lightMap = 0, int $palettePage = 0): int
 	{
 		$lightMap = max(0, min(count($this->packed) - 1, $lightMap));
@@ -98,7 +103,11 @@ final class Palette
 		return $this->closest[$key] = $best;
 	}
 
-	/** @param int $sectorLight Doom sector light in [0,255]. @param float $distance Corrected view distance. @return int COLORMAP row. */
+	/**
+	 * @param int $sectorLight Doom sector light in [0,255].
+	 * @param float $distance Corrected view distance.
+	 * @return int COLORMAP row.
+	 */
 	public function lightMap(int $sectorLight, float $distance = 0): int
 	{
 		$base = (int)round((255 - max(0, min(255, $sectorLight))) / 8);

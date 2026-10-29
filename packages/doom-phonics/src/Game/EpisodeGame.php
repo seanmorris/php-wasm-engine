@@ -90,6 +90,7 @@ final class EpisodeGame
 		try
 		{
 			if($this->map !== '') $this->beginTransition();
+
 			$this->intermission = null;
 
 			if($preserve) $this->rememberPlayer();
@@ -298,9 +299,9 @@ final class EpisodeGame
 
 		if($health->current <= 0)
 		{
-			if($player->canRestart() && ($this->engine->controls->pressed(DoomActions::FIRE) || $this->engine->controls->pressed(
-				DoomActions::USE
-			)))
+			if($player->canRestart() && ($this->engine->controls->pressed(
+				DoomActions::FIRE
+			) || $this->engine->controls->pressed(DoomActions::USE)))
 			$this->enter($this->map, false);
 
 			return;
@@ -312,21 +313,23 @@ final class EpisodeGame
 		$maps = $content instanceof WadLevel ? $content->wad->maps() : [];
 		$next = LevelProgression::next($this->map, $player->secretExit, $maps);
 		$this->beginTransition();
+
 		$this->intermission = new LevelIntermission(
-			$this->map,
-			$next,
-			$player->secretExit,
-			max(0, $player->kills - $this->levelBaseKills),
-			$this->levelTotalKills,
-			max(0, $player->items - $this->levelBaseItems),
-			$this->levelTotalItems,
-			max(0, $player->secrets - $this->levelBaseSecrets),
-			$this->levelTotalSecrets,
-			max(0, (int)floor($this->engine->time - $this->levelStartedAt)),
-			LevelProgression::par($this->map),
-			$content instanceof WadLevel ? $content->language->mapTitle($this->map) : $this->map,
-			$content instanceof WadLevel && $next !== null ? $content->language->mapTitle($next) : $next
+			$this->map
+			, $next
+			, $player->secretExit
+			, max(0, $player->kills - $this->levelBaseKills)
+			, $this->levelTotalKills
+			, max(0, $player->items - $this->levelBaseItems)
+			, $this->levelTotalItems
+			, max(0, $player->secrets - $this->levelBaseSecrets)
+			, $this->levelTotalSecrets
+			, max(0, (int)floor($this->engine->time - $this->levelStartedAt))
+			, LevelProgression::par($this->map)
+			, $content instanceof WadLevel ? $content->language->mapTitle($this->map) : $this->map
+			, $content instanceof WadLevel && $next !== null ? $content->language->mapTitle($next) : $next
 		);
+
 		$this->engine->userPaused = true;
 		$this->sound->playMusic(MusicCue::intermissionForMap($this->map));
 		$this->engine->input->reset();
@@ -341,6 +344,7 @@ final class EpisodeGame
 		if($this->intermission === null) return;
 
 		if($cue = $this->intermission->advance($elapsed, $activation)) $this->playMenuSound($cue);
+
 		if(!$this->intermission->ready()) return;
 
 		$next = $this->intermission->nextMap;
@@ -402,13 +406,11 @@ final class EpisodeGame
 
 			if(is_array($motion) && count($motion) >= 2)
 			{
-				if(is_numeric($motion[0])) $engine->input->actions?->move(
-					Source::MOUSE_AXIS, Source::X, (float)$motion[0]
-				);
+				if(is_numeric($motion[0]))
+				$engine->input->actions?->move(Source::MOUSE_AXIS, Source::X, (float)$motion[0]);
 
-				if(is_numeric($motion[1])) $engine->input->actions?->move(
-					Source::MOUSE_AXIS, Source::Y, (float)$motion[1]
-				);
+				if(is_numeric($motion[1]))
+				$engine->input->actions?->move(Source::MOUSE_AXIS, Source::Y, (float)$motion[1]);
 			}
 		}
 
@@ -464,8 +466,7 @@ final class EpisodeGame
 			if($this->applyingInitialCheats
 				&& $command->type === CheatCommand::OOPS_ALL_GIBS
 				&& $this->cheats->oopsAllGibsEnabled()
-			)
-			{
+			){
 				$this->cheats->applyActive($this->phonics->entities, $entity);
 
 				continue;
@@ -671,6 +672,7 @@ final class EpisodeGame
 			$definition = $this->phonics->entities->get($actor, ActorState::class)->definition;
 
 			if($definition->hasFlag('COUNTKILL')) $this->levelTotalKills++;
+
 			if($definition->hasFlag('COUNTITEM')) $this->levelTotalItems++;
 		}
 

@@ -44,6 +44,7 @@ final class StatusFaceSystem
 				$view = $registry->has($entity, ViewInput::class)
 					? $registry->get($entity, ViewInput::class)
 					: null;
+
 				$attacking = $this->controls->down(DoomActions::FIRE)
 					|| $this->controls->down(DoomActions::ALT_FIRE)
 					|| ($view?->fire ?? false)

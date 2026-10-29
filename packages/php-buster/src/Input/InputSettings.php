@@ -46,8 +46,10 @@ final class InputSettings
 		try
 		{
 			$this->sessionOnly = !$this->write || ($this->write)(json_encode([
-				'version' => 1, 'bindings' => $this->bindings
-			], JSON_THROW_ON_ERROR)) === false;
+				'version' => 1
+				, 'bindings' => $this->bindings
+			], JSON_THROW_ON_ERROR
+			)) === false;
 		} catch(\Throwable)
 		{
 			$this->sessionOnly = true;

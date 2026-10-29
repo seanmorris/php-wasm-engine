@@ -16,8 +16,9 @@ final class ViewColorState
 	public function __construct(
 		public int $palettePage = self::NORMAL_PALETTE
 		, public ?int $fixedColormap = null
-	) {
+	){
 		if($palettePage < 0) throw new \InvalidArgumentException('PLAYPAL page cannot be negative');
+
 		if($fixedColormap !== null && $fixedColormap < 0)
 		throw new \InvalidArgumentException('Fixed COLORMAP row cannot be negative');
 	}

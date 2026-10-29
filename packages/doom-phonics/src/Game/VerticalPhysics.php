@@ -16,7 +16,8 @@ final class VerticalPhysics
 		public Level $level
 		, public float $maxStep = 24
 		, public float $acceleration = DoomGravity::ACCELERATION
-	) {}
+	){
+	}
 
 	public function step(
 		Transform $pose
@@ -33,19 +34,17 @@ final class VerticalPhysics
 		$floorPortal = $this->level->cameraPortalForPlane($sector->index, 0)?->link;
 		$ceilingPortal = $this->level->cameraPortalForPlane($sector->index, 1)?->link;
 		$passableFloor = ($floorPortal?->passable() ?? false)
-			&& $this->level->boundsWithinCameraPortalPlane(
-				$pose->x, $pose->y, $body->radius, $sector->index, 0
-			);
+			&& $this->level->boundsWithinCameraPortalPlane($pose->x, $pose->y, $body->radius, $sector->index, 0);
+
 		$passableCeiling = ($ceilingPortal?->passable() ?? false)
-			&& $this->level->boundsWithinCameraPortalPlane(
-				$pose->x, $pose->y, $body->radius, $sector->index, 1
-			);
+			&& $this->level->boundsWithinCameraPortalPlane($pose->x, $pose->y, $body->radius, $sector->index, 1);
 
 		if($floorPortal && !$passableFloor)
 		{
 			foreach($this->footprintSectors($pose, $body) as $support)
 			$floor = max($floor, $support->floorZ($pose->x, $pose->y));
 		}
+
 		if($ceilingPortal && !$passableCeiling)
 		{
 			foreach($this->footprintSectors($pose, $body) as $boundary)
@@ -78,15 +77,21 @@ final class VerticalPhysics
 			$pose->z += $velocity->z * $elapsed;
 
 			$portalAnchorZ = $pose->z + $portalAnchorHeight;
+
 			if($passableFloor && $portalAnchorZ < $floor)
 			{
 				$this->crossFloorPortal(
-					$pose, $velocity, $body, $floorPortal
-					, $portalAnchorHeight, $floor - $portalAnchorZ
+					$pose
+					, $velocity
+					, $body
+					, $floorPortal
+					, $portalAnchorHeight
+					, $floor - $portalAnchorZ
 				);
 
 				return;
 			}
+
 			if(!$passableFloor && $pose->z <= $floor)
 			{
 				$pose->z = $floor;
@@ -98,11 +103,16 @@ final class VerticalPhysics
 
 		$highest = $ceiling - $body->height;
 		$portalAnchorZ = $pose->z + $portalAnchorHeight;
+
 		if($passableCeiling && $portalAnchorZ > $ceiling)
 		{
 			$this->crossCeilingPortal(
-				$pose, $velocity, $body, $ceilingPortal
-				, $portalAnchorHeight, $portalAnchorZ - $ceiling
+				$pose
+				, $velocity
+				, $body
+				, $ceilingPortal
+				, $portalAnchorHeight
+				, $portalAnchorZ - $ceiling
 			);
 
 			return;
@@ -120,11 +130,10 @@ final class VerticalPhysics
 	private function footprintSectors(Transform $pose, Body $body): array
 	{
 		$sectors = [];
+
 		foreach([[-1,-1],[-1,1],[1,-1],[1,1]] as [$dx,$dy])
 		{
-			$sector = $this->level->sectorAt(
-				$pose->x + $dx * $body->radius, $pose->y + $dy * $body->radius
-			);
+			$sector = $this->level->sectorAt($pose->x + $dx * $body->radius, $pose->y + $dy * $body->radius);
 			$sectors[$sector->index] = $sector;
 		}
 
@@ -133,8 +142,12 @@ final class VerticalPhysics
 
 	/** Continue falling below a linked floor at the matching remote ceiling. */
 	private function crossFloorPortal(
-		Transform $pose, Velocity $velocity, Body $body, CameraPortalLink $portal
-		, float $anchorHeight, float $depth
+		Transform $pose
+		, Velocity $velocity
+		, Body $body
+		, CameraPortalLink $portal
+		, float $anchorHeight
+		, float $depth
 	): void {
 		[$x,$y] = $portal->point($pose->x, $pose->y);
 		$destination = $this->level->sectors[$portal->destinationSector];
@@ -151,8 +164,12 @@ final class VerticalPhysics
 
 	/** Continue rising above a linked ceiling at the matching remote floor. */
 	private function crossCeilingPortal(
-		Transform $pose, Velocity $velocity, Body $body, CameraPortalLink $portal
-		, float $anchorHeight, float $depth
+		Transform $pose
+		, Velocity $velocity
+		, Body $body
+		, CameraPortalLink $portal
+		, float $anchorHeight
+		, float $depth
 	): void {
 		[$x,$y] = $portal->point($pose->x, $pose->y);
 		$destination = $this->level->sectors[$portal->destinationSector];

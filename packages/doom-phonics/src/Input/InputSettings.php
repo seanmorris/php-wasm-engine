@@ -100,22 +100,26 @@ final class InputSettings
 			&& ($fire[0]['kind'] ?? null) === Source::PAD_BUTTON
 			&& ($fire[0]['code'] ?? null) === Pad::RB
 		){
-			$bindings[DoomActions::FIRE][1][Source::CONTROLLER] = [[
-				'kind' => Source::PAD_AXIS
-				, 'code' => Pad::RT
-				, 'sign' => 1
-			]];
+			$bindings[DoomActions::FIRE][1][Source::CONTROLLER] = [
+				[
+					'kind' => Source::PAD_AXIS
+					, 'code' => Pad::RT
+					, 'sign' => 1
+				]
+			];
 		}
 
 		$use = $bindings[DoomActions::USE][1][Source::KEYBOARD] ?? null;
 
 		if(is_array($use))
-		$bindings[DoomActions::USE][1][Source::KEYBOARD] = array_values(array_filter(
-			$use
-			, static fn(mixed $source): bool => !is_array($source)
-				|| ($source['kind'] ?? null) !== Source::MOUSE_BUTTON
-				|| ($source['code'] ?? null) !== Source::SECONDARY
-		));
+		$bindings[DoomActions::USE][1][Source::KEYBOARD] = array_values(
+			array_filter(
+				$use
+				, static fn(mixed $source): bool => !is_array($source) || ($source['kind']
+					?? null
+				) !== Source::MOUSE_BUTTON || ($source['code'] ?? null) !== Source::SECONDARY
+			)
+		);
 
 		$data['bindings'] = $bindings;
 		$data['version'] = 2;

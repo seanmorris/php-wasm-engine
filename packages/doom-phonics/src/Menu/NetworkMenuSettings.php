@@ -23,7 +23,7 @@ final class NetworkMenuSettings
 		, callable $writer
 		, string $homeserver = 'https://matrix.org'
 		, string $lobbyChannel = '#doom-phonics:matrix.org'
-	) {
+	){
 		$this->reader = \Closure::fromCallable($reader);
 		$this->writer = \Closure::fromCallable($writer);
 		$this->homeserver = $this->savedHomeserver = $homeserver;
@@ -95,7 +95,9 @@ final class NetworkMenuSettings
 			$response = ($this->writer)(json_encode([
 				'homeserver' => $homeserver
 				, 'room' => $lobbyChannel
-			], JSON_THROW_ON_ERROR));
+			], JSON_THROW_ON_ERROR
+			));
+
 			$record = $this->decode($response);
 
 			if(isset($record['error'])) return $this->reject((string)$record['error']);
@@ -108,6 +110,7 @@ final class NetworkMenuSettings
 			$this->message = ($configuration['pending'] ?? false)
 				? 'Saved for the next lobby connection'
 				: 'Networking settings saved';
+
 			$this->error = false;
 
 			return true;
@@ -147,6 +150,7 @@ final class NetworkMenuSettings
 		$lobbyChannel = trim((string)($configuration['room'] ?? $this->lobbyChannel));
 
 		if($homeserver !== '') $this->homeserver = $this->savedHomeserver = $homeserver;
+
 		if($lobbyChannel !== '') $this->lobbyChannel = $this->savedLobbyChannel = $lobbyChannel;
 	}
 

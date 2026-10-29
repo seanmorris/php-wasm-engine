@@ -54,8 +54,16 @@ final class ProjectileTracer
 		{
 			$ray = new Transform($x, $y, $z, $pose->angle);
 			$impact = $this->traceStraight($ray, $body, $remainingX, $remainingY, $remainingZ);
+
 			$portalHit = $this->cameraPortalHit(
-				$x, $y, $z, $body, $remainingX, $remainingY, $remainingZ, $impact?->fraction ?? 1.0
+				$x
+				, $y
+				, $z
+				, $body
+				, $remainingX
+				, $remainingY
+				, $remainingZ
+				, $impact?->fraction ?? 1.0
 			);
 
 			if($portalHit === null)
@@ -63,11 +71,15 @@ final class ProjectileTracer
 				$local = $impact?->fraction ?? 1.0;
 				$to = $from + (1.0 - $from) * $local;
 				$segments[] = [
-					'x' => $x, 'y' => $y, 'z' => $z
+					'x' => $x
+					, 'y' => $y
+					, 'z' => $z
 					, 'dx' => $remainingX * $local
 					, 'dy' => $remainingY * $local
 					, 'dz' => $remainingZ * $local
-					, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+					, 'from' => $from
+					, 'to' => $to
+					, 'portalCount' => count($portals)
 				];
 
 				if($impact) $impact->fraction = $to;
@@ -78,11 +90,15 @@ final class ProjectileTracer
 			$local = $portalHit['fraction'];
 			$to = $from + (1.0 - $from) * $local;
 			$segments[] = [
-				'x' => $x, 'y' => $y, 'z' => $z
+				'x' => $x
+				, 'y' => $y
+				, 'z' => $z
 				, 'dx' => $remainingX * $local
 				, 'dy' => $remainingY * $local
 				, 'dz' => $remainingZ * $local
-				, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+				, 'from' => $from
+				, 'to' => $to
+				, 'portalCount' => count($portals)
 			];
 
 			$link = $portalHit['portal'];
@@ -91,9 +107,7 @@ final class ProjectileTracer
 			$crossZ = $z + $remainingZ * $local;
 			[$x,$y] = $link->point($crossX, $crossY);
 			$z = $link->bodyZ($crossZ, $body->height, $this->level);
-			[$remainingX,$remainingY] = $link->vector(
-				$remainingX * (1.0 - $local), $remainingY * (1.0 - $local)
-			);
+			[$remainingX,$remainingY] = $link->vector($remainingX * (1.0 - $local), $remainingY * (1.0 - $local));
 			$remainingZ *= 1.0 - $local;
 			$from = $to;
 			$portals[] = $link;
@@ -109,10 +123,17 @@ final class ProjectileTracer
 		$local = $impact?->fraction ?? 1.0;
 		$to = $from + (1.0 - $from) * $local;
 		$segments[] = [
-			'x' => $x, 'y' => $y, 'z' => $z
-			, 'dx' => $remainingX * $local, 'dy' => $remainingY * $local, 'dz' => $remainingZ * $local
-			, 'from' => $from, 'to' => $to, 'portalCount' => count($portals)
+			'x' => $x
+			, 'y' => $y
+			, 'z' => $z
+			, 'dx' => $remainingX * $local
+			, 'dy' => $remainingY * $local
+			, 'dz' => $remainingZ * $local
+			, 'from' => $from
+			, 'to' => $to
+			, 'portalCount' => count($portals)
 		];
+
 		if($impact) $impact->fraction = $to;
 
 		return ['segments' => $segments,'impact' => $impact,'portals' => $portals];
@@ -135,6 +156,7 @@ final class ProjectileTracer
 		$plane = $this->planeCameraPortalHit($x, $y, $z, $body, $dx, $dy, $dz, $limit);
 
 		if($line === null) return $plane;
+
 		if($plane === null) return $line;
 
 		return $line['fraction'] <= $plane['fraction'] ? $line : $plane;
@@ -152,14 +174,19 @@ final class ProjectileTracer
 		, float $limit
 	): ?array {
 		$distance = hypot($dx, $dy);
+
 		if($distance <= 1e-9) return null;
 
 		foreach($this->level->spatial->cast($x, $y, $dx, $dy, $distance) as $hit)
 		{
 			$fraction = $hit['distance'] / $distance;
+
 			if($fraction > $limit + 1e-7) break;
+
 			$surface = $this->level->cameraPortalForLine($hit['line']);
+
 			if(!$surface?->link->passable()) continue;
+
 			$line = $this->level->map->linedefs[$hit['line']];
 			$a = $this->level->map->vertices[$line['from']];
 			$b = $this->level->map->vertices[$line['to']];
@@ -172,6 +199,7 @@ final class ProjectileTracer
 
 			$physical = $this->level->portal($hit['line']);
 			$crossZ = $z + $dz * $fraction;
+
 			if(!$physical?->admitsProjectile($crossZ, $body->height, .001, $hit['x'], $hit['y'])) continue;
 
 			return ['fraction' => $fraction,'portal' => $surface->link];
@@ -207,31 +235,36 @@ final class ProjectileTracer
 		foreach($hits as $hit)
 		{
 			$fraction = min(1.0, max(0.0, $hit['distance'] / $distance));
+
 			if($fraction > $limit + 1e-7) break;
+
 			if($fraction < $from) continue;
 
-			$plane = $this->planeCameraPortalInSector(
-				$x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $fraction
-			);
+			$plane = $this->planeCameraPortalInSector($x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $fraction);
+
 			if($plane !== null) return $plane;
 
 			$portal = $this->level->portal($hit['line']);
 			$back = $portal?->opposite($current);
 			$bottom = $z + $dz * $fraction;
+
 			$surface = $this->lineSurface(
-				$hit['line'], $bottom, $body->height
-				, $x + $dx * $fraction, $y + $dy * $fraction
+				$hit['line']
+				, $bottom
+				, $body->height
+				, $x + $dx * $fraction
+				, $y + $dy * $fraction
 			);
+
 			if($portal && $back === null) $surface = ProjectileImpact::WALL;
+
 			if($surface !== null || $back === null) break;
 
 			$current = $back;
 			$from = $fraction;
 		}
 
-		return $this->planeCameraPortalInSector(
-			$x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $limit
-		);
+		return $this->planeCameraPortalInSector($x, $y, $z, $body, $dx, $dy, $dz, $current, $from, $limit);
 	}
 
 	/** @return array{fraction:float,portal:CameraPortalLink}|null */
@@ -258,12 +291,15 @@ final class ProjectileTracer
 		if($floorRate < -1e-9)
 		{
 			$fraction = -$floor / $floorRate;
+
 			if($fraction >= $from - 1e-7 && $fraction <= $to + 1e-7)
 			$candidates[] = [0,$fraction];
 		}
+
 		if($ceilingRate > 1e-9)
 		{
 			$fraction = -$ceiling / $ceilingRate;
+
 			if($fraction >= $from - 1e-7 && $fraction <= $to + 1e-7)
 			$candidates[] = [1,$fraction];
 		}
@@ -275,10 +311,17 @@ final class ProjectileTracer
 			$fraction = min($to, max($from, $fraction));
 			$crossX = $x + $dx * $fraction;
 			$crossY = $y + $dy * $fraction;
+
 			if(!$this->level->boundsWithinCameraPortalPlane(
-				$crossX, $crossY, $body->radius, $sectorId, $plane
+				$crossX
+				, $crossY
+				, $body->radius
+				, $sectorId
+				, $plane
 			)) continue;
+
 			$link = $this->level->cameraPortalForPlane($sectorId, $plane)?->link;
+
 			if($link?->passable()) return ['fraction' => $fraction,'portal' => $link];
 		}
 
@@ -318,7 +361,14 @@ final class ProjectileTracer
 			$z = $pose->z + $dz * $fraction;
 			$portal = $this->level->portal($hit['line']);
 			$back = $portal?->opposite($current);
-			$surface = $this->lineSurface($hit['line'], $z, $body->height, $pose->x + $dx * $fraction, $pose->y + $dy * $fraction);
+
+			$surface = $this->lineSurface(
+				$hit['line']
+				, $z
+				, $body->height
+				, $pose->x + $dx * $fraction
+				, $pose->y + $dy * $fraction
+			);
 
 			if($portal && $back === null) $surface = ProjectileImpact::WALL;
 
@@ -531,8 +581,7 @@ final class ProjectileTracer
 		}
 		elseif(!$sector->hasSkyCeiling() && $ceilingRate >= 0
 			&& $ceiling + $ceilingRate * $from > .001
-		)
-		{
+		){
 			$fraction = $from;
 			$surface = ProjectileImpact::CEILING;
 		}
@@ -554,16 +603,13 @@ final class ProjectileTracer
 		// Keep that aperture non-solid while the complete horizontal footprint fits;
 		// planeCameraPortalInSector() performs the actual center-anchor traversal.
 		if($portal?->passable() && $this->level->boundsWithinCameraPortalPlane(
-			$crossX, $crossY, $body->radius, $sectorId, $plane
+			$crossX
+			, $crossY
+			, $body->radius
+			, $sectorId
+			, $plane
 		)) return null;
 
-		return new ProjectileImpact(
-			$surface
-			, $fraction
-			, $crossX
-			, $crossY
-			, $pose->z + $dz * $fraction
-			, $sectorId
-		);
+		return new ProjectileImpact($surface, $fraction, $crossX, $crossY, $pose->z + $dz * $fraction, $sectorId);
 	}
 }

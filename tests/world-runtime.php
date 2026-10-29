@@ -30,9 +30,13 @@ final class CoreFixtureActiveScope implements ActiveScope
 	public bool $closed = false;
 
 	public function __construct(private ScopeDescriptor $scope, private array $state = []) {}
+
 	public function descriptor(): ScopeDescriptor { return $this->scope; }
+
 	public function content() { return ['name' => $this->scope->id]; }
+
 	public function snapshot(): array { return ['visits' => ($this->state['visits'] ?? 0) + 1]; }
+
 	public function close(): void { $this->closed = true; }
 }
 
@@ -53,6 +57,7 @@ final class CoreFixtureSource implements ContentSource
 	public function activate(string $id, ScopeContext $context): ActiveScope
 	{
 		$this->activations++;
+
 		return $this->active[] = new CoreFixtureActiveScope($context->descriptor, $context->state());
 	}
 
@@ -82,6 +87,7 @@ final class CoreFixtureSystems implements SystemSet
 		$this->order[] = $this->name;
 		$this->activated[] = $scope->state();
 		$scope->system($this->name, static function(): void {});
+
 		$scope->entity((object) ['owner' => $this->name]);
 		$scope->own($scope->registry->create((object) ['adopted' => $this->name]));
 	}
@@ -154,8 +160,10 @@ $bound = [
 		]
 	]
 ];
+
 $rebind->bindWorld($bound);
 $lease = $rebind->activate('match', 'MAP01');
+
 verifyWorldRuntime(
 	$rebindAdapter->definitions[0]->resources[0]['url'] === 'https://one.example/base.wad'
 	, 'bound resource reaches the adapter'
@@ -177,18 +185,23 @@ $replacement['sources']['match']['resources'][0]['url'] = 'https://two.example/b
 $rebind->bindWorld($replacement);
 verifyWorldRuntime($rebindAdapter->sources[0]->closed, 'rebinding closes the prior parsed source');
 $rebind->activate('match', 'MAP01')->release();
+
 verifyWorldRuntime(
 	$rebindAdapter->definitions[1]->resources[0]['url'] === 'https://two.example/base.wad'
 	, 'rebound resource opens a fresh source'
 );
+
 $rebind->close();
 
 final class CoreFixtureDevice
 {
 	public int $generation = 0, $begins = 0, $presents = 0;
 	public bool $ready = true;
+
 	public function ready(): bool { return $this->ready; }
+
 	public function begin(array $color): void { $this->begins++; }
+
 	public function present(): void { $this->presents++; }
 }
 
@@ -197,10 +210,15 @@ final class CoreFixturePass implements RenderPass
 	public int $restores = 0, $closes = 0;
 
 	public function __construct(private string $name, private array &$order, private array $after = []) {}
+
 	public function id(): string { return $this->name; }
+
 	public function after(): array { return $this->after; }
+
 	public function render(FrameContext $frame): void { $this->order[] = $this->name; }
+
 	public function restore(): void { $this->restores++; }
+
 	public function close(): void { $this->closes++; }
 }
 

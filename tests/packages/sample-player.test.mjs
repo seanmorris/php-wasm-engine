@@ -5,21 +5,49 @@ import {SamplePlayer} from '../../browser/SamplePlayer.mjs';
 test('SamplePlayer caches decoding, plays through gain, mutes, and closes', async() => {
 	let reads = 0, decodes = 0, starts = 0, closes = 0, gain = 0;
 	const source = {
-		connect(){ return {connect(){}}; }
+
+		connect(){
+			return {
+
+				connect(){}
+			};
+		}
+
 		, start(){ starts++; queueMicrotask(() => source.onended?.()); }
+
 		, disconnect(){}
 	};
+
 	const context = {
 		state: 'running'
 		, destination: {}
+
 		, async resume(){}
+
 		, async decodeAudioData(){ decodes++; return {sample: true}; }
+
 		, createBufferSource(){ return source; }
-		, createGain(){ return {gain: {set value(value){ gain = value; }},connect(){ return this; },disconnect(){}}; }
+
+		, createGain(){
+			return {
+				gain: {set value(value){ gain = value; }}
+
+				, connect(){ return this; }
+
+				, disconnect(){}
+			};
+		}
+
 		, async close(){ closes++; }
 	};
+
 	const player = new SamplePlayer(
-		{FS: {readFile(){ reads++; return new Uint8Array([1,2,3]); }}}
+		{
+			FS: {
+
+				readFile(){ reads++; return new Uint8Array([1,2,3]); }
+			}
+		}
 		, {path: value => value}
 		, 'https://example.test/packages/game/phonics.json'
 		, {contextFactory: () => context}
@@ -40,11 +68,23 @@ test('SamplePlayer caches decoding, plays through gain, mutes, and closes', asyn
 
 test('SamplePlayer contains missing assets and decode failures', async() => {
 	const context = {
-		state: 'running', destination: {}, async resume(){}, async decodeAudioData(){ throw Error('bad'); }
+		state: 'running'
+		, destination: {}
+
+		, async resume(){}
+
+		, async decodeAudioData(){ throw Error('bad'); }
+
 		, async close(){}
 	};
+
 	const player = new SamplePlayer(
-		{FS: {readFile(){ return new Uint8Array([0]); }}}
+		{
+			FS: {
+
+				readFile(){ return new Uint8Array([0]); }
+			}
+		}
 		, {path: value => value}
 		, 'https://example.test/game/phonics.json'
 		, {contextFactory: () => context}

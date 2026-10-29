@@ -20,14 +20,20 @@ final class EnemyAwareness
 		foreach($level->map->linedefs as $line)
 		{
 			$portal = $level->portal((int)$line['index']);
+
 			if($portal === null) continue;
 
 			$blocked = ((int)$line['flags'] & self::SOUND_BLOCK) !== 0;
 			$this->adjacent[$portal->rightSector][] = [
-				'sector' => $portal->leftSector, 'line' => (int)$line['index'], 'blocked' => $blocked
+				'sector' => $portal->leftSector
+				, 'line' => (int)$line['index']
+				, 'blocked' => $blocked
 			];
+
 			$this->adjacent[$portal->leftSector][] = [
-				'sector' => $portal->rightSector, 'line' => (int)$line['index'], 'blocked' => $blocked
+				'sector' => $portal->rightSector
+				, 'line' => (int)$line['index']
+				, 'blocked' => $blocked
 			];
 		}
 	}
@@ -48,6 +54,7 @@ final class EnemyAwareness
 		while(isset($queue[$head]))
 		{
 			[$sector,$blocks] = $queue[$head++];
+
 			if(isset($visited[$sector]) && $visited[$sector] <= $blocks) continue;
 
 			$visited[$sector] = $blocks;
@@ -56,8 +63,11 @@ final class EnemyAwareness
 			foreach($this->adjacent[$sector] ?? [] as $edge)
 			{
 				if(!$this->open($edge['line'])) continue;
+
 				$nextBlocks = $blocks + ($edge['blocked'] ? 1 : 0);
+
 				if($nextBlocks > 1) continue;
+
 				$queue[] = [$edge['sector'],$nextBlocks];
 			}
 		}

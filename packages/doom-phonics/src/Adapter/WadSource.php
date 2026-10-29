@@ -31,13 +31,12 @@ final class WadSource implements ContentSource
 	 * @param array<string,string> $language
 	 */
 	public function __construct(
-		public Stack $wad,
-		array $decorate = [],
-		array $sndinfo = [],
-		array $keyconf = [],
-		array $language = []
-	)
-	{
+		public Stack $wad
+		, array $decorate = []
+		, array $sndinfo = []
+		, array $keyconf = []
+		, array $language = []
+	){
 		// Direct Stack consumers and the browser adapter share the same lump path.
 		// The adapter's arrays retain interleaved loose-resource precedence; missing
 		// entries are filled from the archive stack for callers that already own it.
@@ -51,11 +50,14 @@ final class WadSource implements ContentSource
 	public function catalog(): iterable
 	{
 		$this->requireOpen();
+
 		foreach($this->wad->maps() as $name)
 		{
 			$episode = preg_match('/^E(\d+)M(\d+)$/', $name, $match) ? (int)$match[1] : null;
 			$tags = ['playable','wad-map'];
+
 			if($episode !== null) $tags[] = 'episode-' . $episode;
+
 			yield new ScopeDescriptor($name, 'map', null, $tags, [
 				'format' => 'doom'
 				, 'episode' => $episode
@@ -67,31 +69,37 @@ final class WadSource implements ContentSource
 	public function activate(string $id, ScopeContext $context): ActiveScope
 	{
 		$this->requireOpen();
+
 		if(!in_array(strtoupper($id), $this->wad->maps(), true))
 		throw new \OutOfBoundsException("Unknown WAD map $id");
 
 		$this->textures ??= new TextureCatalog($this->wad);
 		$this->palette ??= new Palette($this->wad);
+
 		$this->weapons ??= WeaponSlots::fromCatalog(
 			$this->definitions->actors
 			, fn(ActorDefinition $weapon): bool => $this->weaponAssetsExist($weapon)
 			, $this->definitions->keyconf
 		);
+
 		$level = new Level($this->wad->map($id));
 		CameraTextureSetup::apply($level, $this->textures);
 		$domTextures = $context->service('doom-dom-textures', []);
+
 		if(!is_array($domTextures))
 		throw new \LogicException('doom-dom-textures service must be an array of trusted browser bridges');
+
 		DomTextureSetup::apply($level, $this->textures, $domTextures);
+
 		$content = new WadLevel(
-			$this->wad,
-			$level,
-			$this->textures,
-			$this->palette,
-			$this->definitions->actors,
-			$this->definitions->sounds,
-			$this->weapons,
-			$this->definitions->language
+			$this->wad
+			, $level
+			, $this->textures
+			, $this->palette
+			, $this->definitions->actors
+			, $this->definitions->sounds
+			, $this->weapons
+			, $this->definitions->language
 		);
 
 		return new WadActiveScope($context->descriptor, $content);

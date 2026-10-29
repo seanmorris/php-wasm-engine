@@ -123,6 +123,7 @@ final class GlesMapRenderer
 		$this->actorQuery = Query::all(Transform::class, ActorState::class);
 		$this->beamQuery = Query::all(BeamEffect::class);
 		$this->reticleImage = new IndexedImage(1, 1, chr($palette->closestIndex(255, 128, 0)), "\xff");
+
 		foreach($level->sectors as $sector)
 		$this->sectorComponents[$sector->index] = $level->map->sectorComponent($sector->index);
 		$this->atlas = IndexedAtlas::forLevel($level, $catalog, 2048, $actors, $palette);
@@ -162,10 +163,12 @@ final class GlesMapRenderer
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/camera-portal.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/camera-portal.frag')
 		);
+
 		$this->cameraTextureProgram = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/map.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/camera-texture.frag')
 		);
+
 		$this->mirrorProgram = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/camera-portal.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/mirror.frag')
@@ -194,17 +197,32 @@ final class GlesMapRenderer
 		glBindVertexArray($this->vao[6]);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[6]);
 		$cameraTextureBytes = $this->mesh->cameraTextures->bytes();
-		glBufferData(GL_ARRAY_BUFFER, max($stride, strlen($cameraTextureBytes)), $cameraTextureBytes ?: str_repeat("\0", $stride), GL_STATIC_DRAW);
+
+		glBufferData(
+			GL_ARRAY_BUFFER
+			, max($stride, strlen($cameraTextureBytes))
+			, $cameraTextureBytes ?: str_repeat("\0", $stride)
+			, GL_STATIC_DRAW
+		);
+
 		foreach([[0,2,0],[1,2,8],[2,2,16],[3,2,24],[4,3,32],[5,3,44],[6,2,56]] as [$location,$size,$offset])
 		{
 			glVertexAttribPointer($location, $size, GL_FLOAT, false, $stride, $offset);
 			glEnableVertexAttribArray($location);
 		}
+
 		glBindVertexArray(0);
 		glBindVertexArray($this->vao[7]);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[7]);
 		$mirrorBytes = $this->mesh->mirrors->bytes();
-		glBufferData(GL_ARRAY_BUFFER, max(20, strlen($mirrorBytes)), $mirrorBytes ?: str_repeat("\0", 20), GL_STATIC_DRAW);
+
+		glBufferData(
+			GL_ARRAY_BUFFER
+			, max(20, strlen($mirrorBytes))
+			, $mirrorBytes ?: str_repeat("\0", 20)
+			, GL_STATIC_DRAW
+		);
+
 		glVertexAttribPointer(0, 2, GL_FLOAT, false, MirrorMesh::FLOATS * 4, 0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 2, GL_FLOAT, false, MirrorMesh::FLOATS * 4, 8);
@@ -215,7 +233,14 @@ final class GlesMapRenderer
 		glBindVertexArray($this->vao[5]);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[5]);
 		$portalBytes = $this->mesh->cameraPortals->bytes();
-		glBufferData(GL_ARRAY_BUFFER, max(20, strlen($portalBytes)), $portalBytes ?: str_repeat("\0", 20), GL_STATIC_DRAW);
+
+		glBufferData(
+			GL_ARRAY_BUFFER
+			, max(20, strlen($portalBytes))
+			, $portalBytes ?: str_repeat("\0", 20)
+			, GL_STATIC_DRAW
+		);
+
 		glVertexAttribPointer(0, 2, GL_FLOAT, false, CameraPortalMesh::FLOATS * 4, 0);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(1, 2, GL_FLOAT, false, CameraPortalMesh::FLOATS * 4, 8);
@@ -318,6 +343,7 @@ final class GlesMapRenderer
 		glBindTexture(GL_TEXTURE_2D, $this->textures[3]);
 		$this->sectorBytes = $this->sectorData();
 		$planes = [];
+
 		foreach(['floor','ceiling'] as $plane)
 		foreach($this->level->sectors as $sector)
 		{
@@ -400,11 +426,13 @@ final class GlesMapRenderer
 		glUniform1i($this->cameraPortalProgram->location('sectorHeights'), 3);
 		glUniform1i($this->cameraPortalProgram->location('portalView'), 4);
 		glUniform2f($this->cameraPortalProgram->location('projection'), $projectionX, $projectionY);
+
 		glUniform2f(
 			$this->cameraPortalProgram->location('viewport')
 			, $this->viewport->sceneWidth
 			, $this->viewport->sceneHeight
 		);
+
 		$this->cameraTextureProgram->use();
 		glUniform1i($this->cameraTextureProgram->location('sectorHeights'), 3);
 		glUniform1i($this->cameraTextureProgram->location('cameraView'), 4);
@@ -413,7 +441,12 @@ final class GlesMapRenderer
 		glUniform1i($this->mirrorProgram->location('sectorHeights'), 3);
 		glUniform1i($this->mirrorProgram->location('portalView'), 4);
 		glUniform2f($this->mirrorProgram->location('projection'), $projectionX, $projectionY);
-		glUniform2f($this->mirrorProgram->location('viewport'), $this->viewport->sceneWidth, $this->viewport->sceneHeight);
+
+		glUniform2f(
+			$this->mirrorProgram->location('viewport')
+			, $this->viewport->sceneWidth
+			, $this->viewport->sceneHeight
+		);
 
 		glUseProgram(0);
 	}
@@ -467,9 +500,17 @@ final class GlesMapRenderer
 			, $this->viewport->sceneWidth
 			, $this->viewport->sceneHeight
 		);
+
 		$this->mirrorProgram->use();
-		glUniform2f($this->mirrorProgram->location('viewport'), $this->viewport->sceneWidth, $this->viewport->sceneHeight);
+
+		glUniform2f(
+			$this->mirrorProgram->location('viewport')
+			, $this->viewport->sceneWidth
+			, $this->viewport->sceneHeight
+		);
+
 		$this->cameraPortalProgram->use();
+
 		glUniform2f(
 			$this->cameraPortalProgram->location('viewport')
 			, $this->viewport->sceneWidth
@@ -527,6 +568,7 @@ final class GlesMapRenderer
 		$started = hrtime(true);
 
 		if($this->closed || !$this->actors) return;
+
 		$nearPlane ??= $this->visiblePortalNearPlane($cameraX, $cameraY);
 
 		// WAD map coordinates are right-handed with +Y north; screen-right is clockwise.
@@ -585,8 +627,7 @@ final class GlesMapRenderer
 
 			if(!isset($connectedSectors[$actorSector])
 				|| $this->level->map->rejects($cameraSector, $actorSector)
-			)
-			{
+			){
 				$stats['rejected']++;
 				continue;
 			}
@@ -607,8 +648,7 @@ final class GlesMapRenderer
 			if($distance <= max(.05, $nearPlane * .5)
 				|| $distance > 8192
 				|| abs($sideDistance) > $distance * $halfWidth + $radius
-			)
-			{
+			){
 				$stats['frustum']++;
 				continue;
 			}
@@ -885,6 +925,7 @@ final class GlesMapRenderer
 		$started = hrtime(true);
 
 		if($this->closed || !$this->mesh->vertexCount()) return;
+
 		$nearPlane ??= $this->visiblePortalNearPlane($x, $y);
 
 		$meshUpdates = $this->mesh->sync($this->level, $this->atlas);
@@ -969,6 +1010,7 @@ final class GlesMapRenderer
 		$this->cameraPortalViewBudget = self::CAMERA_PORTAL_VIEW_BUDGET;
 		$this->cameraTextureViews = [];
 		$this->mirrorViews = [];
+
 		if($this->closed) return;
 
 		$width = $this->viewport->sceneWidth;
@@ -976,42 +1018,68 @@ final class GlesMapRenderer
 		$this->renderDomTextureViews();
 		$this->renderCameraTextureViews($registry, $viewEntity, $extraLight, $alpha);
 		$this->renderMirrorViews($registry, $x, $y, $z, $angle, $pitch, $extraLight, $alpha);
+
 		if(!$this->mesh->cameraPortals->vertexCount())
 		{
 			glViewport(0, 0, $width, $height);
+
 			return;
 		}
+
 		$visibleLinks = $this->mesh->cameraPortals->visibleLinks(
-			$this->level, $x, $y, $z, $angle, PHP_INT_MAX, $this->fov, $cameraSector
-			, $this->projection, $pitch, $this->pitchMode
+			$this->level
+			, $x
+			, $y
+			, $z
+			, $angle
+			, PHP_INT_MAX
+			, $this->fov
+			, $cameraSector
+			, $this->projection
+			, $pitch
+			, $this->pitchMode
 		);
+
 		$this->cameraPortalVisible = array_fill_keys(
-			array_map(static fn($visibleLink): int => $visibleLink->id, $visibleLinks), true
+			array_map(static fn($visibleLink): int => $visibleLink->id, $visibleLinks)
+			, true
 		);
+
 		$this->cameraPortalFrame = [
 			'camera' => [$x,$y,$z,$cameraSector ?? $this->level->map->sectorAt((int)$x, (int)$y),$alpha]
 			, 'visible' => array_keys($this->cameraPortalVisible)
 			, 'targets' => []
 		];
-		$links = array_slice(
-			$visibleLinks
-			, 0
-			, min(self::CAMERA_PORTALS_PER_VIEW, $this->cameraPortalViewBudget)
-		);
+
+		$links = array_slice($visibleLinks, 0, min(self::CAMERA_PORTALS_PER_VIEW, $this->cameraPortalViewBudget));
 		$linkCount = count($links);
 		$branchBudget = $linkCount ? intdiv($this->cameraPortalViewBudget, $linkCount) : 0;
 
 		foreach($links as $link)
 		{
 			$target = $this->renderCameraPortalView(
-				$registry, $link, $x, $y, $z, $angle, $pitch, $viewEntity, $extraLight, $alpha
-				, 1, $branchBudget
+				$registry
+				, $link
+				, $x
+				, $y
+				, $z
+				, $angle
+				, $pitch
+				, $viewEntity
+				, $extraLight
+				, $alpha
+				, 1
+				, $branchBudget
 			);
+
 			if($target)
 			{
 				$this->cameraPortalViews[$link->id] = $target;
+
 				$this->cameraPortalFrame['targets'][$link->id] = (int)array_search(
-					$target, $this->cameraPortalTargets, true
+					$target
+					, $this->cameraPortalTargets
+					, true
 				);
 			}
 		}
@@ -1025,12 +1093,16 @@ final class GlesMapRenderer
 		foreach($this->level->domTextureBindings() as $name => $binding)
 		{
 			$definition = $binding->texture;
+
 			$target = $this->cameraTextureTargets[$name] ??= new CameraPortalTarget(
-				$definition->width, $definition->height
+				$definition->width
+				, $definition->height
 			);
+
 			$target->resize($definition->width, $definition->height);
 			$target->begin();
 			$ready = false;
+
 			try
 			{
 				$ready = (bool)$binding->bridge->render($definition->width, $definition->height, 38);
@@ -1040,61 +1112,147 @@ final class GlesMapRenderer
 				// Browser-backed documents can be temporarily unavailable while rasterizing
 				// or recovering a context. Leave the ordinary placeholder visible this frame.
 			}
-			finally { $target->end(); }
+			finally
+			{
+				$target->end();
+			}
+
 			if(!$ready) continue;
+
 			$this->cameraTextureViews[$name] = $target;
 			$this->domTextureViewsRendered++;
 		}
+
 		$this->configureViewport();
 	}
 
 	/** Capture every bound ANIMDEFS camera texture before drawing the player's view. */
 	private function renderCameraTextureViews(
-		Registry $registry, ?int $viewEntity, int $extraLight, float $alpha
+		Registry $registry
+		, ?int $viewEntity
+		, int $extraLight
+		, float $alpha
 	): void {
 		foreach($this->level->cameraTextureBindings() as $name => $binding)
 		{
 			$definition = $binding->texture;
-			$target = $this->cameraTextureTargets[$name] ??= new CameraPortalTarget($definition->width, $definition->height);
+
+			$target = $this->cameraTextureTargets[$name] ??= new CameraPortalTarget(
+				$definition->width
+				, $definition->height
+			);
+
 			$target->resize($definition->width, $definition->height);
 			$projection = new ViewProjection($definition->width, $definition->height, $binding->fov);
 			$this->configureSceneProjection($projection, $definition->width, $definition->height);
 			$camera = $binding->camera;
 			$target->begin();
+
 			try
 			{
 				$feet = $camera->z - PlayerState::VIEW_HEIGHT;
-				$this->render($camera->x, $camera->y, $feet, $camera->angle, $camera->pitch, $extraLight, $alpha, $camera->sector);
+
+				$this->render(
+					$camera->x
+					, $camera->y
+					, $feet
+					, $camera->angle
+					, $camera->pitch
+					, $extraLight
+					, $alpha
+					, $camera->sector
+				);
+
 				// A remote camera should see the local player's body as well.
-				$this->renderActors($registry, $camera->x, $camera->y, $feet, $camera->angle, $camera->pitch, null, $extraLight, $alpha, $camera->sector);
+				$this->renderActors(
+					$registry
+					, $camera->x
+					, $camera->y
+					, $feet
+					, $camera->angle
+					, $camera->pitch
+					, null
+					, $extraLight
+					, $alpha
+					, $camera->sector
+				);
+
 				$this->renderBeams($registry, $camera->x, $camera->y, $feet, $camera->angle, $camera->pitch, $alpha);
 			}
-			finally { $target->end(); }
+			finally
+			{
+				$target->end();
+			}
+
 			$this->cameraTextureViews[$name] = $target;
 			$this->cameraTextureViewsRendered++;
 		}
+
 		$this->configureViewport();
 	}
 
 	/** Capture each Line_Mirror using a point and heading reflected across its line. */
 	private function renderMirrorViews(
-		Registry $registry, float $x, float $y, float $z, float $angle, float $pitch
-		, int $extraLight, float $alpha
+		Registry $registry
+		, float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $pitch
+		, int $extraLight
+		, float $alpha
 	): void {
-		$width = $this->viewport->sceneWidth; $height = $this->viewport->sceneHeight;
+		$width = $this->viewport->sceneWidth;
+		$height = $this->viewport->sceneHeight;
+
 		foreach($this->level->mirrors() as $mirror)
 		{
 			$camera = $mirror->camera($this->level, $x, $y, $z, $angle);
 			$target = $this->mirrorTargets[$mirror->line] ??= new CameraPortalTarget($width, $height);
 			$target->resize($width, $height);
 			$target->begin();
+
 			try
 			{
-				$this->render($camera['x'], $camera['y'], $camera['z'], $camera['angle'], $pitch, $extraLight, $alpha, $camera['sector']);
-				$this->renderActors($registry, $camera['x'], $camera['y'], $camera['z'], $camera['angle'], $pitch, null, $extraLight, $alpha, $camera['sector']);
-				$this->renderBeams($registry, $camera['x'], $camera['y'], $camera['z'], $camera['angle'], $pitch, $alpha);
+				$this->render(
+					$camera['x']
+					, $camera['y']
+					, $camera['z']
+					, $camera['angle']
+					, $pitch
+					, $extraLight
+					, $alpha
+					, $camera['sector']
+				);
+
+				$this->renderActors(
+					$registry
+					, $camera['x']
+					, $camera['y']
+					, $camera['z']
+					, $camera['angle']
+					, $pitch
+					, null
+					, $extraLight
+					, $alpha
+					, $camera['sector']
+				);
+
+				$this->renderBeams(
+					$registry
+					, $camera['x']
+					, $camera['y']
+					, $camera['z']
+					, $camera['angle']
+					, $pitch
+					, $alpha
+				);
 			}
-			finally { $target->end(); }
+			finally
+			{
+				$target->end();
+			}
+
 			$this->mirrorViews[$mirror->line] = $target;
 			$this->mirrorViewsRendered++;
 		}
@@ -1104,20 +1262,29 @@ final class GlesMapRenderer
 	private function configureSceneProjection(ViewProjection $projection, int $width, int $height): void
 	{
 		foreach([
-			$this->program,$this->spriteProgram,$this->skyProgram,$this->skyOcclusionProgram
-			, $this->beamProgram,$this->cameraPortalProgram,$this->cameraTextureProgram,$this->mirrorProgram
+			$this->program
+			, $this->spriteProgram
+			, $this->skyProgram
+			, $this->skyOcclusionProgram
+			, $this->beamProgram
+			, $this->cameraPortalProgram
+			, $this->cameraTextureProgram
+			, $this->mirrorProgram
 		] as $program)
 		{
 			$program->use();
 			glUniform2f($program->location('projection'), $projection->horizontalScale, $projection->verticalScale);
 		}
+
 		$this->beamProgram->use();
 		glUniform2f($this->beamProgram->location('viewport'), $width, $height);
+
 		foreach([$this->cameraPortalProgram,$this->mirrorProgram] as $program)
 		{
 			$program->use();
 			glUniform2f($program->location('viewport'), $width, $height);
 		}
+
 		glUseProgram(0);
 	}
 
@@ -1157,58 +1324,103 @@ final class GlesMapRenderer
 		$cameraPitch = $pitch;
 		$nearPlane = $this->linePortalNearPlane($link, $x, $y);
 		$childViews = [];
+
 		$visibleChildLinks = $this->mesh->cameraPortals->visibleLinks(
-			$this->level, $camera['x'], $camera['y'], $camera['z'], $camera['angle']
-			, PHP_INT_MAX, $this->fov, $link->destinationSector
-			, $this->projection, $cameraPitch, $this->pitchMode
+			$this->level
+			, $camera['x']
+			, $camera['y']
+			, $camera['z']
+			, $camera['angle']
+			, PHP_INT_MAX
+			, $this->fov
+			, $link->destinationSector
+			, $this->projection
+			, $cameraPitch
+			, $this->pitchMode
 		);
-		if($link->reciprocalId !== null) $visibleChildLinks = array_values(array_filter(
-			$visibleChildLinks
-			, static fn($childLink): bool => $childLink->id !== $link->reciprocalId
-		));
+
+		if($link->reciprocalId !== null)
+		$visibleChildLinks = array_values(
+			array_filter($visibleChildLinks, static fn($childLink): bool => $childLink->id !== $link->reciprocalId)
+		);
+
 		// A nested plane portal can cross the near plane while its parent line is
 		// passing almost parallel beside the eye. Use the plane's local material for
 		// that grazing parent view; the direct plane portal remains fully active.
 		if($this->grazingLinePortal($link, $x, $y, $angle)) $visibleChildLinks = [];
+
 		$availableChildViews = min($this->cameraPortalViewBudget, $branchBudget - 1);
-		$childLinks = array_slice(
-			$visibleChildLinks
-			, 0
-			, min(self::CAMERA_PORTALS_PER_VIEW, $availableChildViews)
-		);
+		$childLinks = array_slice($visibleChildLinks, 0, min(self::CAMERA_PORTALS_PER_VIEW, $availableChildViews));
 		$childCount = count($childLinks);
 		$childBudget = $childCount ? intdiv($availableChildViews, $childCount) : 0;
 
 		foreach($childLinks as $childLink)
 		{
 			$child = $this->renderCameraPortalView(
-				$registry, $childLink
-				, $camera['x'], $camera['y'], $camera['z'], $camera['angle'], $cameraPitch
-				, $viewEntity, $extraLight, $alpha, $depth + 1, $childBudget
+				$registry
+				, $childLink
+				, $camera['x']
+				, $camera['y']
+				, $camera['z']
+				, $camera['angle']
+				, $cameraPitch
+				, $viewEntity
+				, $extraLight
+				, $alpha
+				, $depth + 1
+				, $childBudget
 			);
+
 			if($child) $childViews[$childLink->id] = $child;
 		}
 
 		$parentViews = $this->cameraPortalViews;
 		$parentVisible = $this->cameraPortalVisible;
 		$this->cameraPortalViews = $childViews;
+
 		$this->cameraPortalVisible = array_fill_keys(
-			array_map(static fn($visibleLink): int => $visibleLink->id, $visibleChildLinks), true
+			array_map(static fn($visibleLink): int => $visibleLink->id, $visibleChildLinks)
+			, true
 		);
+
 		$target->begin();
 
 		try
 		{
 			$this->render(
-				$camera['x'], $camera['y'], $camera['z'], $camera['angle'], $cameraPitch, $extraLight, $alpha
-				, $link->destinationSector, $nearPlane
+				$camera['x']
+				, $camera['y']
+				, $camera['z']
+				, $camera['angle']
+				, $cameraPitch
+				, $extraLight
+				, $alpha
+				, $link->destinationSector
+				, $nearPlane
 			);
+
 			$this->renderActors(
-				$registry, $camera['x'], $camera['y'], $camera['z'], $camera['angle'], $cameraPitch
-				, $viewEntity, $extraLight, $alpha, $link->destinationSector, $nearPlane
+				$registry
+				, $camera['x']
+				, $camera['y']
+				, $camera['z']
+				, $camera['angle']
+				, $cameraPitch
+				, $viewEntity
+				, $extraLight
+				, $alpha
+				, $link->destinationSector
+				, $nearPlane
 			);
+
 			$this->renderBeams(
-				$registry, $camera['x'], $camera['y'], $camera['z'], $camera['angle'], $cameraPitch, $alpha
+				$registry
+				, $camera['x']
+				, $camera['y']
+				, $camera['z']
+				, $camera['angle']
+				, $cameraPitch
+				, $alpha
 				, $nearPlane
 			);
 		}
@@ -1226,9 +1438,13 @@ final class GlesMapRenderer
 
 	/** Project each portal camera texture onto its line or sector-plane geometry. */
 	private function renderCameraPortalSurfaces(
-		float $x, float $y, float $z, float $angle, float $pitch, float $nearPlane
-	): void
-	{
+		float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $pitch
+		, float $nearPlane
+	): void {
 		if(!$this->mesh->cameraPortals->vertexCount()) return;
 
 		$program = $this->cameraPortalProgram;
@@ -1250,8 +1466,11 @@ final class GlesMapRenderer
 			foreach($this->mesh->cameraPortals->spans as $span)
 			{
 				$link = $span['surface']->link;
+
 				if(!isset($this->cameraPortalVisible[$link->id])) continue;
+
 				$target = $link->active ? ($this->cameraPortalViews[$link->id] ?? null) : null;
+
 				if($target)
 				{
 					glUniform1i($program->location('portalReady'), 1);
@@ -1259,6 +1478,7 @@ final class GlesMapRenderer
 					glBindTexture(GL_TEXTURE_2D, $target->texture());
 				}
 				else glUniform1i($program->location('portalReady'), 0);
+
 				glDrawArrays(GL_TRIANGLES, $span['first'], $span['count']);
 			}
 		}
@@ -1273,9 +1493,15 @@ final class GlesMapRenderer
 
 	/** Draw captured camera targets using the WAD texture coordinates of each surface. */
 	private function renderCameraTextureSurfaces(
-		float $x, float $y, float $z, float $angle, float $pitch, float $nearPlane
+		float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $pitch
+		, float $nearPlane
 	): void {
 		if(!$this->mesh->cameraTextures->vertexCount()) return;
+
 		$program = $this->cameraTextureProgram;
 		$cameraSector = $this->level->map->sectorAt((int)round($x), (int)round($y));
 		$program->use();
@@ -1285,51 +1511,88 @@ final class GlesMapRenderer
 		glUniform1f($program->location('nearPlane'), $nearPlane);
 		glUniform1i($program->location('pitchMode'), $this->pitchMode->shaderValue());
 		glUniform1i($program->location('cameraComponent'), $this->sectorComponents[$cameraSector] ?? $cameraSector);
-		glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDepthMask(true); glDisable(GL_CULL_FACE);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(true);
+		glDisable(GL_CULL_FACE);
 		glBindVertexArray($this->vao[6]);
+
 		try
 		{
 			foreach($this->mesh->cameraTextures->spans as $span)
 			{
-				$binding = $span['binding']; $target = $this->cameraTextureViews[$binding->texture->name] ?? null;
+				$binding = $span['binding'];
+				$target = $this->cameraTextureViews[$binding->texture->name] ?? null;
 				glUniform1i($program->location('surfaceSide'), $span['side']);
-				glUniform2f($program->location('textureSize'), $binding->texture->displayWidth(), $binding->texture->displayHeight());
+
+				glUniform2f(
+					$program->location('textureSize')
+					, $binding->texture->displayWidth()
+					, $binding->texture->displayHeight()
+				);
+
 				glUniform1i($program->location('cameraReady'), $target ? 1 : 0);
+
 				if($target)
 				{
 					glActiveTexture(GL_TEXTURE0 + 4);
 					glBindTexture(GL_TEXTURE_2D, $target->texture());
 				}
+
 				glDrawArrays(GL_TRIANGLES, $span['first'], $span['count']);
 			}
 		}
-		finally { glBindVertexArray(0); glActiveTexture(GL_TEXTURE0); glDepthFunc(GL_LESS); }
+		finally
+		{
+			glBindVertexArray(0);
+			glActiveTexture(GL_TEXTURE0);
+			glDepthFunc(GL_LESS);
+		}
 	}
 
 	/** Project reflected scene targets over one-sided mirror geometry. */
 	private function renderMirrorSurfaces(
-		float $x, float $y, float $z, float $angle, float $pitch, float $nearPlane
+		float $x
+		, float $y
+		, float $z
+		, float $angle
+		, float $pitch
+		, float $nearPlane
 	): void {
 		if(!$this->mesh->mirrors->vertexCount()) return;
-		$program = $this->mirrorProgram; $program->use();
+
+		$program = $this->mirrorProgram;
+		$program->use();
 		glUniform3f($program->location('camera'), $x, $y, $z + PlayerState::VIEW_HEIGHT);
 		glUniform2f($program->location('forward'), cos($angle), sin($angle));
 		glUniform1f($program->location('cameraPitch'), $pitch);
 		glUniform1f($program->location('nearPlane'), $nearPlane);
 		glUniform1i($program->location('pitchMode'), $this->pitchMode->shaderValue());
-		glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LEQUAL); glDepthMask(true); glDisable(GL_CULL_FACE);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LEQUAL);
+		glDepthMask(true);
+		glDisable(GL_CULL_FACE);
 		glBindVertexArray($this->vao[7]);
+
 		try
 		{
 			foreach($this->mesh->mirrors->spans as $span)
 			{
 				$target = $this->mirrorViews[$span['mirror']->line] ?? null;
+
 				if(!$target) continue;
-				glActiveTexture(GL_TEXTURE0 + 4); glBindTexture(GL_TEXTURE_2D, $target->texture());
+
+				glActiveTexture(GL_TEXTURE0 + 4);
+				glBindTexture(GL_TEXTURE_2D, $target->texture());
 				glDrawArrays(GL_TRIANGLES, $span['first'], $span['count']);
 			}
 		}
-		finally { glBindVertexArray(0); glActiveTexture(GL_TEXTURE0); glDepthFunc(GL_LESS); }
+		finally
+		{
+			glBindVertexArray(0);
+			glActiveTexture(GL_TEXTURE0);
+			glDepthFunc(GL_LESS);
+		}
 	}
 
 	/** Keep the usual depth precision except while a visible line portal intersects the near plane. */
@@ -1345,11 +1608,14 @@ final class GlesMapRenderer
 
 	/** A portal capture starts behind its destination seam by the same distance as this source camera. */
 	private function linePortalNearPlane(
-		\DoomPhonics\Game\CameraPortalLink $link, float $x, float $y
+		\DoomPhonics\Game\CameraPortalLink $link
+		, float $x
+		, float $y
 	): float {
 		if(!$link->active || $link->originLine === null) return self::NEAR_PLANE;
 
 		$line = $this->level->map->linedefs[$link->originLine] ?? null;
+
 		if(!$line) return self::NEAR_PLANE;
 
 		$a = $this->level->map->vertices[$line['from']];
@@ -1357,6 +1623,7 @@ final class GlesMapRenderer
 		$lineX = $b['x'] - $a['x'];
 		$lineY = $b['y'] - $a['y'];
 		$length = hypot($lineX, $lineY);
+
 		if($length <= 0) return self::NEAR_PLANE;
 
 		$distance = abs($lineX * ($y - $a['y']) - $lineY * ($x - $a['x'])) / $length;
@@ -1366,11 +1633,15 @@ final class GlesMapRenderer
 
 	/** Whether a nearby line portal is crossing the view's near plane edge-on. */
 	private function grazingLinePortal(
-		\DoomPhonics\Game\CameraPortalLink $link, float $x, float $y, float $angle
+		\DoomPhonics\Game\CameraPortalLink $link
+		, float $x
+		, float $y
+		, float $angle
 	): bool {
 		if($link->originLine === null) return false;
 
 		$line = $this->level->map->linedefs[$link->originLine] ?? null;
+
 		if(!$line) return false;
 
 		$a = $this->level->map->vertices[$line['from']];
@@ -1378,6 +1649,7 @@ final class GlesMapRenderer
 		$lineX = $b['x'] - $a['x'];
 		$lineY = $b['y'] - $a['y'];
 		$length = hypot($lineX, $lineY);
+
 		if($length <= 0) return false;
 
 		$side = $lineX * ($y - $a['y']) - $lineY * ($x - $a['x']);
@@ -1420,8 +1692,10 @@ final class GlesMapRenderer
 
 		$overlays = [];
 
-		foreach($health->current > 0 ? $registry->query(Query::all(WeaponOverlay::class, ActorState::class)) : [] as $overlayEntity)
-		{
+		foreach($health->current > 0
+			? $registry->query(Query::all(WeaponOverlay::class, ActorState::class))
+			: [] as $overlayEntity
+		){
 			$overlay = $registry->get($overlayEntity, WeaponOverlay::class);
 			$state = $registry->get($overlayEntity, ActorState::class);
 
@@ -1510,11 +1784,25 @@ final class GlesMapRenderer
 				$length = max($thickness, 4 * $scale);
 				$left = $this->width / 2 - $thickness / 2;
 				$top = $this->height / 2 - $thickness / 2;
+
 				$this->appendOverlayQuad(
-					$values, $left, $top, $left + $length, $top + $thickness, $this->reticleImage, $id
+					$values
+					, $left
+					, $top
+					, $left + $length
+					, $top + $thickness
+					, $this->reticleImage
+					, $id
 				);
+
 				$this->appendOverlayQuad(
-					$values, $left, $top, $left + $thickness, $top + $length, $this->reticleImage, $id
+					$values
+					, $left
+					, $top
+					, $left + $thickness
+					, $top + $length
+					, $this->reticleImage
+					, $id
 				);
 			}
 		}
@@ -1757,6 +2045,7 @@ final class GlesMapRenderer
 			$patches[] = [
 				'picture',$name,$x - $image->leftOffset,$y - $image->topOffset,$image
 			];
+
 			$x += $image->width;
 		}
 	}
@@ -1806,8 +2095,7 @@ final class GlesMapRenderer
 		, float $pitch
 		, int $cameraComponent
 		, float $nearPlane
-	): void
-	{
+	): void {
 		if(!$this->mesh->sky->vertexCount()) return;
 
 		$this->skyOcclusionProgram->use();
@@ -1856,12 +2144,15 @@ final class GlesMapRenderer
 	private function release(): void
 	{
 		foreach($this->cameraPortalTargets as $target) $target->close();
+
 		foreach($this->cameraTextureTargets as $target) $target->close();
+
 		foreach($this->mirrorTargets as $target) $target->close();
 		$this->cameraPortalTargets = $this->cameraPortalViews = $this->cameraPortalVisible = [];
 		$this->cameraTextureTargets = $this->cameraTextureViews = [];
 		$this->mirrorTargets = $this->mirrorViews = [];
 		$this->cameraPortalTargetCursor = $this->cameraPortalViewBudget = 0;
+
 		if($this->textures) glDeleteTextures(count($this->textures), $this->textures);
 
 		if($this->buffers) glDeleteBuffers(count($this->buffers), $this->buffers);

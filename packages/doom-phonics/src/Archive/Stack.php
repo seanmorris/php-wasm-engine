@@ -10,7 +10,10 @@ final class Stack
 	/** @var list<Archive> Archives in increasing precedence. */
 	public array $archives = [];
 
-	/** @param Archive ...$archives IWAD followed by ordered IWAD/PWAD overlays. @return void Validates the base role. */
+	/**
+	 * @param Archive ...$archives IWAD followed by ordered IWAD/PWAD overlays.
+	 * @return void Validates the base role.
+	 */
 	public function __construct(Archive ...$archives)
 	{
 		if(!$archives || $archives[0]->type !== 'IWAD')
@@ -34,7 +37,10 @@ final class Stack
 		return null;
 	}
 
-	/** @param string $name Case-insensitive lump name. @return list<Lump> Every occurrence in increasing archive precedence and source order. */
+	/**
+	 * @param string $name Case-insensitive lump name.
+	 * @return list<Lump> Every occurrence in increasing archive precedence and source order.
+	 */
 	public function lumps(string $name): array
 	{
 		$result = [];
@@ -69,7 +75,11 @@ final class Stack
 		throw new \OutOfBoundsException("Missing map $name");
 	}
 
-	/** @param list<string> $starts Namespace start markers. @param list<string> $ends Namespace end markers. @return array<string,Lump> Layered namespace. */
+	/**
+	 * @param list<string> $starts Namespace start markers.
+	 * @param list<string> $ends Namespace end markers.
+	 * @return array<string,Lump> Layered namespace.
+	 */
 	public function namespace(array $starts, array $ends): array
 	{
 		$result = [];

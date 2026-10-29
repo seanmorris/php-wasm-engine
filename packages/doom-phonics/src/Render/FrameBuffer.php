@@ -13,6 +13,7 @@ final class FrameBuffer
 	public function __construct(public int $width, public int $height, int $clear = 0xff000000)
 	{
 		if($width < 1 || $height < 1) throw new \InvalidArgumentException('Framebuffer dimensions must be positive');
+
 		$this->pixels = array_fill(0, $width * $height, $clear);
 		$this->depth = array_fill(0, $width * $height, INF);
 	}
@@ -20,8 +21,11 @@ final class FrameBuffer
 	public function set(int $x, int $y, int $rgba, float $depth = INF): void
 	{
 		if($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) return;
+
 		$offset = $y * $this->width + $x;
+
 		if($depth > $this->depth[$offset]) return;
+
 		$this->pixels[$offset] = $rgba;
 		$this->depth[$offset] = $depth;
 	}
@@ -29,6 +33,7 @@ final class FrameBuffer
 	public function bytes(): string
 	{
 		$bytes = '';
+
 		foreach(array_chunk($this->pixels, 4096) as $chunk) $bytes .= pack('V*', ...$chunk);
 
 		return $bytes;

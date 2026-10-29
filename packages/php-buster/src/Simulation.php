@@ -94,7 +94,8 @@ final class Simulation
 			$this->stageElapsed += self::STEP;
 			$this->spawnSchedule();
 			$this->fire($fire);
-		} else {
+		} else
+		{
 			$this->intermission = max(0, $this->intermission - self::STEP);
 			$this->fire(false);
 		}
@@ -143,7 +144,8 @@ final class Simulation
 		{
 			$this->player->x = $pointerX - $this->player->width / 2;
 			$this->player->y = $pointerY - $this->player->height / 2;
-		} else {
+		} else
+		{
 			$moveX = max(-1, min(1, $moveX));
 			$moveY = max(-1, min(1, $moveY));
 			$length = hypot($moveX, $moveY);
@@ -184,6 +186,7 @@ final class Simulation
 		if($this->fireCooldown > 0) return;
 
 		[$width,$height] = [[36,18],[47,37],[50,22],[62,40]][$this->weapon];
+
 		$this->actors[] = $this->actor(
 			'missile'
 			, $this->player->x + ($this->player->width - $width) / 2
@@ -197,6 +200,7 @@ final class Simulation
 			, 0
 			, $this->weapon
 		);
+
 		$this->shots++;
 		$this->fireCooldown += (6 - $this->weapon) * self::LEGACY_TICK;
 	}
@@ -229,11 +233,19 @@ final class Simulation
 		{
 			$variant = $data['variant'];
 			$size = $variant < 4 ? 50 : 29;
+
 			$this->actors[] = $this->actor(
-				'rock', $data['x'], 1 - $size, $size, $size
+				'rock'
+				, $data['x']
+				, 1 - $size
+				, $size
+				, $size
 				, $data['direction'] * ($this->level + 1) / self::LEGACY_TICK
 				, 2 * ($this->level + 1) / self::LEGACY_TICK
-				, 1, 1, 1, $variant
+				, 1
+				, 1
+				, 1
+				, $variant
 			);
 
 			return;
@@ -241,9 +253,7 @@ final class Simulation
 
 		if($type === 'midi')
 		{
-			$actor = $this->actor(
-				'midi', $data['x'], -35, 62, 36, 0, (3 + $this->level) / self::LEGACY_TICK, 1, 1, 2
-			);
+			$actor = $this->actor('midi', $data['x'], -35, 62, 36, 0, (3 + $this->level) / self::LEGACY_TICK, 1, 1, 2);
 			$actor->timer = 20 * self::LEGACY_TICK;
 			$this->actors[] = $actor;
 
@@ -297,8 +307,16 @@ final class Simulation
 
 				if($this->player->x > $actor->x - 42 && $this->player->x < $actor->x + 84)
 				$spawned[] = $this->actor(
-					'bomb', $actor->x + 16, $actor->y + 28, 10, 10
-					, 0, (5 + $this->level) / self::LEGACY_TICK, 1, 1, 2
+					'bomb'
+					, $actor->x + 16
+					, $actor->y + 28
+					, 10
+					, 10
+					, 0
+					, (5 + $this->level) / self::LEGACY_TICK
+					, 1
+					, 1
+					, 2
 				);
 
 				if($actor->y >= self::HEIGHT / 2) $actor->vy = -$actor->vy - 1 / self::LEGACY_TICK;
@@ -311,9 +329,16 @@ final class Simulation
 
 				foreach([0, 2, -2] as $direction)
 				$spawned[] = $this->actor(
-					'flare', $actor->x + 17, $actor->y + 28, 28, 27
+					'flare'
+					, $actor->x + 17
+					, $actor->y + 28
+					, 28
+					, 27
 					, $direction * 5 / self::LEGACY_TICK
-					, (7 + $this->level) / self::LEGACY_TICK, 1, 2, 3
+					, (7 + $this->level) / self::LEGACY_TICK
+					, 1
+					, 2
+					, 3
 				);
 
 				if($actor->y >= self::HEIGHT / 2) $actor->vy = -$actor->vy;
@@ -337,8 +362,10 @@ final class Simulation
 			$actor->x += $actor->vx * self::STEP;
 			$actor->y += $actor->vy * self::STEP;
 			$actor->age += self::STEP;
-			$frames = in_array($actor->type, ['flare','missile'], true) ? 4
+			$frames = in_array($actor->type, ['flare','missile'], true)
+				? 4
 				: (in_array($actor->type, ['midi','mini','maxi'], true) ? 3 : 1);
+
 			$actor->frame = $frames > 1 ? (int)floor($actor->age / self::LEGACY_TICK) % $frames : 0;
 
 			if($actor->x + $actor->width < 0 || $actor->x > self::WIDTH
@@ -366,7 +393,8 @@ final class Simulation
 			{
 				$this->weapon = min(3, $this->weapon + 1);
 				$this->score += 100;
-			} else {
+			} else
+			{
 				$this->shields++;
 				$this->player->hits = $this->shields;
 				$this->score += 10;
@@ -424,8 +452,16 @@ final class Simulation
 				|| !$this->overlaps($one, $two)
 			) continue;
 
-			if($one->x < $two->x) { $one->x--; $two->x++; }
-			else { $one->x++; $two->x--; }
+			if($one->x < $two->x)
+			{
+				$one->x--;
+				$two->x++;
+			}
+			else
+			{
+				$one->x++;
+				$two->x--;
+			}
 		}
 	}
 
@@ -449,7 +485,17 @@ final class Simulation
 
 		if($actor->type === 'maxi')
 		{
-			$this->actors[] = $this->actor('ruby', $actor->x + 18, $actor->y + 17, 26, 20, 0, -1 / self::LEGACY_TICK, 3);
+			$this->actors[] = $this->actor(
+				'ruby'
+				, $actor->x + 18
+				, $actor->y + 17
+				, 26
+				, 20
+				, 0
+				, -1 / self::LEGACY_TICK
+				, 3
+			);
+
 			$this->accuracy = $this->shots > 0 ? intdiv($this->hits * 100, $this->shots) : 0;
 			$this->bonus = $this->level * $this->accuracy;
 			$this->score += $this->bonus;
@@ -513,6 +559,7 @@ final class Simulation
 	 */
 	private function prune(): void
 	{
+
 		/**
 		 * Select actors that remain active in the simulation.
 		 *
@@ -565,8 +612,11 @@ final class Simulation
 				$variant = $this->random->int(8);
 				$size = $variant < 4 ? 50 : 29;
 				$this->schedule[] = [
-					'time' => $tick * self::LEGACY_TICK, 'type' => 'rock', 'direction' => $direction
-					, 'variant' => $variant, 'x' => $this->random->int(self::WIDTH - $size + 1)
+					'time' => $tick * self::LEGACY_TICK
+					, 'type' => 'rock'
+					, 'direction' => $direction
+					, 'variant' => $variant
+					, 'x' => $this->random->int(self::WIDTH - $size + 1)
 				];
 			}
 		}
@@ -587,6 +637,7 @@ final class Simulation
 			, 'type' => 'maxi'
 			, 'x' => $this->random->int(self::WIDTH - 62 + 1)
 		];
+
 		/**
 		 * Sort spawn entries into chronological order.
 		 *
@@ -646,8 +697,6 @@ final class Simulation
 		, int $strength = 1
 		, int $variant = 0
 	): Actor {
-		return new Actor(
-			$this->nextId++, $type, $x, $y, $width, $height, $vx, $vy, $team, $hits, $strength, $variant
-		);
+		return new Actor($this->nextId++, $type, $x, $y, $width, $height, $vx, $vy, $team, $hits, $strength, $variant);
 	}
 }

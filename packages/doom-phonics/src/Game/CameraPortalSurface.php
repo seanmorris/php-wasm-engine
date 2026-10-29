@@ -16,7 +16,7 @@ final class CameraPortalSurface
 		// Hexen portal alpha controls the source flat drawn over a sector portal.
 		// The remote camera image itself remains opaque.
 		, public float $overlayAlpha = 0.0
-	) {
+	){
 		if(!in_array($kind, [self::LINE,self::FLOOR,self::CEILING], true))
 		throw new \InvalidArgumentException("Unknown camera portal surface $kind");
 	}

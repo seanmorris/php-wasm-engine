@@ -12,7 +12,7 @@ final class RenderViewport
 		public readonly int $outputWidth
 		, public readonly int $outputHeight
 		, public readonly float $sceneScale = 1.0
-	) {
+	){
 		if($outputWidth < 1 || $outputHeight < 1)
 		throw new \InvalidArgumentException('Render viewport dimensions must be positive');
 

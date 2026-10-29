@@ -33,12 +33,16 @@ final class SectorMotionSystem
 	{
 		$this->ticRemainder += max(0, $dt) * 35;
 		$tics = min(8, (int)floor($this->ticRemainder + 1e-9));
+
 		if($tics < 1) return;
+
 		$this->ticRemainder -= $tics;
+
 		for($tic = 0; $tic < $tics; $tic++)
 		foreach($registry->query(SectorMover::class) as $entity)
 		{
 			if(!$registry->alive($entity)) continue;
+
 			$this->tick($registry, $entity, $registry->get($entity, SectorMover::class));
 		}
 	}
@@ -46,25 +50,42 @@ final class SectorMotionSystem
 	private function tick(Registry $registry, int $entity, SectorMover $mover): void
 	{
 		$sector = $this->level->sectors[$mover->sector] ?? null;
-		if(!$sector) { $registry->destroy($entity); return; }
+
+		if(!$sector)
+		{
+			$registry->destroy($entity);
+
+			return;
+		}
 
 		if($mover->isWaiting())
 		{
 			if(!$mover->advanceWait()) return;
-			if($mover->returnTarget === null) { $this->finish($registry, $entity, $mover); return; }
+
+			if($mover->returnTarget === null)
+			{
+				$this->finish($registry, $entity, $mover);
+
+				return;
+			}
+
 			$mover->target = $mover->returnTarget;
 			$mover->returnTarget = null;
 			$mover->resume();
-			$current=$mover->movesFloor()?$sector->floor:$sector->ceiling;
-			$cue=$mover->isLift()?SoundCue::platformStart()
-				:($mover->target>$current?SoundCue::doorOpen():SoundCue::doorClose());
-			$this->play($registry,$cue,$mover->sector);
+			$current = $mover->movesFloor()?$sector->floor:$sector->ceiling;
+			$cue = $mover->isLift()
+				? SoundCue::platformStart()
+				: ($mover->target > $current?SoundCue::doorOpen():SoundCue::doorClose());
+
+			$this->play($registry, $cue, $mover->sector);
+
 			return;
 		}
 
 		$current = $mover->movesFloor() ? $sector->floor : $sector->ceiling;
 		$step = $mover->speed / 35;
 		$next = self::approach($current, $mover->target, $step);
+
 		if($next !== $current && !$this->movePlane($registry, $mover, $current, $next))
 		{
 			if($mover->reversesWhenBlocked() && $mover->movesCeiling())
@@ -75,20 +96,26 @@ final class SectorMotionSystem
 				$mover->resume();
 				$this->play($registry, SoundCue::doorOpen(), $mover->sector);
 			}
+
 			return;
 		}
 
 		if($next !== $mover->target) return;
+
 		if($mover->returnTarget !== null)
 		{
 			if($mover->waitTics > 0)
 			{
 				$mover->beginWaiting();
+
 				if($mover->isLift()) $this->play($registry, SoundCue::platformStop(), $mover->sector);
+
 				return;
 			}
+
 			$mover->target = $mover->returnTarget;
 			$mover->returnTarget = null;
+
 			return;
 		}
 
@@ -100,46 +127,65 @@ final class SectorMotionSystem
 		$sector = $this->level->sectors[$mover->sector];
 		$delta = $to - $from;
 		$carried = [];
+
 		foreach($registry->query($this->actors) as $entity)
 		{
 			if(!$registry->alive($entity)) continue;
+
 			$pose = $registry->get($entity, Transform::class);
+
 			if($this->level->sectorAt($pose->x, $pose->y)->index !== $mover->sector) continue;
+
 			$floor = $sector->floorZ($pose->x, $pose->y);
 			$ceiling = $sector->ceilingZ($pose->x, $pose->y);
+
 			if($mover->movesFloor() && $delta !== 0.0 && abs($pose->z - $floor) <= .1
 				&& !$registry->has($entity, Projectile::class)
 				&& !$registry->has($entity, RemoteProjectile::class)
-				&& !$registry->get($entity, ActorState::class)->definition->hasFlag('SPAWNCEILING'))
-			{
+				&& !$registry->get($entity, ActorState::class)->definition->hasFlag('SPAWNCEILING')
+			){
 				$carried[$entity] = $pose->z;
 				$pose->z += $delta;
 			}
+
 			if(!$registry->has($entity, Body::class)) continue;
-			$constricting=($mover->movesFloor()&&$delta>0)
-				||($mover->movesCeiling()&&$delta<0);
+
+			$constricting = ($mover->movesFloor() && $delta > 0)
+				|| ($mover->movesCeiling() && $delta < 0);
+
 			if(!$constricting)continue;
+
 			$body = $registry->get($entity, Body::class);
 			$newFloor = $floor + ($mover->movesFloor() ? $delta : 0);
 			$newCeiling = $ceiling + ($mover->movesCeiling() ? $delta : 0);
+
 			if($pose->z < $newFloor - .01 || $pose->z + $body->height > $newCeiling + .01)
 			{
 				foreach($carried as $carriedEntity => $oldZ)
 				if($registry->alive($carriedEntity)) $registry->get($carriedEntity, Transform::class)->z = $oldZ;
+
 				return false;
 			}
 		}
-		if($mover->movesFloor()) $sector->floor = $to; else $sector->ceiling = $to;
+
+		if($mover->movesFloor()) $sector->floor = $to;
+		else $sector->ceiling = $to;
+
 		return true;
 	}
 
 	private function finish(Registry $registry, int $entity, SectorMover $mover): void
 	{
 		$sector = $this->level->sectors[$mover->sector];
+
 		if($mover->completionTexture !== null) $sector->setFloorTexture($mover->completionTexture);
+
 		if($mover->completionSpecial !== null) $sector->setSpecial($mover->completionSpecial);
-		$sector->unlockMover($mover,$entity);
-		if($mover->movesFloor()) $this->play($registry,SoundCue::platformStop(),$mover->sector);
+
+		$sector->unlockMover($mover, $entity);
+
+		if($mover->movesFloor()) $this->play($registry, SoundCue::platformStop(), $mover->sector);
+
 		if($registry->alive($entity)) $registry->destroy($entity);
 	}
 
@@ -147,10 +193,15 @@ final class SectorMotionSystem
 	{
 		[$x,$y] = $this->level->sectorCenter($sectorId);
 		$listener = null;
+
 		foreach($registry->query(Query::all(PlayerStart::class, Transform::class)) as $id)
-		{ $listener = $registry->get($id, Transform::class); break; }
-		$listenerPose=$listener?new SoundListener($listener->x,$listener->y,$listener->angle):null;
-		$this->sound->play(new SoundEvent($cue,new SoundSource($x,$y),$listenerPose));
+		{
+			$listener = $registry->get($id, Transform::class);
+			break;
+		}
+
+		$listenerPose = $listener?new SoundListener($listener->x, $listener->y, $listener->angle):null;
+		$this->sound->play(new SoundEvent($cue, new SoundSource($x, $y), $listenerPose));
 	}
 
 	private static function approach(float $value, float $target, float $amount): float

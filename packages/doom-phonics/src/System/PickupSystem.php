@@ -25,11 +25,10 @@ final class PickupSystem
 	private LanguageCatalog $language;
 
 	public function __construct(
-		public ActorCatalog $actors,
-		public bool $authoritative = true,
-		?LanguageCatalog $language = null
-	)
-	{
+		public ActorCatalog $actors
+		, public bool $authoritative = true
+		, ?LanguageCatalog $language = null
+	){
 		$this->players = Query::all(PlayerStart::class, PlayerState::class, Transform::class, HitPoints::class);
 		$this->language = $language ?? LanguageCatalog::documents([]);
 	}
@@ -94,8 +93,7 @@ final class PickupSystem
 		, InventoryPickup $pickup
 		, PlayerState $player
 		, HitPoints $health
-	): bool
-	{
+	): bool {
 		$amount = $pickup->amount;
 
 		if($this->actors->isA($definition, 'Health'))
@@ -147,14 +145,17 @@ final class PickupSystem
 				$give = WeaponAmmo::give($definition, $channel);
 
 				if($type === '' || $give <= 0) continue;
+
 				if($pickup->dropped) $give = max(1, intdiv($give, 2));
 
 				$pool = WeaponAmmo::pool($this->actors, $type);
 				$name = $pool?->name ?? $type;
+
 				$maximum = (int)($pool?->value(
 					'Inventory.MaxAmount'
 					, $player->ammoMaximum[$name] ?? 0
 				) ?? ($player->ammoMaximum[$name] ?? 0));
+
 				$ammo = $this->giveAmmo($player, $name, $give, $maximum) || $ammo;
 			}
 

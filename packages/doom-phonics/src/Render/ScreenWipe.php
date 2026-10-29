@@ -44,6 +44,7 @@ final class ScreenWipe
 		throw new \InvalidArgumentException('Screen-wipe dimensions must be positive');
 
 		if($this->width === $width && $this->height === $height) return false;
+
 		if($this->capturing) throw new \LogicException('Screen wipe cannot resize while capturing');
 
 		$parentFramebuffer = glGetIntegerv(GL_FRAMEBUFFER_BINDING);
@@ -278,7 +279,12 @@ final class ScreenWipe
 		$this->textures = $this->framebuffers = $this->depthBuffers = $this->vao = [];
 	}
 
-	/** @param list<int> $textures @param list<int> $framebuffers @param list<int> $depthBuffers @param list<int> $vao */
+	/**
+	 * @param list<int> $textures
+	 * @param list<int> $framebuffers
+	 * @param list<int> $depthBuffers
+	 * @param list<int> $vao
+	 */
 	private function deleteResources(array $textures, array $framebuffers, array $depthBuffers, array $vao): void
 	{
 		if($textures) glDeleteTextures(count($textures), $textures);

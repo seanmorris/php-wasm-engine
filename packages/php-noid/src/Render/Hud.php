@@ -70,14 +70,8 @@ final class Hud
 		$this->text($text, 'SCORE', 14, 77, 2, [1, .78, .42, 1]);
 		$this->text($text, sprintf('%06d', $field->state->score), 14, 96, 4);
 		$this->text($text, 'BEST', 14, 138, 2, [.56, .67, .75, 1]);
-		$this->text(
-			$text
-			, sprintf('%06d', max($bestScore, $field->state->score))
-			, 78
-			, 138
-			, 2
-			, [.56, .67, .75, 1]
-		);
+		$this->text($text, sprintf('%06d', max($bestScore, $field->state->score)), 78, 138, 2, [.56, .67, .75, 1]);
+
 		$this->text(
 			$text
 			, sprintf('LEVEL %02d / %02d', $field->state->stage + 1, $field->state->stageCount)
@@ -86,7 +80,15 @@ final class Hud
 			, 2
 			, [.72, .91, 1, 1]
 		);
-		$this->text($text, 'PADDLES X ' . ($field->state->infiniteLives ? 'INF' : $field->state->lives), 14, 196, 2, [1, .78, .42, 1]);
+
+		$this->text(
+			$text
+			, 'PADDLES X ' . ($field->state->infiniteLives ? 'INF' : $field->state->lives)
+			, 14
+			, 196
+			, 2
+			, [1, .78, .42, 1]
+		);
 
 		for($i = 0; $i < min(6, max(0, $field->state->lives)); $i++)
 		{
@@ -106,9 +108,11 @@ final class Hud
 		foreach($flashes as $kind => $remaining)
 		{
 			if($field->capsules[$kind]['duration'] > 0) continue;
+
 			$heading = strtoupper($field->capsules[$kind]['label']);
 			$headingColor = self::pickupColor($field->capsules[$kind]['color'], $remaining);
 		}
+
 		$this->text($text, $heading, 14, 234, 2, $headingColor, 200);
 		$row = 0;
 
@@ -122,6 +126,7 @@ final class Hud
 			$color = self::pickupColor($power['color'], $flash);
 			Scene::balloon($panels, 14, $y, 18, 17, $color, true);
 			$panels[] = self::rectangle(14, $y + 21, 200, 3, [.12, .18, .22, 1]);
+
 			$panels[] = self::rectangle(
 				14
 				, $y + 21
@@ -129,6 +134,7 @@ final class Hud
 				, 3
 				, $color
 			);
+
 			$this->text($text, (string)$power['symbol'], 17, $y + 1, 2, [.03, .07, .11, 1]);
 			$this->text($text, strtoupper((string)$power['label']), 38, $y, 2, $flash > 0 ? $color : [1, 1, 1, 1], 164);
 			$row++;
@@ -137,15 +143,18 @@ final class Hud
 		if($row === 0)
 		$this->text($text, 'STANDARD', 14, 256, 2, [.56, .67, .75, 1]);
 
-		$lines = $paused ? ['PAUSED', 'RIGHT CLICK / P'] : match($field->state->phase)
-		{
-			'gameover' => ['GAME OVER', 'FIRE TO CONTINUE']
-			, 'complete' => ['CAMPAIGN CLEAR', 'FIRE TO REPLAY']
-			, 'clearing' => ['LEVEL CLEAR']
-			, 'loading' => ['LOADING...']
-			, 'entering' => ['GET READY']
-			, default => ['LAUNCH / FIRE', 'MOVE: ARROWS']
-		};
+		$lines = $paused
+			? ['PAUSED', 'RIGHT CLICK / P']
+			: match($field->state->phase)
+			{
+				'gameover' => ['GAME OVER', 'FIRE TO CONTINUE']
+				, 'complete' => ['CAMPAIGN CLEAR', 'FIRE TO REPLAY']
+				, 'clearing' => ['LEVEL CLEAR']
+				, 'loading' => ['LOADING...']
+				, 'entering' => ['GET READY']
+				, default => ['LAUNCH / FIRE', 'MOVE: ARROWS']
+			};
+
 		$this->text($text, implode(PHP_EOL, $lines), 14, 425, 2, [1, 1, 1, 1], 200);
 
 		$this->rectangles->render($panels, self::WIDTH, self::HEIGHT);
@@ -181,12 +190,14 @@ final class Hud
 		, float $pixelRatio = 1
 		, float $displayWidth = self::SCREEN_WIDTH
 	): void {
+
 		/**
 		 * Scale a reference-space horizontal coordinate to the current title width.
 		 * @param float $value Reference-space X coordinate.
 		 * @return int Scaled pixel X coordinate.
 		 */
 		$x = static fn(float $value): int => (int)round($value * $width / self::SCREEN_WIDTH);
+
 		/**
 		 * Scale a reference-space vertical coordinate to the current title height.
 		 * @param float $value Reference-space Y coordinate.
@@ -200,11 +211,13 @@ final class Hud
 			, self::rectangle($x(7), $y(7), 2, $height - 2 * $y(7), [.25, .35, .4, 1])
 			, self::rectangle($x(845), $y(7), 2, $height - 2 * $y(7), [.07, .12, .16, 1])
 		];
+
 		$text = [];
 		$labels = [];
 		// Scale with the title viewport, then snap to physical pixels. The small-screen
 		// floor preserves legibility without pinning fullscreen text to a fixed CSS size.
 		$scale = max((int)ceil(10 * $pixelRatio / 7), $x(2));
+
 		/**
 		 * Append a centered title label and retain its measured diagnostic bounds.
 		 * @param string $value Label text.
@@ -218,6 +231,7 @@ final class Hud
 			$this->text($text, $value, $left, $top, $size, $color);
 			$labels[$value] = ['x' => $left, 'y' => $top, 'scale' => $size];
 		};
+
 		$label('PHP/NOID', $y(90), max(1, $x(6)), [.89, .94, 1, 1]);
 		$label('BREAK THE RUNTIME', $y(174), $scale, [.41, .85, .77, 1]);
 
@@ -226,10 +240,21 @@ final class Hud
 			$top = $y($key === 'start' ? 244 : 300);
 			$active = $selected === $key;
 			$rectangles[] = self::rectangle($x(287), $top, $x(280), $y(40), [.25, .35, .4, 1]);
-			$rectangles[] = self::rectangle($x(287) + 2, $top + 2, $x(280) - 4, $y(40) - 4,
-				$active ? [1, .78, .42, 1] : [.02, .04, .07, 1]);
-			$label($value, $top + (int)floor(($y(40) - 7 * $scale) / 2), $scale,
-				$active ? [.03, .07, .12, 1] : [.89, .94, 1, 1]);
+
+			$rectangles[] = self::rectangle(
+				$x(287) + 2
+				, $top + 2
+				, $x(280) - 4
+				, $y(40) - 4
+				, $active ? [1, .78, .42, 1] : [.02, .04, .07, 1]
+			);
+
+			$label(
+				$value
+				, $top + (int)floor(($y(40) - 7 * $scale) / 2)
+				, $scale
+				, $active ? [.03, .07, .12, 1] : [.89, .94, 1, 1]
+			);
 		}
 
 		$label('UP DOWN SELECT', $y(366), $scale, [.56, .67, .75, 1]);
@@ -237,9 +262,15 @@ final class Hud
 		$this->rectangles->render($rectangles, $width, $height);
 		$this->sprites->render($text, new Camera(0, 0, $width, $height));
 		$this->snapshot = [
-			'mode' => 'title', 'width' => $width, 'height' => $height, 'selection' => $selected
-			, 'textScale' => $scale, 'displayWidth' => $displayWidth, 'pixelRatio' => $pixelRatio
-			, 'integerScale' => true, 'labels' => $labels
+			'mode' => 'title'
+			, 'width' => $width
+			, 'height' => $height
+			, 'selection' => $selected
+			, 'textScale' => $scale
+			, 'displayWidth' => $displayWidth
+			, 'pixelRatio' => $pixelRatio
+			, 'integerScale' => true
+			, 'labels' => $labels
 		];
 	}
 
@@ -342,6 +373,7 @@ final class Hud
 	private static function pickupColor(array $color, float $remaining): array
 	{
 		$light = $remaining > 0 ? .5 + .5 * cos((.8 - $remaining) * 5 * M_PI) : 0;
+
 		return [
 			$color[0] + (1 - $color[0]) * $light
 			, $color[1] + (1 - $color[1]) * $light
@@ -349,5 +381,4 @@ final class Hud
 			, 1
 		];
 	}
-
 }

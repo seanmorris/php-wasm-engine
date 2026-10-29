@@ -56,12 +56,17 @@ final class MapData
 		$this->indexTopology();
 	}
 
-	/** @param string $name Lump name. @param int $stride Record size. @return array{string,int,string} Bytes, count, diagnostic identity. */
+	/**
+	 * @param string $name Lump name.
+	 * @param int $stride Record size.
+	 * @return array{string,int,string} Bytes, count, diagnostic identity.
+	 */
 	private function records(string $name, int $stride): array
 	{
 		$lump = $this->lumps[$name] ?? null;
 
 		if(!$lump) return ['',0,"{$this->name}/$name"];
+
 		if($lump->size % $stride !== 0)
 		throw new \UnexpectedValueException("{$lump->identity()}: size {$lump->size} is not divisible by $stride");
 
@@ -82,29 +87,49 @@ final class MapData
 			{
 				$flags = Binary::u16($bytes, $o + 8, $source);
 				$this->things[] = [
-					'index' => $i, 'x' => Binary::s16($bytes, $o, $source)
-					, 'y' => Binary::s16($bytes, $o + 2, $source), 'z' => 0
+					'index' => $i
+					, 'x' => Binary::s16($bytes, $o, $source)
+					, 'y' => Binary::s16($bytes, $o + 2, $source)
+					, 'z' => 0
 					, 'angle' => Binary::s16($bytes, $o + 4, $source)
-					, 'type' => Binary::u16($bytes, $o + 6, $source), 'flagsRaw' => $flags
-					, 'flags' => ['easy' => (bool)($flags & 1), 'medium' => (bool)($flags & 2)
-						, 'hard' => (bool)($flags & 4), 'ambush' => (bool)($flags & 8)
-						, 'multiplayer' => (bool)($flags & 16)]
+					, 'type' => Binary::u16($bytes, $o + 6, $source)
+					, 'flagsRaw' => $flags
+					, 'flags' => [
+						'easy' => (bool)($flags & 1)
+						, 'medium' => (bool)($flags & 2)
+						, 'hard' => (bool)($flags & 4)
+						, 'ambush' => (bool)($flags & 8)
+						, 'multiplayer' => (bool)($flags & 16)
+					]
 				];
 			}
 			else
 			{
 				$flags = Binary::u16($bytes, $o + 12, $source);
+
 				$this->things[] = [
-					'index' => $i, 'id' => Binary::u16($bytes, $o, $source)
-					, 'x' => Binary::s16($bytes, $o + 2, $source), 'y' => Binary::s16($bytes, $o + 4, $source)
-					, 'z' => Binary::s16($bytes, $o + 6, $source), 'angle' => Binary::u16($bytes, $o + 8, $source)
-					, 'type' => Binary::u16($bytes, $o + 10, $source), 'flagsRaw' => $flags
-					, 'flags' => ['easy' => (bool)($flags & 1), 'medium' => (bool)($flags & 2)
-						, 'hard' => (bool)($flags & 4), 'ambush' => (bool)($flags & 8)
-						, 'single' => (bool)($flags & 256), 'cooperative' => (bool)($flags & 512)
-						, 'deathmatch' => (bool)($flags & 1024)]
+					'index' => $i
+					, 'id' => Binary::u16($bytes, $o, $source)
+					, 'x' => Binary::s16($bytes, $o + 2, $source)
+					, 'y' => Binary::s16($bytes, $o + 4, $source)
+					, 'z' => Binary::s16($bytes, $o + 6, $source)
+					, 'angle' => Binary::u16($bytes, $o + 8, $source)
+					, 'type' => Binary::u16($bytes, $o + 10, $source)
+					, 'flagsRaw' => $flags
+					, 'flags' => [
+						'easy' => (bool)($flags & 1)
+						, 'medium' => (bool)($flags & 2)
+						, 'hard' => (bool)($flags & 4)
+						, 'ambush' => (bool)($flags & 8)
+						, 'single' => (bool)($flags & 256)
+						, 'cooperative' => (bool)($flags & 512)
+						, 'deathmatch' => (bool)($flags & 1024)
+					]
 					, 'special' => Binary::u8($bytes, $o + 14, $source)
-					, 'args' => array_map(static fn(int $n): int => Binary::u8($bytes, $o + 15 + $n, $source), range(0,4))
+					, 'args' => array_map(
+						static fn(int $n): int => Binary::u8($bytes, $o + 15 + $n, $source)
+						, range(0, 4)
+					)
 				];
 			}
 		}
@@ -120,28 +145,39 @@ final class MapData
 		{
 			$o = $i * $stride;
 			$line = [
-				'index' => $i, 'from' => Binary::u16($bytes, $o, $source)
+				'index' => $i
+				, 'from' => Binary::u16($bytes, $o, $source)
 				, 'to' => Binary::u16($bytes, $o + 2, $source)
 				, 'flags' => Binary::u16($bytes, $o + 4, $source)
 			];
 
 			if($this->format === 'DOOM')
 			{
-				$line += ['action' => Binary::u16($bytes, $o + 6, $source)
+				$line += [
+					'action' => Binary::u16($bytes, $o + 6, $source)
 					, 'tag' => Binary::u16($bytes, $o + 8, $source)
 					, 'right' => Binary::u16($bytes, $o + 10, $source)
-					, 'left' => Binary::u16($bytes, $o + 12, $source)];
+					, 'left' => Binary::u16($bytes, $o + 12, $source)
+				];
 			}
 			else
 			{
-				$line += ['action' => Binary::u8($bytes, $o + 6, $source), 'tag' => 0
-					, 'args' => array_map(static fn(int $n): int => Binary::u8($bytes, $o + 7 + $n, $source), range(0,4))
+				$line += [
+					'action' => Binary::u8($bytes, $o + 6, $source)
+					, 'tag' => 0
+					, 'args' => array_map(
+						static fn(int $n): int => Binary::u8($bytes, $o + 7 + $n, $source)
+						, range(0, 4)
+					)
 					, 'right' => Binary::u16($bytes, $o + 12, $source)
-					, 'left' => Binary::u16($bytes, $o + 14, $source)];
+					, 'left' => Binary::u16($bytes, $o + 14, $source)
+				];
 			}
 
 			if($line['left'] === 0xffff) $line['left'] = -1;
+
 			if($line['right'] === 0xffff) $line['right'] = -1;
+
 			$this->linedefs[] = $line;
 		}
 	}
@@ -155,7 +191,8 @@ final class MapData
 		{
 			$o = $i * 30;
 			$this->sidedefs[] = [
-				'index' => $i, 'xOffset' => Binary::s16($bytes, $o, $source)
+				'index' => $i
+				, 'xOffset' => Binary::s16($bytes, $o, $source)
 				, 'yOffset' => Binary::s16($bytes, $o + 2, $source)
 				, 'upper' => Binary::name($bytes, $o + 4, 8, $source)
 				, 'lower' => Binary::name($bytes, $o + 12, 8, $source)
@@ -177,12 +214,20 @@ final class MapData
 			$x = Binary::s16($bytes, $i * 4, $source);
 			$y = Binary::s16($bytes, $i * 4 + 2, $source);
 			$this->vertices[] = ['index' => $i, 'x' => $x, 'y' => $y];
-			$minX = min($minX, $x); $maxX = max($maxX, $x);
-			$minY = min($minY, $y); $maxY = max($maxY, $y);
+			$minX = min($minX, $x);
+			$maxX = max($maxX, $x);
+			$minY = min($minY, $y);
+			$maxY = max($maxY, $y);
 		}
 
-		$this->bounds = ['minX' => $minX, 'minY' => $minY, 'maxX' => $maxX, 'maxY' => $maxY
-			, 'width' => $maxX - $minX, 'height' => $maxY - $minY];
+		$this->bounds = [
+			'minX' => $minX
+			, 'minY' => $minY
+			, 'maxX' => $maxX
+			, 'maxY' => $maxY
+			, 'width' => $maxX - $minX
+			, 'height' => $maxY - $minY
+		];
 	}
 
 	/** @return void Parses BSP segments. */
@@ -193,10 +238,15 @@ final class MapData
 		for($i = 0; $i < $count; $i++)
 		{
 			$o = $i * 12;
-			$this->segs[] = ['index' => $i, 'start' => Binary::u16($bytes, $o, $source)
-				, 'end' => Binary::u16($bytes, $o + 2, $source), 'angle' => Binary::u16($bytes, $o + 4, $source)
-				, 'linedef' => Binary::u16($bytes, $o + 6, $source), 'direction' => Binary::u16($bytes, $o + 8, $source)
-				, 'offset' => Binary::u16($bytes, $o + 10, $source)];
+			$this->segs[] = [
+				'index' => $i
+				, 'start' => Binary::u16($bytes, $o, $source)
+				, 'end' => Binary::u16($bytes, $o + 2, $source)
+				, 'angle' => Binary::u16($bytes, $o + 4, $source)
+				, 'linedef' => Binary::u16($bytes, $o + 6, $source)
+				, 'direction' => Binary::u16($bytes, $o + 8, $source)
+				, 'offset' => Binary::u16($bytes, $o + 10, $source)
+			];
 		}
 	}
 
@@ -206,8 +256,11 @@ final class MapData
 		[$bytes,$count,$source] = $this->records('SSECTORS', 4);
 
 		for($i = 0; $i < $count; $i++)
-		$this->subsectors[] = ['index' => $i, 'count' => Binary::u16($bytes, $i * 4, $source)
-			, 'first' => Binary::u16($bytes, $i * 4 + 2, $source)];
+		$this->subsectors[] = [
+			'index' => $i
+			, 'count' => Binary::u16($bytes, $i * 4, $source)
+			, 'first' => Binary::u16($bytes, $i * 4 + 2, $source)
+		];
 	}
 
 	/** @return void Parses BSP nodes. */
@@ -218,12 +271,23 @@ final class MapData
 		for($i = 0; $i < $count; $i++)
 		{
 			$o = $i * 28;
+
 			$this->nodes[] = [
-				'index' => $i, 'x' => Binary::s16($bytes, $o, $source), 'y' => Binary::s16($bytes, $o + 2, $source)
-				, 'dx' => Binary::s16($bytes, $o + 4, $source), 'dy' => Binary::s16($bytes, $o + 6, $source)
-				, 'rightBounds' => array_map(static fn(int $n): int => Binary::s16($bytes, $o + 8 + $n * 2, $source), range(0,3))
-				, 'leftBounds' => array_map(static fn(int $n): int => Binary::s16($bytes, $o + 16 + $n * 2, $source), range(0,3))
-				, 'right' => Binary::u16($bytes, $o + 24, $source), 'left' => Binary::u16($bytes, $o + 26, $source)
+				'index' => $i
+				, 'x' => Binary::s16($bytes, $o, $source)
+				, 'y' => Binary::s16($bytes, $o + 2, $source)
+				, 'dx' => Binary::s16($bytes, $o + 4, $source)
+				, 'dy' => Binary::s16($bytes, $o + 6, $source)
+				, 'rightBounds' => array_map(
+					static fn(int $n): int => Binary::s16($bytes, $o + 8 + $n * 2, $source)
+					, range(0, 3)
+				)
+				, 'leftBounds' => array_map(
+					static fn(int $n): int => Binary::s16($bytes, $o + 16 + $n * 2, $source)
+					, range(0, 3)
+				)
+				, 'right' => Binary::u16($bytes, $o + 24, $source)
+				, 'left' => Binary::u16($bytes, $o + 26, $source)
 			];
 		}
 	}
@@ -237,7 +301,8 @@ final class MapData
 		{
 			$o = $i * 26;
 			$this->sectors[] = [
-				'index' => $i, 'floor' => Binary::s16($bytes, $o, $source)
+				'index' => $i
+				, 'floor' => Binary::s16($bytes, $o, $source)
 				, 'ceiling' => Binary::s16($bytes, $o + 2, $source)
 				, 'floorTexture' => Binary::name($bytes, $o + 4, 8, $source)
 				, 'ceilingTexture' => Binary::name($bytes, $o + 12, 8, $source)
@@ -262,7 +327,9 @@ final class MapData
 	public function rejects(int $from, int $to): bool
 	{
 		$count = count($this->sectors);
+
 		if($from < 0 || $to < 0 || $from >= $count || $to >= $count) return false;
+
 		$bit = $from * $count + $to;
 		$byte = intdiv($bit, 8);
 
@@ -280,8 +347,11 @@ final class MapData
 		while($pending)
 		{
 			$sector = array_pop($pending);
+
 			if(isset($component[$sector])) continue;
+
 			$component[$sector] = true;
+
 			foreach($this->neighbors[$sector] ?? [] as $neighbor)
 			if(!isset($component[$neighbor])) $pending[] = $neighbor;
 		}
@@ -316,6 +386,7 @@ final class MapData
 	public function subsectorPolygons(): array
 	{
 		if($this->subsectorPolygons !== null) return $this->subsectorPolygons;
+
 		if(!$this->subsectors || !$this->segs) return $this->subsectorPolygons = [];
 
 		$bounds = $this->bounds;
@@ -325,6 +396,7 @@ final class MapData
 			, [(float)$bounds['maxX'], (float)$bounds['maxY']]
 			, [(float)$bounds['minX'], (float)$bounds['maxY']]
 		];
+
 		// A convex map with one subsector has no partition to encode, so an empty
 		// NODES lump is valid. Its sole leaf starts with the complete map bounds and
 		// is trimmed by the ordinary SEGS below just like every BSP-derived leaf.
@@ -352,6 +424,7 @@ final class MapData
 			$left = self::clipPolygon($polygon, $node['x'], $node['y'], $node['dx'], $node['dy'], false);
 
 			if(count($right) >= 3) $pending[] = [$node['right'], $right];
+
 			if(count($left) >= 3) $pending[] = [$node['left'], $left];
 		}
 
@@ -388,7 +461,12 @@ final class MapData
 				if(!$from || !$to) continue;
 
 				$polygon = self::clipPolygon(
-					$polygon, $from['x'], $from['y'], $to['x'] - $from['x'], $to['y'] - $from['y'], true
+					$polygon
+					, $from['x']
+					, $from['y']
+					, $to['x'] - $from['x']
+					, $to['y'] - $from['y']
+					, true
 				);
 			}
 
@@ -402,12 +480,14 @@ final class MapData
 	private static function clipPolygon(array $polygon, float $x, float $y, float $dx, float $dy, bool $positive): array
 	{
 		if(!$polygon || ($dx == 0.0 && $dy == 0.0)) return $polygon;
+
 		$result = [];
 		$count = count($polygon);
 
 		for($i = 0; $i < $count; $i++)
 		{
-			$current = $polygon[$i]; $next = $polygon[($i + 1) % $count];
+			$current = $polygon[$i];
+			$next = $polygon[($i + 1) % $count];
 			$currentSide = ($current[0] - $x) * $dy - ($current[1] - $y) * $dx;
 			$nextSide = ($next[0] - $x) * $dy - ($next[1] - $y) * $dx;
 			$currentInside = $positive ? $currentSide >= -1e-7 : $currentSide <= 1e-7;
@@ -435,10 +515,12 @@ final class MapData
 
 		foreach($polygon as $point)
 		if(!$result || abs($point[0] - $result[array_key_last($result)][0]) > 1e-7
-			|| abs($point[1] - $result[array_key_last($result)][1]) > 1e-7) $result[] = $point;
+			|| abs($point[1] - $result[array_key_last($result)][1]) > 1e-7
+		) $result[] = $point;
 
 		if(count($result) > 1 && abs($result[0][0] - $result[array_key_last($result)][0]) <= 1e-7
-			&& abs($result[0][1] - $result[array_key_last($result)][1]) <= 1e-7) array_pop($result);
+			&& abs($result[0][1] - $result[array_key_last($result)][1]) <= 1e-7
+		) array_pop($result);
 
 		return $result;
 	}
@@ -458,8 +540,11 @@ final class MapData
 				$sideId = $line[$side];
 
 				if($sideId < 0) continue;
+
 				if(!isset($this->sidedefs[$sideId]))
-				throw new \UnexpectedValueException("{$this->name}: linedef {$line['index']} references a missing sidedef");
+				throw new \UnexpectedValueException(
+					"{$this->name}: linedef {$line['index']} references a missing sidedef"
+				);
 
 				$sector = $this->sidedefs[$sideId]['sector'];
 

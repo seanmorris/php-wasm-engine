@@ -74,6 +74,7 @@ final class CheatSequence
 
 			foreach(array_keys(self::CODES) as $code)
 			if(str_starts_with($code, $suffix)) return true;
+
 			if(preg_match('/^idclev(?:[1-9])?$/', $suffix)) return true;
 		}
 

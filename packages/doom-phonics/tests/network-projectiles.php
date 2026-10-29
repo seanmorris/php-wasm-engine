@@ -202,6 +202,7 @@ DEC
 	);
 
 	$dropSector = (new Level($stack->map('E1M1')))->sectorAt(3440, -3420);
+
 	$drop = $factory->spawn(
 		$host
 		, $actors->named('Clip')
@@ -211,18 +212,23 @@ DEC
 			, 'ceiling' => $dropSector->ceilingZ(3440, -3420)
 		]
 	);
+
 	$hostDrop = $host->get($drop, InventoryPickup::class);
 	$hostDrop->amount = 5;
 	$hostDrop->dropped = true;
 	$step();
 	$step();
 
-	$remoteDrops = array_values(array_filter(
-		$guest->query(InventoryPickup::class)
-		, static fn(int $entity): bool => $guest->has($entity, NetworkIdentity::class)
-			&& $guest->has($entity, MapThing::class)
-			&& $guest->get($entity, MapThing::class)->index === -1
-	));
+	$remoteDrops = array_values(
+		array_filter(
+			$guest->query(InventoryPickup::class)
+			, static fn(int $entity): bool => $guest->has($entity, NetworkIdentity::class) && $guest->has(
+				$entity
+				, MapThing::class
+			) && $guest->get($entity, MapThing::class)->index === -1
+		)
+	);
+
 	verifyWad(count($remoteDrops) === 1, 'host-created enemy drop appears once on the guest');
 	$remoteDrop = $remoteDrops[0];
 	$guestDrop = $guest->get($remoteDrop, InventoryPickup::class);
@@ -236,12 +242,14 @@ DEC
 	$guestDropPose = $guest->get($remoteDrop, Transform::class);
 	$guestPlayerState = new PlayerState;
 	$guestPlayerState->ammo['Clip'] = 0;
+
 	$guestPlayer = $guest->create(
 		new PlayerStart(99)
 		, $guestPlayerState
 		, new Transform($guestDropPose->x, $guestDropPose->y, $guestDropPose->z)
 		, new HitPoints(100, 100)
 	);
+
 	(new PickupSystem($actors, false))->update($guest, 1 / 35);
 	$guest->flush();
 

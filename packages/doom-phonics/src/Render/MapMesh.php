@@ -17,7 +17,10 @@ final class MapMesh
 	public array $vertices = [];
 	/** @var list<array{first:int,count:int,sector:int,plane:int}> */
 	public array $planeSpans = [];
-	/** @var list<array{first:int,count:int,line:int,slot:string,right:?int,left:?int,rightU:list<float>,leftU:list<float>}> */
+	/**
+	 * @var
+	 * list<array{first:int,count:int,line:int,slot:string,right:?int,left:?int,rightU:list<float>,leftU:list<float>}>
+	 */
 	public array $wallSpans = [];
 	/** @var array<int,array<int,list<int>>> */
 	private array $planeGroups = [];
@@ -85,16 +88,21 @@ final class MapMesh
 	{
 		$updates = [];
 		$planes = [];
+
 		foreach($level->sectors as $sector)
 		{
 			$previous = $this->planeNames[$sector->index] ?? null;
+
 			if($previous !== null && $previous[0] === $sector->floorTexture
-				&& $previous[1] === $sector->ceilingTexture) continue;
+				&& $previous[1] === $sector->ceilingTexture
+			) continue;
 
 			if(($previous[0] ?? null) !== $sector->floorTexture)
 			array_push($planes, ...($this->planeGroups[$sector->index][0] ?? []));
+
 			if(($previous[1] ?? null) !== $sector->ceilingTexture)
 			array_push($planes, ...($this->planeGroups[$sector->index][1] ?? []));
+
 			$this->planeNames[$sector->index] = [$sector->floorTexture,$sector->ceilingTexture];
 		}
 
@@ -121,17 +129,21 @@ final class MapMesh
 		}
 
 		$walls = [];
+
 		if($this->wallRevision !== $level->appearanceRevision)
 		{
 			$walls = array_keys($this->wallSpans);
 			$this->wallRevision = $level->appearanceRevision;
 		}
-		else foreach($level->wallScroll + $this->scrollOffsets as $line => $unused)
+		else
+		foreach($level->wallScroll + $this->scrollOffsets as $line => $unused)
 		{
 			$offset = (float)($level->wallScroll[$line] ?? 0);
+
 			if(($this->scrollOffsets[$line] ?? 0.0) !== $offset)
 			array_push($walls, ...($this->wallGroups[$line] ?? []));
 		}
+
 		$this->scrollOffsets = $level->wallScroll;
 
 		foreach($walls as $index)
@@ -147,9 +159,9 @@ final class MapMesh
 				$offset = ($span['first'] + $vertex) * self::FLOATS;
 				$rightU = $span['rightU'][$vertex] + $scroll;
 
-				if($this->vertices[$offset + 2] !== $rightU || (int)$this->vertices[$offset + 4] !== $right || (int)$this->vertices[
-					$offset + 5
-				] !== $left
+				if($this->vertices[$offset + 2] !== $rightU
+					|| (int)$this->vertices[$offset + 4] !== $right
+					|| (int)$this->vertices[$offset + 5] !== $left
 				){
 					$this->vertices[$offset + 2] = $rightU;
 					$this->vertices[$offset + 4] = (float)$right;

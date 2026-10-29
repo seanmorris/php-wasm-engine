@@ -350,10 +350,7 @@ foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
 
 $hintData = $data;
 $hintData['tiles'][3]['properties'][] = ['name' => 'glyph.offsetY', 'value' => -2];
-$hintFont = new BitmapFont(
-	new Loader(new Assets(fn() => json_encode($hintData)))
-	, __DIR__ . '/assets/font.tsj'
-);
+$hintFont = new BitmapFont(new Loader(new Assets(fn() => json_encode($hintData))), __DIR__ . '/assets/font.tsj');
 $hintFont->theme = 'keyboard';
 $hintRenderer = new MenuRenderer($hintFont);
 $device->begin([0, 0, 0, 1]);

@@ -32,6 +32,7 @@ test('integrity accepts every runtime export type', async() => {
 		, 'transport'
 		, 'resource-inspector'
 	];
+
 	const exports = Object.fromEntries(types.map((type, index) => [String(index), {type}]));
 	const filename = path.join(directory, 'phonics.json');
 

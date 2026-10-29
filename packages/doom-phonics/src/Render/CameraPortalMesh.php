@@ -29,6 +29,7 @@ final class CameraPortalMesh
 	public function plane(array $points, int $sector, int $plane, CameraPortalSurface $surface): void
 	{
 		$first = $this->vertexCount();
+
 		foreach($points as [$x,$y])
 		array_push($this->vertices, $x, $y, (float)$sector, (float)$plane, (float)$sector);
 		$this->spans[] = ['first' => $first,'count' => count($points),'surface' => $surface];
@@ -41,12 +42,12 @@ final class CameraPortalMesh
 		$bottom = $backSector === null ? MapMesh::FLOOR : MapMesh::MAX_FLOOR;
 		$top = $backSector === null ? MapMesh::CEILING : MapMesh::MIN_CEILING;
 		$backSector ??= $sector;
+
 		foreach([
 			[$a['x'],$a['y'],$bottom],[$b['x'],$b['y'],$bottom],[$b['x'],$b['y'],$top]
 			, [$a['x'],$a['y'],$bottom],[$b['x'],$b['y'],$top],[$a['x'],$a['y'],$top]
-		] as [$x,$y,$plane]) array_push(
-			$this->vertices, (float)$x, (float)$y, (float)$sector, (float)$plane, (float)$backSector
-		);
+		] as [$x,$y,$plane])
+		array_push($this->vertices, (float)$x, (float)$y, (float)$sector, (float)$plane, (float)$backSector);
 		$this->spans[] = ['first' => $first,'count' => 6,'surface' => $surface];
 	}
 
@@ -63,8 +64,7 @@ final class CameraPortalMesh
 		, ?ViewProjection $projection = null
 		, float $pitch = 0
 		, PitchMode $pitchMode = PitchMode::Perspective
-	): array
-	{
+	): array {
 		$candidates = [];
 		$cameraSector ??= $level->map->sectorAt((int)round($x), (int)round($y));
 		$visibleSectors = $level->map->connectedSectors($cameraSector);
@@ -79,36 +79,61 @@ final class CameraPortalMesh
 		{
 			$surface = $span['surface'];
 			$link = $surface->link;
-			if(!$link->active || isset($candidates[$link->id]) || !isset($visibleSectors[$link->originSector])) continue;
+
+			if(!$link->active || isset($candidates[$link->id]) || !isset($visibleSectors[$link->originSector]))
+			continue;
 
 			if($surface->kind === CameraPortalSurface::LINE)
 			{
 				$line = $level->map->linedefs[$surface->index];
 				$a = $level->map->vertices[$line['from']];
 				$b = $level->map->vertices[$line['to']];
+
 				// A portal is visible from sidedef zero, the line's right/front side.
 				if(($b['x'] - $a['x']) * ($y - $a['y']) - ($b['y'] - $a['y']) * ($x - $a['x']) > 0) continue;
 			}
 			else
 			{
 				if($level->map->rejects($cameraSector, $surface->index)) continue;
+
 				$height = $surface->kind === CameraPortalSurface::FLOOR
 					? $level->sectors[$surface->index]->floorZ($x, $y)
 					: $level->sectors[$surface->index]->ceilingZ($x, $y);
+
 				if(($surface->kind === CameraPortalSurface::FLOOR && $eye < $height)
-					|| ($surface->kind === CameraPortalSurface::CEILING && $eye > $height)) continue;
+					|| ($surface->kind === CameraPortalSurface::CEILING && $eye > $height)
+				) continue;
 			}
+
 			if($projection)
 			{
 				if(!$this->spanInView(
-					$level, $span['first'], $span['count'], $x, $y, $eye, $pitch, $pitchMode
-					, $forwardX, $forwardY, $rightX, $rightY, $projection
+					$level
+					, $span['first']
+					, $span['count']
+					, $x
+					, $y
+					, $eye
+					, $pitch
+					, $pitchMode
+					, $forwardX
+					, $forwardY
+					, $rightX
+					, $rightY
+					, $projection
 					, $surface->kind === CameraPortalSurface::LINE ? self::LINE_NEAR_PLANE : 1.0
 				)) continue;
 			}
 			elseif(!$this->spanInHorizontalView(
-				$span['first'], $span['count'], $x, $y
-				, $forwardX, $forwardY, $rightX, $rightY, $tanHalfFov
+				$span['first']
+				, $span['count']
+				, $x
+				, $y
+				, $forwardX
+				, $forwardY
+				, $rightX
+				, $rightY
+				, $tanHalfFov
 			)) continue;
 
 			$candidates[$link->id] = $link;
@@ -143,8 +168,11 @@ final class CameraPortalMesh
 			$dy = $this->vertices[$offset + 1] - $cameraY;
 			$depth = $dx * $forwardX + $dy * $forwardY;
 			$side = $dx * $rightX + $dy * $rightY;
+
 			if($depth >= 1) $behind = false;
+
 			if($depth * $tanHalfFov + $side >= 0) $left = false;
+
 			if($depth * $tanHalfFov - $side >= 0) $right = false;
 		}
 
@@ -194,6 +222,7 @@ final class CameraPortalMesh
 			for($plane = 0; $plane < 5; $plane++)
 			{
 				$polygon = $this->clipPolygon($polygon, $plane, $nearPlane);
+
 				if(!$polygon) break;
 			}
 
@@ -229,6 +258,7 @@ final class CameraPortalMesh
 			}
 
 			if($currentInside) $clipped[] = $current;
+
 			$previous = $current;
 			$previousDistance = $currentDistance;
 		}
@@ -239,7 +269,8 @@ final class CameraPortalMesh
 	/** @param array{0:float,1:float,2:float} $vertex */
 	private function clipDistance(array $vertex, int $plane, float $nearPlane): float
 	{
-		return match($plane) {
+		return match($plane)
+		{
 			0 => $vertex[2] - $nearPlane,
 			1 => $vertex[0] + $vertex[2],
 			2 => $vertex[2] - $vertex[0],
@@ -264,5 +295,4 @@ final class CameraPortalMesh
 
 		return $selector % 2 === 0 ? min($front, $back) : max($front, $back);
 	}
-
 }

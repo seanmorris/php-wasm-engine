@@ -5,6 +5,7 @@ namespace DoomPhonics\Definition;
 /** Layered ZDoom LANGUAGE strings used by DECORATE and native gameplay messages. */
 final class LanguageCatalog
 {
+
 	/** @param array<string,string> $strings Case-folded token to translated text. */
 	private function __construct(private array $strings = []) {}
 
@@ -19,7 +20,10 @@ final class LanguageCatalog
 		{
 			if(!is_string($text)) throw new \InvalidArgumentException('LANGUAGE documents must contain text');
 
-			try { $strings = array_replace($strings, self::parse($text, $locale, $game)); }
+			try
+			{
+				$strings = array_replace($strings, self::parse($text, $locale, $game));
+			}
 			catch(\Throwable $error)
 			{
 				$label = is_string($source) ? $source . ': ' : '';
@@ -117,9 +121,9 @@ final class LanguageCatalog
 				if($statement === '' || $rank === 0) continue;
 
 				if(!preg_match(
-					'/^(?:\$ifgame\s*\(\s*([^)]+)\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/s',
-					$statement,
-					$match
+					'/^(?:\$ifgame\s*\(\s*([^)]+)\s*\)\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/s'
+					, $statement
+					, $match
 				)) throw new \UnexpectedValueException('invalid LANGUAGE assignment: ' . substr($statement, 0, 80));
 
 				if(($match[1] ?? '') !== '')
@@ -134,6 +138,7 @@ final class LanguageCatalog
 				if(!$parts[0]) throw new \UnexpectedValueException("LANGUAGE value {$match[2]} is not a quoted string");
 
 				$value = '';
+
 				foreach($parts[1] as $part) $value .= self::unescape($part);
 				$key = strtoupper($match[2]);
 
@@ -183,7 +188,8 @@ final class LanguageCatalog
 		{
 			'n' => "\n", 'r' => "\r", 't' => "\t", '"' => '"', '\\' => '\\',
 			default => '\\' . $match[1]
-		}, $value);
+		}, $value
+		);
 	}
 
 	private static function withoutComments(string $text): string
@@ -201,14 +207,22 @@ final class LanguageCatalog
 
 			if($line)
 			{
-				if($character === "\n") { $line = false; $result .= $character; }
+				if($character === "\n")
+				{
+					$line = false;
+					$result .= $character;
+				}
 
 				continue;
 			}
 
 			if($block)
 			{
-				if($character === '*' && $next === '/') { $block = false; $index++; }
+				if($character === '*' && $next === '/')
+				{
+					$block = false;
+					$index++;
+				}
 				elseif($character === "\n") $result .= $character;
 
 				continue;
@@ -217,6 +231,7 @@ final class LanguageCatalog
 			if($quoted)
 			{
 				$result .= $character;
+
 				if($escaped) $escaped = false;
 				elseif($character === '\\') $escaped = true;
 				elseif($character === '"') $quoted = false;
@@ -224,9 +239,21 @@ final class LanguageCatalog
 				continue;
 			}
 
-			if($character === '"') { $quoted = true; $result .= $character; }
-			elseif($character === '/' && $next === '/') { $line = true; $index++; }
-			elseif($character === '/' && $next === '*') { $block = true; $index++; }
+			if($character === '"')
+			{
+				$quoted = true;
+				$result .= $character;
+			}
+			elseif($character === '/' && $next === '/')
+			{
+				$line = true;
+				$index++;
+			}
+			elseif($character === '/' && $next === '*')
+			{
+				$block = true;
+				$index++;
+			}
 			else $result .= $character;
 		}
 

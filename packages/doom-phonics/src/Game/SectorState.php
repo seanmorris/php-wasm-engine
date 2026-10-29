@@ -126,7 +126,9 @@ final class SectorState
 
 	public function ceilingZ(float $x, float $y, float $alpha = 1): float
 	{
-		return $this->ceilingAt($alpha) + $this->ceilingSlope[0] * $x + $this->ceilingSlope[1] * $y + $this->ceilingSlope[2];
+		return $this->ceilingAt(
+			$alpha
+		) + $this->ceilingSlope[0] * $x + $this->ceilingSlope[1] * $y + $this->ceilingSlope[2];
 	}
 
 	public function moveFloor(float $target, float $speed, ?float $return = null, float $delay = 0): void

@@ -74,19 +74,37 @@ try
 {
 	new Random(-1);
 	check(false, 'nonportable random seed rejected');
-} catch(InvalidArgumentException) { check(true, 'nonportable random seed rejected'); }
+} catch(InvalidArgumentException)
+{
+	check(true, 'nonportable random seed rejected');
+}
 
 try
 {
 	Replay::decode(substr_replace($bytes, chr(ord($bytes[10]) ^ 1), 10, 1));
 	check(false, 'corrupt replay rejected');
-} catch(UnexpectedValueException) { check(true, 'corrupt replay rejected'); }
+} catch(UnexpectedValueException)
+{
+	check(true, 'corrupt replay rejected');
+}
 
 $settings = new InputSettings;
 $left = $settings->bindings->sources(SlalomActions::LEFT);
 $right = $settings->bindings->sources(SlalomActions::RIGHT);
-check(count(array_filter($left, fn(Source $source): bool => $source->device() === Source::KEYBOARD)) === 4, 'left keyboard and mouse defaults');
-check(count(array_filter($right, fn(Source $source): bool => $source->device() === Source::CONTROLLER)) === 2, 'right controller defaults');
-check(SlalomActions::LEFT > 0xFFFF && SlalomActions::RIGHT > 0xFFFF, 'game actions are above the engine-reserved range');
+
+check(
+	count(array_filter($left, fn(Source $source): bool => $source->device() === Source::KEYBOARD)) === 4
+	, 'left keyboard and mouse defaults'
+);
+
+check(
+	count(array_filter($right, fn(Source $source): bool => $source->device() === Source::CONTROLLER)) === 2
+	, 'right controller defaults'
+);
+
+check(
+	SlalomActions::LEFT > 0xFFFF && SlalomActions::RIGHT > 0xFFFF
+	, 'game actions are above the engine-reserved range'
+);
 
 echo "PHP Slalom: $checks checks passed.\n";

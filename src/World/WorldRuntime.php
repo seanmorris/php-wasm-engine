@@ -28,7 +28,7 @@ final class WorldRuntime
 		, ?Registry $registry = null
 		, ?Scheduler $scheduler = null
 		, public ?FramePipeline $pipeline = null
-	) {
+	){
 		$this->registry = $registry ?? new Registry;
 		$this->scheduler = $scheduler ?? new Scheduler($this->registry);
 	}
@@ -47,7 +47,9 @@ final class WorldRuntime
 	public function service(string $name, $value): void
 	{
 		$this->requireOpen();
+
 		if($name === '') throw new \InvalidArgumentException('World service names cannot be empty');
+
 		$this->services[$name] = $value;
 	}
 
@@ -63,6 +65,7 @@ final class WorldRuntime
 		$this->requireOpen();
 
 		if(isset($this->adapters[$reference])) throw new \LogicException("Conflicting adapter $reference");
+
 		if(!$factory instanceof ContentAdapter && !is_callable($factory))
 		throw new \InvalidArgumentException("Invalid adapter $reference");
 
@@ -81,6 +84,7 @@ final class WorldRuntime
 		$this->requireOpen();
 
 		if(isset($this->systemSets[$reference])) throw new \LogicException("Conflicting system set $reference");
+
 		if(!$factory instanceof SystemSet && !is_callable($factory))
 		throw new \InvalidArgumentException("Invalid system set $reference");
 
@@ -203,7 +207,11 @@ final class WorldRuntime
 			$descriptor = null;
 
 			foreach($this->catalogs[$sourceId] as $candidate)
-			if($candidate->id === $scopeId) { $descriptor = $candidate; break; }
+			if($candidate->id === $scopeId)
+			{
+				$descriptor = $candidate;
+				break;
+			}
 
 			if(!$descriptor) throw new \OutOfBoundsException("Unknown scope $key");
 
@@ -346,6 +354,7 @@ final class WorldRuntime
 	 */
 	private function orderedBindings(string $sourceId, ScopeDescriptor $scope): array
 	{
+
 		/**
 		 * Match a binding selector's source, kind, ID and tags against the scope.
 		 *
@@ -356,7 +365,9 @@ final class WorldRuntime
 			$on = $binding['on'];
 
 			if(isset($on['source']) && $on['source'] !== $sourceId) return false;
+
 			if(isset($on['kind']) && $on['kind'] !== $scope->kind) return false;
+
 			if(isset($on['id']) && $on['id'] !== $scope->id) return false;
 
 			foreach((array) ($on['tags'] ?? []) as $tag)
@@ -379,7 +390,9 @@ final class WorldRuntime
 		 */
 		$visit = function(string $id) use (&$visit, &$result, &$active, &$done, $matching): void {
 			if(isset($done[$id])) return;
+
 			if(isset($active[$id])) throw new \LogicException("Binding dependency cycle at $id");
+
 			if(!isset($matching[$id])) throw new \LogicException("Missing matching binding dependency $id");
 
 			$active[$id] = true;
@@ -428,9 +441,13 @@ final class WorldRuntime
 			$state = $record['active']->snapshot();
 			$record['context']->replaceState($state + $record['context']->state());
 		}
-		catch(\Throwable $failure) { $error = $failure; }
+		catch(\Throwable $failure)
+		{
+			$error = $failure;
+		}
 
 		try { $record['active']->close(); } catch(\Throwable $failure) { $error ??= $failure; }
+
 		try { $this->state[$key] = $record['context']->close(); } catch(\Throwable $failure) { $error ??= $failure; }
 
 		if($error) throw $error;

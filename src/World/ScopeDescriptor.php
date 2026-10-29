@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Stable adapter scope identity, hierarchy, kind, tags, and declarative metadata. */
 final class ScopeDescriptor
 {
+
 	/**
 	 * Describe an activatable unit such as a world, episode, map, region, or room.
 	 *
@@ -21,8 +22,9 @@ final class ScopeDescriptor
 		, public ?string $parent = null
 		, public array $tags = []
 		, public array $metadata = []
-	) {
+	){
 		if($id === '' || str_contains($id, "\0")) throw new \InvalidArgumentException('Invalid scope ID');
+
 		if($kind === '') throw new \InvalidArgumentException("Scope $id has no kind");
 	}
 }

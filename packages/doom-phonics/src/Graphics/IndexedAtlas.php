@@ -30,12 +30,7 @@ final class IndexedAtlas
 		];
 
 		if($palette)
-		$images['ui:reticle'] = new IndexedImage(
-			1
-			, 1
-			, chr($palette->closestIndex(255, 128, 0))
-			, "\xff"
-		);
+		$images['ui:reticle'] = new IndexedImage(1, 1, chr($palette->closestIndex(255, 128, 0)), "\xff");
 
 		foreach($level->map->sidedefs as $side)
 		foreach(['upper','lower','middle'] as $position)
@@ -104,6 +99,7 @@ final class IndexedAtlas
 		}
 
 		for($map = 0; $map < 99; $map++) $menu[] = 'CWILV' . str_pad((string)$map, 2, '0', STR_PAD_LEFT);
+
 		for($digit = 0; $digit <= 9; $digit++) $menu[] = 'WINUM' . $digit;
 
 		for($character = 33; $character <= 95; $character++)
@@ -123,8 +119,11 @@ final class IndexedAtlas
 		foreach($sequence->frames as $frame)
 		{
 			if(strlen($frame->sprite) !== 4 || str_contains('#-', $frame->sprite[0])) continue;
+
 			$key = strtoupper($frame->sprite . $frame->frame);
+
 			if(isset($frames[$key])) continue;
+
 			$frames[$key] = true;
 
 			for($rotation = 0; $rotation <= 8; $rotation++)
@@ -189,6 +188,7 @@ final class IndexedAtlas
 		}
 
 		$self->pixels = '';
+
 		foreach($rows as $row) $self->pixels .= str_pad($row, $self->width * 2, "\0");
 
 		return $self;

@@ -31,6 +31,7 @@ final class TextureCatalog
 	{
 		$this->patches = $wad->namespace(['P_START','PP_START'], ['P_END','PP_END']);
 		$this->flats = $wad->namespace(['F_START','FF_START'], ['F_END','FF_END']);
+
 		foreach($wad->namespace(['S_START','SS_START'], ['S_END','SS_END']) as $name => $lump)
 		{
 			// Namespace lookup already applies WAD overrides. Keep the first matching
@@ -42,6 +43,7 @@ final class TextureCatalog
 		}
 
 		$this->loadDefinitions();
+
 		foreach($wad->lumps('ANIMDEFS') as $lump)
 		foreach(AnimDefsParser::cameraTextures($lump->bytes()) as $name => $definition)
 		{
@@ -49,8 +51,10 @@ final class TextureCatalog
 			// A transparent placeholder reserves the name and its logical dimensions
 			// until SetCameraToTexture supplies live pixels at render time.
 			$this->definitions[$name] = [
-				'name' => $name, 'width' => $definition->displayWidth()
-				, 'height' => $definition->displayHeight(), 'patches' => []
+				'name' => $name
+				, 'width' => $definition->displayWidth()
+				, 'height' => $definition->displayHeight()
+				, 'patches' => []
 			];
 		}
 	}
@@ -114,7 +118,10 @@ final class TextureCatalog
 		return $this->cache['texture:' . $name] = new IndexedImage($width, $height, $pixels, $alpha);
 	}
 
-	/** @param string $name Floor or ceiling material name. @return IndexedImage|null Flat, or a composite wall texture when no flat exists. */
+	/**
+	 * @param string $name Floor or ceiling material name.
+	 * @return IndexedImage|null Flat, or a composite wall texture when no flat exists.
+	 */
 	public function flat(string $name): ?IndexedImage
 	{
 		$name = strtoupper($name);
@@ -129,11 +136,18 @@ final class TextureCatalog
 		if($lump->size < 4096) return null;
 
 		return $this->cache['flat:' . $name] = new IndexedImage(
-			64, 64, substr($lump->bytes(), 0, 4096), str_repeat("\xff", 4096)
+			64
+			, 64
+			, substr($lump->bytes(), 0, 4096)
+			, str_repeat("\xff", 4096)
 		);
 	}
 
-	/** @param string $name Direct picture lump name. @param Lump|null $known Pre-resolved lump. @return IndexedImage|null Decoded picture. */
+	/**
+	 * @param string $name Direct picture lump name.
+	 * @param Lump|null $known Pre-resolved lump.
+	 * @return IndexedImage|null Decoded picture.
+	 */
 	public function picture(string $name, ?Lump $known = null): ?IndexedImage
 	{
 		$name = strtoupper($name);
@@ -195,7 +209,9 @@ final class TextureCatalog
 		$sprite = strtoupper(substr($sprite, 0, 4));
 		$frame = strtoupper(substr($frame, 0, 1));
 		$key = $sprite . ':' . $frame . ':' . $rotation;
+
 		if(array_key_exists($key, $this->spriteCache)) return $this->spriteCache[$key] ?: null;
+
 		// A rotation-zero lump explicitly applies from every viewpoint. Doom checks it
 		// before directional frames, which also keeps pickups independent of camera angle.
 		$candidates = $rotation ? [0,$rotation] : [0,1,2,3,4,5,6,7,8];
@@ -234,14 +250,19 @@ final class TextureCatalog
 			Binary::slice($pnameBytes, 4, $count * 8, $pnamesLump->identity());
 			$pnames = [];
 
-			for($i = 0; $i < $count; $i++) $pnames[] = Binary::name($pnameBytes, 4 + $i * 8, 8, $pnamesLump->identity());
+			for($i = 0; $i < $count; $i++)
+			$pnames[] = Binary::name($pnameBytes, 4 + $i * 8, 8, $pnamesLump->identity());
 
 			foreach(['TEXTURE1','TEXTURE2'] as $lumpName)
 			if($textureLump = $archive->lump($lumpName)) $this->parseTextureLump($textureLump, $pnames);
 		}
 	}
 
-	/** @param Lump $lump TEXTURE1/2 lump. @param list<string> $pnames Patch-name table. @return void Adds definitions. */
+	/**
+	 * @param Lump $lump TEXTURE1/2 lump.
+	 * @param list<string> $pnames Patch-name table.
+	 * @return void Adds definitions.
+	 */
 	private function parseTextureLump(Lump $lump, array $pnames): void
 	{
 		$bytes = $lump->bytes();
@@ -262,12 +283,14 @@ final class TextureCatalog
 			{
 				$o = $offset + 22 + $j * 10;
 				$index = Binary::u16($bytes, $o + 4, $lump->identity());
-				$patches[] = ['x' => Binary::s16($bytes, $o, $lump->identity())
+				$patches[] = [
+					'x' => Binary::s16($bytes, $o, $lump->identity())
 					, 'y' => Binary::s16($bytes, $o + 2, $lump->identity())
-					, 'name' => $pnames[$index] ?? ''];
+					, 'name' => $pnames[$index] ?? ''
+				];
 			}
 
-			$this->definitions[$name] = compact('name','width','height','patches');
+			$this->definitions[$name] = compact('name', 'width', 'height', 'patches');
 		}
 	}
 }

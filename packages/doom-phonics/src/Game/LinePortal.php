@@ -28,13 +28,16 @@ final class LinePortal
 	public function floor(?float $x = null, ?float $y = null): float
 	{
 		if($x !== null && $y !== null) return max($this->rightState->floorZ($x, $y), $this->leftState->floorZ($x, $y));
+
 		return max($this->rightState->floor, $this->leftState->floor);
 	}
 
 	/** Return the current upper edge of the opening, including moving ceilings. */
 	public function ceiling(?float $x = null, ?float $y = null): float
 	{
-		if($x !== null && $y !== null) return min($this->rightState->ceilingZ($x, $y), $this->leftState->ceilingZ($x, $y));
+		if($x !== null && $y !== null)
+		return min($this->rightState->ceilingZ($x, $y), $this->leftState->ceilingZ($x, $y));
+
 		return min($this->rightState->ceiling, $this->leftState->ceiling);
 	}
 
@@ -55,8 +58,13 @@ final class LinePortal
 	 * Projectiles may cross above the lower ceiling where two outdoor sectors meet.
 	 * Doom treats their differing sky heights as one continuous, unbounded opening.
 	 */
-	public function admitsProjectile(float $bottom, float $height, float $tolerance = .001, ?float $x = null, ?float $y = null): bool
-	{
+	public function admitsProjectile(
+		float $bottom
+		, float $height
+		, float $tolerance = .001
+		, ?float $x = null
+		, ?float $y = null
+	): bool {
 		return $bottom >= $this->floor($x, $y) - $tolerance
 			&& ($this->sharesOpenSky() || $bottom + $height <= $this->ceiling($x, $y) + $tolerance);
 	}

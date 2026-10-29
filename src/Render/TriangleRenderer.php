@@ -92,6 +92,7 @@ final class TriangleRenderer
 		$this->bound = false;
 
 		if($this->vao) glDeleteVertexArrays(count($this->vao), $this->vao);
+
 		if($this->buffers) glDeleteBuffers(count($this->buffers), $this->buffers);
 
 		$this->vao = $this->buffers = [];

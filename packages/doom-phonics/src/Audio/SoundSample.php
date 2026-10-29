@@ -8,6 +8,7 @@ use DoomPhonics\Archive\Lump;
 /** Normalize native Doom DMX and add-on RIFF/WAVE lumps for the audio backends. */
 final class SoundSample
 {
+
 	/**
 	 * Return a validated WAV container for a WAD sound lump.
 	 *

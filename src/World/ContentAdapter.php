@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Open one declarative source without assuming its file format or renderer. */
 interface ContentAdapter
 {
+
 	/**
 	 * Open a source after its package graph and resources have been resolved.
 	 *

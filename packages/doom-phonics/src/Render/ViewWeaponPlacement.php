@@ -30,9 +30,6 @@ final class ViewWeaponPlacement
 	 */
 	public static function fromImage(IndexedImage $image, float $loweringOffset = 0): self
 	{
-		return new self(
-			-$image->leftOffset
-			, self::READY_ORIGIN_Y - $image->topOffset + $loweringOffset
-		);
+		return new self(-$image->leftOffset, self::READY_ORIGIN_Y - $image->topOffset + $loweringOffset);
 	}
 }

@@ -62,6 +62,7 @@ DEC
 	);
 
 	$zombie = $spawn('ZombieMan');
+
 	verifyWad(
 		$resolver->apply($world, new DamageEvent($zombie, $killer, 25))
 		, 'lethal damage resolves the Former Human death once'
@@ -116,10 +117,7 @@ DEC
 		, 'dropped Chaingun grants the weapon and ten bullets'
 	);
 
-	$corpse = $world->create(
-		new ActorState($actors->named('DeadZombieMan'))
-		, new Transform($x, $y, $planes['floor'])
-	);
+	$corpse = $world->create(new ActorState($actors->named('DeadZombieMan')), new Transform($x, $y, $planes['floor']));
 	$dropper = new ActorDropper($level, $factory, static fn(): int => 0);
 	verifyWad($dropper->spawn($world, $corpse) === [], 'DropItem None suppresses decorative corpse loot');
 
@@ -131,11 +129,14 @@ ACTOR ExplicitDropper : Actor
 }
 DEC
 	]);
+
 	foreach($custom->all() as $definition) $actors->add($definition);
+
 	$explicit = $world->create(
 		new ActorState($actors->named('ExplicitDropper'))
 		, new Transform($x, $y, $planes['floor'])
 	);
+
 	$spawned = $dropper->spawn($world, $explicit);
 
 	verifyWad(

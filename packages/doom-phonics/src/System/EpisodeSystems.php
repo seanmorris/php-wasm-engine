@@ -126,9 +126,16 @@ final class EpisodeSystems implements SystemSet
 
 		$sound->beginScope($content->wad);
 		$scope->onClose([$sound,'stopScope']);
+
 		$specials = new LineSpecials(
-			$content->level, $scope->registry, [$scope,'own'], $sound, $factory, $content->language
+			$content->level
+			, $scope->registry
+			, [$scope,'own']
+			, $sound
+			, $factory
+			, $content->language
 		);
+
 		$actions = new ActionDispatcher;
 
 		$combat = new CombatSystem(
@@ -147,13 +154,7 @@ final class EpisodeSystems implements SystemSet
 			, $host
 			, $host
 			, $cheats
-			, new BloodEffects(
-				$content->level
-				, $actors
-				, $factory
-				, $content->textures->iwadBloodSprite()
-				, $settings
-			)
+			, new BloodEffects($content->level, $actors, $factory, $content->textures->iwadBloodSprite(), $settings)
 		);
 
 		$movement = new PlayerMovementSystem(
@@ -175,9 +176,9 @@ final class EpisodeSystems implements SystemSet
 		$playerEffects = new PlayerEffectSystem;
 		$statusFaces = new StatusFaceSystem($this->controls($scope));
 		$commands = new PlayerCommandSystem($this->controls($scope));
-		$network = $match ? new EpisodeNetworkSystem(
-			$scope->registry, $match, $scope->key(), $actors, null, $content->level
-		) : null;
+		$network = $match
+			? new EpisodeNetworkSystem($scope->registry, $match, $scope->key(), $actors, null, $content->level)
+			: null;
 
 		if($commands) $scope->system('player-commands', [$commands,'update']);
 

@@ -22,7 +22,7 @@ final class CameraViewpoint
 		, float $pitch
 		, public int $sector
 		, public array $args = [0,0,0,0,0]
-	) {
+	){
 		$this->angle = $this->baseAngle = $angle;
 		$this->pitch = max(deg2rad(-89), min(deg2rad(89), $pitch));
 	}
@@ -30,6 +30,7 @@ final class CameraViewpoint
 	public function update(float $dt, Level $level): void
 	{
 		if($dt <= 0) return;
+
 		if($this->type === self::SECURITY && ($this->args[2] ?? 0) > 0)
 		{
 			$range = deg2rad((float)($this->args[1] ?? 0));
@@ -41,8 +42,11 @@ final class CameraViewpoint
 				? $this->baseAngle + $range * sin($this->accumulator)
 				: $this->accumulator;
 		}
+
 		if($this->type !== self::AIMING || !($target = $level->thingWithTid((int)($this->args[3] ?? 0)))) return;
-		$dx = (float)$target['x'] - $this->x; $dy = (float)$target['y'] - $this->y;
+
+		$dx = (float)$target['x'] - $this->x;
+		$dy = (float)$target['y'] - $this->y;
 		$targetSector = $level->sectorAt((float)$target['x'], (float)$target['y']);
 		$targetZ = $targetSector->floorZ((float)$target['x'], (float)$target['y']) + (float)($target['z'] ?? 0);
 		$yaw = atan2($dy, $dx);
@@ -54,6 +58,7 @@ final class CameraViewpoint
 	private static function approachAngle(float $value, float $target, float $step): float
 	{
 		$delta = fmod($target - $value + M_PI * 3, M_PI * 2) - M_PI;
+
 		return $value + max(-$step, min($step, $delta));
 	}
 

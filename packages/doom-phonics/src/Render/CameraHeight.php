@@ -11,7 +11,7 @@ final class CameraHeight
 	public function __construct(
 		public float $riseFraction = .25
 		, public float $snapDistance = 4
-	) {
+	){
 		if($riseFraction <= 0 || $riseFraction > 1)
 		throw new \InvalidArgumentException('Camera rise fraction must be within (0, 1]');
 

@@ -21,7 +21,8 @@ final class ScopeLease
 		, public string $scopeId
 		, public ScopeContext $context
 		, private $release
-	) {}
+	){
+	}
 
 	/**
 	 * Release one active-scope reference.

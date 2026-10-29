@@ -94,7 +94,9 @@ final class DoomActions
 			, self::PREVIOUS_WEAPON => [
 				1 => [new Source(Source::WHEEL, Source::Y, 1),$button(Pad::LEFT),$button(Pad::DOWN)]
 			]
-			, self::NEXT_WEAPON => [1 => [new Source(Source::WHEEL, Source::Y, -1),$button(Pad::RIGHT),$button(Pad::UP)]]
+			, self::NEXT_WEAPON => [
+				1 => [new Source(Source::WHEEL, Source::Y, -1),$button(Pad::RIGHT),$button(Pad::UP)]
+			]
 		];
 
 		foreach(self::SLOTS as $slot => $code) $bindings[$code] = [1 => [$key((string)$slot)]];

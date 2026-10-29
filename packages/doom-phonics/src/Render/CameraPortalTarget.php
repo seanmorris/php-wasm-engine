@@ -19,7 +19,9 @@ final class CameraPortalTarget
 	public function resize(int $width, int $height): void
 	{
 		if($width === $this->width && $height === $this->height) return;
+
 		if($this->capturing) throw new \LogicException('Camera portal target cannot resize while capturing');
+
 		$this->release();
 		$this->width = $width;
 		$this->height = $height;
@@ -42,8 +44,10 @@ final class CameraPortalTarget
 		glBindRenderbuffer(GL_RENDERBUFFER, $this->depthBuffer[0]);
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, $this->width, $this->height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, $this->depthBuffer[0]);
+
 		if(glCheckFramebufferStatus(GL_FRAMEBUFFER) !== GL_FRAMEBUFFER_COMPLETE)
 		throw new \RuntimeException('Doom-Phonics camera portal framebuffer is incomplete');
+
 		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, $parentFramebuffer);
 	}
@@ -51,6 +55,7 @@ final class CameraPortalTarget
 	public function begin(): void
 	{
 		if($this->closed || $this->capturing) throw new \LogicException('Camera portal target cannot begin');
+
 		$this->parentFramebuffer = glGetIntegerv(GL_FRAMEBUFFER_BINDING);
 		$this->capturing = true;
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
@@ -64,6 +69,7 @@ final class CameraPortalTarget
 	public function end(): void
 	{
 		if(!$this->capturing) throw new \LogicException('Camera portal target must begin before end');
+
 		$this->capturing = false;
 		glBindFramebuffer(GL_FRAMEBUFFER, $this->parentFramebuffer);
 	}
@@ -71,6 +77,7 @@ final class CameraPortalTarget
 	public function restore(): void
 	{
 		if($this->closed) return;
+
 		$this->capturing = false;
 		$this->release();
 		$this->create();
@@ -79,6 +86,7 @@ final class CameraPortalTarget
 	public function close(): void
 	{
 		if($this->closed) return;
+
 		$this->closed = true;
 		$this->capturing = false;
 		$this->release();
@@ -87,8 +95,11 @@ final class CameraPortalTarget
 	private function release(): void
 	{
 		if($this->texture) glDeleteTextures(1, [$this->texture]);
+
 		if($this->framebuffer) glDeleteFramebuffers(1, $this->framebuffer);
+
 		if($this->depthBuffer) glDeleteRenderbuffers(1, $this->depthBuffer);
+
 		$this->texture = 0;
 		$this->framebuffer = $this->depthBuffer = [];
 	}

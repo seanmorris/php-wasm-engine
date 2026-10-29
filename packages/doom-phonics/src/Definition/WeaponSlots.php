@@ -22,8 +22,7 @@ final class WeaponSlots
 		ActorCatalog $actors
 		, ?callable $available = null
 		, array $keyconf = []
-	): self
-	{
+	): self {
 		$slots = [];
 		$assigned = [];
 		$accept = $available ?? static fn(ActorDefinition $actor): bool => true;
@@ -73,8 +72,11 @@ final class WeaponSlots
 			foreach($command['weapons'] as $name)
 			{
 				$definition = $actors->named($name);
+
 				if(!$definition || !$actors->isA($definition, 'Weapon') || !$accept($definition)) continue;
+
 				if(self::contains($slots, $definition->name)) continue;
+
 				self::append($slots, $slot, $definition->name);
 			}
 		}
@@ -180,5 +182,4 @@ final class WeaponSlots
 
 		return false;
 	}
-
 }

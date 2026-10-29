@@ -5,6 +5,7 @@ namespace DoomPhonics\Game;
 /** Immutable-by-convention position in WAD world space. */
 final class WorldPoint
 {
+
 	public function __construct(public float $x, public float $y, public float $z)
 	{
 		if(!is_finite($x) || !is_finite($y) || !is_finite($z))

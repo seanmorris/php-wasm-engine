@@ -5,6 +5,7 @@ namespace DoomPhonics\Game;
 /** Validated Doom-specific values supplied by a world's game-owned init object. */
 final class DoomInitialization
 {
+
 	/**
 	 * @param ?string $startMap Optional WAD map name overriding the generic start scope for the initial game.
 	 * @param list<string> $cheats Classic cheat sequences applied after a new player is created.
@@ -34,9 +35,6 @@ final class DoomInitialization
 		if(!is_string($cheat) || trim($cheat) === '')
 		throw new \UnexpectedValueException('Doom world init.cheats must contain non-empty strings');
 
-		return new self(
-			$startMap === null ? null : strtoupper(trim($startMap))
-			, array_map('trim', $cheats)
-		);
+		return new self($startMap === null ? null : strtoupper(trim($startMap)), array_map('trim', $cheats));
 	}
 }

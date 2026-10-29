@@ -18,7 +18,8 @@ final class ProjectileImpact
 		, public float $z
 		, public int $sector
 		, public ?int $line = null
-	) {}
+	){
+	}
 
 	public function escapesIntoSky(): bool { return $this->surface === self::SKY; }
 }

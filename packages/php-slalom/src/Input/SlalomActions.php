@@ -14,7 +14,11 @@ final class SlalomActions
 	public const LEFT = InputCode::GAME_START;
 	public const RIGHT = InputCode::GAME_START + 1;
 
-	/** Rows shown by the shared binding editor. */
+	/**
+	 * Describe the steering rows shown by the shared binding editor.
+	 *
+	 * @return array<string,array{0:int,1:int,2:string}> Named binding rows.
+	 */
 	public static function rows(): array
 	{
 		return [
@@ -23,9 +27,20 @@ final class SlalomActions
 		];
 	}
 
-	/** Original keys and pointer buttons plus standardized D-pad and left-stick input. */
+	/**
+	 * Build the original keys and pointer buttons plus standardized D-pad and left-stick input.
+	 *
+	 * @return Bindings A fresh editable binding profile.
+	 */
 	public static function defaults(): Bindings
 	{
+
+		/**
+		 * Convert a named or numeric key into a physical input source.
+		 *
+		 * @param int|string $code Named special key or printable character.
+		 * @return Source The corresponding keyboard source.
+		 */
 		$key = static fn(int|string $code): Source => new Source(Source::KEY, is_string($code) ? ord($code) : $code);
 
 		return new Bindings([
@@ -52,7 +67,12 @@ final class SlalomActions
 		]);
 	}
 
-	/** Pause and menu controls remain fixed and available. */
+	/**
+	 * Keep pause and menu controls fixed so every custom profile retains an escape route.
+	 *
+	 * @param Source $source Physical source proposed for a steering binding.
+	 * @return bool True when the source is available for steering.
+	 */
 	public static function allowed(Source $source): bool
 	{
 		return !($source->kind === Source::KEY && in_array($source->code, [Key::ESCAPE, ord('p')], true))

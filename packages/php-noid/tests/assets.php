@@ -56,11 +56,7 @@ expect($sdlFont[0] === 96 && $sdlFont[1] === 40, 'SDL HUD font keeps one source 
 $metadata = json_decode(file_get_contents($directory . '/assets/font.json'), true, 512, JSON_THROW_ON_ERROR);
 expect($metadata['tileWidth'] === 12 && $metadata['tileHeight'] === 16, 'HUD font declares fixed sprite cells');
 expect(count($metadata['characters']) === 74, 'HUD font covers the game text and symbols');
-$bitmap = new BitmapFont(
-	new Loader
-	, $directory . '/assets/font.tsj'
-	, [$directory . '/assets/hud.tsj']
-);
+$bitmap = new BitmapFont(new Loader, $directory . '/assets/font.tsj', [$directory . '/assets/hud.tsj']);
 expect($bitmap->lineHeight === 8.0, 'HUD font exposes resolution-independent logical metrics');
 expect($bitmap->map->tilesets[1]['firstgid'] === 75, 'HUD rail follows the font in one SDL atlas');
 $hud = getimagesize($directory . '/assets/hud-rail.png');

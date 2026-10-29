@@ -7,6 +7,7 @@
 // A group that contains the current page always stays open.
 
 (function() {
+
 	/**
 	 * Build the local-storage key for one stable navigation path.
 	 *
@@ -31,6 +32,7 @@
 		{
 			const stored = localStorage.getItem(storageKey(idPath));
 			const parsed = stored === null ? fallback : JSON.parse(stored);
+
 			return typeof parsed === 'boolean' ? parsed : fallback;
 		}
 		catch(error)
@@ -79,6 +81,7 @@
 	function openAncestors(node)
 	{
 		let details = node.closest('details[data-id-path]');
+
 		while(details)
 		{
 			details.setAttribute('open', '');
@@ -95,12 +98,16 @@
 	function apply(details)
 	{
 		const idPath = details.getAttribute('data-id-path');
+
 		if(!idPath) return;
+
 		if(holdsCurrentPage(details))
 		{
 			details.setAttribute('open', '');
+
 			return;
 		}
+
 		if(readState(idPath, details.hasAttribute('open')))
 		{
 			details.setAttribute('open', '');
@@ -120,9 +127,13 @@
 	function applyWithin(node)
 	{
 		if(node.nodeType !== 1) return;
+
 		if(node.matches('details[data-id-path]')) apply(node);
+
 		for(const details of node.querySelectorAll('details[data-id-path]')) apply(details);
+
 		if(node.matches('a[aria-current="page"], a.active-link')) openAncestors(node);
+
 		for(const link of node.querySelectorAll('a[aria-current="page"], a.active-link')) openAncestors(link);
 	}
 
@@ -162,6 +173,7 @@
 			if(target.tagName === 'UL')
 			{
 				event.stopPropagation();
+
 				return;
 			}
 
@@ -170,6 +182,7 @@
 			if(idPath)
 			{
 				writeState(idPath, !target.hasAttribute('open'));
+
 				return;
 			}
 

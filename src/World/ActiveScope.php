@@ -5,6 +5,7 @@ namespace Phonics\World;
 /** Format-specific state retained while a neutral source scope is active. */
 interface ActiveScope
 {
+
 	/**
 	 * Return stable identity and matching metadata for this scope.
 	 * @return ScopeDescriptor Descriptor selected during activation.

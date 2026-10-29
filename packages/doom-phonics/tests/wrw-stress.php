@@ -37,14 +37,19 @@ $checks = 0;
 
 $verify = static function(bool $condition, string $message) use (&$checks): void {
 	$checks++;
+
 	if(!$condition) throw new RuntimeException($message);
 };
 
 if(!is_file($addonPath))
-throw new RuntimeException("WRW stress WAD not found: $addonPath\nUsage: php " . __FILE__ . ' /path/to/wrw.wad [/path/to/base.wad]');
+throw new RuntimeException(
+	"WRW stress WAD not found: $addonPath\nUsage: php " . __FILE__ . ' /path/to/wrw.wad [/path/to/base.wad]'
+);
 
 $addonBytes = file_get_contents($addonPath);
+
 if(!is_string($addonBytes)) throw new RuntimeException("Cannot read $addonPath");
+
 $addon = new Archive($addonBytes, $addonPath);
 $keyconf = [];
 
@@ -52,9 +57,11 @@ foreach($addon->lumps('KEYCONF') as $lump) $keyconf[$lump->identity()] = $lump->
 
 $commands = KeyConfParser::weaponSlots($keyconf);
 $declaredWeapons = [];
+
 foreach($commands as $command) foreach($command['weapons'] as $weapon) $declaredWeapons[] = $weapon;
 
 $verify(count($commands) === 8, 'WRW KEYCONF retains all eight setslot declarations');
+
 $verify(
 	count($declaredWeapons) === 58
 		&& count(array_unique(array_map('strtolower', $declaredWeapons))) === 58
@@ -70,19 +77,21 @@ $source = (new WadAdapter)->open(
 	$definition
 	, new AdapterContext(null, static function(string $url): string {
 		$bytes = file_get_contents($url);
+
 		if(!is_string($bytes)) throw new RuntimeException("Cannot read $url");
+
 		return $bytes;
 	})
 );
 
 $descriptor = iterator_to_array($source->catalog())[0] ?? null;
+
 if($descriptor === null) throw new RuntimeException("Base WAD has no maps: $iwadPath");
+
 $registry = new Registry;
-$active = $source->activate(
-	$descriptor->id
-	, new ScopeContext('wrw', $descriptor, $registry, new Scheduler($registry))
-);
+$active = $source->activate($descriptor->id, new ScopeContext('wrw', $descriptor, $registry, new Scheduler($registry)));
 $content = $active->content();
+
 if(!$content instanceof WadLevel) throw new RuntimeException('WRW adapter returned the wrong content type');
 
 $verify(count($content->actors->resolved()) >= 406, 'WRW resolves its complete actor inheritance catalog');
@@ -91,10 +100,12 @@ foreach($declaredWeapons as $weapon)
 $verify($content->actors->named($weapon) !== null, "WRW KEYCONF weapon $weapon has a DECORATE definition");
 
 $availableWeapons = $content->weapons->weapons();
+
 $verify(
 	count($availableWeapons) === count(array_unique(array_map('strtolower', $availableWeapons)))
 	, 'WRW effective weapon banks contain no duplicate actor names'
 );
+
 $verify(
 	array_slice($content->weapons->slot(1), 0, 2) === ['Fist','Chainsaw']
 		&& in_array('Gauntlet', $content->weapons->slot(1), true)
@@ -113,8 +124,20 @@ foreach($declaredWeapons as $weapon)
 $verify(!empty($cheatPlayer->weapons[$weapon]), "IDKFA grants WRW weapon $weapon");
 
 $customAmmo = [
-	'AutoShotgunClip','BarnicleAmmo','BSGShell','Crystal','D2C_PipebombAmmo','Darkmana','Ember'
-	, 'Grenades','IncendShells','MagnumBullets','Mines','MiniRockets','Orbs','PoisonRecipient'
+	'AutoShotgunClip'
+	, 'BarnicleAmmo'
+	, 'BSGShell'
+	, 'Crystal'
+	, 'D2C_PipebombAmmo'
+	, 'Darkmana'
+	, 'Ember'
+	, 'Grenades'
+	, 'IncendShells'
+	, 'MagnumBullets'
+	, 'Mines'
+	, 'MiniRockets'
+	, 'Orbs'
+	, 'PoisonRecipient'
 	, 'PowerMissile','ProjectileWeaponCharge','BoltCheck','UACProtoEn'
 ];
 
@@ -134,6 +157,7 @@ $verify(
 
 $actions = new ActionDispatcher;
 $factory = new ActorFactory($content->actors);
+
 $combat = new CombatSystem(
 	$content->level
 	, $content->actors
@@ -148,6 +172,7 @@ $combat = new CombatSystem(
 $switchRegistry = new Registry;
 $switchPlayer = new PlayerState;
 $switchCommand = new PlayerCommand;
+
 $switchEntity = $switchRegistry->create(
 	$switchPlayer
 	, new HitPoints(100, 100)
@@ -156,6 +181,7 @@ $switchEntity = $switchRegistry->create(
 	, $switchCommand
 	, new ViewInput
 );
+
 $cheats->apply(CheatCommand::named(CheatCommand::ARSENAL_AND_KEYS), $switchRegistry, $switchEntity);
 $states = new ActorStateSystem($actions);
 $combat->update($switchRegistry, 1 / 35);
@@ -187,7 +213,11 @@ $targetDefinition = $content->actors->named('BaronOfHell');
 $playerThing = null;
 
 foreach($content->level->map->things as $thing)
-if((int)($thing['type'] ?? 0) === 1) { $playerThing = $thing; break; }
+if((int)($thing['type'] ?? 0) === 1)
+{
+	$playerThing = $thing;
+	break;
+}
 
 $verify(
 	$walter !== null && $playerDefinition !== null && $targetDefinition !== null && $playerThing !== null
@@ -196,17 +226,20 @@ $verify(
 
 $walterRegistry = new Registry;
 $startSector = $content->level->sectorAt((float)$playerThing['x'], (float)$playerThing['y']);
+
 $walterPlayer = $factory->spawn(
 	$walterRegistry
 	, $playerDefinition
 	, $playerThing + ['index' => -1, 'flags' => []]
 	, ['floor' => $startSector->floor, 'ceiling' => $startSector->ceiling]
 );
+
 $walterRegistry->add($walterPlayer, new PlayerCommand);
 $playerPose = $walterRegistry->get($walterPlayer, Transform::class);
 $targetX = $playerPose->x + cos($playerPose->angle) * 32;
 $targetY = $playerPose->y + sin($playerPose->angle) * 32;
 $targetSector = $content->level->sectorAt($targetX, $targetY);
+
 $walterTarget = $factory->spawn($walterRegistry, $targetDefinition, [
 	'x' => $targetX
 	, 'y' => $targetY
@@ -216,13 +249,16 @@ $walterTarget = $factory->spawn($walterRegistry, $targetDefinition, [
 	, 'index' => -1
 	, 'flags' => []
 ], ['floor' => $targetSector->floor, 'ceiling' => $targetSector->ceiling]);
+
 $walterPlayerState = $walterRegistry->get($walterPlayer, PlayerState::class);
 $walterPlayerState->ammo['Clip'] = 100;
 $walterWeapon = $walterRegistry->create(new \DoomPhonics\Component\ActorState($walter), new WeaponOwner($walterPlayer));
+
 $walterOverlay = $walterRegistry->create(
 	new \DoomPhonics\Component\ActorState($walter, 'Flash')
 	, new WeaponOverlay($walterPlayer, $walterWeapon)
 );
+
 $walterHealth = $walterRegistry->get($walterTarget, HitPoints::class);
 $walterHealthBefore = $walterHealth->current;
 $walterFlash = $walter->state('Flash')?->frames[0] ?? null;
@@ -237,7 +273,12 @@ $verify(
 
 $cop = $content->actors->named('COPGun');
 $verify($cop !== null, 'WRW COP Derringer definition is available');
-$copWeapon = $walterRegistry->create(new \DoomPhonics\Component\ActorState($cop, 'Ready'), new WeaponOwner($walterPlayer));
+
+$copWeapon = $walterRegistry->create(
+	new \DoomPhonics\Component\ActorState($cop, 'Ready')
+	, new WeaponOwner($walterPlayer)
+);
+
 $copState = $walterRegistry->get($copWeapon, \DoomPhonics\Component\ActorState::class);
 $copCommand = $walterRegistry->get($walterPlayer, PlayerCommand::class);
 $copCommand->apply(['altFire' => true]);
@@ -266,6 +307,7 @@ $actions->dispatch($copWeapon, $takeShell, $walterRegistry);
 [$giveClipIndex,$giveClip] = $findFrame($cop->state('AltFire'), 'A_GiveInventory', 'COPgunInClip');
 $copState->enter('AltFire', $giveClipIndex);
 $actions->dispatch($copWeapon, $giveClip, $walterRegistry);
+
 $verify(
 	$walterPlayerState->ammo['Shell'] === 0 && ($walterPlayerState->inventory['COPgunInClip'] ?? 0) === 1
 	, 'COP reload transfers a reserve shell into its internal clip'
@@ -283,6 +325,7 @@ $actions->dispatch($copWeapon, $takeClip, $walterRegistry);
 $copState->enter('Fire', $copShotIndex);
 $copHealthBefore = $walterHealth->current;
 $actions->dispatch($copWeapon, $copShot, $walterRegistry);
+
 $verify(
 	$walterHealth->current < $copHealthBefore && $walterPlayerState->ammo['Shell'] === 0
 		&& ($walterPlayerState->inventory['COPgunInClip'] ?? 0) === 0
@@ -291,21 +334,26 @@ $verify(
 
 $fireWand = $content->actors->named('FireWand');
 $verify($fireWand !== null, 'WRW Fire Wand definition is available');
+
 $fireWandWeapon = $walterRegistry->create(
 	new \DoomPhonics\Component\ActorState($fireWand, 'Fire')
 	, new WeaponOwner($walterPlayer)
 );
+
 [$fireWandShotIndex,$fireWandShot] = $findFrame($fireWand->state('Fire'), 'A_FireCustomMissile');
+
 $walterRegistry->get($fireWandWeapon, \DoomPhonics\Component\ActorState::class)
 	->enter('Fire', $fireWandShotIndex);
+
 $walterPlayerState->ammoMaximum['Ember'] = 200;
 $walterPlayerState->ammo['Ember'] = 2;
 $projectilesBefore = $walterRegistry->query(\DoomPhonics\Component\Projectile::class);
 $actions->dispatch($fireWandWeapon, $fireWandShot, $walterRegistry);
-$spawnedProjectiles = array_values(array_diff(
-	$walterRegistry->query(\DoomPhonics\Component\Projectile::class)
-	, $projectilesBefore
-));
+
+$spawnedProjectiles = array_values(
+	array_diff($walterRegistry->query(\DoomPhonics\Component\Projectile::class), $projectilesBefore)
+);
+
 $fireShot = $spawnedProjectiles[0] ?? null;
 
 $verify(
@@ -317,10 +365,12 @@ $verify(
 
 $freeze = $content->actors->named('FreezeThrower');
 $verify($freeze !== null, 'WRW secondary-ammo fixture resolves Freeze Thrower');
+
 $freezeWeapon = $walterRegistry->create(
 	new \DoomPhonics\Component\ActorState($freeze, 'Ready')
 	, new WeaponOwner($walterPlayer)
 );
+
 $freezeState = $walterRegistry->get($freezeWeapon, \DoomPhonics\Component\ActorState::class);
 $walterPlayerState->ammo['Cell'] = 1;
 $actions->dispatch($freezeWeapon, $freeze->state('Ready')->frames[0], $walterRegistry);
@@ -336,15 +386,13 @@ $actions->dispatch($freezeWeapon, $noAmmo, $walterRegistry);
 $verify($freezeState->frame === $noAmmoIndex + 1, 'A_JumpIfNoAmmo follows the active AltFire ammo channel');
 
 $usedActions = [];
+
 foreach($content->actors->resolved() as $actor)
 foreach($actor->states as $sequence)
 foreach($sequence->frames as $frame)
 if($frame->action !== null) $usedActions[strtolower($frame->action)] = $frame->action;
 
-$unsupported = array_values(array_filter(
-	$usedActions
-	, static fn(string $action): bool => !$actions->handles($action)
-));
+$unsupported = array_values(array_filter($usedActions, static fn(string $action): bool => !$actions->handles($action)));
 
 $verify(count($usedActions) >= 131, 'WRW DECORATE retains its full action-function surface');
 

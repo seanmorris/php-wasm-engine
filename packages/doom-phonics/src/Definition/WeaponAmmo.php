@@ -5,6 +5,7 @@ namespace DoomPhonics\Definition;
 /** Resolves the equivalent classic and numbered DECORATE weapon-ammo properties. */
 final class WeaponAmmo
 {
+
 	public static function type(ActorDefinition $weapon, int $channel = 1): string
 	{
 		if($channel !== 1 && $channel !== 2)
@@ -22,9 +23,13 @@ final class WeaponAmmo
 		if($channel !== 1 && $channel !== 2)
 		throw new \InvalidArgumentException('Weapon ammo channels are 1 or 2');
 
-		return max(0, (int)($channel === 1
-			? $weapon->value('Weapon.AmmoUse', $weapon->value('Weapon.AmmoUse1', 0))
-			: $weapon->value('Weapon.AmmoUse2', 0)));
+		return max(
+			0
+			, (int)($channel === 1
+				? $weapon->value('Weapon.AmmoUse', $weapon->value('Weapon.AmmoUse1', 0))
+				: $weapon->value('Weapon.AmmoUse2', 0)
+			)
+		);
 	}
 
 	public static function give(ActorDefinition $weapon, int $channel = 1): int
@@ -32,9 +37,13 @@ final class WeaponAmmo
 		if($channel !== 1 && $channel !== 2)
 		throw new \InvalidArgumentException('Weapon ammo channels are 1 or 2');
 
-		return max(0, (int)($channel === 1
-			? $weapon->value('Weapon.AmmoGive', $weapon->value('Weapon.AmmoGive1', 0))
-			: $weapon->value('Weapon.AmmoGive2', 0)));
+		return max(
+			0
+			, (int)($channel === 1
+				? $weapon->value('Weapon.AmmoGive', $weapon->value('Weapon.AmmoGive1', 0))
+				: $weapon->value('Weapon.AmmoGive2', 0)
+			)
+		);
 	}
 
 	/** @return list<string> Distinct ammo inventory names used by either fire mode. */

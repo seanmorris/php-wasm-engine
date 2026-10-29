@@ -88,10 +88,7 @@ final class PlayerState
 		$this->beginDeath();
 		$this->previousViewHeight = $this->viewHeight;
 		$this->deathTime += max(0, $elapsed);
-		$this->viewHeight = max(
-			self::DEATH_VIEW_HEIGHT
-			, $this->viewHeight - self::DEATH_VIEW_SPEED * max(0, $elapsed)
-		);
+		$this->viewHeight = max(self::DEATH_VIEW_HEIGHT, $this->viewHeight - self::DEATH_VIEW_SPEED * max(0, $elapsed));
 	}
 
 	public function viewHeightAt(float $alpha): float

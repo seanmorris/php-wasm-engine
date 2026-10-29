@@ -42,9 +42,10 @@ class BindingMenu
 		, ?callable $allowed = null
 		, ?callable $extras = null
 		, ?callable $status = null
-	) {
+	){
 		$this->save = \Closure::fromCallable($save);
 		$this->reset = \Closure::fromCallable($reset);
+
 		/**
 		 * Accept every physical source when the game reserves none.
 		 *
@@ -87,6 +88,7 @@ class BindingMenu
 	 */
 	public function item(string $label = 'Controls'): array
 	{
+
 		/**
 		 * Build the keyboard and mouse binding page on demand.
 		 *
@@ -131,6 +133,7 @@ class BindingMenu
 	 */
 	private function page(): array
 	{
+
 		/**
 		 * Read the latest capture message, or the game's persistence status when there is none.
 		 *
@@ -160,6 +163,7 @@ class BindingMenu
 
 		foreach($this->actions as $id => [$code, $direction, $label])
 		{
+
 			/**
 			 * Show the action's current bindings for this device.
 			 *
@@ -239,6 +243,7 @@ class BindingMenu
 	public function hints(int $code, int $direction): string
 	{
 		$sources = $this->bindings->sources($code, $direction, Source::CONTROLLER);
+
 		/**
 		 * Prefer a controller glyph, falling back to the themed label.
 		 *
@@ -396,6 +401,7 @@ class BindingMenu
 
 			foreach(['replace' => 'Replace', 'share' => 'Share', 'cancel' => 'Cancel'] as $choice => $label)
 			{
+
 				/**
 				 * Resolve a binding conflict with the selected policy.
 				 *

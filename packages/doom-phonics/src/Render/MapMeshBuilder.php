@@ -57,13 +57,29 @@ final class MapMeshBuilder
 			{
 				$floor = [$points[0],$points[$i],$points[$i + 1]];
 				$floorPortal = $this->level->cameraPortalForPlane($sector, 0);
+
 				if($floorPortal) $this->mesh->cameraPortals->plane($floor, $sector, 0, $floorPortal);
-				else $this->triangle($floor, $floorTexture, $sector, 0, $this->level->surfaceTextureBinding($definition->floorTexture));
+				else
+				$this->triangle(
+					$floor
+					, $floorTexture
+					, $sector
+					, 0
+					, $this->level->surfaceTextureBinding($definition->floorTexture)
+				);
 
 				$ceiling = [$points[0],$points[$i + 1],$points[$i]];
 				$ceilingPortal = $this->level->cameraPortalForPlane($sector, 1);
+
 				if($ceilingPortal) $this->mesh->cameraPortals->plane($ceiling, $sector, 1, $ceilingPortal);
-				else $this->triangle($ceiling, $ceilingTexture, $sector, 1, $this->level->surfaceTextureBinding($definition->ceilingTexture));
+				else
+				$this->triangle(
+					$ceiling
+					, $ceilingTexture
+					, $sector
+					, 1
+					, $this->level->surfaceTextureBinding($definition->ceilingTexture)
+				);
 			}
 		}
 	}
@@ -86,8 +102,10 @@ final class MapMeshBuilder
 			{
 				$sector = $right ?? $left;
 				$backSector = $right !== null ? $left : null;
+
 				if($sector !== null)
 				$this->mesh->cameraPortals->line($a, $b, $sector, $backSector, $cameraPortal);
+
 				continue;
 			}
 
@@ -104,11 +122,12 @@ final class MapMeshBuilder
 						? $this->mesh->sky->boundary($a, $b, $sector, $line['index'])
 						: $this->mesh->sky->boundary($b, $a, $sector, $line['index']);
 				}
-			if($mirror)
-			{
-				$this->mesh->mirrors->line($a, $b, $mirror->sector, $mirror);
-				continue;
-			}
+
+				if($mirror)
+				{
+					$this->mesh->mirrors->line($a, $b, $mirror->sector, $mirror);
+					continue;
+				}
 
 				$this->quad(
 					$a
@@ -186,7 +205,14 @@ final class MapMeshBuilder
 		}
 	}
 
-	/** @param array{x:int,y:int} $a @param array{x:int,y:int} $b @param array<string,mixed>|null $right @param array<string,mixed>|null $left @param array{int,int} $top @param array{int,int} $bottom */
+	/**
+	 * @param array{x:int,y:int} $a
+	 * @param array{x:int,y:int} $b
+	 * @param array<string,mixed>|null $right
+	 * @param array<string,mixed>|null $left
+	 * @param array{int,int} $top
+	 * @param array{int,int} $bottom
+	 */
 	private function quad(
 		array $a
 		, array $b
@@ -203,8 +229,13 @@ final class MapMeshBuilder
 	): void {
 		$rightTexture = $right ? $this->atlas->id('wall', $this->level->sideTextures[$rightSideId][$slot]) : -1;
 		$leftTexture = $left ? $this->atlas->id('wall', $this->level->sideTextures[$leftSideId][$slot]) : -1;
-		$rightBinding = $right ? $this->level->surfaceTextureBinding($this->level->sideTextures[$rightSideId][$slot]) : null;
-		$leftBinding = $left ? $this->level->surfaceTextureBinding($this->level->sideTextures[$leftSideId][$slot]) : null;
+		$rightBinding = $right
+			? $this->level->surfaceTextureBinding($this->level->sideTextures[$rightSideId][$slot])
+			: null;
+
+		$leftBinding = $left
+			? $this->level->surfaceTextureBinding($this->level->sideTextures[$leftSideId][$slot])
+			: null;
 
 		if($rightTexture < 0 && $leftTexture < 0) return;
 
@@ -240,11 +271,18 @@ final class MapMeshBuilder
 			, $leftSector
 		);
 		$this->mesh->wallSpan($first, 6, $lineId, $slot, $rightSideId, $leftSideId);
+
 		if($rightBinding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 6, $rightBinding, 0);
+
 		if($leftBinding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 6, $leftBinding, 1);
 	}
 
-	/** @param array<string,mixed>|null $side @param array{int,int} $top @param array{int,int} $bottom @return array{float,float,float} */
+	/**
+	 * @param array<string,mixed>|null $side
+	 * @param array{int,int} $top
+	 * @param array{int,int} $bottom
+	 * @return array{float,float,float}
+	 */
 	private function wallAnchor(?array $side, string $slot, array $top, array $bottom, int $flags, int $texture): array
 	{
 		if(!$side || $texture < 0) return [-1.0,0.0,0.0];
@@ -267,10 +305,12 @@ final class MapMeshBuilder
 
 	/** @param list<array{0:float,1:float}> $points */
 	private function triangle(
-		array $points, int $texture, int $sector, int $plane
+		array $points
+		, int $texture
+		, int $sector
+		, int $plane
 		, CameraTextureBinding|DomTextureBinding|null $binding = null
-	): void
-	{
+	): void {
 		if($texture < 0) return;
 
 		$first = $this->mesh->vertexCount();
@@ -291,6 +331,7 @@ final class MapMeshBuilder
 			, $sector
 		);
 		$this->mesh->planeSpan($first, 3, $sector, $plane);
+
 		if($binding) $this->mesh->cameraTextures->surface($this->mesh->vertices, $first, 3, $binding, 2);
 	}
 

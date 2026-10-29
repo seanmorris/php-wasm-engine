@@ -115,10 +115,14 @@ final class DoomRenderPass implements RenderPass
 		$supportedByMovingFloor = $sector !== null
 			&& abs($sector->floor - $sector->previousFloor) > 1e-6
 			&& abs($pose->z - $sector->floorZ($pose->x, $pose->y)) <= .1;
+
 		$smoothHeight = !$this->registry->has($entity, Body::class)
 			|| !$this->renderer->level->boundsCrossCameraPortal(
-				$x, $y, $this->registry->get($entity, Body::class)->radius
+				$x
+				, $y
+				, $this->registry->get($entity, Body::class)->radius
 			);
+
 		$z = $this->cameraHeight->follow($pose->zAt($alpha), $smoothHeight, $supportedByMovingFloor);
 		$pitch = $this->registry->has($entity, ViewInput::class)
 			? $this->registry->get($entity, ViewInput::class)->pitch
@@ -149,12 +153,33 @@ final class DoomRenderPass implements RenderPass
 		if(!$this->target) glViewport(0, 0, $frame->device->width, $frame->device->height);
 
 		$this->renderer->renderCameraPortals(
-			$this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha, $cameraSector
+			$this->registry
+			, $x
+			, $y
+			, $z
+			, $angle
+			, $pitch
+			, $entity
+			, $extraLight
+			, $alpha
+			, $cameraSector
 		);
+
 		$this->renderer->render($x, $y, $z, $angle, $pitch, $extraLight, $alpha, $cameraSector);
+
 		$this->renderer->renderActors(
-			$this->registry, $x, $y, $z, $angle, $pitch, $entity, $extraLight, $alpha, $cameraSector
+			$this->registry
+			, $x
+			, $y
+			, $z
+			, $angle
+			, $pitch
+			, $entity
+			, $extraLight
+			, $alpha
+			, $cameraSector
 		);
+
 		$this->renderer->renderBeams($this->registry, $x, $y, $z, $angle, $pitch, $alpha);
 		$this->target?->compose();
 		$this->renderer->renderOverlay($this->registry, $this->settings->reticle());

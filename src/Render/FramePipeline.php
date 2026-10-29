@@ -27,6 +27,7 @@ final class FramePipeline
 	public function add(RenderPass $pass): void
 	{
 		if($this->closed) throw new \LogicException('Render pipeline is closed');
+
 		if(isset($this->passes[$pass->id()])) throw new \LogicException("Conflicting render pass {$pass->id()}");
 
 		$this->passes[$pass->id()] = $pass;
@@ -110,6 +111,7 @@ final class FramePipeline
 	 */
 	private function ordered(): array
 	{
+
 		/**
 		 * Look up a registered pass by ID.
 		 *
@@ -133,7 +135,9 @@ final class FramePipeline
 		 */
 		$visit = function(string $id) use (&$visit, &$result, &$active, &$done): void {
 			if(isset($done[$id])) return;
+
 			if(isset($active[$id])) throw new \LogicException("Render-pass dependency cycle at $id");
+
 			if(!isset($this->passes[$id])) throw new \LogicException("Unknown render-pass dependency $id");
 
 			$active[$id] = true;

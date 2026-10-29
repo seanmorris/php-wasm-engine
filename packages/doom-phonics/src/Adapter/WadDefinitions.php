@@ -36,6 +36,7 @@ final class WadDefinitions
 			$root . 'sndinfo.txt' => self::read($root . 'sndinfo.txt')
 			, ...$sndinfo
 		]);
+
 		$this->language = LanguageCatalog::documents([
 			$root . 'language.txt' => self::read($root . 'language.txt')
 			, ...$language

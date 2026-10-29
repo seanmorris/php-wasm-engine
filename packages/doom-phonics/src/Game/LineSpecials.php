@@ -202,7 +202,8 @@ final class LineSpecials
 			$line = $this->level->map->linedefs[$lineId];
 
 			if((!$line['action'] && !$this->level->cameraPortalForLine($lineId))
-				|| !self::segmentsCross($fromX, $fromY, $actor->x, $actor->y, $line, $this->level))
+				|| !self::segmentsCross($fromX, $fromY, $actor->x, $actor->y, $line, $this->level)
+			)
 			continue;
 
 			$hits[$lineId] = self::intersectionFraction($fromX, $fromY, $actor->x, $actor->y, $line, $this->level);
@@ -268,7 +269,9 @@ final class LineSpecials
 			{
 				'blue' => 'PD_BLUEK', 'red' => 'PD_REDK', 'yellow' => 'PD_YELLOWK',
 				default => ''
-			}, 'YOU NEED A ' . strtoupper($action->key) . ' KEY'));
+			}, 'YOU NEED A ' . strtoupper($action->key) . ' KEY'
+			));
+
 			$this->playAtActor(SoundCue::locked(), $actor);
 
 			return false;
@@ -392,8 +395,7 @@ final class LineSpecials
 		, float $fromX
 		, float $fromY
 		, float $fraction
-	): void
-	{
+	): void {
 		// The pre-crossing pose belongs to the origin component. Transforming that
 		// whole point places render interpolation behind the destination portal,
 		// even though the renderer has already switched to the destination
@@ -406,6 +408,7 @@ final class LineSpecials
 		[$previousX,$previousY] = $portal->point($crossingX, $crossingY);
 		[$x,$y] = $portal->point($actor->x, $actor->y);
 		$travelDistance = hypot($travelX, $travelY);
+
 		if($travelDistance > 0)
 		{
 			$directionX = $travelX / $travelDistance;
@@ -413,12 +416,14 @@ final class LineSpecials
 			$exitDepth = ($x - $previousX) * $directionX + ($y - $previousY) * $directionY;
 			$previousX += $directionX * self::PORTAL_EXIT_INSET;
 			$previousY += $directionY * self::PORTAL_EXIT_INSET;
+
 			if($exitDepth < self::PORTAL_EXIT_INSET)
 			{
 				$x += $directionX * (self::PORTAL_EXIT_INSET - $exitDepth);
 				$y += $directionY * (self::PORTAL_EXIT_INSET - $exitDepth);
 			}
 		}
+
 		$actor->previousX = $previousX;
 		$actor->previousY = $previousY;
 		$actor->previousZ = $portal->z($crossingZ, $this->level);

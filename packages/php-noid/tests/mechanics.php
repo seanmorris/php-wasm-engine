@@ -321,19 +321,13 @@ $protected = new Projectile($p->x, 390, 'killer', 2000, 'enemy');
 $protectedId = $r->create($protected);
 (new ProjectileSystem($f))->update($r, .05);
 
-expect(
-	$f->state->lives === 2 && !$r->alive($protectedId)
-	, 'respawn protection absorbs a following lethal projectile'
-);
+expect($f->state->lives === 2 && !$r->alive($protectedId), 'respawn protection absorbs a following lethal projectile');
 
 (new PaddleSystem($f))->update($r, 2.1);
 $exposed = $r->create(new Projectile($p->x, 390, 'killer', 2000, 'enemy'));
 (new ProjectileSystem($f))->update($r, .05);
 
-expect(
-	$f->state->lives === 1 && !$r->alive($exposed)
-	, 'lethal projectiles resume after respawn protection expires'
-);
+expect($f->state->lives === 1 && !$r->alive($exposed), 'lethal projectiles resume after respawn protection expires');
 
 [$f, $r, $p, $b] = arena();
 $brickId = $r->create(new Brick(280, 200, 80, 20, 3));
@@ -497,7 +491,12 @@ expect($p->powerFlashes['laser'] === .8, 'new equipment starts a HUD flash');
 $f->power('laser');
 expect($p->powerFlashes['laser'] === .8, 'repeat pickup restarts the HUD flash');
 $f->power('extra');
-expect($p->powerFlashes['extra'] === .8 && !isset($p->powers['extra']), 'instant pickups flash without becoming timed equipment');
+
+expect(
+	$p->powerFlashes['extra'] === .8 && !isset($p->powers['extra'])
+	, 'instant pickups flash without becoming timed equipment'
+);
+
 (new PaddleSystem($f))->update($r, .81);
 expect($p->powerFlashes === [] && isset($p->powers['laser']), 'HUD flashes expire independently of equipment');
 $f->power('catch');
@@ -515,6 +514,7 @@ expect(
 [$f, $r, $p, $b] = arena();
 $f->state->infiniteLives = true;
 $f->state->lives = 1;
+
 for($i = 0; $i < 10; $i++) $f->loseLife();
 expect($f->state->lives === 1 && $f->state->phase === 'playing', 'infinite lives survives repeated losses');
 expect(count($r->query(Ball::class)) === 1, 'infinite lives serves one fresh ball after each loss');

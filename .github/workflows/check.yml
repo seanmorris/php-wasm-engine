@@ -69,6 +69,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/setup-docs
       - run: npm run setup:runtime
       - run: npm run test:cli:browser
       - name: Measure PHP-Noid collisions in PHP-WASM
@@ -85,7 +86,6 @@ jobs:
           path: |
             ${{ runner.temp }}/php-noid-collisions.json
             test-results/**/*profile*
-      - uses: ./.github/actions/setup-docs
       - run: npm run build:docs
       - run: npm run test:site
       - run: npm run test:site:browser

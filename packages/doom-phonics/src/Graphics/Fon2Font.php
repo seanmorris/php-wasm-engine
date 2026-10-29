@@ -21,7 +21,8 @@ final class Fon2Font
 		, public int $lastCharacter
 		, public int $kerning
 		, public int $spaceWidth
-	) {}
+	){
+	}
 
 	/** Decode a standard FON2 lump into menu-red pictures in the active PLAYPAL. */
 	public static function decode(Lump $lump, Palette $palette): self
@@ -83,11 +84,13 @@ final class Fon2Font
 		for($index = 1; $index < $paletteSize; $index++)
 		{
 			$color = $index * 3;
+
 			$luminance = (int)round(
 				Binary::u8($fontPalette, $color, $source) * .2126
 				+ Binary::u8($fontPalette, $color + 1, $source) * .7152
 				+ Binary::u8($fontPalette, $color + 2, $source) * .0722
 			);
+
 			$translation[$index] = $palette->closestIndex($luminance, 0, 0);
 		}
 
@@ -95,6 +98,7 @@ final class Fon2Font
 		$spaceWidth = $spaceIndex === null
 			? max(1, (int)round(array_sum($widths) * 2 / (3 * $count)))
 			: $widths[$spaceIndex];
+
 		$self = new self($height, $first, $last, $kerning, $spaceWidth);
 
 		foreach($widths as $index => $width)

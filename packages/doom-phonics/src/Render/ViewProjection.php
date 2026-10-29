@@ -28,8 +28,7 @@ final class ViewProjection
 		, float $verticalOffset
 		, float $pitch
 		, PitchMode $mode = PitchMode::Perspective
-	): float
-	{
+	): float {
 		if($mode === PitchMode::ClassicShear) return $horizontalDepth;
 
 		return $horizontalDepth * cos($pitch) + $verticalOffset * sin($pitch);
@@ -41,8 +40,7 @@ final class ViewProjection
 		, float $verticalOffset
 		, float $pitch
 		, PitchMode $mode = PitchMode::Perspective
-	): float
-	{
+	): float {
 		if($mode === PitchMode::ClassicShear)
 		return $verticalOffset - tan($pitch) * $horizontalDepth;
 
@@ -55,11 +53,11 @@ final class ViewProjection
 		, float $verticalOffset
 		, float $pitch
 		, PitchMode $mode = PitchMode::Perspective
-	): float
-	{
+	): float {
 		$depth = $this->viewDepth($horizontalDepth, $verticalOffset, $pitch, $mode);
 
-		if(abs($depth) < 1e-9) return $this->viewHeight($horizontalDepth, $verticalOffset, $pitch, $mode) < 0
+		if(abs($depth) < 1e-9)
+		return $this->viewHeight($horizontalDepth, $verticalOffset, $pitch, $mode) < 0
 			? -INF
 			: INF;
 
