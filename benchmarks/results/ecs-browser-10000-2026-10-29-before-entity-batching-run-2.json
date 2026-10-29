@@ -1,0 +1,425 @@
+{
+  "php": "8.4.1",
+  "int_bytes": 4,
+  "sapi": "embed",
+  "jit": false,
+  "entities": 10000,
+  "samples": 7,
+  "registry_bytes": null,
+  "query_cache_bytes": null,
+  "results": {
+    "string_snapshot": {
+      "median_us": 2.3125,
+      "min_us": 2.2875,
+      "max_us": 2.675,
+      "samples_us": [
+        2.675,
+        2.35,
+        2.3,
+        2.3,
+        2.3125,
+        2.2875,
+        2.325
+      ],
+      "checksum": 20001,
+      "iterations": 8000,
+      "units_per_call": 1
+    },
+    "all_common": {
+      "median_us": 5.286839145106862,
+      "min_us": 4.911886014248219,
+      "max_us": 7.386576677915261,
+      "samples_us": [
+        7.386576677915261,
+        5.961754780652418,
+        5.286839145106862,
+        4.911886014248219,
+        4.949381327334083,
+        4.949381327334083,
+        5.399325084364454
+      ],
+      "checksum": 14002,
+      "iterations": 2667,
+      "units_per_call": 1
+    },
+    "all_rare": {
+      "median_us": 4.25,
+      "min_us": 4.025,
+      "max_us": 4.325,
+      "samples_us": [
+        4.25,
+        4.325,
+        4.05,
+        4.325,
+        4.025,
+        4.275,
+        4.025
+      ],
+      "checksum": 9012,
+      "iterations": 4000,
+      "units_per_call": 1
+    },
+    "any": {
+      "median_us": 4.3,
+      "min_us": 3.875,
+      "max_us": 4.975,
+      "samples_us": [
+        3.875,
+        4.05,
+        4,
+        4.95,
+        4.975,
+        4.675,
+        4.3
+      ],
+      "checksum": 20001,
+      "iterations": 4000,
+      "units_per_call": 1
+    },
+    "not": {
+      "median_us": 4.0119985001874765,
+      "min_us": 3.824521934758155,
+      "max_us": 4.311961004874391,
+      "samples_us": [
+        3.9745031871016123,
+        3.824521934758155,
+        4.1244844394450695,
+        4.236970378702662,
+        3.8620172478440193,
+        4.0119985001874765,
+        4.311961004874391
+      ],
+      "checksum": 14002,
+      "iterations": 2667,
+      "units_per_call": 1
+    },
+    "nested": {
+      "median_us": 5.88676415448069,
+      "min_us": 5.661792275965504,
+      "max_us": 6.561679790026246,
+      "samples_us": [
+        5.88676415448069,
+        6.111736032995876,
+        5.661792275965504,
+        5.88676415448069,
+        5.661792275965504,
+        6.561679790026246,
+        6.14923134608174
+      ],
+      "checksum": 18002,
+      "iterations": 2667,
+      "units_per_call": 1
+    },
+    "all_fresh_description": {
+      "median_us": 8.8,
+      "min_us": 7.6,
+      "max_us": 9.5,
+      "samples_us": [
+        8.95,
+        8.6,
+        8.25,
+        9.5,
+        8.8,
+        8.95,
+        7.6
+      ],
+      "checksum": 14002,
+      "iterations": 2000,
+      "units_per_call": 1
+    },
+    "string_after_mutation": {
+      "median_us": 86.4,
+      "min_us": 84.8,
+      "max_us": 89.6,
+      "samples_us": [
+        85.6,
+        86.4,
+        88.4,
+        84.8,
+        89.6,
+        88.4,
+        85.2
+      ],
+      "checksum": 20001,
+      "iterations": 250,
+      "units_per_call": 1
+    },
+    "all_after_mutation": {
+      "median_us": 687.5,
+      "min_us": 680,
+      "max_us": 720,
+      "samples_us": [
+        720,
+        715,
+        680,
+        687.5,
+        682.5,
+        685,
+        712.5
+      ],
+      "checksum": 14002,
+      "iterations": 40,
+      "units_per_call": 1
+    },
+    "nested_after_mutation": {
+      "median_us": 1825,
+      "min_us": 1720,
+      "max_us": 2135,
+      "samples_us": [
+        1720,
+        1802.5,
+        2135,
+        1825,
+        1890,
+        1872.5,
+        1810
+      ],
+      "checksum": 18002,
+      "iterations": 40,
+      "units_per_call": 1
+    },
+    "get_exact": {
+      "median_us": 8872.5,
+      "min_us": 8602.5,
+      "max_us": 9227.5,
+      "samples_us": [
+        9227.5,
+        8757.5,
+        8602.5,
+        8872.5,
+        9200,
+        9040,
+        8695
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 10000
+    },
+    "get_interface": {
+      "median_us": 16272.5,
+      "min_us": 15525,
+      "max_us": 19560,
+      "samples_us": [
+        15672.5,
+        16272.5,
+        15525,
+        15905,
+        16472.5,
+        16445,
+        19560
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 10000
+    },
+    "has_sparse": {
+      "median_us": 6852.5,
+      "min_us": 6315,
+      "max_us": 7675,
+      "samples_us": [
+        7022.5,
+        6852.5,
+        6777.5,
+        6782.5,
+        7675,
+        7387.5,
+        6315
+      ],
+      "checksum": 10,
+      "iterations": 40,
+      "units_per_call": 10000
+    },
+    "add_remove_1000": {
+      "median_us": 7905,
+      "min_us": 7460,
+      "max_us": 8427.5,
+      "samples_us": [
+        7460,
+        7530,
+        7827.5,
+        8137.5,
+        8427.5,
+        7992.5,
+        7905
+      ],
+      "checksum": 1000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "replace_1000": {
+      "median_us": 2517.5,
+      "min_us": 2442.5,
+      "max_us": 2875,
+      "samples_us": [
+        2875,
+        2482.5,
+        2442.5,
+        2450,
+        2517.5,
+        2650,
+        2667.5
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "create_destroy_1000": {
+      "median_us": 18017.5,
+      "min_us": 17677.5,
+      "max_us": 18915,
+      "samples_us": [
+        18915,
+        17677.5,
+        18582.5,
+        18017.5,
+        17917.5,
+        17727.5,
+        18125
+      ],
+      "checksum": 0,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "add_remove_1000_observed": {
+      "median_us": 11772.5,
+      "min_us": 11445,
+      "max_us": 12317.5,
+      "samples_us": [
+        12052.5,
+        11445,
+        11772.5,
+        12317.5,
+        11497.5,
+        11982.5,
+        11462.5
+      ],
+      "checksum": 1000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "replace_1000_observed": {
+      "median_us": 12925,
+      "min_us": 12427.5,
+      "max_us": 13580,
+      "samples_us": [
+        12467.5,
+        12925,
+        12520,
+        12427.5,
+        13580,
+        13340,
+        13335
+      ],
+      "checksum": 10000,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "create_destroy_1000_observed": {
+      "median_us": 32017.5,
+      "min_us": 31167.5,
+      "max_us": 32932.5,
+      "samples_us": [
+        32577.5,
+        32017.5,
+        32932.5,
+        31220,
+        31340,
+        31167.5,
+        32810
+      ],
+      "checksum": 0,
+      "iterations": 40,
+      "units_per_call": 1000
+    },
+    "system_update": {
+      "median_us": 7497.5,
+      "min_us": 7265,
+      "max_us": 8345,
+      "samples_us": [
+        7330,
+        7497.5,
+        7265,
+        7295,
+        7640,
+        7762.5,
+        8345
+      ],
+      "checksum": 4000,
+      "iterations": 40,
+      "units_per_call": 1
+    },
+    "add_1000": {
+      "median_us": 3445,
+      "min_us": 3330,
+      "max_us": 3790,
+      "samples_us": [
+        3790,
+        3502.5,
+        3455,
+        3330,
+        3430,
+        3412.5,
+        3445
+      ],
+      "checksum": 1000,
+      "iterations": 40,
+      "units_per_call": 1000,
+      "fixture_setup_timed": false
+    },
+    "remove_1000": {
+      "median_us": 3335,
+      "min_us": 3152.5,
+      "max_us": 3735,
+      "samples_us": [
+        3187.5,
+        3152.5,
+        3537.5,
+        3542.5,
+        3335,
+        3310,
+        3735
+      ],
+      "checksum": 0,
+      "iterations": 40,
+      "units_per_call": 1000,
+      "fixture_setup_timed": false
+    },
+    "create_1000": {
+      "median_us": 10692.5,
+      "min_us": 10550,
+      "max_us": 11285,
+      "samples_us": [
+        10692.5,
+        11067.5,
+        10680,
+        10925,
+        10550,
+        10645,
+        11285
+      ],
+      "checksum": 1000,
+      "iterations": 40,
+      "units_per_call": 1000,
+      "fixture_setup_timed": false
+    },
+    "destroy_1000": {
+      "median_us": 7402.5,
+      "min_us": 6782.5,
+      "max_us": 7687.5,
+      "samples_us": [
+        7402.5,
+        7302.5,
+        7657.5,
+        7687.5,
+        7582.5,
+        7240,
+        6782.5
+      ],
+      "checksum": 0,
+      "iterations": 40,
+      "units_per_call": 1000,
+      "fixture_setup_timed": false
+    }
+  },
+  "browser": "152.0.7977.75"
+}

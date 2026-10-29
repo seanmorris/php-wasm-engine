@@ -236,7 +236,7 @@
     "src/Asset/Resource.php": "sha256-jB+eiLg2vjiMRC8RiLIhoTbuG39I+yHcUpQ0ySYCcp8=",
     "src/Ecs/ObjectSpawner.php": "sha256-8XEWsiAupPwYEombUmplzElb+sfD+DEpfPmu6cACU8g=",
     "src/Ecs/Query.php": "sha256-rwdqj3xptvU7YDvpmBWpMD+fVNlbKkru9ZJZdPjNaiM=",
-    "src/Ecs/Registry.php": "sha256-JlY86yaKawaTX28DDcZiazitBsM8rBH8dIW/9qvZrCc=",
+    "src/Ecs/Registry.php": "sha256-tY9oiklkZbpyOaKXUeI5nQZZm8+HRtv8AYaqQWgJriw=",
     "src/Ecs/Scheduler.php": "sha256-NX1P3J2Lbr9b7Mt4npJI1dbuR77tRvAVrcXqZsRCEwA=",
     "src/Effects/CameraShake.php": "sha256-nlwfXqpd+qG3U5cDYWaVOGF+bYiDoe34klk66ycTUVI=",
     "src/Effects/ParticleBurst.php": "sha256-Endon/EZjMAMdV2as2C+4lIqPrBbzVN71Z74DuYsbV4=",

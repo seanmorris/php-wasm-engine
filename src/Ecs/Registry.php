@@ -40,18 +40,53 @@ final class Registry
 	public function create(object ...$components): int
 	{
 		$id = $this->next++;
-		$this->entities[$id] = [];
-		$this->invalidateQueries();
 
 		if(!$this->observesAdded && !$this->observesRemoved)
 		{
+			$entity = [];
+			$duplicate = false;
+
 			foreach($components as $component)
 			{
-				$this->addWithoutListeners($id, $component);
+				$type = get_class($component);
+				$duplicate = $duplicate || isset($entity[$type]);
+				$entity[$type] = $component;
 			}
+
+			if($duplicate)
+			{
+				// Replacing an exact parent can also remove subclasses attached earlier
+				// in this call. Preserve the ordered attachment path for repeated types.
+				$this->entities[$id] = [];
+
+				foreach($components as $component)
+				{
+					$this->addWithoutListeners($id, $component);
+				}
+			}
+			else
+			{
+				// No callbacks can observe construction: install the component table once.
+				$this->entities[$id] = $entity;
+
+				foreach($entity as $type => $component)
+				{
+					$types = $this->typeCache[$type] ?? $this->types($type);
+
+					foreach($types as $indexed)
+					{
+						$this->index[$indexed][$id] = ($this->index[$indexed][$id] ?? 0) + 1;
+					}
+				}
+			}
+
+			$this->invalidateQueries();
 
 			return $id;
 		}
+
+		$this->entities[$id] = [];
+		$this->invalidateQueries();
 
 		foreach($components as $component)
 		{
@@ -207,12 +242,22 @@ final class Registry
 
 		if(!$this->observesRemoved)
 		{
-			foreach(array_keys($this->entities[$id]) as $type)
+			// Retain components until all memberships and snapshots are retired, so
+			// their destructors cannot observe a partially destroyed entity.
+			$components = $this->entities[$id];
+			unset($this->entities[$id]);
+
+			foreach($components as $type => $component)
 			{
-				$this->detachComponent($id, $type);
+				$types = $this->typeCache[$type];
+
+				foreach($types as $indexed)
+				{
+					// All components are leaving, including every shared ancestor.
+					unset($this->index[$indexed][$id]);
+				}
 			}
 
-			unset($this->entities[$id]);
 			$this->invalidateQueries();
 
 			return;
@@ -361,6 +406,7 @@ final class Registry
 
 		// Intersect in the original candidate order, even when a nested set is more selective.
 		$ids = $candidates ? array_keys(array_intersect_key($candidates, $this->matchingSet($query))) : [];
+
 		return $this->cacheSnapshot($key, $ids);
 	}
 

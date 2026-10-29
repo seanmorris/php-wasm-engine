@@ -12,6 +12,143 @@ class EcsSibling implements EcsTagged {}
 
 class EcsOther {}
 
+test('ECS initial component batches preserve ordered replacements and shared memberships', function() {
+	$cases = [
+		[[], []], [[EcsBase::class], [0]]
+		, [[EcsBase::class, EcsChild::class, EcsSibling::class], [0, 1, 2]]
+		, [[EcsChild::class, EcsSibling::class, EcsBase::class], [0, 1, 2]]
+		, [[EcsBase::class, EcsBase::class], [1]]
+		, [[EcsBase::class, EcsChild::class, EcsSibling::class, EcsBase::class], [2, 3]]
+		, [[EcsChild::class, EcsBase::class, EcsOther::class, EcsChild::class], [3, 1, 2]]
+		, [[EcsBase::class, EcsChild::class, EcsBase::class, EcsChild::class], [2, 3]]
+	];
+
+	foreach($cases as [$types, $retained])
+	{
+		$r = new Registry;
+		$survivor = $r->create(new EcsChild, new EcsSibling);
+		$before = $r->query(EcsTagged::class);
+		$allBefore = $r->query(Query::all());
+		$components = array_map(fn($type) => new $type, $types);
+		$expected = [];
+
+		foreach($retained as $position)
+		{
+			$expected[$types[$position]] = $components[$position];
+		}
+
+		$id = $r->create(...$components);
+		check($r->query(Query::all()) === [$survivor, $id]);
+		check($before === [$survivor] && $allBefore === [$survivor]);
+
+		foreach([EcsBase::class, EcsChild::class, EcsSibling::class, EcsOther::class, EcsTagged::class] as $type)
+		{
+			$matching = array_filter($expected, fn($component) => $component instanceof $type);
+			check($r->has($id, $type) === (bool)$matching);
+			check(in_array($id, $r->query($type), true) === (bool)$matching);
+
+			if($matching)
+			{
+				check($r->get($id, $type) === ($expected[$type] ?? reset($matching)));
+			}
+		}
+
+		// Counts must survive removing just one of several components sharing a type.
+		$r->remove($id, EcsChild::class);
+		unset($expected[EcsChild::class]);
+		check($r->has($id, EcsTagged::class) === ecsReferenceMatch($expected, EcsTagged::class));
+		$r->query(Query::all(EcsTagged::class));
+		$r->destroy($id);
+		check(!$r->alive($id));
+		check($r->query(Query::all()) === [$survivor]);
+		check($r->query(EcsTagged::class) === [$survivor]);
+		check($r->query(Query::all(EcsTagged::class)) === [$survivor]);
+		check($r->query(EcsOther::class) === []);
+		check($r->create() === $id + 1, 'destroyed IDs must not be reused');
+
+		try
+		{
+			$r->destroy($id);
+			check(false, 'destroying a dead entity did not throw');
+		}
+		catch(OutOfBoundsException $error)
+		{
+			check($error->getMessage() === "Entity $id is not alive");
+		}
+	}
+});
+
+test('ECS creation callbacks observe each attachment and ordered parent replacement', function() {
+	foreach([['added'], ['removed'], ['added', 'removed']] as $observed)
+	{
+		$r = new Registry;
+		$events = [];
+
+		foreach($observed as $event)
+		{
+			$r->on($event, function($registry, $id, $component) use (&$events, $event) {
+				check($registry->alive($id));
+				check($registry->query(Query::all()) === [$id]);
+				$events[] = [$event, get_class($component), $registry->query(EcsBase::class)];
+			});
+		}
+
+		$r->query(Query::all());
+		$r->query(EcsBase::class);
+		$base = new EcsBase;
+		$id = $r->create(new EcsBase, new EcsChild, $base);
+		$expected = [
+			['added', EcsBase::class, [$id]], ['added', EcsChild::class, [$id]]
+			, ['removed', EcsBase::class, [$id]], ['removed', EcsChild::class, []]
+			, ['added', EcsBase::class, [$id]]
+		];
+
+		check($events === array_values(array_filter($expected, fn($row) => in_array($row[0], $observed, true))));
+		check($r->get($id, EcsBase::class) === $base);
+		check(!$r->has($id, EcsChild::class));
+	}
+});
+
+test('ECS destruction releases every component after retiring memberships and cached snapshots', function() {
+	$r = new Registry;
+	$id = null;
+	$observations = [];
+
+	$inspect = function() use ($r, &$id, &$observations) {
+		$observations[] = [
+			$r->alive($id), $r->has($id, EcsTagged::class)
+			, $r->query(EcsTagged::class), $r->query(Query::all())
+		];
+
+		// Destructors may perform new registry work after the retired entity is gone.
+		$next = $r->create(new EcsSibling);
+		$r->destroy($next);
+	};
+
+	$component = new class($inspect) implements EcsTagged {
+
+		public function __construct(private Closure $inspect) {}
+
+		public function __destruct() { ($this->inspect)(); }
+	};
+
+	$child = new EcsChild;
+	$sibling = new EcsSibling;
+	$weak = array_map(fn($value) => WeakReference::create($value), [$component, $child, $sibling]);
+	$id = $r->create($component, $child, $sibling);
+	unset($component, $child, $sibling);
+	$snapshot = $r->query(EcsTagged::class);
+	$r->query(Query::all());
+	$r->destroy($id);
+	check($observations === [[false, false, [], []]]);
+	check($snapshot === [$id]);
+
+	foreach($weak as $reference) check($reference->get() === null);
+
+	check($r->query(EcsTagged::class) === []);
+	check($r->query(Query::all()) === []);
+});
+
 test('ECS type lookups preserve aliases, case variants and types defined after a miss', function() {
 	$r = new Registry;
 	$component = new EcsChild;
