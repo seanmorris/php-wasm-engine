@@ -253,7 +253,7 @@
     "src/Input/InputCode.php": "sha256-JEz2ft5PG97UpKPn7ZYDt6HBvsvotJItWke8RXWmYlQ=",
     "src/Input/Key.php": "sha256-PBMvk80RFAZJUTia7oklUBxalPGaxEIc6PA2wws0o3k=",
     "src/Input/Pad.php": "sha256-7LYC6efBfVDsyb0rRJH0kF0natBo1ylcBAykuk33CHA=",
-    "src/Input/SdlInput.php": "sha256-IIyBpZM7aWHjIC3P+DzQam5ynmPs8ydiKjO+MJpP9BU=",
+    "src/Input/SdlInput.php": "sha256-LXjoD3b1R1Hp1vrzLzKgjO/rdJ6tk56FhBfVZrfSjR0=",
     "src/Input/Sequences.php": "sha256-8JVDFGdmHe4mRIMXuU6i5T10HirZ4uP7ClOGGGyVtdc=",
     "src/Input/Source.php": "sha256-wS2W8fh5U9XjPHVtpWLB+HyPxAB6WEW3MPcjfT1kEDE=",
     "src/Network/AuthorityOwner.php": "sha256-wVLVMfXTYT7akDX0k7VfgFWeG+kh8RAR9RxFNwgxiVQ=",

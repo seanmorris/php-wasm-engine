@@ -20,10 +20,12 @@ final class SdlInput
 	private array $sequenceBlocked = [];
 	private bool $focused = true, $closed = false;
 	private bool $resetPads = false;
-	private $canvas = null, $focusListener = null, $blurListener = null;
+	private $canvas = null, $focusListener = null, $blurListener = null, $mouseListener = null;
 	private bool $pointerLocked = false;
 	private $keyboardWindow = null, $keyListener = null;
 	private array $browserKeys = [];
+	/** Whether the newest browser mouse-down originated on the canvas. */
+	private ?bool $browserMouseTarget = null;
 	private array $uiEvents = [];
 	private array $uiBlocked = [];
 	private bool $uiEditing = false;
@@ -160,6 +162,27 @@ final class SdlInput
 
 			$this->keyboardWindow->addEventListener('keydown', $this->keyListener, true);
 			$this->keyboardWindow->addEventListener('keyup', $this->keyListener, true);
+
+			/**
+			 * Preserve each mouse-down's DOM owner until SDL drains the matching event.
+			 * A launcher button can close itself and refocus the canvas before that drain,
+			 * so checking only the current focus would turn the launcher click into Fire.
+			 *
+			 * @param object $event Browser mouse event observed before SDL's listener.
+			 * @return void Retains canvas ownership for the next SDL mouse-down.
+			 */
+			$this->mouseListener = function(object $event): void {
+				$target = $event->target;
+				$owned = $this->canvas->ownerDocument->pointerLockElement === $this->canvas
+					|| ($target && (bool)$this->canvas->contains($target));
+
+				// SDL listens on the canvas and may omit external DOM presses entirely. Keep
+				// only the newest origin so an old launcher interaction cannot reject the
+				// next canvas event.
+				$this->browserMouseTarget = $owned;
+			};
+
+			$this->keyboardWindow->addEventListener('mousedown', $this->mouseListener, true);
 		}
 	}
 
@@ -371,6 +394,16 @@ final class SdlInput
 
 		while(SDL_PollEvent($event))
 		{
+			$mouseOwned = null;
+
+			// Drain origin markers even while focus is elsewhere. Otherwise an ignored
+			// launcher click would be mistaken for the next real canvas click.
+			if($this->canvas && $event->type === SDL_MOUSEBUTTONDOWN)
+			{
+				$mouseOwned = $this->browserMouseTarget;
+				$this->browserMouseTarget = null;
+			}
+
 			if($event->type === SDL_QUIT)
 			{
 				$this->quit = true;
@@ -409,7 +442,7 @@ final class SdlInput
 
 			if($this->focused)
 			{
-				if(!$this->discarding) $this->actionEvent($event);
+				if(!$this->discarding) $this->actionEvent($event, $mouseOwned);
 
 				$this->uiEvent($event);
 			}
@@ -457,9 +490,10 @@ final class SdlInput
 	 * Translate physical SDL events before gameplay assigns their meaning.
 	 *
 	 * @param \SDL_Event $event Polled keyboard or pointer event.
+	 * @param bool|null $mouseOwned Browser origin for this mouse-down, when available.
 	 * @return void Updates physical buffers for the installed profile.
 	 */
-	private function actionEvent(\SDL_Event $event): void
+	private function actionEvent(\SDL_Event $event, ?bool $mouseOwned = null): void
 	{
 		if(!$this->actions) return;
 
@@ -476,9 +510,12 @@ final class SdlInput
 		if($event->type === SDL_MOUSEBUTTONDOWN || $event->type === SDL_MOUSEBUTTONUP)
 		{
 			$code = $event->button->button;
+			$down = $event->type === SDL_MOUSEBUTTONDOWN;
 
-			if($code >= 1 && $code <= 5)
-			$this->actions->hold(new Source(Source::MOUSE_BUTTON, $code), $event->type === SDL_MOUSEBUTTONDOWN ? 1 : 0);
+			if($code >= 1 && $code <= 5 && (!$down || !$this->canvas
+				|| ($mouseOwned ?? $this->ownsFocus())
+			))
+			$this->actions->hold(new Source(Source::MOUSE_BUTTON, $code), $down ? 1 : 0);
 		}
 
 		if($event->type === SDL_MOUSEWHEEL)
@@ -667,10 +704,12 @@ final class SdlInput
 			$this->canvas->removeEventListener('blur', $this->blurListener);
 			$this->keyboardWindow->removeEventListener('keydown', $this->keyListener, true);
 			$this->keyboardWindow->removeEventListener('keyup', $this->keyListener, true);
+			$this->keyboardWindow->removeEventListener('mousedown', $this->mouseListener, true);
 		}
 
-		$this->canvas = $this->focusListener = $this->blurListener = null;
+		$this->canvas = $this->focusListener = $this->blurListener = $this->mouseListener = null;
 		$this->keyboardWindow = $this->keyListener = null;
+		$this->browserMouseTarget = null;
 		$this->gamepads->close();
 		$this->sequences->reset();
 	}
@@ -938,7 +977,13 @@ final class SdlInput
 			$escapePauses = in_array(SDLK_ESCAPE, $pauseKeys, true);
 			$pauseKeys = array_values(array_filter(
 				$pauseKeys
-				, static fn(int $key): bool => $key !== SDLK_ESCAPE
+				, /**
+				 * Keep pause keys other than Escape, which only opens a closed menu.
+				 *
+				 * @param int $key SDL key bound to the pause button.
+				 * @return bool True for keys that always toggle pause.
+				 */
+				static fn(int $key): bool => $key !== SDLK_ESCAPE
 			));
 
 			$buttons['pause'] = (!$editing && (
