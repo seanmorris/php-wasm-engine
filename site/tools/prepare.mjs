@@ -244,7 +244,7 @@ for(const game of games)
 			title
 		)}\ndescription-meta: ${JSON.stringify(
 			slug === 'index' ? game.description : `${title} in ${game.title}.`
-		)}\nllms: games\nmenus:\n  documentation:\n    parent: game-${game.slug}\n    weight: ${weight}\n---\n`;
+		)}\nllms: games\nmenus:\n  documentation:\n${slug === 'index' ? '    title: Overview\n' : ''}    parent: game-${game.slug}\n    weight: ${weight}\n---\n`;
 
 		const embedClass = game.aspectClass ? ` ${game.aspectClass}` : '';
 		const dataOrigins = game.dataOrigins
