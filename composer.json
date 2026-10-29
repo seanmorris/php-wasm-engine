@@ -71,6 +71,8 @@
       "/core",
       "/preview",
       "/dist",
+      "/*.wad",
+      "/*.WAD",
       "/eslint.config.mjs",
       "/webpack.config.mjs",
       "/playwright.config.mjs",

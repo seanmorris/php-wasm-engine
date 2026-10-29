@@ -18,6 +18,7 @@
   "files": [
     "autoload.php",
     "game.php",
+    "application.php",
     "src/Input/InputSettings.php",
     "src/Input/SlalomActions.php",
     "src/Obstacle.php",

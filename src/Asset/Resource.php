@@ -53,6 +53,25 @@ final class Resource
 	}
 
 	/**
+	 * Return a real filesystem path for SDL/native consumers that cannot use PHP streams.
+	 * @param string $source Canonical resource URL, archive stream path, or native path.
+	 * @return string Materialized archive member path, or the existing filesystem transport path.
+	 */
+	public static function native(string $source): string
+	{
+		$local = self::local($source);
+		if(!str_starts_with($local, 'phar://')) return $local;
+		$resolve = function_exists('vrzno_env') ? vrzno_env('resourceNativePath') : null;
+		$target = is_callable($resolve) ? $resolve($source) : sys_get_temp_dir() . '/phonics-' . hash('sha256', $local);
+		if(!is_file($target))
+		{
+			if(!is_dir(dirname($target))) mkdir(dirname($target), 0777, true);
+			if(!copy($local, $target)) throw new \RuntimeException("Cannot materialize $source");
+		}
+		return $target;
+	}
+
+	/**
 	 * Return canonical provenance for a transport path.
 	 *
 	 * @param string $path Resource path or URL.
@@ -85,6 +104,10 @@ final class Resource
 			if(is_callable($resolve)) return $resolve($reference, $base);
 		}
 
+		// parse_url rejects hostless phar:/// paths. A temporary authority preserves RFC resolution.
+		$archive = str_starts_with($base, 'phar:///');
+		if($archive) $base = 'phar://phonics.local/' . substr($base, 8);
+		if(str_starts_with($reference, 'phar:///')) return $reference;
 		$b = parse_url($base);
 		$r = parse_url($reference);
 
@@ -158,6 +181,8 @@ final class Resource
 			)
 			. strtolower($t['host']) . (isset($t['port']) ? ':' . $t['port'] : '')
 			: '';
+
+		if($archive && ($t['host'] ?? '') === 'phonics.local') $authority = '//';
 
 		return (isset($t['scheme']) ? strtolower($t['scheme']) . ':' : '') . $authority . $path
 			. (isset($t['query']) ? '?' . $t['query'] : '') . (isset($t['fragment']) ? '#' . $t['fragment'] : '');

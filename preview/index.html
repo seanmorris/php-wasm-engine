@@ -9,7 +9,7 @@ try {
   if(savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
   document.documentElement.classList.add(theme);
 } catch {}
-</script><title>World preview · Phonics</title><link rel="icon" href="data:,"><link rel="stylesheet" href="../site.css"><link rel="stylesheet" href="../preview/preview.css"><script defer src="../site.js"></script></head>
+</script><title>Application preview · Phonics</title><link rel="icon" href="data:,"><link rel="stylesheet" href="../site.css"><link rel="stylesheet" href="../preview/preview.css"><script defer src="../site.js"></script></head>
 <body class="play-page"><a class="skip" href="#content">Skip to content</a>
 <header class="masthead">
 <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">p/</span>phonics<span class="brand-label">docs</span></a>
@@ -21,9 +21,9 @@ try {
 </button>
 </div>
 </header>
-<main id="content" tabindex="-1" class="play-main"><p class="section-label">PHONICS / PLAY</p><h1>World preview</h1><p class="subtitle">Load any Phonics world using its URL. The world chooses the game and its packages.</p>
-<form id="world-form"><label>World URL <input id="world-url" type="url" required></label><button>Load world</button></form>
+<main id="content" tabindex="-1" class="play-main"><p class="section-label">PHONICS / PLAY</p><h1>Application preview</h1><p class="subtitle">Run an executable PHAR application using its URL. Application PHP chooses its worlds and resources.</p>
+<form id="world-form"><label>Application PHAR URL <input id="world-url" type="url" required></label><button>Run application</button></form>
 <div id="game-frame"><canvas width="960" height="540" tabindex="0" aria-label="Game canvas"></canvas></div>
-<p id="fullscreen-error" role="alert"></p><p id="status" role="status">Choose a world to begin.</p><button id="stop">Stop</button>
-<section class="play-notes"><h2>Load your world</h2><p>Serve your world and its dependencies over HTTP. For cross-origin packages, configure the host’s code-origin policy and CORS before loading.</p><p><a href="../worlds.html">World loading guide</a> · <a href="../tiled.html">Author in Tiled</a></p></section>
+<p id="fullscreen-error" role="alert"></p><p id="status" role="status">Choose an application to begin.</p><button id="stop">Stop</button>
+<section class="play-notes"><h2>Run your application</h2><p>Serve your application PHAR and external resources over HTTP. For cross-origin packages, configure the host’s code-origin policy and CORS before loading.</p><p><a href="../worlds.html">World loading guide</a> · <a href="../tiled.html">Author in Tiled</a></p></section>
 <footer><a href="../games/">Explore the games</a><span>Built with <a href="../index.html">Phonics</a> · PHP + SDL + WebGL 2</span><a class="sitemap-link" href="../sitemap.xml"><img src="../sitemap-badge.png" width="80" height="15" alt="XML sitemap"></a></footer></main><script type="module" src="./host.mjs"></script></body></html>

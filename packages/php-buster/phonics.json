@@ -10,6 +10,7 @@
     "files": [
       "autoload.php",
       "game.php",
+      "application.php",
       "src/Actor.php",
       "src/Input/BusterActions.php",
       "src/Input/InputSettings.php",
@@ -42,6 +43,9 @@
     "assets/starfield.png",
     "assets/starfield.tsj"
   ],
+  "application": {
+    "entry": "application.php"
+  },
   "schemaVersion": 1,
   "version": "0.1.0",
   "requires": {
@@ -66,6 +70,7 @@
   "integrity": {
     "autoload.php": "sha256-CnC7WLaRuLfFPie9b0e98pXrZ69gkgjz++xI2FtzNFY=",
     "game.php": "sha256-/dsWXdwfaeq8FbySV8tPNNPmIWiU29GU8HT2gPCcXEI=",
+    "application.php": "sha256-+EuZC8JJ2kt/6/GqxZ5dH6+L8Phi8tEU0pYQGnbnVJo=",
     "src/Actor.php": "sha256-JVcvbdYn4bUuOtTDysuMSYvL6gPMoInL0z2yeWAhScw=",
     "src/Input/BusterActions.php": "sha256-5y32nPyHnWLpWZ676Prz9uTSm89K5ORDy/ptovPLR6w=",
     "src/Input/InputSettings.php": "sha256-x8ANtOCR4UqqgWvxBOCop0FU9LFE1MgbyO23WoeTLp8=",
@@ -79,6 +84,6 @@
     "assets/starfield.png": "sha256-vww4roUoUkfMxM2axL2BEjzTRt3s/O+19iMOgMoDN+I=",
     "assets/starfield.tsj": "sha256-Bbokl3i7SJiorOThQFdtzmDWiqJqpoBaO6ujeWNW8ls=",
     "worlds/buster.tmj": "sha256-ZTaFRkBb1GbpAgrjA5FUW4Cp8Hz3nxadnpTpRqoinOs=",
-    "worlds/buster.world": "sha256-UePjUYGXayrABZGU8c6xroezam+Xe9Xztg1HfOlWE1Q="
+    "worlds/buster.world": "sha256-cGy38i4sFf94cjSq+qcX0A5V9ltKJ2nRHRFQ33pM8Y8="
   }
 }

@@ -23,7 +23,7 @@ export async function init(directory, {name} = {})
 
 	const write = (file, value) => fs.writeFile(path.join(root, file), JSON.stringify(value, null, 2) + '\n');
 
-	for(const file of ['autoload.php', 'src/Player.php', 'module.php', 'game.php'])
+	for(const file of ['autoload.php', 'src/Player.php', 'module.php', 'game.php', 'application.php'])
 	{
 		const source = await fs.readFile(new URL('starter/' + file, import.meta.url), 'utf8');
 		await fs.writeFile(path.join(root, file), source.replaceAll('StarterGame', namespace));
@@ -34,19 +34,33 @@ export async function init(directory, {name} = {})
 		, version: '0.1.0'
 		, type: 'module'
 		, description: 'A game package built with Phonics'
-		, files: ['src/', 'worlds/', 'game.php', 'module.php', 'autoload.php', 'phonics.json', 'README.md']
+		, files: ['src/'
+			, 'worlds/'
+			, 'application.php'
+			, 'game.php'
+			, 'module.php'
+			, 'autoload.php'
+			, 'phonics.json'
+			, 'README.md'
+		]
 		, peerDependencies: {'@seanmorris/phonics': '^0.1.0'}
-		, scripts: {build: 'phonics build', validate: 'phonics validate', preview: 'phonics preview'}
+		, scripts: {
+			build: 'phonics build'
+			, pack: 'phonics pack'
+			, validate: 'phonics validate'
+			, preview: 'phonics preview'
+		}
 	});
 
 	await write('phonics.json', {
 		schemaVersion: 1
+		, application: {entry: 'application.php'}
 		, name
 		, version: '0.1.0'
 		, requires: {phonics: '^0.1.0', php: '>=8.2.0', extensions: ['sdl', 'vrzno']}
 		, dependencies: {}
 		, php: {
-			files: ['autoload.php', 'game.php', 'module.php', 'src/Player.php']
+			files: ['autoload.php', 'application.php', 'game.php', 'module.php', 'src/Player.php']
 			, bootstrap: ['autoload.php']
 			, autoload: {[namespace + '\\']: 'src/'}
 		}
@@ -67,7 +81,6 @@ export async function init(directory, {name} = {})
 		, maps: [{fileName: 'start.tmj', x: 0, y: 0, width: 640, height: 360}]
 		, properties: [
 			{name: 'phonics.import.game', type: 'string', value: '../phonics.json'}
-			, {name: 'phonics.game', type: 'string', value: '@game/game'}
 			, {name: 'phonics.start', type: 'string', value: 'start.tmj'}
 		]
 	});
@@ -114,10 +127,11 @@ export async function init(directory, {name} = {})
 	await fs.writeFile(
 		path.join(root, 'README.md')
 		, `# ${name}\n\nMove with arrows or WASD. Edit worlds/start.tmj in Tiled.\n\n`
-			+ 'Run `phonics integrity` after edits, `phonics validate` to check the package, and `phonics build` '
-				+ 'to produce dist/. Preview with `phonics preview --runtime /path/to/php-sdl-wasm`.\n\n'
+			+ 'Run `phonics integrity` after edits, `phonics validate` to check the package, and `phonics pack` '
+				+ 'to produce dist/game.phar. Preview with `phonics preview --runtime /path/to/php-sdl-wasm`.\n\n'
 					+ 'Declare new PHP/browser files and assets in phonics.json. No other game package is required. '
-						+ 'Choose a license before publishing with `npm publish ./dist` as a separate release step.\n'
+						+ 'For a reusable npm package, run `phonics build --out package-dist`. '
+						+ 'Choose a license before publishing with `npm publish ./package-dist` as a separate release step.\n'
 	);
 
 	await manifest(path.join(root, 'phonics.json'), {write: true});

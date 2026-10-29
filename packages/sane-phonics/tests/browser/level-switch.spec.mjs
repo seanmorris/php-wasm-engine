@@ -1,5 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {waitForMenuFrames} from './menu-frames.mjs';
+import {externalAssets} from './external-assets.mjs';
+
+test.beforeEach(async ({page}) => externalAssets(page));
 
 const data = (page, key) => page.locator('canvas').evaluate(
 	(canvas, key) => JSON.parse(canvas.dataset[key] || 'null')
@@ -104,7 +107,7 @@ test(
 			const {FS} = await enginePhp.binary;
 
 			return ['platformer.tmj', 'stream.world', 'stream-2.tmj', 'breakables.tmj', 'tiles.png']
-				.map(name => FS.analyzePath('/phonics/packages/1/examples/assets/' + name).exists);
+				.map(name => FS.analyzePath('/phonics/assets/1/examples/assets/' + name).exists);
 		})).toEqual([false, false, false, true, true]);
 
 		await page.evaluate(() => {
@@ -160,7 +163,7 @@ test('latest level request wins and cancelled assets cannot reappear', async ({p
 	await expect.poll(async () => page.evaluate(async () => {
 		const {FS} = await enginePhp.binary;
 
-		return FS.analyzePath('/phonics/packages/1/examples/assets/loop.tmj').exists;
+		return FS.analyzePath('/phonics/assets/1/examples/assets/loop.tmj').exists;
 	})).toBe(false);
 
 	await expect(page.locator('canvas')).toHaveAttribute('data-scene', 'infinite');

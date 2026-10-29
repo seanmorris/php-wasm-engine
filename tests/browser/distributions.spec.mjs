@@ -29,6 +29,14 @@ test('packed core and PhpNoid boot from a separate static origin without workspa
 			);
 		}
 
+		await fs.symlink(path.resolve('node_modules'), path.join(directory, 'node_modules'), 'dir');
+		const game = (await fs.readdir(directory)).find(name => name === 'php-noid' || name === 'php-tris');
+
+		execFileSync(
+			process.execPath
+			, [path.join(directory, 'phonics/bin/phonics.mjs'), 'pack', path.join(directory, game)]
+		);
+
 		const requests = [];
 
 		server = http.createServer(async(request, response) => {
@@ -58,7 +66,7 @@ test('packed core and PhpNoid boot from a separate static origin without workspa
 		await page.evaluate(async origin => {
 			const {Phonics} = await import(origin + '/phonics/browser/Phonics.mjs');
 
-			window.packedSession = await Phonics.loadWorld(origin + '/php-noid/worlds/campaign.world', {
+			window.packedSession = await Phonics.run(origin + '/php-noid/dist/game.phar', {
 				canvas: document.querySelector('canvas')
 				, runtime: {url: location.origin + '/runtime/php8.4-sdl.mjs'}
 				, policy: {codeOrigins: [origin,location.origin]}
@@ -86,7 +94,7 @@ test('packed core and PhpNoid boot from a separate static origin without workspa
 			document.body.replaceChildren(canvas);
 			const {Phonics} = await import(origin + '/phonics/browser/Phonics.mjs');
 
-			window.packedSession = await Phonics.loadWorld(origin + '/php-noid/worlds/campaign.world', {
+			window.packedSession = await Phonics.run(origin + '/php-noid/dist/game.phar', {
 				canvas
 				, runtime: {url: location.origin + '/runtime/php8.4-sdl.mjs'}
 				, policy: {codeOrigins: [origin,location.origin]}
@@ -108,7 +116,7 @@ test('packed core and PhpNoid boot from a separate static origin without workspa
 		await expect(page.locator('.quick-controls, .php-noid-ui')).toHaveCount(0);
 		expect(await canvas.evaluate(element => element.parentElement === document.body)).toBe(true);
 		expect(requests.some(url => url.includes('/sane-phonics/'))).toBe(false);
-		expect(requests.some(url => url.includes('/phonics/src/Engine.php'))).toBe(true);
+		expect(requests.some(url => url.endsWith('.php'))).toBe(false);
 		expect(errors).toEqual([]);
 	}
 	finally
@@ -143,6 +151,14 @@ test('packed core and PHPTris boot from a separate static origin without workspa
 			);
 		}
 
+		await fs.symlink(path.resolve('node_modules'), path.join(directory, 'node_modules'), 'dir');
+		const game = (await fs.readdir(directory)).find(name => name === 'php-noid' || name === 'php-tris');
+
+		execFileSync(
+			process.execPath
+			, [path.join(directory, 'phonics/bin/phonics.mjs'), 'pack', path.join(directory, game)]
+		);
+
 		const requests = [];
 
 		server = http.createServer(async(request, response) => {
@@ -172,7 +188,7 @@ test('packed core and PHPTris boot from a separate static origin without workspa
 		await page.evaluate(async origin => {
 			const {Phonics} = await import(origin + '/phonics/browser/Phonics.mjs');
 
-			window.packedSession = await Phonics.loadWorld(origin + '/php-tris/worlds/arcade.world', {
+			window.packedSession = await Phonics.run(origin + '/php-tris/dist/game.phar', {
 				canvas: document.querySelector('canvas')
 				, runtime: {url: location.origin + '/runtime/php8.4-sdl.mjs'}
 				, policy: {codeOrigins: [origin,location.origin]}
@@ -201,7 +217,7 @@ test('packed core and PHPTris boot from a separate static origin without workspa
 			document.body.replaceChildren(canvas);
 			const {Phonics} = await import(origin + '/phonics/browser/Phonics.mjs');
 
-			window.packedSession = await Phonics.loadWorld(origin + '/php-tris/worlds/arcade.world', {
+			window.packedSession = await Phonics.run(origin + '/php-tris/dist/game.phar', {
 				canvas
 				, runtime: {url: location.origin + '/runtime/php8.4-sdl.mjs'}
 				, policy: {codeOrigins: [origin,location.origin]}
@@ -223,7 +239,7 @@ test('packed core and PHPTris boot from a separate static origin without workspa
 		await expect(page.locator('.quick-controls, .php-tris-ui')).toHaveCount(0);
 		expect(await canvas.evaluate(element => element.parentElement === document.body)).toBe(true);
 		expect(requests.some(url => url.includes('/sane-phonics/'))).toBe(false);
-		expect(requests.some(url => url.includes('/phonics/src/Engine.php'))).toBe(true);
+		expect(requests.some(url => url.endsWith('.php'))).toBe(false);
 		expect(errors).toEqual([]);
 	}
 	finally

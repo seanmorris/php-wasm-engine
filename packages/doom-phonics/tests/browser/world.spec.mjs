@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-test('the online world boots through the preview host with its verified browser export', async({page}) => {
+test('the Doom application boots through the preview host with its verified browser export', async({page}) => {
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/doom-phonics/');
@@ -12,7 +12,7 @@ test('the online world boots through the preview host with its verified browser 
 	}, null, {timeout: 60000});
 
 	await expect(page.locator('#status')).toHaveText('Ready');
-	await expect(page.locator('#world-url')).toHaveValue(/episode-one-online\.phonics-world\.json$/);
+	await expect(page.getByLabel('Application PHAR URL')).toHaveValue(/doom-phonics\/dist\/game\.phar$/);
 
 	await expect.poll(async() => {
 		const state = await page.evaluate(() => window.previewSession?.doomState);

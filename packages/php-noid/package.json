@@ -6,6 +6,7 @@
   "files": [
     "autoload.php",
     "game.php",
+    "application.php",
     "src/CollisionWorld.php",
     "src/Component/Ball.php",
     "src/Component/Brick.php",

@@ -10,6 +10,7 @@
     "files": [
       "autoload.php",
       "game.php",
+      "application.php",
       "src/CollisionWorld.php",
       "src/Component/Ball.php",
       "src/Component/Brick.php",
@@ -163,6 +164,9 @@
     "assets/hud-rail.png",
     "assets/hud.tsj"
   ],
+  "application": {
+    "entry": "application.php"
+  },
   "schemaVersion": 1,
   "version": "0.1.0",
   "requires": {
@@ -227,6 +231,7 @@
   "integrity": {
     "autoload.php": "sha256-rnIEsGQdIwa8lI4MzvCEeJS2AT3XZBdF7GbJZ+m21qI=",
     "game.php": "sha256-EtfWfX05I4lcf0FoL7IFyF54yYPZ5H6xRfQ+b8CxeF0=",
+    "application.php": "sha256-oFPY96XBIPkXE/pCviEik7n5Tn4/gkqymItW1pXTwvA=",
     "src/CollisionWorld.php": "sha256-QkVQlMEu9GbYgjGbSO48/874M1oBYCX0Sk0MNLJw0ok=",
     "src/Component/Ball.php": "sha256-St7KTZIwqH9XULNm8XUupaYRDZFrTrYlRqfkIqqKY38=",
     "src/Component/Brick.php": "sha256-b2iJDpGtBQUiDNwCNh2Pqwj8SN+TNyx5Aa+piE8Atbc=",
@@ -249,7 +254,7 @@
     "src/System/TransitionSystem.php": "sha256-x5nVfzHS20QmydG4JeMor4+nVg0N3pJ/54MP9lDlf2c=",
     "browser/game.mjs": "sha256-zN75CI+BKJiv1I2/CnyVDTnVk7JcywHfQAwrMEDqwd8=",
     "modules/factories.php": "sha256-ihl24BeXJ2pOL7KwWaZaU6SFEF30c3R5plWSQqJu3SE=",
-    "worlds/campaign.world": "sha256-neoMqeScLll1d+VryX7SQZNKk57hNoHD+SYVcX+cNjY=",
+    "worlds/campaign.world": "sha256-WBYj2psunNd/Yo1HJKT/UUxhhW3j9ME2X3UyAO6paaE=",
     "worlds/stage-01.tmj": "sha256-5kgKYtKEhox6Ld99rSQsz/IDoMdhWbhah58yUI1esVI=",
     "worlds/stage-02.tmj": "sha256-jVuFROmmU3lzv9vaAjMNDyGSWRldbldIPwRu7CO3s5E=",
     "worlds/stage-03.tmj": "sha256-S3YrwhrRDRWrByv/dd5JzmMqwZY6dYEMjeseOSuQkKE=",

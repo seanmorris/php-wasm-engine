@@ -245,6 +245,30 @@ definitions.push(
 	]
 );
 
+// Executable entry points are build metadata; world documents remain content.
+for(const [directory, definition] of definitions)
+{
+	if(directory === '.' || directory === 'packages/phonics-matrix') continue;
+
+	definition.files.push('application.php');
+	definition.application = {entry: 'application.php'};
+
+	if(directory === 'packages/doom-phonics')
+	{
+		definition.application.assets = ['application-network.json'
+			, 'demo/camera-mirrors.phonics-world.json'
+			, 'demo/episode-one-online.phonics-world.json'
+			, 'demo/portal-demo.phonics-world.json'
+			, 'demo/episode-one.phonics-world.json'
+			, 'demo/skulltag-stress.phonics-world.json'
+			, 'demo/portal-rooms.phonics-world.json'
+		];
+
+		definition.application.dependencies = {matrix: '../phonics-matrix/phonics.json'};
+		definition.files.push(...definition.application.assets);
+	}
+}
+
 for(const [directory, definition] of definitions)
 {
 	const base = path.join(root, directory);

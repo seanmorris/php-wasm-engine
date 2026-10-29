@@ -47,6 +47,7 @@ export class NetworkSession extends EventTarget
 			controller
 			, negotiator
 			, world
+			, application = null
 			, packages = []
 			, bridge = new NetworkBridge
 			, now = () => performance.now()
@@ -62,6 +63,7 @@ export class NetworkSession extends EventTarget
 		this.negotiator = negotiator;
 		this.world = world;
 		this.packages = packages;
+		this.application = application;
 		this.bridge = bridge;
 		this.now = now;
 		this.startDelay = startDelay;
@@ -144,7 +146,9 @@ export class NetworkSession extends EventTarget
 		this.requireMap(selectedStart, this.negotiator.maps());
 
 		const descriptor = new MatchDescriptor({
-			game: this.world.game
+			game: this.application?.id ?? this.world.game
+			, protocol: this.application ? '2.0.0' : '1.0.0'
+			, application: this.application
 			, start: selectedStart
 			, packages: this.packages
 			, content: offers
@@ -430,6 +434,14 @@ export class NetworkSession extends EventTarget
 
 		if(digest !== value.descriptorDigest)
 		throw new NetworkError('match_digest', 'Host match descriptor digest is invalid');
+
+		if((this.application && (descriptor.protocol !== '2.0.0'
+			|| descriptor.application?.id !== this.application.id
+			|| descriptor.application?.code !== this.application.code
+		))
+			|| (!this.application && (descriptor.protocol !== '1.0.0' || descriptor.application))
+		)
+		throw new NetworkError('match_application', 'Peer application code or protocol differs');
 
 		if(descriptor.game !== this.world.game
 			|| descriptor.start?.source !== this.world.start.source

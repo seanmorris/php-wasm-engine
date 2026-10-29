@@ -38,6 +38,7 @@ test(`a disconnected ${role} returns to the menu and can start another game`, as
 			})
 			, world: local.world
 			, packages: local.packages
+			, application: local.application
 			, startDelay: 50
 		});
 

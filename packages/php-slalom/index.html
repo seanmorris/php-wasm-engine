@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-world="../engine/packages/php-slalom/worlds/slalom.world"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>
+<html lang="en" data-application="../engine/packages/php-slalom/dist/game.phar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>
 try {
   const savedTheme = localStorage.getItem('phonics-doc-theme');
   const theme = savedTheme === 'light' || savedTheme === 'dark'
@@ -22,8 +22,8 @@ try {
 </div>
 </header>
 <main id="content" tabindex="-1" class="play-main"><p class="section-label">PHONICS / PLAY</p><h1>PHP Slalom</h1><p class="subtitle">A deterministic PHP port of Jet Slalom with six course stages, editable controls, and compact replays.</p>
-<form id="world-form"><label>World URL <input id="world-url" type="url" required></label><button>Load world</button></form>
+<form id="world-form"><label>Application PHAR URL <input id="world-url" type="url" required></label><button>Run application</button></form>
 <div id="game-frame"><canvas width="960" height="600" tabindex="0" aria-label="PHP Slalom game canvas"></canvas></div>
-<p id="fullscreen-error" role="alert"></p><p id="status" role="status">Choose a world to begin.</p><button id="stop">Stop</button>
+<p id="fullscreen-error" role="alert"></p><p id="status" role="status">Choose an application to begin.</p><button id="stop">Stop</button>
 <section class="play-notes"><h2>Controls</h2><p>Steer with Left/Right, A/D, J/L, mouse buttons, D-pad, or the controller left stick. Escape, P, or Start pauses. Touch steering zones appear on touch screens. Use Input settings to rebind keyboard/mouse and controller independently.</p><p><a href="../games/">More playable examples</a> · <a href="../tiled.html">Author in Tiled</a></p></section>
 <footer><a href="../games/">Explore the games</a><span>Built with <a href="../index.html">Phonics</a> · PHP + SDL + WebGL 2</span><a class="sitemap-link" href="../sitemap.xml"><img src="../sitemap-badge.png" width="80" height="15" alt="XML sitemap"></a></footer></main><script type="module" src="../preview/host.mjs"></script></body></html>

@@ -76,6 +76,11 @@ export async function initManifest(directory, settings = {})
 		const kind = await ask('Export type: game or module', files.includes('game.php') ? 'game' : 'module');
 		const entry = await ask('PHP entry file; use - for none', files.includes(kind + '.php') ? kind + '.php' : '-');
 
+		const application = await ask(
+			'Executable application bootstrap; use - for a library'
+			, files.includes('application.php') ? 'application.php' : '-'
+		);
+
 		const bootstrap = await ask(
 			'PHP autoloader; use - for none'
 			, files.includes('autoload.php') ? 'autoload.php' : '-'
@@ -122,10 +127,13 @@ export async function initManifest(directory, settings = {})
 
 		if(entry !== '-') php.push(entry);
 
+		if(application !== '-') php.push(application);
+
 		if(bootstrap !== '-') php.push(bootstrap);
 
 		const data = {
 			schemaVersion: 1
+			, ...(application !== '-' ? {application: {entry: application}} : {})
 			, name
 			, version
 			, requires: {phonics: '^0.1.0', php: '>=8.2.0', extensions: ['sdl', 'vrzno']}

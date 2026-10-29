@@ -251,7 +251,6 @@ const world = {
 		, height: 480
 	}))
 	, properties: [property('phonics.import.php-noid', '../phonics.json')
-		, property('phonics.game', '@php-noid/game')
 		, property('phonics.start', 'stage-01.tmj')
 	]
 };

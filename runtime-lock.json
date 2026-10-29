@@ -7,5 +7,13 @@
   "sourceRepository": "https://github.com/seanmorris/php-wasm",
   "hostSourceCommit": "7b80019e1bd6df2b28c7811f176e148e59c477f1",
   "nativeWasmSha256": "a35bf60c1a7c40e9f677692f4c5f60dc41283853664dbbbd8247c75f9e226a1e",
-  "note": "Existing SDL native build, with current host package files and optional PHP zlib. No native rebuild or npm publication."
+  "note": "Existing SDL native build, with current host package files and optional PHP zlib. No native rebuild or npm publication.",
+  "extensions": {
+    "phar": {
+      "package": "php-wasm-phar",
+      "version": "0.2.0",
+      "file": "php8.4-phar.so",
+      "sha256": "b9a938f20706a35d1172218159616019ba62ad8b2d6e0c86b796dcdbb1ab22d3"
+    }
+  }
 }

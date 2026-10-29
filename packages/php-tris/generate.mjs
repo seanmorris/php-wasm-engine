@@ -247,7 +247,6 @@ await write(
 		, onlyShowAdjacentMaps: false
 		, maps
 		, properties: [prop('phonics.import.php-tris', '../phonics.json')
-			, prop('phonics.game', '@php-tris/game')
 			, prop('phonics.start', 'endless-01.tmj')
 		]
 	}

@@ -15,6 +15,7 @@ You’ll create a small game with a movable player, change its layout and speed 
 Have these ready:
 
 - **Node.js 22 or newer**, with npm.
+- **Native PHP with Phar** to package the application; gameplay runs in browser PHP.
 - **Tiled 1.12.2** for editing the map.
 - A packed **Phonics npm artifact**, such as `seanmorris-phonics-0.1.0.tgz`.
 - A built **PHP 8.4/SDL runtime directory** containing `php8.4-sdl.mjs` and its matching runtime files. In a Phonics source checkout, `npm run setup:runtime` prints this directory, first downloading the pinned runtime to `<checkout>/.runtime` when none is installed.
@@ -38,7 +39,8 @@ The starter includes:
 
 | File | What you’ll use it for |
 | --- | --- |
-| `worlds/game.world` | Select the game package and starting map. |
+| `application.php` | Select and start the game, optionally composing a content world. |
+| `worlds/game.world` | Declare imported content packages and the starting map. |
 | `worlds/start.tmj` | Place the player and set its speed in Tiled. |
 | `src/Player.php` | Define the player’s movement settings. |
 | `module.php` | Turn Tiled player objects into ECS components. |
@@ -54,7 +56,7 @@ npx phonics preview --runtime /path/to/php-sdl-wasm
 
 Open the URL printed in the terminal. When the status reads **Ready**, click the canvas and move the green rectangle with **arrows or WASD**. The player stays inside a 640 × 360 playfield.
 
-Leave this server running. Use a second terminal in `my-game` for edits and build commands. The preview serves files directly; reload the browser after changes. If the port is busy, add `--port 9142`.
+Leave this server running. Use a second terminal in `my-game` for edits and build commands. The preview rebuilds the PHAR on its next request after declared inputs change; reload the browser after edits. If the port is busy, add `--port 9142`.
 
 ## Understand the ECS
 
@@ -126,17 +128,18 @@ Declare any new PHP files in `phonics.json` before hashing or building them.
 
 ```sh
 npx phonics validate --world worlds/game.world
-npx phonics build
-npx phonics validate dist --world worlds/game.world
-npm pack ./dist
+npx phonics pack
+npx phonics build --out package-dist
+npx phonics validate package-dist --world worlds/game.world
+npm pack ./package-dist
 ```
 
-You now have a `dist/` directory containing the declared game files and an npm tarball named after your package and version. The built package excludes undeclared scratch files and development scripts. These commands do **not** publish it to a registry.
+You now have `dist/game.phar`, the executable browser application, and a separate `package-dist/` directory containing reusable game files plus an npm tarball named after your package and version. These artifacts exclude undeclared scratch files and development scripts. These commands do **not** publish them to a registry.
 
 To try the built copy, stop the first preview server with **Ctrl+C**, then run:
 
 ```sh
-npx phonics preview dist --runtime /path/to/php-sdl-wasm
+npx phonics preview package-dist --runtime /path/to/php-sdl-wasm
 ```
 
 Open the newly printed URL and confirm the player still has your layout, speed, and color. Use **Stop** in the page to dispose the game session; Ctrl+C stops the server itself.

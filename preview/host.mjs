@@ -8,7 +8,7 @@ window.previewLoadProgress = null;
 const policyList = (element, name) => JSON.parse(element.dataset[name] ?? '[]');
 
 /**
- * Mount the reusable world preview in either the generic loader or a game documentation page.
+ * Mount the reusable application preview in either the generic loader or a game documentation page.
  *
  * @param {ParentNode} root Element containing the canvas and preview controls.
  * @param {object} options Preview configuration.
@@ -44,7 +44,7 @@ export function mountPreview(root = document, options = {})
 		pending?.abort();
 		pending = new AbortController();
 		preloader.begin();
-		status.textContent = 'Loading world…';
+		status.textContent = 'Loading application…';
 
 		try
 		{
@@ -55,8 +55,15 @@ export function mountPreview(root = document, options = {})
 			session = null;
 			window.previewSession = null;
 
-			session = await Phonics.loadWorld(url, {
+			session = await Phonics.run(url, {
 				canvas
+				, init: {
+					...options.init
+					, ...(new URLSearchParams(location.search).has('world')
+						? {world: new URL(new URLSearchParams(location.search).get('world'), location.href).href}
+						: {}
+					)
+				}
 				, signal: pending.signal
 				, runtime: {url: new URL('../runtime/php8.4-sdl.mjs', import.meta.url).href}
 				, onProgress: progress => {
@@ -117,13 +124,13 @@ export function mountPreview(root = document, options = {})
 
 	stopButton.addEventListener('click', () => void stop());
 
-	const configuredWorld = options.world
-		?? new URLSearchParams(location.search).get('world')
-		?? document.documentElement.dataset.world;
+	const configuredApplication = options.application
+		?? new URLSearchParams(location.search).get('application')
+		?? document.documentElement.dataset.application;
 
-	if(configuredWorld)
+	if(configuredApplication)
 	{
-		const world = new URL(configuredWorld, location.href).href;
+		const world = new URL(configuredApplication, location.href).href;
 
 		if(input) input.value = world;
 

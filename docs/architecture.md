@@ -1,47 +1,45 @@
 # Phonics architecture
 
-Phonics is a game-neutral runtime for worlds assembled in Tiled or opened by content adapters. The browser resolves a world's package graph, verifies executable files, prepares an isolated PHP filesystem, and starts one PHP/SDL session. PHP owns simulation and rendering. JavaScript owns asynchronous loading, host policy, mounting, and cleanup.
+Phonics runs executable PHP applications in the browser. The browser supplies PHP/SDL, policy, a canvas, and lifecycle services. The application's PHAR stub runs first and chooses its own game code, content, and optional browser modules. PHP owns simulation and rendering.
 
-## World-first startup
+## Executable application startup
 
-`Phonics.loadWorld(worldUrl, options)` is the public browser entry point. The URL names one of three launchable documents, and the host keeps no game table:
+`Phonics.run(applicationUrl, options)` accepts an executable `.phar`. It fetches the archive under the host's code-origin policy, checks optional SHA-256 integrity, starts PHP with the pinned Phar extension, validates the archive's internal signature, and executes its stub. Worlds, WADs, and package manifests are resources rather than launch entry points.
 
-- A **`phonics-world` document** (`"type": "phonics-world"`, `"schemaVersion": 1`) is the primary format.
-- A **package manifest** (`phonics.json`) launches the world it declares: `world` is either a URL to a world document or an inline `phonics-world` object. The manifest's package joins the session's package graph with the core package.
-- A **Tiled `.world` file** with `phonics.*` custom properties is the legacy format. It remains supported and is described below.
+`phonics pack` builds `dist/game.phar` from `application.entry` in `phonics.json`. That entry is an authored PHP file. The archive includes declared engine and application PHP, browser modules, assets, installed dependencies, and a versioned bridge descriptor. Files outside those declarations are excluded. Fixed member ordering and timestamps make the build reproducible; a `.integrity` sidecar supplies the complete archive digest. Native PHP with Phar is required for packaging, not for serving or playing the game.
 
-A `phonics-world` document declares:
+A typical application bootstrap is:
 
-- `imports` — aliases mapped to package manifest URLs, so references such as `@doom/game` resolve.
-- `game` (required) — the export reference of a `game` export.
-- `modules` — optional array of additional module export references.
-- `sources` (required) — content sources keyed by ID. Each names an `adapter` export and lists `resources`, either URLs with optional `integrity` or `slot` placements filled from `resourceSlots`.
-- `resourceSlots` — world-owned slots for files the player or a match supplies, with acceptance requirements and an optional `defaultUrl`.
-- `bindings` — `system-set` exports activated for matching scopes. Each binding has an `id`, a `use` reference, an `on` selector (`source`, `kind`, `id`, `tags`), `options`, and `after` dependencies.
-- `start` (required) — the first `{source, scope}` to activate.
-- `transitions` — declared moves between `{source, scope}` endpoints.
-- `view` — optional positive integer `width` and `height`.
-- `network` — optional multiplayer declaration, described under [Networking](#networking).
-- `init` — an optional object passed to the game unchanged. Its meaning belongs to the game.
+```php
+<?php
+require_once 'phar://' . Phar::running(false) . '/core/autoload.php';
+$app = new \Phonics\Application\Context;
+$phonics = $app->compose(__DIR__ . '/worlds/game.world', __DIR__ . '/phonics.json#game');
+require $app->entry();
+```
 
-The loader validates the document, then resolves the complete dependency graph before executing code. Package requirements, dependency cycles, export types, PHP namespace ownership, code origins, and integrity metadata are checked first. Every declared PHP dependency is fetched and mounted before its bootstrap runs, so PHP autoloading remains synchronous. The validated world reaches PHP through the session's `phonicsWorld` bridge value.
+`compose()` is an optional engine service. It resolves and verifies the content's imported packages, prepares `Phonics\Package\Context`, and returns the explicitly selected game entry through `entry()`. The bootstrap requires that entry in its own PHP scope. The world cannot replace it. An application can instead execute arbitrary PHP, activate a packaged browser module with `$app->browser($path)`, and call `$app->ready()` without loading a world.
 
-### Legacy Tiled worlds
+`options.init` supplies JSON data through `$app->init`; `compose()` merges it over the world's `init`. The default bootstraps accept `init.world` to select external content. Doom also accepts `startMap` and `cheats`. Application-owned network configuration is supplied as the third argument to `compose()`. These choices belong to PHP application code, not the browser host.
 
-A Tiled `.world` file is recognized when it has a string `phonics.game` property. Its custom properties replace the `phonics-world` fields:
+A `phonics-world` content document declares:
 
-- `phonics.import.<alias>` registers a package manifest in the session pallet.
-- `phonics.game` selects a game export by `@alias/name` or a manifest URL and fragment.
-- `phonics.start` selects the first map or exported asset; without it, the first map in the world is used.
-- `phonics.modules` lists additional module exports as a JSON string.
+- `imports` and `modules` — package aliases and optional additional modules. Remote executable imports still require allowed origins, compatible package declarations, and verified file integrity before activation.
+- `sources` — adapters and their resource URLs or slot placements.
+- `resourceSlots` — requirements and defaults for files supplied by the player or match.
+- `bindings` — system sets activated for matching content scopes.
+- `start`, `transitions`, and `view` — initial scope, scope changes, and optional viewport dimensions.
+- `init` — game-owned initialization data.
 
-A ready session exposes its canonical world URL, abort signal, parsed world, package graph, asset adapter, starting map or `{source, scope}` selector, PHP runtime, and `dispose()` method. Disposal aborts outstanding work, runs module cleanup in reverse registration order, releases scoped resources, and refreshes the PHP runtime. The [JavaScript API](api-js/modules/phonics/) documents the options and session in full.
+Tiled `.world` resources remain supported. `phonics.import.<alias>`, `phonics.start`, and `phonics.modules` retain their meaning. `phonics.game` is no longer used. The `game` and `network` fields in a content document cannot override the application's selections.
+
+A ready session exposes its application URL and code identity, PHP runtime, abort signal, and asynchronous `dispose()`. Applications that use composition additionally expose their world, graph, assets, and network services. Disposal aborts outstanding requests, closes PHP resources and browser services, and releases scoped bytes. Dispose the previous session before launching another application. Stage transitions stay inside the existing runtime.
 
 ## Resource identity and ownership
 
 Every loaded resource retains a canonical source URL separately from its cache key or WASM mount. Relative references resolve against the resource that declares them: world to map, map to tileset, tileset to image, and manifest to code or assets. Root-relative paths, queries, and fragments use normal URL semantics.
 
-`ResourceStore` deduplicates canonical URLs, retries failed requests when asked, verifies SHA-256 integrity, and reference-counts ownership through cancellable scopes. `SessionAssets` maps those URLs into isolated package mounts while preserving package-relative layouts. Shared bytes can outlive one scene; mutable map placement and ECS state cannot.
+`ResourceStore` deduplicates canonical URLs, retries failed requests when asked, verifies SHA-256 integrity, and reference-counts ownership through cancellable scopes. `ArchiveResources` maps public declaring URLs to archive members, retaining external relative references and query identity. PHP reads packaged files directly through `phar://`; `SessionAssets` materializes only the assets required by native SDL or browser consumers. `Resource::native()` supplies a real filesystem path for native APIs that cannot open PHP streams. Shared bytes can outlive one scene; mutable map placement and ECS state cannot.
 
 Tiled authoring caches use `phonics.source` and `phonics.source.property.<name>` metadata to retain canonical provenance. Browser and native PHP loaders honor those overrides. Relocating an authoring cache therefore does not change the published identity of its dependencies.
 
@@ -101,14 +99,14 @@ Framework UI includes bitmap fonts, editable text buffers, menu input and render
 
 ## Networking
 
-Multiplayer is optional and declared by a world's `network` object:
+Multiplayer is optional and selected by the application's network configuration:
 
 - `activation` — `menu` (the default) or `auto`.
 - `players` — a `{min, max}` range from 2 through 16; the default is exactly two players.
 - `lobby.provider` — a `lobby-provider` export, with provider `options`.
 - `transport` — a `transport` export reference, or `{use, options}`.
 
-The core manifest exports `webrtc` as a transport and `memory-lobby` as an in-memory lobby provider. A world without `network` activates no lobby or transport.
+The core manifest exports `webrtc` as a transport and `memory-lobby` as an in-memory lobby provider. An application without network configuration activates no lobby or transport. PHAR applications use match protocol `2.0.0`, with application ID and executable-code digest separate from the content manifest. Peers with differing code or protocol are rejected before simulation begins. Verified remote code dependencies participate in that digest; WAD selection remains part of resource negotiation.
 
 In the browser, a `LobbyController` runs the lobby and invitation state machine independently of Matrix and WebRTC classes. A `ResourceNegotiator` acquires, verifies, and binds the files for world-declared resource slots without interpreting their format. `NetworkSession` coordinates the match and resource handshake for one controller, and `WebRtcTransport` carries packets on an ordered `control` channel and an unordered `realtime` channel with no retransmits. `NetworkBridge` keeps bounded packet queues between the browser and PHP. These classes are exported from [`@seanmorris/phonics/networking`](api-js/modules/networking/).
 
@@ -116,6 +114,6 @@ In PHP, `BrowserBridge` exchanges validated binary packets with the browser thro
 
 ## Compatibility boundary
 
-The supported PHP namespace is `Phonics\`. Pre-1.0 `PhpWasmEngine\` names remain aliases and resolve consistently in mixed ECS lookups. Legacy browser boot functions and development example URLs adapt to `loadWorld()` without adding game selection logic to the host.
+The supported PHP namespace is `Phonics\`. Pre-1.0 `PhpWasmEngine\` names remain aliases and resolve consistently in mixed ECS lookups. The former `Phonics.loadWorld()` launch API is retired. Browser consumers call `Phonics.run()` with an executable archive; the development example adapter uses the same entry point.
 
-Compatibility adapters do not make the core depend on a game package. A core-only installation can load a separately packaged game when its manifest declares all code and assets it needs.
+Compatibility adapters do not make the core depend on a game package. An application archive carries its PHP dependencies. The browser PHP/SDL runtime is distributed separately and remains host-controlled. Native desktop gameplay is outside this application contract.

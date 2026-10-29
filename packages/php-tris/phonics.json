@@ -10,6 +10,7 @@
     "files": [
       "autoload.php",
       "game.php",
+      "application.php",
       "src/Component/Active.php",
       "src/Component/Board.php",
       "src/Component/Input.php",
@@ -82,6 +83,9 @@
     ]
   },
   "preload": [],
+  "application": {
+    "entry": "application.php"
+  },
   "schemaVersion": 1,
   "version": "0.1.0",
   "requires": {
@@ -181,6 +185,7 @@
   "integrity": {
     "autoload.php": "sha256-l3Pbcs1Lqcw017fhYgEVAEMl9KuQ2XMw6pU+PDDR9q0=",
     "game.php": "sha256-T/+gdfGetLPv1ANYACg/qgonVe6catynPJmeCfb8J9s=",
+    "application.php": "sha256-rWFfGr9ZKHwuhr2aO28kqNyHabTk+7NbBjhgeEngwdQ=",
     "src/Component/Active.php": "sha256-Ty5OSdrguTWt2zVep2KnIzrmmMRXQk5v9L/OxLVyxbA=",
     "src/Component/Board.php": "sha256-CR1iNis+m4hz1eGybJZTkZcRv/rG+A0bKMfKQmT0H7E=",
     "src/Component/Input.php": "sha256-46cIhhgYZgVOZraa9bRgwuqNYFezQZpgoVH6QN3fwf8=",
@@ -198,7 +203,7 @@
     "src/System/ResolutionSystem.php": "sha256-I6uklPotQ8lIU1W/Ti0cwES5xRfTNMAJqR15me1WXyM=",
     "browser/game.mjs": "sha256-rmbi1lyNBKN5NNd0alpgqdH0xb1ap8oJ5HF37bkRETQ=",
     "modules/rules.php": "sha256-jg9ZqcgAf6awenNHUJDUTumHbwRte8EZnJpGAp2V+0A=",
-    "worlds/arcade.world": "sha256-M1XrXWenBGVjws+ejTgE93EEC/jQtXGN1NnQszfXk8c=",
+    "worlds/arcade.world": "sha256-BhMeQM0ZvzliYhQi0jPC4iEIStWTXfpkMEM1mZbjLME=",
     "worlds/bonds-01.tmj": "sha256-0h8h7IZ/gaHPAb3oEFjf13H/U/r2ecLnHbiyrVKCCP0=",
     "worlds/bonds-02.tmj": "sha256-dq/xfz881CUL/AOgMPYCEnMgm7Uf6RFyXKWWmJsPVPA=",
     "worlds/bonds-03.tmj": "sha256-m1GeccnoKtb+yO2/vmKoQFZV7bWs0lAyP9zmWj/pDFo=",

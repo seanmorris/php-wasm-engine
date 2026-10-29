@@ -54,7 +54,7 @@ final class ImageRenderer
 			return $this->textures[$path];
 		}
 
-		$source = IMG_Load(\Phonics\Asset\Resource::local($path));
+		$source = IMG_Load(\Phonics\Asset\Resource::native($path));
 
 		if(!$source)
 		{

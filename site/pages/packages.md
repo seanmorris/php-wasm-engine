@@ -16,6 +16,7 @@ Every distribution exposes a versioned `phonics.json`. The current schema is ver
 | Field | Purpose |
 | --- | --- |
 | `name`, `version`, `requires` | Package identity and supported runtime |
+| `application` | Executable PHP entry, bundled application assets, and optional local packaging dependencies |
 | `dependencies` | Named manifest URLs and compatible version ranges |
 | `exports` | Named, typed exports, listed below |
 | `php` | Files, namespace autoload mappings, and bootstrap files |
@@ -28,7 +29,7 @@ Each export declares one of these types:
 
 | Type | Purpose |
 | --- | --- |
-| `game` | Entry point selected by `phonics.game` or a world's `game`; starts the session lifecycle |
+| `game` | Game entry selected explicitly by the PHP application bootstrap |
 | `module` | Registers systems, factories, and cleanup against the shared session context |
 | `factory` | Tiled entity factory; names its registered `class` and `module` |
 | `component` | Tiled entity class that objects reference in the same way as a factory |
@@ -36,18 +37,26 @@ Each export declares one of these types:
 | `adapter` | PHP content adapter selected by a world source's `adapter` |
 | `system-set` | PHP systems bound to matching adapter scopes by a world's `bindings[].use` |
 | `resource-inspector` | Browser module that inspects launcher resources named by a resource requirement's `inspector` |
-| `lobby-provider` | Online lobby selected by a world's `network.lobby.provider` |
-| `transport` | Peer transport selected by a world's `network.transport` reference or `network.transport.use` |
+| `lobby-provider` | Online lobby selected by the application's network configuration |
+| `transport` | Peer transport selected by the application's network configuration |
 
 Supported version ranges are exact, `^x.y.z`, and `>=x.y.z`. The browser resolves declared dependencies; it does not run installation scripts or solve arbitrary npm/Composer graphs.
 
+## Package an application
+
+`phonics pack` produces an executable `dist/game.phar` from `application.entry` and the explicitly declared files. The archive includes the engine and local package dependencies. Worlds, maps, and other assets can be bundled or loaded from URLs; their declaring URLs remain the base for relative references. Remote executable packages are verified when loaded instead of being downloaded by the packer.
+
+The browser starts this archive with `Phonics.run()`. Its PHP entry controls initialization, selects the game export, and supplies any network configuration. Worlds remain content consumed by that application.
+
+Reusable packages still use `phonics.json` and typed exports. Use `phonics build --out package-dist` to prepare an npm package alongside the executable archive.
+
 ## Activate in dependency order
 
-The loader resolves dependencies before execution and verifies declared PHP and browser files before activating modules. Each package retains its relative layout in an isolated WASM mount, so internal PHP includes can stay synchronous.
+The loader resolves dependencies before execution and verifies declared PHP and browser files before activating modules. Each package retains its relative layout inside the archive or a verified WASM mount, so internal PHP includes can stay synchronous.
 
 Cycles, overlapping PHP namespaces, incompatible versions, unsupported runtime requirements, missing resources, and conflicting registrations produce errors with resource context. Changing incompatible code graphs requires a new runtime.
 
-The `php.autoload` mapping declares namespace ownership for graph validation. Register actual PHP autoloading in a file listed in both `php.files` and `php.bootstrap`; the CLI starter includes this `autoload.php` for you. All PHP files must be fetched before that bootstrap runs.
+The `php.autoload` mapping declares namespace ownership for graph validation. Register actual PHP autoloading in a file listed in both `php.files` and `php.bootstrap`; the CLI starter includes this `autoload.php` for you. All declared PHP files must be available from the archive or fetched and verified before that bootstrap runs.
 
 ## Regenerate hashes
 

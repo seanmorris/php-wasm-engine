@@ -12,11 +12,6 @@
   "onlyShowAdjacentMaps": false,
   "properties": [
     {
-      "name": "phonics.game",
-      "type": "string",
-      "value": "@sane/game"
-    },
-    {
       "name": "phonics.import.sane",
       "type": "string",
       "value": "../phonics.json"

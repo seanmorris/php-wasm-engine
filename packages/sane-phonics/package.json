@@ -6,6 +6,7 @@
   "files": [
     "autoload.php",
     "legacy.php",
+    "application.php",
     "src/Effects/Rumble.php",
     "src/Gameplay/Badnik.php",
     "src/Gameplay/BadnikBehavior.php",

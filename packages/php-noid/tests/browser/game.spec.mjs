@@ -27,8 +27,8 @@ const probe = async page => {
 
 const state = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpNoid));
 
-const loadGame = async page => {
-	await page.goto('/php-noid/');
+const loadGame = async (page, query = '') => {
+	await page.goto('/php-noid/' + query);
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 	await expect(page.locator('.php-noid-title')).toBeVisible();
 	await page.locator('[data-action="start"]').click();
@@ -378,7 +378,7 @@ test('PHP-Noid uses shared icon shortcuts with persistent mute and keyboard focu
 	expect(requests.some(url => url.includes('sane-phonics'))).toBe(false);
 	await page.click('#stop');
 	await expect(page.locator('.quick-controls')).toHaveCount(0);
-	await page.getByRole('button', {name: 'Load world', exact: true}).click();
+	await page.getByRole('button', {name: 'Run application', exact: true}).click();
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 	await expect(page.locator('.quick-controls')).toHaveCount(1);
 	await page.click('#stop');
@@ -437,14 +437,21 @@ test('level changes fade around delayed loading, show a title, and pause before 
 	let release;
 	const ready = new Promise(resolve => { release = resolve; });
 
-	await page.route('**/php-noid/worlds/stage-02.tmj', async route => {
+	await page.route('**/php-noid/worlds/campaign.world?delayed', async route => {
+		const response = await route.fetch();
+		const world = await response.json();
+		world.maps[1].fileName += '?delayed';
+		await route.fulfill({response, json: world});
+	});
+
+	await page.route('**/php-noid/worlds/stage-02.tmj?delayed', async route => {
 		await ready;
 		await route.continue().catch(() => {});
 	});
 
 	try
 	{
-		await loadGame(page);
+		await loadGame(page, '?world=' + encodeURIComponent('/engine/packages/php-noid/worlds/campaign.world?delayed'));
 		await run(page, "$field->power('expand'); $field->power('exit');");
 		await expect.poll(async () => (await state(page)).phase).toBe('clearing');
 		await expect(page.locator('.php-noid-transition-title')).toHaveText('Level clear');

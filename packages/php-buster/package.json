@@ -18,6 +18,7 @@
   "files": [
     "autoload.php",
     "game.php",
+    "application.php",
     "src/Actor.php",
     "src/Input/BusterActions.php",
     "src/Input/InputSettings.php",

@@ -81,14 +81,9 @@ export async function validate(directory, {world, origins = []} = {})
 			const data = JSON.parse(new TextDecoder().decode(await scope.read(worldUrl)));
 			const config = properties(data.properties);
 
-			if(data.type !== 'world' || !config['phonics.game']) throw Error(`${world}: expected a Phonics world`);
+			if(data.type !== 'world') throw Error(`${world}: expected a Phonics world`);
 
 			await graph.imports(data, worldUrl);
-			const game = await graph.resolve(config['phonics.game'], worldUrl);
-
-			if(game.type !== 'game') throw Error(`${world}: phonics.game must select a game`);
-
-			await graph.activateGraph(game);
 
 			for(const reference of JSON.parse(config['phonics.modules'] ?? '[]'))
 				await graph.activateGraph(await graph.resolve(reference, worldUrl));

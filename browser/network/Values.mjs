@@ -486,6 +486,7 @@ export class MatchDescriptor
 	constructor(
 		{
 			protocol = '1.0.0'
+			, application = null
 			, game
 			, start
 			, packages = []
@@ -499,6 +500,14 @@ export class MatchDescriptor
 		if(!Number.isInteger(players) || players < 2 || players > 16) throw new TypeError('Invalid match player count');
 
 		this.protocol = protocol;
+
+		this.application = application
+			? Object.freeze({
+				id: requiredString(application.id, 'Application identity')
+				, code: requiredString(application.code, 'Application code digest')
+			})
+			: null;
+
 		this.game = requiredString(game, 'MatchDescriptor.game');
 		this.start = structuredClone(start);
 		this.packages = Object.freeze(packages.map(item => Object.freeze({...item})));
@@ -516,6 +525,7 @@ export class MatchDescriptor
 	{
 		return {
 			protocol: this.protocol
+			, ...(this.application ? {application: this.application} : {})
 			, game: this.game
 			, start: this.start
 			, packages: this.packages

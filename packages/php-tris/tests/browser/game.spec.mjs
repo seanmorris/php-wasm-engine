@@ -1,5 +1,4 @@
 import {test,expect} from '@playwright/test';
-import {createHash} from 'node:crypto';
 
 const state = page => page.locator('canvas').evaluate(c => JSON.parse(c.dataset.phpTris));
 
@@ -8,9 +7,9 @@ const run = (page, code) => page.evaluate(
 	, code
 );
 
-async function load(page)
+async function load(page, query = '')
 {
-	await page.goto('/php-tris/');
+	await page.goto('/php-tris/' + query);
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 	await expect(page.locator('[data-action="start"]')).toBeVisible();
 }
@@ -171,25 +170,14 @@ test('PHPTris controller rotation, hold, drop and pause use the shared SDL mappi
 });
 
 test('PHPTris starts at the mode and rank selected by the world', async({page}) => {
-	let integrity;
-
-	await page.route('**/php-tris/phonics.json', async route => {
-		const response = await route.fetch();
-		const manifest = await response.json();
-		manifest.integrity['worlds/arcade.world'] = integrity;
-		await route.fulfill({response, json: manifest});
-	});
-
-	await page.route('**/php-tris/worlds/arcade.world', async route => {
+	await page.route('**/php-tris/worlds/arcade.world?reactor', async route => {
 		const response = await route.fetch();
 		const world = await response.json();
 		world.properties.find(property => property.name === 'phonics.start').value = 'reactor-02.tmj';
-		const body = JSON.stringify(world);
-		integrity = 'sha256-' + createHash('sha256').update(body).digest('base64');
-		await route.fulfill({response, body});
+		await route.fulfill({response, json: world});
 	});
 
-	await load(page);
+	await load(page, '?world=' + encodeURIComponent('/engine/packages/php-tris/worlds/arcade.world?reactor'));
 	await start(page);
 	expect(await state(page)).toMatchObject({mode: 'reactor', level: 2, seed: 1});
 	await page.locator('#stop').click();

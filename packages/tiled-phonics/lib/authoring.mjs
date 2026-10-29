@@ -236,7 +236,6 @@ export function validateWorld(world, records)
 		return entry;
 	};
 
-	if(resolve(config['phonics.game']).type !== 'game') throw new Error('phonics.game must select a game export');
 
 	if(!config['phonics.start']) throw new Error('Missing phonics.start');
 

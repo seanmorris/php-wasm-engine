@@ -26,8 +26,8 @@
     }
   },
   "integrity": {
-    "extension/phonics.mjs": "sha256-RNuYGBeU3n/5E6RbLJmG24Prm1tcbdYlyfWQXKnfb2M=",
-    "lib/authoring.mjs": "sha256-KABXNvEMfpenNeauqPf+/vUbaKLen6EparAVFbxmRf8=",
+    "extension/phonics.mjs": "sha256-MbsbtQgT8A9M3YzZKWzifUot+Gu+Dush2lzAbLiH/BY=",
+    "lib/authoring.mjs": "sha256-Z25EHRpNTAhmpj433omUKAOq4YUqtf/++d2deBVaKEo=",
     "bin/tiled-phonics.mjs": "sha256-B0GiVPKKCUHmfTWODvGzybWK2xiWjv2WJHXV+2a4vkQ="
   }
 }

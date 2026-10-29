@@ -154,7 +154,7 @@ test('games mount inside their documentation pages', async() => {
 		assert.match(html, /class="game-embed/);
 		assert.match(html, /data-game-runtime/);
 		assert.match(html, /data-host="\.\.\/\.\.\/preview\/host\.mjs"/);
-		assert.match(html, new RegExp(`data-world="\\.\\.\\/\\.\\.\\/engine\\/packages\\/${page}\\/`));
+		assert.match(html, new RegExp(`data-application="\\.\\.\\/\\.\\.\\/engine\\/packages\\/${page}\\/`));
 		assert.doesNotMatch(html, /<iframe|Open the standalone game/);
 		await assert.rejects(fs.access(path.join(output, page, 'index.html')));
 	}

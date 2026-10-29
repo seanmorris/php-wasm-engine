@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
+import {pharExtension} from './cli/phar-extension.mjs';
 import path from 'node:path';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
+import {pack} from './cli/pack.mjs';
 import {root,engineFiles} from './scripts/files.mjs';
 import {runtimeDirectory} from './scripts/runtime.mjs';
 
@@ -36,6 +38,8 @@ export default async (_env, argv) => {
 
 	if(development)
 	{
+		for(const game of ['sane-phonics','php-noid','php-tris','php-slalom','php-buster','doom-phonics'])
+		await pack(path.join(root, 'packages', game), {cache: true});
 		const runtime = await runtimeDirectory();
 		let zlib = path.join(runtime, 'extensions/zlib');
 
@@ -55,7 +59,14 @@ export default async (_env, argv) => {
 					directory: path.join(root, directory)
 					, publicPath: '/engine/' + directory
 					, serveIndex: false
+					, watch: {ignored: '**/dist/**'}
 				}))
+				, {
+					directory: await pharExtension()
+					, publicPath: '/runtime/extensions/phar'
+					, serveIndex: false
+					, watch: false
+				}
 				, {directory: zlib,publicPath: '/runtime/extensions/zlib',serveIndex: false,watch: false}
 				, {directory: runtime,publicPath: '/runtime',serveIndex: false,watch: false}
 			]
@@ -74,6 +85,30 @@ export default async (_env, argv) => {
 
 
 			, setupMiddlewares(middlewares, server) {
+				middlewares.unshift({
+					name: 'application-build'
+					, middleware: async(req, res, next) => {
+						const applicationRoute = /^\/engine\/packages\/([a-z-]+)\/dist\/game\.phar(?:\.integrity)?$/;
+						const match = req.url.split('?')[0].match(applicationRoute);
+
+						if(!match
+						|| !['sane-phonics','php-noid','php-tris','php-slalom','php-buster','doom-phonics'].includes(
+							match[1]
+						))
+					return next();
+
+						try
+						{
+							await pack(path.join(root, 'packages', match[1]), {cache: true});
+							next();
+						}
+						catch(error)
+						{
+							next(error);
+						}
+					}
+				});
+
 				server.app.get('/engine/engine-files.json', async(_req, res, next) => {
 					try {res.json(await engineFiles());} catch(error) {next(error);}
 				});

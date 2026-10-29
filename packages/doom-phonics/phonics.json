@@ -10,6 +10,7 @@
     "files": [
       "autoload.php",
       "game.php",
+      "application.php",
       "src/Adapter/ActorFactory.php",
       "src/Adapter/WadActiveScope.php",
       "src/Adapter/WadAdapter.php",
@@ -232,6 +233,21 @@
     "shaders/wipe.frag",
     "shaders/wipe.vert"
   ],
+  "application": {
+    "entry": "application.php",
+    "assets": [
+      "application-network.json",
+      "demo/camera-mirrors.phonics-world.json",
+      "demo/episode-one-online.phonics-world.json",
+      "demo/portal-demo.phonics-world.json",
+      "demo/episode-one.phonics-world.json",
+      "demo/skulltag-stress.phonics-world.json",
+      "demo/portal-rooms.phonics-world.json"
+    ],
+    "dependencies": {
+      "matrix": "../phonics-matrix/phonics.json"
+    }
+  },
   "schemaVersion": 1,
   "version": "0.1.0",
   "requires": {
@@ -246,6 +262,13 @@
     ]
   },
   "assets": [
+    "application-network.json",
+    "demo/camera-mirrors.phonics-world.json",
+    "demo/episode-one-online.phonics-world.json",
+    "demo/portal-demo.phonics-world.json",
+    "demo/episode-one.phonics-world.json",
+    "demo/skulltag-stress.phonics-world.json",
+    "demo/portal-rooms.phonics-world.json",
     "shaders/beam.frag",
     "shaders/beam.vert",
     "shaders/camera-portal.frag",
@@ -280,6 +303,14 @@
   "integrity": {
     "autoload.php": "sha256-NyvXd52uYyyH6sk5vfNRlgw43OfF4aN3fcqkW2bx1u8=",
     "game.php": "sha256-kOgypgyj7T/uwhQVgrSzZ9MyuLitrBULhAZPqc6Ci5o=",
+    "application.php": "sha256-u07itKK4iX2A0eqpetLhu3VzRpJ1SR/sOm7oMqNhUkk=",
+    "application-network.json": "sha256-beV5jPBML3eSO+vgt8ccLDb3uu3li60XySzvcP7pmBk=",
+    "demo/camera-mirrors.phonics-world.json": "sha256-/jIAw+mTZGCF+1jtIvQhzCHO/2r6mfZ0fvi2u2csDHo=",
+    "demo/episode-one-online.phonics-world.json": "sha256-/yUpucgzv77fcsCecqOmryCzUm0bYGweYY2sOUpuM4s=",
+    "demo/portal-demo.phonics-world.json": "sha256-l3FfT4M9nRi1h/mEmf+2WPrHWiqNkOOWKgYWrnUwnmA=",
+    "demo/episode-one.phonics-world.json": "sha256-UCq8qIYKwZEsDlHynNOwo8OJUFP1I82kx+gk6bZQNrI=",
+    "demo/skulltag-stress.phonics-world.json": "sha256-uinUnW3U5P682bt/g7raFoDyjuUv3tvXWCJA5QRaaoQ=",
+    "demo/portal-rooms.phonics-world.json": "sha256-sX2Ew4frMXr6PTu2CnfU3mQ158XUPRaB9qQ/OfA0xGo=",
     "src/Adapter/ActorFactory.php": "sha256-wu36JD8hN1FOZ4md+aDgMzySFV9GuDp536tTHXuOG2o=",
     "src/Adapter/WadActiveScope.php": "sha256-YWlXXbo0AyZNpcrSy8qP4H3A4A5amIobXKL0mjF0mIw=",
     "src/Adapter/WadAdapter.php": "sha256-AKDuqMXtPQrcai7RnkiuhzdmCrF3mFh3kKH8ZH9Vpow=",

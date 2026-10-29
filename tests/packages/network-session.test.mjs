@@ -17,7 +17,7 @@ import {
 import {ResourceNegotiator} from '../../browser/network/ResourceNegotiator.mjs';
 import {ResourceStore} from '../../browser/ResourceStore.mjs';
 import {normalizeWorld} from '../../browser/WorldDefinition.mjs';
-import {sha256} from '../../browser/network/Values.mjs';
+import {sha256, MatchDescriptor} from '../../browser/network/Values.mjs';
 
 class LoopbackTransport extends EventTarget
 {
@@ -667,4 +667,35 @@ test('disconnect during resource acquisition cannot finish loading an abandoned 
 	assert.equal(guest.boundWorld, null);
 	assert.equal(guest.negotiator.resolutions().length, 0);
 	assert.equal(guest.controller.state, 'available');
+});
+
+
+test('application handshakes reject changed code and mixed launch protocols before negotiating content', async () => {
+	const identity = {id: 'app', code: 'sha256-original'};
+
+	for(const [local, remote, protocol] of [
+		[identity, {...identity, code: 'sha256-other'}, '2.0.0']
+		, [identity, {...identity, id: 'other'}, '2.0.0']
+		, [identity, null, '1.0.0']
+		, [null, identity, '2.0.0']
+	]){
+		const session = new NetworkSession({
+			controller: new EventTarget
+			, world
+			, application: local
+			, negotiator: {
+
+				reset() { assert.fail('Incompatible peers must not reach content negotiation'); }
+			}
+		});
+
+		session.match = {initiator: false, invitation: {}};
+		session.matchController = new AbortController();
+		const descriptor = new MatchDescriptor({protocol, application: remote, game: world.game, start: world.start});
+
+		await assert.rejects(
+			session.hello({descriptor, descriptorDigest: await descriptor.digest()})
+			, error => error.code === 'match_application'
+		);
+	}
 });

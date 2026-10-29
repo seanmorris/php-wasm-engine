@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
 import {execFileSync} from 'node:child_process';
+import {pack} from '../../cli/pack.mjs';
 let server, directory, origin;
 
 test.beforeAll(async () => {
@@ -46,13 +47,30 @@ test.beforeAll(async () => {
 
 	await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 	origin = `http://127.0.0.1:${server.address().port}`;
+
+	await fs.writeFile(path.join(directory, 'application.php'), `<?php
+require_once 'phar://' . Phar::running(false) . '/core/autoload.php';
+$app = new \\Phonics\\Application\\Context;
+$phonics = $app->compose('unused.world', '${origin}/motion/phonics.json#game');
+require $app->entry();
+`
+	);
+
+	await fs.writeFile(
+		path.join(directory, 'phonics.json')
+		, JSON.stringify(
+			{schemaVersion: 1, name: '@fixture/composition', version: '1.0.0', application: {entry: 'application.php'}}
+		)
+	);
+
+	await pack(directory);
+
 	const world = {
 		type: 'world'
 		, maps: [{fileName: 'maps/start.tmj',x: 0,y: 0,width: 960,height: 540}]
 		, properties: [
 			{name: 'phonics.import.motion',type: 'string',value: origin + '/motion/phonics.json'}
 			, {name: 'phonics.import.color',type: 'string',value: origin + '/color/phonics.json'}
-			, {name: 'phonics.game',type: 'string',value: '@motion/game'}
 			, {name: 'phonics.modules',type: 'string',value: '["@color/module"]'}
 			, {name: 'phonics.start',type: 'string',value: 'maps/start.tmj'}
 		]
@@ -106,9 +124,13 @@ test(
 		for(const location of ['world','relocated/nested'])
 		{
 			await page.evaluate(async ({url,origin}) => {
-				window.composed = await Phonics.loadWorld(
-					url
-					, {canvas: document.querySelector('canvas'),policy: {codeOrigins: [window.location.origin,origin]}}
+				window.composed = await Phonics.run(
+					origin + '/dist/game.phar'
+					, {
+						init: {world: url}
+						, canvas: document.querySelector('canvas')
+						, policy: {codeOrigins: [window.location.origin,origin]}
+					}
 				);
 			}, {url: origin + '/' + location + '/new.world',origin}
 			);
@@ -233,7 +255,6 @@ test(
 			, properties: [
 				{name: 'phonics.import.sane',type: 'string',value: host + '/engine/packages/sane-phonics/phonics.json'}
 				, {name: 'phonics.import.motion',type: 'string',value: origin + '/motion/phonics.json'}
-				, {name: 'phonics.game',type: 'string',value: '@sane/game'}
 				, {name: 'phonics.start',type: 'string',value: 'custom.tmj'}
 				, {name: 'phonics.modules',type: 'string',value: '["@motion/module","@sane/platformer"]'}
 				, {name: 'sane.scene',type: 'string',value: 'platformer'}
@@ -249,8 +270,9 @@ test(
 			const canvas = document.querySelector('canvas');
 			document.body.replaceChildren(canvas);
 
-			window.composed = await Phonics.loadWorld(origin + '/custom.world', {
-				canvas
+			window.composed = await Phonics.run('/engine/packages/sane-phonics/dist/game.phar', {
+				init: {world: origin + '/custom.world'}
+				, canvas
 				, policy: {codeOrigins: [location.origin,origin]}
 			});
 		}, origin
@@ -301,7 +323,6 @@ test('PhpNoid treats repeated map sources as separate campaign placements', asyn
 				, type: 'string'
 				, value: host + '/engine/packages/php-noid/phonics.json'
 			}
-			, {name: 'phonics.game',type: 'string',value: '@php-noid/game'}
 			, {
 				name: 'phonics.start'
 				, type: 'string'
@@ -313,8 +334,9 @@ test('PhpNoid treats repeated map sources as separate campaign placements', asyn
 	await fs.writeFile(path.join(directory, 'repeated.world'), JSON.stringify(world));
 
 	await page.evaluate(async origin => {
-		window.composed = await Phonics.loadWorld(origin + '/repeated.world', {
-			canvas: document.querySelector('canvas')
+		window.composed = await Phonics.run('/engine/packages/php-noid/dist/game.phar', {
+			init: {world: origin + '/repeated.world'}
+			, canvas: document.querySelector('canvas')
 			, policy: {codeOrigins: [location.origin,origin]}
 		});
 	}, origin

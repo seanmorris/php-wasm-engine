@@ -1,10 +1,9 @@
 # World authoring
 
-The package manifest, `phonics.json`, declares the PHP bootstrap, browser module, `#rules` module, `#board` factory, `#arcade` world, and the files available to a self-contained browser export. A world selects the game through three custom properties; the supplied `worlds/arcade.world` uses:
+The package manifest, `phonics.json`, declares the application bootstrap, browser module, `#rules` module, `#board` factory, `#arcade` world, and the files available to the executable PHAR. `application.php` selects the game entry. The supplied `worlds/arcade.world` selects its content through these custom properties:
 
 ```text
 phonics.import.php-tris = ../phonics.json
-phonics.game = @php-tris/game
 phonics.start = endless-01.tmj
 ```
 

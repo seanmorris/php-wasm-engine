@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {externalAssets} from './external-assets.mjs';
 
 const menu = page => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.menu || 'null'));
 
@@ -387,6 +388,7 @@ for(const [asset, scene] of [
 	test(
 		'Scripted stop cancels ' + asset + ' during a level change and Run can retry'
 		, async ({page}) => {
+			await externalAssets(page);
 			const errors = [];
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto('/sane-phonics/');
@@ -414,10 +416,11 @@ for(const [asset, scene] of [
 	);
 
 
-for(const asset of ['phonics.json', 'examples/assets/platformer.tmj'])
+for(const asset of ['dist/game.phar', 'examples/assets/platformer.tmj'])
 	test(
 		'failed startup ' + asset + ' exposes Run without leaving a frame loop'
 		, async ({page}) => {
+			await externalAssets(page);
 			await page.goto('/sane-phonics/');
 
 			await page.route(
@@ -442,7 +445,7 @@ test(
 		await page.goto('/sane-phonics/');
 		await start(page);
 		let pending;
-		await page.route('**/engine/phonics.json', route => { pending = route; });
+		await page.route('**/engine/packages/sane-phonics/dist/game.phar', route => { pending = route; });
 
 		await page.evaluate(() => {
 			window.stopEngine();

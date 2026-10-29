@@ -63,7 +63,7 @@ final class Atlas
 						continue;
 					}
 
-					$surface = IMG_Load(\Phonics\Asset\Resource::local($tile['image']));
+					$surface = IMG_Load(\Phonics\Asset\Resource::native($tile['image']));
 
 					if(!$surface)
 					{

@@ -339,7 +339,7 @@ export function normalizeWorld(value, declaring)
 		normalized.imports[alias] = new URL(reference(url, `${declaring}: invalid import ${alias}`), declaring).href;
 	}
 
-	reference(value.game, `${declaring}: missing game export`);
+	// Application PHP selects executable code; worlds describe content only.
 
 	for(const [id, source] of Object.entries(sources))
 	{
@@ -474,65 +474,16 @@ export function normalizeWorld(value, declaring)
 	return normalized;
 }
 
-/**
- * Load a launchable package manifest, neutral world, or legacy Tiled world.
- * @param {object} scope ResourceStore scope providing read().
- * @param {string|URL} input Canonical or resolvable input URL.
- * @param {string[]} [chain] Internal indirection chain for diagnostics.
- * @returns {Promise<{world: object, url: string, launchUrl: string, legacy: boolean,
- * packageUrl?: string, package?: object}>} Normalized launch resource.
- */
-export async function readWorldResource(scope, input, chain = [])
+/** Read a content world at the request of an already executing application. */
+export async function readWorldResource(scope, input, {game, network} = {})
 {
 	const url = new URL(input).href;
-
-	if(chain.includes(url)) throw new Error(`World resource cycle: ${[...chain, url].join(' -> ')}`);
-
-	let data;
-
-	try
-	{
-		data = JSON.parse(new TextDecoder().decode(await scope.read(url)));
-	}
-	catch(error)
-	{
-		throw new Error(`${url}: ${error.message}`, {cause: error});
-	}
+	const data = JSON.parse(new TextDecoder().decode(await scope.read(url)));
 
 	if(data.type === WORLD_TYPE)
-	return {world: normalizeWorld(data, url), url, launchUrl: chain[0] ?? url, legacy: false};
+	return {world: normalizeWorld({...data, game, network: network ?? undefined}, url), url, legacy: false};
 
-	if(data.type === 'world')
-	{
-		const config = properties(data.properties);
+	if(data.type === 'world') return {world: {...data, sourceUrl: url}, url, legacy: true};
 
-		if(typeof config['phonics.game'] !== 'string')
-		throw new Error(`${url}: expected a Tiled world with phonics.game`);
-
-		return {world: {...data, sourceUrl: url}, url, launchUrl: chain[0] ?? url, legacy: true};
-	}
-
-	if(data.schemaVersion === 1 && typeof data.name === 'string' && typeof data.version === 'string')
-	{
-		if(typeof data.world === 'string')
-		{
-			const loaded = await readWorldResource(scope, new URL(data.world, url), [...chain, url]);
-
-			return {...loaded, launchUrl: chain[0] ?? url, packageUrl: url, package: data};
-		}
-
-		if(data.world && typeof data.world === 'object' && !Array.isArray(data.world))
-		return {
-			world: normalizeWorld(data.world, url)
-			, url
-			, launchUrl: chain[0] ?? url
-			, legacy: false
-			, packageUrl: url
-			, package: data
-		};
-
-		throw new Error(`${url}: package has no launchable world`);
-	}
-
-	throw new Error(`${url}: expected phonics.json, ${WORLD_TYPE}, or a legacy Tiled world`);
+	throw new Error(`${url}: expected a content world; launch applications with Phonics.run()`);
 }

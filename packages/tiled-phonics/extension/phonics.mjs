@@ -89,11 +89,10 @@ export function applyClasses(definitions)
 	}
 }
 
-export function configureWorld(world, imports, game, start, modules = [])
+export function configureWorld(world, imports, start, modules = [])
 {
 	world.macro('Configure Phonics world', () => {
 		for(const alias of Object.keys(imports)) world.setProperty('phonics.import.' + alias, imports[alias]);
-		world.setProperty('phonics.game', game);
 		world.setProperty('phonics.start', start);
 		world.setProperty('phonics.modules', JSON.stringify(modules));
 	});
@@ -126,7 +125,7 @@ action('PhonicsAddPackage', 'Add Package URL…', () => {
 });
 
 action('PhonicsWorldSettings', 'Phonics World Settings…', () => {
-	const world = currentWorld(), cached = records(), games = [], pallets = [], modules = [];
+	const world = currentWorld(), cached = records(), pallets = [], modules = [];
 
 	for(const [name, url] of Object.entries(world.properties()))
 	{
@@ -140,16 +139,13 @@ action('PhonicsWorldSettings', 'Phonics World Settings…', () => {
 		{
 			pallets.push('@' + alias + '/' + name + ' (' + entry.type + ')');
 
-			if(entry.type === 'game') games.push('@' + alias + '/' + name);
 
 			if(entry.type === 'module') modules.push('@' + alias + '/' + name);
 		}
 	}
 
-	if(!games.length) throw new Error('Add a package containing a game first.');
 
 	const dialog = new Dialog('Phonics World Settings');
-	const game = dialog.addComboBox('Game', games, Math.max(0, games.indexOf(world.property('phonics.game'))));
 	const maps = world.maps.map(map => FileInfo.relativePath(FileInfo.path(world.fileName), map.fileName));
 	const start = dialog.addComboBox('Starting map', maps, Math.max(0, maps.indexOf(world.property('phonics.start'))));
 	const selected = JSON.parse(world.property('phonics.modules') || '[]');
@@ -160,13 +156,7 @@ action('PhonicsWorldSettings', 'Phonics World Settings…', () => {
 
 	if(dialog.exec() !== Dialog.Accepted) return;
 
-	configureWorld(
-		world
-		, {}
-		, games[game.currentIndex]
-		, maps[start.currentIndex]
-		, modules.filter((_, i) => checks[i].checked)
-	);
+	configureWorld(world, {}, maps[start.currentIndex], modules.filter((_, i) => checks[i].checked));
 
 	world.save();
 });
@@ -236,6 +226,12 @@ action('PhonicsPreview', 'Validate and Preview Phonics World…', () => {
 		, tiled.project.property('phonics.previewHost') || 'http://localhost:9130/preview/'
 	);
 
+	const application = dialog.addTextInput(
+		'Application PHAR URL'
+		, tiled.project.property('phonics.application')
+			|| 'http://localhost:9130/engine/packages/sane-phonics/dist/game.phar'
+	);
+
 	const url = dialog.addTextInput(
 		'Served world URL'
 		, world.property('phonics.previewUrl') || 'http://localhost:9130/'
@@ -247,9 +243,18 @@ action('PhonicsPreview', 'Validate and Preview Phonics World…', () => {
 	if(dialog.exec() !== Dialog.Accepted) return;
 
 	tiled.project.setProperty('phonics.previewHost', host.text);
+	tiled.project.setProperty('phonics.application', application.text);
 	world.setProperty('phonics.previewUrl', url.text);
 	world.save();
-	run(['open', host.text + (host.text.includes('?') ? '&' : '?') + 'world=' + encodeURIComponent(url.text)]);
+
+	run(
+		['open'
+			, host.text + (host.text.includes('?')
+				? '&'
+				: '?'
+			) + 'application=' + encodeURIComponent(application.text) + '&world=' + encodeURIComponent(url.text)
+		]
+	);
 });
 
 if(tiled.menus.includes('File'))

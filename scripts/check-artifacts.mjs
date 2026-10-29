@@ -43,7 +43,11 @@ try
 		if(bad) throw new Error(`Development file in ${result.name}: ${bad.path}`);
 
 		if(result.name === '@seanmorris/doom-phonics'
-			&& result.files.some(file => /(^|\/)demo\/|\.wad$/i.test(file.path))
+			&& result.files.some(
+				file => /\.wad$/i.test(file.path) || (/^demo\//.test(file.path)
+					&& !/^demo\/[^/]+\.phonics-world\.json$/.test(file.path)
+				)
+			)
 		)
 		throw new Error('Doom-Phonics artifact contains reference game data');
 
@@ -66,6 +70,11 @@ try
 			const leaked = entries.find(developmentFile);
 
 			if(leaked) throw new Error(`Development file in Composer ${result.name}: ${leaked}`);
+
+			if(['@seanmorris/phonics', '@seanmorris/doom-phonics'].includes(result.name)
+				&& entries.some(file => /\.wad$/i.test(file))
+			)
+			throw new Error(`Reference WAD in Composer ${result.name}`);
 		}
 	}
 
@@ -98,13 +107,14 @@ try
 			, ...(manifest.assets
 			?? []
 			)
+			, ...(manifest.application?.assets ?? [])
 		])
 			await fs.access(path.join(directory, file));
 	}
 
 	execute(
 		'node'
-		, ['--input-type=module', '-e', "import {Phonics} from '@seanmorris/phonics'; if(typeof Phonics.loadWorld !== 'function') throw Error('missing loader');"]
+		, ['--input-type=module', '-e', "import {Phonics} from '@seanmorris/phonics'; if(typeof Phonics.run !== 'function') throw Error('missing loader');"]
 		, temporary
 	);
 

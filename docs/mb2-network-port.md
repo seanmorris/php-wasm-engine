@@ -130,11 +130,11 @@ Phonics should provide these game-neutral services:
 - `LobbyProvider`: an adapter contract for identity, presence, invitations, opaque signaling messages, and optional chat.
 - `PeerTransport`: a transport contract exposing typed channels, state changes, backpressure, diagnostics, cancellation, and idempotent cleanup.
 - `WebRtcTransport`: the browser implementation using one `RTCPeerConnection` and explicit control and realtime data channels.
-- `MatchDescriptor`: an immutable description of protocol version, world digest, package-graph digest, game export, start scope, player count, negotiated content manifest, and feature set.
+- `MatchDescriptor`: an immutable description of protocol version, application identity and code digest, world and package-graph digests, game export, start scope, player count, negotiated content manifest, and feature set. PHAR sessions use protocol 2 and compare executable identity separately from content compatibility.
 - `MatchHandle`: a session-owned handle for one connected, compatibility-checked match.
 - `NetworkBridge`: bounded browser-to-PHP queues and send functions exposed through the WASM bridge.
 
-These are browser services because authentication, WebRTC, asynchronous signaling, DOM lifecycle, and network policy are browser concerns. They must be session-scoped and register cleanup with the same reverse-order lifecycle used by `Phonics.loadWorld()`.
+These are browser services because authentication, WebRTC, asynchronous signaling, DOM lifecycle, and network policy are browser concerns. They must be session-scoped and register cleanup with the same reverse-order lifecycle used by `Phonics.run()`.
 
 The core HTML lobby can render neutral status, player rows, invitations, chat, errors, and progress. A game package may supply title, artwork, copy, and CSS metadata, but cannot replace connection-state semantics. All remote strings must enter the DOM as text.
 
@@ -188,11 +188,11 @@ Core never names Sonic, rings, shields, a campaign map, or a concrete player com
 
 ## HTML lobby and direct level boot
 
-The generic host should continue to call `Phonics.loadWorld(worldUrl, options)`. Multiplayer is declared by the world, so the host does not gain a game-selection table or game-specific scene option.
+The generic host should continue to call `Phonics.run(applicationUrl, options)`. Multiplayer is selected by the PHP application, so the host does not gain a game-selection table or game-specific scene option.
 
 The normal flow should invoke the lobby as an HTML overlay from the game-owned menu:
 
-1. `loadWorld()` reads the world, verifies the package graph, and activates the PHP game and its declared browser networking modules.
+1. `run()` reads the world, verifies the package graph, and activates the PHP game and its declared browser networking modules.
 2. The title screen runs without opening a content source that still has unresolved resource slots.
 3. The game menu's **Online Play** item invokes the session's neutral `LobbyService`.
 4. The service acquires modal input, renders the HTML overlay above the canvas, and leaves game-specific menu placement and labeling to the game.
@@ -204,13 +204,13 @@ The normal flow should invoke the lobby as an HTML overlay from the game-owned m
 
 Cancellation releases modal input and restores the previous menu focus. A load failure or compatibility rejection closes the connection and returns to the lobby. `session.dispose()` closes all channels, peer-connection listeners, provider subscriptions, queues, and DOM ownership.
 
-The same `LobbyService` may auto-open after the title scene becomes ready for invitation links or worlds whose network declaration requires multiplayer. Both activation policies use the same overlay and session lifecycle; auto-open does not introduce a separate networking implementation.
+The same `LobbyService` may auto-open after the title scene becomes ready for invitation links or applications whose network configuration requires multiplayer. Both activation policies use the same overlay and session lifecycle; auto-open does not introduce a separate networking implementation.
 
 The public host API remains one-step and game-neutral:
 
 ```js
 // Public host code remains game-neutral.
-const session = await Phonics.loadWorld(worldUrl, {
+const session = await Phonics.run(applicationUrl, {
   canvas,
   runtime: {url: '/runtime/php8.4-sdl.mjs'},
   signal,
@@ -222,7 +222,7 @@ const session = await Phonics.loadWorld(worldUrl, {
 });
 ```
 
-`signalingOrigins` and `iceServers` are host security/connectivity policy. The world may request a provider, room, player count, and game mode, but it cannot silently add an ICE server or relax an origin policy.
+`signalingOrigins` and `iceServers` are host security/connectivity policy. The PHP application may request a provider, room, player count, and game mode, but it cannot silently add an ICE server or relax an origin policy.
 
 An illustrative neutral-world declaration is:
 
@@ -233,16 +233,6 @@ An illustrative neutral-world declaration is:
   "imports": {
     "sane": "../sane-phonics/phonics.json",
     "matrix": "../phonics-matrix/phonics.json"
-  },
-  "game": "@sane/game",
-  "network": {
-    "activation": "menu",
-    "players": {"min": 2, "max": 2},
-    "lobby": {
-      "provider": "@matrix/lobby",
-      "options": {"room": "#sane-phonics:example.org"}
-    },
-    "transport": "@phonics/webrtc"
   },
   "sources": {
     "campaign": {
@@ -262,7 +252,19 @@ An illustrative neutral-world declaration is:
 }
 ```
 
-The exact export names are prospective. The important split is that `network` chooses neutral browser services, the binding chooses game behavior, and `start` chooses the level. The lobby never contains `emerald-isle`, a player class, or a package-specific mode switch.
+The PHP bootstrap supplies the game and network configuration explicitly:
+
+```php
+$phonics = $app->compose(__DIR__ . '/campaign.phonics-world.json', __DIR__ . '/phonics.json#game', [
+    'activation' => 'menu',
+    'players' => ['min' => 2, 'max' => 2],
+    'lobby' => ['provider' => '@matrix/lobby', 'options' => ['room' => '#sane-phonics:example.org']],
+    'transport' => '@phonics/webrtc',
+]);
+require $app->entry();
+```
+
+The exact export names are prospective. The application's network configuration chooses neutral browser services, the binding chooses game behavior, and `start` chooses the level. The lobby never contains `emerald-isle`, a player class, or a package-specific mode switch.
 
 ## Peer-supplied and locally required content
 
@@ -287,7 +289,6 @@ An illustrative Doom world can declare a host-filled base archive while retainin
   "imports": {
     "doom": "../doom-phonics/phonics.json"
   },
-  "game": "@doom/game",
   "resourceSlots": {
     "wad-stack": {
       "type": "url",

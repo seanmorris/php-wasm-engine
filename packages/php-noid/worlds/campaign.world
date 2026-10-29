@@ -185,11 +185,6 @@
       "value": "../phonics.json"
     },
     {
-      "name": "phonics.game",
-      "type": "string",
-      "value": "@php-noid/game"
-    },
-    {
       "name": "phonics.start",
       "type": "string",
       "value": "stage-01.tmj"

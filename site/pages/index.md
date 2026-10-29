@@ -58,16 +58,16 @@ jsonld:
 ---
 
 
-<div class="flow" aria-label="Tiled world loads packages which run in PHP and SDL"><span><b>01</b>Tiled world<small>Maps &amp; properties</small></span><span><b>02</b>Package exports<small>Games &amp; systems</small></span><span><b>03</b>PHP + SDL<small>A playable session</small></span></div>
+<div class="flow" aria-label="An executable PHAR loads game code and resources in browser PHP and SDL"><span><b>01</b>Application PHAR<small>Authored PHP bootstrap</small></span><span><b>02</b>Code &amp; resources<small>Systems, worlds &amp; assets</small></span><span><b>03</b>PHP + SDL<small>A playable session</small></span></div>
 
-## A world is the entry point
+## An executable PHP application is the entry point
 
-A Phonics world declares its game, imported packages, and starting map. The generic host resolves that graph, verifies its files, and starts the game. Change the world to choose another game; the host stays the same.
+The browser runs an executable PHAR. Its PHP bootstrap chooses the game and can compose content from packaged worlds, external URLs, and reusable modules. Worlds describe resources and their bindings; the application controls startup. The same browser host runs every game.
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
 
-const session = await Phonics.loadWorld('/worlds/game.world', {
+const session = await Phonics.run('/dist/game.phar', {
   canvas: document.querySelector('canvas'),
   runtime: {url: '/runtime/php8.4-sdl.mjs'}
 });
@@ -80,7 +80,7 @@ await session.dispose();
 
 - **Build your first game:** follow the [quickstart tutorial](quickstart.html), from a new package to a playable world.
 - **Play and inspect:** explore the [complete game packages](games/), from platforming and puzzles to PHP Slalom and Doom.
-- **Design a world:** [add package URLs in Tiled](tiled.html), place entities, and launch your saved world.
+- **Design a world:** [add package URLs in Tiled](tiled.html), place entities, and preview your saved world with its application.
 - **Start your own game:** use the [game-package CLI](cli.html) to scaffold, preview, validate, and build.
 - **Write a module:** [register PHP systems and factories](modules.html) against the shared session context.
 

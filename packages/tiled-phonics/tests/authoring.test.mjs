@@ -79,7 +79,6 @@ test(
 
 			const world = {
 				properties: [{name: 'phonics.import.example', value: url}
-					, {name: 'phonics.game', value: '@example/game'}
 					, {name: 'phonics.start', value: 'level.tmj'}
 				]
 			};
@@ -138,13 +137,13 @@ const check=() => {
  try {
   const world=tiled.worlds[0];
   if(${pass} === 1) {
-   if(world.property('phonics.game') !== '@${packageName}/game') throw new Error('Lost initial world property');
+   if(!world.property('phonics.start')) throw new Error('Lost initial world property');
    const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]}];
    applyClasses(classes); applyClasses(classes);
-   configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'@fixture/game','${nextMap}',['@fixture/module']);
+   configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'${nextMap}',['@fixture/module']);
    if(!world.save()) throw new Error('World save failed');
   } else {
-   if(world.property('phonics.game') !== '@fixture/game') throw new Error('Lost game after reopening');
+   if(world.property('phonics.start') !== '${nextMap}') throw new Error('Lost start after reopening');
    if(world.property('phonics.import.fixture') !== 'https://cdn.test/pkg@1.0.0/phonics.json') throw new Error('Lost import');
    if(world.property('phonics.modules') !== '["@fixture/module"]') throw new Error('Lost module selection');
    if(!tiled.project.findTypeByName('Fixture.Actor')) throw new Error('Lost typed class');

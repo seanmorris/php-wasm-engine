@@ -52,6 +52,7 @@ const gamePackages = [
 
 const namespaceInfo = {
 	Phonics: ['Core runtime', 'Frame scheduling, fixed-step simulation, lifecycle, and browser restoration.']
+	, 'Phonics\\Application': ['Applications', 'Executable PHAR bootstraps, browser services, and optional content composition.']
 	, 'Phonics\\Asset': ['Assets', 'Synchronous PHP asset reads and canonical source-to-mount identity.']
 	, 'Phonics\\Ecs': ['ECS', 'Entity storage, boolean queries, ordered systems, and Tiled object factories.']
 	, 'Phonics\\Effects': ['Effects', 'Reusable particles, camera shake, and generic rumble scheduling.']
@@ -68,7 +69,8 @@ const namespaceInfo = {
 };
 
 const namespaceExamples = {
-	Phonics: `use Phonics\\Engine;\nuse Phonics\\Render\\Device;\n\n$engine = new Engine(new Device);\n$engine->start(static function(Engine $engine): void {\n    // Draw the current frame.\n});`
+	'Phonics\\Application': `require_once 'phar://' . Phar::running(false) . '/core/autoload.php';\n$app = new Phonics\\Application\\Context;\n$phonics = $app->compose(__DIR__ . '/worlds/game.world', __DIR__ . '/phonics.json#game');\nrequire $app->entry();`
+	, Phonics: `use Phonics\\Engine;\nuse Phonics\\Render\\Device;\n\n$engine = new Engine(new Device);\n$engine->start(static function(Engine $engine): void {\n    // Draw the current frame.\n});`
 	, 'Phonics\\Asset': `use Phonics\\Asset\\Assets;\nuse Phonics\\Asset\\Resource;\n\n$url = Resource::resolve($mapUrl, '../images/tiles.png');\n$bytes = (new Assets)->read(Resource::local($url));`
 	, 'Phonics\\Ecs': `use Phonics\\Ecs\\Query;\nuse Phonics\\Ecs\\Registry;\n\n$entities = new Registry;\n$id = $entities->create(new Position(10, 20), new Velocity(2, 0));\n$moving = $entities->query(Query::all(Position::class, Velocity::class));`
 	, 'Phonics\\Effects': `use Phonics\\Effects\\CameraShake;\n\n$shake = new CameraShake;\n$shake->impulse(8, 3);\n$shake->update($dt);\n$view = $shake->view($camera);`

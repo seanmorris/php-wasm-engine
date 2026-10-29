@@ -1,4 +1,7 @@
 import {test,expect} from '@playwright/test';
+import {externalAssets} from './external-assets.mjs';
+
+test.beforeEach(async ({page}) => externalAssets(page));
 
 const state = page => page.evaluate(() => JSON.parse(document.querySelector('canvas').dataset.world||'{}'));
 
@@ -47,7 +50,7 @@ test(
 
 		const errors = await start(page);
 		await expect.poll(async() => (await state(page)).pending.length).toBe(0);
-		expect(requests).toContain('world.world');
+		expect(requests).not.toContain('world.world'); // World definitions remain in the executable archive.
 		expect(requests).not.toContain('stream-0.tmj');
 		expect(requests).not.toContain('stream-4.tmj');
 		expect(requests).not.toContain('platformer.tmj');
@@ -64,7 +67,7 @@ test(
 		expect(await page.evaluate(async() => {
 			const module = await enginePhp.binary;
 
-			return module.FS.analyzePath('/phonics/packages/1/examples/assets/stream-2.tmj').exists;
+			return module.FS.analyzePath('/phonics/assets/1/examples/assets/stream-2.tmj').exists;
 		})).toBe(false);
 
 		await page.evaluate(() => {
@@ -128,7 +131,7 @@ test('failed map fetches stay local, retry with X, and cannot resurrect a stoppe
 	expect(await page.evaluate(async() => {
 		const module = await enginePhp.binary;
 
-		return module.FS.analyzePath('/phonics/packages/1/examples/assets/stream-3.tmj').exists;
+		return module.FS.analyzePath('/phonics/assets/1/examples/assets/stream-3.tmj').exists;
 	})).toBe(false);
 
 	expect(errors).toEqual([]);

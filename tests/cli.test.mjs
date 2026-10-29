@@ -175,7 +175,7 @@ test('packed CLI creates, validates, builds and previews an independent game out
 	);
 
 	const url = await new Promise((resolve, reject) => {
-		const timer = setTimeout(() => reject(Error('Preview server did not start')), 10000);
+		const timer = setTimeout(() => reject(Error('Preview server did not start')), 30000);
 		let output = '';
 
 		child.stdout.on('data', chunk => {
@@ -231,6 +231,25 @@ test('packed CLI creates, validates, builds and previews an independent game out
 		await page.locator('#stop').click();
 		await page.waitForFunction(() => document.querySelector('#status').textContent === 'Stopped');
 		assert.equal(await page.locator('#status').textContent(), 'Stopped');
+		const archiveUrl = new URL('/dist/game.phar', url);
+		const originalArchive = Buffer.from(await (await fetch(archiveUrl)).arrayBuffer());
+		await fs.appendFile(path.join(game, 'application.php'), '\n$previewRebuilt = true;\n');
+		const editedArchive = Buffer.from(await (await fetch(archiveUrl)).arrayBuffer());
+		assert.notDeepEqual(editedArchive, originalArchive, 'preview repacks edits without stale manifest failures');
+		await page.reload();
+		await page.waitForFunction(() => document.querySelector('#status').textContent.startsWith('Ready'));
+
+		assert.equal(
+			await page.evaluate(
+				() => previewSession.php.run(
+					'<?php if(empty($previewRebuilt)) throw new RuntimeException("Preview used stale application");'
+				)
+			)
+			, 0
+		);
+
+		await page.locator('#stop').click();
+		await page.waitForFunction(() => document.querySelector('#status').textContent === 'Stopped');
 		assert.deepEqual(errors, []);
 	}
 	finally

@@ -25,9 +25,9 @@ Copy `extension/phonics.mjs` from the installed Tiled-Phonics package into the e
 
 Choose **File → Add Package URL…**, enter a versioned `phonics.json` URL, and assign a pallet alias. The importer reads dependencies, classes, typed defaults, templates, and preview resources. It caches resources in the project's `.phonics-cache` directory without executing downloaded gameplay code.
 
-### Select the game
+### Configure the content
 
-Use **File → Phonics World Settings…** to choose a game export, starting map, and additional modules. Imports are saved as `phonics.import.<alias>` custom properties. Game and module selections use those aliases.
+Use **File → Phonics World Settings…** to choose a starting map and additional modules. Imports are saved as `phonics.import.<alias>` custom properties. Module selections use those aliases. The application's PHP bootstrap selects the game export.
 
 ### Place entities
 
@@ -35,12 +35,13 @@ Select an object layer and choose **File → Place Phonics Entity…**. Choose a
 
 ## Validate and preview
 
-**File → Validate and Preview Phonics World…** saves modified open assets and the world, checks imports and typed properties, then asks for two URLs:
+**File → Validate and Preview Phonics World…** saves modified open assets and the world, checks imports and typed properties, then asks for three URLs:
 
 - **Preview host URL**: a running Phonics host. The default is `http://localhost:9130/preview/`; the project remembers your entry.
+- **Application PHAR URL**: the executable application that will open the content, such as `http://127.0.0.1:9140/dist/game.phar` from `phonics preview`.
 - **Served world URL**: the HTTP(S) URL of this `.world` file. The default is `http://localhost:9130/`; the world remembers your entry.
 
-The extension opens the host URL with `world=` set to the served world URL. Any of these hosts works:
+The extension opens the host with `application=` selecting the PHAR and `world=` supplying the content URL as application initialization data. Any of these hosts works:
 
 | Host | Start it with | Preview host URL |
 | --- | --- | --- |

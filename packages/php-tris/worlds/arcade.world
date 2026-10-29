@@ -556,11 +556,6 @@
       "value": "../phonics.json"
     },
     {
-      "name": "phonics.game",
-      "type": "string",
-      "value": "@php-tris/game"
-    },
-    {
       "name": "phonics.start",
       "type": "string",
       "value": "endless-01.tmj"

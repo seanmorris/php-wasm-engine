@@ -538,12 +538,12 @@ for(const embed of document.querySelectorAll('.game-embed[data-title]'))
 		try
 		{
 			const host = new URL(embed.dataset.host, location.href).href;
-			const world = new URL(embed.dataset.world, location.href).href;
+			const world = new URL(embed.dataset.application, location.href).href;
 			const dataOrigins = embed.dataset.dataOrigins?.split(',').filter(Boolean);
 			const {mountPreview} = await import(host);
 			runtime.hidden = false;
 			trigger.remove();
-			mountPreview(runtime, {world, title: embed.dataset.title, dataOrigins});
+			mountPreview(runtime, {application: world, title: embed.dataset.title, dataOrigins});
 		}
 		catch(error)
 		{

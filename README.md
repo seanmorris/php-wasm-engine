@@ -4,7 +4,7 @@ Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
-const session = await Phonics.loadWorld('https://your-host/game.world', {
+const session = await Phonics.run('https://your-host/dist/game.phar', {
   canvas: document.querySelector('canvas'),
   runtime: {url: '/runtime/php8.4-sdl.mjs'},
   policy: {codeOrigins: [location.origin, 'https://cdn.jsdelivr.net']}
@@ -13,14 +13,16 @@ const session = await Phonics.loadWorld('https://your-host/game.world', {
 await session.dispose();
 ```
 
-The loader reads `phonics.game`, `phonics.import.<alias>`, `phonics.start`, and optional `phonics.modules` from **Tiled custom properties** on a `.world` file. Imports are resolved before the game. `phonics.modules` is a JSON array stored as a string. A game is an export reference such as `@php-noid/game` or an absolute manifest URL with `#game`. The host has no game selection table. `/preview/` is the generic host, and each bundled game mounts lazily in its documentation overview under `/games/`.
+The browser executes the PHAR stub. Its authored PHP bootstrap chooses the game and optionally composes a Tiled or adapter-based content world. Declare `application.entry` in `phonics.json`, then run `npx phonics pack` to produce the archive. `options.init` passes application data such as `{world, startMap, cheats}`. Worlds and WADs can be packaged assets or external URLs. `/preview/` is the generic application host; each game mounts lazily in its documentation page under `/games/`.
+
+The runtime requires PHP 8.4 SDL plus the pinned `php-wasm-phar` extension. Packaging requires native PHP with Phar; gameplay remains browser-only. See [the architecture](docs/architecture.md) for the application bootstrap and resource lifecycle.
 
 ## Author a world
 
 1. Install the core and Tiled helper packages together. Install Tiled **1.12.2**, open a project and world, and install the extension as described in the [editor guide](packages/tiled-phonics/README.md).
 2. Choose **File → Add Package URL**, enter the package's exact-version `phonics.json` URL, and assign a pallet alias.
-3. Use **Phonics World Settings** to select a game, start map, and additional modules. On an object layer, **Place Phonics Entity** selects an exported factory. Move and configure the resulting object with Tiled's normal tools. Cached templates and tilesets are also available in the project's `.phonics-cache` directory.
-4. Save. **Validate and Preview** checks imports and properties and launches the unchanged Phonics host with the world URL. Your static server must serve the world/maps and allow CORS for cross-origin assets.
+3. Use **Phonics World Settings** to select a start map and additional modules. On an object layer, **Place Phonics Entity** selects an exported factory. Move and configure the resulting object with Tiled's normal tools. Cached templates and tilesets are also available in the project's `.phonics-cache` directory.
+4. Save. **Validate and Preview** checks imports and properties and opens the Phonics host with an application PHAR URL and the served world URL. Your static server must serve the world/maps and allow CORS for cross-origin assets.
 
 URLs and `@` references are string properties. Use Tiled file properties for actual local files. Cached authoring resources record canonical sources in supported `phonics.source*` properties. References retain the declaring document's identity, including inherited template and tile properties. Maps placed in different worlds have separate mutable state; resources share canonical URL identity. Query strings distinguish versions; fragments select manifest exports.
 
@@ -32,7 +34,7 @@ Export types:
 
 | Type | Meaning |
 | --- | --- |
-| `game` | Entry point selected by `phonics.game` or a world's `game`; starts the session lifecycle |
+| `game` | Game entry selected explicitly by the PHP application bootstrap |
 | `module` | Registers systems, factories, and cleanup against the shared session context |
 | `factory` | Tiled entity factory; names its registered `class` and `module` |
 | `component` | Tiled entity class that objects reference in the same way as a factory |
@@ -40,12 +42,12 @@ Export types:
 | `adapter` | PHP content adapter selected by a world source's `adapter` |
 | `system-set` | PHP systems bound to matching adapter scopes by a world's `bindings[].use` |
 | `resource-inspector` | Browser module that inspects launcher resources named by a resource requirement's `inspector` |
-| `lobby-provider` | Online lobby selected by a world's `network.lobby.provider` |
-| `transport` | Peer transport selected by a world's `network.transport` reference or `network.transport.use` |
+| `lobby-provider` | Online lobby selected by the application's `network.lobby.provider` |
+| `transport` | Peer transport selected by the application's `network.transport` reference or `network.transport.use` |
 
 Executable exports name a declared `php` and/or `browser` file; core's built-in `@seanmorris/phonics` `webrtc` transport and `memory-lobby` provider are supplied by the loader instead. `modules` lists prerequisite module references; factories name their registered `class` and `module`. Dependencies resolve relative to their manifest. Asset exports resolve through `context.resolve(reference, declaringUrl)` in browser modules and normal asset scopes; PHP uses `Phonics\Asset\Resource::resolve` and `Assets` with the same session pallets. Request asynchronous assets before reading their mounted files. Browser entries must be self-contained ES module bundles exporting `activate(context)`; return cleanup or use `context.onClose`. PHP module files return a callback accepting `Phonics\Package\Context`: register `system(name, callback, after: [...])`, `factory(name, callback)`, and `onClose(callback)`. A module that needs the first map during registration declares `preloadStart: true`. A game may declare `preloadStart: false` to manage its own map-loading lifecycle (for example, an intro before the first level); its world must explicitly list any required modules. The game shares that context's registry and scheduler, starts its lifecycle, and calls `vrzno_env('sceneReady')()` when ready. The [fixture modules](tests/fixtures/composition) demonstrate independent composition; [PHP-Noid](packages/php-noid/game.php) demonstrates a full game lifecycle.
 
-All declared PHP and browser files are fetched and SHA-256 checked before code runs. Each package keeps its relative layout in its own WASM mount. Missing exports, cycles, conflicting registrations, overlapping PHP namespaces, unsupported runtime requirements, and integrity failures report their declaring resource. PHP code lives for a session; loading another code graph creates a fresh runtime. A game's ordinary stage changes stay within its session. Loading supports abort signals, retries, scoped ownership, and shared resource reference counts.
+The PHAR signature and optional host-supplied integrity are checked before its stub runs. Composition verifies declared PHP and browser dependencies before activation. Each package keeps its relative layout in its own WASM mount. Missing exports, cycles, conflicting registrations, overlapping PHP namespaces, unsupported runtime requirements, and integrity failures report their declaring resource. PHP code lives for a session; loading another code graph creates a fresh runtime. A game's ordinary stage changes stay within its session. Loading supports abort signals, retries, scoped ownership, and shared resource reference counts.
 
 Remote modules are executable code. The host, not the world, controls `policy.codeOrigins`; the default permits only the host origin. Serve packages from exact npm versions, commit-pinned GitHub URLs, or immutable static locations. Integrity detects file corruption relative to the trusted manifest; it does not authenticate an untrusted manifest. Composer installs PHP distributions; it is not used as a per-file CDN.
 
@@ -82,7 +84,7 @@ Regenerate authored assets with `npm run generate`; regenerate manifests **after
 
 `npm run build:manifests && npm run test:artifacts` writes verified npm tarballs and Composer ZIP archives to ignored `dist/`. Review the manifests, licensing, and package contents, then publish the core and game/editor artifacts as a separate release operation. Nothing in this implementation publishes to a registry or establishes live CDN availability.
 
-After publishing version `0.1.0`, serve `/preview/` with `https://cdn.jsdelivr.net` added to its host-owned `data-code-origins` array. In Tiled import `https://cdn.jsdelivr.net/npm/@seanmorris/php-noid@0.1.0/phonics.json`, select `@php-noid/game`, and place entities in a new local map/world. Serve that world, run **Validate and Preview**, verify movement, launch, capsule collection and stage restart, then stop and reload. Repeat with two independently published fixture modules and move the world/map directory. Inspect the network panel for exact-version package URLs, successful CORS, no Sane-Phonics downloads, and successful integrity checks. This is a documented post-publication check, not a claim that these URLs are already live.
+After publishing version `0.1.0`, serve `/preview/` with `https://cdn.jsdelivr.net` added to its host-owned `data-code-origins` array. In Tiled import `https://cdn.jsdelivr.net/npm/@seanmorris/php-noid@0.1.0/phonics.json`, and place entities in a new local map/world. Have the PHP application select the game export, serve its PHAR and that world, run **Validate and Preview** with both URLs, verify movement, launch, capsule collection and stage restart, then stop and reload. Repeat with two independently published fixture modules and move the world/map directory. Inspect the network panel for exact-version package URLs, successful CORS, no Sane-Phonics downloads, and successful integrity checks. This is a documented post-publication check, not a claim that these URLs are already live.
 
 ## Documentation site
 
@@ -99,8 +101,9 @@ npm install --save-dev /path/to/seanmorris-phonics-0.1.0.tgz
 npx phonics preview --runtime /path/to/php-sdl-wasm
 npx phonics integrity
 npx phonics validate --world worlds/game.world
-npx phonics build
-npm pack ./dist
+npx phonics pack
+npx phonics build --out package-dist
+npm pack ./package-dist
 ```
 
 `--runtime` names a built PHP/SDL runtime directory containing `php8.4-sdl.mjs`. In this checkout, `npm run setup:runtime` prints that directory, first downloading the pinned runtime to `.runtime/` when none is installed; `PHP_SDL_ROOT` may supply it instead. Run `npx phonics --help` for all commands. The CLI ships in the packed npm artifact and works without this checkout. Builds include declared runtime files, not arbitrary project contents. Publishing is a separate operation. See the [CLI guide](site/pages/cli.md).

@@ -1,6 +1,6 @@
 ---
 title: Load a world
-description-meta: One URL describes the game and its content.
+description-meta: Compose content inside an executable PHP application.
 llms: guides
 menus:
   documentation:
@@ -11,7 +11,7 @@ menus:
 
 ## Declare the world
 
-Store runtime configuration as Tiled custom properties. This abbreviated world uses a manifest relative to the world file:
+An executable application can compose this content with `Phonics\Application\Context::compose()`. Store content configuration as Tiled custom properties. This abbreviated world uses a manifest relative to the world file:
 
 ```json
 {
@@ -19,13 +19,12 @@ Store runtime configuration as Tiled custom properties. This abbreviated world u
   "maps": [{"fileName": "stage.tmj", "x": 0, "y": 0, "width": 640, "height": 480}],
   "properties": [
     {"name": "phonics.import.arcade", "type": "string", "value": "../packages/php-noid/phonics.json"},
-    {"name": "phonics.game", "type": "string", "value": "@arcade/game"},
     {"name": "phonics.start", "type": "string", "value": "stage.tmj"}
   ]
 }
 ```
 
-The loader resolves imports before `phonics.game`. Optional `phonics.modules` is a JSON array of export references stored in a **string** property. Include modules used by later streamed maps as well as the first map. Use the game package's factories to author the contents of `stage.tmj`.
+The PHP application chooses the game export; this document supplies its content. Optional `phonics.modules` is a JSON array of export references stored in a **string** property. Include modules used by later streamed maps as well as the first map. Use the game package's factories to author the contents of `stage.tmj`.
 
 ## Use a content adapter
 
@@ -38,7 +37,6 @@ Worlds can activate content that does not come from Tiled. This example uses Doo
   "imports": {
     "doom": "https://cdn.example/doom-phonics/0.1.0/phonics.json"
   },
-  "game": "@doom/game",
   "sources": {
     "episode": {
       "adapter": "@doom/wad",
@@ -85,7 +83,7 @@ Worlds can activate content that does not come from Tiled. This example uses Doo
 
 `init` is an optional game-owned object. The engine validates that it is an object and copies it into the session's world without assigning meaning to its keys. Browser modules read it as `context.world.init`; PHP reads it as `$context->world['init']` in a module callback, or `$phonics->world['init']` in a game entry point. This lets a world configure a game without adding game-specific fields to the neutral world schema. Doom-Phonics accepts `startMap` plus either one classic cheat string or an ordered `cheats` string list. It applies the cheats after creating the player for a new game. `startMap` overrides `start.scope` for Doom's initial title and new-game flow, while `start.source` still selects the content source.
 
-Replace the example manifest URL with an immutable published URL and generate the integrity value from the WAD you are licensed to use. Package manifests provide code; worlds provide content URLs. The package archive does not contain the repository's reference WAD.
+Replace the example manifest URL with an immutable published URL and generate the integrity value from the WAD you are licensed to use. The executable PHAR provides application code; worlds provide content URLs and may import additional verified modules. The package archive does not contain the repository's reference WAD.
 
 `bindings` apply the exported system set only while a matching scope is active. Doom-Phonics resizes its output framebuffer to the canvas's physical display size. Native resolution renders the three-dimensional scene directly into that output; the Options menu's Classic resolution uses `renderScale` as its scene multiplier, so `0.5` renders at half the output width and height before nearest-neighbor composition. Weapons, the status bar, menus, PHP Info, and screen wipes remain at full output resolution. The same world may declare Tiled and WAD sources, which allows a two-dimensional game to transition into an adapter-owned three-dimensional special stage.
 
@@ -93,13 +91,14 @@ A resource slot with `multiple: true` expands into an ordered sequence at the sl
 
 [Play the repository example](games/doom-phonics/) or inspect its [complete world definition](https://github.com/seanmorris/php-wasm-engine/blob/HEAD/packages/doom-phonics/demo/episode-one-online.phonics-world.json).
 
-## Launch a session
+## Launch the application
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
 
 const loading = new AbortController();
-const session = await Phonics.loadWorld(worldUrl, {
+const session = await Phonics.run('/dist/game.phar', {
+  init: {world: new URL(worldUrl, location.href).href},
   canvas,
   runtime: {url: '/runtime/php8.4-sdl.mjs'},
   signal: loading.signal,

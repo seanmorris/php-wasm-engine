@@ -375,7 +375,7 @@ export class PackageGraph
 		{
 			onProgress?.({completed, total: planned.length, url: file.url, state: 'loading'});
 			const bytes = await this.scope.read(file.url, {integrity: file.integrity});
-			files.push({url: file.url, path: file.path, bytes, record: file.record});
+			files.push({...file, bytes});
 			completed++;
 			onProgress?.({completed, total: planned.length, url: file.url, state: 'verified'});
 		}

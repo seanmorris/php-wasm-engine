@@ -36,7 +36,8 @@
     "test:cli": "node --test tests/cli.test.mjs",
     "test:cli:browser": "PHONICS_CLI_BROWSER=1 node --test tests/cli.test.mjs",
     "bench:php-tris": "php packages/php-tris/benchmarks/board.php",
-    "bench:php-tris:browser": "node scripts/bench-php-tris-browser.mjs"
+    "bench:php-tris:browser": "node scripts/bench-php-tris-browser.mjs",
+    "build:applications": "node scripts/applications.mjs"
   },
   "devDependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
@@ -52,7 +53,6 @@
     "smgen-search": "^0.1.1",
     "style-loader": "^4.0.0",
     "typescript": "^6.0.3",
-    "webpack": "^5.111.1",
     "webpack-cli": "^7.2.3",
     "webpack-dev-server": "^6.0.0",
     "yaml": "^2.9.1"
@@ -91,9 +91,14 @@
     "README.md",
     "LICENSE",
     "bin/",
-    "cli/"
+    "cli/",
+    "runtime-lock.json"
   ],
   "bin": {
     "phonics": "./bin/phonics.mjs"
+  },
+  "dependencies": {
+    "php-wasm-phar": "0.2.0",
+    "webpack": "^5.111.1"
   }
 }

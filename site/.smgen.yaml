@@ -79,6 +79,12 @@ MENUS:
         parent: api
         weight: 10
         expanded: false
+      - id: api-application
+        group: true
+        title: Applications
+        parent: api
+        weight: 15
+        expanded: false
       - id: api-asset
         group: true
         title: Assets

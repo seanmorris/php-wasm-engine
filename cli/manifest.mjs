@@ -17,6 +17,8 @@ export async function manifest(filename, {write = false} = {})
 		...(data.php?.files ?? [])
 		, ...(data.browser?.files ?? [])
 		, ...(data.assets ?? [])
+		, ...(data.application?.assets ?? [])
+		, ...(data.application?.entry ? [data.application.entry] : [])
 		, ...(data.preload ?? []), ...(data.php?.bootstrap ?? [])
 	]);
 

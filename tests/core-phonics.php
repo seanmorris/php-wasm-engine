@@ -30,6 +30,9 @@ foreach([
 	, ['https://cdn.test/a/map.tmj?q=1', '?q=2', 'https://cdn.test/a/map.tmj?q=2']
 	, ['/tmp/maps/a.tmj', '../art/tile.png', '/tmp/art/tile.png']
 	, ['maps/a.tmj', '../tile.png', 'tile.png']
+	, ['phar:///phonics/application.phar/application/maps/a.tmj', '../tiles.png', 'phar:///phonics/application.phar/application/tiles.png']
+	, ['phar:///phonics/application.phar/maps/a.tmj', 'https://cdn.test/tiles.png?v=1', 'https://cdn.test/tiles.png?v=1']
+	, ['phar:///phonics/application.phar/maps/a.tmj', '#tile', 'phar:///phonics/application.phar/maps/a.tmj#tile']
 ] as [$base, $reference, $expected])
 verifyCore(Assets::relative($base, $reference) === $expected, 'URL resolution ' . $reference);
 Resource::mount('https://cdn.test/maps/a.tmj', '/mounted/a.tmj');

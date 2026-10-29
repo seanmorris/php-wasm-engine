@@ -23,7 +23,7 @@ const types = {
 };
 
 /** Serve package bytes unchanged, including PHP source consumed by the WASM runtime. */
-export async function serve(directory, {host = '127.0.0.1', port = 9140, mounts = {}} = {})
+export async function serve(directory, {host = '127.0.0.1', port = 9140, mounts = {}, beforeRequest, headers = {}} = {})
 {
 	const root = await fs.realpath(directory);
 
@@ -46,6 +46,7 @@ export async function serve(directory, {host = '127.0.0.1', port = 9140, mounts 
 			}
 
 			const url = new URL(request.url, 'http://localhost');
+			await beforeRequest?.(url);
 			let pathname = decodeURIComponent(url.pathname);
 			const mount = mounted.find(([prefix]) => pathname.startsWith(prefix));
 			const allowed = mount?.[1] ?? root;
@@ -79,7 +80,8 @@ export async function serve(directory, {host = '127.0.0.1', port = 9140, mounts 
 			if(!info.isFile()) throw Error('Not a file');
 
 			response.writeHead(200, {
-				'Content-Type': types[path.extname(file)] ?? 'application/octet-stream'
+				...headers
+				, 'Content-Type': types[path.extname(file)] ?? 'application/octet-stream'
 				, 'Content-Length': info.size
 				, 'Cache-Control': 'no-store'
 				, 'X-Content-Type-Options': 'nosniff'

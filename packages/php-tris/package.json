@@ -18,6 +18,7 @@
   "files": [
     "autoload.php",
     "game.php",
+    "application.php",
     "src/Component/Active.php",
     "src/Component/Board.php",
     "src/Component/Input.php",

@@ -2,7 +2,7 @@
 
 PHP Slalom is a deterministic PHP/Phonics port of the rare Jet Slalom Java game, originally programmed by MR-C. It preserves the original 55 ms course simulation, steering response, stage thresholds, road generator, perspective, craft frames, palette, and impact timing while adding a responsive browser shell, saved input bindings, local score tables, and a compact replay format. The same attribution appears in the in-game Credits screen.
 
-Play the packaged world at `/games/php-slalom/`, or load `worlds/slalom.world` through `Phonics.loadWorld`.
+Play the packaged world at `/games/php-slalom/`, or run `dist/game.phar` through `Phonics.run`.
 
 ## Controls
 
@@ -16,7 +16,6 @@ The `@php-slalom/game` export owns the browser host and PHP lifecycle. The `#sla
 
 ```text
 phonics.import.php-slalom = ../phonics.json
-phonics.game = @php-slalom/game
 phonics.start = slalom.tmj
 ```
 

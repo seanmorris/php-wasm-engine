@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import {pharExtension} from '../cli/phar-extension.mjs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {serve} from '../cli/server.mjs';
 import {manifest} from '../cli/manifest.mjs';
+import {pack} from '../cli/pack.mjs';
 import {init, build} from '../cli/project.mjs';
 import {initManifest} from '../cli/init-manifest.mjs';
 import {validate} from '../cli/validate.mjs';
@@ -18,6 +20,7 @@ Usage: phonics <command> [directory] [options]
     --name NAME --version X.Y.Z  Override package.json metadata.
   init <directory>           Create an independent PHP/Tiled starter game.
     --name @you/my-game      Set the npm package name (default: directory name).
+  pack [directory]           Build an executable PHAR (default: dist/game.phar).
   build [directory]          Refresh integrity and build a publishable package.
     --out dist               Output relative to the project; only generated output is replaced.
   integrity [directory]      Rebuild phonics.json hashes for declared files.
@@ -25,7 +28,7 @@ Usage: phonics <command> [directory] [options]
     --world worlds/game.world  Also validate world references and Tiled resources.
     --allow-origin URL      Allow a remote dependency origin; repeat as needed.
   preview [directory]        Serve your package with the generic Phonics host.
-    --world worlds/game.world  Starting world (default shown).
+    --world worlds/game.world  Override the application's default content world.
     --runtime DIRECTORY     Built php-sdl-wasm runtime, or set PHP_SDL_ROOT.
     --allow-origin URL      Permit remote executable packages; repeat as needed.
   serve [directory]          Serve a built site or package as static files, including PHP source.
@@ -41,8 +44,9 @@ Quick start:
   phonics preview --runtime /path/to/php-sdl-wasm
   phonics integrity
   phonics validate --world worlds/game.world
-  phonics build
-  npm pack ./dist
+  phonics pack
+  phonics build --out package-dist
+  npm pack ./package-dist
 
 Declare new PHP files, browser modules, assets, and exports in phonics.json.
 Open worlds/start.tmj in Tiled to change the starter layout and player speed.
@@ -54,6 +58,7 @@ const commands = {
 	init: ['name', 'yes', 'version']
 	, manifest: ['name', 'yes', 'version']
 	, build: ['out']
+	, pack: ['out']
 	, integrity: []
 	, validate: ['world', 'allow-origin']
 	, preview: ['world', 'runtime', 'allow-origin', 'port', 'host']
@@ -132,28 +137,47 @@ async function startServer(directory, settings)
 		}
 
 		mounts = {
-			'/__phonics/core/': fileURLToPath(new URL('../', import.meta.url))
+			'/__phonics/runtime/extensions/phar/': await pharExtension()
+			, '/__phonics/core/': fileURLToPath(new URL('../', import.meta.url))
 			, '/__phonics/runtime/': runtime
 			, '/__phonics/': fileURLToPath(new URL('../cli/preview/', import.meta.url))
 		};
 	}
 
-	const server = await serve(directory, {...settings, mounts});
+	const refresh = () => pack(directory, {coreUrl: '/__phonics/core/', cache: true});
+	const application = command === 'preview' ? await refresh() : null;
+
+	const server = await serve(directory, {
+		...settings
+		, mounts
+		, beforeRequest: async url => {
+			if(application && ['/dist/game.phar', '/dist/game.phar.integrity'].includes(url.pathname)) await refresh();
+		}
+	});
+
 	const host = settings.host ?? '127.0.0.1';
 	const origin = `http://${host.includes(':') ? `[${host}]` : host}:${server.address().port}`;
 	const url = new URL(command === 'preview' ? '/__phonics/' : '/', origin);
 
 	if(command === 'preview')
 	{
-		const world = path.relative(directory, path.resolve(directory, settings.world ?? 'worlds/game.world'));
+		url.searchParams.set(
+			'application'
+			, '/' + path.relative(directory, application).split(path.sep).map(encodeURIComponent).join('/')
+		);
 
-		if(world.startsWith('..'))
+		if(settings.world)
 		{
-			server.close();
-			throw Error('World must be inside the served package');
-		}
+			const world = path.relative(directory, path.resolve(directory, settings.world));
 
-		url.searchParams.set('world', '/' + world.split(path.sep).map(encodeURIComponent).join('/'));
+			if(world.startsWith('..'))
+			{
+				server.close();
+				throw Error('World must be inside the served package');
+			}
+
+			url.searchParams.set('world', '/' + world.split(path.sep).map(encodeURIComponent).join('/'));
+		}
 
 		for(const origin of settings.origins) url.searchParams.append('origin', origin);
 	}
@@ -188,6 +212,7 @@ try
 
 			console.log('Created ' + await init(directory, settings));
 		}
+		else if(command === 'pack') console.log('Packed ' + await pack(directory, settings));
 		else if(command === 'build') console.log('Built ' + await build(directory, settings.out));
 		else if(command === 'integrity')
 			console.log(`Updated ${await manifest(path.join(directory, 'phonics.json'), {write: true})} files`);

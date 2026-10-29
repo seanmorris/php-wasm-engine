@@ -1,5 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {waitForMenuFrames} from './menu-frames.mjs';
+import {externalAssets} from './external-assets.mjs';
+
+test.beforeEach(async ({page}) => externalAssets(page));
 
 const data = (page, key = 'intro') => page.locator('canvas').evaluate(
 	(canvas, key) => JSON.parse(canvas.dataset[key] || 'null')
@@ -39,8 +42,8 @@ test(
 		const requests = [], errors = [];
 		page.on('request', request => requests.push(request.url()));
 		page.on('pageerror', error => errors.push(error.message));
-		let manifest, title;
-		await page.route('**/engine/phonics.json', route => { manifest = route; });
+		let application, title;
+		await page.route('**/engine/packages/sane-phonics/dist/game.phar', route => { application = route; });
 
 		await page.route('**/engine/packages/sane-phonics/examples/assets/title.tmj', route => { title = route; });
 
@@ -48,8 +51,8 @@ test(
 		await page.click('#start');
 		await expect(page.locator('#preloader')).toBeVisible();
 		await expect(page.locator('#preload-progress')).not.toHaveAttribute('value');
-		await expect.poll(() => Boolean(manifest), {timeout: 60000}).toBe(true);
-		await manifest.continue();
+		await expect.poll(() => Boolean(application), {timeout: 60000}).toBe(true);
+		await application.fallback();
 		await expect.poll(() => Boolean(title), {timeout: 60000}).toBe(true);
 		await expect(page.locator('#preloader')).toBeHidden();
 		await expect.poll(async () => (await data(page))?.card).toBe('loading');
@@ -183,7 +186,7 @@ test('scripted stop cancels the title download and ignores its late response', a
 
 	expect(
 		await page.evaluate(
-			async () => (await enginePhp.binary).FS.analyzePath('/phonics/packages/1/examples/assets/title.tmj').exists
+			async () => (await enginePhp.binary).FS.analyzePath('/phonics/assets/1/examples/assets/title.tmj').exists
 		)
 	).toBe(false);
 

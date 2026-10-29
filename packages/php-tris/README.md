@@ -1,6 +1,6 @@
 # PHPTris
 
-PHPTris is an independent Phonics puzzle game with three solo modes, five challenge tracks, and original graphics and synthesized sounds. Play at `/games/php-tris/`, or load `worlds/arcade.world` through `Phonics.loadWorld`. It depends only on Phonics.
+PHPTris is an independent Phonics puzzle game with three solo modes, five challenge tracks, and original graphics and synthesized sounds. Play at `/games/php-tris/`, or run `dist/game.phar` through `Phonics.run`. It depends only on Phonics.
 
 ## Play
 
@@ -50,7 +50,6 @@ Import the package manifest in Tiled, then choose `@php-tris/game`. The supplied
 
 ```text
 phonics.import.php-tris = ../phonics.json
-phonics.game = @php-tris/game
 phonics.start = endless-01.tmj
 ```
 

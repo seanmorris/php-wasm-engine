@@ -171,8 +171,8 @@ test(
 		await expect.poll(() => menuOpen(page)).toBe(false);
 
 		expect(await run(page, 'echo $game->level !== $oldDashLevel ? "restarted" : "old";')).toBe('restarted');
-		expect(files.filter(url => url.endsWith('/light-dash.tmj'))).toHaveLength(1);
-		expect(files.filter(url => url.endsWith('/tiles.png'))).toHaveLength(1);
+		expect(files.filter(url => url.endsWith('/light-dash.tmj'))).toHaveLength(0);
+		expect(files.filter(url => url.endsWith('/tiles.png'))).toHaveLength(0);
 	}
 );
 

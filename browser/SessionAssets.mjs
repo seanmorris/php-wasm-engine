@@ -50,7 +50,11 @@ export class SessionAssets
 
 			if(url.startsWith(base) && !/[?#]/.test(url.slice(base.length)))
 			{
-				const path = record.mount + decodeURIComponent(url.slice(base.length));
+				const root = record.mount.startsWith('phar://')
+					? '/phonics/assets/' + this.packages.indexOf(record) + '/'
+					: record.mount;
+
+				const path = root + decodeURIComponent(url.slice(base.length));
 				this.bind(url, path);
 
 				return path;

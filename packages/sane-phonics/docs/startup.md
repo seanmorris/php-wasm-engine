@@ -40,8 +40,9 @@ images, with animated water shine and different horizontal parallax factors.
 `ImageRenderer` draws each repeating strip with one quad. The title camera and
 image animation use active UI time, independent of `Engine::$time`.
 
-A world selects the entry point with `sane.intro`; `sane.scene` and `sane.profile`
-choose the level and movement profile. The repository's legacy demo page
+The executable application selects its game entry. The world's `sane.intro`
+enables its startup UI; `sane.scene` and `sane.profile` choose the level and
+movement profile. The repository's legacy demo page
 (`docs/index.html`, served at `/sane-phonics/` by `npm start`) also exposes console
 globals. They exist only on that page:
 

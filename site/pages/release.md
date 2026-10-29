@@ -15,11 +15,12 @@ Run these commands from your game package, with the Phonics CLI installed there 
 ```sh
 npx phonics integrity
 npx phonics validate --world worlds/game.world
-npx phonics build
-npm pack ./dist
+npx phonics pack
+npx phonics build --out package-dist
+npm pack ./package-dist
 ```
 
-`phonics build` writes declared runtime files and package metadata to `dist/`. Inspect the tarball’s file list, choose a license, and confirm that `package.json` and `phonics.json` agree on the package name and version. Declare all required files explicitly so the package does not depend on undeclared source-tree content.
+`phonics pack` creates the browser application at `dist/game.phar` and its integrity sidecar. `phonics build --out package-dist` creates a separate reusable npm distribution. Inspect both artifacts' file lists, choose a license, and confirm that `package.json` and `phonics.json` agree on the package name and version. Declare all required files explicitly so the package does not depend on undeclared source-tree content.
 
 ## Test a separate consumer
 
@@ -36,8 +37,8 @@ Use exact versions or commit-pinned URLs. Do not change file contents under a pu
 After publishing a chosen version:
 
 1. Serve the generic preview host with the intended CDN added to its host-owned code-origin policy.
-2. In Tiled, import the package's exact-version `phonics.json`, select its game export, and place exported entities in a new local world.
-3. Serve that world, run **Validate and Preview**, and exercise movement, powers, restart, and cleanup.
+2. Have the application's PHP bootstrap explicitly select the game export. In Tiled, import the package's exact-version `phonics.json` and place exported entities in a new local world.
+3. Serve the application PHAR and the world, run **Validate and Preview** with both URLs, and exercise movement, powers, restart, and cleanup.
 4. Repeat with independently published modules served across origins. Relocate the world/map directory and launch it again.
 5. Inspect network requests for exact URLs, CORS, integrity success, and the absence of undeclared dependencies.
 

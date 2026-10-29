@@ -69,40 +69,29 @@ test('neutral worlds expose an empty game-owned init object and reject other sha
 	assert.throws(() => normalizeWorld({...hybrid, init: ['iddqd']}, origin + 'world.json'), /init must be an object/);
 });
 
-test('phonics.json launches an inline or referenced world with correct provenance', async () => {
-	const inlineUrl = origin + 'phonics.json';
+test('application selects content; manifests and embedded game/network declarations cannot launch code', async () => {
+	const url = origin + 'worlds/game.json';
 
-	const inline = await readWorldResource(scope({
-		[inlineUrl]: {schemaVersion: 1, name: '@fixture/hybrid', version: '1.0.0', world: hybrid}
-	}), inlineUrl
+	const result = await readWorldResource(
+		scope({[url]: {...hybrid, game: 'untrusted.php', network: {bad: true}}})
+		, url
 	);
 
-	assert.equal(inline.packageUrl, inlineUrl);
-	assert.equal(inline.world.sources.specials.resources[0].url, origin + 'data/DOOM1.WAD');
+	assert.equal(result.world.game, undefined);
+	assert.equal(result.world.network, null);
+	assert.equal(result.world.sources.specials.resources[0].url, origin + 'worlds/data/DOOM1.WAD');
 
-	const externalUrl = origin + 'worlds/game.phonics-world.json';
-
-	const external = await readWorldResource(scope({
-		[inlineUrl]: {
-			schemaVersion: 1
-			, name: '@fixture/hybrid'
-			, version: '1.0.0'
-			, world: './worlds/game.phonics-world.json'
-		}
-		, [externalUrl]: hybrid
-	}), inlineUrl
+	await assert.rejects(
+		readWorldResource(scope({[url]: {schemaVersion: 1, name: 'game', world: hybrid}}), url)
+		, /expected a content world/
 	);
-
-	assert.equal(external.packageUrl, inlineUrl);
-	assert.equal(external.url, externalUrl);
-	assert.equal(external.world.sources.specials.resources[0].url, origin + 'worlds/data/DOOM1.WAD');
 });
 
 test('legacy Tiled worlds remain accepted and malformed transitions fail early', async () => {
 	const url = origin + 'legacy.world';
 
 	const legacy = await readWorldResource(scope({
-		[url]: {type: 'world', properties: [{name: 'phonics.game', value: '@game/main'}], maps: []}
+		[url]: {type: 'world', properties: [], maps: []}
 	}), url
 	);
 

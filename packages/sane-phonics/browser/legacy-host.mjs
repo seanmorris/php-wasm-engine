@@ -129,10 +129,11 @@ export function boot(
 			await session?.dispose();
 			const worldUrl = new URL('packages/sane-phonics/worlds/' + (intro ? 'demo' : scene) + '.world', base);
 
-			session = await Phonics.loadWorld(
-				worldUrl
+			session = await Phonics.run(
+				new URL('packages/sane-phonics/dist/game.phar', base)
 				, {
 					canvas
+					, init: {world: worldUrl.href}
 					, signal
 					, runtime: {
 						create: async () => {
@@ -143,7 +144,16 @@ export function boot(
 							);
 
 							php = new PhpSdl(
-								{canvas,persist: false,ini: 'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'}
+								{
+									canvas
+									, persist: false
+									, sharedLibs: ['zlib','phar'].map(name => ({
+										name: `php8.4-${name}.so`
+										, url: new URL(`extensions/${name}/php8.4-${name}.so`, runtimeBase)
+										, ini: true
+									}))
+									, ini: 'display_errors=0\nlog_errors=1\nerror_log=/dev/stderr'
+								}
 							);
 
 							window.enginePhp = php;

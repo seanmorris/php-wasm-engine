@@ -75,9 +75,9 @@ test('load progress exposes immutable phase and resource counts', () => {
 		, resource: origin + '/art.wad'
 	});
 
-	assert.equal(progress.phaseIndex, 4);
-	assert.equal(progress.phaseCount, 8);
-	assert.equal(progress.fraction, 4.5 / 8);
+	assert.equal(progress.phaseIndex, 5);
+	assert.equal(progress.phaseCount, 9);
+	assert.equal(progress.fraction, 5.5 / 9);
 	assert.equal(progress.resource, origin + '/art.wad');
 	assert.ok(Object.isFrozen(progress));
 	assert.equal(new LoadProgress('ready', 'Ready', {completed: 1, total: 1}).fraction, 1);

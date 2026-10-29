@@ -24,3 +24,5 @@ packages/doom-phonics/demo/local-wads/
 /SKULLTAG_ACTORS.lmp
 /blockade-buster.zip
 /kexdoom_sc55_ogg.wad
+
+/packages/*/dist/

@@ -17,11 +17,6 @@
       "value": "../phonics.json"
     },
     {
-      "name": "phonics.game",
-      "type": "string",
-      "value": "@php-slalom/game"
-    },
-    {
       "name": "phonics.start",
       "type": "string",
       "value": "slalom.tmj"

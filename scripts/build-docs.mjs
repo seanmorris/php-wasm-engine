@@ -1,8 +1,16 @@
 import fs from 'node:fs/promises';
+import {pharExtension} from '../cli/phar-extension.mjs';
 import path from 'node:path';
+import {pack} from '../cli/pack.mjs';
 import {root} from './files.mjs';
 import {runtimeDirectory} from './runtime.mjs';
-const files = new Set();
+const games = ['sane-phonics','php-noid','php-tris','php-slalom','php-buster','doom-phonics'];
+
+for(const game of games) await pack(path.join(root, 'packages', game));
+
+const files = new Set(
+	games.flatMap(game => ['phar','phar.integrity'].map(extension => `packages/${game}/dist/game.${extension}`))
+);
 
 for(const directory of [''
 	, 'packages/sane-phonics/'
@@ -91,3 +99,9 @@ await fs.mkdir(path.join(root, 'docs/dist/runtime/extensions/zlib'), {recursive:
 for(const name of ['8.4.mjs','php8.4-zlib.so','libz.so','LICENSE','LICENSE-GPL','NOTICE','package.json'])
 	await fs.copyFile(path.join(zlib, name), path.join(root, 'docs/dist/runtime/extensions/zlib', name));
 console.log('Built the Phonics preview, embedded game documentation, package manifests and runtime in docs/dist.');
+
+const phar = await pharExtension();
+await fs.mkdir(path.join(root, 'docs/dist/runtime/extensions/phar'), {recursive: true});
+
+for(const name of ['php8.4-phar.so','LICENSE','LICENSE-GPL','NOTICE','package.json'])
+await fs.copyFile(path.join(phar, name), path.join(root, 'docs/dist/runtime/extensions/phar', name));
