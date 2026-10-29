@@ -885,9 +885,11 @@ test('all games start and clean up inside the shared site design', async({page})
 	await press('Enter');
 	await expect.poll(async() => (await doomState()).menu?.screen).toBe('skill');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('skill-2');
+	// The melt lasts about a second, so count wipes rather than trying to observe one mid-flight.
+	const wipesBefore = (await doomState()).wipe?.transitions ?? 0;
 	await press('Enter');
 	await expect.poll(async() => (await doomState()).menu?.open, {timeout: 10000}).toBe(false);
-	await expect.poll(async() => (await doomState()).wipe?.active).toBe(true);
+	await expect.poll(async() => (await doomState()).wipe?.transitions).toBe(wipesBefore + 1);
 	await expect.poll(async() => (await doomState()).wipe?.active, {timeout: 5000}).toBe(false);
 	await expect.poll(async() => (await doomState()).render?.skyOccluderVertices).toBe(210);
 

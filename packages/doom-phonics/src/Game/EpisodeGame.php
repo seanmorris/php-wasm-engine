@@ -520,7 +520,7 @@ final class EpisodeGame
 	public function status(): array
 	{
 		$entity = $this->player();
-		$wipe = $this->wipe?->status() ?? ['active' => false,'progress' => 1.0,'columns' => 0];
+		$wipe = $this->wipe?->status() ?? ['active' => false,'progress' => 1.0,'columns' => 0,'transitions' => 0];
 
 		if($entity === null)
 		return [

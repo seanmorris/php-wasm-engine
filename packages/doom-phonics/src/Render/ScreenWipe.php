@@ -18,6 +18,7 @@ final class ScreenWipe
 	private int $parentFramebuffer = 0;
 	private int $uploadedRevision = -1;
 	private int $seed = 1;
+	private int $transitions = 0;
 	private bool $capturing = false;
 	private bool $transitioning = false;
 	private bool $closed = false;
@@ -97,6 +98,7 @@ final class ScreenWipe
 		$this->source = $this->front;
 		$this->columns->restart($this->seed++);
 		$this->transitioning = true;
+		$this->transitions++;
 
 		return true;
 	}
@@ -108,13 +110,18 @@ final class ScreenWipe
 
 	public function active(): bool { return $this->transitioning; }
 
-	/** @return array{active:bool,progress:float,columns:int} */
+	/**
+	 * Describe the wipe for diagnostics, including how many wipes have begun since creation.
+	 *
+	 * @return array{active:bool,progress:float,columns:int,transitions:int} Current wipe state and lifetime count.
+	 */
 	public function status(): array
 	{
 		return [
 			'active' => $this->transitioning
 			, 'progress' => $this->transitioning ? $this->columns->progress() : 1.0
 			, 'columns' => $this->columns->columns
+			, 'transitions' => $this->transitions
 		];
 	}
 
