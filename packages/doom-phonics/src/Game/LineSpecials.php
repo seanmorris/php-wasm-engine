@@ -15,6 +15,7 @@ use DoomPhonics\Component\SectorMover;
 use DoomPhonics\Component\Transform;
 use DoomPhonics\Component\Velocity;
 use DoomPhonics\Definition\LineAction;
+use DoomPhonics\Definition\LanguageCatalog;
 use DoomPhonics\System\SectorMotionSystem;
 use Phonics\Ecs\Query;
 use Phonics\Ecs\Registry;
@@ -56,7 +57,7 @@ final class LineSpecials
 		, 34 => ['trigger' => 'use','repeat' => false,'type' => 'local-door','mode' => 'open','key' => 'yellow']
 		, 35 => ['trigger' => 'walk','repeat' => false,'type' => 'light','mode' => 'dark']
 		, 36 => ['trigger' => 'walk','repeat' => false,'type' => 'floor','mode' => 'lower-highest-fast']
-		, 46 => ['trigger' => 'shoot','repeat' => true,'type' => 'local-door','mode' => 'open']
+		, 46 => ['trigger' => 'shoot','repeat' => false,'type' => 'local-door','mode' => 'open']
 		, 48 => ['trigger' => 'automatic','repeat' => true,'type' => 'scroll']
 		, 51 => ['trigger' => 'use','repeat' => false,'type' => 'secret-exit']
 		, 62 => ['trigger' => 'use','repeat' => true,'type' => 'lift']
@@ -79,6 +80,7 @@ final class LineSpecials
 	private SoundEmitter $sound;
 	private ?ActorFactory $factory;
 	private ?\Closure $own;
+	private LanguageCatalog $language;
 	private float $buttonTics = 0;
 	/** @var array<int,LineAction> */
 	private array $actions = [];
@@ -91,12 +93,14 @@ final class LineSpecials
 		, ?callable $own = null
 		, ?SoundEmitter $sound = null
 		, ?ActorFactory $factory = null
+		, ?LanguageCatalog $language = null
 	){
 		$this->registry = $registry ?? new Registry;
 		$this->sound = $sound ?? new NullSoundEmitter;
 		$this->motion = new SectorMotionSystem($level, $this->sound);
 		$this->factory = $factory;
 		$this->own = $own ? \Closure::fromCallable($own) : null;
+		$this->language = $language ?? LanguageCatalog::documents([]);
 
 		foreach(self::ACTIONS as $number => $definition)
 		$this->actions[$number] = LineAction::fromArray($number, $definition);
@@ -260,7 +264,11 @@ final class LineSpecials
 
 		if($action->key !== null && !$this->hasKey($player, $action->key))
 		{
-			$player->message = 'YOU NEED A ' . strtoupper($action->key) . ' KEY';
+			$player->showMessage($this->language->text(match(strtolower($action->key))
+			{
+				'blue' => 'PD_BLUEK', 'red' => 'PD_REDK', 'yellow' => 'PD_YELLOWK',
+				default => ''
+			}, 'YOU NEED A ' . strtoupper($action->key) . ' KEY'));
 			$this->playAtActor(SoundCue::locked(), $actor);
 
 			return false;
@@ -288,14 +296,15 @@ final class LineSpecials
 			default => false,
 		};
 
-		// Gun switches animate on every impact; their tagged door may already be moving.
+		// Action 46 still counts as triggered when another action already owns its door.
 		$triggered = $activated || $number === 46;
 
 		if($triggered && $action->isSwitch())
 		$this->switchTexture($lineId, $action->repeatable, in_array($number, [11,51], true));
 
-		// W1 triggers are cleared by the crossing itself, even if their tagged thinker was busy.
-		if(!$action->repeatable && ($activated || $trigger === LineAction::WALK)) $this->consumed[$lineId] = true;
+		// W1 triggers consume the crossing even when their thinker is busy; other
+		// one-shot actions consume the first accepted trigger.
+		if(!$action->repeatable && ($triggered || $trigger === LineAction::WALK)) $this->consumed[$lineId] = true;
 
 		return $triggered;
 	}
@@ -443,7 +452,9 @@ final class LineSpecials
 
 			if($sector->ceilingMover !== null && $this->registry->alive($sector->ceilingMover))
 			{
-				if(!$local) continue;
+				// Only raise/wait/lower manual doors may reverse while active. An
+				// open-and-stay door must keep opening when its line is hit again.
+				if(!$local || $mode !== LineAction::OPEN_CLOSE) continue;
 
 				$mover = $this->registry->get($sector->ceilingMover, SectorMover::class);
 

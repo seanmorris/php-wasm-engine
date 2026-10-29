@@ -420,6 +420,7 @@ final class EpisodeNetworkSystem
 			, 'secretExit' => $value->secretExit
 			, 'reactionTics' => $value->reactionTics
 			, 'message' => $value->message
+			, 'messageTics' => $value->messageTics
 			, 'deathTime' => $value->deathTime
 			, 'viewHeight' => $value->viewHeight
 			, 'previousViewHeight' => $value->previousViewHeight
@@ -456,6 +457,10 @@ final class EpisodeNetworkSystem
 		$player->$property = (bool)($value[$property] ?? false);
 
 		$player->message = substr((string)($value['message'] ?? ''), 0, 160);
+		$player->messageTics = $player->message === '' ? 0 : max(0, min(
+			PlayerState::MESSAGE_TICS
+			, (int)($value['messageTics'] ?? PlayerState::MESSAGE_TICS)
+		));
 		$deathTime = $value['deathTime'] ?? null;
 		$viewHeight = is_numeric($value['viewHeight'] ?? null)
 			? max(PlayerState::DEATH_VIEW_HEIGHT, min(PlayerState::VIEW_HEIGHT, (float)$value['viewHeight']))

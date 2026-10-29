@@ -126,7 +126,9 @@ final class EpisodeSystems implements SystemSet
 
 		$sound->beginScope($content->wad);
 		$scope->onClose([$sound,'stopScope']);
-		$specials = new LineSpecials($content->level, $scope->registry, [$scope,'own'], $sound, $factory);
+		$specials = new LineSpecials(
+			$content->level, $scope->registry, [$scope,'own'], $sound, $factory, $content->language
+		);
 		$actions = new ActionDispatcher;
 
 		$combat = new CombatSystem(
@@ -165,11 +167,11 @@ final class EpisodeSystems implements SystemSet
 			, $host
 		);
 
-		$pickups = new PickupSystem($actors, $host);
+		$pickups = new PickupSystem($actors, $host, $content->language);
 		$states = new ActorStateSystem($actions);
 		$beams = new BeamEffectSystem;
 		$physics = new ActorPhysicsSystem($collision, (float)($motion['gravity'] ?? DoomGravity::ACCELERATION));
-		$effects = new SectorEffectSystem($content->level, $specials);
+		$effects = new SectorEffectSystem($content->level, $specials, $content->language);
 		$playerEffects = new PlayerEffectSystem;
 		$statusFaces = new StatusFaceSystem($this->controls($scope));
 		$commands = new PlayerCommandSystem($this->controls($scope));

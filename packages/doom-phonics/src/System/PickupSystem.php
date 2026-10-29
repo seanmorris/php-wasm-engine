@@ -12,6 +12,7 @@ use DoomPhonics\Component\ViewEffects;
 use DoomPhonics\Definition\ActorCatalog;
 use DoomPhonics\Definition\ActorDefinition;
 use DoomPhonics\Definition\WeaponAmmo;
+use DoomPhonics\Definition\LanguageCatalog;
 use DoomPhonics\Game\PlayerState;
 use Phonics\Ecs\Query;
 use Phonics\Ecs\Registry;
@@ -21,10 +22,16 @@ use Phonics\Network\Component\NetworkIdentity;
 final class PickupSystem
 {
 	private Query $players;
+	private LanguageCatalog $language;
 
-	public function __construct(public ActorCatalog $actors, public bool $authoritative = true)
+	public function __construct(
+		public ActorCatalog $actors,
+		public bool $authoritative = true,
+		?LanguageCatalog $language = null
+	)
 	{
 		$this->players = Query::all(PlayerStart::class, PlayerState::class, Transform::class, HitPoints::class);
+		$this->language = $language ?? LanguageCatalog::documents([]);
 	}
 
 	public function update(Registry $registry, float $dt): void
@@ -70,7 +77,7 @@ final class PickupSystem
 				if($definition->hasFlag('COUNTITEM')) $player->items++;
 
 				$message = (string)$definition->value('Inventory.PickupMessage', $definition->name);
-				$player->message = str_starts_with($message, '$') ? strtoupper($definition->name) : $message;
+				$player->showMessage($this->language->resolve($message));
 
 				if($registry->has($playerEntity, ViewEffects::class))
 				$registry->get($playerEntity, ViewEffects::class)->recordPickup();

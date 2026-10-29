@@ -88,10 +88,37 @@ final class DamageResolver
 				&& $registry->has($event->source, PlayerState::class)
 			) $registry->get($event->source, PlayerState::class)->kills++;
 		}
-		elseif($state->definition->state('Pain') && mt_rand(0, 255) < $health->painChance)
-		$state->enter('Pain');
+		else
+		{
+			if($state->definition->state('Pain') && mt_rand(0, 255) < $health->painChance)
+			$state->enter('Pain');
+
+			$this->retargetMonster($registry, $event, $state);
+		}
 
 		return true;
+	}
+
+	/** A surviving monster struck by a viable source wakes and pursues it for BASETHRESHOLD. */
+	private function retargetMonster(Registry $registry, DamageEvent $event, ActorState $state): void
+	{
+		if(!$registry->has($event->target, MonsterBrain::class)) return;
+
+		$brain = $registry->get($event->target, MonsterBrain::class);
+		$brain->reaction = 0;
+		if(!$registry->alive($event->source) || $event->source === $event->target
+			|| !$registry->has($event->source, Transform::class)
+		) return;
+
+		$targetIsVile = strcasecmp($state->definition->name, 'Archvile') === 0;
+		$sourceIsVile = $registry->has($event->source, ActorState::class)
+			&& strcasecmp($registry->get($event->source, ActorState::class)->definition->name, 'Archvile') === 0;
+		if(($brain->threshold > 0 && !$targetIsVile) || $sourceIsVile) return;
+
+		$brain->target = $event->source;
+		$brain->threshold = 100;
+		$brain->awake = true;
+		if(strcasecmp($state->label, 'Spawn') === 0 && $state->definition->state('See')) $state->enter('See');
 	}
 
 	private function deathLabel(ActorState $state, HitPoints $health): ?string

@@ -5,6 +5,7 @@ namespace DoomPhonics\Game;
 /** Persistent single-player inventory and episode statistics. */
 final class PlayerState
 {
+	public const MESSAGE_TICS = 4 * 35;
 	public const VIEW_HEIGHT = 41.0;
 	public const DEATH_VIEW_HEIGHT = 6.0;
 	public const DEATH_VIEW_SPEED = 35.0;
@@ -37,9 +38,32 @@ final class PlayerState
 	public bool $secretExit = false;
 	public int $reactionTics = 0;
 	public string $message = '';
+	public int $messageTics = 0;
 	public ?float $deathTime = null;
 	public float $viewHeight = self::VIEW_HEIGHT;
 	public float $previousViewHeight = self::VIEW_HEIGHT;
+
+	/** Show a classic status message for four seconds unless a caller supplies another duration. */
+	public function showMessage(string $message, int $tics = self::MESSAGE_TICS): void
+	{
+		$this->message = $message;
+		$this->messageTics = $message === '' ? 0 : max(0, $tics);
+	}
+
+	/** Advance the status-message timeout on the shared 35 Hz gameplay clock. */
+	public function advanceMessage(int $tics): void
+	{
+		if($this->message === '')
+		{
+			$this->messageTics = 0;
+
+			return;
+		}
+
+		$this->messageTics = max(0, $this->messageTics - max(0, $tics));
+
+		if($this->messageTics === 0) $this->message = '';
+	}
 
 	/** Queue a first-person lowering transition without changing the active weapon early. */
 	public function requestWeapon(string $weapon): void

@@ -9,6 +9,8 @@ use DoomPhonics\Game\PitchMode;
 use DoomPhonics\Game\RenderResolution;
 use DoomPhonics\Game\SkillLevel;
 use DoomPhonics\Input\InputSettings;
+use DoomPhonics\Input\DoomActions;
+use DoomPhonics\Render\DoomIntermissionRenderer;
 use DoomPhonics\Render\GlesMapRenderer;
 use Phonics\Engine;
 use Phonics\Ui\DomTextureModal;
@@ -33,6 +35,7 @@ final class DoomMenuController implements MenuOverlay
 	private int $contentRequest = 0;
 	private DoomControlsMenu $controlsMenu;
 	private DoomOptions $options;
+	private DoomIntermissionRenderer $intermissionRenderer;
 
 	public function __construct(
 		private Engine $engine
@@ -54,6 +57,7 @@ final class DoomMenuController implements MenuOverlay
 		$this->menu = new Menu($this->titleItems(), 'Doom-Phonics');
 		$this->menu->open();
 		$this->renderer = new DoomMenuRenderer($this->phpInfoHints);
+		$this->intermissionRenderer = new DoomIntermissionRenderer;
 		$this->input = new MenuInput;
 		$this->engine->userPaused = true;
 		$this->engine->setInputHandler([$this, 'update']);
@@ -112,6 +116,22 @@ final class DoomMenuController implements MenuOverlay
 
 		if($this->game->transitioning())
 		{
+			$engine->userPaused = true;
+
+			return true;
+		}
+
+		if($this->game->intermission() !== null)
+		{
+			$frame = $engine->input->uiFrame(false, true);
+			$actions = $engine->input->frameActions();
+			$activation = ($frame['buttons']['confirm'] ?? 0) >= .5
+				|| abs($actions->value(DoomActions::FIRE)) >= .5
+				|| abs($actions->value(DoomActions::USE)) >= .5;
+			$this->game->advanceIntermission(min(.25, max(0, $elapsed)), $activation);
+
+			if($this->game->complete && !$this->atTitle) $this->showTitle();
+
 			$engine->userPaused = true;
 
 			return true;
@@ -220,6 +240,13 @@ final class DoomMenuController implements MenuOverlay
 
 	public function render(GlesMapRenderer $renderer): void
 	{
+		if($intermission = $this->game->intermission())
+		{
+			$this->intermissionRenderer->render($renderer, $intermission);
+
+			return;
+		}
+
 		$this->renderer->render(
 			$renderer
 			, $this->menu
@@ -233,7 +260,10 @@ final class DoomMenuController implements MenuOverlay
 
 	public function restore(): void { $this->phpInfoHints?->restore(); }
 
-	public function coversWorld(): bool { return $this->atTitle && $this->menu->isOpen; }
+	public function coversWorld(): bool
+	{
+		return $this->game->intermission() !== null || ($this->atTitle && $this->menu->isOpen);
+	}
 
 	/** Return browser-readable menu state without exposing renderer internals. */
 	public function status(): array

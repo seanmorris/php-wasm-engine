@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace DoomPhonics\Game;
 use DoomPhonics\Input\DoomActions;
 
+use DoomPhonics\Component\ActorState;
 use DoomPhonics\Component\HitPoints;
 use DoomPhonics\Component\NetworkPlayer;
 use DoomPhonics\Component\PlayerStart;
@@ -43,6 +44,10 @@ final class EpisodeGame
 	private ?ScreenWipe $wipe;
 	private ?DoomMatch $match = null;
 	private ?ViewInput $viewOwner = null;
+	private ?LevelIntermission $intermission = null;
+	private float $levelStartedAt = 0;
+	private int $levelBaseKills = 0, $levelBaseItems = 0, $levelBaseSecrets = 0;
+	private int $levelTotalKills = 0, $levelTotalItems = 0, $levelTotalSecrets = 0;
 	/** @var array<string,mixed> Last successfully bound source resources. */
 	private array $boundWorld;
 	public GameSettings $settings;
@@ -85,6 +90,7 @@ final class EpisodeGame
 		try
 		{
 			if($this->map !== '') $this->beginTransition();
+			$this->intermission = null;
 
 			if($preserve) $this->rememberPlayer();
 			else
@@ -105,12 +111,14 @@ final class EpisodeGame
 			$content = $this->lease->context->content();
 
 			if($content instanceof WadLevel)
-			$this->cheats->configure($content->weapons, $content->actors);
+			$this->cheats->configure($content->weapons, $content->actors, $content->language);
 
 			$this->restorePlayer();
 
 			if(($entity = $this->player()) !== null)
 			$this->cheats->applyActive($this->phonics->entities, $entity);
+
+			$this->beginLevelStatistics();
 
 			$this->cheatSequence->reset();
 			$this->engine->input->reset();
@@ -246,6 +254,7 @@ final class EpisodeGame
 	public function returnToTitle(): void
 	{
 		$this->beginTransition();
+		$this->intermission = null;
 
 		if($this->match !== null)
 		{
@@ -278,6 +287,8 @@ final class EpisodeGame
 	/** Apply exits and death restarts after the current fixed update has flushed. */
 	public function update(): void
 	{
+		if($this->intermission !== null) return;
+
 		$entity = $this->player();
 
 		if($entity === null) return;
@@ -297,18 +308,44 @@ final class EpisodeGame
 
 		if(!$player->exited) return;
 
-		$next = match($this->map)
-		{
-			'E1M1' => 'E1M2',
-			'E1M2' => 'E1M3',
-			'E1M3' => $player->secretExit ? 'E1M9' : 'E1M4',
-			'E1M9' => 'E1M4',
-			'E1M4' => 'E1M5',
-			'E1M5' => 'E1M6',
-			'E1M6' => 'E1M7',
-			'E1M7' => 'E1M8',
-			default => null,
-		};
+		$content = $this->lease?->context->content();
+		$maps = $content instanceof WadLevel ? $content->wad->maps() : [];
+		$next = LevelProgression::next($this->map, $player->secretExit, $maps);
+		$this->beginTransition();
+		$this->intermission = new LevelIntermission(
+			$this->map,
+			$next,
+			$player->secretExit,
+			max(0, $player->kills - $this->levelBaseKills),
+			$this->levelTotalKills,
+			max(0, $player->items - $this->levelBaseItems),
+			$this->levelTotalItems,
+			max(0, $player->secrets - $this->levelBaseSecrets),
+			$this->levelTotalSecrets,
+			max(0, (int)floor($this->engine->time - $this->levelStartedAt)),
+			LevelProgression::par($this->map),
+			$content instanceof WadLevel ? $content->language->mapTitle($this->map) : $this->map,
+			$content instanceof WadLevel && $next !== null ? $content->language->mapTitle($next) : $next
+		);
+		$this->engine->userPaused = true;
+		$this->sound->playMusic(MusicCue::intermissionForMap($this->map));
+		$this->engine->input->reset();
+		$this->engine->controls->reset();
+	}
+
+	public function intermission(): ?LevelIntermission { return $this->intermission; }
+
+	/** Advance the tally with display time while gameplay remains paused. */
+	public function advanceIntermission(float $elapsed, bool $activation): void
+	{
+		if($this->intermission === null) return;
+
+		if($cue = $this->intermission->advance($elapsed, $activation)) $this->playMenuSound($cue);
+		if(!$this->intermission->ready()) return;
+
+		$next = $this->intermission->nextMap;
+		$this->beginTransition();
+		$this->intermission = null;
 
 		if($next !== null) $this->enter($next);
 		else
@@ -354,6 +391,8 @@ final class EpisodeGame
 	/** Sample local look after UI gating, including frames without a simulation update. */
 	public function frameInput(Engine $engine, float $elapsed): void
 	{
+		if($this->intermission !== null) return;
+
 		// Browser pointer lock is active even though this PHP/Wasm SDL build does
 		// not emit relative SDL_MOUSEMOTION. Import raw displacement as physical
 		// mouse axes so rebinding and device-specific sensitivity remain in PHP.
@@ -363,12 +402,6 @@ final class EpisodeGame
 
 			if(is_array($motion) && count($motion) >= 2)
 			{
-				// The click that focuses an unlocked canvas is an activation gesture, not
-				// gameplay. SDL has already queued its mouse-down by this point, so release
-				// mouse actions before fixed-step command sampling can turn it into Fire.
-				if(is_numeric($motion[2] ?? null) && (int)$motion[2] > 0)
-				$engine->input->actions?->release(Source::MOUSE_BUTTON);
-
 				if(is_numeric($motion[0])) $engine->input->actions?->move(
 					Source::MOUSE_AXIS, Source::X, (float)$motion[0]
 				);
@@ -449,7 +482,7 @@ final class EpisodeGame
 				$this->phonics->entities->get(
 					$entity
 					, PlayerState::class
-				)->message = 'NO SUCH LEVEL ' . $result->warpMap;
+				)->showMessage('NO SUCH LEVEL ' . $result->warpMap);
 
 				continue;
 			}
@@ -493,6 +526,7 @@ final class EpisodeGame
 			'map' => $this->map
 			, 'mode' => $this->settings->mode()
 			, 'complete' => $this->complete
+			, 'intermission' => $this->intermission?->status()
 			, 'wipe' => $wipe
 			, 'renderResolution' => $this->settings->renderResolution()->value
 			, 'pitchMode' => $this->settings->pitchMode()->value
@@ -540,6 +574,7 @@ final class EpisodeGame
 			, 'message' => $player->message
 			, 'paused' => $this->engine->userPaused
 			, 'complete' => $this->complete
+			, 'intermission' => $this->intermission?->status()
 			, 'wipe' => $wipe
 			, 'skill' => $this->settings->skill()->label()
 			, 'renderResolution' => $this->settings->renderResolution()->value
@@ -613,5 +648,36 @@ final class EpisodeGame
 
 		$this->phonics->entities->add($entity, clone $this->carry);
 		$this->phonics->entities->get($entity, HitPoints::class)->current = $this->carryHealth;
+	}
+
+	/** Capture per-map baselines and totals after the active scope has populated its actors. */
+	private function beginLevelStatistics(): void
+	{
+		$this->levelStartedAt = $this->engine->time;
+		$this->levelTotalKills = $this->levelTotalItems = $this->levelTotalSecrets = 0;
+		$entity = $this->player();
+
+		if($entity !== null)
+		{
+			$player = $this->phonics->entities->get($entity, PlayerState::class);
+			$this->levelBaseKills = $player->kills;
+			$this->levelBaseItems = $player->items;
+			$this->levelBaseSecrets = $player->secrets;
+		}
+		else $this->levelBaseKills = $this->levelBaseItems = $this->levelBaseSecrets = 0;
+
+		foreach($this->phonics->entities->query(ActorState::class) as $actor)
+		{
+			$definition = $this->phonics->entities->get($actor, ActorState::class)->definition;
+
+			if($definition->hasFlag('COUNTKILL')) $this->levelTotalKills++;
+			if($definition->hasFlag('COUNTITEM')) $this->levelTotalItems++;
+		}
+
+		$content = $this->lease?->context->content();
+
+		if($content instanceof WadLevel && $content->level->map->format !== 'HEXEN')
+		foreach($content->level->sectors as $sector)
+		if($sector->special === 9) $this->levelTotalSecrets++;
 	}
 }

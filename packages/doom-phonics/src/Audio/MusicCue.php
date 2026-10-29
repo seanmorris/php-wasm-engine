@@ -21,6 +21,11 @@ final class MusicCue
 
 	public static function intermission(): self { return new self('D_INTER'); }
 
+	public static function intermissionForMap(string $map): self
+	{
+		return new self(preg_match('/^MAP\d\d$/i', $map) ? 'D_DM2INT' : 'D_INTER');
+	}
+
 	public static function victory(): self { return new self('D_VICTOR'); }
 
 	public function lump(): string { return $this->lump; }

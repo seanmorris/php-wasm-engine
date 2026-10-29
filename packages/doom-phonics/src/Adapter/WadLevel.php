@@ -6,6 +6,7 @@ use DoomPhonics\Archive\Stack;
 use DoomPhonics\Audio\SoundCatalog;
 use DoomPhonics\Definition\ActorCatalog;
 use DoomPhonics\Definition\WeaponSlots;
+use DoomPhonics\Definition\LanguageCatalog;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Graphics\Palette;
 use DoomPhonics\Graphics\TextureCatalog;
@@ -25,6 +26,7 @@ final class WadLevel
 		public Palette $palette,
 		public ActorCatalog $actors,
 		public SoundCatalog $sounds,
-		public WeaponSlots $weapons
+		public WeaponSlots $weapons,
+		public LanguageCatalog $language
 	) {}
 }

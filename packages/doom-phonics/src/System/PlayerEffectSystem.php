@@ -30,6 +30,7 @@ final class PlayerEffectSystem
 		foreach($registry->query($this->players) as $entity)
 		{
 			$player = $registry->get($entity, PlayerState::class);
+			if($tics > 0) $player->advanceMessage($tics);
 			$dead = $registry->has($entity, HitPoints::class)
 				&& $registry->get($entity, HitPoints::class)->current <= 0;
 

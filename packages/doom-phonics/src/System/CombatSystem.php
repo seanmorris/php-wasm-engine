@@ -45,6 +45,7 @@ use DoomPhonics\Game\ActorDropper;
 use DoomPhonics\Game\BloodEffects;
 use DoomPhonics\Game\DamageResolver;
 use DoomPhonics\Game\DoomGravity;
+use DoomPhonics\Game\EnemyAwareness;
 use DoomPhonics\Game\Level;
 use DoomPhonics\Game\HitscanImpact;
 use DoomPhonics\Game\LineSpecials;
@@ -70,6 +71,7 @@ final class CombatSystem
 	private WeaponSlots $weaponSlots;
 	private CheatSystem $cheats;
 	private BloodEffects $blood;
+	private EnemyAwareness $awareness;
 
 	public function __construct(
 		public Level $level
@@ -88,6 +90,7 @@ final class CombatSystem
 		, public bool $simulateBeams = true
 		, ?CheatSystem $cheats = null
 		, ?BloodEffects $blood = null
+		, ?EnemyAwareness $awareness = null
 	){
 		$this->players = Query::all(PlayerStart::class, PlayerState::class, Transform::class, HitPoints::class);
 		$this->projectiles = Query::all(Projectile::class, Transform::class, Velocity::class, ActorState::class);
@@ -100,6 +103,7 @@ final class CombatSystem
 		$this->weaponSlots = $weaponSlots ?? WeaponSlots::fromCatalog($actors);
 		$this->cheats = $cheats ?? new CheatSystem($this->weaponSlots, $actors);
 		$this->blood = $blood ?? new BloodEffects($level, $actors, $factory);
+		$this->awareness = $awareness ?? new EnemyAwareness($level);
 		$this->registerActions();
 	}
 
@@ -939,7 +943,10 @@ final class CombatSystem
 			if($state->definition->hasFlag('ammo_optional')
 				|| $this->hasAmmo($registry->get($owner, PlayerState::class), $state->definition, 2)
 			)
-			$state->enter('AltFire');
+			{
+				$this->awareness->alert($registry, $owner, $owner);
+				$state->enter('AltFire');
+			}
 
 			return;
 		}
@@ -949,7 +956,10 @@ final class CombatSystem
 		if($state->definition->hasFlag('ammo_optional')
 			|| $this->hasAmmo($registry->get($owner, PlayerState::class), $state->definition)
 		)
-		$state->enter('Fire');
+		{
+			$this->awareness->alert($registry, $owner, $owner);
+			$state->enter('Fire');
+		}
 	}
 
 	private function hasAmmo(PlayerState $player, ActorDefinition $weapon, int $channel = 1): bool
@@ -1395,33 +1405,89 @@ final class CombatSystem
 		$this->playerHitscan($weapon, $registry, 1, $damage, 6, 64);
 	}
 
+	/** Doom checks at most two active player slots per A_Look call. */
+	private function lookForPlayer(int $entity, Registry $registry, bool $allAround): ?int
+	{
+		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Transform::class)) return null;
+
+		$players = $registry->query($this->players);
+		usort($players, static fn(int $a, int $b): int => $registry->get(
+			$a, PlayerStart::class
+		)->number <=> $registry->get($b, PlayerStart::class)->number);
+		$count = count($players);
+		if($count === 0) return null;
+
+		$brain = $registry->get($entity, MonsterBrain::class);
+		$source = $registry->get($entity, Transform::class);
+		$checks = min(2, $count);
+
+		for($attempt = 0; $attempt < $checks; $attempt++)
+		{
+			$index = $brain->lastLook % $count;
+			$player = $players[$index];
+			$brain->lastLook = ($index + 1) % $count;
+			if(!$this->validTarget($registry, $player)) continue;
+
+			$target = $registry->get($player, Transform::class);
+			if(!$this->visible($source, $target)) continue;
+
+			if(!$allAround)
+			{
+				$angle = atan2($target->y - $source->y, $target->x - $source->x);
+				$delta = atan2(sin($angle - $source->angle), cos($angle - $source->angle));
+				$distance = hypot($target->x - $source->x, $target->y - $source->y);
+
+				if(abs($delta) > M_PI / 2 && $distance > 64) continue;
+			}
+
+			return $player;
+		}
+
+		return null;
+	}
+
+	private function validTarget(Registry $registry, int $target): bool
+	{
+		return $registry->alive($target)
+			&& $registry->has($target, Transform::class)
+			&& $registry->has($target, HitPoints::class)
+			&& $registry->get($target, HitPoints::class)->current > 0
+			&& (!$registry->has($target, Body::class) || $registry->get($target, Body::class)->shootable);
+	}
+
+	private function wake(int $entity, int $target, Registry $registry, bool $sightSound): void
+	{
+		$brain = $registry->get($entity, MonsterBrain::class);
+		$brain->target = $target;
+		$brain->awake = true;
+		if($sightSound) $this->actorSound($entity, $registry, 'SeeSound');
+
+		$state = $registry->get($entity, ActorState::class);
+		if($state->definition->state('See')) $state->enter('See');
+	}
+
 	private function look(int $entity, Registry $registry): void
 	{
 		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Transform::class)) return;
 
 		$pose = $registry->get($entity, Transform::class);
-		$nearest = null;
-		$distance = INF;
+		$brain = $registry->get($entity, MonsterBrain::class);
+		$brain->threshold = 0;
+		$heard = $this->awareness->target($this->level->sectorAt($pose->x, $pose->y)->index);
 
-		foreach($registry->query($this->players) as $player)
+		if($heard !== null && $this->validTarget($registry, $heard))
 		{
-			$p = $registry->get($player, Transform::class);
-			$d = hypot($p->x - $pose->x, $p->y - $pose->y);
-
-			if($d < $distance && $this->visible($pose, $p))
+			$brain->target = $heard;
+			if(!$brain->ambush || $this->visible($pose, $registry->get($heard, Transform::class)))
 			{
-				$nearest = $player;
-				$distance = $d;
-			} }
+				$this->wake($entity, $heard, $registry, true);
 
-		if($nearest !== null)
-		{
-			$brain = $registry->get($entity, MonsterBrain::class);
-			$brain->target = $nearest;
-			$brain->awake = true;
-			$this->actorSound($entity, $registry, 'SeeSound');
-			$registry->get($entity, ActorState::class)->enter('See');
+				return;
+			}
 		}
+
+		$player = $this->lookForPlayer($entity, $registry, false);
+		if($player !== null) $this->wake($entity, $player, $registry, true);
 	}
 
 	private function chase(int $entity, Registry $registry): void
@@ -1429,9 +1495,22 @@ final class CombatSystem
 		if(!$registry->has($entity, MonsterBrain::class) || !$registry->has($entity, Body::class))return;
 
 		$brain = $registry->get($entity, MonsterBrain::class);
+		if($brain->threshold > 0) $brain->threshold--;
 
-		if($brain->target === null || !$registry->alive($brain->target))
+		if($brain->target === null || !$this->validTarget($registry, $brain->target))
 		{
+			$brain->threshold = 0;
+			$player = $this->lookForPlayer($entity, $registry, true);
+			if($player !== null)
+			{
+				$brain->target = $player;
+				$brain->awake = true;
+
+				return;
+			}
+
+			$brain->target = null;
+			$brain->awake = false;
 			$registry->get($entity, ActorState::class)->enter('Spawn');
 
 			return;
@@ -1445,17 +1524,18 @@ final class CombatSystem
 		$pose->angle = atan2($dy, $dx);
 		$state = $registry->get($entity, ActorState::class);
 		$melee = (float)$state->definition->value('MeleeRange', 44) + 20;
+		$visible = $this->visible($pose, $target);
 
 		if(mt_rand(0, 255) < 3) $this->actorSound($entity, $registry, 'ActiveSound');
 
-		if($distance < $melee && $state->definition->state('Melee'))
+		if($distance < $melee && $visible && $state->definition->state('Melee'))
 		{
 			$state->enter('Melee');
 
 			return;
 		}
 
-		if($distance < 768 && mt_rand(0, 7) === 0 && $state->definition->state('Missile'))
+		if($distance < 768 && $visible && mt_rand(0, 7) === 0 && $state->definition->state('Missile'))
 		{
 			$state->enter('Missile');
 
@@ -2744,6 +2824,7 @@ final class CombatSystem
 			$brain = $registry->get($entity, MonsterBrain::class);
 			$brain->target = null;
 			$brain->awake = false;
+			$brain->threshold = 0;
 		}
 
 		if($registry->has($entity, FloorClip::class)) $registry->remove($entity, FloorClip::class);

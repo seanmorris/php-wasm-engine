@@ -13,6 +13,7 @@ use DoomPhonics\Game\Level;
 use DoomPhonics\Game\LineSpecials;
 use DoomPhonics\Game\PlayerState;
 use DoomPhonics\Game\FaceDirection;
+use DoomPhonics\Definition\LanguageCatalog;
 use Phonics\Ecs\Query;
 use Phonics\Ecs\Registry;
 
@@ -24,9 +25,11 @@ final class SectorEffectSystem
 	private int $random = 1;
 	/** @var array<int,int> */
 	private array $high = [], $low = [], $timer = [], $phase = [], $glowDirection = [];
+	private LanguageCatalog $language;
 
-	public function __construct(public Level $level, public LineSpecials $specials)
+	public function __construct(public Level $level, public LineSpecials $specials, ?LanguageCatalog $language = null)
 	{
+		$this->language = $language ?? LanguageCatalog::documents([]);
 		foreach($level->sectors as $sector)
 		{
 			$this->high[$sector->index] = $sector->light;
@@ -137,7 +140,7 @@ final class SectorEffectSystem
 			{
 				$sector->setSpecial(0);
 				$player->secrets++;
-				$player->message = 'A SECRET IS REVEALED';
+				$player->showMessage($this->language->text('SECRETMESSAGE', 'A SECRET IS REVEALED'));
 				continue;
 			}
 

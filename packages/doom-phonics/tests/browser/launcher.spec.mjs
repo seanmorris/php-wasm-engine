@@ -144,20 +144,73 @@ test('launcher starts local game modes, recovers from invalid starts, and opens 
 	await expect(map.locator('option[value="D2ST9"]')).toHaveCount(1);
 	const start = dialog.getByRole('button', {name: 'Start locally', exact: true});
 	await map.selectOption('MAP01');
+	expect(await page.evaluate(async() => {
+		window.launcherGameplayFire = 0;
+		const module = await previewSession.php.binary;
+		module.launcherGameplayFire = () => {window.launcherGameplayFire++;};
+
+		return previewSession.php.run(String.raw`<?php
+			$engine->systems->add('launcher-gameplay-fire-probe', function() use ($engine): void {
+				if($engine->controls->down(DoomPhonics\Input\DoomActions::FIRE))
+				(vrzno_env('launcherGameplayFire'))();
+			});
+		`);
+	})).toBe(0);
 	await start.click();
 	await expect(dialog).toBeHidden({timeout: 45000});
 	await expect.poll(async() => (await state())?.map).toBe('MAP01');
 	await expect.poll(async() => (await state())?.wipe.active, {timeout: 10000}).toBe(false);
+	expect(await page.evaluate(() => window.launcherGameplayFire)).toBe(0);
+
+	// The first canvas press must fire immediately; pointer-lock acquisition is not
+	// a reason to throw it away. Later locked presses must remain equally reliable.
+	const canvas = page.locator('canvas');
+	const box = await canvas.boundingBox();
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await expect.poll(async() => page.evaluate(() => window.launcherGameplayFire)).toBeGreaterThan(0);
+	await expect.poll(async() => (await state()).ammo.Clip).toBeLessThan(50);
+	await page.mouse.up();
+	await page.waitForFunction(() => document.pointerLockElement?.tagName === 'CANVAS');
+
+	for(let click = 0; click < 3; click++)
+	{
+		const before = await page.evaluate(() => window.launcherGameplayFire);
+		await page.mouse.down();
+		await expect.poll(async() => page.evaluate(() => window.launcherGameplayFire)).toBeGreaterThan(before);
+		await page.mouse.up();
+	}
+
+	await page.evaluate(() => document.exitPointerLock());
+	await page.waitForFunction(() => document.pointerLockElement === null);
+
+	expect(await page.evaluate(() => previewSession.php.run(String.raw`<?php
+		$engine->systems->remove('launcher-gameplay-fire-probe');
+	`))).toBe(0);
 
 	expect((await state()).mode).toBe('singleplayer');
 	expect(await state()).toMatchObject({skill: 'Hey, not too rough', health: 100, paused: false});
 
 	expect((await state()).render).toBeTruthy();
 	const spawn = (await state()).position;
-	await page.locator('canvas').focus();
+	await canvas.focus();
 	await page.keyboard.down('w');
 	await expect.poll(async() => (await state()).position.slice(0, 2)).not.toEqual(spawn.slice(0, 2));
 	await page.keyboard.up('w');
+
+	// The fixed update consumes an exit special into a paused, renderable tally before changing maps.
+	expect(await page.evaluate(() => previewSession.php.run(String.raw`<?php
+		$players = iterator_to_array($engine->entities->query(DoomPhonics\Game\PlayerState::class));
+		$engine->entities->get($players[0], DoomPhonics\Game\PlayerState::class)->exited = true;
+	`))).toBe(0);
+	await expect.poll(async() => (await state()).intermission?.map).toBe('MAP01');
+	await expect.poll(async() => (await state()).wipe.active).toBe(true);
+	await expect.poll(async() => (await state()).wipe.active, {timeout: 10000}).toBe(false);
+	expect(await state()).toMatchObject({map: 'MAP01', paused: true, intermission: {phase: 'kills'}});
+	expect(await page.evaluate(() => previewSession.php.run(String.raw`<?php $game->restart();`))).toBe(0);
+	await expect.poll(async() => (await state()).intermission).toBe(null);
+	await expect.poll(async() => (await state()).wipe.active, {timeout: 10000}).toBe(false);
+	await expect.poll(async() => (await state()).paused).toBe(false);
 
 	for(const [name, message] of [
 		['BADMAP', 'Unresolved WAD thing types: 32767']

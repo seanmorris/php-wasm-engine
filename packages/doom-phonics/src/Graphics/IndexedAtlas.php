@@ -92,7 +92,19 @@ final class IndexedAtlas
 			'TITLEPIC','M_DOOM','M_NGAME','M_OPTION','M_RDTHIS','M_NEWG','M_SKILL'
 			, 'M_JKILL','M_ROUGH','M_HURT','M_ULTRA','M_NMARE','M_SKULL1','M_SKULL2'
 			, 'M_OPTTTL','M_MSENS','M_THERML','M_THERMR','M_THERMM','M_THERMO','M_PAUSE'
+			, 'INTERPIC','WIF','WIENTER','WIOSTK','WIOSTI','WISCRT2','WITIME','WIPAR'
+			, 'WIPCNT','WICOLON','WIMINUS'
 		];
+
+		for($episode = 0; $episode < 9; $episode++)
+		{
+			$menu[] = 'WIMAP' . $episode;
+
+			for($mission = 0; $mission < 9; $mission++) $menu[] = 'WILV' . $episode . $mission;
+		}
+
+		for($map = 0; $map < 99; $map++) $menu[] = 'CWILV' . str_pad((string)$map, 2, '0', STR_PAD_LEFT);
+		for($digit = 0; $digit <= 9; $digit++) $menu[] = 'WINUM' . $digit;
 
 		for($character = 33; $character <= 95; $character++)
 		$menu[] = 'STCFN' . str_pad((string)$character, 3, '0', STR_PAD_LEFT);

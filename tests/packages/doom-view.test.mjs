@@ -10,6 +10,7 @@ test('Doom browser export loads from verified bytes without a package base URL',
 	const code = await source(manifest.exports.game.browser);
 	const game = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
+	assert.ok(manifest.preload.includes('resources/language.txt'));
 	assert.equal(typeof game.activate, 'function');
 	assert.equal(typeof game.WadMusic, 'function');
 });

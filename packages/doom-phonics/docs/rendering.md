@@ -14,6 +14,14 @@ The same PWAD includes `PORTAL2`, launched directly by the [two-room portal worl
 
 `DOMTEXTURE name width height [FIT width height] [WorldPanning]` reserves an ordinary wall or flat material for browser-rendered document pixels. The declaration contains no markup. The game host must register a trusted `DomTexture` bridge under the same eight-character name before the WAD scope activates; an absent or temporarily unready provider leaves a black placeholder. Each document has independent contents and scroll state, shares the engine canvas through `DomTexture::fork()`, and draws into the renderer's current offscreen framebuffer without changing the caller's WebGL state. `showSurface()` fills that framebuffer edge to edge without the title, footer, margins, or backdrop used by full-screen information modals.
 
-Use the browser benchmark scripts to separate world-load cost, PHP simulation time, visibility traversal, draw submission, and browser composition. D2ST9 is the package stress map because it combines a large layout with extended actors and renderer conditionals.
+Use the browser benchmark [`scripts/bench-doom-browser.mjs`](../../../scripts/bench-doom-browser.mjs) to separate world-load cost, PHP simulation time, visibility traversal, draw submission, and browser composition. D2ST9 is the package stress map because it combines a large layout with extended actors and renderer conditionals. With a local server already running on port 9130 and the D2ST9 archives prepared as described in the package README, run it from the repository root:
+
+```sh
+node scripts/bench-doom-browser.mjs \
+  --views=packages/doom-phonics/benchmarks/d2st9-views.json \
+  --seconds=8
+```
+
+Pass `--url=http://...` to measure another server or world.
 
 Context restoration rebuilds GPU resources from mounted archive data. Map changes and session disposal release the old map's buffers, textures, audio, DOM overlays, and scoped actors.

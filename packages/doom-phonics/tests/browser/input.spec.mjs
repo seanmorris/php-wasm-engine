@@ -101,7 +101,7 @@ test('Doom controller bindings separate movement, turning, use, fire and weapon 
 	const bounds = await canvas.boundingBox();
 	await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
 	await page.mouse.down();
-	await expect.poll(frame).toMatchObject({fire: false});
+	await expect.poll(frame).toMatchObject({fire: true});
 	await page.mouse.up();
 	await page.waitForFunction(() => document.pointerLockElement?.tagName === 'CANVAS');
 	await page.mouse.move(bounds.x + bounds.width / 2 + 70, bounds.y + bounds.height / 2 + 45);

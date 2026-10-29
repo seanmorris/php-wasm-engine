@@ -204,7 +204,8 @@ final class ActorFactory
 			$components[] = new HitPoints($health, $health, (int)$definition->value('PainChance', 0));
 		}
 
-		if($definition->hasFlag('MONSTER')) $components[] = new MonsterBrain;
+		if($definition->hasFlag('MONSTER'))
+		$components[] = new MonsterBrain((bool)($thing['flags']['ambush'] ?? false));
 		$bounceType = (string)$definition->value('BounceType', '');
 
 		if($bounceType !== '' && strcasecmp($bounceType, 'None') !== 0)

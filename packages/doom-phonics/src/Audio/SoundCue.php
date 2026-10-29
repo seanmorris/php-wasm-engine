@@ -30,6 +30,9 @@ final class SoundCue
 	public static function menuBack(): self { return new self('DSSWTCHX'); }
 	public static function menuMove(): self { return new self('DSPSTOP'); }
 	public static function menuSelect(): self { return new self('DSPISTOL'); }
+	public static function intermissionTick(): self { return new self('DSPISTOL'); }
+	public static function intermissionStage(): self { return new self('DSBAREXP'); }
+	public static function intermissionDone(): self { return new self('DSSGCOCK'); }
 
 	public function lump(): string { return $this->lump; }
 }

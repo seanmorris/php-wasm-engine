@@ -10,6 +10,7 @@ use DoomPhonics\Game\PlayerState;
 use DoomPhonics\Definition\ActorCatalog;
 use DoomPhonics\Definition\WeaponAmmo;
 use DoomPhonics\Definition\WeaponSlots;
+use DoomPhonics\Definition\LanguageCatalog;
 use Phonics\Ecs\Registry;
 
 /** Applies recognized cheats through the same typed player state used by ordinary pickups and combat. */
@@ -42,15 +43,26 @@ final class CheatSystem
 	private bool $oopsAllGibs = false;
 	/** @var array{weapons:array<string,bool>,ammo:array<string,int>,infiniteAmmo:array<string,bool>,weapon:string}|null */
 	private ?array $oopsLoadout = null;
+	private LanguageCatalog $language;
 
-	public function __construct(?WeaponSlots $slots = null, ?ActorCatalog $actors = null)
+	public function __construct(
+		?WeaponSlots $slots = null,
+		?ActorCatalog $actors = null,
+		?LanguageCatalog $language = null
+	)
 	{
-		$this->configure($slots, $actors);
+		$this->language = $language ?? LanguageCatalog::documents([]);
+		$this->configure($slots, $actors, $language);
 	}
 
 	/** Refresh stack-dependent weapons without replacing the session's active cheat state. */
-	public function configure(?WeaponSlots $slots = null, ?ActorCatalog $actors = null): void
+	public function configure(
+		?WeaponSlots $slots = null,
+		?ActorCatalog $actors = null,
+		?LanguageCatalog $language = null
+	): void
 	{
+		if($language !== null) $this->language = $language;
 		$this->weapons = array_values(array_unique([
 			...self::WEAPONS
 			, ...($slots?->weapons() ?? [])
@@ -129,28 +141,36 @@ final class CheatSystem
 
 				if($player->godMode) $health->current = max($health->current, min(100, $health->maximum));
 
-				$player->message = 'DEGREELESSNESS MODE ' . ($player->godMode ? 'ON' : 'OFF');
+				$player->showMessage($this->language->text(
+					$player->godMode ? 'STSTR_DQDON' : 'STSTR_DQDOFF',
+					'DEGREELESSNESS MODE ' . ($player->godMode ? 'ON' : 'OFF')
+				));
 				break;
 
 			case CheatCommand::ARSENAL:
 				$this->arsenal($player);
-				$player->message = 'AMMO (NO KEYS) ADDED';
+				$player->showMessage($this->language->text('STSTR_FAADDED', 'AMMO (NO KEYS) ADDED'));
 				break;
 
 			case CheatCommand::ARSENAL_AND_KEYS:
 				$this->arsenal($player);
 
 				foreach(self::KEYS as $key) $player->keys[$key] = true;
-				$player->message = 'VERY HAPPY AMMO ADDED';
+				$player->showMessage($this->language->text('STSTR_KFAADDED', 'VERY HAPPY AMMO ADDED'));
 				break;
 
 			case CheatCommand::NO_CLIP:
 				$player->noClip = !$player->noClip;
-				$player->message = 'NO CLIPPING MODE ' . ($player->noClip ? 'ON' : 'OFF');
+				$player->showMessage($this->language->text(
+					$player->noClip ? 'STSTR_NCON' : 'STSTR_NCOFF',
+					'NO CLIPPING MODE ' . ($player->noClip ? 'ON' : 'OFF')
+				));
 				break;
 
 			case CheatCommand::BEHOLD:
-				$player->message = 'INvuln, Str, Invis, Rad, Allmap, or Lite-amp';
+				$player->showMessage($this->language->text(
+					'STSTR_BEHOLD', 'INvuln, Str, Invis, Rad, Allmap, or Lite-amp'
+				));
 				break;
 
 			case CheatCommand::POWER:
@@ -161,7 +181,7 @@ final class CheatSystem
 				$player->weapons['Chainsaw'] = true;
 				$player->requestWeapon('Chainsaw');
 				$player->powers['Invulnerable'] = self::POWER_SECONDS['Invulnerable'];
-				$player->message = "... DOESN'T SUCK - GM";
+				$player->showMessage($this->language->text('STSTR_CHOPPERS', "... DOESN'T SUCK - GM"));
 				break;
 
 			case CheatCommand::POSITION:
@@ -169,14 +189,16 @@ final class CheatSystem
 				{
 					$pose = $registry->get($entity, Transform::class);
 					$angle = fmod(rad2deg($pose->angle) + 360, 360);
-					$player->message = sprintf('X %.0f Y %.0f Z %.0f A %.0f', $pose->x, $pose->y, $pose->z, $angle);
+					$player->showMessage(sprintf(
+						'X %.0f Y %.0f Z %.0f A %.0f', $pose->x, $pose->y, $pose->z, $angle
+					));
 				}
 
 				break;
 
 			case CheatCommand::WARP:
 				$map = (string)$command->argument;
-				$player->message = 'WARPING TO ' . $map;
+				$player->showMessage('WARPING TO ' . $map);
 
 				return CheatResult::warp($map);
 
@@ -209,7 +231,7 @@ final class CheatSystem
 			}
 			else $player->infiniteAmmo = [];
 
-			$player->message = 'OOPS! ALL GIBS OFF';
+			$player->showMessage('OOPS! ALL GIBS OFF');
 
 			return;
 		}
@@ -218,7 +240,7 @@ final class CheatSystem
 
 		if($railgun === null)
 		{
-			$player->message = 'RAILGUN NOT AVAILABLE';
+			$player->showMessage('RAILGUN NOT AVAILABLE');
 
 			return;
 		}
@@ -231,7 +253,7 @@ final class CheatSystem
 		];
 		$this->oopsAllGibs = true;
 		$this->equipOopsAllGibs($player, $railgun);
-		$player->message = 'OOPS! ALL GIBS';
+		$player->showMessage('OOPS! ALL GIBS');
 	}
 
 	private function equipOopsAllGibs(PlayerState $player, string $railgun): void
@@ -269,7 +291,7 @@ final class CheatSystem
 		if(isset($player->powers[$name]))
 		{
 			unset($player->powers[$name]);
-			$player->message = strtoupper($name) . ' OFF';
+			$player->showMessage(strtoupper($name) . ' OFF');
 
 			return;
 		}
@@ -282,6 +304,6 @@ final class CheatSystem
 			$player->requestWeapon('Fist');
 		}
 
-		$player->message = strtoupper($name) . ' ON';
+		$player->showMessage(strtoupper($name) . ' ON');
 	}
 }

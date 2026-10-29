@@ -1751,7 +1751,12 @@ final class GlesMapRenderer
 				$y += 9;
 			}
 
-			$patches[] = ['picture',$name,$x,$y,$image];
+			// STCFN punctuation uses patch origins to sit on the baseline. In
+			// particular, the period has a negative top offset and otherwise looks
+			// like a trailing apostrophe at the top of the text row.
+			$patches[] = [
+				'picture',$name,$x - $image->leftOffset,$y - $image->topOffset,$image
+			];
 			$x += $image->width;
 		}
 	}

@@ -111,11 +111,15 @@ final class DoomRenderPass implements RenderPass
 		$x = $pose->xAt($alpha);
 		$y = $pose->yAt($alpha);
 		$cameraSector = $this->renderer->level->map->sectorAt((int)$pose->x, (int)$pose->y);
+		$sector = $this->renderer->level->sectors[$cameraSector] ?? null;
+		$supportedByMovingFloor = $sector !== null
+			&& abs($sector->floor - $sector->previousFloor) > 1e-6
+			&& abs($pose->z - $sector->floorZ($pose->x, $pose->y)) <= .1;
 		$smoothHeight = !$this->registry->has($entity, Body::class)
 			|| !$this->renderer->level->boundsCrossCameraPortal(
 				$x, $y, $this->registry->get($entity, Body::class)->radius
 			);
-		$z = $this->cameraHeight->follow($pose->zAt($alpha), $smoothHeight);
+		$z = $this->cameraHeight->follow($pose->zAt($alpha), $smoothHeight, $supportedByMovingFloor);
 		$pitch = $this->registry->has($entity, ViewInput::class)
 			? $this->registry->get($entity, ViewInput::class)->pitch
 			: 0.0;

@@ -28,10 +28,24 @@ final class WadSource implements ContentSource
 	 * @param array<string,string> $decorate
 	 * @param array<string,string> $sndinfo
 	 * @param array<string,string> $keyconf
+	 * @param array<string,string> $language
 	 */
-	public function __construct(public Stack $wad, array $decorate = [], array $sndinfo = [], array $keyconf = [])
+	public function __construct(
+		public Stack $wad,
+		array $decorate = [],
+		array $sndinfo = [],
+		array $keyconf = [],
+		array $language = []
+	)
 	{
-		$this->definitions = new WadDefinitions($decorate, $sndinfo, $keyconf);
+		// Direct Stack consumers and the browser adapter share the same lump path.
+		// The adapter's arrays retain interleaved loose-resource precedence; missing
+		// entries are filled from the archive stack for callers that already own it.
+		$decorate = $this->stackDocuments('DECORATE', $decorate);
+		$sndinfo = $this->stackDocuments('SNDINFO', $sndinfo);
+		$keyconf = $this->stackDocuments('KEYCONF', $keyconf);
+		$language = $this->stackDocuments('LANGUAGE', $language);
+		$this->definitions = new WadDefinitions($decorate, $sndinfo, $keyconf, $language);
 	}
 
 	public function catalog(): iterable
@@ -76,7 +90,8 @@ final class WadSource implements ContentSource
 			$this->palette,
 			$this->definitions->actors,
 			$this->definitions->sounds,
-			$this->weapons
+			$this->weapons,
+			$this->definitions->language
 		);
 
 		return new WadActiveScope($context->descriptor, $content);
@@ -107,5 +122,18 @@ final class WadSource implements ContentSource
 	private function requireOpen(): void
 	{
 		if($this->closed) throw new \LogicException('WAD source is closed');
+	}
+
+	/** @param array<string,string> $documents @return array<string,string> */
+	private function stackDocuments(string $name, array $documents): array
+	{
+		foreach($this->wad->lumps($name) as $lump)
+		{
+			$identity = $lump->identity();
+
+			if(!array_key_exists($identity, $documents)) $documents[$identity] = $lump->bytes();
+		}
+
+		return $documents;
 	}
 }

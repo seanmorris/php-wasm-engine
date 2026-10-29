@@ -11,12 +11,14 @@ use DoomPhonics\Graphics\TextureCatalog;
 use DoomPhonics\Graphics\IndexedAtlas;
 use DoomPhonics\Graphics\Fon2Font;
 use DoomPhonics\Definition\DecorateParser;
+use DoomPhonics\Definition\LanguageCatalog;
 use DoomPhonics\Audio\SoundCatalog;
 use DoomPhonics\Audio\DmxSound;
 use DoomPhonics\Audio\SoundSample;
 use DoomPhonics\Audio\SoundEmitter;
 use DoomPhonics\Audio\SoundEvent;
 use DoomPhonics\Audio\MusicCue;
+use DoomPhonics\Audio\SoundCue;
 use DoomPhonics\Adapter\ActorFactory;
 use DoomPhonics\Adapter\WadAdapter;
 use DoomPhonics\Adapter\WadDefinitions;
@@ -63,9 +65,12 @@ use DoomPhonics\Game\DamageResolver;
 use DoomPhonics\Game\FaceDirection;
 use DoomPhonics\Game\HitscanImpact;
 use DoomPhonics\Game\Level;
+use DoomPhonics\Game\LevelIntermission;
+use DoomPhonics\Game\LevelProgression;
 use DoomPhonics\Game\LineSpecials;
 use DoomPhonics\Game\PlayerState;
 use DoomPhonics\Game\DoomMatch;
+use DoomPhonics\Game\EnemyAwareness;
 use DoomPhonics\Game\ProjectileImpact;
 use DoomPhonics\Game\ProjectileTracer;
 use Phonics\Network\MatchContext;
@@ -189,6 +194,68 @@ verifyWad(
 );
 
 verifyWad($musicArchive->lump('D_INTROA') === null, 'music overlay does not require a D_INTROA alias');
+
+$episodeMaps = array_map(static fn(int $map): string => 'E1M' . $map, range(1, 9));
+verifyWad(
+	LevelProgression::next('E1M3', true, $episodeMaps) === 'E1M9'
+		&& LevelProgression::next('E1M9', false, $episodeMaps) === 'E1M4'
+		&& LevelProgression::next('E1M8', false, $episodeMaps) === null
+	, 'episode progression follows normal, secret, and terminal exits'
+);
+
+$doomTwoMaps = array_map(static fn(int $map): string => sprintf('MAP%02d', $map), range(1, 32));
+verifyWad(
+	LevelProgression::next('MAP15', true, $doomTwoMaps) === 'MAP31'
+		&& LevelProgression::next('MAP31', false, $doomTwoMaps) === 'MAP16'
+		&& LevelProgression::next('MAP31', true, $doomTwoMaps) === 'MAP32'
+		&& LevelProgression::next('MAP30', false, $doomTwoMaps) === null
+	, 'commercial progression follows normal, secret, return, and terminal exits'
+);
+
+verifyWad(
+	LevelProgression::par('E1M1') === 30
+		&& LevelProgression::par('MAP01') === 30
+		&& LevelProgression::par('CUSTOM') === null
+	, 'classic maps expose par times without inventing custom-map pars'
+);
+
+$intermission = new LevelIntermission('E1M1', 'E1M2', false, 5, 10, 2, 4, 1, 2, 120, 30);
+$intermission->advance(0, false);
+$skipCue = $intermission->advance(0, true);
+verifyWad(
+	$intermission->phase() === 'done'
+		&& $intermission->displayKills === 50
+		&& $intermission->displayItems === 50
+		&& $intermission->displaySecrets === 50
+		&& $intermission->displayTime === 120
+		&& $intermission->displayPar === 30
+		&& $skipCue?->lump() === SoundCue::intermissionStage()->lump()
+	, 'first fresh activation completes every animated intermission tally'
+);
+
+$intermission->advance(0, false);
+$doneCue = $intermission->advance(0, true);
+for($frame = 0; $frame < 120 && !$intermission->ready(); $frame++)
+$intermission->advance(1 / 60, false);
+verifyWad(
+	$intermission->phase() === 'entering'
+		&& $intermission->ready()
+		&& $doneCue?->lump() === SoundCue::intermissionDone()->lump()
+	, 'second activation shows the entering page before releasing the next map'
+);
+
+$automaticTally = new LevelIntermission('E1M1', null, false, 1, 1, 1, 1, 0, 0, 5, null);
+$automaticTally->advance(0, false);
+for($frame = 0; $frame < 600 && $automaticTally->phase() !== 'done'; $frame++)
+$automaticTally->advance(1 / 60, false);
+verifyWad(
+	$automaticTally->phase() === 'done'
+		&& $automaticTally->displayKills === 100
+		&& $automaticTally->displayItems === 100
+		&& $automaticTally->displaySecrets === 0
+		&& !$automaticTally->ready()
+	, 'intermission counts at real display time while fixed simulation is paused'
+);
 
 $laterIwad = new Archive($bytes, $path . '#later-iwad');
 $iwadStack = new Stack($archive, $laterIwad);
@@ -522,16 +589,22 @@ verifyWad(
 
 $timedEffectsRegistry = new Registry;
 $timedPlayer = new PlayerState;
+$timedPlayer->showMessage('PICKED UP A CLIP.');
 $timedPlayer->powers['Invulnerable'] = 1 / 35;
 $timedView = new ViewEffects;
 $timedView->recordPickup();
 $timedEffectsRegistry->create($timedPlayer, $timedView);
-(new PlayerEffectSystem)->update($timedEffectsRegistry, 1 / 35);
+$timedEffects = new PlayerEffectSystem;
+$timedEffects->update($timedEffectsRegistry, 1 / 35);
 
 verifyWad(
 	!isset($timedPlayer->powers['Invulnerable']) && $timedView->bonusTics() === 5
+		&& $timedPlayer->messageTics === PlayerState::MESSAGE_TICS - 1
 	, 'player effect system expires powers and palette counters on the shared 35 Hz clock'
 );
+
+$timedEffects->update($timedEffectsRegistry, (PlayerState::MESSAGE_TICS - 1) / 35);
+verifyWad($timedPlayer->message === '', 'status messages expire after the classic four-second timeout');
 
 $eastMap = $stack->map('E1M1');
 $eastThing = $eastMap->things[37];
@@ -790,6 +863,38 @@ verifyWad(
 );
 
 $resource = dirname(__DIR__) . '/resources/';
+$baseLanguage = LanguageCatalog::documents([
+	$resource . 'language.txt' => file_get_contents($resource . 'language.txt')
+]);
+
+verifyWad(
+	$baseLanguage->text('$GOTARMOR') === 'Picked up the armor.'
+		&& $baseLanguage->mapTitle('E1M1') === 'E1M1: Hangar'
+		&& $baseLanguage->mapTitle('MAP04') === 'level 4: the focus'
+	, 'built-in LANGUAGE resolves DECORATE tokens and classic map titles'
+);
+
+verifyWad(
+	str_contains($baseLanguage->text('E1TEXT'), "Once you beat the big badasses")
+		&& str_contains($baseLanguage->text('E1TEXT'), "The Shores of Hell")
+	, 'LANGUAGE concatenates multiline quoted strings'
+);
+
+verifyWad(
+	$baseLanguage->text('STSTR_DQDON') === 'Degreelessness Mode ON'
+		&& $baseLanguage->resolve('$MISSING_ADDON_TOKEN') === '$MISSING_ADDON_TOKEN'
+	, 'LANGUAGE observes game conditionals and preserves unresolved DECORATE tokens'
+);
+
+$layeredLanguage = LanguageCatalog::documents([
+	'base' => "[default]\nPICKUP = \"base\";\nONLY_BASE = \"fallback\";",
+	'overlay' => "[fra default]\nPICKUP = \"fallback overlay\";\n[enu]\nPICKUP = \"English overlay\";"
+]);
+verifyWad(
+	$layeredLanguage->text('PICKUP') === 'English overlay'
+		&& $layeredLanguage->text('ONLY_BASE') === 'fallback'
+	, 'later LANGUAGE documents layer exact locale strings over defaults'
+);
 
 $actors = DecorateParser::catalog([
 	'decor.dec' => file_get_contents($resource . 'decor.dec')
@@ -940,6 +1045,7 @@ $demo = dirname(__DIR__) . '/demo/';
 $keyconfFixtureLumps = [
 	'DECORATE' => "ACTOR KeyConfFixtureGun : Pistol\n{\n}\n"
 	, 'KEYCONF' => "weaponsection Fixture\nsetslot 9 KeyConfFixtureGun Pistol\n"
+	, 'LANGUAGE' => "[enu default]\nGOTCLIP = \"Layered clip message.\";\n"
 ];
 $keyconfFixtureData = '';
 $keyconfFixtureDirectory = '';
@@ -990,6 +1096,27 @@ verifyWad($stackedContent->actors->named('Minigun') !== null, 'WAD adapter appli
 verifyWad(
 	$stackedContent->sounds->resolve('weapons/minigun') === 'DSMINIGN'
 	, 'WAD adapter applies declared SNDINFO sidecars'
+);
+
+verifyWad(
+	$stackedContent->language->text('$GOTCLIP') === 'Layered clip message.'
+	, 'WAD adapter layers embedded LANGUAGE lumps after built-in strings'
+);
+
+$directLanguageStack = new Stack($archive, new Archive($keyconfFixtureWad, $keyconfFixtureUrl));
+$directLanguageSource = new WadSource($directLanguageStack);
+$directLanguageDescriptors = iterator_to_array($directLanguageSource->catalog());
+$directLanguageRegistry = new Registry;
+$directLanguageContext = new ScopeContext(
+	'direct-language',
+	$directLanguageDescriptors[0],
+	$directLanguageRegistry,
+	new Scheduler($directLanguageRegistry)
+);
+$directLanguageContent = $directLanguageSource->activate('E1M1', $directLanguageContext)->content();
+verifyWad(
+	$directLanguageContent->language->text('$GOTCLIP') === 'Layered clip message.'
+	, 'direct WAD stack loading discovers embedded LANGUAGE overrides through the lump loader'
 );
 
 verifyWad(
@@ -1455,6 +1582,13 @@ verifyWad($cameraHeight->follow(40) === 40.0, 'vertical camera snaps the final f
 verifyWad($cameraHeight->follow(72, false) === 72.0, 'vertical camera smoothing can snap across a portal discontinuity');
 verifyWad($cameraHeight->follow(80) === 74.0, 'vertical camera smoothing resumes from the snapped portal height');
 verifyWad($cameraHeight->follow(16) === 16.0, 'vertical camera follows downward motion immediately');
+$liftCamera = new CameraHeight;
+$liftCamera->follow(0);
+verifyWad(
+	$liftCamera->follow(8, true, true) === 8.0
+		&& $liftCamera->follow(16, true, true) === 16.0
+	, 'vertical camera remains attached to a rising lift instead of smoothing into its floor'
+);
 $reversingCamera = new CameraHeight;
 $reversingCamera->follow(32);
 $reversingCamera->follow(40);
@@ -1688,6 +1822,8 @@ verifyWad($e1m1Atlas->id('ui', 'reticle') >= 0, 'palette-matched target reticle 
 verifyWad($e1m1Atlas->id('picture', 'TITLEPIC') >= 0, 'title screen is packed with the map atlas');
 verifyWad($e1m1Atlas->id('picture', 'M_NGAME') >= 0, 'menu labels are packed with the map atlas');
 verifyWad($e1m1Atlas->id('picture', 'STCFN065') >= 0, 'menu text font is packed with the map atlas');
+foreach(['WIMAP0','WILV00','WIF','WIOSTK','WIOSTI','WISCRT2','WITIME','WIPAR','WIPCNT','WINUM0'] as $patch)
+verifyWad($e1m1Atlas->id('picture', $patch) >= 0, "intermission patch $patch is packed with the map atlas");
 
 for($digit = 0; $digit <= 9; $digit++)
 verifyWad(
@@ -1858,6 +1994,47 @@ verifyWad(count($rays) > 0 && $rays[0]['distance'] > 0, 'spatial ray traversal')
 $projectileTracer = new ProjectileTracer($level);
 $projectileBody = new Body(6, 8, false, false, true);
 $projectileSector = $level->sectorAt(3440, -3420);
+
+// E1M1's local door sector finishes at ceiling height 68. A horizontal
+// hitscan at z=41 must cross as soon as the moving plane reaches the ray,
+// rather than waiting for the door to finish opening. The inverse case
+// covers a floor lowering past the same ray.
+$partialDoorLevel = new Level($map);
+$partialDoorTracer = new ProjectileTracer($partialDoorLevel);
+$hitscanBody = new Body(0, 0);
+$partialDoor = $partialDoorLevel->sectors[4];
+$partialDoor->ceiling = $partialDoor->previousCeiling = 40;
+$closedCeilingHit = $partialDoorTracer->trace(
+	new Transform(1450, -2496, 41), $hitscanBody, 120, 0, 0
+);
+$partialDoor->ceiling = $partialDoor->previousCeiling = 41;
+$openCeilingHit = $partialDoorTracer->trace(
+	new Transform(1450, -2496, 41), $hitscanBody, 120, 0, 0
+);
+$partialDoor->floor = $partialDoor->previousFloor = 42;
+$partialDoor->ceiling = $partialDoor->previousCeiling = 72;
+$closedFloorHit = $partialDoorTracer->trace(
+	new Transform(1450, -2496, 41), $hitscanBody, 120, 0, 0
+);
+$partialDoor->floor = $partialDoor->previousFloor = 41;
+$openFloorHit = $partialDoorTracer->trace(
+	new Transform(1450, -2496, 41), $hitscanBody, 120, 0, 0
+);
+
+verifyWad(
+	$closedCeilingHit?->surface === ProjectileImpact::WALL
+		&& $closedCeilingHit->line === 151
+		&& $openCeilingHit === null
+		&& $partialDoor->ceiling > 41
+	, 'hitscan crosses a rising door as soon as its ceiling clears the ray'
+);
+
+verifyWad(
+	$closedFloorHit?->surface === ProjectileImpact::WALL
+		&& $closedFloorHit->line === 151
+		&& $openFloorHit === null
+	, 'hitscan crosses a lowering door as soon as its floor clears the ray'
+);
 
 $floorImpact = $projectileTracer->trace(
 	new Transform(3440, -3420, $projectileSector->floor + 20)
@@ -2071,9 +2248,13 @@ $factory->spawn($registry, $clipDefinition, [
 	, 'flags' => []
 ], $map->sectors[$map->sectorAt($start['x'], $start['y'])]);
 
-(new PickupSystem($actors))->update($registry, 1 / 35);
+(new PickupSystem($actors, true, $baseLanguage))->update($registry, 1 / 35);
 $registry->flush();
 verifyWad($player->ammo['Clip'] === 60, 'DECORATE ammo pickup applied through ECS');
+verifyWad(
+	$player->message === 'Picked up a clip.' && $player->messageTics === PlayerState::MESSAGE_TICS
+	, 'DECORATE pickup messages resolve through LANGUAGE with a classic timeout'
+);
 
 verifyWad(
 	$registry->get($playerEntity, ViewEffects::class)->bonusTics() === 6
@@ -3017,6 +3198,27 @@ verifyWad(
 	, 'successive lift tics interpolate from the immediately preceding carried height'
 );
 
+$liftStayedSupported = true;
+$liftReturnedUpward = false;
+$lastLiftFloor = $liftLevel->sectors[137]->floor;
+
+for($i = 0; $i < 300 && $liftRegistry->query(\DoomPhonics\Component\SectorMover::class); $i++)
+{
+	$liftPose->beginStep();
+	$liftSpecials->update(1 / 35);
+	$liftMovement->update($liftRegistry, 1 / 35);
+	$currentLiftFloor = $liftLevel->sectors[137]->floor;
+	if($currentLiftFloor > $lastLiftFloor) $liftReturnedUpward = true;
+	$liftStayedSupported = $liftStayedSupported && abs($liftPose->z - $currentLiftFloor) <= .01;
+	$lastLiftFloor = $currentLiftFloor;
+}
+
+verifyWad(
+	$liftReturnedUpward && $liftStayedSupported
+		&& $liftPose->z === $liftLevel->sectors[137]->floor
+	, 'E1M2 sector 137 carries its player throughout the complete down-wait-up lift cycle'
+);
+
 // Switch and scrolling changes patch only their recorded map-mesh spans.
 $switchLevel = new Level($liftMap);
 $switchAtlas = IndexedAtlas::forLevel($switchLevel, $textures);
@@ -3139,6 +3341,17 @@ $shootStates = new ActorStateSystem($shootActions);
 
 for($i = 0; $i < 24; $i++)$shootStates->update($shootRegistry, 1 / 35);
 verifyWad($shootLevel->sectors[188]->ceilingMover !== null, 'hitscan impact activates a gun-triggered door');
+$shootDoorMover = $shootRegistry->get(
+	$shootLevel->sectors[188]->ceilingMover
+	, \DoomPhonics\Component\SectorMover::class
+);
+verifyWad(
+	isset($shootSpecials->consumed[572])
+		&& $shootSpecials->definition(46)?->repeatable === false
+		&& $shootDoorMover->returnTarget === null
+		&& !$shootDoorMover->reversesWhenBlocked()
+	, 'E1M2 linedef 572 starts a one-shot open-and-stay door'
+);
 $shotPuffs = $shootRegistry->query(TransientEffect::class);
 verifyWad(count($shotPuffs) > 0, 'hitscan geometry impacts spawn DECORATE bullet puffs');
 $shotPuff = $shotPuffs[0];
@@ -3201,8 +3414,10 @@ verifyWad(
 );
 
 verifyWad(
-	$shootSpecials->activate(572, 'shoot', 183, $shootRegistry->get($shooter, PlayerState::class))
-	, 'gun trigger remains responsive while its tagged door is busy'
+	!$shootSpecials->activate(572, 'shoot', 183, $shootRegistry->get($shooter, PlayerState::class))
+		&& $shootDoorMover->target > $shootLevel->sectors[188]->ceiling
+		&& $shootDoorMover->returnTarget === null
+	, 'E1M2 linedef 572 cannot repeat or reverse its active door'
 );
 
 verifyWad(
@@ -3347,6 +3562,91 @@ catch(UnexpectedValueException $error)
 }
 
 require __DIR__ . '/ports.php';
+
+// Original Doom wake rules: forward sight, sector sound flooding, ambush, and damage retaliation.
+$wakeMap = \DoomPhonics\Tests\PortMap::map();
+$wakeLevel = new Level($wakeMap);
+$wakeRegistry = new Registry;
+$wakePlayer = $factory->spawn($wakeRegistry, $playerDefinition, [
+	'x' => 32, 'y' => 64, 'z' => 0, 'angle' => 0, 'type' => 1, 'index' => -1, 'flags' => []
+], $wakeMap->sectors[0]);
+$rearEnemy = $factory->spawn($wakeRegistry, $zombie, [
+	'x' => 112, 'y' => 64, 'z' => 0, 'angle' => 0, 'type' => 3004, 'index' => -1, 'flags' => []
+], $wakeMap->sectors[0]);
+$wakeActions = new ActionDispatcher;
+new CombatSystem(
+	$wakeLevel, $actors, $factory, new Collision($wakeLevel), new Controls, $wakeActions
+	, awareness: new EnemyAwareness($wakeLevel)
+);
+$wakeActions->dispatch($rearEnemy, new StateFrame('POSS', 'A', 10, false, 'A_Look'), $wakeRegistry);
+
+verifyWad(
+	!$wakeRegistry->get($rearEnemy, MonsterBrain::class)->awake
+		&& strcasecmp($wakeRegistry->get($rearEnemy, ActorState::class)->label, 'Spawn') === 0
+	, 'A_Look does not see a player more than melee range behind the monster'
+);
+
+$wakeRegistry->get($wakePlayer, Transform::class)->x = 64;
+$wakeActions->dispatch($rearEnemy, new StateFrame('POSS', 'A', 10, false, 'A_Look'), $wakeRegistry);
+verifyWad(
+	$wakeRegistry->get($rearEnemy, MonsterBrain::class)->target === $wakePlayer
+		&& strcasecmp($wakeRegistry->get($rearEnemy, ActorState::class)->label, 'See') === 0
+	, 'A_Look preserves Doom close-behind wake behavior inside melee range'
+);
+
+$hearingMap = \DoomPhonics\Tests\PortMap::map();
+$hearingMap->linedefs[0]['flags'] |= 0x40;
+$hearingLevel = new Level($hearingMap);
+// Keep the inter-sector opening audible while putting the raised monster eye above it.
+$hearingLevel->sectors[1]->floor = $hearingLevel->sectors[1]->previousFloor = 100;
+$hearingRegistry = new Registry;
+$hearingPlayer = $factory->spawn($hearingRegistry, $playerDefinition, [
+	'x' => 32, 'y' => 64, 'z' => 0, 'angle' => 180, 'type' => 1, 'index' => -1, 'flags' => []
+], $hearingMap->sectors[0]);
+$raisedSector = $hearingMap->sectors[1];
+$raisedSector['floor'] = 100;
+$hearingEnemy = $factory->spawn($hearingRegistry, $zombie, [
+	'x' => 192, 'y' => 64, 'z' => 0, 'angle' => 0, 'type' => 3004, 'index' => -1, 'flags' => []
+], $raisedSector);
+$ambushEnemy = $factory->spawn($hearingRegistry, $zombie, [
+	'x' => 208, 'y' => 64, 'z' => 0, 'angle' => 0, 'type' => 3004, 'index' => -1
+	, 'flags' => ['ambush' => true]
+], $raisedSector);
+$hearingAwareness = new EnemyAwareness($hearingLevel);
+$hearingControls = new Controls;
+$hearingControls->set([\DoomPhonics\Input\DoomActions::FIRE => 1]);
+$hearingActions = new ActionDispatcher;
+$hearingCombat = new CombatSystem(
+	$hearingLevel, $actors, $factory, new Collision($hearingLevel), $hearingControls, $hearingActions
+	, awareness: $hearingAwareness
+);
+$hearingCombat->update($hearingRegistry, 1 / 35);
+$hearingStates = new ActorStateSystem($hearingActions);
+for($tick = 0; $tick < 24; $tick++) $hearingStates->update($hearingRegistry, 1 / 35);
+
+verifyWad(
+	$hearingAwareness->target(1) === $hearingPlayer
+		&& $hearingRegistry->get($hearingEnemy, MonsterBrain::class)->target === $hearingPlayer
+		&& $hearingRegistry->get($hearingEnemy, MonsterBrain::class)->awake
+	, 'player weapon fire crosses one open sound-blocking line and wakes an ordinary monster'
+);
+
+verifyWad(
+	$hearingRegistry->get($ambushEnemy, MonsterBrain::class)->ambush
+		&& !$hearingRegistry->get($ambushEnemy, MonsterBrain::class)->awake
+	, 'ambush map things retain their flag and ignore weapon noise without line of sight'
+);
+
+$ambushHealth = $hearingRegistry->get($ambushEnemy, HitPoints::class);
+$ambushHealth->painChance = 0;
+verifyWad(
+	(new DamageResolver)->apply($hearingRegistry, new DamageEvent($ambushEnemy, $hearingPlayer, 1))
+		&& $hearingRegistry->get($ambushEnemy, MonsterBrain::class)->target === $hearingPlayer
+		&& $hearingRegistry->get($ambushEnemy, MonsterBrain::class)->threshold === 100
+		&& strcasecmp($hearingRegistry->get($ambushEnemy, ActorState::class)->label, 'See') === 0
+	, 'direct damage wakes an ambush monster and locks retaliation to the source'
+);
+
 require __DIR__ . '/line-specials.php';
 require __DIR__ . '/game-modes.php';
 require __DIR__ . '/input.php';
