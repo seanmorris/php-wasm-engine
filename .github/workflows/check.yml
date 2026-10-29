@@ -112,6 +112,14 @@ jobs:
       - run: npm run build:docs
       - run: npm run test:site
       - run: npm run test:site:browser
+        env:
+          DEBUG: pw:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: site-test-results
+          path: site/test-results/
+          if-no-files-found: ignore
 
   artifacts:
     runs-on: ubuntu-latest
