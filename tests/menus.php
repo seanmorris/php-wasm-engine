@@ -153,6 +153,19 @@ test('unwrapped alignment supports fields, empty lines, themed symbols and overf
 	}
 });
 
+test('named menu buttons override their shared command codes', function() {
+	$menu = new Menu(['play' => ['label' => 'Play', 'callback' => static function(): void {}]]);
+	$menu->open();
+	$input = new MenuInput;
+	$input->update($menu, [\Phonics\Input\InputCode::PAUSE => true], 0);
+	check(!$menu->isOpen);
+
+	$menu->open();
+	$input = new MenuInput;
+	$input->update($menu, ['pause' => false, \Phonics\Input\InputCode::PAUSE => true, 'confirm' => true], 0);
+	check($menu->isOpen);
+});
+
 test('repeated activation keys cannot finish a field entered by the same hold', function() {
 	$menu = new Menu(['name' => ['input' => 'string', 'value' => 'Player']]);
 	$menu->open();

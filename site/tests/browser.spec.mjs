@@ -588,7 +588,10 @@ test('Matrix OAuth returns through a popup without navigating the running host',
 	await page.getByRole('button', {name: 'Test Matrix popup'}).click();
 	const popup = await opened;
 
-	await expect.poll(() => page.evaluate(() => window.oauthCallbackUrl ?? null)).toContain('code=test-code');
+	// The popup relays only after its own preview host imports the browser runtime.
+	await expect.poll(() => page.evaluate(() => window.oauthCallbackUrl ?? null), {timeout: 20000})
+		.toContain('code=test-code');
+
 	await expect.poll(() => popup.isClosed()).toBe(true);
 	expect(page.url()).toBe(original);
 	expect(await page.evaluate(() => window.oauthPopupResult)).toBe('connected');
@@ -898,6 +901,8 @@ test('all games start and clean up inside the shared site design', async({page})
 	expect(distance(retained)).toBeGreaterThan(100);
 
 	await page.keyboard.type('idffa');
+	// Classic status messages expire after four seconds, so read the cheat message before inventory checks.
+	await expect.poll(async() => (await doomState()).message).toBe('AMMO (NO KEYS) ADDED');
 	await expect.poll(async() => (await doomState()).armor).toBe(200);
 	await expect.poll(async() => (await doomState()).weapons).toContain('BFG9000');
 
@@ -905,7 +910,6 @@ test('all games start and clean up inside the shared site design', async({page})
 		'Minigun','GrenadeLauncher','Railgun','BFG10K'
 	]));
 
-	await expect.poll(async() => (await doomState()).message).toBe('AMMO (NO KEYS) ADDED');
 	await press('Digit4');
 	await expect.poll(async() => (await doomState()).weapon, {timeout: 10000}).toBe('Chaingun');
 	await page.locator('canvas').hover();

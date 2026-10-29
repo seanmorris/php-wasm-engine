@@ -81,9 +81,10 @@ final class MenuInput
 		, array $events = []
 		, array $regions = []
 	): bool {
-		// Accept shared command codes directly while preserving named UI-frame callers.
+		// Accept shared command codes directly; a named button supplied by the caller wins, so a caller
+		// can remap or clear a UI-frame button without its command code restoring it.
 		foreach(InputCode::MENU as $name => $code)
-		if(isset($buttons[$code])) $buttons[$name] = max($buttons[$name] ?? 0, $buttons[$code]);
+		if(isset($buttons[$code]) && !array_key_exists($name, $buttons)) $buttons[$name] = $buttons[$code];
 
 		if(!is_finite($dt) || $dt < 0)
 		{

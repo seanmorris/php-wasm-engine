@@ -13,6 +13,7 @@ test('diagnostic samples leave the DOM idle until accessible game state changes'
 	const result = await page.evaluate(async () => {
 		const {activate} = await import('/engine/packages/doom-phonics/browser/game.mjs');
 		const {QuickControls} = await import('/engine/browser/QuickControls.mjs');
+		const {SafeStorage} = await import('/engine/browser/SafeStorage.mjs');
 		const {cacheProgramValidation} = await import('/engine/browser/GlesPrograms.mjs');
 		const {cachePixelStoreQueries} = await import('/engine/browser/GlesPixelStore.mjs');
 		const canvas = document.querySelector('canvas');
@@ -30,6 +31,7 @@ test('diagnostic samples leave the DOM idle until accessible game state changes'
 			, session
 			, services: {
 				QuickControls
+				, SafeStorage
 				, cacheProgramValidation
 				, cachePixelStoreQueries
 				, SdlAudio: SilentAudio

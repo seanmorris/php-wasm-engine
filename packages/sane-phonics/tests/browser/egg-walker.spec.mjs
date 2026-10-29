@@ -45,6 +45,8 @@ test('EggWalker seats its rider and composes crouch, booster, punch and cannon c
 	await page.keyboard.up('ArrowUp');
 	await expect.poll(async() => (await state(page)).vehicles[0].boosting).toBe(true);
 
+	// A crouch only arms the landing drop once the walker is falling; one started while rising never does.
+	await expect.poll(async() => (await state(page)).vehicles[0].vy).toBeGreaterThan(0);
 	await page.keyboard.down('ArrowDown');
 	await expect.poll(async() => (await state(page)).vehicles[0].boosting).toBe(false);
 	await expect.poll(async() => Math.abs((await state(page)).vehicles[0].shakeY)).toBeGreaterThan(0);

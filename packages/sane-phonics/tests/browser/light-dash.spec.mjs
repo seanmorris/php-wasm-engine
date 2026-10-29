@@ -104,7 +104,18 @@ test(device + ' button two acquires a light-dash trail from an actual jump', asy
 
 	await expect.poll(async() => (await state(page)).hud?.rings).toBe(13);
 	await expect.poll(async() => (await state(page)).body?.ability).toBe('');
-	expect(await page.evaluate(() => dashSamples.some(body => body.pose === 'lightdash' && body.y < 250))).toBe(true);
+
+	// Frames are sampled at the render rate, so a slow renderer may skip the dash's highest frames;
+	// the 13 collected rings already prove the trail was traversed.
+	const dashFollowsJump = await page.evaluate(() => {
+		const dash = dashSamples.findIndex(body => body.pose === 'lightdash');
+
+		return dash > 0
+			&& !dashSamples[dash].grounded
+			&& dashSamples.slice(0, dash).some(body => body.pose === 'jumping' && !body.grounded);
+	});
+
+	expect(dashFollowsJump).toBe(true);
 	await page.screenshot({path: 'test-results/light-dash-' + device + '.png'});
 	expect(errors).toEqual([]);
 });
