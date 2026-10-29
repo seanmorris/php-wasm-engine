@@ -155,6 +155,7 @@ test('unwrapped alignment supports fields, empty lines, themed symbols and overf
 
 test('named menu buttons override their shared command codes', function() {
 	$menu = new Menu(['play' => ['label' => 'Play', 'callback' => static function(): void {}]]);
+
 	$menu->open();
 	$input = new MenuInput;
 	$input->update($menu, [\Phonics\Input\InputCode::PAUSE => true], 0);

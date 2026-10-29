@@ -20,7 +20,14 @@ async function files(directory, prefix = '')
 const pages = (await files(new URL('../.cache/pages/', import.meta.url)))
 	.filter(name => name.endsWith('.md')).map(name => name.replace(/\.md$/, '.html'));
 
-const guidePages = pages.filter(name => !/^api-phonics-/.test(name) && !/^games\/[^/]+\/api\//.test(name));
+// Generated symbol pages share one template; the guide, landing, and game chapters are checked at every width.
+const generatedPages = [
+	/^api-phonics-/
+	, /^games\/[^/]+\/api\//
+	, /^api-js\/(?:classes|functions|types|variables|enums)\//
+];
+
+const guidePages = pages.filter(name => !generatedPages.some(pattern => pattern.test(name)));
 
 async function openGame(page, slug, title)
 {
@@ -29,7 +36,7 @@ async function openGame(page, slug, title)
 }
 
 test('all guide pages fit desktop, tablet and mobile without loading a game runtime', async({page}) => {
-	test.setTimeout(180000);
+	test.setTimeout(60000 + guidePages.length * 3 * 1000);
 
 	const errors = [], failed = [], runtimes = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -902,7 +909,8 @@ test('all games start and clean up inside the shared site design', async({page})
 
 	await page.keyboard.type('idffa');
 	// Classic status messages expire after four seconds, so read the cheat message before inventory checks.
-	await expect.poll(async() => (await doomState()).message).toBe('AMMO (NO KEYS) ADDED');
+	// Its text comes from the loaded WAD's LANGUAGE table, which sets its own capitalization.
+	await expect.poll(async() => (await doomState()).message).toMatch(/^ammo \(no keys\) added$/i);
 	await expect.poll(async() => (await doomState()).armor).toBe(200);
 	await expect.poll(async() => (await doomState()).weapons).toContain('BFG9000');
 
