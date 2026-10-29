@@ -103,16 +103,34 @@ final class FramePipeline
 		if($error) throw $error;
 	}
 
-	/** @return list<RenderPass> Passes in resolved dependency order. */
+	/**
+	 * Resolve render passes into dependency order, caching the order until passes change.
+	 *
+	 * @return list<RenderPass> Passes in resolved dependency order; cycles and unknown dependencies throw.
+	 */
 	private function ordered(): array
 	{
+		/**
+		 * Look up a registered pass by ID.
+		 *
+		 * @param string $id Registered pass ID.
+		 * @return RenderPass The registered pass.
+		 */
+		$passById = fn(string $id): RenderPass => $this->passes[$id];
+
 		if($this->ordered !== null)
-		return array_map(fn(string $id): RenderPass => $this->passes[$id], $this->ordered);
+		return array_map($passById, $this->ordered);
 
 		$result = [];
 		$active = [];
 		$done = [];
 
+		/**
+		 * Append a pass after its dependencies, rejecting cycles and unknown passes.
+		 *
+		 * @param string $id Pass ID to visit.
+		 * @return void Updates the resolved order and traversal state.
+		 */
 		$visit = function(string $id) use (&$visit, &$result, &$active, &$done): void {
 			if(isset($done[$id])) return;
 			if(isset($active[$id])) throw new \LogicException("Render-pass dependency cycle at $id");
@@ -131,6 +149,6 @@ final class FramePipeline
 
 		$this->ordered = $result;
 
-		return array_map(fn(string $id): RenderPass => $this->passes[$id], $result);
+		return array_map($passById, $result);
 	}
 }

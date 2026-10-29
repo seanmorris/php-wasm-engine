@@ -6,6 +6,13 @@ namespace Phonics\Network;
 final class AuthorityOwner implements \JsonSerializable
 {
 
+	/**
+	 * Store an authority kind and its owning peer; callers use host(), peer() or fromArray().
+	 *
+	 * @param string $kind Authority kind: host or peer.
+	 * @param ?PeerId $peer Owning peer for peer authority, or null for the host.
+	 * @return void Stores the assignment.
+	 */
 	private function __construct(private string $kind, private ?PeerId $peer = null) {}
 
 	/**

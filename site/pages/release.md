@@ -10,12 +10,12 @@ menus:
 
 ## Prepare your distribution
 
-Run these commands from your game package:
+Run these commands from your game package, with the Phonics CLI installed there as in the [CLI guide](cli.html):
 
 ```sh
-phonics integrity
-phonics validate --world worlds/game.world
-phonics build
+npx phonics integrity
+npx phonics validate --world worlds/game.world
+npx phonics build
 npm pack ./dist
 ```
 

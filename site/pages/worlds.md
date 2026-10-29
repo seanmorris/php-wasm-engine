@@ -83,7 +83,7 @@ Worlds can activate content that does not come from Tiled. This example uses Doo
 }
 ```
 
-`init` is an optional game-owned object. The engine validates and copies it into the browser module context and PHP package context without assigning meaning to its keys. This lets a world configure a game without adding game-specific fields to the neutral world schema. Doom-Phonics accepts `startMap` plus either one classic cheat string or an ordered `cheats` string list. It applies the cheats after creating the player for a new game. `startMap` overrides `start.scope` for Doom's initial title and new-game flow, while `start.source` still selects the content source.
+`init` is an optional game-owned object. The engine validates that it is an object and copies it into the session's world without assigning meaning to its keys. Browser modules read it as `context.world.init`; PHP reads it as `$context->world['init']` in a module callback, or `$phonics->world['init']` in a game entry point. This lets a world configure a game without adding game-specific fields to the neutral world schema. Doom-Phonics accepts `startMap` plus either one classic cheat string or an ordered `cheats` string list. It applies the cheats after creating the player for a new game. `startMap` overrides `start.scope` for Doom's initial title and new-game flow, while `start.source` still selects the content source.
 
 Replace the example manifest URL with an immutable published URL and generate the integrity value from the WAD you are licensed to use. Package manifests provide code; worlds provide content URLs. The package archive does not contain the repository's reference WAD.
 

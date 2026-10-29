@@ -26,6 +26,7 @@ final class Protocol
 	 * Create and validate a binary protocol codec.
 	 *
 	 * @param int $maximumBytes Validated maximum bytes used by this binary protocol codec.
+	 * @return void Rejects a nonpositive maximum size.
 	 */
 	public function __construct(
 		/** Largest payload accepted by the binary codec. */

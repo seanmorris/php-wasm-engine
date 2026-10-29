@@ -1,4 +1,7 @@
+/** Query parameter carrying the popup relay ID on an OAuth return URL. */
 export const OAUTH_POPUP_PARAMETER = 'phonics.oauth.popup';
+
+/** Message type posted by a relayed popup callback. */
 export const OAUTH_POPUP_MESSAGE = 'phonics.oauth.callback';
 
 const callbackValues = value => {
@@ -15,7 +18,12 @@ const failure = (code, message) => Object.assign(new Error(message), {code});
 
 const channelName = id => `phonics.oauth.${id}`;
 
-/** Build the exact same-origin redirect URI used to relay an OAuth response to its opener. */
+/**
+ * Build the exact same-origin redirect URI used to relay an OAuth response to its opener.
+ * @param {string|URL} value Current page URL; its fragment and OAuth response parameters are removed.
+ * @param {string} id Popup relay ID stored in the OAUTH_POPUP_PARAMETER query parameter.
+ * @returns {string} Return URL.
+ */
 export const oauthPopupReturnUrl = (value, id) => {
 	const url = new URL(value);
 
@@ -32,6 +40,15 @@ export const oauthPopupReturnUrl = (value, id) => {
 /**
  * Relay one popup callback before the ordinary host starts loading its world.
  * The authorization response stays same-origin and contains no access token.
+ * @param {object} [environment] Browser globals, replaceable in tests.
+ * @param {Location} [environment.location] Popup location; defaults to globalThis.location.
+ * @param {Window|null} [environment.opener] Opener receiving a same-origin postMessage.
+ * @param {History} [environment.history] History whose URL is replaced without the OAuth parameters.
+ * @param {Document} [environment.document] Document that receives a completion notice.
+ * @param {typeof BroadcastChannel} [environment.BroadcastChannel] Channel constructor used for the relay.
+ * @param {function(): void} [environment.close] Closes the popup after the relay.
+ * @param {function(function(): void, number): *} [environment.schedule] Delays closing by 100 ms.
+ * @returns {boolean} True when this page was a popup callback and was relayed; false otherwise.
  */
 export const relayOAuthPopup = (
 	{
@@ -190,7 +207,19 @@ const waitForCallback = ({windowRef, popup, id, channel, signal, timeout}) => ne
 	);
 });
 
-/** Open Matrix authorization without navigating the running game away from its active session. */
+/**
+ * Open Matrix authorization without navigating the running game away from its active session.
+ * @param {object} options Popup flow settings.
+ * @param {function(string): (string|Promise<string>)} options.begin Receives the return URL; resolves to the
+ * authorization URL.
+ * @param {function(string): *} options.complete Receives the relayed callback URL; its result is returned.
+ * @param {Window} [options.window] Opening window; defaults to globalThis.
+ * @param {AbortSignal} [options.signal] Cancels waiting for the callback.
+ * @param {number} [options.timeout] Callback timeout in milliseconds; defaults to ten minutes.
+ * @param {string} [options.id] Popup relay ID; defaults to a random UUID.
+ * @returns {Promise<*>} Result of complete(); the popup is closed either way.
+ * @throws {Error} oauth_popup_blocked, oauth_popup_closed, oauth_popup_cancelled, or oauth_popup_timeout.
+ */
 export async function authorizeWithPopup(
 	{
 		begin

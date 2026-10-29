@@ -1,12 +1,14 @@
 # Phonics — drafting outline
 
 I. A world is the entry point
-    A. Compose maps and package exports in Tiled
+    A. A world declares its game, imports, and starting map
     B. Load the world with one browser API
 II. Choose your starting point
-    A. Run an existing game
-    B. Author a world
-    C. Register your own systems
+    A. Build a first game with the quickstart
+    B. Play and inspect the bundled games
+    C. Design a world in Tiled
+    D. Start a game package with the CLI
+    E. Write a module
 III. What belongs in the framework
     A. Neutral services
     B. Independent games

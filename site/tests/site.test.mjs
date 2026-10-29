@@ -10,6 +10,7 @@ import test from 'node:test';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const output = path.resolve(root, process.env.SITE_OUTPUT ?? 'docs/dist');
 const base = new URL((process.env.BASE_URL ?? '') + '/', 'http://phonics.test');
+
 const publicPath = target => new URL(target, base).pathname;
 
 async function files(directory, prefix = '')
@@ -30,7 +31,15 @@ async function files(directory, prefix = '')
 const planned = (await files(path.join(root, 'site/.cache/pages'))).filter(name => name.endsWith('.md'));
 const pages = planned.map(name => name.replace(/\.md$/, '.html'));
 
-const read = name => fs.readFile(path.join(output, name.endsWith('/') ? name + 'index.html' : name), 'utf8');
+const reads = new Map;
+
+const read = name => {
+	const file = path.join(output, name.endsWith('/') ? name + 'index.html' : name);
+
+	if(!reads.has(file)) reads.set(file, fs.readFile(file, 'utf8'));
+
+	return reads.get(file);
+};
 
 test('all planned pages have navigation, contents for sections, and a drafting outline', async() => {
 	for(const page of pages)
@@ -38,6 +47,15 @@ test('all planned pages have navigation, contents for sections, and a drafting o
 		const html = await read(page);
 
 		assert.match(html, /aria-label="Documentation"/);
+
+		if(page !== 'index.html')
+		{
+			assert.match(html, /<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>/, page);
+		}
+
+		assert.doesNotMatch(html, /PHONICS \/ DOCUMENTATION|class="api-breadcrumb"/, page);
+		const breadcrumb = /<nav class="breadcrumbs"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1] ?? '';
+		assert.doesNotMatch(breadcrumb, /<span>/, `${page} has an unlinked breadcrumb ancestor`);
 
 		assert.equal(/aria-label="On this page"/.test(html), /<h2(?:\s|>)/.test(html), page);
 
@@ -52,11 +70,65 @@ test('all planned pages have navigation, contents for sections, and a drafting o
 		const packageDoc = /^games\/([^/]+)\/([^/]+)\.html$/.exec(page);
 		const sources = [fs.access(authored), fs.access(generated)];
 
+		if(page.startsWith('api-js/'))
+			sources.push(fs.access(path.join(root, '.smgen-jsdoc.yaml')));
+
 		if(packageDoc)
 		sources.push(fs.access(path.join(root, 'packages', packageDoc[1], 'docs', packageDoc[2] + '.md')));
 
 		await Promise.any(sources);
 	}
+});
+
+test('SMGen breadcrumbs follow the documentation menu hierarchy', async() => {
+	const install = await read('install.html');
+	const game = await read('games/doom-phonics/playing.html');
+	const api = await read('api-phonics-ecs-scheduler.html');
+	const javascriptApi = await read('api-js/classes/quick-controls/quick-controls.html');
+
+	assert.ok(
+		install.includes(
+			`<li><a href="${publicPath('/')}">Get started</a></li><li aria-current="page">Run locally</li>`
+		)
+	);
+
+	assert.ok(
+		game.includes(
+			`<li><a href="${publicPath(
+				'/'
+			)}">Documentation</a></li><li><a href="${publicPath(
+				'/games/'
+			)}">Games</a></li><li><a href="${publicPath(
+				'/games/doom-phonics/'
+			)}">Doom-Phonics</a></li><li aria-current="page">Playing and controls</li>`
+		)
+	);
+
+	assert.ok(
+		api.includes(
+			`<li><a href="${publicPath(
+				'/'
+			)}">Documentation</a></li><li><a href="${publicPath(
+				'/architecture.html'
+			)}">Reference</a></li><li><a href="${publicPath(
+				'/api.html'
+			)}">PHP API</a></li><li><a href="${publicPath(
+				'/api-ecs.html'
+			)}">ECS</a></li><li aria-current="page">Phonics\\Ecs\\Scheduler</li>`
+		)
+	);
+
+	assert.ok(
+		javascriptApi.includes(
+			`<li><a href="${publicPath(
+				'/architecture.html'
+			)}">Reference</a></li><li><a href="${publicPath(
+				'/api-js/'
+			)}">Phonics JavaScript API</a></li><li><a href="${publicPath(
+				'/api-js/modules/quick-controls/'
+			)}">QuickControls</a></li><li aria-current="page">QuickControls</li>`
+		)
+	);
 });
 
 test('games mount inside their documentation pages', async() => {
@@ -77,7 +149,8 @@ test('games mount inside their documentation pages', async() => {
 		const html = await read(`games/${page}/index.html`);
 
 		assert.ok(html.includes(`<title>${title} · Phonics documentation</title>`));
-		assert.ok(html.includes(`<h1>${title}</h1>`));
+		const heading = /<h1>([\s\S]*?)<\/h1>/.exec(html);
+		assert.equal(heading?.[1].replace(/\s+/g, ' '), title);
 		assert.match(html, /class="game-embed/);
 		assert.match(html, /data-game-runtime/);
 		assert.match(html, /data-host="\.\.\/\.\.\/preview\/host\.mjs"/);
@@ -129,9 +202,24 @@ test('the generated PHP reference exposes every public class and member', async(
 			assert.ok(page.includes(`id="${anchor('method', value.name)}"`), `${item.name}::${value.name}()`);
 	}
 
-	assert.equal(planned.filter(name => /^api-browser-.+\.md$/.test(name)).length, 9);
-	assert.match(index, /GameLauncher/);
 	assert.match(index, /Compatibility aliases/);
+});
+
+test('the generated JavaScript reference exposes browser modules and exports', async() => {
+	const javascriptPages = planned.filter(name => name.startsWith('api-js/') && name.endsWith('.md'));
+	const index = await read('api-js/');
+	const quickControls = await read('api-js/classes/quick-controls/quick-controls.html');
+
+	assert.ok(javascriptPages.length > 100);
+	assert.match(index, /Phonics JavaScript API/);
+	assert.match(index, /GameLauncher/);
+	assert.match(index, /data-api-filter/);
+	assert.match(index, /data-api-entry/);
+	assert.match(quickControls, /data-id-path="api-js-classes"/);
+	assert.match(quickControls, /<summary>Classes<\/summary>/);
+	assert.match(quickControls, /aria-current="page"><span>QuickControls<\/span>/);
+	assert.match(quickControls, /<h2 id="declaration">Declaration<\/h2>/);
+	assert.match(quickControls, /browser\/QuickControls\.mjs#L/);
 });
 
 test('every public game type has a nested package reference page', async() => {
@@ -143,8 +231,6 @@ test('every public game type has a nested package reference page', async() => {
 		, ['php-buster', 'PhpBuster']
 		, ['doom-phonics', 'DoomPhonics']
 	];
-
-	let total = 0;
 
 	for(const [slug, rootNamespace] of packages)
 	{
@@ -165,16 +251,19 @@ test('every public game type has a nested package reference page', async() => {
 			assert.ok(index.includes(item.name), item.name);
 			assert.ok(page.includes(`<h1>${item.name}</h1>`), item.name);
 			assert.ok(page.includes('View source'), item.name);
-			total++;
 		}
 	}
-
-	assert.equal(total, 289);
 });
 
 test('the static Doom-Phonics example includes its integrity-matched content stack', async() => {
 	const directory = path.join(output, 'engine/packages/doom-phonics/demo');
+	const packageDirectory = path.dirname(directory);
+	const manifest = JSON.parse(await fs.readFile(path.join(packageDirectory, 'phonics.json'), 'utf8'));
 	const world = JSON.parse(await fs.readFile(path.join(directory, 'episode-one.phonics-world.json'), 'utf8'));
+
+	assert.ok(manifest.preload.includes('resources/language.txt'));
+
+	for(const name of manifest.preload) await fs.access(path.join(packageDirectory, name));
 
 	for(const [index, name] of [
 		'DOOM1.WAD'
@@ -203,18 +292,20 @@ test('the static Doom-Phonics example includes its integrity-matched content sta
 		['portal-demo.phonics-world.json','portal-demo','PORTALS']
 		, ['portal-rooms.phonics-world.json','portal-rooms','PORTAL2']
 		, ['camera-mirrors.phonics-world.json','camera-mirrors','CAMERAS']
-	])
-	{
+	]){
 		const portalWorld = JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));
+
 		for(const [index,name] of ['DOOM1.WAD','PORTALS.WAD'].entries())
 		{
 			const bytes = await fs.readFile(path.join(directory, name));
 			assert.equal(portalWorld.sources[source].resources[index].url, './' + name);
+
 			assert.equal(
 				portalWorld.sources[source].resources[index].integrity
 				, 'sha256-' + createHash('sha256').update(bytes).digest('base64')
 			);
 		}
+
 		assert.deepEqual(portalWorld.sources[source].resources.map(resource => resource.role), ['iwad','pwad']);
 		assert.equal(portalWorld.start.scope, scope);
 	}
@@ -257,6 +348,23 @@ test('the site publishes structured metadata, llms.txt, and the browser assistan
 	const jsonLd = JSON.parse(jsonLdText);
 	assert.deepEqual(jsonLd['@graph'].map(value => value['@type']), ['WebSite', 'SoftwareSourceCode']);
 	assert.equal(jsonLd['@graph'][1].codeRepository, 'https://github.com/seanmorris/php-wasm-engine');
+
+	for(const page of pages.filter(page => page !== 'index.html'))
+	{
+		const html = await read(page);
+		const scripts = [...html.matchAll(/<script type="application\/ld\+json">([^<]+)<\/script>/g)];
+
+		assert.equal(scripts.length, 1, `${page} must contain one JSON-LD document`);
+
+		const structured = JSON.parse(scripts[0][1]);
+
+		assert.equal(structured['@context'], 'https://schema.org', page);
+		assert.equal(structured['@type'], 'TechArticle', page);
+		assert.ok(structured.headline, `${page} is missing a JSON-LD headline`);
+		assert.equal(structured.inLanguage, 'en', page);
+		assert.equal(structured.isPartOf?.name, 'Phonics documentation', page);
+		assert.equal(structured.about?.codeRepository, 'https://github.com/seanmorris/php-wasm-engine', page);
+	}
 
 	const llms = await fs.readFile(path.join(output, 'llms.txt'), 'utf8');
 	const headings = [
@@ -318,7 +426,7 @@ test('search and controller references are published with the requested smgen pi
 
 	assert.equal(
 		(await fs.readFile(path.join(root, 'site/.smgen-version'), 'utf8')).trim()
-		, '11d7984173cc796a652eee324f85897a545ba7c9'
+		, '04af8b116317724863af544c023818eb8b67d135'
 	);
 
 	const manifest = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
@@ -327,6 +435,13 @@ test('search and controller references are published with the requested smgen pi
 		manifest.devDependencies['smgen-assistant']
 		, 'github:seanmorris/smgen-assistant#289e2eaa35f3a1cd5698e7d485700f201e13d0e2'
 	);
+
+	assert.equal(
+		manifest.devDependencies['smgen-plugins']
+		, 'github:seanmorris/smgen-plugins#30c99f413f33333b2c17e8ee993ad2acfc04b516'
+	);
+
+	assert.equal(manifest.devDependencies.typescript, '^6.0.3');
 
 	assert.equal(manifest.devDependencies['smgen-search'], '^0.1.1');
 
@@ -338,6 +453,10 @@ test('search and controller references are published with the requested smgen pi
 	assert.match(home, /data-search-toggle/);
 	assert.ok(home.includes(`data-search-index="${publicPath('search.bin')}"`));
 	assert.ok(home.includes(`data-search-reader="${publicPath('vendor/smgen-search/SearchReader.mjs')}"`));
+	const navigationStateScript = `<script src="${publicPath('nav-state.js')}"></script>`;
+	const deferredSiteScript = `<script defer src="${publicPath('site.js')}"></script>`;
+	assert.ok(home.includes(navigationStateScript));
+	assert.ok(home.indexOf(navigationStateScript) < home.indexOf(deferredSiteScript));
 	assert.equal([...input.matchAll(/class="controller-glyph"/g)].length, 32);
 	assert.match(input, /alt="Xbox A button"/);
 	assert.match(input, /alt="PlayStation Cross button"/);

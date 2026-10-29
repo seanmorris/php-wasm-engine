@@ -28,6 +28,20 @@ const handshakeFamilies = new Set([
 export class NetworkSession extends EventTarget
 {
 
+	/**
+	 * Bind a match session to a lobby controller and listen for its transports, messages, and match ends.
+	 * @param {object} options Session dependencies.
+	 * @param {LobbyController} options.controller Lobby whose prepareInvitation hook this session installs.
+	 * @param {ResourceNegotiator} options.negotiator Resource offer, acceptance, and world-binding service.
+	 * @param {object} options.world Normalized phonics-world document.
+	 * @param {Array<{name: string, version: string, url: string}>} [options.packages] Package identities included
+	 * in match descriptors; defaults to none.
+	 * @param {NetworkBridge} [options.bridge] Browser/PHP packet queues; defaults to a new NetworkBridge.
+	 * @param {function(): number} [options.now] Millisecond clock; defaults to performance.now().
+	 * @param {number} [options.startDelay] Milliseconds between the host's start message and tick zero;
+	 * defaults to 500.
+	 * @throws {TypeError} When the controller, negotiator, or world is missing.
+	 */
 	constructor(
 		{
 			controller
@@ -81,6 +95,10 @@ export class NetworkSession extends EventTarget
 		});
 	}
 
+	/**
+	 * Cancel pending start and match work and clear all per-match state.
+	 * @returns {void}
+	 */
 	resetMatch()
 	{
 		clearTimeout(this.startTimer);
@@ -108,6 +126,17 @@ export class NetworkSession extends EventTarget
 		this.pendingMessages = [];
 	}
 
+	/**
+	 * Offer the selected resources and build the host's signed match descriptor for an invitation.
+	 * @param {object} [selection] Local content selection.
+	 * @param {Object<string, (string|Blob|Array)>} [selection.resources] Sources keyed by resource slot ID; slots
+	 * without one use their default URL or first candidate URL.
+	 * @param {object} [selection.settings] Match settings; settings.map names the start scope when start is absent.
+	 * @param {string|object|null} [selection.start] Start scope name or {source, scope} selector; defaults to the
+	 * world start.
+	 * @returns {Promise<{publicPayload: object, privatePayload: object}>} Invitation summary with the descriptor
+	 * digest, and the private descriptor and full offers retained by the host.
+	 */
 	async prepareInvitation({resources = {}, settings = {}, start = null} = {})
 	{
 		const offers = await this.prepareResources(resources);
@@ -138,7 +167,16 @@ export class NetworkSession extends EventTarget
 		};
 	}
 
-	/** Resolve a local content selection through the same ordered path used by online matches. */
+	/**
+	 * Resolve a local content selection through the same ordered path used by online matches.
+	 * @param {object} [selection] Local content selection.
+	 * @param {Object<string, (string|Blob|Array)>} [selection.resources] Sources keyed by resource slot ID; slots
+	 * without one use their default URL or first candidate URL.
+	 * @param {object} [selection.settings] Match settings; settings.map names the start scope when start is absent.
+	 * @param {string|object|null} [selection.start] Start scope name or {source, scope} selector; defaults to the
+	 * world start.
+	 * @returns {Promise<object>} Bound world, also dispatched in a resourcesready event with role local.
+	 */
 	async prepareLocalWorld({resources = {}, settings = {}, start = null} = {})
 	{
 		await this.prepareResources(resources);
@@ -156,6 +194,13 @@ export class NetworkSession extends EventTarget
 		return this.boundWorld;
 	}
 
+	/**
+	 * Reset the negotiator and offer each resource slot's selection in adapter stack order.
+	 * @param {Object<string, (string|Blob|Array)>} resources Sources keyed by resource slot ID.
+	 * @returns {Promise<object[]>} Resource offers in stack order.
+	 * @throws {NetworkError} When a world-fixed slot is overridden, a single slot receives several resources, or a
+	 * required slot has no source.
+	 */
 	async prepareResources(resources)
 	{
 		this.negotiator.reset();
@@ -203,6 +248,12 @@ export class NetworkSession extends EventTarget
 		return offers;
 	}
 
+	/**
+	 * Normalize a start selection to the world's start source with an upper-case scope.
+	 * @param {string|object} value Scope name, or {source, scope} selector naming the world start source.
+	 * @returns {object} Start selector.
+	 * @throws {NetworkError} When the value names no map or another source.
+	 */
 	selectedStart(value)
 	{
 		if(typeof value === 'string') return {...this.world.start, scope: value.toUpperCase()};
@@ -220,6 +271,13 @@ export class NetworkSession extends EventTarget
 		return result;
 	}
 
+	/**
+	 * Reject a start scope missing from a nonempty map list.
+	 * @param {{scope: string}} start Normalized start selector.
+	 * @param {string[]} maps Map names reported by the negotiator; an empty list accepts any scope.
+	 * @returns {void}
+	 * @throws {NetworkError} When the scope is not listed.
+	 */
 	requireMap(start, maps)
 	{
 		if(maps.length && !maps.includes(start.scope))
@@ -251,6 +309,12 @@ export class NetworkSession extends EventTarget
 			.map(value => value.entry);
 	}
 
+	/**
+	 * Adopt a lobby transport for one match, replay queued messages, and begin the host or guest handshake.
+	 * @param {{transport: object, match: object}} detail Transport event detail from the lobby controller.
+	 * @returns {Promise<void>} Resolves once the hello (host) or clock ping (guest) has been sent.
+	 * @throws {NetworkError} When the host has no prepared match descriptor.
+	 */
 	async open({transport, match})
 	{
 		if(this.closed || transport.closed) return;
@@ -308,6 +372,12 @@ export class NetworkSession extends EventTarget
 		this.updateReady();
 	}
 
+	/**
+	 * Accept one in-order packet, forwarding gameplay families to PHP and handling handshake families here.
+	 * @param {{channel: string, data: Uint8Array}} message Packet received on the control or realtime channel.
+	 * @returns {Promise<void>} Resolves after the packet is dropped, queued, or handled.
+	 * @throws {NetworkError} For unknown channels and invalid or out-of-state handshake messages.
+	 */
 	async receive({channel, data})
 	{
 		if(!this.match || this.closed) return;
@@ -343,6 +413,12 @@ export class NetworkSession extends EventTarget
 		}
 	}
 
+	/**
+	 * Verify the host's descriptor, accept its resource offers, bind the world, and acknowledge it (guest only).
+	 * @param {object} value Hello payload with descriptor, descriptorDigest, offers, and resolutions.
+	 * @returns {Promise<void>} Resolves after compatibility and resource-ready messages are sent.
+	 * @throws {NetworkError} When received by the host or when the descriptor, digest, world, or map differs.
+	 */
 	async hello(value)
 	{
 		if(this.match.initiator) throw new NetworkError('match_role', 'Host received an unexpected hello');
@@ -404,6 +480,12 @@ export class NetworkSession extends EventTarget
 		this.send(MessageFamily.resourceReady, {descriptorDigest: digest});
 	}
 
+	/**
+	 * Verify the guest's compatibility acknowledgement and resource resolutions (host only).
+	 * @param {object} value Compatibility payload with ok, descriptorDigest, and resolutions.
+	 * @returns {void}
+	 * @throws {NetworkError} When the guest rejected or named another descriptor.
+	 */
 	compatibility(value)
 	{
 		if(!this.match.initiator || value.descriptorDigest !== this.descriptorDigest || value.ok !== true)
@@ -412,6 +494,11 @@ export class NetworkSession extends EventTarget
 		this.negotiator.verifyPeer(value.resolutions ?? []);
 	}
 
+	/**
+	 * Record that the peer's resources are ready and dispatch peerresourcesready.
+	 * @param {{descriptorDigest: string}} value Resource-ready payload.
+	 * @returns {void}
+	 */
 	resourceReady(value)
 	{
 		this.requireDigest(value);
@@ -420,6 +507,11 @@ export class NetworkSession extends EventTarget
 		this.updateReady();
 	}
 
+	/**
+	 * Record that the peer's game reached its tick-zero barrier.
+	 * @param {{descriptorDigest: string}} value Game-ready payload.
+	 * @returns {void}
+	 */
 	remoteGame(value)
 	{
 		this.requireDigest(value);
@@ -427,6 +519,10 @@ export class NetworkSession extends EventTarget
 		this.updateReady();
 	}
 
+	/**
+	 * Send this peer's gameReady when allowed, then mark the lobby ready once both games are ready.
+	 * @returns {void}
+	 */
 	updateReady()
 	{
 		// The guest processes hello asynchronously while acquiring resources. Its acknowledgment
@@ -444,6 +540,10 @@ export class NetworkSession extends EventTarget
 		this.maybeStart();
 	}
 
+	/**
+	 * Host only: once both peers and the clock are ready, send the start time and schedule tick zero.
+	 * @returns {void}
+	 */
 	maybeStart()
 	{
 		if(!this.match?.initiator || this.started || !this.localGameReady || !this.remoteGameReady
@@ -456,12 +556,21 @@ export class NetworkSession extends EventTarget
 		this.scheduleStart(hostTime);
 	}
 
+	/**
+	 * Send a clock-synchronization ping.
+	 * @returns {void}
+	 */
 	ping()
 	{
 		this.pingSent = this.now();
 		this.send(MessageFamily.ping, {nonce: crypto.randomUUID(), sentAt: this.pingSent});
 	}
 
+	/**
+	 * Answer a ping with local receive and send times.
+	 * @param {{nonce: string, sentAt: number}} value Ping payload.
+	 * @returns {void}
+	 */
 	pong(value)
 	{
 		this.send(MessageFamily.pong, {
@@ -472,6 +581,11 @@ export class NetworkSession extends EventTarget
 		});
 	}
 
+	/**
+	 * Estimate round-trip time and clock offset from a pong, then report clock readiness to the peer.
+	 * @param {{originSentAt: number, receivedAt: number, sentAt: number}} value Pong payload.
+	 * @returns {void}
+	 */
 	clock(value)
 	{
 		const received = this.now();
@@ -483,6 +597,11 @@ export class NetworkSession extends EventTarget
 		this.send(MessageFamily.diagnostics, {clockReady: true, rtt, clockOffset: this.clockOffset});
 	}
 
+	/**
+	 * Record the peer's clock readiness and round-trip time, then try to start.
+	 * @param {{clockReady?: boolean, rtt?: number}} value Diagnostics payload.
+	 * @returns {void}
+	 */
 	remoteDiagnostics(value)
 	{
 		if(value.clockReady)
@@ -494,12 +613,22 @@ export class NetworkSession extends EventTarget
 		this.maybeStart();
 	}
 
+	/**
+	 * Schedule tick zero from the host's start time, converted through the estimated clock offset.
+	 * @param {{descriptorDigest: string, hostTime: number}} value Start payload.
+	 * @returns {void}
+	 */
 	start(value)
 	{
 		this.requireDigest(value);
 		this.scheduleStart(value.hostTime - this.clockOffset);
 	}
 
+	/**
+	 * Mark the match starting and dispatch start for tick zero at a local time.
+	 * @param {number} localTime Local clock time in milliseconds; past times start immediately.
+	 * @returns {void}
+	 */
 	scheduleStart(localTime)
 	{
 		const match = this.match;
@@ -520,6 +649,13 @@ export class NetworkSession extends EventTarget
 		);
 	}
 
+	/**
+	 * Send one JSON handshake packet on the control channel.
+	 * @param {number} family Message family number.
+	 * @param {*} value JSON-serializable payload.
+	 * @returns {boolean} The transport's send() result.
+	 * @throws {NetworkError} When no match transport is open.
+	 */
 	send(family, value)
 	{
 		if(!this.transport) throw new NetworkError('match_transport', 'Match transport is not open');
@@ -527,7 +663,17 @@ export class NetworkSession extends EventTarget
 		return this.transport.send('control', encodeJsonPacket({family, sequence: ++this.sequence}, value));
 	}
 
-	/** Send one gameplay packet while sharing the handshake sequence space. */
+	/**
+	 * Send one gameplay packet while sharing the handshake sequence space.
+	 * @param {number} family Gameplay message family; handshake families are rejected.
+	 * @param {string|Uint8Array|*} value Payload; values other than strings and bytes are JSON-encoded.
+	 * @param {object} [options] Packet header options.
+	 * @param {string} [options.channel] control or realtime; defaults to realtime.
+	 * @param {number} [options.tick] Simulation tick in the packet header; defaults to 0.
+	 * @param {number} [options.schema] Payload schema version; defaults to 1.
+	 * @returns {boolean} False when closed, disconnected, or dropped; otherwise the transport's send() result.
+	 * @throws {NetworkError} For handshake families, unknown channels, and unexpected transport errors.
+	 */
 	sendGameplay(family, value, {channel = 'realtime', tick = 0, schema = 1} = {})
 	{
 		if(handshakeFamilies.has(family))
@@ -593,12 +739,23 @@ export class NetworkSession extends EventTarget
 		});
 	}
 
+	/**
+	 * Reject a peer message naming another match descriptor.
+	 * @param {{descriptorDigest: string}} value Peer payload.
+	 * @returns {void}
+	 * @throws {NetworkError} When no descriptor is installed or the digest differs.
+	 */
 	requireDigest(value)
 	{
 		if(!this.descriptorDigest || value.descriptorDigest !== this.descriptorDigest)
 		throw new NetworkError('match_digest', 'Peer message names another match descriptor');
 	}
 
+	/**
+	 * Dispatch an error event and close the current match.
+	 * @param {Error} error Failure whose message becomes the close reason.
+	 * @returns {void}
+	 */
 	fail(error)
 	{
 		if(this.closed) return;
@@ -607,7 +764,11 @@ export class NetworkSession extends EventTarget
 		this.controller.closeMatch(error?.message ?? 'network session failed');
 	}
 
-	/** Notify the peer and end this match without closing the lobby or PHP runtime. */
+	/**
+	 * Notify the peer and end this match without closing the lobby or PHP runtime.
+	 * @param {string} [reason] Disconnect reason sent to the peer; defaults to left match.
+	 * @returns {void}
+	 */
 	leaveMatch(reason = 'left match')
 	{
 		try { if(this.transport) this.send(MessageFamily.disconnect, {reason}); } catch {}
@@ -615,6 +776,14 @@ export class NetworkSession extends EventTarget
 		this.controller.closeMatch(reason, {local: true});
 	}
 
+	/**
+	 * Clear match state and queued packets, dispatching disconnect when a match was active.
+	 * @param {object} [detail] Match-end detail from the lobby controller.
+	 * @param {object} [detail.match] Ended match; defaults to the current match.
+	 * @param {string} [detail.reason] Disconnect reason; defaults to peer disconnected.
+	 * @param {boolean} [detail.local] Whether this peer ended the match; defaults to false.
+	 * @returns {void}
+	 */
 	endMatch({match = this.match, reason = 'peer disconnected', local = false} = {})
 	{
 		this.resetMatch();
@@ -623,6 +792,10 @@ export class NetworkSession extends EventTarget
 		if(match) this.dispatchEvent(event('disconnect', {match, reason, local}));
 	}
 
+	/**
+	 * Leave any match, then close the bridge, negotiator, and lobby controller.
+	 * @returns {void}
+	 */
 	close()
 	{
 		if(this.closed) return;

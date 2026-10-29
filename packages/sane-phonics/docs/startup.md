@@ -1,6 +1,7 @@
 # Intro cards and the main menu
 
-Press **Run PHP** in the [live demo](./) to try the complete startup sequence:
+Press the **Play Sane-Phonics** poster on the [Sane-Phonics page](index.md) to try the complete
+startup sequence. It loads `worlds/demo.world`, whose `sane.intro` property enables the intro:
 
 1. The browser loads PHP SDL, then shows progress for the engine and font files.
 2. A PHP loading card waits for the title map and its image dependencies.
@@ -39,7 +40,10 @@ images, with animated water shine and different horizontal parallax factors.
 `ImageRenderer` draws each repeating strip with one quad. The title camera and
 image animation use active UI time, independent of `Engine::$time`.
 
-The browser's console can start either entry point:
+A world selects the entry point with `sane.intro`; `sane.scene` and `sane.profile`
+choose the level and movement profile. The repository's legacy demo page
+(`docs/index.html`, served at `/sane-phonics/` by `npm start`) also exposes console
+globals. They exist only on that page:
 
 ```js
 await bootEngine({intro: true, scene: 'loop', profile: 'runner'});
@@ -47,8 +51,8 @@ await bootEngine({intro: false, scene: 'breakables'});
 await stopEngine();
 ```
 
-`bootEngine()` defaults to direct gameplay for scripts and fixtures. The page's
-Run button passes `intro: true`. An explicit boot starts a fresh session;
+`bootEngine()` defaults to direct gameplay for scripts and fixtures. That page's
+Run PHP button passes `intro: true`. An explicit boot starts a fresh session;
 in-session transitions use these PHP methods instead:
 
 ```php
@@ -67,12 +71,15 @@ background pan, simulation time, discovered-file counts, and errors for tests.
 
 ## Reusable card API
 
+The framework's [UI reference](../../../docs/ui.md) documents the `Phonics\Ui` card,
+menu, and renderer classes. This section summarizes how the demo uses them.
+
 `Ui\Card` describes a screen. `Ui\CardSequence` owns its timers and transitions.
 Neither requires SDL, browser timers, or a renderer.
 
 ```php
-use PhpWasmEngine\Ui\Card;
-use PhpWasmEngine\Ui\CardSequence;
+use Phonics\Ui\Card;
+use Phonics\Ui\CardSequence;
 
 $assetsReady = false;
 $cards = new CardSequence([
@@ -128,7 +135,7 @@ known-file progress bar. The application renders any backdrop first and supplies
 the prompt, including its blink behavior:
 
 ```php
-use PhpWasmEngine\Ui\CardRenderer;
+use Phonics\Ui\CardRenderer;
 
 // Borrow the matching font atlas from an existing menu renderer.
 $renderer = new CardRenderer($pauseMenu->renderer->font, $pauseMenu->renderer->atlas);

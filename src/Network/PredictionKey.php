@@ -11,6 +11,7 @@ final class PredictionKey implements \JsonSerializable
 	 *
 	 * @param PeerId $peer Session peer associated with authority or input ownership.
 	 * @param CommandSequence $sequence Command or snapshot sequence used as a boundary.
+	 * @return void Stores the peer and command sequence.
 	 */
 	public function __construct(
 		/** Numeric packet peer identifier or opaque prediction peer. */

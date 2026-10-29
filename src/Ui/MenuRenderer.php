@@ -321,8 +321,8 @@ final class MenuRenderer
 	/**
 	 * Draw several control hints in one cached glyph batch over an existing surface.
 	 *
-	 * @param list<array{text:string,rect:array{float,float,float,float},scale?:float,theme?:string}> $hints
-	 * Right-aligned hints, optionally overriding the font theme for individual device bindings.
+	 * @param list<array{text:string,rect:array{float,float,float,float},scale?:float,theme?:string}> $hints Hint list:
+	 * right-aligned hints, optionally overriding the font theme for individual device bindings.
 	 * @param int $width Drawing-buffer width in pixels.
 	 * @param int $height Drawing-buffer height in pixels.
 	 * @param array{float,float,float,float} $color Text tint; button artwork keeps its source color.

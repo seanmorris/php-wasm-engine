@@ -10,6 +10,7 @@ final class PlayerSlot extends UnsignedValue
 	 * Create and validate a player slot.
 	 *
 	 * @param int $value Scalar value or serialized fields to validate.
+	 * @return void Stores the slot; rejects values outside 1 through 16.
 	 */
 	public function __construct(int $value)
 	{

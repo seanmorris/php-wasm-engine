@@ -247,12 +247,14 @@ final class WorldRuntime
 		$this->active[$key]['references']++;
 		$context = $this->active[$key]['context'];
 
-		return new ScopeLease(
-			$sourceId
-			, $scopeId
-			, $context
-			, fn() => $this->release($key)
-		);
+		/**
+		 * Release this lease's reference to the active scope.
+		 *
+		 * @return void Deactivates the scope when no other lease remains.
+		 */
+		$releaseLease = fn() => $this->release($key);
+
+		return new ScopeLease($sourceId, $scopeId, $context, $releaseLease);
 	}
 
 	/**
@@ -278,7 +280,12 @@ final class WorldRuntime
 		if($error) throw $error;
 	}
 
-	/** @param string $sourceId Source to open. @return ContentSource Parsed source. */
+	/**
+	 * Open a registered source once and cache its validated scope catalog.
+	 *
+	 * @param string $sourceId Source to open.
+	 * @return ContentSource Parsed source, reused on later calls.
+	 */
 	private function open(string $sourceId): ContentSource
 	{
 		$this->requireOpen();
@@ -312,7 +319,14 @@ final class WorldRuntime
 		return $source;
 	}
 
-	/** @param array<string,mixed> $items Registry to read. @param string $key Entry key. @param string $type Required interface. @return object Instantiated service. */
+	/**
+	 * Resolve a registered adapter or system set, calling a lazy factory when needed.
+	 *
+	 * @param array<string,mixed> $items Registry to read.
+	 * @param string $key Entry key.
+	 * @param string $type Required interface.
+	 * @return object Instantiated service implementing the required interface.
+	 */
 	private function instantiate(array $items, string $key, string $type): object
 	{
 		$item = $items[$key] ?? throw new \OutOfBoundsException("Missing registered export $key");
@@ -323,29 +337,46 @@ final class WorldRuntime
 		return $value;
 	}
 
-	/** @param string $sourceId Source ID. @param ScopeDescriptor $scope Candidate scope. @return list<array<string,mixed>> Ordered matching bindings. */
+	/**
+	 * Select the bindings whose selector matches a scope and order them by their after dependencies.
+	 *
+	 * @param string $sourceId Source ID.
+	 * @param ScopeDescriptor $scope Candidate scope.
+	 * @return list<array<string,mixed>> Ordered matching bindings; cycles and missing dependencies throw.
+	 */
 	private function orderedBindings(string $sourceId, ScopeDescriptor $scope): array
 	{
-		$matching = array_filter(
-			$this->bindings
-			, static function(array $binding) use ($sourceId, $scope): bool {
-				$on = $binding['on'];
+		/**
+		 * Match a binding selector's source, kind, ID and tags against the scope.
+		 *
+		 * @param array<string,mixed> $binding Declarative binding with its on selector.
+		 * @return bool True when every declared selector field matches.
+		 */
+		$selectsScope = static function(array $binding) use ($sourceId, $scope): bool {
+			$on = $binding['on'];
 
-				if(isset($on['source']) && $on['source'] !== $sourceId) return false;
-				if(isset($on['kind']) && $on['kind'] !== $scope->kind) return false;
-				if(isset($on['id']) && $on['id'] !== $scope->id) return false;
+			if(isset($on['source']) && $on['source'] !== $sourceId) return false;
+			if(isset($on['kind']) && $on['kind'] !== $scope->kind) return false;
+			if(isset($on['id']) && $on['id'] !== $scope->id) return false;
 
-				foreach((array) ($on['tags'] ?? []) as $tag)
-				if(!in_array($tag, $scope->tags, true)) return false;
+			foreach((array) ($on['tags'] ?? []) as $tag)
+			if(!in_array($tag, $scope->tags, true)) return false;
 
-				return true;
-			}
-		);
+			return true;
+		};
+
+		$matching = array_filter($this->bindings, $selectsScope);
 
 		$result = [];
 		$active = [];
 		$done = [];
 
+		/**
+		 * Append a binding after its dependencies, rejecting cycles and missing matches.
+		 *
+		 * @param string $id Binding ID to visit.
+		 * @return void Updates the ordered result and traversal state.
+		 */
 		$visit = function(string $id) use (&$visit, &$result, &$active, &$done, $matching): void {
 			if(isset($done[$id])) return;
 			if(isset($active[$id])) throw new \LogicException("Binding dependency cycle at $id");
@@ -365,7 +396,12 @@ final class WorldRuntime
 		return $result;
 	}
 
-	/** @param string $key Active scope key. @return void Decrements and deactivates the last reference. */
+	/**
+	 * Drop one lease reference to an active scope.
+	 *
+	 * @param string $key Active scope key.
+	 * @return void Decrements and deactivates the last reference.
+	 */
 	private function release(string $key): void
 	{
 		if(!isset($this->active[$key]) || --$this->active[$key]['references'] > 0) return;
@@ -373,7 +409,12 @@ final class WorldRuntime
 		$this->deactivate($key);
 	}
 
-	/** @param string $key Active scope key. @return void Snapshots and releases the scope. */
+	/**
+	 * Snapshot an active scope's state, then close the adapter scope and its context.
+	 *
+	 * @param string $key Active scope key.
+	 * @return void Snapshots and releases the scope, retaining its state and rethrowing the first failure.
+	 */
 	private function deactivate(string $key): void
 	{
 		if(!isset($this->active[$key])) return;
@@ -395,7 +436,11 @@ final class WorldRuntime
 		if($error) throw $error;
 	}
 
-	/** @return void Rejects mutations after closure. */
+	/**
+	 * Guard runtime operations after close().
+	 *
+	 * @return void Rejects mutations after closure.
+	 */
 	private function requireOpen(): void
 	{
 		if($this->closed) throw new \LogicException('World runtime is closed');

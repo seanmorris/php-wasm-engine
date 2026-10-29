@@ -1,4 +1,4 @@
-# Browser API — drafting outline
+# JavaScript API — drafting outline
 
 I. Load a world into a ready session
     A. Resolve, verify, mount, and activate its package graph

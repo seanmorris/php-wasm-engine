@@ -5,7 +5,6 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {parse} from 'espree';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(site, '..');
@@ -49,18 +48,6 @@ const gamePackages = [
 		, rootNamespace: 'DoomPhonics'
 		, description: 'WAD adapters, Doom gameplay, input, networking, and direct GLES rendering.'
 	}
-];
-
-const browserSources = [
-	{file: 'browser/Phonics.mjs', slug: 'api-browser-phonics', title: 'World loader', npm: '@seanmorris/phonics'}
-	, {file: 'browser/PackageGraph.mjs', slug: 'api-browser-package-graph', title: 'PackageGraph', npm: '@seanmorris/phonics/package-graph'}
-	, {file: 'browser/ResourceStore.mjs', slug: 'api-browser-resource-store', title: 'ResourceStore', npm: '@seanmorris/phonics/resources'}
-	, {file: 'browser/QuickControls.mjs', slug: 'api-browser-quick-controls', title: 'QuickControls', context: true}
-	, {file: 'browser/SdlAudio.mjs', slug: 'api-browser-sdl-audio', title: 'SdlAudio', context: true}
-	, {file: 'browser/SessionAssets.mjs', slug: 'api-browser-session-assets', title: 'SessionAssets', context: true}
-	, {file: 'browser/SafeStorage.mjs', slug: 'api-browser-safe-storage', title: 'SafeStorage', npm: '@seanmorris/phonics/storage'}
-	, {file: 'browser/SamplePlayer.mjs', slug: 'api-browser-sample-player', title: 'SamplePlayer', npm: '@seanmorris/phonics/audio-samples'}
-	, {file: 'browser/launcher/GameLauncher.mjs', slug: 'api-browser-game-launcher', title: 'GameLauncher', npm: '@seanmorris/phonics/launcher'}
 ];
 
 const namespaceInfo = {
@@ -112,138 +99,6 @@ function phpApi(directory = '.')
 			else resolve(JSON.parse(Buffer.concat(output).toString()));
 		});
 	});
-}
-
-function parseDoc(comment)
-{
-	if(!comment) return {summary: '', description: '', params: [], properties: [], returns: null, throws: []};
-
-	const lines = comment.value.replace(/^\*/, '').split(/\r?\n/).map(line => line.replace(/^\s*\*\s?/, ''));
-	const body = [], tags = [];
-	let current = null;
-
-	for(const line of lines)
-	{
-		const match = /^@(\w+)\s*(.*)$/.exec(line);
-
-		if(match)
-		{
-			current = {name: match[1].toLowerCase(), value: match[2].trim()};
-			tags.push(current);
-		}
-		else if(current && line.trim()) current.value += ' ' + line.trim();
-		else if(!current) body.push(line.trimEnd());
-	}
-
-	const text = body.join('\n').trim(), split = text.split(/\n\s*\n/, 2);
-	const result = {summary: split[0] ?? '', description: split[1] ?? '', params: [], properties: [], returns: null, throws: [], typedef: null};
-
-	for(const tag of tags)
-	{
-		const typed = typedTag(tag.value);
-
-		if(tag.name === 'param' && typed)
-			result.params.push(typed);
-		else if(tag.name === 'property' && typed)
-			result.properties.push(typed);
-		else if(['return','returns'].includes(tag.name) && typed)
-			result.returns = {type: typed.type, description: [typed.name, typed.description].filter(Boolean).join(' ')};
-		else if(tag.name === 'throws' && typed)
-			result.throws.push({type: typed.type, description: [typed.name, typed.description].filter(Boolean).join(' ')});
-		else if(tag.name === 'typedef') result.typedef = typed?.name || tag.value;
-	}
-
-	return result;
-}
-
-function typedTag(value)
-{
-	if(!value.startsWith('{')) return null;
-
-	let depth = 0, end = -1;
-
-	for(let index = 0; index < value.length; index++)
-	{
-		if(value[index] === '{') depth++;
-		else if(value[index] === '}' && --depth === 0)
-		{
-			end = index;
-			break;
-		}
-	}
-
-	if(end < 0) return null;
-
-	const remainder = value.slice(end + 1).trim();
-	const match = /^(\S+)?\s*(.*)$/.exec(remainder);
-
-	return {
-		type: value.slice(1, end)
-		, name: match?.[1] ?? ''
-		, description: match?.[2] ?? ''
-	};
-}
-
-function docBefore(source, comments, start)
-{
-	const candidates = comments.filter(comment => comment.type === 'Block' && comment.value.startsWith('*') && comment.range[1] <= start);
-	const comment = candidates.at(-1);
-
-	return comment && /^\s*(?:export\s+)?$/.test(source.slice(comment.range[1], start)) ? comment : null;
-}
-
-function jsSignature(source, node)
-{
-	if(node.type === 'FunctionDeclaration') return source.slice(node.range[0], node.body.range[0]).trim();
-
-	if(node.type === 'VariableDeclaration')
-	{
-		const declaration = node.declarations[0], init = declaration.init;
-
-		if(init?.type === 'ArrowFunctionExpression')
-			return `const ${declaration.id.name} = ${source.slice(init.range[0], init.body.range[0]).trim()}…`;
-
-		return source.slice(node.range[0], node.range[1]).replace(/;$/, '');
-	}
-
-	return '';
-}
-
-async function browserApi(config)
-{
-	const source = await fs.readFile(path.join(root, config.file), 'utf8');
-	const tree = parse(source, {ecmaVersion: 'latest', sourceType: 'module', comment: true, range: true, loc: true});
-	const comments = tree.comments;
-	const typedefs = comments.map(comment => ({comment, doc: parseDoc(comment)})).filter(value => value.doc.typedef);
-	const members = [];
-
-	for(const statement of tree.body)
-	{
-		if(statement.type !== 'ExportNamedDeclaration' || !statement.declaration) continue;
-
-		const node = statement.declaration, doc = parseDoc(docBefore(source, comments, statement.range[0]));
-
-		if(node.type === 'ClassDeclaration')
-		{
-			const methods = node.body.body.filter(method => method.type === 'MethodDefinition'
-				&& method.key.type !== 'PrivateIdentifier'
-			).map(method => ({
-				name: method.key.name
-				, signature: source.slice(method.range[0], method.value.body.range[0]).trim()
-				, line: method.loc.start.line
-				, doc: parseDoc(docBefore(source, comments, method.range[0]))
-			}));
-
-			members.push({kind: 'class', name: node.id.name, signature: `export class ${node.id.name}`, line: node.loc.start.line, doc, methods});
-		}
-		else if(node.type === 'FunctionDeclaration')
-			members.push({kind: 'function', name: node.id.name, signature: jsSignature(source, node), line: node.loc.start.line, doc});
-		else if(node.type === 'VariableDeclaration')
-			for(const declaration of node.declarations)
-				members.push({kind: 'constant', name: declaration.id.name, signature: jsSignature(source, node), line: node.loc.start.line, doc});
-	}
-
-	return {...config, source, members, typedefs};
 }
 
 function slugClass(name)
@@ -401,20 +256,26 @@ function validatePhp(data)
 	if(failures.length) throw new Error(`Incomplete public PHP API documentation:\n${failures.join('\n')}`);
 }
 
-function validateBrowser(modules)
+/** List the documented top-level parameter names, ignoring nested `options.name` properties. */
+function documentedParams(doc)
 {
-	const failures = [];
+	return doc.params.map(param => param.name.replace(/^\[|\]$/g, '').split('=')[0]).filter(name => !name.includes('.'));
+}
 
-	for(const module of modules)
-		for(const member of module.members)
-		{
-			if(!member.doc.summary) failures.push(`${module.file}:${member.line} ${member.name}: missing JSDoc`);
+/** Report AST parameters without a matching @param; destructured parameters match by position. */
+function missingParams(params = [], doc)
+{
+	const documented = documentedParams(doc), missing = [];
 
-			for(const method of member.methods ?? [])
-				if(!method.doc.summary) failures.push(`${module.file}:${method.line} ${member.name}.${method.name}: missing JSDoc`);
-		}
+	for(const [index, param] of params.entries())
+	{
+		const target = param.type === 'AssignmentPattern' ? param.left : param.type === 'RestElement' ? param.argument : param;
 
-	if(failures.length) throw new Error(`Incomplete public browser API documentation:\n${failures.join('\n')}`);
+		if(target.type === 'Identifier' ? !documented.includes(target.name) : index >= documented.length)
+			missing.push(target.type === 'Identifier' ? target.name : `parameter ${index + 1}`);
+	}
+
+	return missing;
 }
 
 function phpSignature(method)
@@ -464,7 +325,7 @@ function phpClassPage(item, aliases, config = null)
 	let body = frontmatter(config ? item.shortName : item.name, item.doc.summary, parent, 0, {
 		'display-title': item.name
 		, 'api-page': true
-		, 'api-root-title': config ? `${config.title} PHP API` : 'Programming API'
+		, 'api-root-title': config ? `${config.title} PHP API` : 'PHP API'
 		, 'api-root-url': relativePage(slug, apiRoot)
 		, 'api-parent-title': namespaceTitle
 		, 'api-parent-url': relativePage(slug, namespaceSlug)
@@ -559,7 +420,7 @@ function namespacePage(namespace, classes)
 {
 	const [title, description] = namespaceInfo[namespace];
 	let body = frontmatter(`${title} API`, description, namespaceId(namespace), -100);
-	body += `[Programming API](api.html)\n\n${description}\n\n## Example\n\n\`\`\`php\n${namespaceExamples[namespace]}\n\`\`\`\n\n## Classes\n\n`;
+	body += `[PHP API](api.html)\n\n${description}\n\n## Example\n\n\`\`\`php\n${namespaceExamples[namespace]}\n\`\`\`\n\n## Classes\n\n`;
 
 	for(const item of classes)
 		body += `- [${code(item.name)}](${slugClass(item.name)}.html) — ${item.doc.summary}\n`;
@@ -602,87 +463,7 @@ function gameApiIndex(data, config)
 	return body;
 }
 
-function jsDetails(doc)
-{
-	let result = memberDoc(doc);
-
-	if(doc.params.length)
-	{
-		result += '\n| Parameter | Type | Description |\n|---|---|---|\n';
-		for(const param of doc.params) result += `| ${code(param.name)} | ${code(param.type)} | ${cell(param.description)} |\n`;
-	}
-
-	if(doc.returns) result += `\n**Returns:** ${code(doc.returns.type)} — ${doc.returns.description}\n`;
-	if(doc.throws.length) result += `\n**Throws:** ${doc.throws.map(value => `${code(value.type)} — ${value.description}`).join('; ')}\n`;
-
-	return result;
-}
-
-function browserPage(module)
-{
-	const primary = module.members.find(member => member.kind === 'class')
-		?? module.members.find(member => member.name === 'loadWorld') ?? module.members[0];
-	const description = primary?.doc.summary ?? `Browser API from ${module.file}.`;
-	let body = frontmatter(module.title, description, 'api-browser', 0, {
-		'api-page': true
-		, 'api-parent-title': 'Browser API'
-		, 'api-parent-url': 'api-browser.html'
-		, 'source-url': `https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${module.file}`
-	});
-	body += module.context
-		? `This service is supplied to browser game modules through ${code('context.services')} or ${code('context.assets')}.\n`
-		: `Import this API from ${code(module.npm)}.\n`;
-
-	if(module.typedefs.length)
-	{
-		body += '\n## Types\n';
-
-		for(const {doc} of module.typedefs)
-		{
-			body += `\n### ${doc.typedef} {#${anchor('type', doc.typedef)}}\n\n${memberDoc(doc)}`;
-
-			if(doc.properties.length)
-			{
-				body += '\n| Property | Type | Description |\n|---|---|---|\n';
-				for(const property of doc.properties)
-					body += `| ${code(property.name)} | ${code(property.type)} | ${cell(property.description)} |\n`;
-			}
-		}
-	}
-
-	body += '\n## Exports\n';
-
-	for(const member of module.members)
-	{
-		body += `\n### ${member.name} {#${anchor(member.kind, member.name)}}\n\n${jsDetails(member.doc)}\n\`\`\`js\n${member.signature}\n\`\`\`\n`;
-
-		for(const method of member.methods ?? [])
-			body += `\n#### ${method.name}() {#${anchor('method', method.name)}}\n\n${jsDetails(method.doc)}\n\`\`\`js\n${method.signature}\n\`\`\`\n`;
-	}
-
-	const outline = `# ${module.title} — drafting outline\n\nI. Module purpose and access\n    A. ${description}\nII. Public exports\n${module.members.map((value, index) => `    ${String.fromCharCode(65 + index)}. ${value.name}`).join('\n')}\nIII. Lifecycle and failure behavior\n`;
-
-	return {slug: module.slug, body, outline};
-}
-
-function browserIndex(modules)
-{
-	let body = frontmatter('Browser API', 'World loading, package resolution, resource ownership, and browser game services.', 'api-browser', -100);
-	body += '[Programming API](api.html)\n\nThe browser API loads complete worlds and gives each executable browser export a session-scoped context. Direct npm exports are safe to import from their documented subpaths; context services are supplied by the loader.\n\n## Modules and services\n\n';
-
-	for(const module of modules)
-	{
-		const primary = module.members.find(member => member.kind === 'class')
-			?? module.members.find(member => member.name === 'loadWorld') ?? module.members[0];
-		body += `- [${code(module.title)}](${module.slug}.html) — ${primary?.doc.summary ?? module.file}\n`;
-	}
-
-	body += '\n## Browser module lifecycle\n\nA browser export provides `activate(context)`. It may return a cleanup callback or register cleanup with `context.onClose`. Loading verifies every declared browser file before importing it, and disposal runs cleanup in reverse registration order.\n';
-
-	return body;
-}
-
-function apiIndex(data, modules)
+function apiIndex(data)
 {
 	const rows = [];
 
@@ -692,24 +473,15 @@ function apiIndex(data, modules)
 		rows.push(`<li data-api-entry data-api-search="${html([item.name, item.doc.summary, ...names].join(' ').toLowerCase())}"><a href="${slugClass(item.name)}.html"><code>${html(item.name)}</code></a><span>${html(item.doc.summary)}</span><small>${html(names.join(' · '))}</small></li>`);
 	}
 
-	for(const module of modules)
-	{
-		const names = module.members.flatMap(value => [value.name, ...(value.methods ?? []).map(method => method.name)]);
-		const primary = module.members.find(member => member.kind === 'class')
-			?? module.members.find(member => member.name === 'loadWorld') ?? module.members[0];
-		rows.push(`<li data-api-entry data-api-search="${html([module.title, ...names].join(' ').toLowerCase())}"><a href="${module.slug}.html"><code>${html(module.title)}</code></a><span>${html(primary?.doc.summary ?? module.file)}</span><small>${html(names.join(' · '))}</small></li>`);
-	}
-
-	let body = frontmatter('Programming API', 'Every supported Phonics PHP class and browser programming interface.', 'api', -100);
-	body += `Phonics ${data.version} exposes the complete framework through Composer's ${code('Phonics\\')} namespace and the documented npm entry points. Game packages have separate gameplay references.\n\n`;
-	body += '<div class="api-filter"><label for="api-filter">Filter classes, methods, properties, and browser exports</label><input id="api-filter" type="search" autocomplete="off" data-api-filter><p role="status" aria-live="polite" data-api-status></p></div>\n\n';
+	let body = frontmatter('PHP API', 'Every supported Phonics PHP class and member.', 'api', -100);
+	body += `Phonics ${data.version} exposes the complete framework through Composer's ${code('Phonics\\')} namespace. Game packages have separate gameplay references.\n\n`;
+	body += '<div class="api-filter"><label for="api-filter">Filter classes, methods, and properties</label><input id="api-filter" type="search" autocomplete="off" data-api-filter><p role="status" aria-live="polite" data-api-status></p></div>\n\n';
 	body += `<ul class="api-index" data-api-index>\n${rows.join('\n')}\n</ul>\n\n`;
 	body += '## Namespaces\n\n';
 
 	for(const [namespace, [title, description]] of Object.entries(namespaceInfo))
 		body += `- [${title}](api-${namespace === 'Phonics' ? 'core' : namespace.slice(8).replaceAll('\\', '-').toLowerCase()}.html) — ${description}\n`;
 
-	body += '- [Browser API](api-browser.html) — World loading, package graphs, resources, sessions, and host services.\n\n';
 	body += '## Compatibility aliases\n\nThe pre-1.0 `PhpWasmEngine\\` names remain aliases. New code should use the canonical class shown here.\n\n| Deprecated name | Canonical class |\n|---|---|\n';
 
 	for(const [old, target] of Object.entries(data.aliases))
@@ -728,10 +500,8 @@ async function write(page)
 
 const data = await phpApi();
 const gameData = await Promise.all(gamePackages.map(async config => ({config, data: await phpApi(config.directory)})));
-const modules = await Promise.all(browserSources.map(browserApi));
 validatePhp(data);
 for(const game of gameData) validateGamePhp(game.data);
-validateBrowser(modules);
 
 for(const item of data.classes) phpTypes.set(item.name, {...item, slug: slugClass(item.name)});
 
@@ -750,8 +520,8 @@ await fs.mkdir(drafts, {recursive: true});
 
 await write({
 	slug: 'api'
-	, body: apiIndex(data, modules)
-	, outline: '# Programming API — drafting outline\n\nI. Define the supported framework surface\n    A. PHP namespaces and classes\n    B. Browser modules and services\nII. Find an API by symbol\n    A. Filter classes and members\n    B. Browse subsystem indexes\nIII. Preserve compatibility\n    A. Link deprecated aliases to canonical classes\n'
+	, body: apiIndex(data)
+	, outline: '# PHP API — drafting outline\n\nI. Define the supported PHP framework surface\n    A. Namespaces and classes\nII. Find an API by symbol\n    A. Filter classes and members\n    B. Browse subsystem indexes\nIII. Preserve compatibility\n    A. Link deprecated aliases to canonical classes\n'
 });
 
 for(const [namespace] of Object.entries(namespaceInfo))
@@ -788,12 +558,4 @@ for(const {config, data: packageData} of gameData)
 	for(const item of packageData.classes) await write(phpClassPage(item, packageData.aliases, config));
 }
 
-await write({
-	slug: 'api-browser'
-	, body: browserIndex(modules)
-	, outline: '# Browser API — drafting outline\n\nI. Load a world\n    A. Options and ready session\nII. Activate browser modules\n    A. Context and cleanup\nIII. Use package and resource services\n    A. Direct npm exports\n    B. Context-provided services\n'
-});
-
-for(const module of modules) await write(browserPage(module));
-
-console.log(`Generated ${data.classes.length} core PHP class pages, ${gameData.reduce((count, value) => count + value.data.classes.length, 0)} game PHP class pages, and ${modules.length} browser API pages.`);
+console.log(`Generated ${data.classes.length} core PHP class pages and ${gameData.reduce((count, value) => count + value.data.classes.length, 0)} game PHP class pages.`);

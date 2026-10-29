@@ -51,7 +51,7 @@ final class Controls
 	 * Check whether a logical control is currently held.
 	 *
 	 * @param int|string $key Button index or logical control name to inspect.
-	 * @return bool True for a nonzero current control value.
+	 * @return bool True for a nonzero current control value or a buffered press since the previous step.
 	 */
 	public function down(int|string $key): bool { return $this->value($key) != 0 || $this->pressCount($key) !== 0; }
 

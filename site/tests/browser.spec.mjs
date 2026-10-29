@@ -298,7 +298,31 @@ test('API class header groups breadcrumbs, summary, and source without repetitio
 
 	const summary = 'Execute named ECS systems in dependency order and flush deferred entity changes.';
 	const header = page.locator('.api-page-header');
-	await expect(header.getByRole('navigation', {name: 'Breadcrumb'})).toHaveText('Programming API/ECS');
+	const breadcrumb = header.getByRole('navigation', {name: 'Breadcrumb'});
+
+	await expect(breadcrumb.locator('li')).toHaveText([
+		'Documentation'
+		, 'Reference'
+		, 'PHP API'
+		, 'ECS'
+		, 'Phonics\\Ecs\\Scheduler'
+	]);
+
+	const breadcrumbLinks = breadcrumb.getByRole('link');
+	await expect(breadcrumbLinks).toHaveCount(4);
+
+	await expect(breadcrumbLinks).toHaveText([
+		'Documentation'
+		, 'Reference'
+		, 'PHP API'
+		, 'ECS'
+	]);
+
+	for(const [index, href] of ['/', '/architecture.html', '/api.html', '/api-ecs.html'].entries())
+	{
+		await expect(breadcrumbLinks.nth(index)).toHaveAttribute('href', href);
+	}
+
 	await expect(header.getByRole('heading', {level: 1})).toHaveText('Phonics\\Ecs\\Scheduler');
 	await expect(header.locator('.subtitle')).toHaveText(summary);
 
@@ -342,6 +366,15 @@ test('the programming reference filters symbols without a round trip', async({pa
 	await expect(page.locator('[data-api-entry]:visible')).toHaveCount(1);
 	await expect(page.locator('[data-api-entry]:visible')).toContainText('Phonics\\Ecs\\Registry');
 	await expect(status).toHaveText(`1 of ${total} API entries`);
+
+	await page.goto('/api-js/');
+	const jsStatus = page.locator('[data-api-status]');
+	await expect(jsStatus).toHaveText(/\d+ of \d+ API entries/);
+	const jsTotal = (await jsStatus.textContent()).match(/of (\d+) API entries/)?.[1];
+	await page.locator('[data-api-filter]').fill('DOMTexture rasterize');
+	await expect(page.locator('[data-api-entry]:visible')).toHaveCount(1);
+	await expect(page.locator('[data-api-entry]:visible')).toContainText('DomTexture');
+	await expect(jsStatus).toHaveText(`1 of ${jsTotal} API entries`);
 });
 
 test('production exposes the unified documentation and generic preview', async({page}) => {
@@ -693,9 +726,11 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('reticle');
 	await press('Enter');
 	await expect.poll(async() => (await doomState()).reticle).toBe(false);
-	await expect.poll(() => page.evaluate(
-		() => JSON.parse(localStorage.getItem('doom-phonics.options.v1')).reticle
-	)).toBe(false);
+
+	await expect.poll(
+		() => page.evaluate(() => JSON.parse(localStorage.getItem('doom-phonics.options.v1')).reticle)
+	).toBe(false);
+
 	await press('Enter');
 	await expect.poll(async() => (await doomState()).reticle).toBe(true);
 	await press('ArrowUp');
@@ -811,6 +846,7 @@ test('all games start and clean up inside the shared site design', async({page})
 	await page.keyboard.type('idoopsallgibs');
 	await expect.poll(async() => (await doomState()).message).toBe('OOPS! ALL GIBS OFF');
 	await expect.poll(async() => (await doomState()).oopsAllGibs).toBe(false);
+
 	await expect.poll(async() => (await doomState()).weapons).toEqual(expect.arrayContaining([
 		'Minigun','GrenadeLauncher','Railgun','BFG10K'
 	]));

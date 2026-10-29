@@ -20,6 +20,16 @@ const element = (name, attributes = {}, text = '') => {
 export class LobbyOverlay
 {
 
+	/**
+	 * Build the lobby dialog inside the game frame and subscribe to controller events.
+	 * @param {object} options Overlay dependencies.
+	 * @param {LobbyController} options.controller Lobby state and invitation coordinator.
+	 * @param {GameLauncher} options.launcher Modal used to configure offered and accepted games.
+	 * @param {HTMLElement} options.frame Element that receives the dialog.
+	 * @param {object} options.world World whose network.lobby.title names the dialog.
+	 * @param {{homeserver?: string}} options.configuration Fallback homeserver label.
+	 * @param {AbortSignal} [options.signal] Removes the overlay's listeners when aborted.
+	 */
 	constructor({controller, launcher, frame, world, configuration, signal})
 	{
 		this.controller = controller;
@@ -35,6 +45,10 @@ export class LobbyOverlay
 		this.install();
 	}
 
+	/**
+	 * Show the modal dialog, render the current lobby state, and focus its title.
+	 * @returns {void}
+	 */
 	open()
 	{
 		if(!this.dialog.open)
@@ -48,9 +62,16 @@ export class LobbyOverlay
 		this.title.focus({preventScroll: true});
 	}
 
-	/** Compatibility adapter for game menus which previously opened inline content controls. */
+	/**
+	 * Compatibility adapter for game menus which previously opened inline content controls.
+	 * @returns {void} Opens the launcher's local-game modal.
+	 */
 	openContent() { this.launcher.openLocal(); }
 
+	/**
+	 * Close the dialog and restore the previously focused element.
+	 * @returns {void}
+	 */
 	close()
 	{
 		if(this.dialog.open) this.dialog.close();
@@ -60,6 +81,10 @@ export class LobbyOverlay
 		this.previousFocus = null;
 	}
 
+	/**
+	 * Close the dialog, remove its listeners and element, and release the overlay theme.
+	 * @returns {void}
+	 */
 	dispose()
 	{
 		this.close();
@@ -68,6 +93,10 @@ export class LobbyOverlay
 		this.releaseTheme();
 	}
 
+	/**
+	 * Create the dialog header, status toolbar, and room view, then append the dialog to the frame.
+	 * @returns {void}
+	 */
 	build()
 	{
 		this.dialog = element(
@@ -100,6 +129,10 @@ export class LobbyOverlay
 		this.frame.append(this.dialog);
 	}
 
+	/**
+	 * Create the chat column, invitation list, and player list.
+	 * @returns {void}
+	 */
 	buildRoom()
 	{
 		this.roomView = element('section', {'class': 'phonics-lobby-room'});
@@ -126,6 +159,10 @@ export class LobbyOverlay
 		this.roomView.append(chatColumn, playerColumn);
 	}
 
+	/**
+	 * Wire dialog controls, chat submission, and controller events.
+	 * @returns {void}
+	 */
 	install()
 	{
 		this.closeButton.addEventListener('click', () => this.close(), {signal: this.signal});
@@ -155,6 +192,10 @@ export class LobbyOverlay
 		this.controller.addEventListener('chat', ({detail}) => this.addChat(detail), {signal: this.signal});
 	}
 
+	/**
+	 * Run Matrix OAuth in a popup once; a second call returns the pending attempt.
+	 * @returns {Promise<void>} Settles after sign-in finishes; failures are shown in the status line.
+	 */
 	signIn()
 	{
 		if(this.oauthPending) return this.oauthPending;
@@ -183,6 +224,11 @@ export class LobbyOverlay
 		return this.oauthPending;
 	}
 
+	/**
+	 * Update the server label, status, sign-in controls, peers, and invitations.
+	 * @param {object} state LobbyController snapshot.
+	 * @returns {void}
+	 */
 	render(state)
 	{
 		const busy = ['connecting','negotiating','loading','starting'].includes(state.state);
@@ -205,6 +251,11 @@ export class LobbyOverlay
 		this.renderInvitations(state);
 	}
 
+	/**
+	 * List available peers with an Offer game button enabled only while available.
+	 * @param {object} state LobbyController snapshot.
+	 * @returns {void}
+	 */
 	renderPeers(state)
 	{
 		this.peers.replaceChildren();
@@ -230,6 +281,11 @@ export class LobbyOverlay
 		if(!state.peers.length) this.peers.append(element('li', {}, 'Waiting for another player…'));
 	}
 
+	/**
+	 * List received invitations with Accept and Reject buttons.
+	 * @param {object} state LobbyController snapshot.
+	 * @returns {void}
+	 */
 	renderInvitations(state)
 	{
 		this.incoming.replaceChildren();
@@ -265,12 +321,22 @@ export class LobbyOverlay
 		}
 	}
 
+	/**
+	 * Append one chat message and scroll the log to it.
+	 * @param {{from: string, text: string}} value Chat event detail.
+	 * @returns {void}
+	 */
 	addChat(value)
 	{
 		this.chatLog.append(element('li', {}, `${value.from}: ${value.text}`));
 		this.chatLog.scrollTop = this.chatLog.scrollHeight;
 	}
 
+	/**
+	 * Show a failure in the status line and clear the busy state.
+	 * @param {*} error Failure or message to display.
+	 * @returns {void}
+	 */
 	showError(error)
 	{
 		this.status.textContent = error?.message ?? String(error);

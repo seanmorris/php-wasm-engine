@@ -30,7 +30,7 @@ final class Context
 	/**
 	 * Create a module context with optional engine-owned ECS services.
 	 *
-	 * @param array $world Tiled world configuration and source identity.
+	 * @param array $world Neutral or legacy Tiled world document, including its source identity.
 	 * @param Registry|null $entities Entity registry shared by the session.
 	 * @param Scheduler|null $systems Scheduler shared by the session, or null to create one.
 	 * @return void Initializes independent factory and Tiled-loader services.
@@ -41,21 +41,46 @@ final class Context
 		$this->systems = $systems ?? new Scheduler($this->entities);
 		$this->factories = new ObjectSpawner;
 		$this->loader = new Loader;
+
+		/**
+		 * Resolve a source reference against the document that declares it.
+		 *
+		 * @param string $reference Relative or absolute resource reference.
+		 * @param string $declaring Canonical URL of the declaring document.
+		 * @return string Resolved resource URL.
+		 */
+		$resolveReference = static fn(string $reference, string $declaring): string => Assets::relative(
+			$declaring
+			, $reference
+		);
+
+		/**
+		 * Read a content-source resource from its mounted local path.
+		 *
+		 * @param string $url Canonical resource URL.
+		 * @return string Resource bytes; unreadable files throw.
+		 */
+		$readSource = static function(string $url): string {
+			$bytes = file_get_contents(Resource::local($url));
+
+			if(!is_string($bytes)) throw new \RuntimeException("Cannot read content source: $url");
+
+			return $bytes;
+		};
+
 		$this->runtime = new WorldRuntime(
-			new AdapterContext(
-				static fn(string $reference, string $declaring): string => Assets::relative($declaring, $reference)
-				, static function(string $url): string {
-					$bytes = file_get_contents(Resource::local($url));
-
-					if(!is_string($bytes)) throw new \RuntimeException("Cannot read content source: $url");
-
-					return $bytes;
-				}
-			)
+			new AdapterContext($resolveReference, $readSource)
 			, $this->entities
 			, $this->systems
 		);
-		$this->cleanup[] = fn() => $this->runtime->close();
+
+		/**
+		 * Close the world runtime with the other session cleanup.
+		 *
+		 * @return void Releases active scopes and opened sources.
+		 */
+		$closeRuntime = fn() => $this->runtime->close();
+		$this->cleanup[] = $closeRuntime;
 	}
 
 	/**

@@ -1,0 +1,33 @@
+version: 1
+package:
+  title: Phonics JavaScript API
+  description: Browser world loading, package resources, audio, launchers, networking, and host services.
+  version: 0.1.0
+sources:
+  - path: browser
+    include:
+      - "**/*.mjs"
+output: api-js
+visibility:
+  - public
+grouping: module
+menu:
+  name: documentation
+  parent: api-js
+  weight: -100
+  symbols: true
+llms:
+  section: reference
+  description: JavaScript modules and exports provided by the Phonics browser runtime.
+assistant: true
+jsonld: false
+source:
+  repository: https://github.com/seanmorris/php-wasm-engine
+  ref: HEAD
+templates:
+  landing: site/tools/jsdoc-landing.mjs
+validation:
+  summaries: off
+  parameters: off
+  returns: off
+  brokenSee: warn

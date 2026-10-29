@@ -24,6 +24,8 @@ npm run setup:runtime
 npm start
 ```
 
+`npm run setup:runtime` prints the PHP/SDL runtime directory used by the demos, first downloading the runtime pinned in `runtime-lock.json` to `.runtime/` when no runtime is installed. `PHP_SDL_ROOT` selects another built runtime. Pass the printed directory to `phonics preview --runtime` when previewing your own packages.
+
 Open `http://localhost:9130/`. The homepage is the documentation; bundled games run directly from their `/games/<name>/` overview pages. Their source lives in `packages/`; framework services live in `src/` and `browser/`.
 
 For development of the Tiled extension, expose the workspace helper with `npm link --workspace @seanmorris/tiled-phonics`.

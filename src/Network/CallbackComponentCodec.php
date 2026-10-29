@@ -17,8 +17,10 @@ final class CallbackComponentCodec implements ComponentCodec
 	 * @param int $version Positive component codec version.
 	 * @param class-string $componentType PHP class or interface handled by the codec.
 	 * @param callable(object):array<string,mixed> $encoder Game callback that converts a component into scalar fields.
-	 * @param callable(array<string,mixed>,?object):object $decoder Game callback that reconstructs or updates a component.
+	 * @param callable(array<string,mixed>,?object):object $decoder Game callback that reconstructs or updates
+	 * a component.
 	 * @param ?ReplicationPolicy $policy Authority, delivery, and interpolation rules for this component.
+	 * @return void Stores the codec after validating its schema, version and component type.
 	 */
 	public function __construct(
 		string $schema

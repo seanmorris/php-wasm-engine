@@ -1,26 +1,15 @@
-# Example games — drafting outline
+# Games — drafting outline
 
-I. Sane-Phonics
-    A. Platformer demo
-    B. Reusable movement exports
-    C. World configuration
-II. PHP-Noid
-    A. 25-stage campaign
-    B. Controls and stackable powers
-    C. Independent services
-III. PHPTris
-    A. Three solo modes and five challenge tracks
-    B. Adaptive display and touch controls
-    C. Tiled board configuration
-IV. Doom-Phonics
-    A. WAD adapter and DECORATE ECS
-    B. Direct GLES rendering
-    C. World-owned licensed content
-    D. Ordered local stacks and Matrix matches
-V. Study the implementations
-    A. Package-owned assets
-    B. Reference guides
-VI. PHP Buster
-    A. Original four-stage wave loop
-    B. Pointer, touch, keyboard, and controller input
-    C. Logical viewport and sample playback utilities
+I. Introduce the bundled games
+    A. Each game owns its maps, assets, factories, systems, rendering, and lifecycle
+    B. Each screenshot opens a game's documentation and on-demand playable embed
+II. Select a game
+    A. Sane-Phonics: platforming, loops, vehicles, and streamed worlds
+    B. PHP-Noid: a 25-stage brick-breaker campaign
+    C. PHPTris: solo modes and progressive challenge tracks
+    D. PHP Slalom: arcade steering, six stages, and deterministic replays
+    E. PHP Buster: Blockade waves, weapon upgrades, and local scores
+    F. Doom-Phonics: WAD maps, DECORATE actors, and multiplayer
+III. Use the games as references
+    A. Working examples of the package contract
+    B. The generic preview for separate worlds

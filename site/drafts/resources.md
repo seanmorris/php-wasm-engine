@@ -9,3 +9,7 @@ II. Use pallets and fragments
 III. Keep identity separate from state
     A. Canonical URL and placement
     B. Scopes, retries and cancellation
+IV. Declare ordered resource stacks
+    A. Multiple-resource slots with one requirement
+    B. Distinct first and following requirements
+    C. Launcher revalidation and multiplayer negotiation

@@ -1,5 +1,7 @@
 # MB2 WebRTC and lobby port analysis
 
+> **Historical design proposal.** This document is the analysis and plan for the Phonics networking port, kept as a design record. The shipped API differs from it: several types named below (`PeerRole`, `PeerTransport`, `MatchHandle`, `LobbyService`, `NetworkOwnership`, `Authority`) do not exist, and the readiness and start messages differ. For the current design, see [Networking in the architecture reference](architecture.md#networking), the `Phonics\Network` PHP reference (`api-network.html` on the documentation site), the [JavaScript networking reference](api-js/modules/networking/), the sources in [`src/Network`](../src/Network) and [`browser/network`](../browser/network), and [Doom-Phonics multiplayer and replication](../packages/doom-phonics/docs/multiplayer.md).
+
 This document analyzes the current two-player path in Moving Boxes 2 (MB2) and defines the boundary for a Phonics port. The Subspace/WebSocket experiment is deliberately excluded. The target is an HTML lobby followed by a direct launch into the world's declared starting level when two players have connected.
 
 ## Recommendation

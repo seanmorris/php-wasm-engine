@@ -22,6 +22,20 @@ const originPolicy = values => {
 export class ResourceNegotiator
 {
 
+	/**
+	 * Bind negotiation to one normalized world and a scope of the shared resource store.
+	 * @param {object} options Negotiator dependencies.
+	 * @param {object} options.world Normalized world with resourceSlots, sources, and sourceUrl.
+	 * @param {ResourceStore} options.store Store whose scope(signal) performs reads.
+	 * @param {AbortSignal} [options.signal] Cancels reads and makes later calls throw.
+	 * @param {object} [options.policy] `dataOrigins` (default: the world origin; `*` allows any) and `maxResourceBytes`
+	 * (default 256 MiB).
+	 * @param {string} [options.role] `host` (default) or `guest`; checked against each slot's authority.
+	 * @param {function(object): void} [options.onProgress] Receives frozen {state, slot, url, bytes} updates.
+	 * @param {function(string): (function|{inspect: function})|null} [options.inspectors] Creates a resource inspector
+	 * by reference.
+	 * @throws {TypeError} When the world, store, or role is invalid.
+	 */
 	constructor({world, store, signal, policy = {}, role = 'host', onProgress = () => {}, inspectors = null})
 	{
 		if(!world?.resourceSlots || !world?.sources) throw new TypeError('Resource negotiation requires a world');
@@ -51,7 +65,14 @@ export class ResourceNegotiator
 		this.maximumBytes = policy.maxResourceBytes ?? 256 * 1024 * 1024;
 	}
 
-	/** Create and verify a local offer for a slot this peer is permitted to fill. */
+	/**
+	 * Create and verify a local offer for a slot this peer is permitted to fill.
+	 * @param {string} slotId World resource slot ID.
+	 * @param {string} url Resource URL, resolved against the world and checked against the data-origin policy.
+	 * @param {object} [metadata] Optional `stackIndex`, `role`, `adapter`, `order`, and `label`.
+	 * @returns {Promise<ResourceOffer>} Verified offer; local-distribution slots delegate to offerLocal().
+	 * @throws {NetworkError} When authority, origin, size, type, integrity, or inspection checks fail.
+	 */
 	async offer(slotId, url, metadata = {})
 	{
 		this.requireOpen();
@@ -111,7 +132,14 @@ export class ResourceNegotiator
 		}
 	}
 
-	/** Inspect a prospective selection for authoring UI without binding or publishing it. */
+	/**
+	 * Inspect a prospective selection for authoring UI without binding or publishing it.
+	 * @param {string} slotId World resource slot ID.
+	 * @param {Blob|string} source Selected file, or a URL checked against the data-origin policy (blob: URLs allowed).
+	 * @param {object} [metadata] Optional `stackIndex` and `role`.
+	 * @returns {Promise<Readonly<object>>} Slot, source, filename, display URL, integrity, bytes, candidate, profile.
+	 * @throws {NetworkError} When size, type, integrity, inspection, or candidate checks fail.
+	 */
 	async preview(slotId, source, metadata = {})
 	{
 		this.requireOpen();
@@ -156,7 +184,13 @@ export class ResourceNegotiator
 		});
 	}
 
-	/** Resolve a local-only selection and create an offer which exposes no acquisition URL. */
+	/**
+	 * Resolve a local-only selection and create an offer which exposes no acquisition URL.
+	 * @param {string} slotId World resource slot ID.
+	 * @param {Blob|string} source Selected file or authorized URL.
+	 * @param {object} [metadata] Optional `stackIndex`, `role`, `adapter`, `order`, and `label`.
+	 * @returns {Promise<ResourceOffer>} Local-distribution offer carrying a URL-free requirement.
+	 */
 	async offerLocal(slotId, source, metadata = {})
 	{
 		const slot = this.slot(slotId);
@@ -189,7 +223,17 @@ export class ResourceNegotiator
 		return offer;
 	}
 
-	/** Fetch an offered resource, optionally from an equivalent authorized mirror. */
+	/**
+	 * Fetch an offered resource, optionally from an equivalent authorized mirror.
+	 * @param {ResourceOffer|object} value Peer offer, or fields for a new ResourceOffer.
+	 * @param {object} [options] Acquisition overrides.
+	 * @param {string|null} [options.url] Mirror URL; also the default for `source`.
+	 * @param {Blob|string|null} [options.source] Local file or URL used instead of the offer URL.
+	 * @param {number} [options.stackIndex] Position in an ordered slot; defaults to 0.
+	 * @param {AbortSignal} [options.signal] Aborts between acquisition steps.
+	 * @returns {Promise<ResolvedResource>} Verified resource, also recorded for bindWorld().
+	 * @throws {NetworkError} When requirement, authority, role, origin, size, integrity, or inspection checks fail.
+	 */
 	async accept(value, {url = null, source = url, stackIndex = 0, signal} = {})
 	{
 		this.requireOpen();
@@ -248,7 +292,16 @@ export class ResourceNegotiator
 		}
 	}
 
-	/** Satisfy a name-only offer using bytes selected independently on this peer. */
+	/**
+	 * Satisfy a name-only offer using bytes selected independently on this peer.
+	 * @param {ResourceOffer} offer Local-distribution offer from the peer.
+	 * @param {object} slot Normalized world slot.
+	 * @param {Blob|string|null} source Local selection; defaults to the slot or candidate default URL.
+	 * @param {object|null} requirement Requirement for this stack position.
+	 * @param {AbortSignal} [signal] Aborts between acquisition steps.
+	 * @returns {Promise<ResolvedResource>} Verified resource; integrity equivalence also requires the host digest.
+	 * @throws {NetworkError} When no source is available or verification fails.
+	 */
 	async acceptLocal(offer, slot, source, requirement, signal)
 	{
 		source ??= this.defaultSource(slot, requirement);
@@ -288,7 +341,12 @@ export class ResourceNegotiator
 		return resolved;
 	}
 
-	/** Resolve a slot's local default through the same integrity path used by peer offers. */
+	/**
+	 * Resolve a slot's local default through the same integrity path used by peer offers.
+	 * @param {string} slotId World resource slot ID.
+	 * @param {object} [metadata] Metadata passed to offer().
+	 * @returns {Promise<ResolvedResource|null>} Last resolved resource for the slot, or null without a default URL.
+	 */
 	async default(slotId, metadata = {})
 	{
 		const slot = this.slot(slotId);
@@ -300,19 +358,30 @@ export class ResourceNegotiator
 		return this.resolved.get(slotId)?.at(-1) ?? null;
 	}
 
-	/** Return the deterministic manifest currently bound to this session. */
+	/**
+	 * Return the deterministic manifest currently bound to this session.
+	 * @returns {ContentManifest} Offers for every resolved resource.
+	 */
 	manifest()
 	{
 		return new ContentManifest([...this.resolved.values()].flat().map(resource => resource.offer));
 	}
 
-	/** Return compatibility evidence stripped of every local or remote acquisition URL. */
+	/**
+	 * Return compatibility evidence stripped of every local or remote acquisition URL.
+	 * @returns {ResourceResolution[]} Resolution evidence for every resolved resource.
+	 */
 	resolutions()
 	{
 		return [...this.resolved.values()].flat().map(resource => resource.resolution);
 	}
 
-	/** Validate the peer's safe resolution summary against this peer's bound content. */
+	/**
+	 * Validate the peer's safe resolution summary against this peer's bound content.
+	 * @param {Array<ResourceResolution|object>} [values] Peer resolutions keyed by slot and order.
+	 * @returns {boolean} True when every local resource matches and the peer resolved nothing extra.
+	 * @throws {NetworkError} When a slot is missing, differs where exactness is required, or is undeclared.
+	 */
 	verifyPeer(values = [])
 	{
 		const remote = new Map(values.map(value => {
@@ -356,6 +425,14 @@ export class ResourceNegotiator
 		return true;
 	}
 
+	/**
+	 * Require every guard slot of a profile requirement to match the peer exactly.
+	 * @param {ResourceRequirement} requirement Profile-equivalence requirement naming guard slots.
+	 * @param {Map<string, ResourceResolution>} remote Peer resolutions keyed by `slot:order`.
+	 * @param {string} slotId Slot whose profiles differ, used in error messages.
+	 * @returns {void}
+	 * @throws {NetworkError} When a guard is unresolved, uses profile equivalence, or differs from the peer.
+	 */
 	verifyProfileGuards(requirement, remote, slotId)
 	{
 		for(const guardId of requirement.profileRequires)
@@ -385,7 +462,13 @@ export class ResourceNegotiator
 		}
 	}
 
-	/** Produce an immutable world copy with every resource slot replaced by verified URLs. */
+	/**
+	 * Produce an immutable world copy with every resource slot replaced by verified URLs.
+	 * @param {object} [options] Binding overrides.
+	 * @param {object|null} [options.start] Replacement start selector.
+	 * @returns {object} Cloned world whose slotted placements are replaced by resolved resources.
+	 * @throws {NetworkError} When a required slot is unresolved.
+	 */
 	bindWorld({start = null} = {})
 	{
 		this.requireOpen();
@@ -445,7 +528,10 @@ export class ResourceNegotiator
 		return world;
 	}
 
-	/** Maps visible after applying archive-order overrides from all inspected resources. */
+	/**
+	 * Maps visible after applying archive-order overrides from all inspected resources.
+	 * @returns {string[]} Map names from inspected profiles, with later archives moving repeated names last.
+	 */
 	maps()
 	{
 		const result = [];
@@ -466,7 +552,10 @@ export class ResourceNegotiator
 		return result;
 	}
 
-	/** Forget an abandoned setup while retaining the session's shared fetch cache. */
+	/**
+	 * Forget an abandoned setup while retaining the session's shared fetch cache.
+	 * @returns {void}
+	 */
 	reset()
 	{
 		this.requireOpen();
@@ -477,6 +566,10 @@ export class ResourceNegotiator
 		this.objectUrls.clear();
 	}
 
+	/**
+	 * Close the store scope, forget resolutions, and revoke created object URLs; repeated calls do nothing.
+	 * @returns {void}
+	 */
 	close()
 	{
 		if(this.closed) return;
@@ -490,13 +583,25 @@ export class ResourceNegotiator
 		this.objectUrls.clear();
 	}
 
+	/**
+	 * Look up one world resource slot.
+	 * @param {string} id Resource slot ID.
+	 * @returns {object} Normalized slot declaration.
+	 * @throws {NetworkError} With code resource_slot for an unknown ID.
+	 */
 	slot(id)
 	{
 		return this.world.resourceSlots[id]
 			?? (() => { throw new NetworkError('resource_slot', `Unknown resource slot ${id}`); })();
 	}
 
-	/** Select the validation contract for one position in an ordered resource slot. */
+	/**
+	 * Select the validation contract for one position in an ordered resource slot.
+	 * @param {object} slot Normalized world slot.
+	 * @param {number} [stackIndex] Stack position; 0 selects `stack.first`, later positions `stack.following`.
+	 * @returns {object|null} Requirement for that position, or null when the slot has none.
+	 * @throws {NetworkError} When the stack index is not a non-negative integer.
+	 */
 	requirement(slot, stackIndex = 0)
 	{
 		if(!slot.stack) return slot.requirement ?? null;
@@ -507,6 +612,13 @@ export class ResourceNegotiator
 		return stackIndex === 0 ? slot.stack.first : slot.stack.following;
 	}
 
+	/**
+	 * Require an offer to carry the world's URL-free requirement for its stack position.
+	 * @param {ResourceOffer} offer Offer under review.
+	 * @param {object|null} expected World requirement for the position.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_profile when the requirements differ.
+	 */
 	validateOfferedRequirement(offer, expected)
 	{
 		const actual = offer.requirement ?? null;
@@ -519,6 +631,11 @@ export class ResourceNegotiator
 		);
 	}
 
+	/**
+	 * List the distinct placement roles that world sources assign to a slot.
+	 * @param {string} slotId Resource slot ID.
+	 * @returns {string[]} Roles in source order; placements without a role count as `data`.
+	 */
 	roles(slotId)
 	{
 		return [...new Set(
@@ -529,6 +646,13 @@ export class ResourceNegotiator
 		)];
 	}
 
+	/**
+	 * Resolve a URL and enforce the protocol, credential, and data-origin policy.
+	 * @param {string|URL} value URL resolved against the world URL.
+	 * @param {string} slotId Slot used in error messages.
+	 * @returns {string} Absolute authorized URL; file: URLs bypass the origin check.
+	 * @throws {NetworkError} With code resource_url or data_origin.
+	 */
 	authorize(value, slotId)
 	{
 		let url;
@@ -551,6 +675,17 @@ export class ResourceNegotiator
 		return url.href;
 	}
 
+	/**
+	 * Enforce size limits, the offered byte length, and extension rules.
+	 * @param {string} slotId Slot used in error messages.
+	 * @param {object} slot Normalized world slot with `accept` rules and optional `maxBytes`.
+	 * @param {string} url Display URL used when no filename is known.
+	 * @param {Uint8Array} bytes Acquired bytes.
+	 * @param {number|null} [offeredBytes] Length promised by an offer, when checked.
+	 * @param {string} [filename] Name tested against `.ext` accept rules.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_size or resource_type.
+	 */
 	validateBytes(slotId, slot, url, bytes, offeredBytes = null, filename = '')
 	{
 		const limit = Math.min(slot.maxBytes ?? this.maximumBytes, this.maximumBytes);
@@ -567,6 +702,15 @@ export class ResourceNegotiator
 		throw new NetworkError('resource_type', `Resource slot ${slotId} does not accept ${filename || url}`);
 	}
 
+	/**
+	 * Enforce any integrity and byte length fixed by the world slot.
+	 * @param {string} slotId Slot used in error messages.
+	 * @param {object} slot Normalized world slot.
+	 * @param {string} integrity Computed SHA-256 SRI string.
+	 * @param {number} bytes Computed byte length.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_integrity or resource_size.
+	 */
 	validateExpected(slotId, slot, integrity, bytes)
 	{
 		if(slot.integrity && slot.integrity !== integrity)
@@ -576,6 +720,14 @@ export class ResourceNegotiator
 		throw new NetworkError('resource_size', `Resource slot ${slotId} does not match its world byte length`);
 	}
 
+	/**
+	 * Require a world-authority slot to use its declared default URL.
+	 * @param {string} slotId Slot used in error messages.
+	 * @param {object} slot Normalized world slot with `defaultUrl`.
+	 * @param {string} value Proposed URL.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_authority when the URLs differ.
+	 */
 	requireWorldDefault(slotId, slot, value)
 	{
 		const actual = this.authorize(value, slotId);
@@ -585,6 +737,16 @@ export class ResourceNegotiator
 		throw new NetworkError('resource_authority', `Resource slot ${slotId} is fixed by its declaring world`);
 	}
 
+	/**
+	 * Read a locally selected file or authorized URL and check its size and type.
+	 * @param {string} slotId Slot used in progress and errors.
+	 * @param {object} slot Normalized world slot.
+	 * @param {Blob|string} source Selected file (mounted through an object URL) or URL.
+	 * @param {object|null} [requirement] Requirement whose names supply a Blob's fallback filename.
+	 * @returns {Promise<{bytes: Uint8Array, sourceUrl: string, filename: string, displayUrl: string}>} Acquired bytes
+	 * and their identities.
+	 * @throws {NetworkError} When the source is missing, cannot be mounted, or fails validation.
+	 */
 	async acquireLocal(slotId, slot, source, requirement = this.requirement(slot))
 	{
 		this.requireOpen();
@@ -621,6 +783,16 @@ export class ResourceNegotiator
 		return {bytes, sourceUrl, filename, displayUrl};
 	}
 
+	/**
+	 * Run the requirement's inspector over acquired bytes.
+	 * @param {string} slotId Slot passed to the inspector.
+	 * @param {object} slot Normalized world slot.
+	 * @param {Uint8Array} bytes Acquired bytes.
+	 * @param {object} details `role`, `filename`, `sourceUrl`, and optional `displayUrl`.
+	 * @param {object|null} [requirement] Requirement naming the inspector; none skips inspection.
+	 * @returns {Promise<{candidate: string, profile: object}>} Matched candidate ID and cloned profile.
+	 * @throws {NetworkError} When no valid inspector exists, it fails, or it returns an invalid result.
+	 */
 	async inspect(slotId, slot, bytes, details, requirement = this.requirement(slot))
 	{
 		if(!requirement) return {candidate: '', profile: {}};
@@ -677,6 +849,16 @@ export class ResourceNegotiator
 		return {candidate: result.candidate ?? '', profile: structuredClone(result.profile)};
 	}
 
+	/**
+	 * Require the inspected candidate to be accepted and match its pinned digest and length.
+	 * @param {string} slotId Slot used in error messages.
+	 * @param {object|null} requirement Requirement listing candidates; null skips the check.
+	 * @param {{candidate: string}} inspected Inspector result.
+	 * @param {string} integrity Computed SHA-256 SRI string.
+	 * @param {number} bytes Computed byte length.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_profile, resource_integrity, or resource_size.
+	 */
 	validateCandidate(slotId, requirement, inspected, integrity, bytes)
 	{
 		if(!requirement) return;
@@ -700,6 +882,14 @@ export class ResourceNegotiator
 		);
 	}
 
+	/**
+	 * Build URL-free compatibility evidence for one verified resource.
+	 * @param {ResourceOffer} offer Offer supplying slot and order.
+	 * @param {string} integrity Computed SHA-256 SRI string.
+	 * @param {number} bytes Computed byte length.
+	 * @param {{candidate: string, profile: object}} inspected Inspector result.
+	 * @returns {ResourceResolution} Evidence safe to send to a peer.
+	 */
 	resolution(offer, integrity, bytes, inspected)
 	{
 		return new ResourceResolution({
@@ -712,6 +902,12 @@ export class ResourceNegotiator
 		});
 	}
 
+	/**
+	 * Choose the default local source for a slot position.
+	 * @param {object} slot Normalized world slot.
+	 * @param {object|null} [requirement] Requirement for the position.
+	 * @returns {string|null} Slot default URL for the first position, else the first candidate URL, else null.
+	 */
 	defaultSource(slot, requirement = this.requirement(slot))
 	{
 		const slotDefault = !slot.stack || requirement === slot.stack.first ? slot.defaultUrl : null;
@@ -719,6 +915,11 @@ export class ResourceNegotiator
 		return slotDefault ?? requirement?.candidates?.find(candidate => candidate.url)?.url ?? null;
 	}
 
+	/**
+	 * List the acceptable file names declared by a requirement and its candidates.
+	 * @param {object|null} requirement Requirement to read.
+	 * @returns {string[]} Distinct names in declaration order.
+	 */
 	requirementNames(requirement)
 	{
 		return [...new Set([
@@ -727,6 +928,11 @@ export class ResourceNegotiator
 		])];
 	}
 
+	/**
+	 * Copy a requirement without candidate URLs so it can be shared with peers.
+	 * @param {object} requirement Requirement fields.
+	 * @returns {ResourceRequirement} Requirement whose candidates omit `url`.
+	 */
 	safeRequirement(requirement)
 	{
 		return new ResourceRequirement({
@@ -739,6 +945,11 @@ export class ResourceNegotiator
 		});
 	}
 
+	/**
+	 * Derive a display filename from a URL or file-like value.
+	 * @param {string|{name?: string}} value URL resolved against the world, or an object with a name.
+	 * @returns {string} Decoded last path segment, the object's name, or the original string when parsing fails.
+	 */
 	filename(value)
 	{
 		if(typeof value !== 'string') return String(value?.name ?? '');
@@ -755,6 +966,13 @@ export class ResourceNegotiator
 		}
 	}
 
+	/**
+	 * Authorize a local selection URL, allowing blob: URLs without an origin check.
+	 * @param {string} value URL resolved against the world URL.
+	 * @param {string} slotId Slot used in error messages.
+	 * @returns {string} Absolute authorized URL.
+	 * @throws {NetworkError} With code resource_url or data_origin.
+	 */
 	authorizeLocal(value, slotId)
 	{
 		let url;
@@ -773,11 +991,26 @@ export class ResourceNegotiator
 		return this.authorize(url, slotId);
 	}
 
+	/**
+	 * Report one progress update to the onProgress observer.
+	 * @param {string} state Progress state such as `loading` or `verified`.
+	 * @param {string} slot Resource slot ID.
+	 * @param {string} url Display URL.
+	 * @param {number} [bytes] Verified byte length; defaults to 0.
+	 * @returns {void}
+	 */
 	progress(state, slot, url, bytes = 0)
 	{
 		this.onProgress(Object.freeze({state, slot, url, bytes}));
 	}
 
+	/**
+	 * Record a verified resource for its slot in placement order.
+	 * @param {ResolvedResource} resolved Verified resource.
+	 * @param {object} slot Normalized world slot; only `multiple` slots accept several resources.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_conflict when a single-resource slot is already filled.
+	 */
 	remember(resolved, slot)
 	{
 		const items = this.resolved.get(resolved.offer.slot) ?? [];
@@ -790,6 +1023,11 @@ export class ResourceNegotiator
 		this.resolved.set(resolved.offer.slot, items);
 	}
 
+	/**
+	 * Throw when the negotiator's signal has aborted or it has been closed.
+	 * @returns {void}
+	 * @throws {NetworkError} With code resource_closed after close().
+	 */
 	requireOpen()
 	{
 		this.signal?.throwIfAborted();

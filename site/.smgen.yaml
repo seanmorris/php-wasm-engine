@@ -3,6 +3,8 @@ SEARCH_READER: /vendor/smgen-search/SearchReader.mjs
 SMG_SEARCH: ../node_modules/.bin/smgen-search
 STYLES:
   - /site.css
+SCRIPTS:
+  - /nav-state.js
 BODY_SCRIPTS:
   - /vendor/highlight.js/highlight.min.js
   - /syntax-highlight.js
@@ -67,7 +69,7 @@ MENUS:
         expanded: true
       - id: api
         group: true
-        title: Programming API
+        title: PHP API
         parent: reference
         weight: 60
         expanded: false
@@ -155,11 +157,41 @@ MENUS:
         parent: api
         weight: 130
         expanded: false
-      - id: api-browser
+      - id: api-js
         group: true
-        title: Browser API
-        parent: api
-        weight: 140
+        title: JavaScript API
+        parent: reference
+        weight: 70
+        expanded: false
+      - id: api-js-modules
+        group: true
+        title: Modules
+        parent: api-js
+        weight: 10
+        expanded: false
+      - id: api-js-classes
+        group: true
+        title: Classes
+        parent: api-js
+        weight: 20
+        expanded: false
+      - id: api-js-functions
+        group: true
+        title: Functions
+        parent: api-js
+        weight: 30
+        expanded: false
+      - id: api-js-types
+        group: true
+        title: Types
+        parent: api-js
+        weight: 40
+        expanded: false
+      - id: api-js-values
+        group: true
+        title: Values
+        parent: api-js
+        weight: 50
         expanded: false
       - id: games
         group: true

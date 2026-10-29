@@ -6,9 +6,9 @@
 |---|---|---|---|
 | Move | Arrow keys, WASD, or mouse position | Left stick | Drag the craft |
 | Fire | Space or primary mouse button | A or RB | Fire button |
-| Pause | Escape or P | Start / Options | Browser pause control |
+| Pause | Escape or P | Start / Options | — |
 
-Keyboard and controller movement is analog and normalized, so diagonal movement is not faster. Mouse position targets the logical playfield directly. Touch drag begins at the craft's current position, which prevents the craft from jumping to the finger when a drag starts.
+Controller stick movement is analog; keyboard keys move at full speed. Both are normalized, so diagonal movement is not faster. Touch has no pause control; pause with a keyboard or controller. Mouse position targets the logical playfield directly. Touch drag begins at the craft's current position, which prevents the craft from jumping to the finger when a drag starts.
 
 Open **Input settings** to add or remove gameplay bindings separately for keyboard/mouse and controller. Capture waits for the activating input to return to neutral, handles conflicts explicitly, and keeps the fixed pause controls available. Valid changes are stored locally; blocked browser storage leaves them active for the session.
 

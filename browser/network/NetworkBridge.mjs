@@ -15,6 +15,12 @@ const decode = value => Uint8Array.from(atob(value), character => character.char
 export class NetworkBridge
 {
 
+	/**
+	 * Create empty browser-to-PHP queues with packet and byte limits.
+	 * @param {object} [options] Queue limits.
+	 * @param {number} [options.maximumPackets] Queued packet limit; defaults to 256.
+	 * @param {number} [options.maximumBytes] Queued byte limit; defaults to 4 MiB.
+	 */
 	constructor({maximumPackets = 256, maximumBytes = 4 * 1024 * 1024} = {})
 	{
 		this.maximumPackets = maximumPackets;
@@ -26,6 +32,12 @@ export class NetworkBridge
 		this.closed = false;
 	}
 
+	/**
+	 * Replace the peer transport, discarding packets queued for the previous match.
+	 * @param {{send: function(string, Uint8Array): *}} transport Peer transport used by send().
+	 * @returns {void}
+	 * @throws {NetworkError} When the bridge is closed.
+	 */
 	attach(transport) { this.requireOpen(); this.detach(); this.transport = transport; }
 
 	/** Discard one match's packets while keeping the PHP bridge usable for the next match. */
@@ -36,6 +48,13 @@ export class NetworkBridge
 		this.incomingBytes = 0;
 	}
 
+	/**
+	 * Queue one received packet for PHP, shedding older realtime packets when the queue is full.
+	 * @param {string} channel Channel name; realtime packets may be dropped, others are reliable.
+	 * @param {Uint8Array|ArrayBuffer|ArrayLike<number>} data Packet bytes; non-Uint8Array values are copied.
+	 * @returns {boolean} True when queued; false when a realtime packet was dropped.
+	 * @throws {NetworkError} When the bridge is closed or a reliable packet does not fit.
+	 */
 	push(channel, data)
 	{
 		this.requireOpen();
@@ -65,7 +84,12 @@ export class NetworkBridge
 		return true;
 	}
 
-	/** Return base64 records because Vrzno cannot retain ArrayBuffers across the PHP call boundary. */
+	/**
+	 * Return base64 records because Vrzno cannot retain ArrayBuffers across the PHP call boundary.
+	 * @param {number} [limit] Maximum packets to dequeue, clamped to 0 through 256; defaults to 64.
+	 * @returns {string} JSON array of {channel, data} records with base64 data.
+	 * @throws {NetworkError} When the bridge is closed.
+	 */
 	receive(limit = 64)
 	{
 		this.requireOpen();
@@ -76,6 +100,13 @@ export class NetworkBridge
 		return JSON.stringify(result.map(item => ({channel: item.channel, data: encode(item.data)})));
 	}
 
+	/**
+	 * Send one PHP packet through the attached transport.
+	 * @param {string} channel Channel name passed to the transport.
+	 * @param {string|Uint8Array} value Base64 packet text, or bytes passed through unchanged.
+	 * @returns {*} The transport's send() result.
+	 * @throws {NetworkError} When the bridge is closed or no transport is attached.
+	 */
 	send(channel, value)
 	{
 		this.requireOpen();
@@ -85,6 +116,10 @@ export class NetworkBridge
 		return this.transport.send(channel, typeof value === 'string' ? decode(value) : value);
 	}
 
+	/**
+	 * Report queue occupancy and dropped realtime packets.
+	 * @returns {{queuedPackets: number, queuedBytes: number, dropped: number}} Frozen counters.
+	 */
 	diagnostics()
 	{
 		return Object.freeze({
@@ -94,12 +129,20 @@ export class NetworkBridge
 		});
 	}
 
+	/**
+	 * Close the bridge and discard the transport and queued packets.
+	 * @returns {void}
+	 */
 	close()
 	{
 		this.closed = true;
 		this.detach();
 	}
 
+	/**
+	 * Drop the oldest queued realtime packet.
+	 * @returns {boolean} True when a packet was dropped.
+	 */
 	dropRealtime()
 	{
 		const index = this.incoming.findIndex(item => item.channel === 'realtime');
@@ -113,6 +156,11 @@ export class NetworkBridge
 		return true;
 	}
 
+	/**
+	 * Reject use after close().
+	 * @returns {void}
+	 * @throws {NetworkError} When the bridge is closed.
+	 */
 	requireOpen()
 	{
 		if(this.closed) throw new NetworkError('bridge_closed', 'Network bridge is closed');

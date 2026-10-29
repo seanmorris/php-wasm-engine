@@ -6,4 +6,4 @@ Bricks expose `hits`, `unbreakable`, `material`, `capsule`, and `score`. Enemies
 
 Capsule definitions, colors, labels, durations, and conflict groups live in `assets/capsules.json`. Stage layouts are ordinary Tiled maps. Regenerate the authored campaign with `node generate-stages.mjs`, the font atlas with `php generate-font.php`, and production manifests with `node scripts/manifests.mjs` from the repository root.
 
-Each stage owns a distinct silhouette and authored background. The package retains broad firing lanes and negative space so multiball, missiles, and ship encounters remain readable.
+Each stage owns a distinct silhouette. Stages 1–10 each have their own authored background; stages 11–25 reuse those ten images. The package retains broad firing lanes and negative space so multiball, missiles, and ship encounters remain readable.

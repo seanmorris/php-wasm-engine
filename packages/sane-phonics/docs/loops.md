@@ -4,7 +4,8 @@ Select **Loop-de-loop** in the live demo and hold Right from the start. After ex
 
 Open [`examples/assets/loop.tmj`](../examples/assets/loop.tmj) in Tiled. Its external [`loop.tsj`](../examples/assets/loop.tsj) tileset contains original procedural artwork and collision polygons. Run `php examples/generate-assets.php` to regenerate the demo assets.
 
-Select **Grinding rail** for the extended test course. Its
+Select **Grinding rail** from the pause menu's **Level** list for the extended test course; the main
+menu's level list does not include it. Its
 [`grinding.tmj`](../examples/assets/grinding.tmj) begins with separate grinding, ordinary-ground,
 and grinding polygons sharing a level surface. Four visible quarter bends then raise and lower the
 rail before it reaches the loop. [`grinding.tsj`](../examples/assets/grinding.tsj) retains matching
@@ -67,7 +68,7 @@ PHP gates use the **body center**. Give entrance gates enough height to include 
 
 ## Continuous switching and collision
 
-`Platformer::sweep` compares the first terrain impact with the first gate crossing along the entire displacement. It moves to whichever comes first. After a switch, it casts the remaining displacement against the new plane. Multiple gates are processed in travel order, regardless of object order, and do not consume the six-contact terrain budget. A wall before a gate prevents reaching that gate. Narrow regions cannot be skipped by a fast dash or airborne move.
+`Platformer::step()` moves each body through a private sweep that compares the first terrain impact with the first gate crossing along the entire displacement. It moves to whichever comes first. After a switch, it casts the remaining displacement against the new plane. Multiple gates are processed in travel order, regardless of object order, and do not consume the six-contact terrain budget. A wall before a gate prevents reaching that gate. Narrow regions cannot be skipped by a fast dash or airborne move.
 
 `Terrain::castBody` expands terrain segments by the oriented body to prevent tunneling. Short `Terrain::raycast` calls keep the feet attached and handle clearance and climbing. Both queries include shared terrain plus the body's selected plane. Opposite tile edges cancel only when both neighboring shapes are active, including joins between shared terrain and a selected half.
 

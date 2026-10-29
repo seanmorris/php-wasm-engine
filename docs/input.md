@@ -24,17 +24,17 @@ remain available, including Z for jump and left Shift for action.
 
 | Button | Xbox | PlayStation | Keyboard | Action alias |
 | --- | --- | --- | --- | --- |
-| 0 | <img class="controller-glyph" src="images/controllers/xbox-button-a.svg" alt="Xbox A button"> | <img class="controller-glyph" src="images/controllers/playstation-button-x.svg" alt="PlayStation Cross button"> | Space, Z, Enter, keypad Enter | `jump` |
-| 1 | <img class="controller-glyph" src="images/controllers/xbox-button-b.svg" alt="Xbox B button"> | <img class="controller-glyph" src="images/controllers/playstation-button-circle.svg" alt="PlayStation Circle button"> | X, left Shift, either Ctrl | `action` |
-| 2 | <img class="controller-glyph" src="images/controllers/xbox-button-x.svg" alt="Xbox X button"> | <img class="controller-glyph" src="images/controllers/playstation-button-square.svg" alt="PlayStation Square button"> | C | |
-| 3 | <img class="controller-glyph" src="images/controllers/xbox-button-y.svg" alt="Xbox Y button"> | <img class="controller-glyph" src="images/controllers/playstation-button-triangle.svg" alt="PlayStation Triangle button"> | V | |
-| 4, 5 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lb.svg" alt="Xbox LB button"><img class="controller-glyph" src="images/controllers/xbox-button-rb.svg" alt="Xbox RB button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l1.svg" alt="PlayStation L1 button"><img class="controller-glyph" src="images/controllers/playstation-button-r1.svg" alt="PlayStation R1 button"></span> | Q, E | |
-| 6, 7 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lt.svg" alt="Xbox LT button"><img class="controller-glyph" src="images/controllers/xbox-button-rt.svg" alt="Xbox RT button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l2.svg" alt="PlayStation L2 button"><img class="controller-glyph" src="images/controllers/playstation-button-r2.svg" alt="PlayStation R2 button"></span> | 1, 3 | |
-| 8 | <img class="controller-glyph" src="images/controllers/xbox-button-back.svg" alt="Xbox Back button"> | <img class="controller-glyph" src="images/controllers/playstation-button-select.svg" alt="PlayStation Select button"> | R | `reset` |
-| 9 | <img class="controller-glyph" src="images/controllers/xbox-button-start.svg" alt="Xbox Start button"> | <img class="controller-glyph" src="images/controllers/playstation-button-start.svg" alt="PlayStation Options button"> | P, Escape | `pause` |
-| 10, 11 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-lsb.svg" alt="Xbox left stick click"><img class="controller-glyph" src="images/controllers/xbox-button-rsb.svg" alt="Xbox right stick click"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-l3.svg" alt="PlayStation L3 button"><img class="controller-glyph" src="images/controllers/playstation-button-r3.svg" alt="PlayStation R3 button"></span> | Tab, Backspace | |
-| 12, 13 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-up.svg" alt="Xbox D-pad up"><img class="controller-glyph" src="images/controllers/xbox-button-down.svg" alt="Xbox D-pad down"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-up.svg" alt="PlayStation D-pad up"><img class="controller-glyph" src="images/controllers/playstation-button-down.svg" alt="PlayStation D-pad down"></span> | Up/W, Down/S | `up`, `down` |
-| 14, 15 | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/xbox-button-left.svg" alt="Xbox D-pad left"><img class="controller-glyph" src="images/controllers/xbox-button-right.svg" alt="Xbox D-pad right"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="images/controllers/playstation-button-left.svg" alt="PlayStation D-pad left"><img class="controller-glyph" src="images/controllers/playstation-button-right.svg" alt="PlayStation D-pad right"></span> | Left/A, Right/D | `left`, `right` |
+| 0 | <img class="controller-glyph" src="../art/controllers/xbox-button-a.svg" alt="Xbox A button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-x.svg" alt="PlayStation Cross button"> | Space, Z, Enter, keypad Enter | `jump` |
+| 1 | <img class="controller-glyph" src="../art/controllers/xbox-button-b.svg" alt="Xbox B button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-circle.svg" alt="PlayStation Circle button"> | X, left Shift, either Ctrl | `action` |
+| 2 | <img class="controller-glyph" src="../art/controllers/xbox-button-x.svg" alt="Xbox X button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-square.svg" alt="PlayStation Square button"> | C | `lightdash` (legacy) |
+| 3 | <img class="controller-glyph" src="../art/controllers/xbox-button-y.svg" alt="Xbox Y button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-triangle.svg" alt="PlayStation Triangle button"> | V | |
+| 4, 5 | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/xbox-button-lb.svg" alt="Xbox LB button"><img class="controller-glyph" src="../art/controllers/xbox-button-rb.svg" alt="Xbox RB button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/playstation-button-l1.svg" alt="PlayStation L1 button"><img class="controller-glyph" src="../art/controllers/playstation-button-r1.svg" alt="PlayStation R1 button"></span> | Q, E | |
+| 6, 7 | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/xbox-button-lt.svg" alt="Xbox LT button"><img class="controller-glyph" src="../art/controllers/xbox-button-rt.svg" alt="Xbox RT button"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/playstation-button-l2.svg" alt="PlayStation L2 button"><img class="controller-glyph" src="../art/controllers/playstation-button-r2.svg" alt="PlayStation R2 button"></span> | 1, 3 | |
+| 8 | <img class="controller-glyph" src="../art/controllers/xbox-button-back.svg" alt="Xbox Back button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-select.svg" alt="PlayStation Select button"> | R | `reset` |
+| 9 | <img class="controller-glyph" src="../art/controllers/xbox-button-start.svg" alt="Xbox Start button"> | <img class="controller-glyph" src="../art/controllers/playstation-button-start.svg" alt="PlayStation Options button"> | P, Escape | `pause` |
+| 10, 11 | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/xbox-button-lsb.svg" alt="Xbox left stick click"><img class="controller-glyph" src="../art/controllers/xbox-button-rsb.svg" alt="Xbox right stick click"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/playstation-button-l3.svg" alt="PlayStation L3 button"><img class="controller-glyph" src="../art/controllers/playstation-button-r3.svg" alt="PlayStation R3 button"></span> | Tab, Backspace | |
+| 12, 13 | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/xbox-button-up.svg" alt="Xbox D-pad up"><img class="controller-glyph" src="../art/controllers/xbox-button-down.svg" alt="Xbox D-pad down"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/playstation-button-up.svg" alt="PlayStation D-pad up"><img class="controller-glyph" src="../art/controllers/playstation-button-down.svg" alt="PlayStation D-pad down"></span> | Up/W, Down/S | `up`, `down` |
+| 14, 15 | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/xbox-button-left.svg" alt="Xbox D-pad left"><img class="controller-glyph" src="../art/controllers/xbox-button-right.svg" alt="Xbox D-pad right"></span> | <span class="controller-glyphs"><img class="controller-glyph" src="../art/controllers/playstation-button-left.svg" alt="PlayStation D-pad left"><img class="controller-glyph" src="../art/controllers/playstation-button-right.svg" alt="PlayStation D-pad right"></span> | Left/A, Right/D | `left`, `right` |
 | 16 | Guide | PS | None | |
 
 The left stick also supplies buttons 12–15 at proportional strength after the
@@ -71,6 +71,9 @@ editing keep their own UI bindings. For separate players, read individual SDL
 instance IDs through `Gamepads`, then feed each player's logical snapshot into
 its own `Controls` and `Sequences` objects.
 
+`lightdash` is a legacy compatibility alias for button 2, matching
+`InputCode::LIGHTDASH`. New games should name their own actions instead.
+
 ## Observe a code
 
 `SdlInput::$sequences` observes keyboard transitions in SDL queue order and
@@ -106,8 +109,8 @@ cardinal directions; opposing directions cancel on that axis.
 
 `drain()` returns completions in recognition order and empties its queue. Poll
 it regularly; the queue retains the latest 64 completions. `progress()` reports
-the longest remaining prefix, including a possible overlapping start after a
-completion. Definitions remain registered after a match.
+the number of steps in the longest matched prefix, including a possible
+overlapping start after a completion. Definitions remain registered after a match.
 
 ## Fighting-game combinations
 
@@ -206,27 +209,14 @@ binding methods and sequence observer remain available.
 `Engine::setFrameInputHandler()` runs after UI, pause and focus gating, before
 fixed updates. Its delta is capped at the fixed clock's stall limit. Read
 `$engine->input->frameActions()` here to consume relative displacement once
-per display frame. `ActionFrame::value($code, $device)` retains device strengths
-so applications can apply different mouse, keyboard and controller gains.
+per display frame. `ActionFrame::value($code, $device)` retains held strengths
+per device group: `Source::KEYBOARD` covers keys and mouse buttons, and
+`Source::CONTROLLER` covers pad buttons and axes. Mouse motion and wheel
+movement arrive separately through `ActionFrame::delta($code)`, so
+applications can apply different keyboard, controller and mouse gains.
 Fixed-step action reads do not consume mouse displacement, and display-frame
 reads do not consume fixed-step press counts.
 
-Doom uses this hook to integrate local look. It renders simulated yaw plus
-pending yaw, then transfers the pending yaw into the next player command
-exactly once. Pitch is absolute and visible immediately. The same command
-sampler serves offline and online play; remote commands received in a batch
-accumulate yaw and retain the newest pitch.
-
-Doom's Controls menu includes Keyboard & Mouse and Controller binding pages.
-Capture waits for neutral input, supports alternative bindings and removal,
-and offers Replace, Share or Cancel for conflicts. Escape/P/Start stay reserved
-for Pause; Escape or Start cancels capture. Menu navigation stays fixed.
-Profiles and look settings are saved in browser storage as
-`doom-phonics.controls.v1`; invalid entries fall back independently, and
-unavailable storage allows session-only edits.
-
-Right-stick look defaults to a 12% radial deadzone, a rescaled 1.5 exponent
-response, 180 degrees/second horizontally and 120 degrees/second vertically.
-Sensitivity multipliers range from 0.25 to 3; deadzone ranges from 0 to 30%.
-Vertical inversion is optional. Releasing the stick stops integration without
-recentering. Mouse and controller look settings are independent.
+Doom-Phonics uses this hook for display-rate mouse and controller look; its
+bindings, Controls menu and look settings are described in
+[Doom-Phonics playing and controls](../packages/doom-phonics/docs/playing.md).

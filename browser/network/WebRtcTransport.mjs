@@ -102,6 +102,22 @@ class WebRtcSignalingMessage
 export class WebRtcTransport extends EventTarget
 {
 
+	/**
+	 * Create a peer connection and install its negotiation, channel, and abort handlers.
+	 * @param {object} [options] Transport configuration.
+	 * @param {function(new:RTCPeerConnection, RTCConfiguration)} [options.RTCPeerConnection] Peer connection
+	 * constructor; defaults to globalThis.RTCPeerConnection.
+	 * @param {RTCIceServer[]} [options.iceServers] ICE servers passed to the peer connection; defaults to none.
+	 * @param {boolean} [options.polite] Whether this peer yields during offer collisions; defaults to false.
+	 * @param {function(object): (void|Promise<void>)} options.sendSignal Required callback that delivers
+	 * serialized description and ICE candidate messages to the remote peer.
+	 * @param {AbortSignal} [options.signal] External cancellation; aborting closes the transport.
+	 * @param {number} [options.timeout] Milliseconds start() waits for both channels; defaults to 20,000.
+	 * @param {number} [options.maximumPacketBytes] Largest packet sent or received; defaults to 1 MiB.
+	 * @param {number} [options.maximumBufferedBytes] Per-channel send buffer limit; defaults to 4 MiB.
+	 * @throws {NetworkError} When WebRTC is unavailable.
+	 * @throws {TypeError} When sendSignal is missing.
+	 */
 	constructor(
 		{
 			RTCPeerConnection: PeerConnection = globalThis.RTCPeerConnection
@@ -142,7 +158,14 @@ export class WebRtcTransport extends EventTarget
 		this.install();
 	}
 
-	/** Start negotiation; the initiator creates both negotiated traffic classes. */
+	/**
+	 * Start negotiation; the initiator creates both negotiated traffic classes.
+	 * @param {object} [options] Negotiation role.
+	 * @param {boolean} [options.initiator] Whether this peer creates the control and realtime channels;
+	 * defaults to false.
+	 * @returns {Promise<WebRtcTransport>} Resolves with this transport once both channels are open; repeated calls
+	 * return the same promise. Rejects on timeout, failure, or close.
+	 */
 	async start({initiator = false} = {})
 	{
 		if(this.started) return this.opened;
@@ -172,7 +195,13 @@ export class WebRtcTransport extends EventTarget
 		return this.opened;
 	}
 
-	/** Apply an authenticated signaling message from the selected lobby provider. */
+	/**
+	 * Apply an authenticated signaling message from the selected lobby provider.
+	 * @param {{description?: RTCSessionDescriptionInit, candidate?: RTCIceCandidateInit}} message Message containing
+	 * exactly one session description or ICE candidate.
+	 * @returns {Promise<void>} Resolves after the description or candidate is applied, queued, or ignored.
+	 * @throws {Error} Invalid or unapplicable signals fail the transport and are rethrown.
+	 */
 	async receiveSignal(message)
 	{
 		this.requireOpen(false);
@@ -242,7 +271,14 @@ export class WebRtcTransport extends EventTarget
 		}
 	}
 
-	/** Send control reliably or drop obsolete realtime data under pressure. */
+	/**
+	 * Send control reliably or drop obsolete realtime data under pressure.
+	 * @param {string} channel Channel label, control or realtime.
+	 * @param {Uint8Array|ArrayBuffer|ArrayLike<number>} value Packet bytes; non-Uint8Array values are copied.
+	 * @returns {boolean} True when sent; false when a realtime packet was dropped for backpressure.
+	 * @throws {NetworkError} When closed or not open, the packet is too large, the channel is not open, or the
+	 * control buffer is full.
+	 */
 	send(channel, value)
 	{
 		this.requireOpen();
@@ -273,6 +309,11 @@ export class WebRtcTransport extends EventTarget
 		return true;
 	}
 
+	/**
+	 * Report connection, channel, buffer, and traffic counters.
+	 * @returns {object} Frozen snapshot with connection and signaling states, channel states, buffered bytes,
+	 * pending candidates, dropped realtime packets, and sent and received byte totals.
+	 */
 	diagnostics()
 	{
 		return Object.freeze({
@@ -288,6 +329,11 @@ export class WebRtcTransport extends EventTarget
 		});
 	}
 
+	/**
+	 * Close both channels and the peer connection once, then dispatch a close event.
+	 * @param {string} [reason] Close reason used for the abort error and event detail; defaults to closed.
+	 * @returns {void}
+	 */
 	close(reason = 'closed')
 	{
 		if(this.closed) return;
@@ -306,6 +352,10 @@ export class WebRtcTransport extends EventTarget
 		this.dispatchEvent(event('close', {reason}));
 	}
 
+	/**
+	 * Install peer connection handlers and the abort listener; called by the constructor.
+	 * @returns {void}
+	 */
 	install()
 	{
 
@@ -342,6 +392,11 @@ export class WebRtcTransport extends EventTarget
 		this.signal.addEventListener('abort', () => this.close('cancelled'), {once: true});
 	}
 
+	/**
+	 * Validate and serialize one outgoing signaling message, then pass it to sendSignal.
+	 * @param {{description?: object, candidate?: object}} value Message containing one description or candidate.
+	 * @returns {Promise<void>} Resolves after sendSignal settles.
+	 */
 	async transmitSignal(value)
 	{
 		const signal = new WebRtcSignalingMessage(value);
@@ -349,6 +404,12 @@ export class WebRtcTransport extends EventTarget
 		await this.sendSignal(signal.toJSON());
 	}
 
+	/**
+	 * Hold an ICE candidate until the remote description is applied.
+	 * @param {RTCIceCandidateInit} candidate Validated candidate record.
+	 * @returns {void}
+	 * @throws {NetworkError} When 128 candidates are already queued.
+	 */
 	queueCandidate(candidate)
 	{
 		if(this.pendingCandidates.length >= 128)
@@ -357,11 +418,20 @@ export class WebRtcTransport extends EventTarget
 		this.pendingCandidates.push(candidate);
 	}
 
+	/**
+	 * Apply every queued ICE candidate in arrival order.
+	 * @returns {Promise<void>} Resolves after the queue is empty.
+	 */
 	async flushCandidates()
 	{
 		for(const candidate of this.pendingCandidates.splice(0)) await this.applyCandidate(candidate);
 	}
 
+	/**
+	 * Add one ICE candidate, ignoring failures while a colliding offer is being ignored.
+	 * @param {RTCIceCandidateInit} candidate Validated candidate record.
+	 * @returns {Promise<void>} Resolves after the candidate is added or ignored.
+	 */
 	async applyCandidate(candidate)
 	{
 		try
@@ -374,6 +444,11 @@ export class WebRtcTransport extends EventTarget
 		}
 	}
 
+	/**
+	 * Adopt the first control or realtime data channel and close any other channel.
+	 * @param {RTCDataChannel} channel Locally created or remotely announced data channel.
+	 * @returns {void}
+	 */
 	attach(channel)
 	{
 		if(!['control','realtime'].includes(channel.label))
@@ -419,6 +494,10 @@ export class WebRtcTransport extends EventTarget
 		};
 	}
 
+	/**
+	 * Resolve start() and dispatch open once both channels are open.
+	 * @returns {void}
+	 */
 	checkOpen()
 	{
 		if(this.channels.get('control')?.readyState !== 'open'
@@ -430,6 +509,11 @@ export class WebRtcTransport extends EventTarget
 		this.dispatchEvent(event('open', this.diagnostics()));
 	}
 
+	/**
+	 * Dispatch an error event, reject start(), and close the transport.
+	 * @param {Error} error Failure whose message becomes the close reason.
+	 * @returns {void}
+	 */
 	fail(error)
 	{
 		if(this.closed) return;
@@ -439,6 +523,12 @@ export class WebRtcTransport extends EventTarget
 		this.close(error.message);
 	}
 
+	/**
+	 * Reject use after close and, optionally, before start() has attached a channel.
+	 * @param {boolean} [channels] Whether a started transport with at least one channel is required; defaults to true.
+	 * @returns {void}
+	 * @throws {NetworkError} When the transport is closed or has not opened.
+	 */
 	requireOpen(channels = true)
 	{
 		if(this.closed) throw new NetworkError('transport_closed', 'WebRTC transport is closed');

@@ -12,15 +12,25 @@ final class ReplicationCallbacks
 	/**
 	 * Create and validate a replication callback set.
 	 *
-	 * @param callable(PlayerSlot,SimulationTick):array<string,bool|int|float|string|null> $sample Game callback that samples normalized player actions.
+	 * @param callable(PlayerSlot,SimulationTick):array<string,bool|int|float|string|null> $sample Game callback
+	 * that samples normalized player actions.
 	 * @param callable(InputCommand,bool):void $apply Game callback that applies a command to simulation state.
 	 * @param (callable(ReliableEvent):void)|null $event Idempotent reliable gameplay event.
+	 * @return void Stores the callbacks, substituting a no-op event handler when none is given.
 	 */
 	public function __construct(callable $sample, callable $apply, ?callable $event = null)
 	{
 		$this->sample = $sample;
 		$this->apply = $apply;
-		$this->event = $event ?? static function(): void {};
+
+		/**
+		 * Ignore reliable events when the game supplies no handler.
+		 *
+		 * @return void Does nothing.
+		 */
+		$ignoreEvent = static function(): void {};
+
+		$this->event = $event ?? $ignoreEvent;
 	}
 
 	/**
@@ -28,7 +38,7 @@ final class ReplicationCallbacks
 	 *
 	 * @param PlayerSlot $slot Player slot whose input is sampled, owned, or queried.
 	 * @param SimulationTick $tick Simulation tick associated with the command, event, or snapshot.
-	 * @return array<string,bool|int|float|string|null> Normalized actions or interpolation bounds; null when no samples exist.
+	 * @return array<string,bool|int|float|string|null> Normalized actions; a non-array result throws.
 	 */
 	public function sample(PlayerSlot $slot, SimulationTick $tick): array
 	{

@@ -8,5 +8,6 @@ II. Compose the world
     B. Select game and modules
     C. Place entities
 III. Validate and preview
-    A. Serve local content
-    B. Preserve source metadata
+    A. Choose a preview host and served world URL
+    B. Serve local content with matching origins and CORS
+    C. Preserve source metadata

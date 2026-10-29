@@ -14,6 +14,7 @@ final class NetworkIdentity
 	 *
 	 * @param NetworkEntityId $id Stable identifier for an authority, event, prefab, or network entity.
 	 * @param ReplicationScope $scope Lifetime boundary for the replicated entity.
+	 * @return void Stores the network ID and replication scope.
 	 */
 	public function __construct(
 		/** Stable event or prefab identifier. */

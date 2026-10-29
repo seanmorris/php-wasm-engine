@@ -197,43 +197,6 @@ const fitNavigation = () => {
 fitNavigation();
 narrow.addEventListener('change', fitNavigation);
 
-const menuStatePrefix = 'openMenu-';
-
-for(const menu of document.querySelectorAll('details[data-id-path]'))
-{
-	const key = menuStatePrefix + menu.dataset.idPath;
-
-	try
-	{
-		const saved = localStorage.getItem(key);
-
-		if(saved !== null) menu.open = JSON.parse(saved) === true;
-	}
-	catch
-	{
-		// Storage can be unavailable or contain stale data. Keep the authored state.
-	}
-
-	menu.addEventListener('toggle', () => {
-		try
-		{
-			localStorage.setItem(key, JSON.stringify(menu.open));
-		}
-		catch
-		{
-			// Navigation still works when storage is unavailable.
-		}
-	});
-}
-
-let activeMenu = document.querySelector('.site-navigation .active-link')?.closest('details');
-
-while(activeMenu)
-{
-	activeMenu.open = true;
-	activeMenu = activeMenu.parentElement?.closest('details');
-}
-
 let mousedownNavigationAnchor;
 let dispatchingMousedownNavigation = false;
 

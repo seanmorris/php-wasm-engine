@@ -5,7 +5,11 @@ namespace Phonics\Input;
 /** Standard gamepad numbers shared by SDL, keyboard bindings and recorded input. */
 final class Buttons
 {
-	/** Conventional action and direction names mapped to SDL game-controller button indices. */
+	/**
+	 * Conventional action and direction names mapped to standard browser-gamepad button numbers.
+	 * SdlInput translates SDL's own controller enum into this numbering. `lightdash` is a legacy
+	 * compatibility alias for button 2.
+	 */
 	public const ALIASES = [
 		'jump' => 0
 		, 'action' => 1

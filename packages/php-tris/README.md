@@ -8,11 +8,11 @@ Start Game begins the selected mode. Choose Mode offers Endless, 40 Lines, Time 
 
 | Action | Keyboard | Controller |
 | --- | --- | --- |
-| Move | Left / Right | D-pad Left / Right |
-| Soft drop | Down | D-pad Down |
+| Move | Left / Right | D-pad or left stick Left / Right |
+| Soft drop | Down | D-pad or left stick Down |
 | Rotate clockwise | Up / X | A |
 | Rotate counterclockwise | Z / Ctrl | B |
-| Hard drop | Space | Up / X |
+| Hard drop | Space | D-pad Up / X |
 | Hold | C / Shift | Y |
 | Pause | P / Escape | Start |
 

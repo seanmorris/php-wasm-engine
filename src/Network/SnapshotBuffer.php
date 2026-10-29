@@ -13,6 +13,7 @@ final class SnapshotBuffer
 	 *
 	 * @param int $capacity Maximum number of entries retained by the bounded collection.
 	 * @param int $delayTicks Number of host ticks kept behind for interpolation.
+	 * @return void Rejects a capacity outside 2 through 256 or a delay outside 0 through capacity minus one.
 	 */
 	public function __construct(
 		/** Maximum retained entry count. */
@@ -41,9 +42,10 @@ final class SnapshotBuffer
 	/**
 	 * Select delayed interpolation bounds around a host simulation tick.
 	 *
-	 * @param SimulationTick $hostTick Host tick used to enforce the accepted command window.
+	 * @param SimulationTick $hostTick Current host tick; the buffer samples delayTicks behind it.
 	 * @param float $fraction Fractional progress through the current host tick.
-	 * @return array{from:WorldSnapshot,to:WorldSnapshot,alpha:float}|null Normalized actions or interpolation bounds; null when no samples exist.
+	 * @return array{from:WorldSnapshot,to:WorldSnapshot,alpha:float}|null Bounding snapshots and clamped blend;
+	 * null when no samples exist.
 	 */
 	public function sample(SimulationTick $hostTick, float $fraction = 0): ?array
 	{

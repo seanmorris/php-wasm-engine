@@ -4,4 +4,4 @@ PHPTris includes five challenge tracks with fifteen ranks apiece. A track select
 
 Challenge state records the active track, rank, progress, target, completion, and failure conditions. The HUD reads that state without owning it, which keeps challenge evaluation testable without WebGL or browser input.
 
-Add a challenge by defining its authored metadata, selecting the evaluator used by the game state, and providing concise HUD text for the objective and progress value.
+The track list is fixed in PHP. Each rank map supplies its name, seed, ghost setting, and starting cells, while the rank targets come from `Run::target()` in `src/Component/Run.php`. A map whose `mode` is not a key of `PhpTris\Module::MODES` fails to load (`browser/game.mjs` and `src/Module.php` both reject it). A new track therefore needs PHP changes: a `Module::MODES` entry, its target in `Run::target()`, objective scoring in `src/System/ResolutionSystem.php`, any piece-bag or board rules in `src/Component/Queue.php`, `src/MatchState.php` and `src/Rules.php`, and HUD text in `src/Render/Scene.php`.

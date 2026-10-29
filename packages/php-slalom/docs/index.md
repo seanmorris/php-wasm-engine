@@ -8,7 +8,7 @@ The port retains the gameplay values that determine the run: 55 ms ticks, steeri
 
 Bank the jet left and right to pass the oncoming obstacles for as long as possible. Every live simulation tick adds points. Later stages increase obstacle density, introduce the moving road, add breaks and wider blockers, and eventually continue without an upper limit. Hitting an obstacle freezes the course while the impact animation completes and ends the run.
 
-A fresh run starts from zero, while the checkpoint menu can begin at any of the six stage thresholds. Controller steering is analog. Touch screens expose left and right steering zones at the bottom of the game.
+A fresh run starts from zero, while the checkpoint menu can begin at any of the six stage thresholds. Every input, including the controller stick, steers fully left or right; the simulation has no partial steering. Touch screens expose left and right steering zones at the bottom of the game.
 
 ## Controls
 

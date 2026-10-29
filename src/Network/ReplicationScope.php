@@ -11,6 +11,7 @@ final class ReplicationScope implements \JsonSerializable
 	 * Create and validate a replication scope.
 	 *
 	 * @param string $value Scalar value or serialized fields to validate.
+	 * @return void Stores the scope after validating its spelling.
 	 */
 	public function __construct(string $value)
 	{

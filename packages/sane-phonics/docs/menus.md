@@ -1,5 +1,9 @@
 # Bitmap fonts and menus
 
+This chapter covers the Sane-Phonics demo menus. The reusable `Phonics\Ui`
+classes (`Menu`, `PauseMenu`, `MenuRenderer`, `TextActors`, and the rest) are
+documented in the framework's [UI reference](../../../docs/ui.md).
+
 Press P, Escape, or Start in a live demo to open its pause menu. Settings
 contains text, numeric, slider, selection, boolean, read-only, and **PHP info**
 rows. PHP info captures the running runtime's complete `phpinfo()` document and
@@ -21,13 +25,17 @@ Failed downloads leave the current level intact; select the failed level again
 to retry. Maps, tilesets, and images load on demand. Shared files stay mounted
 until the last level or streamed map releases them.
 
-The centered Run PHP button starts the preloader, intro cards, parallax title,
+On the game page, the **Play Sane-Phonics** poster loads `worlds/demo.world`.
+Its `sane.intro` property starts the preloader, intro cards, parallax title,
 and main menu. Choose Play to load a level. Main menu in the pause menu keeps
 the level available to resume. See the [startup guide](startup.md) for that flow.
+Other hosts choose the first level, profile, and intro with the world properties
+`sane.scene`, `sane.profile`, and `sane.intro`.
 
-Scripts can call `bootEngine({scene, profile})` for an explicit fresh session
-directly in a level, `bootEngine({intro: true})` for the full intro, or
-`stopEngine()` to cancel downloads and stop it. Inside running PHP, use:
+The `bootEngine({scene, profile})`, `bootEngine({intro: true})`, and
+`stopEngine()` globals exist only on the repository's legacy demo page
+(`docs/index.html`, served at `/sane-phonics/` by `npm start`). Inside running
+PHP, use:
 
 ```php
 $game->selectScene('loop');      // Stage a level; the frame loop commits it when ready.
@@ -59,7 +67,9 @@ and checks the signal after this gain.
 
 The PHP menu calls `DemoGame` for scene and movement changes. The browser host
 at `vrzno_env('demoControls')` supplies fullscreen and persistent mute. Browser
-controls live in `docs/controls.mjs`. `browser/DomTexture.mjs` is a separate
+controls live in `DemoControls` in this package's
+[`browser/game.mjs`](../browser/game.mjs). The framework's
+[`browser/DomTexture.mjs`](../../../browser/DomTexture.mjs) is a separate
 browser primitive for trusted HTML: it measures and rasterizes one complete SVG
 `foreignObject` shot, splits it into GPU-height tiles in the shared WebGL2
 context, then scrolls those prebuilt tiles without rerasterizing. It restores
@@ -74,7 +84,7 @@ the whole menu.
 
 ## World text and message overlays
 
-`Gameplay\TextActors` promotes visible Tiled object-layer objects with class
+`Phonics\Ui\TextActors` promotes visible Tiled object-layer objects with class
 `TextActor` or moving-boxes-2's `text-actor` into non-solid ECS labels. Use a
 `content` string property (or Tiled's native text payload), optional `color`,
 `scale`, and `align` (`left`, `center`, or `right`). Labels inherit their map,
@@ -116,7 +126,7 @@ The panel and meter appear during gameplay and remain hidden on intro/title scre
 ## Define a menu
 
 ```php
-use PhpWasmEngine\Ui\Menu;
+use Phonics\Ui\Menu;
 
 $settings = (object)['name' => 'Player', 'hints' => true];
 $menu = new Menu([
@@ -177,11 +187,16 @@ reset behavior. A revert callback can return a value or mutate state read by
 ## Attach to the engine
 
 ```php
-use PhpWasmEngine\Render\BitmapFont;
-use PhpWasmEngine\Tiled\Loader;
-use PhpWasmEngine\Ui\PauseMenu;
+use Phonics\Asset\Resource;
+use Phonics\Render\BitmapFont;
+use Phonics\Tiled\Loader;
+use Phonics\Ui\PauseMenu;
 
-$font = new BitmapFont(new Loader, '/assets/font.tsj', ['/assets/buttons.tsj']);
+$font = new BitmapFont(
+	new Loader
+	, Resource::framework('resources/font.tsj')
+	, [Resource::framework('resources/buttons.tsj')]
+);
 $pauseMenu = new PauseMenu($engine, $menu, $font);
 
 // After the world render and before Device::present():
@@ -352,4 +367,4 @@ and dark transparent edges. Other sprites can opt in with `$sprite->smooth = tru
 
 The font comes from Tigl, annotated using moving-boxes-2's character mapping
 and CSS spacing. Button artwork and its regeneration recipe are recorded in
-[`art/controllers/README.md`](https://github.com/seanmorris/php-wasm-engine/blob/feat/bitmap-menus/art/controllers/README.md).
+[`art/controllers/README.md`](../../../art/controllers/README.md).

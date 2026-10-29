@@ -7,12 +7,23 @@ const event = (type, detail) => new CustomEvent(type, {detail});
 export class InMemoryLobbyHub
 {
 
+	/**
+	 * Create an empty set of in-memory rooms.
+	 * @param {object} [options] Hub settings.
+	 * @param {function(): number} [options.now] Clock in milliseconds; defaults to Date.now().
+	 */
 	constructor({now = () => Date.now()} = {})
 	{
 		this.now = now;
 		this.rooms = new Map;
 	}
 
+	/**
+	 * Add a provider to its room and announce presence to every member.
+	 * @param {InMemoryLobbyProvider} provider Provider whose room and peer ID are joined.
+	 * @returns {void}
+	 * @throws {NetworkError} lobby_identity when the peer ID is already in the room.
+	 */
 	join(provider)
 	{
 		const room = this.rooms.get(provider.room) ?? new Map;
@@ -25,6 +36,11 @@ export class InMemoryLobbyHub
 		this.presence(provider.room);
 	}
 
+	/**
+	 * Remove a provider from its room, announcing presence to any remaining members.
+	 * @param {InMemoryLobbyProvider} provider Provider leaving its room.
+	 * @returns {void}
+	 */
 	leave(provider)
 	{
 		const room = this.rooms.get(provider.room);
@@ -35,6 +51,11 @@ export class InMemoryLobbyHub
 		else this.presence(provider.room);
 	}
 
+	/**
+	 * Dispatch a presence event listing every member's profile to each member of a room.
+	 * @param {string} roomId Room to announce.
+	 * @returns {void}
+	 */
 	presence(roomId)
 	{
 		const room = this.rooms.get(roomId) ?? new Map;
@@ -43,6 +64,15 @@ export class InMemoryLobbyHub
 		for(const provider of room.values()) provider.dispatchEvent(event('presence', {peers}));
 	}
 
+	/**
+	 * Dispatch one event to a peer in the sender's room.
+	 * @param {InMemoryLobbyProvider} sender Sending provider; its peer ID is added as detail.from.
+	 * @param {string} target Receiving peer ID.
+	 * @param {string} type Event type to dispatch.
+	 * @param {object} detail Event detail fields.
+	 * @returns {void}
+	 * @throws {NetworkError} lobby_peer when the target is not in the room.
+	 */
 	deliver(sender, target, type, detail)
 	{
 		const provider = this.rooms.get(sender.room)?.get(target);
@@ -52,6 +82,13 @@ export class InMemoryLobbyHub
 		provider.dispatchEvent(event(type, {...detail, from: sender.peerId}));
 	}
 
+	/**
+	 * Dispatch one event to every member of the sender's room, including the sender.
+	 * @param {InMemoryLobbyProvider} sender Sending provider; its peer ID is added as detail.from.
+	 * @param {string} type Event type to dispatch.
+	 * @param {object} detail Event detail fields.
+	 * @returns {void}
+	 */
 	broadcast(sender, type, detail)
 	{
 		for(const provider of this.rooms.get(sender.room)?.values() ?? [])
@@ -63,6 +100,16 @@ export class InMemoryLobbyHub
 export class InMemoryLobbyProvider extends EventTarget
 {
 
+	/**
+	 * Create a disconnected provider for one peer in a shared hub.
+	 * @param {object} options Provider settings.
+	 * @param {InMemoryLobbyHub} options.hub Shared hub; any other value throws TypeError.
+	 * @param {string} options.peerId Validated peer ID.
+	 * @param {string} [options.displayName] Display name; defaults to the peer ID.
+	 * @param {string} [options.room] Room name; defaults to phonics.
+	 * @param {number} [options.invitationTtl] Invitation lifetime in milliseconds; defaults to 30,000.
+	 * @param {AbortSignal} [options.signal] Closes the provider when aborted after connecting.
+	 */
 	constructor({hub, peerId, displayName = peerId, room = 'phonics', invitationTtl = 30_000, signal} = {})
 	{
 		super();
@@ -80,8 +127,17 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.closed = false;
 	}
 
+	/**
+	 * Describe this peer for presence lists.
+	 * @returns {{id: string, displayName: string}} Frozen peer profile.
+	 */
 	profile() { return Object.freeze({id: this.peerId, displayName: this.displayName}); }
 
+	/**
+	 * Join the hub room once.
+	 * @returns {Promise<{id: string, displayName: string}>} This peer's profile.
+	 * @throws {NetworkError} lobby_closed after close().
+	 */
 	async connect()
 	{
 		if(this.closed) throw new NetworkError('lobby_closed', 'Lobby provider is closed');
@@ -96,6 +152,12 @@ export class InMemoryLobbyProvider extends EventTarget
 		return this.profile();
 	}
 
+	/**
+	 * Send a pending invitation that expires after the configured lifetime.
+	 * @param {string} peerId Invited peer ID.
+	 * @param {object} [payload] Cloned invitation payload.
+	 * @returns {Promise<object>} Frozen invitation with id, from, to, payload, and expiresAt.
+	 */
 	async invite(peerId, payload = {})
 	{
 		this.requireConnected();
@@ -115,6 +177,13 @@ export class InMemoryLobbyProvider extends EventTarget
 		return invitation;
 	}
 
+	/**
+	 * Accept or reject a received invitation, notifying both peers.
+	 * @param {object} invitation Received invitation.
+	 * @param {string} answer accepted or rejected.
+	 * @returns {Promise<void>}
+	 * @throws {NetworkError} invitation_expired when the invitation has expired.
+	 */
 	async respond(invitation, answer)
 	{
 		this.requireConnected();
@@ -127,6 +196,12 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.dispatchEvent(event('invitationstate', {id: invitation.id, state: answer}));
 	}
 
+	/**
+	 * Cancel a pending invitation sent by this provider; other invitations are ignored.
+	 * @param {string} invitationId Invitation to cancel.
+	 * @param {string} peerId Invited peer to notify.
+	 * @returns {Promise<void>}
+	 */
 	async cancel(invitationId, peerId)
 	{
 		this.requireConnected();
@@ -139,12 +214,24 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.dispatchEvent(event('invitationstate', {id: invitationId, state: 'cancelled'}));
 	}
 
+	/**
+	 * Deliver a cloned signalling payload to one peer.
+	 * @param {string} peerId Receiving peer ID.
+	 * @param {*} payload Signalling payload.
+	 * @returns {Promise<void>}
+	 */
 	async signalPeer(peerId, payload)
 	{
 		this.requireConnected();
 		this.hub.deliver(this, new PeerId(peerId).value, 'signal', {payload: structuredClone(payload)});
 	}
 
+	/**
+	 * Broadcast a trimmed chat message to the room.
+	 * @param {*} text Message text; 1-1000 characters after trimming.
+	 * @returns {Promise<void>}
+	 * @throws {NetworkError} chat_message when the message is empty or too long.
+	 */
 	async chat(text)
 	{
 		this.requireConnected();
@@ -155,6 +242,10 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.hub.broadcast(this, 'chat', {text, sentAt: this.hub.now()});
 	}
 
+	/**
+	 * Leave the room once and discard sent invitations.
+	 * @returns {void}
+	 */
 	close()
 	{
 		if(this.closed) return;
@@ -167,6 +258,11 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.invitations.clear();
 	}
 
+	/**
+	 * Require an open, connected provider.
+	 * @returns {void}
+	 * @throws {NetworkError} lobby_state when closed or not connected.
+	 */
 	requireConnected()
 	{
 		if(this.closed || !this.connected) throw new NetworkError('lobby_state', 'Lobby provider is not connected');

@@ -1,6 +1,11 @@
+import {execFile} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
+import {parse, stringify} from 'yaml';
+import {addBreadcrumbs} from './breadcrumbs.mjs';
+import {addStructuredData} from './structured-data.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(site, '..');
@@ -8,6 +13,7 @@ const destination = path.resolve(site, process.env.PAGES_DIR ?? '.cache/pages');
 const references = [
 	['architecture', 'Architecture', 'docs/architecture.md']
 	, ['input', 'Input & sequences', 'docs/input.md']
+	, ['ui', 'UI, menus & cards', 'docs/ui.md']
 	, ['performance', 'ECS performance', 'docs/ecs-performance.md']
 ];
 
@@ -104,6 +110,57 @@ const games = [
 	}
 ];
 
+// Authored site pages, keyed by repository path, so imported chapters can link to them on the site.
+const authoredPages = new Set(
+	(await fs.readdir(path.join(site, 'pages'), {recursive: true}))
+		.filter(file => file.endsWith('.md'))
+		.map(file => path.posix.join('site/pages', file.split(path.sep).join('/')))
+);
+
+/**
+ * Map a repository Markdown path to the generated page that publishes it.
+ *
+ * @param {string} resolved Normalized repository-relative path without a fragment.
+ * @returns {string|null} Site-relative page path, or null when the file is not staged as a page.
+ */
+function sitePage(resolved)
+{
+	const reference = references.find(([, , file]) => file === resolved);
+
+	if(reference) return `${reference[0]}.html`;
+
+	const chapter = /^packages\/([^/]+)\/docs\/([^/]+)\.md$/.exec(resolved);
+	const game = chapter && games.find(value => value.slug === chapter[1]);
+
+	if(game?.chapters.some(([slug]) => slug === chapter[2]))
+		return `games/${game.slug}/${chapter[2] === 'index' ? '' : chapter[2] + '.html'}`;
+
+	if(authoredPages.has(resolved))
+	{
+		const page = resolved.slice('site/pages/'.length).replace(/\.md$/, '');
+
+		return page === 'index' ? './' : page.endsWith('/index') ? page.slice(0, -'index'.length) : page + '.html';
+	}
+
+	return null;
+}
+
+/**
+ * Express a site page relative to the directory of the page that links to it.
+ *
+ * @param {string} from Site-relative directory of the linking page, or '' for the site root.
+ * @param {string} page Site-relative target from sitePage().
+ * @returns {string} Relative URL, keeping directory targets as directories.
+ */
+function relativeSiteLink(from, page)
+{
+	const directory = page.endsWith('/') || page === './';
+	const target = page === './' ? '.' : page.replace(/\/$/, '');
+	const relative = path.posix.relative(from || '.', target) || '.';
+
+	return directory ? (relative === '.' ? './' : relative + '/') : relative;
+}
+
 await fs.rm(destination, {recursive: true, force: true});
 await fs.cp(path.join(site, 'pages'), destination, {recursive: true});
 
@@ -112,13 +169,24 @@ for(const [index, [slug, title, source]] of references.entries())
 	let body = await fs.readFile(path.join(root, source), 'utf8');
 	body = body.replace(/^# .+\r?\n/, '');
 
-	// Repository-relative links remain source links, not broken generated-site paths.
+	// Controller glyphs point at the repository art so they also render on GitHub.
+	body = body.replace(/(<img\b[^>]*\bsrc=["'])\.\.\/art\/controllers\/([^"']+)(["'])/g, '$1images/controllers/$2$3');
+
+	// Repository-relative links remain source links, not broken generated-site paths. Links to other
+	// reference chapters, staged game chapters, and generated API pages stay on the site.
 	body = body.replace(/(!?\[[^\]]*\]\()([^\s)]+)(\))/g, (match, start, target, end) => {
-		if(/^(?:[a-z]+:|\/\/|#)/i.test(target)) return match;
+		if(/^(?:[a-z]+:|\/\/|#)/i.test(target)
+			|| /^api(?:-[a-z0-9-]+)?\.html(?:#|$)/.test(target)
+			|| /^api-js\//.test(target)
+		) return match;
 
-		const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(source), target));
+		const clean = target.split('#')[0], fragment = target.slice(clean.length);
+		const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(source), clean));
+		const page = sitePage(resolved);
 
-		return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${resolved}${end}`;
+		if(page) return `${start}${relativeSiteLink('', page)}${fragment}${end}`;
+
+		return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${resolved}${fragment}${end}`;
 	});
 
 	const header = `---\ntitle: ${title}\nmenus:\n  documentation:\n    parent: reference\n    weight: ${index}\n---\n`;
@@ -131,7 +199,6 @@ for(const [index, [slug, title, source]] of references.entries())
 for(const game of games)
 {
 	const targetDirectory = path.join(destination, 'games', game.slug);
-	const chapterNames = new Set(game.chapters.map(([slug]) => slug));
 
 	await fs.mkdir(targetDirectory, {recursive: true});
 
@@ -140,6 +207,7 @@ for(const game of games)
 		const source = `packages/${game.slug}/docs/${slug}.md`;
 		let body = await fs.readFile(path.join(root, source), 'utf8');
 		body = body.replace(/^# .+\r?\n/, '');
+
 		body = body.replace(
 			/(<img\b[^>]*\bsrc=["'])\.\.\/\.\.\/\.\.\/art\/controllers\/([^"']+)(["'])/g
 			, '$1../../images/controllers/$2$3'
@@ -149,10 +217,6 @@ for(const game of games)
 			if(/^(?:[a-z]+:|\/\/|#)/i.test(target)) return match;
 
 			const clean = target.split('#')[0], fragment = target.slice(clean.length);
-			const local = path.posix.basename(clean, '.md');
-
-			if(clean.endsWith('.md') && chapterNames.has(local))
-			return `${start}${local === 'index' ? './' : local + '.html'}${fragment}${end}`;
 
 			if(clean === 'api/index.html')
 			return `${start}api/${fragment}${end}`;
@@ -167,6 +231,11 @@ for(const game of games)
 			if(/^(?:docs|examples|browser|src|assets)\//.test(clean))
 				resolved = path.posix.join(`packages/${game.slug}`, clean);
 			else resolved = path.posix.normalize(path.posix.join(path.posix.dirname(source), clean));
+
+			// Chapters, reference docs, and authored pages resolve by repository path, not basename.
+			const page = sitePage(resolved);
+
+			if(page) return `${start}${relativeSiteLink(`games/${game.slug}`, page)}${fragment}${end}`;
 
 			return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${resolved}${fragment}${end}`;
 		});
@@ -193,3 +262,53 @@ for(const game of games)
 // Reflection and source parsing run after authored/imported pages are staged so
 // the generated API reference participates in the same SMGen render.
 await import('./api-reference.mjs');
+
+const jsDoc = path.join(root, 'node_modules/smgen-plugins/packages/smgen-jsdoc/bin/smgen-jsdoc');
+
+const generated = await promisify(execFile)(process.execPath, [
+	jsDoc
+	, 'generate'
+	, '--root', root
+	, '--config', '.smgen-jsdoc.yaml'
+	, '--pages', destination
+], {cwd: root});
+
+process.stdout.write(generated.stdout);
+process.stderr.write(generated.stderr);
+
+// The shared site template owns the single page heading. Normalize the generated
+// API subtree for that contract, then route its pages into readable sidebar groups.
+const javascriptDirectory = path.join(destination, 'api-js');
+
+const javascriptPages = (await fs.readdir(javascriptDirectory, {recursive: true}))
+	.filter(file => file.endsWith('.md'));
+
+for(const file of javascriptPages)
+{
+	const page = path.join(javascriptDirectory, file);
+	const source = await fs.readFile(page, 'utf8');
+	const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n+/);
+
+	if(match === null) throw new Error(`Generated JavaScript API page has no frontmatter: ${file}`);
+
+	const metadata = parse(match[1]);
+	const relative = file.split(path.sep).join('/');
+	const menu = metadata.menus?.documentation;
+
+	if(menu)
+	{
+		if(relative.startsWith('modules/')) menu.parent = 'api-js-modules';
+		else if(relative.startsWith('classes/')) menu.parent = 'api-js-classes';
+		else if(relative.startsWith('functions/')) menu.parent = 'api-js-functions';
+		else if(relative.startsWith('types/')) menu.parent = 'api-js-types';
+		else if(relative.startsWith('values/')) menu.parent = 'api-js-values';
+	}
+
+	const body = source.slice(match[0].length).replace(/^(?:# [^\r\n]+\r?\n+)/, '');
+	const normalized = `---\n${stringify(metadata, {lineWidth: 0})}---\n\n${body}`;
+
+	await fs.writeFile(page, normalized);
+}
+
+await addBreadcrumbs(destination, path.join(site, '.smgen.yaml'));
+await addStructuredData(destination);

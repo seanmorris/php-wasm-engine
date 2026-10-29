@@ -99,17 +99,29 @@ final class ScopeContext
 		$this->requireOpen();
 		$prefix = $this->key() . '/';
 		$id = $prefix . $name;
-		$dependencies = array_map(
-			static fn(string $dependency): string => str_contains($dependency, ':')
-				? $dependency
-				: $prefix . $dependency
-			, $after
-		);
+		/**
+		 * Qualify a local dependency with this scope's prefix; names containing a colon are absolute.
+		 *
+		 * @param string $dependency Local or absolute system name.
+		 * @return string Scheduler system name.
+		 */
+		$qualify = static fn(string $dependency): string => str_contains($dependency, ':')
+			? $dependency
+			: $prefix . $dependency;
+
+		$dependencies = array_map($qualify, $after);
 
 		if($this->scheduler->has($id)) throw new \LogicException("Conflicting scoped system $id");
 
 		$this->scheduler->add($id, $system, $dependencies);
-		$this->onClose(fn() => $this->scheduler->remove($id));
+
+		/**
+		 * Unregister the scoped system when the scope closes.
+		 *
+		 * @return void Removes the system from the shared scheduler.
+		 */
+		$unregisterSystem = fn() => $this->scheduler->remove($id);
+		$this->onClose($unregisterSystem);
 
 		return $id;
 	}
@@ -157,7 +169,14 @@ final class ScopeContext
 		if(!$this->pipeline) throw new \LogicException('No render pipeline is available');
 
 		$this->pipeline->add($pass);
-		$this->onClose(fn() => $this->pipeline?->remove($pass->id(), true));
+
+		/**
+		 * Detach the owned render pass when the scope closes.
+		 *
+		 * @return void Removes and closes the pass if the pipeline still exists.
+		 */
+		$detachPass = fn() => $this->pipeline?->remove($pass->id(), true);
+		$this->onClose($detachPass);
 	}
 
 	/**
@@ -199,13 +218,22 @@ final class ScopeContext
 		return $this->state;
 	}
 
-	/** @param array<string,mixed> $value State to verify. @return void Rejects non-JSON state. */
+	/**
+	 * Ensure retained scope state can be encoded as JSON.
+	 *
+	 * @param array<string,mixed> $value State to verify.
+	 * @return void Rejects non-JSON state.
+	 */
 	private function assertSerializable(array $value): void
 	{
 		json_encode($value, JSON_THROW_ON_ERROR);
 	}
 
-	/** @return void Rejects registrations after closure. */
+	/**
+	 * Guard scope registrations after close().
+	 *
+	 * @return void Rejects registrations after closure.
+	 */
 	private function requireOpen(): void
 	{
 		if($this->closed) throw new \LogicException('Scope context is closed');

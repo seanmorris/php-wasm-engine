@@ -14,6 +14,7 @@ final class TriangleRenderer
 	 * Create the screen-space triangle program and streaming instance buffer.
 	 *
 	 * @param bool $exclusive Keep the shader bound between draws when this renderer owns the pass.
+	 * @return void Compiles the triangle program and allocates its vertex array and buffer.
 	 */
 	public function __construct(private bool $exclusive = false)
 	{
@@ -25,7 +26,11 @@ final class TriangleRenderer
 		$this->create();
 	}
 
-	/** Configure three points and one RGBA color per instance. */
+	/**
+	 * Configure three points and one RGBA color per instance.
+	 *
+	 * @return void Allocates and describes the vertex array and instance buffer.
+	 */
 	private function create(): void
 	{
 		glGenVertexArrays(1, $this->vao);
@@ -49,8 +54,8 @@ final class TriangleRenderer
 	/**
 	 * Draw solid triangles in supplied painter order.
 	 *
-	 * @param list<array{float,float,float,float,float,float,float,float,float,float}> $triangles
-	 * Three screen points followed by RGBA.
+	 * @param list<array{float,float,float,float,float,float,float,float,float,float}> $triangles Instance data:
+	 * three screen points followed by RGBA.
 	 * @param int $width Output viewport width in pixels.
 	 * @param int $height Output viewport height in pixels.
 	 * @return void Uploads and draws the supplied triangle instances.
@@ -77,7 +82,11 @@ final class TriangleRenderer
 		glBindVertexArray(0);
 	}
 
-	/** Release current vertex array and buffer handles. */
+	/**
+	 * Release current vertex array and buffer handles.
+	 *
+	 * @return void Deletes the GL objects and forces the program to be rebound on the next draw.
+	 */
 	private function release(): void
 	{
 		$this->bound = false;

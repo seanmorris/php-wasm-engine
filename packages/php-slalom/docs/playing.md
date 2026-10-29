@@ -8,7 +8,7 @@
 | Steer right | Right, D, L, secondary mouse button | D-pad Right, left stick right |
 | Pause | Escape or P | Start / Options |
 
-Touch screens show left and right steering zones over the bottom of the game. Steering is analog when it comes from the controller stick. The fixed simulation samples the latest action values once per 55 ms tick. Holding both directions preserves current course velocity; releasing both applies drag.
+Touch screens show left and right steering zones over the bottom of the game. Steering is not analog: the fixed simulation samples whether each direction is held once per 55 ms tick, so a partly tilted stick steers at full strength once it registers. Holding both directions preserves current course velocity; releasing both applies drag.
 
 Open **Input settings** to add or remove bindings separately for keyboard/mouse and controller. Capture waits until the activating control returns to neutral. Conflicts can replace an existing binding, share the physical source, or be cancelled. Pause bindings remain fixed so every configuration has an escape route. Valid changes are stored locally; blocked storage leaves the setting active for the session.
 

@@ -17,12 +17,27 @@ Every distribution exposes a versioned `phonics.json`. The current schema is ver
 | --- | --- |
 | `name`, `version`, `requires` | Package identity and supported runtime |
 | `dependencies` | Named manifest URLs and compatible version ranges |
-| `exports` | Typed `game`, `module`, `factory`, `component`, and `asset` exports |
+| `exports` | Named, typed exports, listed below |
 | `php` | Files, namespace autoload mappings, and bootstrap files |
 | `browser` | Browser module files |
 | `assets`, `preload` | Content and eagerly requested resources |
 | `integrity` | SHA-256 file hashes |
 | `tiled` | Declarative classes, defaults, templates, and previews |
+
+Each export declares one of these types:
+
+| Type | Purpose |
+| --- | --- |
+| `game` | Entry point selected by `phonics.game` or a world's `game`; starts the session lifecycle |
+| `module` | Registers systems, factories, and cleanup against the shared session context |
+| `factory` | Tiled entity factory; names its registered `class` and `module` |
+| `component` | Tiled entity class that objects reference in the same way as a factory |
+| `asset` | Declared file `path`, such as a map, tileset, or font |
+| `adapter` | PHP content adapter selected by a world source's `adapter` |
+| `system-set` | PHP systems bound to matching adapter scopes by a world's `bindings[].use` |
+| `resource-inspector` | Browser module that inspects launcher resources named by a resource requirement's `inspector` |
+| `lobby-provider` | Online lobby selected by a world's `network.lobby.provider` |
+| `transport` | Peer transport selected by a world's `network.transport` reference or `network.transport.use` |
 
 Supported version ranges are exact, `^x.y.z`, and `>=x.y.z`. The browser resolves declared dependencies; it does not run installation scripts or solve arbitrary npm/Composer graphs.
 
@@ -37,8 +52,8 @@ The `php.autoload` mapping declares namespace ownership for graph validation. Re
 ## Regenerate hashes
 
 ```sh
-phonics integrity
-phonics validate
+npx phonics integrity
+npx phonics validate
 ```
 
 Run these commands from your game package after editing PHP, browser code, or assets. `phonics integrity` updates the hashes in your `phonics.json`; `phonics validate` checks the resulting package. Commit the manifest with the files it describes.

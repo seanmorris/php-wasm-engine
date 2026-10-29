@@ -17,6 +17,7 @@ final class SnapshotBuilder
 	 *
 	 * @param ReplicationRegistry $replication Whitelist of component codecs and prefab factories.
 	 * @param int $baselineCapacity Maximum authoritative baselines retained for deltas.
+	 * @return void Rejects a baseline capacity outside 1 through 256.
 	 */
 	public function __construct(
 		/** Registered component and prefab whitelist. */
@@ -96,7 +97,13 @@ final class SnapshotBuilder
 	 */
 	public function clear(): void { $this->baselines = []; }
 
-	/** @return array<int,array<string,mixed>> */
+	/**
+	 * Capture every network-identified entity's scope, prefab and whitelisted components.
+	 *
+	 * @param Registry $registry ECS registry whose replicated state is read.
+	 * @return array<int,array<string,mixed>> Records keyed and sorted by network entity ID;
+	 * entities without a NetworkPrefab throw.
+	 */
 	private function state(Registry $registry): array
 	{
 		$result = [];
@@ -122,7 +129,13 @@ final class SnapshotBuilder
 		return $result;
 	}
 
-	/** @return array<string,mixed> */
+	/**
+	 * Compare one entity's component records against its baseline.
+	 *
+	 * @param array<string,mixed> $before Baseline component records keyed by schema.
+	 * @param array<string,mixed> $after Current component records keyed by schema.
+	 * @return array<string,mixed> Changed or added records, with null for removed schemas, sorted by schema.
+	 */
 	private function componentDelta(array $before, array $after): array
 	{
 		$result = [];

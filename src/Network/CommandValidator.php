@@ -20,6 +20,8 @@ final class CommandValidator
 	 * @param int $futureTicks Maximum number of ticks a command may lead the host.
 	 * @param int $maximumPerTick Maximum accepted commands for one player and tick.
 	 * @param (callable(InputCommand):bool)|null $gameRule Optional game-specific command predicate.
+	 * @return void Stores the validation limits and optional game rule; rejects negative tick windows
+	 * or a per-tick limit below one.
 	 */
 	public function __construct(
 		/** Accepted number of ticks behind the host. */

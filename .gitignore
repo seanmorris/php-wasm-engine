@@ -13,6 +13,7 @@
 /dist/
 
 /site/.cache/
+/.smgen-jsdoc-cache/
 packages/doom-phonics/demo/local-wads/
 
 # Local source material, profiling output, and crash artifacts.

@@ -20,6 +20,7 @@ final class Packet
 	 * @param int $ackBits Bit window acknowledging earlier packet sequences.
 	 * @param int $schema Stable schema identifier or payload schema version.
 	 * @param array<string,mixed> $payload Validated scalar data carried by the message or component.
+	 * @return void Stores the packet fields after validating the channel and message family.
 	 */
 	public function __construct(
 		/** WebRTC delivery class. */

@@ -31,7 +31,18 @@ const bytes = value => {
 export class GameLauncher
 {
 
-	/** Create a launcher bound to one normalized world and resource negotiator. */
+	/**
+	 * Create a launcher bound to one normalized world and resource negotiator.
+	 * @param {object} options Launcher dependencies.
+	 * @param {ResourceNegotiator} options.negotiator Negotiator used to preview resource entries.
+	 * @param {HTMLElement} options.frame Element that receives the launcher dialog.
+	 * @param {object} options.world Normalized world providing resource slots, match fields, and start scope.
+	 * @param {function(object): (void|Promise<void>)|null} [options.prepareLocal] Local launch action used by
+	 * openLocal().
+	 * @param {function(): (void|Promise<void>)|null} [options.openNetwork] Online action; its button is shown only
+	 * for local opens when supplied.
+	 * @param {AbortSignal} [options.signal] Host signal combined with the launcher's own abort signal.
+	 */
 	constructor({negotiator, frame, world, prepareLocal = null, openNetwork = null, signal})
 	{
 		this.negotiator = negotiator;
@@ -51,7 +62,15 @@ export class GameLauncher
 		this.#seedDefaults();
 	}
 
-	/** Open the launcher with an optional async action for its validated values. */
+	/**
+	 * Open the launcher with an optional async action for its validated values.
+	 * @param {object} [options] Dialog presentation and submit action.
+	 * @param {string} [options.title] Dialog title; defaults to `Game settings`.
+	 * @param {string} [options.submitLabel] Primary button label; defaults to `Done`.
+	 * @param {function(object): (void|Promise<void>)|null} [options.onSubmit] Receives values(); the dialog closes
+	 * after it resolves and shows its error otherwise. Null hides the cancel button.
+	 * @param {boolean} [options.local] Use local-play setting variants and offer the online action.
+	 */
 	open({title = 'Game settings', submitLabel = 'Done', onSubmit = null, local = false} = {})
 	{
 		this.#configureSettings(local);

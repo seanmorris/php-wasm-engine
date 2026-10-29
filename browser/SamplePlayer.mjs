@@ -22,7 +22,11 @@ export class SamplePlayer
 		this.closed = false;
 	}
 
-	/** Create or resume the shared context after a browser user gesture. */
+	/**
+	 * Create or resume the shared context after a browser user gesture.
+	 * @returns {Promise<boolean>} True when an open AudioContext is available;
+	 * false while muted, closed, or unsupported.
+	 */
 	async unlock()
 	{
 		if(this.closed || this.muted || typeof AudioContext === 'undefined' && !this.contextFactory) return false;
@@ -40,7 +44,12 @@ export class SamplePlayer
 		}
 	}
 
-	/** Decode one mounted package asset once. Failures remain silent and cached. */
+	/**
+	 * Decode one mounted package asset once. Failures remain silent and cached.
+	 * @param {*} name Sample name used by play(); converted to a string. A repeated name returns the first load.
+	 * @param {string} path Asset path resolved against the declaring package manifest URL.
+	 * @returns {Promise<AudioBuffer|null>} Decoded sample, or null when audio is unavailable or decoding fails.
+	 */
 	async load(name, path)
 	{
 		name = String(name);
@@ -68,7 +77,12 @@ export class SamplePlayer
 		return pending;
 	}
 
-	/** Play a decoded effect through a short-lived gain node. */
+	/**
+	 * Play a decoded effect through a short-lived gain node.
+	 * @param {*} name Name previously passed to load().
+	 * @param {{gain?: number}} [options] Positive finite linear gain; defaults to 1.
+	 * @returns {Promise<boolean>} True when playback started; false while muted, closed, unloaded, or failing.
+	 */
 	async play(name, {gain = 1} = {})
 	{
 		if(this.closed || this.muted || !Number.isFinite(gain) || gain <= 0) return false;
@@ -99,7 +113,11 @@ export class SamplePlayer
 		}
 	}
 
-	/** Change mute state without discarding decoded samples. */
+	/**
+	 * Change mute state without discarding decoded samples.
+	 * @param {boolean} muted Whether playback is suppressed; unmuting also attempts to resume audio.
+	 * @returns {void}
+	 */
 	setMuted(muted)
 	{
 		this.muted = Boolean(muted);
@@ -107,7 +125,10 @@ export class SamplePlayer
 		if(!this.muted) void this.unlock();
 	}
 
-	/** Close the owned AudioContext and discard all sample promises. */
+	/**
+	 * Close the owned AudioContext and discard all sample promises.
+	 * @returns {Promise<void>} Resolves once the context has closed; close failures are ignored.
+	 */
 	async close()
 	{
 		if(this.closed) return;

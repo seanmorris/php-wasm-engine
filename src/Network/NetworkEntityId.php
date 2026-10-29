@@ -10,6 +10,7 @@ final class NetworkEntityId extends UnsignedValue
 	 * Create and validate a network entity ID.
 	 *
 	 * @param int $value Scalar value or serialized fields to validate.
+	 * @return void Stores the ID; zero is reserved and rejected.
 	 */
 	public function __construct(int $value)
 	{

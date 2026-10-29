@@ -12,6 +12,7 @@ final class NetworkAuthority
 	 * Create and validate a network authority component.
 	 *
 	 * @param AuthorityOwner $owner Host or peer allowed to control the entity.
+	 * @return void Stores the authority owner.
 	 */
 	public function __construct(
 		/** Participant allowed to control the entity. */

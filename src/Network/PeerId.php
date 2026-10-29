@@ -11,6 +11,7 @@ final class PeerId implements \JsonSerializable
 	 * Create and validate a peer ID.
 	 *
 	 * @param string $value Scalar value or serialized fields to validate.
+	 * @return void Stores the trimmed ID; rejects empty, overlong or control-character values.
 	 */
 	public function __construct(string $value)
 	{

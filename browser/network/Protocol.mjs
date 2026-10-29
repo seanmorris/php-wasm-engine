@@ -1,9 +1,12 @@
 import {NetworkError} from './Errors.mjs';
 
+/** Protocol major and minor version written into every packet header; decoding rejects other majors. */
 export const PROTOCOL_VERSION = Object.freeze({major: 1, minor: 0});
+/** Fixed packet header length in bytes, preceding the payload. */
 export const HEADER_BYTES = 40;
 const MAGIC = 0x50484E31;
 
+/** Numeric message-family codes carried in byte 6 of the packet header. */
 export const MessageFamily = Object.freeze({
 	hello: 1
 	, compatibility: 2
@@ -44,7 +47,24 @@ const bytes = value => {
 	throw new TypeError('Protocol payload must be bytes or text');
 };
 
-/** Encode a bounded, versioned network packet. */
+/**
+ * Encode a bounded, versioned network packet.
+ * @param {object} header Packet header fields and payload.
+ * @param {number} header.family MessageFamily code; unknown families throw RangeError.
+ * @param {number} [header.flags] Unsigned 8-bit flags; defaults to 0.
+ * @param {number} [header.session] Unsigned 32-bit session number; defaults to 0.
+ * @param {number} [header.peer] Unsigned 32-bit peer number; defaults to 0.
+ * @param {number} [header.sequence] Unsigned 32-bit packet sequence; defaults to 0.
+ * @param {number} [header.tick] Unsigned 32-bit simulation tick; defaults to 0.
+ * @param {number} [header.ack] Unsigned 32-bit latest acknowledged sequence; defaults to 0.
+ * @param {number} [header.ackBits] Unsigned 32-bit acknowledgement bitfield; defaults to 0.
+ * @param {number} [header.schema] Unsigned 16-bit payload schema; defaults to 1.
+ * @param {Uint8Array|ArrayBuffer|string} [header.payload] Payload bytes or UTF-8 text; defaults to empty.
+ * @param {object} [options] Encoding limits.
+ * @param {number} [options.maximumBytes] Largest payload accepted; defaults to 1 MiB.
+ * @returns {Uint8Array} Header followed by the payload.
+ * @throws {RangeError} When the family is unknown, a field overflows, or the payload is too large.
+ */
 export function encodePacket(
 	{
 		family
@@ -88,7 +108,14 @@ export function encodePacket(
 	return result;
 }
 
-/** Decode and validate one complete protocol packet. */
+/**
+ * Decode and validate one complete protocol packet.
+ * @param {Uint8Array|ArrayBuffer|string} value Complete packet bytes.
+ * @param {object} [options] Decoding limits.
+ * @param {number} [options.maximumBytes] Largest payload accepted; defaults to 1 MiB.
+ * @returns {Readonly<object>} Frozen header fields, version, and a copied payload.
+ * @throws {NetworkError} When the packet is truncated, mislabelled, oversized, or of an unknown family.
+ */
 export function decodePacket(value, {maximumBytes = 1024 * 1024} = {})
 {
 	value = bytes(value);
@@ -129,11 +156,24 @@ export function decodePacket(value, {maximumBytes = 1024 * 1024} = {})
 	});
 }
 
+/**
+ * Encode a packet whose payload is JSON text.
+ * @param {object} header Header fields accepted by encodePacket(); any payload is replaced.
+ * @param {*} value Value serialized with JSON.stringify().
+ * @param {object} [options] Options passed to encodePacket().
+ * @returns {Uint8Array} Encoded packet.
+ */
 export function encodeJsonPacket(header, value, options)
 {
 	return encodePacket({...header, payload: JSON.stringify(value)}, options);
 }
 
+/**
+ * Parse a decoded packet's payload as UTF-8 JSON.
+ * @param {{payload: Uint8Array}} packet Packet returned by decodePacket().
+ * @returns {*} Parsed JSON value.
+ * @throws {NetworkError} With code packet_json when the payload is not valid JSON.
+ */
 export function decodeJsonPayload(packet)
 {
 	try
@@ -150,8 +190,15 @@ export function decodeJsonPayload(packet)
 export class SequenceWindow
 {
 
+	/** Create an empty window that accepts its first sequence unconditionally. */
 	constructor() { this.latest = 0; this.bits = 0; this.initialized = false; }
 
+	/**
+	 * Record a sequence when it is new or within the 32-packet window and not yet seen.
+	 * @param {number} sequence Unsigned 32-bit sequence number; wraparound is handled.
+	 * @returns {boolean} True when accepted; false for a duplicate or a sequence 32 or more behind.
+	 * @throws {RangeError} When the sequence is not an unsigned 32-bit integer.
+	 */
 	accept(sequence)
 	{
 		unsigned(sequence, 32, 'sequence');

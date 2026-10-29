@@ -16,6 +16,7 @@ final class MatchContext implements \JsonSerializable
 	 * @param PeerId $remotePeer Opaque identity of the connected participant.
 	 * @param string $descriptorDigest Integrity digest of the negotiated match descriptor.
 	 * @param array<string,mixed> $descriptor Canonical game, content, settings, and player declaration.
+	 * @return void Stores the match identity after validating the role, distinct slots, digest and descriptor.
 	 */
 	public function __construct(
 		/** Local host or guest role. */

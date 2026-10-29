@@ -102,11 +102,16 @@ final class ReplicationSession
 		{
 			$this->history->push($command);
 
+			/**
+			 * Serialize one retained command for redundant transmission.
+			 *
+			 * @param InputCommand $value Recent local command.
+			 * @return array Scalar command fields.
+			 */
+			$serializeCommand = static fn(InputCommand $value): array => $value->jsonSerialize();
+
 			$this->bridge->send(MessageFamily::INPUT, $this->outgoing([
-				'commands' => array_map(
-					static fn(InputCommand $value): array => $value->jsonSerialize()
-					, $this->history->redundant()
-				)
+				'commands' => array_map($serializeCommand, $this->history->redundant())
 				, 'snapshotAck' => $this->latestSnapshot?->value()
 			]), $tick
 			);
@@ -200,6 +205,12 @@ final class ReplicationSession
 		$this->pending = [];
 	}
 
+	/**
+	 * Route one gameplay packet for this session's scope to its family handler.
+	 *
+	 * @param Packet $packet Decoded gameplay packet from the browser bridge.
+	 * @return void Ignores packets for other scopes; a host answers resync requests with a full snapshot.
+	 */
 	private function receive(Packet $packet): void
 	{
 		if($packet->schema !== 1) throw new \UnexpectedValueException("Unsupported gameplay schema {$packet->schema}");
@@ -221,7 +232,12 @@ final class ReplicationSession
 		}
 	}
 
-	/** @param array<string,mixed> $payload */
+	/**
+	 * Accept a guest's redundant input commands on the host.
+	 *
+	 * @param array<string,mixed> $payload Input packet fields with commands and an optional snapshot acknowledgement.
+	 * @return void Records a usable snapshot baseline and queues validated commands for the remote slot.
+	 */
 	private function receiveInput(array $payload): void
 	{
 		if(!$this->match->host()) throw new \UnexpectedValueException('Guest received peer input commands');
@@ -247,7 +263,13 @@ final class ReplicationSession
 		}
 	}
 
-	/** @param array<string,mixed> $payload */
+	/**
+	 * Apply a newer authoritative snapshot on the guest.
+	 *
+	 * @param array<string,mixed> $payload Snapshot packet fields.
+	 * @return void Synchronizes the clock, applies and buffers the snapshot, and acknowledges local commands;
+	 * requests a resync when the delta baseline is unavailable.
+	 */
 	private function receiveSnapshot(array $payload): void
 	{
 		if($this->match->host()) throw new \UnexpectedValueException('Host received an authoritative snapshot');
@@ -287,7 +309,12 @@ final class ReplicationSession
 		}
 	}
 
-	/** @param array<string,mixed> $payload */
+	/**
+	 * Deliver a reliable gameplay event once.
+	 *
+	 * @param array<string,mixed> $payload Event packet fields.
+	 * @return void Passes a first occurrence to the game's event callback.
+	 */
 	private function receiveEvent(array $payload): void
 	{
 		if(!is_array($payload['event'] ?? null)) throw new \UnexpectedValueException('Event packet is invalid');
@@ -297,6 +324,11 @@ final class ReplicationSession
 		if($this->events->accept($event)) $this->callbacks->event($event);
 	}
 
+	/**
+	 * Apply queued remote commands whose tick has been reached, in sequence order.
+	 *
+	 * @return void Leaves commands for future ticks queued.
+	 */
 	private function applyPending(): void
 	{
 		ksort($this->pending, SORT_NUMERIC);
@@ -310,7 +342,12 @@ final class ReplicationSession
 		}
 	}
 
-	/** @param array<string,mixed> $payload @return array<string,mixed> */
+	/**
+	 * Tag an outgoing payload with this session's replication scope.
+	 *
+	 * @param array<string,mixed> $payload Message fields to send.
+	 * @return array<string,mixed> Payload prefixed with the scope when the session has one.
+	 */
 	private function outgoing(array $payload): array
 	{
 		return $this->scope ? ['scope' => $this->scope->value()] + $payload : $payload;

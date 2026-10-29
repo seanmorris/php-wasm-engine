@@ -45,6 +45,7 @@ final class ReplicationPolicy implements \JsonSerializable
 	 * @param string $delivery Reliable or realtime transport class.
 	 * @param string $interpolation Presentation strategy used between received samples.
 	 * @param int $priority Relative shedding priority for realtime state.
+	 * @return void Stores the policy after validating authority, delivery, interpolation and priority.
 	 */
 	public function __construct(
 		/** Allowed component-state origin. */

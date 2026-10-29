@@ -82,7 +82,13 @@ final class SnapshotApplier
 		$this->entities->clear();
 	}
 
-	/** @return array<int,array<string,mixed>> */
+	/**
+	 * Rebuild the full target state of a delta snapshot from its retained baseline.
+	 *
+	 * @param WorldSnapshot $snapshot Baseline-relative authoritative snapshot.
+	 * @return array<int,array<string,mixed>> Entity records keyed and sorted by network ID; throws when the baseline
+	 * is unavailable or a delta changes an entity's prefab or scope.
+	 */
 	private function deltaTarget(WorldSnapshot $snapshot): array
 	{
 		$baseline = $snapshot->baseline?->value();
@@ -120,7 +126,14 @@ final class SnapshotApplier
 		return $target;
 	}
 
-	/** @param array<string,mixed> $target */
+	/**
+	 * Spawn or verify one replicated entity and bring its components to the target state.
+	 *
+	 * @param Registry $registry ECS registry receiving the snapshot.
+	 * @param int $value Network entity ID.
+	 * @param array<string,mixed> $target Target scope, prefab and component records.
+	 * @return void Removes and applies changed components, skipping those the component filter rejects.
+	 */
 	private function reconcile(Registry $registry, int $value, array $target): void
 	{
 		$id = new NetworkEntityId($value);
@@ -171,6 +184,13 @@ final class SnapshotApplier
 		}
 	}
 
+	/**
+	 * Despawn a replicated entity and forget its network identity.
+	 *
+	 * @param Registry $registry ECS registry receiving the snapshot.
+	 * @param NetworkEntityId $id Network entity to remove.
+	 * @return void Uses the prefab's despawn hook when available, otherwise destroys the local entity.
+	 */
 	private function remove(Registry $registry, NetworkEntityId $id): void
 	{
 		$value = $id->value();

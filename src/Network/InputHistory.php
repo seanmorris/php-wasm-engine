@@ -12,6 +12,7 @@ final class InputHistory
 	 * Create and validate an input history.
 	 *
 	 * @param int $capacity Maximum number of entries retained by the bounded collection.
+	 * @return void Rejects a capacity outside 1 through 4096.
 	 */
 	public function __construct(
 		/** Maximum retained entry count. */
@@ -77,12 +78,16 @@ final class InputHistory
 	 */
 	public function after(CommandSequence $sequence): array
 	{
-		return array_values(
-			array_filter(
-				$this->commands
-				, static fn(InputCommand $command): bool => $command->sequence->value() > $sequence->value()
-			)
-		);
+
+		/**
+		 * Keep commands newer than the acknowledged sequence.
+		 *
+		 * @param InputCommand $command Retained command.
+		 * @return bool True when the command follows the acknowledgement.
+		 */
+		$isNewer = static fn(InputCommand $command): bool => $command->sequence->value() > $sequence->value();
+
+		return array_values(array_filter($this->commands, $isNewer));
 	}
 
 	/**

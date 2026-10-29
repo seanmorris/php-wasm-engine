@@ -12,6 +12,7 @@ final class EventLedger
 	 * Create and validate an event ledger.
 	 *
 	 * @param int $capacity Maximum number of entries retained by the bounded collection.
+	 * @return void Rejects a capacity outside 1 through 65536.
 	 */
 	public function __construct(
 		/** Maximum retained entry count. */

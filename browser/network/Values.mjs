@@ -42,7 +42,12 @@ const resourceUrl = (value, label) => {
 	return parsed.href;
 };
 
-/** Serialize plain protocol data with stable object-key order. */
+/**
+ * Serialize plain protocol data with stable object-key order.
+ * @param {*} value JSON-compatible data; objects with toJSON() are serialized through it.
+ * @returns {string} JSON text with plain-object keys sorted at every depth.
+ * @throws {TypeError} For undefined, functions, symbols, or non-finite numbers.
+ */
 export function canonicalJson(value)
 {
 
@@ -66,7 +71,11 @@ export function canonicalJson(value)
 	return JSON.stringify(normalize(value));
 }
 
-/** Calculate an SRI-shaped SHA-256 identity over bytes or UTF-8 text. */
+/**
+ * Calculate an SRI-shaped SHA-256 identity over bytes or UTF-8 text.
+ * @param {string|ArrayBuffer|ArrayLike<number>} value Text encoded as UTF-8, or bytes copied into a Uint8Array.
+ * @returns {Promise<string>} `sha256-` followed by the base64 digest.
+ */
 export async function sha256(value)
 {
 	const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
@@ -93,21 +102,39 @@ class Identifier
 	toJSON() { return this.value; }
 }
 
+/** Opaque PeerId value; its string form is the validated identifier. */
 export class PeerId extends Identifier
 {
 
+	/**
+	 * Validate and freeze one identifier.
+	 * @param {string} value 1–128 characters: a letter or digit, then letters, digits, `_`, `.`, `:` or `-`.
+	 * @throws {TypeError} When the value is empty or malformed.
+	 */
 	constructor(value) { super(value, 'PeerId'); }
 }
 
+/** Opaque SessionId value; its string form is the validated identifier. */
 export class SessionId extends Identifier
 {
 
+	/**
+	 * Validate and freeze one identifier.
+	 * @param {string} value 1–128 characters: a letter or digit, then letters, digits, `_`, `.`, `:` or `-`.
+	 * @throws {TypeError} When the value is empty or malformed.
+	 */
 	constructor(value) { super(value, 'SessionId'); }
 }
 
+/** Opaque ResourceSlotId value; its string form is the validated identifier. */
 export class ResourceSlotId extends Identifier
 {
 
+	/**
+	 * Validate and freeze one identifier.
+	 * @param {string} value 1–128 characters: a letter or digit, then letters, digits, `_`, `.`, `:` or `-`.
+	 * @throws {TypeError} When the value is empty or malformed.
+	 */
 	constructor(value) { super(value, 'ResourceSlotId'); }
 }
 
@@ -115,6 +142,18 @@ export class ResourceSlotId extends Identifier
 export class ResourceCandidate
 {
 
+	/**
+	 * Validate and freeze one candidate archive description.
+	 * @param {object} candidate Candidate fields.
+	 * @param {string} candidate.id Identifier unique within its requirement.
+	 * @param {string} [candidate.label] Display label; defaults to the ID.
+	 * @param {string[]} [candidate.names] Acceptable file names.
+	 * @param {object} [candidate.criteria] Plain inspector criteria object.
+	 * @param {string|null} [candidate.url] HTTP(S) or file URL without credentials.
+	 * @param {string|null} [candidate.integrity] SHA-256 SRI string.
+	 * @param {number|null} [candidate.bytes] Non-negative byte length.
+	 * @throws {TypeError} When a field is invalid.
+	 */
 	constructor({id, label = '', names = [], criteria = {}, url = null, integrity = null, bytes = null})
 	{
 		if(integrity !== null && !integrityPattern.test(integrity))
@@ -136,6 +175,10 @@ export class ResourceCandidate
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the frozen fields.
+	 * @returns {object} Shallow copy of this value's own fields.
+	 */
 	toJSON() { return {...this}; }
 }
 
@@ -143,6 +186,19 @@ export class ResourceCandidate
 export class ResourceRequirement
 {
 
+	/**
+	 * Validate and freeze one content requirement and its candidates.
+	 * @param {object} requirement Requirement fields.
+	 * @param {string} requirement.id Requirement identifier.
+	 * @param {string} [requirement.label] Display label; defaults to the ID.
+	 * @param {string[]} [requirement.names] Acceptable file names.
+	 * @param {string} requirement.inspector Resource-inspector reference.
+	 * @param {string} [requirement.equivalence] `integrity` (default) or `profile`.
+	 * @param {object} [requirement.criteria] Plain inspector criteria object.
+	 * @param {string[]} [requirement.profileRequires] Guard slot IDs; allowed only for profile equivalence.
+	 * @param {Array<ResourceCandidate|object>} [requirement.candidates] Candidates with unique IDs.
+	 * @throws {TypeError} When a field is invalid or candidate IDs conflict.
+	 */
 	constructor(
 		{
 			id
@@ -191,6 +247,10 @@ export class ResourceRequirement
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the frozen fields.
+	 * @returns {object} Shallow copy of this value's own fields.
+	 */
 	toJSON() { return {...this}; }
 }
 
@@ -198,6 +258,21 @@ export class ResourceRequirement
 export class ResourceOffer
 {
 
+	/**
+	 * Validate and freeze one acquisition offer.
+	 * @param {object} offer Offer fields.
+	 * @param {string} offer.slot Resource slot ID.
+	 * @param {string|null} [offer.url] HTTP(S) or file URL; required for retrievable offers, forbidden for local ones.
+	 * @param {string} offer.integrity SHA-256 SRI string.
+	 * @param {number} offer.bytes Non-negative byte length.
+	 * @param {string} [offer.role] Resource role identifier; defaults to `data`.
+	 * @param {string} [offer.adapter] Optional adapter reference.
+	 * @param {number} [offer.order] Non-negative placement order; defaults to 0.
+	 * @param {string} [offer.label] Display label.
+	 * @param {string} [offer.distribution] `retrievable` or `local`; defaults from whether a URL is present.
+	 * @param {ResourceRequirement|object|null} [offer.requirement] Content requirement; required for local offers.
+	 * @throws {TypeError} When a field is invalid or inconsistent with the distribution.
+	 */
 	constructor(
 		{
 			slot
@@ -253,6 +328,10 @@ export class ResourceOffer
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the frozen fields.
+	 * @returns {object} Shallow copy of this value's own fields.
+	 */
 	toJSON() { return {...this}; }
 }
 
@@ -260,6 +339,16 @@ export class ResourceOffer
 export class ResolvedResource
 {
 
+	/**
+	 * Pair an offer with the source that supplied its bytes.
+	 * @param {ResourceOffer|object} offer Offer, or fields for a new ResourceOffer.
+	 * @param {object} [options] Resolution details.
+	 * @param {string} [options.sourceUrl] Absolute source URL; defaults to the offer URL and is required.
+	 * @param {string|null} [options.mountPath] Optional mounted path.
+	 * @param {ResourceResolution|object|null} [options.resolution] Evidence; defaults to the offer's slot,
+	 * integrity, bytes, and order.
+	 * @throws {TypeError} When no source URL is available or a field is invalid.
+	 */
 	constructor(offer, {sourceUrl = offer.url, mountPath = null, resolution = null} = {})
 	{
 		if(!(offer instanceof ResourceOffer)) offer = new ResourceOffer(offer);
@@ -283,6 +372,10 @@ export class ResolvedResource
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the offer with its source URL and resolution evidence.
+	 * @returns {object} Offer fields plus `sourceUrl` and `resolution`; the mount path is omitted.
+	 */
 	toJSON() { return {...this.offer, sourceUrl: this.sourceUrl, resolution: this.resolution}; }
 }
 
@@ -290,6 +383,17 @@ export class ResolvedResource
 export class ResourceResolution
 {
 
+	/**
+	 * Validate and freeze compatibility evidence.
+	 * @param {object} resolution Evidence fields.
+	 * @param {string} resolution.slot Resource slot ID.
+	 * @param {string} resolution.integrity SHA-256 SRI string.
+	 * @param {number} resolution.bytes Non-negative byte length.
+	 * @param {number} [resolution.order] Non-negative placement order; defaults to 0.
+	 * @param {string} [resolution.candidate] Matched candidate ID, if any.
+	 * @param {object} [resolution.profile] Plain inspector profile object.
+	 * @throws {TypeError} When a field is invalid.
+	 */
 	constructor({slot, integrity, bytes, order = 0, candidate = '', profile = {}})
 	{
 		if(!integrityPattern.test(integrity)) throw new TypeError('ResourceResolution.integrity must be SHA-256 SRI');
@@ -312,6 +416,10 @@ export class ResourceResolution
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the frozen fields.
+	 * @returns {object} Shallow copy of this value's own fields.
+	 */
 	toJSON() { return {...this}; }
 }
 
@@ -319,6 +427,11 @@ export class ResourceResolution
 export class ContentManifest
 {
 
+	/**
+	 * Sort offers by order then slot and reject duplicate slot/order pairs.
+	 * @param {Array<ResourceOffer|object>} [resources] Offers, or fields for new ResourceOffers.
+	 * @throws {TypeError} When an offer is invalid or two share a slot and order.
+	 */
 	constructor(resources = [])
 	{
 		const values = resources.map(
@@ -341,8 +454,16 @@ export class ContentManifest
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the ordered offers.
+	 * @returns {ResourceOffer[]} Sorted, frozen offer list.
+	 */
 	toJSON() { return this.resources; }
 
+	/**
+	 * Hash the canonical JSON form.
+	 * @returns {Promise<string>} SHA-256 SRI string over canonicalJson(this).
+	 */
 	async digest() { return sha256(canonicalJson(this)); }
 }
 
@@ -350,6 +471,18 @@ export class ContentManifest
 export class MatchDescriptor
 {
 
+	/**
+	 * Validate and freeze one match description.
+	 * @param {object} match Match fields.
+	 * @param {string} [match.protocol] Semantic version `major.minor.patch`; defaults to `1.0.0`.
+	 * @param {string} match.game Game export reference.
+	 * @param {*} match.start Structured-cloneable start selector.
+	 * @param {object[]} [match.packages] Package descriptions, each shallow-copied and frozen.
+	 * @param {ContentManifest|Array<ResourceOffer|object>} [match.content] Content offers.
+	 * @param {object} [match.settings] Structured-cloneable match settings.
+	 * @param {number} [match.players] Integer player count from 2 through 16; defaults to 2.
+	 * @throws {TypeError} When the protocol, game, player count, or content is invalid.
+	 */
 	constructor(
 		{
 			protocol = '1.0.0'
@@ -375,6 +508,10 @@ export class MatchDescriptor
 		Object.freeze(this);
 	}
 
+	/**
+	 * Serialize the match fields in a fixed order.
+	 * @returns {object} Protocol, game, start, packages, content, settings, and players.
+	 */
 	toJSON()
 	{
 		return {
@@ -388,10 +525,22 @@ export class MatchDescriptor
 		};
 	}
 
+	/**
+	 * Hash the canonical JSON form.
+	 * @returns {Promise<string>} SHA-256 SRI string over canonicalJson(this).
+	 */
 	async digest() { return sha256(canonicalJson(this)); }
 }
 
-/** Resolve and authorize the selected Matrix homeserver. */
+/**
+ * Resolve and authorize the selected Matrix homeserver.
+ * @param {{homeserver?: string, room?: string}} [worldOptions] World-declared lobby options.
+ * @param {{homeserver?: string, room?: string}} [sessionOptions] Session overrides, preferred over world options.
+ * @param {{signalingOrigins?: Iterable<string>}} [policy] Allowed signaling origins; defaults to the homeserver origin.
+ * @returns {Readonly<{homeserver: string, room: string}>} Homeserver origin (default `https://matrix.org`) and
+ * room (default `#phonics:matrix.org`).
+ * @throws {NetworkError} With code matrix_config for an invalid URL or signaling_origin for a disallowed origin.
+ */
 export function matrixConfiguration(worldOptions = {}, sessionOptions = {}, policy = {})
 {
 	const value = sessionOptions.homeserver ?? worldOptions.homeserver ?? 'https://matrix.org';

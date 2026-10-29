@@ -39,7 +39,7 @@ System names are unique. Explicit dependencies determine scheduler order. Contex
 
 Register namespaced factories with `context->factory(name, callback)` and describe their typed properties in the package's Tiled metadata. A factory export identifies its registered class and module. Keep components as data and implement behavior in independently registered systems.
 
-Browser entries are self-contained ES modules exporting `activate(context)`. Return a cleanup callback or register it with `context.onClose`. The [browser context reference](api-browser-phonics.html#type-browser-module-context) documents every supplied value. The shared [`QuickControls`](api-browser-quick-controls.html) service supplies mute/fullscreen controls for browser games without importing Sane-Phonics.
+Browser entries are self-contained ES modules exporting `activate(context)`. Return a cleanup callback or register it with `context.onClose`. The [browser context reference](api-js/types/phonics/browser-module-context.html) documents every supplied value. The shared [`QuickControls`](api-js/classes/quick-controls/quick-controls.html) service supplies mute/fullscreen controls for browser games without importing Sane-Phonics.
 
 The repository's [composition fixtures](https://github.com/seanmorris/php-wasm-engine/tree/HEAD/tests/fixtures/composition) demonstrate independently packaged modules. Match the current checkout when inspecting source: the checked-out branch may differ from the repository default.
 

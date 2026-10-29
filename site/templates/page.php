@@ -29,6 +29,9 @@ $if(description-meta)$<meta name="description" content="$description-meta$">$end
 <?php endif; ?>
 $for(css)$<link rel="stylesheet" href="$css$">$endfor$
 <style>$styles.html()$</style>
+<?php if(getConf('SCRIPTS')) foreach(getConf('SCRIPTS') as $javascript): ?>
+<script src="<?=$escape(resolveAssetUrl($javascript));?>"></script>
+<?php endforeach; ?>
 <script defer src="<?=$escape($base);?>/site.js"></script>
 </head>
 <body>
@@ -63,13 +66,13 @@ $for(css)$<link rel="stylesheet" href="$css$">$endfor$
   <main id="content" tabindex="-1">
     $if(api-page)$
     <header class="page-header api-page-header">
-      <nav class="api-breadcrumb" aria-label="Breadcrumb"><a href="$if(api-root-url)$$api-root-url$$else$api.html$endif$">$if(api-root-title)$$api-root-title$$else$Programming API$endif$</a>$if(api-parent-title)$<span aria-hidden="true">/</span><a href="$api-parent-url$">$api-parent-title$</a>$endif$</nav>
+      <?php renderBreadcrumbs(['home' => 'Documentation']); ?>
       <h1>$if(display-title)$$display-title$$else$$title$$endif$</h1>
       $if(description-meta)$<p class="subtitle">$description-meta$</p>$endif$
       $if(source-url)$<a class="api-source" href="$source-url$" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>$endif$
     </header>
     $else$
-    <p class="section-label">PHONICS / DOCUMENTATION</p>
+    <?php renderBreadcrumbs(['home' => 'Documentation']); ?>
     <h1>$if(display-title)$$display-title$$else$$title$$endif$</h1>
     $if(description-meta)$<p class="subtitle">$description-meta$</p>$endif$
     $endif$

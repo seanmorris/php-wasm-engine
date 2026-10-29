@@ -14,6 +14,8 @@ final class BrowserBridge
 	 * @param ?callable $receiver Callback that drains encoded packet records from the browser queue.
 	 * @param ?callable $sender Callback that sends a payload through the browser transport.
 	 * @param ?Protocol $protocol Binary codec used to validate packets crossing the PHP boundary.
+	 * @return void Stores the callbacks, defaulting to phonicsNetworkReceive and phonicsNetworkSend;
+	 * throws when either is unavailable.
 	 */
 	public function __construct(?callable $receiver = null, ?callable $sender = null, ?Protocol $protocol = null)
 	{

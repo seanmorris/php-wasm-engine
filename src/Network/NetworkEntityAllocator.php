@@ -18,6 +18,7 @@ final class NetworkEntityAllocator
 	 * Create and validate a network entity allocator.
 	 *
 	 * @param int $first First positive network entity ID available for allocation.
+	 * @return void Starts allocation at the first ID; rejects IDs outside the unsigned 32-bit range.
 	 */
 	public function __construct(int $first = 1)
 	{

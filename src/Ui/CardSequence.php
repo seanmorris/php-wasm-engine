@@ -5,9 +5,9 @@ namespace Phonics\Ui;
 /** Deterministic, renderer-independent sequencing with readiness and fresh-press guards. */
 final class CardSequence
 {
-	/** Lifecycle state: idle, entering, showing, leaving, complete, or cancelled. */
+	/** Lifecycle state: idle, opening, waiting, shown, closing, complete, or cancelled. */
 	public string $state = 'idle';
-	/** Elapsed seconds within the current lifecycle state. */
+	/** Active seconds since the current card was entered, including its fade-in. */
 	public float $elapsed = 0;
 
 	private int $index = -1;

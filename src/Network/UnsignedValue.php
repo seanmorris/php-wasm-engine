@@ -12,6 +12,7 @@ abstract class UnsignedValue implements \JsonSerializable
 	 * @param int $value Scalar value or serialized fields to validate.
 	 * @param ?int $maximum Largest unsigned value accepted by this value object, or the runtime's
 	 * representable uint32 maximum when omitted.
+	 * @return void Stores the value; rejects values outside 0 through the maximum.
 	 */
 	public function __construct(private int $value, ?int $maximum = null)
 	{

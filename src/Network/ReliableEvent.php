@@ -13,6 +13,7 @@ final class ReliableEvent implements \JsonSerializable
 	 * @param SimulationTick $tick Simulation tick associated with the command, event, or snapshot.
 	 * @param string $type Stable game-owned reliable event type.
 	 * @param array<string,mixed> $payload Validated scalar data carried by the message or component.
+	 * @return void Stores the event after validating its ID, type and JSON-safe payload.
 	 */
 	public function __construct(
 		/** Stable event or prefab identifier. */

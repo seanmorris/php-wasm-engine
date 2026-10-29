@@ -183,6 +183,52 @@ function apiDeclaration(string $source, string $file): string
 	throw new RuntimeException("Cannot discover public declaration in $file");
 }
 
+/**
+ * Locate each public property declaration, including promoted constructor parameters.
+ *
+ * ReflectionProperty has no start line, so the class body is scanned at brace depth one.
+ */
+function apiPropertyLines(string $source, int $classLine): array
+{
+	$tokens = token_get_all($source, TOKEN_PARSE);
+	$lines = [];
+	$depth = $parens = 0;
+	$started = $modifier = false;
+	$modifiers = [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_VAR];
+
+	if(defined('T_READONLY')) $modifiers[] = T_READONLY;
+
+	$line = 1;
+
+	foreach($tokens as $token)
+	{
+		$text = is_array($token) ? $token[1] : $token;
+		$line = is_array($token) ? $token[2] : $line;
+
+		if(!$started)
+		{
+			$started = $depth = $text === '{' && $line >= $classLine ? 1 : 0;
+
+			continue;
+		}
+
+		$opens = $text === '{'
+			|| is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true);
+
+		if($opens) $depth++;
+		elseif($text === '}' && --$depth === 0) break;
+		elseif($depth !== 1) continue;
+		elseif($text === '(') $parens++;
+		elseif($text === ')') $parens--;
+		elseif($text === ',' || $text === ';' || is_array($token) && $token[0] === T_FUNCTION) $modifier = false;
+		elseif(is_array($token) && in_array($token[0], $modifiers, true)) $modifier = true;
+		elseif(is_array($token) && $token[0] === T_VARIABLE && ($parens === 0 || $modifier))
+			$lines[substr($token[1], 1)] ??= $token[2];
+	}
+
+	return $lines;
+}
+
 $files = array_values(array_filter(
 	$manifest['php']['files'] ?? []
 	, static fn(string $file): bool => str_starts_with($file, 'src/') && str_ends_with($file, '.php')
@@ -198,6 +244,7 @@ foreach($files as $file)
 	$class = new ReflectionClass($name);
 	$constructor = $class->getConstructor();
 	$constructorDoc = $constructor ? apiDoc($constructor->getDocComment()) : null;
+	$propertyLines = apiPropertyLines($source, $class->getStartLine());
 	$properties = [];
 
 	foreach($class->getProperties(ReflectionProperty::IS_PUBLIC) as $property)
@@ -219,7 +266,7 @@ foreach($files as $file)
 			, 'readonly' => method_exists($property, 'isReadOnly') && $property->isReadOnly()
 			, 'default' => $property->hasDefaultValue() ? apiValue($property->getDefaultValue()) : null
 			, 'doc' => $doc
-			, 'line' => $class->getStartLine()
+			, 'line' => $propertyLines[$property->getName()] ?? $class->getStartLine()
 		];
 	}
 

@@ -14,6 +14,7 @@ final class NetworkPrefab
 	 * Create and validate a network prefab component.
 	 *
 	 * @param string $id Stable identifier for an authority, event, prefab, or network entity.
+	 * @return void Stores the prefab ID after validating its spelling.
 	 */
 	public function __construct(string $id)
 	{

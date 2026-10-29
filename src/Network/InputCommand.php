@@ -15,6 +15,7 @@ final class InputCommand implements \JsonSerializable
 	 * @param SimulationTick $tick Simulation tick associated with the command, event, or snapshot.
 	 * @param CommandSequence $sequence Command or snapshot sequence used as a boundary.
 	 * @param array<string,bool|int|float|string|null> $actions Device-independent named action values.
+	 * @return void Stores the command with its actions sorted by name; rejects invalid names or non-scalar values.
 	 */
 	public function __construct(
 		/** Player slot that originated the command. */

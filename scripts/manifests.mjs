@@ -224,6 +224,7 @@ definitions.push(
 				, 'resources/doom1-enemies.dec'
 				, 'resources/wiki-actors.dec'
 				, 'resources/sndinfo.txt'
+				, 'resources/language.txt'
 			]
 			, directories: ['src','browser','shaders','modules','adapters','resources']
 			, files: ['autoload.php','game.php']

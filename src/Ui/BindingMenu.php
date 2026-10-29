@@ -32,6 +32,7 @@ class BindingMenu
 	 * @param callable(Source):bool|null $allowed Reject fixed or reserved sources.
 	 * @param callable(string):array|null $extras Add game-specific device settings.
 	 * @param callable():string|null $status Describe session-only persistence or another state.
+	 * @return void Stores the profile, action rows and callbacks, substituting neutral defaults for omitted hooks.
 	 */
 	public function __construct(
 		private Bindings $bindings
@@ -44,9 +45,31 @@ class BindingMenu
 	) {
 		$this->save = \Closure::fromCallable($save);
 		$this->reset = \Closure::fromCallable($reset);
-		$this->allowed = $allowed ? \Closure::fromCallable($allowed) : static fn(Source $source): bool => true;
-		$this->extras = $extras ? \Closure::fromCallable($extras) : static fn(string $device): array => [];
-		$this->status = $status ? \Closure::fromCallable($status) : static fn(): string => '';
+		/**
+		 * Accept every physical source when the game reserves none.
+		 *
+		 * @param Source $source Candidate physical input.
+		 * @return bool Always true.
+		 */
+		$allowEverySource = static fn(Source $source): bool => true;
+		$this->allowed = $allowed ? \Closure::fromCallable($allowed) : $allowEverySource;
+
+		/**
+		 * Add no game-specific settings when the game supplies none.
+		 *
+		 * @param string $device Device family whose page is being built.
+		 * @return array<string,array<string,mixed>> An empty row list.
+		 */
+		$noExtraRows = static fn(string $device): array => [];
+		$this->extras = $extras ? \Closure::fromCallable($extras) : $noExtraRows;
+
+		/**
+		 * Report no persistence status when the game supplies none.
+		 *
+		 * @return string An empty status message.
+		 */
+		$noStatus = static fn(): string => '';
+		$this->status = $status ? \Closure::fromCallable($status) : $noStatus;
 	}
 
 	/**
@@ -64,34 +87,72 @@ class BindingMenu
 	 */
 	public function item(string $label = 'Controls'): array
 	{
+		/**
+		 * Build the keyboard and mouse binding page on demand.
+		 *
+		 * @return array<string,array<string,mixed>> Keyboard action rows.
+		 */
+		$keyboardPage = fn(): array => $this->devicePage(Source::KEYBOARD);
+
+		/**
+		 * Build the controller binding page on demand.
+		 *
+		 * @return array<string,array<string,mixed>> Controller action rows.
+		 */
+		$controllerPage = fn(): array => $this->devicePage(Source::CONTROLLER);
+
+		/**
+		 * Build the controls root page with keyboard, controller and pause-hint rows.
+		 *
+		 * @return array<string,array<string,mixed>> Root page rows including the hidden page metadata.
+		 */
+		$rootPage = fn(): array => $this->page() + [
+			'keyboard' => [
+				'label' => 'Keyboard & Mouse'
+				, 'children' => $keyboardPage
+			]
+			, 'controller' => [
+				'label' => 'Controller'
+				, 'children' => $controllerPage
+			]
+			, 'pause-hint' => ['label' => 'Pause: Escape / P / Start', 'disabled' => true]
+		];
+
 		return [
 			'label' => $label
-			, 'children' => fn(): array => $this->page() + [
-				'keyboard' => [
-					'label' => 'Keyboard & Mouse'
-					, 'children' => fn(): array => $this->devicePage(Source::KEYBOARD)
-				]
-				, 'controller' => [
-					'label' => 'Controller'
-					, 'children' => fn(): array => $this->devicePage(Source::CONTROLLER)
-				]
-				, 'pause-hint' => ['label' => 'Pause: Escape / P / Start', 'disabled' => true]
-			]
+			, 'children' => $rootPage
 		];
 	}
 
-	/** Hidden metadata identifies compact controls pages and their contextual footer. */
+	/**
+	 * Hidden metadata identifies compact controls pages and their contextual footer.
+	 *
+	 * @return array<string,array<string,mixed>> Hidden page marker and live status-message rows.
+	 */
 	private function page(): array
 	{
+		/**
+		 * Read the latest capture message, or the game's persistence status when there is none.
+		 *
+		 * @return string Footer text for the current controls page.
+		 */
+		$footer = fn(): string => $this->message ?: ($this->status)();
+
 		return [
 			'controls-page' => ['hidden' => true, 'value' => true]
 			, 'controls-message' => [
 				'hidden' => true
-				, 'get' => fn(): string => $this->message ?: ($this->status)()
+				, 'get' => $footer
 			]
 		];
 	}
 
+	/**
+	 * Build one device's action rows, game extras and a restore-defaults action.
+	 *
+	 * @param string $device Device family whose bindings are listed.
+	 * @return array<string,array<string,mixed>> Menu rows for the device page; clears any earlier message.
+	 */
 	private function devicePage(string $device): array
 	{
 		$this->message = '';
@@ -99,24 +160,45 @@ class BindingMenu
 
 		foreach($this->actions as $id => [$code, $direction, $label])
 		{
+			/**
+			 * Show the action's current bindings for this device.
+			 *
+			 * @return string Controller glyphs, or keyboard and mouse labels, or Unbound.
+			 */
+			$currentBindings = fn(): string => $device === Source::CONTROLLER
+				? $this->hints($code, $direction)
+				: $this->labels($code, $direction, $device);
+
+			/**
+			 * Open the add and remove page for one action on this device.
+			 *
+			 * @return array<string,array<string,mixed>> Action page rows.
+			 */
+			$actionRows = fn(): array => $this->actionPage($code, $direction, $device);
+
 			$rows[$id] = [
 				'label' => $label
-				, 'get' => fn(): string => $device === Source::CONTROLLER
-					? $this->hints($code, $direction)
-					: $this->labels($code, $direction, $device)
+				, 'get' => $currentBindings
 				, 'bindingDevice' => $device
-				, 'children' => fn(): array => $this->actionPage($code, $direction, $device)
+				, 'children' => $actionRows
 			];
 		}
 
 		$rows += ($this->extras)($device);
 
+		/**
+		 * Restore this device's defaults through the game callback.
+		 *
+		 * @return void Resets the device and shows a confirmation message.
+		 */
+		$restoreDefaults = function() use ($device): void {
+			($this->reset)($device);
+			$this->message = 'Device defaults restored';
+		};
+
 		$rows['defaults'] = [
 			'label' => 'Restore device defaults'
-			, 'callback' => function() use ($device): void {
-				($this->reset)($device);
-				$this->message = 'Device defaults restored';
-			}
+			, 'callback' => $restoreDefaults
 		];
 
 		return $rows;
@@ -134,8 +216,16 @@ class BindingMenu
 	{
 		$sources = $this->bindings->sources($code, $direction, $device);
 
+		/**
+		 * Format one source with the current input theme.
+		 *
+		 * @param Source $source Bound physical source.
+		 * @return string Human-readable source label.
+		 */
+		$sourceLabel = fn(Source $source): string => $source->label($this->theme);
+
 		return $sources
-			? implode(' / ', array_map(fn(Source $source): string => $source->label($this->theme), $sources))
+			? implode(' / ', array_map($sourceLabel, $sources))
 			: 'Unbound';
 	}
 
@@ -149,40 +239,72 @@ class BindingMenu
 	public function hints(int $code, int $direction): string
 	{
 		$sources = $this->bindings->sources($code, $direction, Source::CONTROLLER);
-		$hints = array_map(fn(Source $source): string => $source->hint() ?? $source->label($this->theme), $sources);
+		/**
+		 * Prefer a controller glyph, falling back to the themed label.
+		 *
+		 * @param Source $source Bound controller source.
+		 * @return string Glyph character or readable label.
+		 */
+		$sourceHint = fn(Source $source): string => $source->hint() ?? $source->label($this->theme);
+		$hints = array_map($sourceHint, $sources);
 
 		return $hints ? implode('  ', $hints) : 'Unbound';
 	}
 
+	/**
+	 * Build the add-binding row and one removal row per source bound to an action on a device.
+	 *
+	 * @param int $code Logical action code.
+	 * @param int $direction Signed action direction.
+	 * @param string $device Device family being edited.
+	 * @return array<string,array<string,mixed>> Menu rows for the action page.
+	 */
 	private function actionPage(int $code, int $direction, string $device): array
 	{
 		$rows = $this->page();
 
+		/**
+		 * Start capturing a new source for this action.
+		 *
+		 * @param Menu $menu Menu whose page is replaced by the capture prompt.
+		 * @return void Arms capture after controls are released.
+		 */
+		$startCapture = function(Menu $menu) use ($code, $direction, $device): void {
+			$this->capture = [$code, $direction, $device];
+			$this->armed = false;
+			$this->message = 'Escape / Start cancels';
+
+			$menu->setItems($this->page() + [
+				'capture' => ['label' => 'Release controls first', 'disabled' => true]
+			]);
+		};
+
 		$rows['add-binding'] = [
 			'label' => 'Add binding'
-			, 'callback' => function(Menu $menu) use ($code, $direction, $device): void {
-				$this->capture = [$code, $direction, $device];
-				$this->armed = false;
-				$this->message = 'Escape / Start cancels';
-
-				$menu->setItems($this->page() + [
-					'capture' => ['label' => 'Release controls first', 'disabled' => true]
-				]);
-			}
+			, 'callback' => $startCapture
 		];
 
 		foreach($this->bindings->sources($code, $direction, $device) as $source)
 		{
 			$hint = $device === Source::CONTROLLER ? $source->hint() : null;
+
+			/**
+			 * Remove this source from the action and persist the profile.
+			 *
+			 * @param Menu $menu Menu whose action page is rebuilt.
+			 * @return void Saves the profile and refreshes the page.
+			 */
+			$removeSource = function(Menu $menu) use ($code, $direction, $device, $source): void {
+				$this->bindings->remove($code, $direction, $source);
+				($this->save)();
+				$menu->setItems($this->actionPage($code, $direction, $device));
+			};
+
 			$rows['remove-' . $source->id()] = [
 				'label' => $hint === null ? 'Remove ' . $source->label($this->theme) : 'Remove'
 				, 'value' => $hint ?? ''
 				, 'bindingDevice' => $device
-				, 'callback' => function(Menu $menu) use ($code, $direction, $device, $source): void {
-					$this->bindings->remove($code, $direction, $source);
-					($this->save)();
-					$menu->setItems($this->actionPage($code, $direction, $device));
-				}
+				, 'callback' => $removeSource
 			];
 		}
 
@@ -274,17 +396,25 @@ class BindingMenu
 
 			foreach(['replace' => 'Replace', 'share' => 'Share', 'cancel' => 'Cancel'] as $choice => $label)
 			{
+				/**
+				 * Resolve a binding conflict with the selected policy.
+				 *
+				 * @param Menu $menu Menu returned to the action page.
+				 * @return void Binds and saves for replace or share; cancel leaves the profile unchanged.
+				 */
+				$resolveConflict = function(Menu $menu) use ($code, $direction, $source, $device, $choice): void {
+					if($choice !== 'cancel')
+					{
+						$this->bindings->bind($code, $direction, $source, $choice);
+						($this->save)();
+					}
+
+					$this->finish($menu, $code, $direction, $device);
+				};
+
 				$rows[$choice] = [
 					'label' => $label
-					, 'callback' => function(Menu $menu) use ($code, $direction, $source, $device, $choice): void {
-						if($choice !== 'cancel')
-						{
-							$this->bindings->bind($code, $direction, $source, $choice);
-							($this->save)();
-						}
-
-						$this->finish($menu, $code, $direction, $device);
-					}
+					, 'callback' => $resolveConflict
 				];
 			}
 
@@ -296,6 +426,15 @@ class BindingMenu
 		return true;
 	}
 
+	/**
+	 * End capture and return to the action page.
+	 *
+	 * @param Menu $menu Menu whose page is replaced.
+	 * @param int $code Logical action code.
+	 * @param int $direction Signed action direction.
+	 * @param string $device Device family being edited.
+	 * @return void Clears capture state and the message, then rebuilds the action page.
+	 */
 	private function finish(Menu $menu, int $code, int $direction, string $device): void
 	{
 		$this->capture = null;

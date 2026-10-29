@@ -24,7 +24,11 @@ export class SafeStorage
 		}
 	}
 
-	/** Read the session value first, then the persistent value. */
+	/**
+	 * Read the session value first, then the persistent value.
+	 * @param {*} key Storage key; converted to a string.
+	 * @returns {string|null} Stored string, or null when the key was removed, is absent, or storage fails.
+	 */
 	get(key)
 	{
 		key = String(key);
@@ -45,7 +49,12 @@ export class SafeStorage
 		}
 	}
 
-	/** Retain the value for this session and attempt to persist it. */
+	/**
+	 * Retain the value for this session and attempt to persist it.
+	 * @param {*} key Storage key; converted to a string.
+	 * @param {*} value Value to store; converted to a string.
+	 * @returns {boolean} True when the persistent store accepted the value; false keeps it for this session only.
+	 */
 	set(key, value)
 	{
 		key = String(key);
@@ -70,7 +79,11 @@ export class SafeStorage
 		}
 	}
 
-	/** Hide the value for this session and attempt to remove its persistent copy. */
+	/**
+	 * Hide the value for this session and attempt to remove its persistent copy.
+	 * @param {*} key Storage key; converted to a string.
+	 * @returns {boolean} True when the persistent copy was removed; false hides it for this session only.
+	 */
 	remove(key)
 	{
 		key = String(key);

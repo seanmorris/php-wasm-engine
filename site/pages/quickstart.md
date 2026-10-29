@@ -8,7 +8,7 @@ menus:
     weight: 15
 ---
 
-You’ll create a small game with a movable player, change its layout and speed in Tiled, change its color in PHP, and produce an npm tarball. Your game will own its code and world; neither demo game is required.
+You’ll create a small game with a movable player, change its layout and speed in Tiled, change its color in PHP, and produce an npm tarball. Your game will own its code and world; none of the bundled games is required.
 
 ## Before you start
 
@@ -17,7 +17,7 @@ Have these ready:
 - **Node.js 22 or newer**, with npm.
 - **Tiled 1.12.2** for editing the map.
 - A packed **Phonics npm artifact**, such as `seanmorris-phonics-0.1.0.tgz`.
-- A built **PHP 8.4/SDL runtime directory** containing `php8.4-sdl.mjs` and its matching runtime files.
+- A built **PHP 8.4/SDL runtime directory** containing `php8.4-sdl.mjs` and its matching runtime files. In a Phonics source checkout, `npm run setup:runtime` prints this directory, first downloading the pinned runtime to `<checkout>/.runtime` when none is installed.
 
 The commands below use local artifacts, so they do not assume the package is already published to npm. Replace `/path/to/...` with your actual absolute paths. If you need to prepare the framework artifacts or runtime from source, see [Contributing](contributing.html).
 

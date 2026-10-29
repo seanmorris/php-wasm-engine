@@ -15,6 +15,7 @@ final class WorldSnapshot implements \JsonSerializable
 	 * @param array<int,array<string,mixed>> $entities Bidirectional network/local entity identity map.
 	 * @param list<int> $despawned Validated despawned used by this world snapshot.
 	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgements.
+	 * @return void Stores the snapshot after validating entity IDs, despawns, acknowledgements and JSON encoding.
 	 */
 	public function __construct(
 		/** Monotonic command or snapshot sequence. */

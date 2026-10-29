@@ -6,8 +6,9 @@ I. Declare the world
 II. Use a content adapter
     A. WAD source declarations
     B. Scope-bound systems and transitions
-    C. Render scale and licensed content
-    D. Multiple resource slots and selected scopes
+    C. Game-owned init values and their PHP and browser access
+    D. Render scale and licensed content
+    E. Multiple resource slots and selected scopes
 III. Launch a session
     A. Canvas and runtime
     B. Cancellation and disposal
