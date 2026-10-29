@@ -9,6 +9,7 @@ export default defineConfig({
 	, testMatch: ['tests/browser/**/*.spec.mjs', 'packages/*/tests/browser/**/*.spec.mjs']
 	, timeout: 90000
 	, workers: 1
+	, reporter: process.env.CI ? [['line'], ['github']] : 'list'
 	, use: {baseURL,headless: true}
 	, projects: [{
 		name: 'chromium'
