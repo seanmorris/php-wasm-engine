@@ -60,6 +60,8 @@ test('all guide pages fit desktop, tablet and mobile without loading a game runt
 test('mobile menus expose navigation and per-page anchors', async({page}) => {
 	await page.setViewportSize({width: 390, height: 844});
 	await page.goto('/');
+	await expect(page.locator('.site-navigation')).toBeHidden();
+	await page.locator('.site-menu > summary').click();
 	await expect(page.locator('.site-navigation')).toBeVisible();
 
 	await page.getByRole('navigation', {name: 'Documentation', exact: true})
@@ -76,15 +78,34 @@ test('mobile menus expose navigation and per-page anchors', async({page}) => {
 
 test('desktop navigation headings align across documentation columns', async({page}) => {
 	await page.setViewportSize({width: 1440, height: 900});
-	await page.goto('/');
+	await page.goto('/quickstart.html');
 
 	const tops = await Promise.all([
-		page.getByText('Get started', {exact: true}).evaluate(element => element.getBoundingClientRect().top)
-		, page.locator('.section-label').evaluate(element => element.getBoundingClientRect().top)
-		, page.getByText('On this page', {exact: true}).evaluate(element => element.getBoundingClientRect().top)
+		page.locator('details[data-id-path="begin"] > summary').evaluate(element => element.getBoundingClientRect().top)
+		, page.locator('main > :first-child').evaluate(element => element.getBoundingClientRect().top)
+		, page.locator('.page-navigation > summary').evaluate(element => element.getBoundingClientRect().top)
 	]);
 
 	expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1);
+});
+
+test('homepage hero introduces Phonics and links every game capture', async({page}) => {
+	await page.setViewportSize({width: 1440, height: 900});
+	await page.goto('/');
+
+	const hero = page.locator('.hero');
+	await expect(hero.getByRole('heading', {level: 1})).toHaveText('Phonics');
+	await expect(page.locator('main h1')).toHaveCount(0);
+	await expect(hero.getByRole('link', {name: 'Start the quickstart'})).toHaveAttribute('href', /quickstart\.html$/);
+
+	const captures = hero.getByRole('list', {name: 'Games built with Phonics'}).getByRole('link');
+	await expect(captures).toHaveCount(6);
+
+	for(const capture of await captures.all())
+	{
+		await expect(capture).toHaveAttribute('href', /games\/[a-z-]+\/$/);
+		await expect.poll(() => capture.locator('img').evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
+	}
 });
 
 test('PHP class names are highlighted as complete identifiers', async({page}) => {
@@ -166,40 +187,112 @@ test('documentation follows the system theme and saves an explicit preference', 
 	})).toEqual(toggleStyle);
 });
 
-test('header search overlays the page and resolves live results', async({page}) => {
-	await page.setViewportSize({width: 1440, height: 900});
-	await page.goto('/');
+for(const width of [1440, 1000, 390])
+{
+	test(`header search adapts at ${width}px and overlays live results`, async({page}) => {
+		await page.setViewportSize({width, height: 900});
+		await page.goto('/');
 
-	const searchToggle = page.locator('[data-search-toggle]');
-	const themeToggle = page.locator('[data-theme-toggle]');
-	const panel = page.locator('[data-search-panel]');
-	const input = page.locator('#search-query');
-	const layout = page.locator('.layout');
-	const layoutTop = await layout.evaluate(element => element.getBoundingClientRect().top);
-	const searchBox = await searchToggle.boundingBox();
-	const themeBox = await themeToggle.boundingBox();
+		const wide = width >= 1100;
+		const searchToggle = page.locator('[data-search-toggle]');
+		const themeToggle = page.locator('[data-theme-toggle]');
+		const panel = page.locator('[data-search-panel]');
+		const input = page.locator('#search-query');
+		const results = page.locator('#search-results');
+		const layout = page.locator('.layout');
+		const layoutTop = await layout.evaluate(element => element.getBoundingClientRect().top);
 
-	expect(searchBox.x).toBeLessThan(themeBox.x);
-	await expect(panel).toBeHidden();
-	await searchToggle.click();
-	await expect(searchToggle).toHaveAttribute('aria-expanded', 'true');
-	await expect(panel).toBeVisible();
-	await expect(input).toBeFocused();
-	expect(await layout.evaluate(element => element.getBoundingClientRect().top)).toBe(layoutTop);
+		const documentation = page.getByRole('navigation', {name: 'Primary', exact: true})
+			.getByRole('link', {name: 'Documentation', exact: true});
 
-	await input.fill('CommandValidator');
-	const commandResult = page.getByRole('link', {name: 'Phonics\\Network\\CommandValidator', exact: true});
-	await expect(commandResult).toBeVisible();
-	await commandResult.click();
-	await expect(page).toHaveURL(/api-phonics-network-command-validator\.html$/);
+		if(wide)
+		{
+			await expect(searchToggle).toBeHidden();
+			await expect(input).toBeVisible();
+			await expect(panel).toHaveAttribute('aria-hidden', 'false');
+			const inputBox = await input.boundingBox();
+			const documentationBox = await documentation.boundingBox();
+			const inputCenter = inputBox.y + inputBox.height / 2;
+			const documentationCenter = documentationBox.y + documentationBox.height / 2;
 
-	await page.locator('[data-search-toggle]').click();
-	await page.locator('#search-query').fill('Doom-Phonics');
-	const gameResult = page.locator('#search-results a').filter({hasText: 'Doom-Phonics'}).first();
-	await expect(gameResult).toHaveAttribute('href', '/games/doom-phonics/');
-	await page.keyboard.press('Escape');
-	await expect(page.locator('[data-search-panel]')).toBeHidden();
-});
+			expect(inputBox.x + inputBox.width).toBeLessThan(documentationBox.x);
+			expect(Math.abs(inputCenter - documentationCenter)).toBeLessThan(2);
+			await input.focus();
+			await page.keyboard.press('Tab');
+			await expect(documentation).toBeFocused();
+		}
+		else
+		{
+			const searchBox = await searchToggle.boundingBox();
+			const themeBox = await themeToggle.boundingBox();
+			expect(searchBox.x).toBeLessThan(themeBox.x);
+			await expect(panel).toBeHidden();
+			await searchToggle.click();
+			await expect(searchToggle).toHaveAttribute('aria-expanded', 'true');
+			await expect(panel).toBeVisible();
+			await expect(input).toBeFocused();
+			const panelBox = await panel.boundingBox();
+			expect(panelBox.x).toBeGreaterThanOrEqual(0);
+			expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(width);
+			await searchToggle.click();
+			await expect(panel).toBeHidden();
+			await searchToggle.click();
+		}
+
+		await input.fill('CommandValidator');
+		const commandResult = page.getByRole('link', {name: 'Phonics\\Network\\CommandValidator', exact: true});
+		await expect(commandResult).toBeVisible();
+		expect(await layout.evaluate(element => element.getBoundingClientRect().top)).toBe(layoutTop);
+		await page.keyboard.press('ArrowDown');
+		await expect(results.locator('a').first()).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(results).toBeHidden();
+
+		if(wide)
+		{
+			await expect(input).toBeVisible();
+			await expect(input).toBeFocused();
+			await input.click();
+			await expect(commandResult).toBeVisible();
+			await page.keyboard.press('ArrowDown');
+		}
+		else
+		{
+			await expect(panel).toBeHidden();
+			await expect(searchToggle).toBeFocused();
+			await searchToggle.click();
+		}
+
+		await commandResult.click();
+		await expect(page).toHaveURL(/api-phonics-network-command-validator\.html$/);
+
+		if(!wide) await searchToggle.click();
+
+		await input.fill('Doom-Phonics');
+		const gameResult = results.locator('a').filter({hasText: 'Doom-Phonics'}).first();
+		await expect(gameResult).toHaveAttribute('href', '/games/doom-phonics/');
+		await themeToggle.click();
+		await expect(results).toBeHidden();
+
+		if(wide)
+		{
+			await expect(input).toBeVisible();
+			await input.focus();
+			await page.setViewportSize({width: 390, height: 900});
+			await expect(searchToggle).toBeVisible();
+			await expect(input).toBeFocused();
+			await expect(gameResult).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(panel).toBeHidden();
+			await page.setViewportSize({width: 1440, height: 900});
+			await expect(searchToggle).toBeHidden();
+			await expect(input).toBeFocused();
+			await expect(input).toHaveValue('Doom-Phonics');
+			await expect(panel).toHaveAttribute('aria-hidden', 'false');
+		}
+		else await expect(panel).toBeHidden();
+	});
+}
 
 test('input reference uses accessible Xbox and PlayStation controller art', async({page}) => {
 	await page.goto('/input.html');
@@ -346,7 +439,7 @@ test('navigation prefetches on hover and starts on primary mousedown', async({pa
 	await page.waitForTimeout(100);
 	await expect(page.locator('link[rel="prefetch"][href$="/tiled.html"]')).toHaveCount(1);
 
-	const github = page.locator('a[href="https://github.com/seanmorris/php-wasm-engine"]');
+	const github = page.locator('.masthead-source[href="https://github.com/seanmorris/php-wasm-engine"]');
 	await expect(github).toHaveAttribute('target', '_blank');
 	await expect(github).toHaveAttribute('rel', 'noopener noreferrer');
 	await github.hover();

@@ -422,6 +422,9 @@ test('search and controller references are published with the requested smgen pi
 	{
 		await fs.access(path.join(output, 'games', page, 'index.html'));
 		await fs.access(path.join(output, 'images', 'games', page + '.png'));
+
+		for(const derived of [page + '.webp', page + '-768.webp', path.join('hero', page + '.webp')])
+			await fs.access(path.join(output, 'images', 'games', derived));
 	}
 
 	assert.equal(

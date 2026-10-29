@@ -1,6 +1,40 @@
 ---
 title: Phonics
 description-meta: Compose a world. Bring it to life.
+eyebrow: PHP · Tiled · SDL · WebGL 2
+hero:
+  lead: Build games from worlds, systems, and reusable packages. Author in Tiled. Run PHP in the browser.
+  actions:
+    - label: Start the quickstart
+      href: quickstart.html
+      primary: true
+    - label: Play the games
+      href: games/
+  shots:
+    - label: Doom-Phonics
+      href: games/doom-phonics/
+      src: images/games/hero/doom-phonics.webp
+      alt: Doom-Phonics gameplay
+    - label: PHP-Noid
+      href: games/php-noid/
+      src: images/games/hero/php-noid.webp
+      alt: PHP-Noid gameplay
+    - label: Sane-Phonics
+      href: games/sane-phonics/
+      src: images/games/hero/sane-phonics.webp
+      alt: Sane-Phonics gameplay
+    - label: PHPTris
+      href: games/php-tris/
+      src: images/games/hero/php-tris.webp
+      alt: PHPTris gameplay
+    - label: PHP Slalom
+      href: games/php-slalom/
+      src: images/games/hero/php-slalom.webp
+      alt: PHP Slalom gameplay
+    - label: PHP Buster
+      href: games/php-buster/
+      src: images/games/hero/php-buster.webp
+      alt: PHP Buster gameplay
 llms: start
 menus:
   documentation:
@@ -24,8 +58,6 @@ jsonld:
 ---
 
 
-<p class="eyebrow">PHP · Tiled · SDL · WebGL 2</p>
-<p class="lead">Build games from worlds, systems, and reusable packages. Author in Tiled. Run PHP in the browser.</p>
 <div class="flow" aria-label="Tiled world loads packages which run in PHP and SDL"><span><b>01</b>Tiled world<small>Maps &amp; properties</small></span><span><b>02</b>Package exports<small>Games &amp; systems</small></span><span><b>03</b>PHP + SDL<small>A playable session</small></span></div>
 
 ## A world is the entry point
