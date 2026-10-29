@@ -60,7 +60,35 @@ jobs:
         env:
           QT_QPA_PLATFORM: xcb
   browser:
+    name: browser (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/setup-docs
+      - run: npm run setup:runtime
+      - run: npm run test:browser -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        env:
+          PHONICS_TEST: 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-test-results-${{ matrix.shard }}
+          path: test-results/
+          if-no-files-found: ignore
+  browser-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,16 +104,11 @@ jobs:
         run: node scripts/bench-php-noid-browser.mjs > "$RUNNER_TEMP/php-noid-collisions.json"
       - name: Measure PHPTris board phases in PHP-WASM
         run: npm run bench:php-tris:browser
-      - run: npm run test:browser
-        env:
-          PHONICS_TEST: 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: php-noid-performance
-          path: |
-            ${{ runner.temp }}/php-noid-collisions.json
-            test-results/**/*profile*
+          path: ${{ runner.temp }}/php-noid-collisions.json
       - run: npm run build:docs
       - run: npm run test:site
       - run: npm run test:site:browser
