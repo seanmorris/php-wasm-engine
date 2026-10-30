@@ -904,6 +904,7 @@ final class GlesMapRenderer
 		$this->beamCpuMs = (hrtime(true) - $started) / 1e6;
 	}
 
+	/** Draw one world view, optionally retaining the real observer's color through a portal. */
 	public function render(
 		float $x
 		, float $y
@@ -914,6 +915,7 @@ final class GlesMapRenderer
 		, float $alpha = 1
 		, ?int $cameraSector = null
 		, ?float $nearPlane = null
+		, ?array $viewBlend = null
 	): void {
 		$started = hrtime(true);
 
@@ -924,9 +926,7 @@ final class GlesMapRenderer
 		$cameraSector ??= $this->level->map->sectorAt($x, $y);
 		$viewSector = $this->level->sectors[$cameraSector];
 		$region = $viewSector->heightTransfer?->region($x, $y, $z + 41, $alpha) ?? 0;
-		$blend = $viewSector->heightTransfer?->blend($region) ?? [0.0,0.0,0.0,0.0];
-		if(!$viewSector->heightTransfer && $this->level->waterSurface($x, $y, $z + 41, .01) !== null)
-		$blend = [0.0,.31,.65,.35];
+		$blend = $viewBlend ?? $this->viewBlend($x, $y, $z + 41, $cameraSector, $alpha);
 		foreach([$this->program,$this->spriteProgram,$this->skyProgram,$this->beamProgram] as $program)
 		{
 			$program->use();
@@ -998,6 +998,15 @@ final class GlesMapRenderer
 		];
 	}
 
+	/** Resolve color at the observer; transformed portal cameras may lie outside their visible room. */
+	private function viewBlend(float $x, float $y, float $eye, int $sector, float $alpha): array
+	{
+		$transfer = $this->level->sectors[$sector]->heightTransfer;
+		if($transfer) return $transfer->blend($transfer->region($x, $y, $eye, $alpha));
+		return $this->level->waterSurface($x, $y, $eye, .01) !== null
+			? [0.0,.31,.65,.35] : [0.0,0.0,0.0,0.0];
+	}
+
 	/** Render visible portal cameras, including bounded views through another portal. */
 	public function renderCameraPortals(
 		Registry $registry
@@ -1026,9 +1035,11 @@ final class GlesMapRenderer
 
 		$width = $this->viewport->sceneWidth;
 		$height = $this->viewport->sceneHeight;
+		$blend = $this->viewBlend($x, $y, $z + PlayerState::VIEW_HEIGHT,
+			$cameraSector ?? $this->level->map->sectorAt($x, $y), $alpha);
 		$this->renderDomTextureViews();
 		$this->renderCameraTextureViews($registry, $viewEntity, $extraLight, $alpha);
-		$this->renderMirrorViews($registry, $x, $y, $z, $angle, $pitch, $extraLight, $alpha);
+		$this->renderMirrorViews($registry, $x, $y, $z, $angle, $pitch, $extraLight, $alpha, $blend);
 
 		if(!$this->mesh->cameraPortals->vertexCount())
 		{
@@ -1081,6 +1092,7 @@ final class GlesMapRenderer
 				, $alpha
 				, 1
 				, $branchBudget
+				, $blend
 			);
 
 			if($target)
@@ -1213,6 +1225,7 @@ final class GlesMapRenderer
 		, float $pitch
 		, int $extraLight
 		, float $alpha
+		, array $viewBlend
 	): void {
 		$width = $this->viewport->sceneWidth;
 		$height = $this->viewport->sceneHeight;
@@ -1235,6 +1248,7 @@ final class GlesMapRenderer
 					, $extraLight
 					, $alpha
 					, $camera['sector']
+					, viewBlend: $viewBlend
 				);
 
 				$this->renderActors(
@@ -1304,6 +1318,9 @@ final class GlesMapRenderer
 	/**
 	 * Render one transformed camera after its child portal textures are ready.
 	 *
+	 * Every capture uses the originating observer's blend. Portal compositing
+	 * copies already-colored pixels, so recursive views apply that blend once.
+	 *
 	 * @param int $branchBudget Maximum captures available to this branch, including this view.
 	 */
 	private function renderCameraPortalView(
@@ -1319,6 +1336,7 @@ final class GlesMapRenderer
 		, float $alpha
 		, int $depth
 		, int $branchBudget
+		, array $viewBlend
 	): ?CameraPortalTarget {
 		if($depth > self::CAMERA_PORTAL_RECURSION_DEPTH
 			|| $this->cameraPortalViewBudget <= 0
@@ -1382,6 +1400,7 @@ final class GlesMapRenderer
 				, $alpha
 				, $depth + 1
 				, $childBudget
+				, $viewBlend
 			);
 
 			if($child) $childViews[$childLink->id] = $child;
@@ -1410,6 +1429,7 @@ final class GlesMapRenderer
 				, $alpha
 				, $link->destinationSector
 				, $nearPlane
+				, $viewBlend
 			);
 
 			$this->renderActors(
