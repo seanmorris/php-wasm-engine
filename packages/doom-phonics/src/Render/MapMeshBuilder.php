@@ -20,6 +20,7 @@ final class MapMeshBuilder
 		$this->walls();
 		$this->mesh->baseVertexCount = $this->mesh->vertexCount();
 		(new VolumeMeshBuilder($this->level, $this->atlas, $this->mesh))->build();
+		VolumePortalFaces::append($this->mesh, $this->level);
 		$this->mesh->watch($this->level);
 
 		return $this->mesh;

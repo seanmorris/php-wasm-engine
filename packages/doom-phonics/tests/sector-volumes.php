@@ -390,7 +390,64 @@ $area = 0;
 foreach($merged as $points) $area += (max(array_column($points,0)) - min(array_column($points,0))) * (max(array_column($points,1)) - min(array_column($points,1)));
 verifyWad(count($merged) < count($ring) && $area === 8 * 64 * 64, 'greedy meshing preserves the unoccupied center of a ring');
 verifyWad(\DoomPhonics\Render\PlaneRectangles::merge([[[0,0],[64,0],[0,64]]]) === [[[0,0],[64,0],[0,64]]], 'clipped triangles remain intact');
-$waterPlanes = array_filter($mesh->volumeSpans, static fn($span) => $span['volume']?->swimmable() && $span['count'] === 6 && $mesh->vertices[$span['first'] * 16 + 8] < 0);
+$waterPlanes = array_filter($mesh->volumeSpans, static fn($span) => $span['volume']?->swimmable() && !isset($span['projection']) && $span['count'] === 6 && $mesh->vertices[$span['first'] * 16 + 8] < 0);
 verifyWad(count(array_unique(array_column($waterPlanes, 'sector'))) === 20,
 	'water faces preserve each target sector so its live floor and ceiling can clip them independently');
-verifyWad($liquid[0]['clipBounds'] && $opaque[0]['clipBounds'], 'liquid and solid batches clip against target sector boundaries');
+verifyWad($liquid[0]['clipBounds'] === 3 && $opaque[0]['clipBounds'] === 3,
+	'original liquid and solid faces stop at their own sector boundaries, preserving solid-floor contact');
+$water->model->ceiling = $water->model->previousCeiling = 352;
+$overflow = \DoomPhonics\Render\VolumeDrawList::build($mesh,$poolLevel,$view,true);
+$projected = array_values(array_filter($overflow,static fn($b)=>$b['projected']));
+verifyWad($projected && array_unique(array_column($projected,'clipBounds')) === [7],
+	'water above a portal ceiling draws in the destination with inclusive floor contact');
+$up->active = false;
+$closed = \DoomPhonics\Render\VolumeDrawList::build($mesh,$poolLevel,$view,true);
+verifyWad(!array_filter($closed,static fn($b)=>$b['projected']),
+	'disabling the portal removes projected liquid from the destination');
+$up->active = true;
+$water->model->ceiling = $water->model->previousCeiling = 320;
+$contact = \DoomPhonics\Render\VolumeDrawList::build($mesh,$poolLevel,$view,true);
+verifyWad((bool)array_filter($contact,static fn($b)=>$b['projected']),
+	'exact water contact is owned by the projected half rather than vanishing at the seam');
+$water->model->ceiling = $water->model->previousCeiling = -192;
+verifyWad(\DoomPhonics\Render\VolumeDrawList::build($mesh,$poolLevel,$view,true) === [],
+	'draining removes source and projected water together');
+
+// A smaller, rotated destination must crop the projection and preserve source UVs.
+$projectionLevel = new Level(PortMap::map());
+$projectionMesh = new \DoomPhonics\Render\MapMesh;
+$projectionLink = new \DoomPhonics\Game\CameraPortalLink(0,3,2,0,1,64,64,192,64,M_PI/2,reciprocalId:1,destinationAlignment:1);
+$projectionReturn = new \DoomPhonics\Game\CameraPortalLink(1,3,1,1,0,192,64,64,64,-M_PI/2,reciprocalId:0,destinationAlignment:2);
+$projectionLevel->addCameraPortalSurface(new \DoomPhonics\Game\CameraPortalSurface('ceiling',0,$projectionLink));
+$projectionSurface = new \DoomPhonics\Game\CameraPortalSurface('floor',1,$projectionReturn);
+$projectionLevel->addCameraPortalSurface($projectionSurface);
+foreach([[[160,32],[224,32],[224,96]],[[160,32],[224,96],[160,96]]] as $triangle)
+$projectionMesh->cameraPortals->plane($triangle,1,0,$projectionSurface);
+foreach([[0,0],[128,0],[128,128],[0,0],[128,128],[0,128]] as [$x,$y])
+array_push($projectionMesh->vertices,...array_map('floatval',[$x,$y,$x,$x,0,0,0,1,-1,0,-$y,-1,0,-$y,0,0]));
+$projectionMesh->volumeSpans[] = ['first'=>0,'count'=>6,'sector'=>0,'model'=>0,'plane'=>1,'x'=>64,'y'=>64,'opacity'=>.75,'additive'=>false,
+	'volume'=>new \DoomPhonics\Game\SectorVolume($projectionLevel->sectors[0],0,2,0,192,'STARTAN3')];
+\DoomPhonics\Render\VolumePortalFaces::append($projectionMesh,$projectionLevel);
+$projectedArea = 0;
+foreach(array_slice($projectionMesh->volumeSpans,1) as $span)
+{
+	verifyWad($span['projection']===$projectionLink && $span['sector']===1,'projected faces retain the live link and destination visibility sector');
+	for($i=$span['first'];$i<$span['first']+$span['count'];$i+=3) {
+		$points=[];
+		for($j=0;$j<3;$j++) {
+			$v=array_slice($projectionMesh->vertices,($i+$j)*16,16); $points[]=[$v[0],$v[1]];
+			verifyWad($v[0]>=160-.001 && $v[0]<=224+.001 && $v[1]>=32-.001 && $v[1]<=96+.001,
+				'liquid is cropped to the remote aperture instead of leaking onto surrounding floors');
+			[$x,$y]=$projectionLink->point($v[2],-$v[10]);
+			verifyWad(abs($x-$v[0])+abs($y-$v[1])<.001,'rotated projections retain source UVs for textures and sloped model evaluation');
+		}
+		[$a,$b,$c]=$points;
+		$projectedArea+=abs(($b[0]-$a[0])*($c[1]-$a[1])-($b[1]-$a[1])*($c[0]-$a[0]))/2;
+	}
+}
+verifyWad(abs($projectedArea-64*64)<.001,'clipped projected triangles cover the aperture exactly once');
+$projectionLevel->sectors[0]->previousCeiling=128; $projectionLevel->sectors[0]->ceiling=160;
+$projectionLevel->sectors[0]->ceilingSlope=[0,0,0];
+$projectionLevel->sectors[1]->floorSlope=[0,0,0];
+verifyWad(abs(\DoomPhonics\Render\VolumePortalFaces::heightOffset($projectionLink,$projectionLevel,.5)-(64-144))<.001,
+	'projected height translation follows interpolated portal planes');

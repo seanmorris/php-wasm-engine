@@ -979,6 +979,7 @@ final class GlesMapRenderer
 		glUniform1f($this->program->location('surfaceAlpha'), 1);
 		glUniform1i($this->program->location('surfaceLight'), -1);
 		glUniform1i($this->program->location('clipSectorBounds'), 0);
+		glUniform1i($this->program->location('volumeProjected'), 0);
 		glDrawArrays(GL_TRIANGLES, 0, $this->mesh->baseVertexCount);
 		$this->drawVolumes(false);
 		glBindVertexArray(0);
@@ -2189,11 +2190,15 @@ final class GlesMapRenderer
 			glDepthMask(false);
 		}
 		$offset = 0;
+		// A projected liquid exactly on an open plane owns that seam's surface.
+		glDepthFunc(GL_LEQUAL);
 		foreach($batches as $batch)
 		{
 			glUniform1f($this->program->location('surfaceAlpha'), $batch['opacity']);
 			glUniform1i($this->program->location('surfaceLight'), $batch['light']);
 			glUniform1i($this->program->location('clipSectorBounds'), (int)$batch['clipBounds']);
+			glUniform1i($this->program->location('volumeProjected'), (int)$batch['projected']);
+			glUniform1f($this->program->location('volumeHeightOffset'), $batch['heightOffset']);
 			if($transparent) glBlendFunc(GL_SRC_ALPHA, $batch['additive'] ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
 			$count = count($batch['indices']);
 			glDrawElements(GL_TRIANGLES, $count, GL_UNSIGNED_INT, $offset);
@@ -2202,6 +2207,8 @@ final class GlesMapRenderer
 		glUniform1f($this->program->location('surfaceAlpha'), 1);
 		glUniform1i($this->program->location('surfaceLight'), -1);
 		glUniform1i($this->program->location('clipSectorBounds'), 0);
+		glUniform1i($this->program->location('volumeProjected'), 0);
+		glDepthFunc(GL_LESS);
 		glDepthMask(true);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}

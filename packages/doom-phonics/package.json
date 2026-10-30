@@ -180,6 +180,7 @@
     "src/Render/ViewWeaponPlacement.php",
     "src/Render/VolumeDrawList.php",
     "src/Render/VolumeMeshBuilder.php",
+    "src/Render/VolumePortalFaces.php",
     "src/Render/WadPatch.php",
     "src/System/ActorPhysicsSystem.php",
     "src/System/ActorStateSystem.php",

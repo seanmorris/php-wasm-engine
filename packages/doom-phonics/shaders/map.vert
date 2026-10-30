@@ -15,7 +15,10 @@ uniform vec2 projection;
 uniform float cameraPitch;
 uniform float nearPlane;
 uniform int pitchMode;
-uniform bool clipSectorBounds;
+// Bits 0/1 clip floor/ceiling; bits 2/3 include contact with the arrival portal.
+uniform int clipSectorBounds;
+uniform bool volumeProjected;
+uniform float volumeHeightOffset;
 
 out vec4 textureUvs;
 out float viewDepth;
@@ -24,11 +27,16 @@ flat out ivec2 textureIds;
 flat out ivec2 lightLevels;
 flat out ivec2 sectorComponents;
 
-float sectorPlaneHeight(int sector, int plane)
+float sectorPlaneHeightAt(int sector, int plane, vec2 position)
 {
 	vec2 heights = texelFetch(sectorHeights, ivec2(sector, 0), 0).rg;
 	vec3 slope = texelFetch(sectorHeights, ivec2(sector, plane + 1), 0).xyz;
-	return heights[plane] + dot(slope, vec3(aPosition, 1.0));
+	return heights[plane] + dot(slope, vec3(position, 1.0));
+}
+
+float sectorPlaneHeight(int sector, int plane)
+{
+	return sectorPlaneHeightAt(sector, plane, aPosition);
 }
 
 float planeHeight(int sector, int selector)
@@ -52,6 +60,8 @@ void main()
 {
 	int plane = int(aHeight.y + .5);
 	float worldZ = planeHeight(int(aHeight.x + .5), plane);
+	if(volumeProjected)
+		worldZ = sectorPlaneHeightAt(int(aHeight.x + .5), plane, vec2(aU.x, -aRightAnchor.z)) + volumeHeightOffset;
 	vec2 relative = aPosition - camera.xy;
 	// WAD +Y is north, so screen-right is the clockwise perpendicular.
 	vec2 right = vec2(forward.y, -forward.x);
@@ -76,9 +86,10 @@ void main()
 	int leftSector = int(round(aSideSectors.y));
 	// Interpolate signed plane distances so sloped and moving target boundaries
 	// also clip partially buried faces. Real sector surfaces own exact contact.
-	sectorClearance = clipSectorBounds
-		? vec2(worldZ - sectorPlaneHeight(rightSector, 0), sectorPlaneHeight(rightSector, 1) - worldZ)
-		: vec2(1.0);
+	sectorClearance = vec2(
+		(clipSectorBounds & 1) != 0 ? worldZ - sectorPlaneHeight(rightSector, 0) + ((clipSectorBounds & 4) != 0 ? .002 : 0.0) : 1.0,
+		(clipSectorBounds & 2) != 0 ? sectorPlaneHeight(rightSector, 1) - worldZ + ((clipSectorBounds & 8) != 0 ? .002 : 0.0) : 1.0
+	);
 	sectorComponents = ivec2(
 		int(round(texelFetch(sectorHeights, ivec2(rightSector, 0), 0).a)),
 		int(round(texelFetch(sectorHeights, ivec2(leftSector, 0), 0).a))

@@ -11,7 +11,8 @@ test(
 			if(message.type() === 'error') errors.push(message.text());
 		});
 
-		await page.goto('/doom-phonics/?world=/engine/packages/doom-phonics/demo/pool-3d.phonics-world.json');
+		await page.goto('/games/doom-phonics/?world=/engine/packages/doom-phonics/demo/pool-3d.phonics-world.json');
+		await page.locator('.game-embed-poster').click();
 		await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 
 		const state = () => page.evaluate(() => previewSession.doomState);

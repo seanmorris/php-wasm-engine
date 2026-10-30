@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace DoomPhonics\Render;
 
 use DoomPhonics\Game\Level;
+use DoomPhonics\Game\CameraPortalLink;
 
 /**
  * Order model-sector faces and batch adjacent faces with the same material state.
@@ -21,13 +22,22 @@ final class VolumeDrawList
 		{
 			if(($span['opacity'] < 1 || $span['additive']) !== $transparent) continue;
 			$volume = $span['volume'];
+			$projection = $span['projection'] ?? null;
+			$span['heightOffset'] = $projection ? VolumePortalFaces::heightOffset($projection, $level, $alpha) : 0.0;
+			if($projection && !VolumePortalFaces::visible($span, $mesh, $level, $alpha, $span['heightOffset'])) continue;
+			$mx = $span['modelX'] ?? $span['x']; $my = $span['modelY'] ?? $span['y'];
 			if($volume && !($volume->flags & 8)
-				&& $volume->top($span['x'], $span['y'], $alpha) <= $volume->bottom($span['x'], $span['y'], $alpha)) continue;
+				&& $volume->top($mx, $my, $alpha) <= $volume->bottom($mx, $my, $alpha)) continue;
 			$span['light'] = $volume && !($volume->flags & 1) ? $volume->model->light : $level->sectors[$span['sector']]->light;
-			$span['clipBounds'] = $volume !== null;
-			$span['key'] = $span['opacity'] . ':' . $span['light'] . ':' . (int)$span['additive'] . ':' . (int)$span['clipBounds'];
+			// Original faces stop at their sector. The projected half owns exact
+			// contact with the destination portal, but still clips its other boundary.
+			$span['clipBounds'] = $volume ? 3 : 0;
+			if($projection) $span['clipBounds'] |= $projection->destinationAlignment === CameraPortalLink::ALIGN_FLOOR ? 4 : 8;
+			$span['projected'] = $projection !== null;
+			$span['key'] = $span['opacity'] . ':' . $span['light'] . ':' . (int)$span['additive'] . ':' . $span['clipBounds']
+				. ':' . ($projection?->id ?? -1);
 			$model = $level->sectors[$span['model']];
-			$height = $span['plane'] ? $model->ceilingZ($span['x'], $span['y'], $alpha) : $model->floorZ($span['x'], $span['y'], $alpha);
+			$height = ($span['plane'] ? $model->ceilingZ($mx, $my, $alpha) : $model->floorZ($mx, $my, $alpha)) + $span['heightOffset'];
 			$span['distance'] = ($span['x'] - $x) ** 2 + ($span['y'] - $y) ** 2 + ($height - $eye) ** 2;
 			$spans[] = $span;
 		}
@@ -41,7 +51,8 @@ final class VolumeDrawList
 			if($last < 0 || $batches[$last]['key'] !== $span['key'])
 			{
 				$batches[] = ['key' => $span['key'],'opacity' => $span['opacity'],
-					'light' => $span['light'],'additive' => $span['additive'],'clipBounds' => $span['clipBounds'],'indices' => []];
+					'light' => $span['light'],'additive' => $span['additive'],'clipBounds' => $span['clipBounds'],
+					'projected' => $span['projected'],'heightOffset' => $span['heightOffset'],'indices' => []];
 				$last++;
 			}
 			array_push($batches[$last]['indices'], ...range($span['first'], $span['first'] + $span['count'] - 1));
