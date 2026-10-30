@@ -4,12 +4,19 @@ namespace Phonics\Ecs;
 use Phonics\Tiled\TileMap;
 use Phonics\Tiled\Loader;
 
-/** Translate recognized Tiled object classes and pallet references into ECS entities. */
+/**
+ * Translate recognized Tiled object classes and pallet references into ECS entities.
+ *
+ * Games register factories by object class and the spawner applies inherited map placement before handing
+ * each object to the matching factory.
+ */
 final class ObjectSpawner
 {
 	/** Require every phonics.entity reference to resolve through a registered pallet alias. */
 	public bool $strictReferences = false;
+	/** Object factories indexed by authored object class. */
 	private array $factories = [];
+	/** Authored object-class aliases indexed by alias name. */
 	private array $aliases = [];
 
 	/**

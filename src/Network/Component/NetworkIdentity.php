@@ -5,7 +5,12 @@ namespace Phonics\Network\Component;
 use Phonics\Network\NetworkEntityId;
 use Phonics\Network\ReplicationScope;
 
-/** Stable network identity attached explicitly to a local ECS entity. */
+/**
+ * Stable network identity attached explicitly to a local ECS entity.
+ *
+ * The component joins transient local entity IDs to match-stable network IDs without deriving identity from
+ * allocation order.
+ */
 final class NetworkIdentity
 {
 
@@ -17,9 +22,9 @@ final class NetworkIdentity
 	 * @return void Stores the network ID and replication scope.
 	 */
 	public function __construct(
-		/** Stable event or prefab identifier. */
+		/** Stable identifier for an authority, event, prefab, or network entity. */
 		public NetworkEntityId $id
-		, /** Replicated entity lifetime boundary. */
+		, /** Lifetime boundary for the replicated entity. */
 		public ReplicationScope $scope
 	){
 	}

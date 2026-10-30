@@ -1,3 +1,4 @@
+import {readInviteLink} from './network/InviteLink.mjs';
 import {PackageGraph, properties} from './PackageGraph.mjs';
 import {SessionAssets} from './SessionAssets.mjs';
 import {DomTexture} from './DomTexture.mjs';
@@ -89,8 +90,9 @@ export function activate(host)
 
 		if(!launch.legacy && world.network)
 		{
-			lobbyEntry = await graph.resolve(world.network.lobby.provider, declaring);
-			transportEntry = await graph.resolve(world.network.transport.use, declaring);
+			const application = await graph.application(host.archive.applicationUrl);
+			lobbyEntry = await graph.resolve(world.network.lobby.provider, application.url, application);
+			transportEntry = await graph.resolve(world.network.transport.use, application.url, application);
 
 			if(lobbyEntry.type !== 'lobby-provider')
 			throw new Error(`${declaring}: network lobby must name a lobby-provider export`);
@@ -469,7 +471,7 @@ export function activate(host)
 			const file = files.find(file => file.url === new URL(entry.browser, entry.record.url).href);
 			const code = new TextDecoder().decode(file.bytes);
 
-			if(/\bimport\s*(?:\(|[\s\S]*?\bfrom\s*['"]|['"])/.test(code))
+			if(/\bimport\b\s*(?:\(|[\s\S]*?\bfrom\s*['"]|['"])/.test(code))
 				throw new Error(`Browser export must be a self-contained bundle: ${file.url}`);
 
 			const loaded = await host.importModule(code);
@@ -494,19 +496,21 @@ export function activate(host)
 
 		if(world.network)
 		{
+			const inviteLink = options.network?.invitation ? readInviteLink(options.network.invitation) : null;
+			const lobbyOptions = inviteLink ? {homeserver: inviteLink.server, guest: true} : options.network?.lobby;
 			let providerOptions = {
 				...world.network.lobby.options
-				, ...options.network?.lobby
+				, ...lobbyOptions
 				, signal
 			};
 
 			if(lobbyEntry.record.data.name === '@seanmorris/phonics-matrix')
 			providerOptions = {
 				...providerOptions
-				, ...matrixConfiguration(world.network.lobby.options, options.network?.lobby, options.policy)
+				, ...matrixConfiguration(world.network.lobby.options, lobbyOptions, options.policy)
 				, authorizeHomeserver: homeserver => matrixConfiguration(
 					world.network.lobby.options
-					, {...options.network?.lobby, homeserver}
+					, {...lobbyOptions, homeserver}
 					, options.policy
 				).homeserver
 			};
@@ -516,10 +520,14 @@ export function activate(host)
 			const lobby = new LobbyController({
 				provider
 				, signal
-				, transportFactory: values => serviceRegistry.create('transport', transportEntry.id, {
+				, transportFactory: async values => serviceRegistry.create('transport', transportEntry.id, {
 					...world.network.transport.options
 					, ...options.network?.transport
-					, iceServers: options.policy?.iceServers ?? world.network.transport.options.iceServers ?? []
+					, iceServers: options.policy?.iceServers ?? options.network?.transport?.iceServers
+						?? world.network.transport.options.iceServers ?? await provider.iceServers?.() ?? []
+					, refreshIceServers: () => options.policy?.iceServers ?? options.network?.transport?.iceServers
+						?? world.network.transport.options.iceServers ?? provider.iceServers?.({refresh: true}) ?? []
+					, timeout: 120_000
 					, ...values
 				})
 			});
@@ -601,13 +609,28 @@ export function activate(host)
 					controller: lobby
 					, overlay
 					, open
+					, createInviteLink: selection => lobby.createInviteLink(selection)
+					, cancelInviteLink: () => lobby.cancelInviteLink()
+					, joinInviteLink: invitation => {
+						overlay.open();
+
+						return lobby.joinInviteLink(
+							invitation
+							, (admitted, signal) => network.prepareInviteGuest(admitted, {
+								signal
+								, pickResource: (offer, detail) => launcher.pickRequiredResource(offer, detail)
+							})
+						);
+					}
 					, openContent: () => launcher.openLocal()
 					, close: () => overlay.close()
 				}
 			});
 
 			Object.assign(module, {
-				phonicsNetworkReceive: limit => network.bridge.receive(limit)
+				phonicsNetworkRecovery: () => network.recovery ? JSON.stringify(network.recovery) : ''
+				, phonicsNetworkRecovered: id => network.recovered(String(id))
+				, phonicsNetworkReceive: limit => network.bridge.receive(limit)
 				, phonicsNetworkSend: (channel, family, tick, schema, payload) => network.sendGameplay(
 					Number(family)
 					, String(payload)
@@ -675,6 +698,8 @@ export function activate(host)
 
 			cleanup.push(() => {
 				contentLoad?.reject(new Error('Game session closed'));
+				delete module.phonicsNetworkRecovery;
+				delete module.phonicsNetworkRecovered;
 				delete module.phonicsNetworkReceive;
 				delete module.phonicsNetworkSend;
 				delete module.phonicsNetworkState;
@@ -687,7 +712,8 @@ export function activate(host)
 				delete module.phonicsNetworkConfigure;
 				overlay.dispose();
 				launcher.dispose();
-				network.close();
+
+				return network.close();
 			});
 		}
 

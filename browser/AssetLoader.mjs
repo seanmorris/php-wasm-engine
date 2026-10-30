@@ -1,7 +1,31 @@
-/** Fetch and mount files selected by PHP. No Tiled parsing or proximity policy lives here. */
+/**
+ * Fetch and mount files selected by PHP. No Tiled parsing or proximity policy lives here.
+ *
+ * It owns request deduplication, progress, mounting, reference counts, and cancellation while leaving format
+ * interpretation to PHP loaders.
+ */
 export class AssetLoader
 {
+	/** Emscripten filesystem receiving resolved asset bytes. */
+	FS;
 
+	/** Canonical base URL used to resolve relative asset references. */
+	base;
+
+	/** Filesystem root under which loaded assets are mounted. */
+	root;
+
+	/** Loaded file records indexed by their canonical URL. */
+	files;
+
+	/** Resolved asset references indexed by logical reference. */
+	references;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
+
+	/** Create a filesystem asset loader rooted at one application mount. */
 	constructor(FS, base, {root = '/engine/'} = {})
 	{
 		this.FS = FS;
@@ -12,6 +36,7 @@ export class AssetLoader
 		this.closed = false;
 	}
 
+	/** Normalize a PHP asset request and return its current transfer state. */
 	request(path, retry = false)
 	{
 		if(this.closed) return 'Asset loader is closed';
@@ -71,6 +96,7 @@ export class AssetLoader
 		return entry.state;
 	}
 
+	/** Fetch and mount one requested asset while reporting progress. */
 	async load(path)
 	{
 		const state = this.request(path);
@@ -142,6 +168,7 @@ export class AssetLoader
 		};
 	}
 
+	/** Release one mounted asset reference when PHP no longer needs it. */
 	release(path)
 	{
 		const entry = this.files.get(path);
@@ -154,6 +181,7 @@ export class AssetLoader
 		if(entry.mounted) this.FS.unlink(path);
 	}
 
+	/** Cancel pending work and unmount every owned asset. */
 	close()
 	{
 		if(this.closed) return;

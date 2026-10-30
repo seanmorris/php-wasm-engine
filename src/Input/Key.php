@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** SDL key symbols available to binding definitions even in hosts without SDL loaded. */
+/**
+ * SDL key symbols available to binding definitions even in hosts without SDL loaded.
+ *
+ * These constants keep serialized keyboard bindings stable and testable without requiring SDL functions to
+ * exist when the class is loaded.
+ */
 final class Key
 {
 	/** Enter key symbol. */

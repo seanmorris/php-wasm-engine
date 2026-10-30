@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Standard gamepad numbers shared by SDL, keyboard bindings and recorded input. */
+/**
+ * Standard gamepad numbers shared by SDL, keyboard bindings and recorded input.
+ *
+ * The compatibility table converts legacy button identifiers to canonical logical action codes so recorded
+ * and older game input can share the named-input path.
+ */
 final class Buttons
 {
 	/**

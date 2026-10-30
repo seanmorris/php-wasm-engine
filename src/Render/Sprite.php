@@ -4,7 +4,12 @@ namespace Phonics\Render;
 
 use Phonics\Tiled\TileMap;
 
-/** Mutable sprite pose, frame selection, crop, tint, filtering, and outline state. */
+/**
+ * Mutable sprite pose, frame selection, crop, tint, filtering, and outline state.
+ *
+ * Animation time, crop, transform, color, filtering, and outline remain CPU-side presentation state resolved
+ * by the sprite renderer at draw time.
+ */
 final class Sprite
 {
 	/** Clockwise rotation in radians around the configured origin. */
@@ -21,15 +26,31 @@ final class Sprite
 	public bool $flipX = false;
 	/** Whether to reflect artwork vertically before rotation. */
 	public bool $flipY = false;
-	/** @var array{float,float,float,float} Normalized RGBA color multiplier. */
+	/**
+ * RGBA color multiplier applied when drawing the sprite.
+ *
+ * @var array{float,float,float,float} Normalized RGBA color multiplier.
+ */
 	public array $tint = [1,1,1,1];
-	/** @var array{int,int,int,int}|null Tile-relative pixel crop, or null for the whole frame. */
+	/**
+ * Optional normalized source crop rectangle.
+ *
+ * @var array{int,int,int,int}|null Tile-relative pixel crop, or null for the whole frame.
+ */
 	public ?array $crop = null;
 	/** Whether frame() follows the tile's animation instead of retaining its base GID. */
 	public bool $animated = true;
-	/** @var bool Expand the rendered silhouette by one world pixel with a black shader outline. */
+	/**
+ * Whether the renderer draws the configured sprite outline.
+ *
+ * @var bool Expand the rendered silhouette by one world pixel with a black shader outline.
+ */
 	public bool $outline = true;
-	/** @var bool Interpolate texels within this crop; false keeps pixel artwork sharp. */
+	/**
+ * Whether texture sampling uses linear filtering.
+ *
+ * @var bool Interpolate texels within this crop; false keeps pixel artwork sharp.
+ */
 	public bool $smooth = false;
 
 	/**
@@ -44,11 +65,16 @@ final class Sprite
 	 * @return void Initializes unit scale, full opacity, an outline, and no rotation or flips.
 	 */
 	public function __construct(
+		/** Global tile ID in the renderer's atlas, including an animation tile when needed. */
 		public int $gid
-		, public float $x = 0
-		, public float $y = 0
-		, public float $originX = .5
-		, public float $originY = 1
+		, /** World X coordinate of the sprite anchor in pixels. */
+		public float $x = 0
+		, /** World Y coordinate of the sprite anchor in pixels. */
+		public float $y = 0
+		, /** Horizontal anchor fraction of image width; 0 is left and 1 is right. */
+		public float $originX = .5
+		, /** Vertical anchor fraction of image height; 0 is top and 1 is bottom. */
+		public float $originY = 1
 	){
 	}
 

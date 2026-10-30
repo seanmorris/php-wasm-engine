@@ -2,12 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Restorable linked GLES shader program with cached uniform locations. */
+/**
+ * Restorable linked GLES shader program with cached uniform locations.
+ *
+ * Source code and uniform names are retained so context restoration can relink the program and refresh
+ * locations before the next draw.
+ */
 final class Program
 {
 	/** Live GL program handle, replaced after context restoration and zero after closure. */
 	public int $id = 0;
+	/** Uniform locations indexed by declared uniform name. */
 	private array $locations = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -17,7 +24,12 @@ final class Program
 	 * @param string $fragment Complete fragment-shader source.
 	 * @return void Stores source strings so the program can be rebuilt after context loss.
 	 */
-	public function __construct(private string $vertex, private string $fragment)
+	public function __construct(
+		/** Complete vertex-shader source. */
+		private string $vertex
+		, /** Complete fragment-shader source. */
+		private string $fragment
+	)
 	{
 		$this->create();
 	}

@@ -3,12 +3,106 @@ import {snappyApproach} from './Easing.mjs';
 /**
  * Rasterize trusted HTML into an SVG foreignObject and composite it into a shared WebGL canvas.
  *
- * This deliberately has no dependency on a scene renderer: callers can use it with any WebGL2
- * canvas, and its state snapshot is JSON-friendly for language bridges such as Vrzno.
+ * The texture manages measurement, tiled rasterization, scrolling, WebGL upload, context restoration, and an
+ * optional interactive overlay without depending on a scene renderer.
  */
 export class DomTexture
 {
+	/** Caller-owned canvas into which the DOM texture is composited. */
+	canvas;
 
+	/** Rendering context metadata supplied by the caller. */
+	context;
+
+	/** Parent DOM texture that owns this child, when nested. */
+	parent;
+
+	/** Child DOM textures disposed with this texture. */
+	children;
+
+	/** Whether this texture and its owned resources were disposed. */
+	disposed;
+
+	/** Whether the texture currently represents an open document. */
+	opened;
+
+	/** Whether the document exposes an interactive scroll surface. */
+	surface;
+
+	/** Title displayed by the interactive document overlay. */
+	title;
+
+	/** Trusted HTML source currently represented by the texture. */
+	html;
+
+	/** Short interaction hint rendered in the document header. */
+	headerHint;
+
+	/** Current vertical document offset in CSS pixels. */
+	scroll;
+
+	/** Requested vertical document offset in CSS pixels. */
+	targetScroll;
+
+	/** Timestamp of the latest scroll integration step. */
+	scrollTime;
+
+	/** Measured document content width in CSS pixels. */
+	contentWidth;
+
+	/** Measured document content height in CSS pixels. */
+	contentHeight;
+
+	/** Visible document height in CSS pixels. */
+	viewportHeight;
+
+	/** Measured tile layout for the current rasterized document. */
+	layout;
+
+	/** Rasterized image containing the current document content. */
+	contentImage;
+
+	/** Rasterized image containing interactive overlay controls. */
+	overlayImage;
+
+	/** Image decode promise for the pending rasterization. */
+	pendingImages;
+
+	/** Raster texture tiles covering the measured document. */
+	tiles;
+
+	/** Lazily allocated WebGL program, buffers, and textures. */
+	resources;
+
+	/** Whether the overlay image is present in its GPU texture. */
+	overlayUploaded;
+
+	/** Whether document content must be rasterized again. */
+	dirty;
+
+	/** Document revision represented by the pending rasterization. */
+	revision;
+
+	/** Whether an asynchronous rasterization is running. */
+	rasterizing;
+
+	/** Most recent rasterization error, or an empty string. */
+	error;
+
+	/** Number of texture uploads completed for this document. */
+	uploads;
+
+	/** Number of composite draw calls issued by this texture. */
+	draws;
+
+	/** Listener that drops stale WebGL handles after context loss. */
+	lost;
+
+	/** Listener that rebuilds WebGL handles after context restoration. */
+	restored;
+
+
+	/** Create an HTML raster texture attached to a caller-owned WebGL canvas. */
 	constructor(canvas, parent = null)
 	{
 		if(!(canvas instanceof HTMLCanvasElement)) throw Error('DomTexture requires a canvas');
@@ -93,6 +187,7 @@ export class DomTexture
 		this.openDocument('', html, '', true);
 	}
 
+	/** Open trusted HTML with explicit viewport and overlay behavior. */
 	openDocument(title, html, headerHint, surface)
 	{
 		this.clearTiles();
@@ -263,6 +358,7 @@ export class DomTexture
 		return this.error === '';
 	}
 
+	/** Return the greatest valid vertical document offset. */
 	maxScroll()
 	{
 		return Math.max(0, this.contentHeight - this.viewportHeight);
@@ -288,6 +384,7 @@ export class DomTexture
 		return layout.contentWidth / Math.max(1, this.contentWidth);
 	}
 
+	/** Measure the document and derive its tiled texture layout. */
 	resolveLayout(width, height, headerHeight = 38)
 	{
 		width = Math.max(1, Math.floor(Number(width) || this.canvas.width || 1));
@@ -337,6 +434,7 @@ export class DomTexture
 		};
 	}
 
+	/** Rasterize pending document content without overlapping an active upload. */
 	async rasterize(layout)
 	{
 		this.layout = layout;
@@ -380,6 +478,7 @@ export class DomTexture
 		}
 	}
 
+	/** Build edge-to-edge trusted markup for the texture document. */
 	contentMarkup()
 	{
 		const source = new DOMParser().parseFromString(this.html, 'text/html');
@@ -408,6 +507,7 @@ export class DomTexture
 		return new XMLSerializer().serializeToString(root);
 	}
 
+	/** Measure rendered content dimensions in an isolated browser surface. */
 	async measure(markup, width)
 	{
 		const frame = document.createElement('iframe');
@@ -475,6 +575,7 @@ export class DomTexture
 		}
 	}
 
+	/** Wrap document markup in the SVG foreignObject used for rasterization. */
 	contentSvg(content, width, height)
 	{
 		return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"`
@@ -482,6 +583,7 @@ export class DomTexture
 			+ `${content}</foreignObject></svg>`;
 	}
 
+	/** Build the interactive overlay image for the current document. */
 	overlaySvg(layout)
 	{
 		if(this.surface)
@@ -508,6 +610,7 @@ export class DomTexture
 				.height}"><foreignObject width="100%" height="100%">${body}</foreignObject></svg>`;
 	}
 
+	/** Allocate restorable WebGL resources for compositing texture tiles. */
 	createResources()
 	{
 		if(this.resources) return this.resources;
@@ -551,6 +654,7 @@ void main() { color = texture(source, uv); }`
 		return this.resources;
 	}
 
+	/** Delete owned WebGL resources for the current context generation. */
 	destroyResources()
 	{
 		if(!this.resources || this.gl.isContextLost()) return;
@@ -647,6 +751,7 @@ void main() { color = texture(source, uv); }`
 		}
 	}
 
+	/** Capture WebGL state changed by the DOM texture renderer. */
 	saveState()
 	{
 		const gl = this.gl;
@@ -686,6 +791,7 @@ void main() { color = texture(source, uv); }`
 		};
 	}
 
+	/** Restore WebGL state after the DOM texture draw completes. */
 	restoreState(state)
 	{
 		const gl = this.gl;

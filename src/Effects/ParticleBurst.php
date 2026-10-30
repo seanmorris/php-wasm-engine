@@ -6,7 +6,12 @@ use Phonics\Render\Sprite;
 use Phonics\Render\SpriteGroup;
 use Phonics\Tiled\TileMap;
 
-/** Cropped sprite shards with deterministic ballistic motion and a finite lifetime. */
+/**
+ * Cropped sprite shards with deterministic ballistic motion and a finite lifetime.
+ *
+ * Each burst owns its deterministic shard trajectories and derives the current sprite fragments directly
+ * from elapsed lifetime.
+ */
 final class ParticleBurst
 {
 	/** Elapsed burst lifetime in seconds. */
@@ -22,10 +27,14 @@ final class ParticleBurst
 	 * @return void Initializes an unadvanced burst with shared source artwork.
 	 */
 	private function __construct(
+		/** Mutable group rendered on the owning entity. */
 		public SpriteGroup $sprites
-		, private array $motion
-		, private float $gravity
-		, private float $lifetime
+		, /** Per-piece velocity, spin, and opacity. */
+		private array $motion
+		, /** Downward acceleration in pixels per second squared. */
+		private float $gravity
+		, /** Positive duration in seconds before all pieces disappear. */
+		private float $lifetime
 	){
 	}
 

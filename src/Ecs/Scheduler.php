@@ -2,10 +2,17 @@
 declare(strict_types=1);
 namespace Phonics\Ecs;
 
-/** Execute named ECS systems in dependency order and flush deferred entity changes. */
+/**
+ * Execute named ECS systems in dependency order and flush deferred entity changes.
+ *
+ * Systems declare before and after dependencies by name; the scheduler caches a topological order and
+ * applies deferred registry changes after every update.
+ */
 final class Scheduler
 {
+	/** Named system callbacks and dependency metadata. */
 	private array $systems = [];
+	/** Cached dependency-ordered system callback list. */
 	private ?array $ordered = null;
 	/** CPU milliseconds used by each system during the latest update. */
 	public array $timings = [];
@@ -16,7 +23,10 @@ final class Scheduler
 	 * @param Registry $registry Registry passed to systems and flushed after each update.
 	 * @return void Creates an empty system list.
 	 */
-	public function __construct(public Registry $registry) {}
+	public function __construct(
+		/** Registry passed to systems and flushed after each update. */
+		public Registry $registry
+	) {}
 
 	/**
 	 * Register or replace a named system and invalidate the dependency order.

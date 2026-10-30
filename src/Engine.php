@@ -7,7 +7,12 @@ use Phonics\Input\Controls;
 use Phonics\Input\SdlInput;
 use Phonics\Render\Device;
 
-/** PHP owns scheduling, SDL event polling and fixed-step simulation. */
+/**
+ * PHP owns scheduling, SDL event polling and fixed-step simulation.
+ *
+ * It coordinates input gating, bounded catch-up, frame-rate look sampling, scheduled updates, render
+ * callbacks, and browser animation-frame ownership for one game session.
+ */
 final class Engine
 {
 	/** Session entity registry shared by every scheduled system. */
@@ -28,22 +33,35 @@ final class Engine
 	public float $simulationCpuMs = 0;
 	/** Number of fixed updates run during the latest browser frame. */
 	public int $simulationSteps = 0;
+	/** Render callback supplied to the active animation-frame loop. */
 	private $frame = null;
+	/** Browser window object used to schedule animation frames. */
 	private $window = null;
+	/** Identifier of the scheduled browser animation frame. */
 	private $raf = null;
+	/** Application cleanup callback run when the engine stops. */
 	private $cleanup = null;
+	/** Callback that rebuilds application graphics resources. */
 	private $refresh = null;
+	/** Cleanup returned by the latest graphics refresh. */
 	private $refreshCleanup = null;
+	/** Previous animation-frame timestamp, or null before the first frame. */
 	private ?float $previous = null;
+	/** Browser callbacks and objects used for visibility and context restoration. */
 	private $restore = null, $document = null, $visibility = null;
+	/** Graphics or runtime generation for which current state is valid. */
 	private int $generation;
 	/** Whether simulation is suspended for visibility, context, or user state. */
 	public bool $paused = false;
 	/** Whether the user explicitly requested the paused state. */
 	public bool $userPaused = false;
+	/** Whether the pause action was held on the previous input sample. */
 	private bool $pauseHeld = false;
+	/** Optional frame input owner that may capture gameplay input. */
 	private $inputHandler = null;
+	/** Optional display-rate gameplay input callback. */
 	private $frameInputHandler = null;
+	/** Whether the optional input owner captured the previous frame. */
 	private bool $inputCaptured = false;
 
 	/**
@@ -68,7 +86,10 @@ final class Engine
 	 * @param Device $device SDL graphics device owned and closed by this engine.
 	 * @return void The engine is initialized without scheduling browser frames.
 	 */
-	public function __construct(public Device $device)
+	public function __construct(
+		/** SDL graphics device owned and closed by this engine. */
+		public Device $device
+	)
 	{
 		$this->entities = new Registry;
 		$this->systems = new Scheduler($this->entities);
@@ -235,6 +256,7 @@ final class Engine
 		$this->document->addEventListener('visibilitychange', $this->visibility);
 		$this->running = true;
 		$this->previous = null;
+		$pendingError = null;
 
 		/**
 		 * Run one browser animation frame and schedule its successor.
@@ -243,7 +265,7 @@ final class Engine
 		 * @return void Stops scheduling when the engine is stopped and pauses recoverable
 		 * context losses.
 		 */
-		$this->frame = function($now) use ($render) {
+		$this->frame = function($now) use ($render, &$pendingError) {
 			if(!$this->running)
 			{
 				return;
@@ -254,16 +276,35 @@ final class Engine
 
 			try
 			{
+				if($pendingError !== null)
+				{
+					[$error, $generation] = $pendingError;
+
+					if($this->device->ready() && $this->device->generation === $generation)
+					{
+						throw $error;
+					}
+
+					$pendingError = null;
+				}
+
 				$this->tick(max(0, $elapsed), $render);
 			}
 			catch(\Throwable $error)
 			{
-				// The GPU can disappear during a draw, before its loss event arrives.
+				// A GPU reset can reject GL handles before even isContextLost() changes.
+				// Leave listeners and resources alive for the next browser frame to confirm it.
 				if(!$this->device->isLost())
 				{
-					$this->stop();
-					throw $error;
+					if($pendingError !== null)
+					{
+						$this->stop();
+						throw $error;
+					}
+
+					$pendingError = [$error, $this->device->generation];
 				}
+				else $pendingError = null;
 
 				$this->pause();
 			}

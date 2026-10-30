@@ -4,10 +4,17 @@ namespace Phonics\Tiled;
 use Phonics\Asset\Assets;
 use Phonics\Spatial\BoundsIndex;
 
-/** Indexed explicit Tiled world manifest with independent mutable map placements. */
+/**
+ * Indexed explicit Tiled world manifest with independent mutable map placements.
+ *
+ * Manifest entries are indexed spatially before maps load, allowing streaming selection and deterministic
+ * placement without scanning all maps each frame.
+ */
 final class World
 {
+	/** Spatial index of authored world-map placements. */
 	private BoundsIndex $index;
+	/** World placements and source definitions indexed by stable identity. */
 	private array $placements = [], $sources = [];
 
 	/**
@@ -19,7 +26,14 @@ final class World
 	 * unsupported.
 	 * @return void Validates and indexes entries without reading any map contents.
 	 */
-	public function __construct(public Loader $loader, public string $path, public array $data)
+	public function __construct(
+		/** Shared loader used for map and dependency caches. */
+		public Loader $loader
+		, /** World manifest path used to resolve map filenames. */
+		public string $path
+		, /** Decoded Tiled world data; filesystem patterns are unsupported. */
+		public array $data
+	)
 	{
 		if(!empty($data['patterns']))
 		{

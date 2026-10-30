@@ -2,16 +2,25 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Own an SDL window, GLES context, frame presentation, and browser context restoration. */
+/**
+ * Own an SDL window, GLES context, frame presentation, and browser context restoration.
+ *
+ * The device centralizes context generation, state restoration, resize handling, and swap ownership so
+ * render passes can rebuild after browser context loss.
+ */
 final class Device
 {
 	/** Native SDL window handle used by input and buffer presentation. */
 	public $window;
+	/** Current SDL graphics context handle. */
 	private $context;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** Graphics generation incremented whenever browser context restoration completes. */
 	public int $generation = 0;
+	/** Browser canvas, WebGL context, and context lifecycle listeners. */
 	private $canvas = null, $webgl = null, $lostListener = null, $restoredListener = null;
+	/** Whether the context is lost and whether resource restoration is pending. */
 	private bool $lost = false, $pendingRestore = false;
 
 	/**
@@ -22,7 +31,13 @@ final class Device
 	 * @param string $title Native SDL window title.
 	 * @return void Acquires video/event resources and configures two-dimensional alpha blending.
 	 */
-	public function __construct(public int $width = 960, public int $height = 540, string $title = 'Phonics')
+	public function __construct(
+		/** Drawing-buffer width in pixels. */
+		public int $width = 960
+		, /** Drawing-buffer height in pixels. */
+		public int $height = 540
+		, string $title = 'Phonics'
+	)
 	{
 		if(!function_exists('glDrawArraysInstanced'))
 		{

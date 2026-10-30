@@ -1,6 +1,23 @@
-/** Failure-tolerant string storage with a session overlay and removal tombstones. */
+/**
+ * Failure-tolerant string storage with a session overlay and removal tombstones.
+ *
+ * Reads and writes survive blocked or throwing browser storage by falling back to an in-memory overlay that
+ * preserves explicit removals for the session.
+ */
 export class SafeStorage
 {
+	/** Session fallback values indexed by storage key. */
+	memory;
+
+	/** Keys hidden from persistent storage for this session. */
+	removed;
+
+	/** Available browser Storage implementation, when accessible. */
+	storage;
+
+	/** Whether persistent storage is unavailable for this session. */
+	sessionOnly;
+
 
 	/**
 	 * Wrap browser storage without allowing access, quota, or security failures to escape.

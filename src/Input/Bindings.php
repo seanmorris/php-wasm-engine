@@ -2,9 +2,15 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Editable alternatives for signed logical actions; menu aliases need no game wrappers. */
+/**
+ * Editable alternatives for signed logical actions; menu aliases need no game wrappers.
+ *
+ * Profiles preserve alternative sources per device, detect conflicts by physical identity, and resolve
+ * signed inputs into logical action samples without browser-specific policy.
+ */
 final class Bindings implements \JsonSerializable
 {
+	/** Physical input sources indexed by logical action code. */
 	private array $bindings;
 
 	/**
@@ -13,7 +19,10 @@ final class Bindings implements \JsonSerializable
 	 * @param array<int,array<int,list<Source>>> $defaults Actions, signed directions and physical alternatives.
 	 * @return void Copies the default profile into the active bindings.
 	 */
-	public function __construct(private array $defaults) { $this->bindings = $defaults; }
+	public function __construct(
+		/** Actions, signed directions and physical alternatives. */
+		private array $defaults
+	) { $this->bindings = $defaults; }
 
 	/**
 	 * Read the sources for one direction and optionally one device group.

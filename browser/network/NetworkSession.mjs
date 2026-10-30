@@ -24,9 +24,110 @@ const handshakeFamilies = new Set([
 	, MessageFamily.disconnect
 ]);
 
-/** Match/resource handshake plus bounded gameplay bridge for one LobbyController. */
+/**
+ * Match/resource handshake plus bounded gameplay bridge for one LobbyController.
+ *
+ * The session verifies compatibility and resources before game readiness, then connects signaling,
+ * transport, packet framing, diagnostics, and graceful disconnect for one match.
+ */
 export class NetworkSession extends EventTarget
 {
+	/** Lobby controller that owns the connected match. */
+	controller;
+
+	/** Resource negotiator used to prepare local and remote content. */
+	negotiator;
+
+	/** World descriptor used to configure this operation. */
+	world;
+
+	/** Package records participating in the current application. */
+	packages;
+
+	/** Application descriptor negotiated for the current match. */
+	application;
+
+	/** PHP network bridge attached to the current session. */
+	bridge;
+
+	/** Clock function used for deterministic timestamps and expiry. */
+	now;
+
+	/** Minimum delay before coordinated match start in milliseconds. */
+	startDelay;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
+	/** Current transport recovery attempt metadata. */
+	recovery;
+
+	/** Timer enforcing or scheduling transport recovery. */
+	recoveryTimer;
+
+	/** Active network transport used by this session or bridge. */
+	transport;
+
+	/** Timer waiting for the coordinated match start time. */
+	startTimer;
+
+	/** Abort controller governing the active match. */
+	matchController;
+
+	/** Provider match metadata for the active connection. */
+	match;
+
+	/** Validated descriptor for the current network match. */
+	descriptor;
+
+	/** Canonical digest of the current match descriptor. */
+	descriptorDigest;
+
+	/** World descriptor already bound to the running match. */
+	boundWorld;
+
+	/** Next outgoing protocol sequence number. */
+	sequence;
+
+	/** Replay windows indexed by network traffic class. */
+	received;
+
+	/** Whether all local match resources are resolved. */
+	localResourcesReady;
+
+	/** Whether the remote peer resolved all match resources. */
+	remoteResourcesReady;
+
+	/** Whether the local game runtime reported readiness. */
+	localGameReady;
+
+	/** Whether local game readiness was sent to the peer. */
+	localGameReadySent;
+
+	/** Whether the remote game runtime reported readiness. */
+	remoteGameReady;
+
+	/** Estimated remote clock offset in milliseconds. */
+	clockOffset;
+
+	/** Locally measured round-trip time in milliseconds. */
+	rtt;
+
+	/** Round-trip time reported by the remote peer in milliseconds. */
+	peerRtt;
+
+	/** Local timestamp of the outstanding clock probe. */
+	pingSent;
+
+	/** Whether the peer clock estimate is ready for start timing. */
+	peerClockReady;
+
+	/** Whether startup has completed or is currently committed. */
+	started;
+
+	/** Protocol messages waiting for match startup. */
+	pendingMessages;
+
 
 	/**
 	 * Bind a match session to a lobby controller and listen for its transports, messages, and match ends.
@@ -71,6 +172,28 @@ export class NetworkSession extends EventTarget
 		this.resetMatch();
 
 		controller.prepareInvitation = payload => this.prepareInvitation(payload);
+
+		controller.addEventListener('recovery', ({detail}) => {
+			if(!this.started) return;
+
+			if(!this.recovery)
+			{
+				this.recovery = {id: crypto.randomUUID(), state: detail.state};
+
+				while(this.bridge.dropRealtime())
+				{
+				}
+
+				this.recoveryTimer = setTimeout(
+					() => this.controller.closeMatch('Connection recovery timed out')
+					, 30_000
+				);
+			}
+
+			this.recovery.state = detail.state;
+			this.dispatchEvent(event('recovery', {...this.recovery}));
+		});
+
 		controller.addEventListener('matchend', ({detail}) => this.endMatch(detail));
 
 		controller.addEventListener('transport', ({detail}) => {
@@ -103,6 +226,8 @@ export class NetworkSession extends EventTarget
 	 */
 	resetMatch()
 	{
+		clearTimeout(this.recoveryTimer);
+		this.recovery = null;
 		clearTimeout(this.startTimer);
 		this.startTimer = null;
 		this.matchController?.abort();
@@ -169,6 +294,78 @@ export class NetworkSession extends EventTarget
 			}
 			, privatePayload: {descriptor, descriptorDigest: digest, offers}
 		};
+	}
+
+	/** Authenticate the frozen descriptor and resolve local files before creating WebRTC. */
+	async prepareInviteGuest(invitation, {pickResource, signal} = {})
+	{
+		const value = invitation.payload?.match;
+
+		if(!value) throw new NetworkError('invite_descriptor', 'Invitation has no match descriptor');
+
+		const descriptor = new MatchDescriptor(value.descriptor);
+
+		if(await descriptor.digest() !== value.descriptorDigest
+			|| value.descriptorDigest !== invitation.payload.descriptorDigest
+		)
+		throw new NetworkError('match_digest', 'Invitation match descriptor is invalid');
+
+		if(descriptor.application?.id !== this.application?.id
+			|| descriptor.application?.code !== this.application?.code
+			|| descriptor.protocol !== (this.application ? '2.0.0' : '1.0.0') || descriptor.game !== this.world.game
+		)
+		throw new NetworkError(
+			'match_application'
+			, 'This invitation requires a different application build. Reload the game and ask the host for a new link.'
+		);
+
+		if(descriptor.start?.source !== this.world.start.source || typeof descriptor.start?.scope !== 'string')
+		throw new NetworkError('match_world', 'Peer selected a different starting scope');
+
+		if(!Array.isArray(value.offers) || value.offers.length > 128)
+		throw new NetworkError('invite_resources', 'Invalid invitation resource list');
+
+		this.negotiator.reset();
+		const resources = {}, indices = new Map;
+
+		for(const offer of value.offers ?? [])
+		{
+			signal?.throwIfAborted();
+			const index = indices.get(offer.slot) ?? 0;
+			indices.set(offer.slot, index + 1);
+			let source = null;
+
+			try
+			{
+				await this.negotiator.accept(offer, {stackIndex: index, signal});
+			}
+			catch(error)
+			{
+				if(offer.distribution !== 'local' || !pickResource || signal?.aborted) throw error;
+
+				for(; ;)
+				{
+					source = await pickResource(offer, {index, error, signal});
+
+					try
+					{
+						await this.negotiator.accept(offer, {source, stackIndex: index, signal});
+						break;
+					}
+					catch(next)
+					{
+						signal?.throwIfAborted();
+						error = next;
+					}
+				}
+			}
+
+			(resources[offer.slot] ??= [])[index] = source;
+		}
+
+		this.requireMap(descriptor.start, this.negotiator.maps());
+
+		return {resources};
 	}
 
 	/**
@@ -396,6 +593,8 @@ export class NetworkSession extends EventTarget
 
 		if(!handshakeFamilies.has(packet.family))
 		{
+			if(this.recovery && packet.family === MessageFamily.input) return;
+
 			this.bridge.push(channel, data);
 
 			return;
@@ -647,6 +846,8 @@ export class NetworkSession extends EventTarget
 
 		if(!match || this.closed) return;
 
+		this.started = true;
+
 		if(this.controller.state === 'ready') this.controller.markStarting({tick: 0});
 
 		const delay = Math.max(0, localTime - this.now());
@@ -708,7 +909,7 @@ export class NetworkSession extends EventTarget
 
 		// PHP may finish its current step before consuming the disconnect action.
 		// Keep that normal shutdown (including a data-channel send race) out of Vrzno.
-		if(this.closed || !this.transport) return false;
+		if(this.closed || !this.transport || (this.recovery && family === MessageFamily.input)) return false;
 
 		if(this.transport.closed)
 		{
@@ -731,6 +932,17 @@ export class NetworkSession extends EventTarget
 
 			return false;
 		}
+	}
+
+	/** Complete the paused recovery barrier without replacing entity or event identities. */
+	recovered(id)
+	{
+		if(!this.recovery || this.recovery.id !== id) return;
+
+		clearTimeout(this.recoveryTimer);
+		this.recovery = null;
+		this.transport?.finishRecovery?.();
+		this.dispatchEvent(event('recovery', {state: 'playing'}));
 	}
 
 	/** Return the stable role and slot assignment consumed by the PHP simulation. */
@@ -817,6 +1029,7 @@ export class NetworkSession extends EventTarget
 
 		this.bridge.close();
 		this.negotiator.close();
-		this.controller.close();
+
+		return this.controller.close();
 	}
 }

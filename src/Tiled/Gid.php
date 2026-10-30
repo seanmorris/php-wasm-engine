@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Tiled;
 
-/** Avoid unsigned-int casts: the WASM runtime has 32-bit PHP integers. */
+/**
+ * Avoid unsigned-int casts: the WASM runtime has 32-bit PHP integers.
+ *
+ * It separates flip flags from the 29-bit tile identifier using byte-safe arithmetic that behaves
+ * consistently in native and 32-bit WASM PHP.
+ */
 final class Gid
 {
 
@@ -13,7 +18,12 @@ final class Gid
 	 * @param int $flags Upper-nibble flags: 8 horizontal, 4 vertical, and 2 diagonal.
 	 * @return void Stores the already decoded values without narrowing an unsigned 32-bit input.
 	 */
-	public function __construct(public int $id, public int $flags = 0) {}
+	public function __construct(
+		/** Tile identifier from the low 28 bits; zero denotes an empty cell. */
+		public int $id
+		, /** Upper-nibble flags: 8 horizontal, 4 vertical, and 2 diagonal. */
+		public int $flags = 0
+	) {}
 
 	/**
 	 * Decode an unsigned Tiled GID without overflowing 32-bit PHP integers.

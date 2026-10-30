@@ -2,7 +2,11 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Stable adapter scope identity, hierarchy, kind, tags, and declarative metadata. */
+/**
+ * Stable adapter scope identity, hierarchy, kind, tags, and declarative metadata.
+ *
+ * The immutable descriptor supports hierarchy and tag matching before format-specific content is activated.
+ */
 final class ScopeDescriptor
 {
 
@@ -17,11 +21,16 @@ final class ScopeDescriptor
 	 * @return void Stores a validated descriptor.
 	 */
 	public function __construct(
+		/** Stable ID within the source. */
 		public string $id
-		, public string $kind
-		, public ?string $parent = null
-		, public array $tags = []
-		, public array $metadata = []
+		, /** Adapter-defined scope kind. */
+		public string $kind
+		, /** Parent scope ID, or null for a source root. */
+		public ?string $parent = null
+		, /** Adapter-defined matching tags. */
+		public array $tags = []
+		, /** Declarative metadata safe to inspect before activation. */
+		public array $metadata = []
 	){
 		if($id === '' || str_contains($id, "\0")) throw new \InvalidArgumentException('Invalid scope ID');
 

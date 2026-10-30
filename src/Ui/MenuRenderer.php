@@ -8,16 +8,33 @@ use Phonics\Render\Camera;
 use Phonics\Render\RectRenderer;
 use Phonics\Render\SpriteRenderer;
 
-/** One shared font atlas and two instanced passes render every page of a menu. */
+/**
+ * One shared font atlas and two instanced passes render every page of a menu.
+ *
+ * Responsive layout, clipping, horizontal menus, cursors, ranges, and glyph hints are converted into a small
+ * set of instanced rectangle and text batches.
+ */
 final class MenuRenderer
 {
 	/** Owned font and controller-symbol atlas. */
 	public Atlas $atlas;
-	/** @var list<array<string,mixed>> Pointer hit regions produced by the latest render. */
+	/**
+ * Interactive row rectangles emitted during the latest render.
+ *
+ * @var list<array<string,mixed>> Pointer hit regions produced by the latest render.
+ */
 	public array $regions = [];
-	/** @var array{float,float,float,float}|null Screen rectangle of the active editor row. */
+	/**
+ * Screen rectangle of the active text editor, when present.
+ *
+ * @var array{float,float,float,float}|null Screen rectangle of the active editor row.
+ */
 	public ?array $editorRect = null;
-	/** @var array<string,mixed> Mutable sizing, spacing, color, and panel settings. */
+	/**
+ * Mutable menu dimensions, colors, typography, and panel style.
+ *
+ * @var array<string,mixed> Mutable sizing, spacing, color, and panel settings.
+ */
 	public array $style = [
 		'scale' => 2
 		, 'width' => 720
@@ -33,14 +50,23 @@ final class MenuRenderer
 	];
 	/** Whether navigation and action hints appear below the menu. */
 	public bool $showHints = true;
+	/** Sprite renderer used for menu glyph and icon batches. */
 	private SpriteRenderer $sprites;
+	/** Rectangle renderer used for menu panels, ranges, and cursors. */
 	private RectRenderer $rects;
+	/** Current draw batch, row boxes, and current and next layout caches. */
 	private array $batch = [], $boxes = [], $cache = [], $nextCache = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Horizontal scroll offset of the active text editor. */
 	private float $editScroll = 0;
+	/** Text buffer active on the previous render frame. */
 	private ?TextBuffer $lastEditor = null;
+	/** Menu whose vertical scroll animation is active. */
 	private ?Menu $scrollMenu = null;
+	/** Measured row positions used by vertical scrolling. */
 	private array $scrollRows = [];
+	/** Current vertical offset and latest scroll integration timestamp. */
 	private float $scrollOffset = 0, $scrollTime = 0;
 
 	/**
@@ -49,7 +75,10 @@ final class MenuRenderer
 	 * @param BitmapFont $font Annotated font and themed symbol metadata.
 	 * @return void Owns one atlas shared across all pages rendered by this object.
 	 */
-	public function __construct(public BitmapFont $font)
+	public function __construct(
+		/** Annotated font and themed symbol metadata. */
+		public BitmapFont $font
+	)
 	{
 		$this->atlas = new Atlas($font->map);
 		$this->sprites = new SpriteRenderer($this->atlas);
@@ -85,9 +114,9 @@ final class MenuRenderer
 	/**
 	 * Return the shared nonnegative screen-space area of two rectangles.
 	 *
-	 * @param array $a A value used by this operation.
-	 * @param array $b B value used by this operation.
-	 * @return array Result of this operation.
+	 * @param array{float,float,float,float} $a First [x, y, width, height] rectangle in screen pixels.
+	 * @param array{float,float,float,float} $b Second [x, y, width, height] rectangle in screen pixels.
+	 * @return array{float,float,float,float} Shared rectangle with nonnegative width and height.
 	 */
 	private function intersect(array $a, array $b): array
 	{
@@ -367,11 +396,11 @@ final class MenuRenderer
 	/**
 	 * Advance the displayed fractional menu viewport toward its integer navigation target.
 	 *
-	 * @param Menu $menu Menu value used by this operation.
-	 * @param array $rows Rows value used by this operation.
-	 * @param int $target Target value used by this operation.
-	 * @param float $seconds Seconds value used by this operation.
-	 * @return float Result of this operation.
+	 * @param Menu $menu Menu whose visible row window is being animated.
+	 * @param array $rows Current visible-row definitions, used to detect layout changes.
+	 * @param int $target Integer row offset that must become visible.
+	 * @param float $seconds Monotonic render time in seconds.
+	 * @return float Fractional row offset after immediate jumps or eased single-row movement.
 	 */
 	private function scroll(Menu $menu, array $rows, int $target, float $seconds): float
 	{

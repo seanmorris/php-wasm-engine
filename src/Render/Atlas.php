@@ -3,7 +3,12 @@ declare(strict_types=1);
 namespace Phonics\Render;
 use Phonics\Tiled\TileMap;
 
-/** Shelf-pack source images once; dense metadata keeps sparse firstgids cheap. */
+/**
+ * Shelf-pack source images once; dense metadata keeps sparse firstgids cheap.
+ *
+ * It uploads packed source pixels and animation metadata once, then exposes dense IDs and UV state suitable
+ * for high-volume instanced rendering.
+ */
 final class Atlas
 {
 	/** GL image-atlas texture handle, replaced after context restoration. */
@@ -14,13 +19,27 @@ final class Atlas
 	public int $width = 1;
 	/** Packed atlas height in pixels. */
 	public int $height = 1;
-	/** @var array<int,int> Global tile ID to dense metadata-column index. */
+	/**
+ * Dense atlas frame indices indexed by animation name.
+ *
+ * @var array<int,int> Global tile ID to dense metadata-column index.
+ */
 	public array $indices = [];
-	/** @var array<string,array{int,int,int,int}> Source image paths to packed pixel rectangles. */
+	/**
+ * Normalized atlas rectangles indexed by dense frame ID.
+ *
+ * @var array<string,array{int,int,int,int}> Source image paths to packed pixel rectangles.
+ */
 	public array $rects = [];
-	/** @var array<int,array<string,mixed>> Normalized tile definitions keyed by global tile ID. */
+	/**
+ * Per-frame source metadata indexed by dense frame ID.
+ *
+ * @var array<int,array<string,mixed>> Normalized tile definitions keyed by global tile ID.
+ */
 	public array $tiles = [];
+	/** Animation frame sequences indexed by semantic animation name. */
 	private array $frames = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -30,7 +49,10 @@ final class Atlas
 	 * frames.
 	 * @return void Creates an image texture and metadata texture in the current GL context.
 	 */
-	public function __construct(public TileMap $map)
+	public function __construct(
+		/** Map supplying normalized tile definitions, source images, and animation frames. */
+		public TileMap $map
+	)
 	{
 		$this->create();
 	}

@@ -2,11 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Match-lifetime network tick independent of engine time and fixed-step accumulation. */
+/**
+ * Match-lifetime network tick independent of engine time and fixed-step accumulation.
+ *
+ * The clock advances exactly once per network simulation step and can accept bounded authoritative
+ * correction without coupling to render-frame time.
+ */
 final class NetworkClock
 {
+	/** Current authoritative fixed-step simulation tick. */
 	private SimulationTick $current;
+	/** Pending bounded authoritative tick corrections. */
 	private int $corrections = 0;
+	/** Most recent correction value, or null before correction. */
 	private ?int $lastCorrection = null;
 
 	/**
@@ -16,7 +24,11 @@ final class NetworkClock
 	 * @param int $maximumLead Largest local lead over a received host snapshot tolerated as transit time.
 	 * @return void Creates a match-lifetime network clock.
 	 */
-	public function __construct(?SimulationTick $initial = null, public int $maximumLead = 8)
+	public function __construct(
+		?SimulationTick $initial = null
+		, /** Largest local lead over a received host snapshot tolerated as transit time. */
+		public int $maximumLead = 8
+	)
 	{
 		if($maximumLead < 0) throw new \InvalidArgumentException('Network clock lead tolerance cannot be negative');
 
@@ -41,6 +53,14 @@ final class NetworkClock
 
 		return $this->current;
 	}
+
+	/**
+	 * Install the paused authoritative tick after a deliberate connection recovery.
+	 *
+	 * @param SimulationTick $tick Tick captured in the recovery snapshot.
+	 * @return void Updates the clock without advancing simulation.
+	 */
+	public function rebase(SimulationTick $tick): void { $this->current = $tick; }
 
 	/**
 	 * Rebase a guest clock when an authoritative snapshot proves it is outside the useful window.

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Identifies one locally predicted command independently of its transport packet. */
+/**
+ * Identifies one locally predicted command independently of its transport packet.
+ *
+ * It lets authoritative events refer back to a local prediction so the receiver can reconcile rather than
+ * present the same result twice.
+ */
 final class PredictionKey implements \JsonSerializable
 {
 
@@ -14,9 +19,9 @@ final class PredictionKey implements \JsonSerializable
 	 * @return void Stores the peer and command sequence.
 	 */
 	public function __construct(
-		/** Numeric packet peer identifier or opaque prediction peer. */
+		/** Session peer associated with authority or input ownership. */
 		public PeerId $peer
-		, /** Monotonic command or snapshot sequence. */
+		, /** Command or snapshot sequence used as a boundary. */
 		public CommandSequence $sequence
 	){
 	}

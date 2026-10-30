@@ -7,11 +7,19 @@ use Phonics\Ecs\Scheduler;
 use Phonics\Render\FramePipeline;
 use Phonics\Render\RenderPass;
 
-/** Own systems, entities, render passes, state, and cleanup for one active source scope. */
+/**
+ * Own systems, entities, render passes, state, and cleanup for one active source scope.
+ *
+ * All registrations are tagged to a stable source/scope key and released in reverse order, preventing
+ * content transitions from leaking entities or passes.
+ */
 final class ScopeContext
 {
+	/** Reverse-order cleanup callbacks and entity IDs owned by this scope. */
 	private array $cleanup = [], $entities = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Content object exposed by the active adapter scope. */
 	private $content = null;
 
 	/**
@@ -27,13 +35,20 @@ final class ScopeContext
 	 * @return void Creates an empty ownership boundary.
 	 */
 	public function __construct(
+		/** World-local source ID. */
 		public string $sourceId
-		, public ScopeDescriptor $descriptor
-		, public Registry $registry
-		, public Scheduler $scheduler
-		, public ?FramePipeline $pipeline = null
-		, private array $state = []
-		, private array $services = []
+		, /** Stable adapter scope description. */
+		public ScopeDescriptor $descriptor
+		, /** Shared entity registry. */
+		public Registry $registry
+		, /** Shared ordered system scheduler. */
+		public Scheduler $scheduler
+		, /** Optional ordered render pipeline. */
+		public ?FramePipeline $pipeline = null
+		, /** JSON-serializable retained scope state. */
+		private array $state = []
+		, /** Session host services keyed by stable names. */
+		private array $services = []
 	){
 		$this->assertSerializable($state);
 	}

@@ -4,11 +4,19 @@ namespace Phonics\Render;
 use Phonics\Tiled\World;
 use Phonics\Tiled\WorldStream;
 
-/** Lazy GPU residency for a Tiled world. Scene order follows the world's maps list. */
+/**
+ * Lazy GPU residency for a Tiled world. Scene order follows the world's maps list.
+ *
+ * Map renderers are created only for resident streamed maps, share atlas state where possible, and follow
+ * manifest order for deterministic scene composition.
+ */
 final class WorldRenderer
 {
+	/** Map renderers indexed by resident streamed-map identity. */
 	private array $resident = [];
+	/** Optional callback that decorates each world frame. */
 	private int $frame = 0;
+	/** Identity of the map supplying the current background, if any. */
 	private ?string $backgroundMap = null;
 
 	/**
@@ -19,7 +27,12 @@ final class WorldRenderer
 	 * are never evicted to meet it.
 	 * @return void Stores the world without immediately creating map renderers.
 	 */
-	public function __construct(public World|WorldStream $world, public int $residentLimit = 8)
+	public function __construct(
+		/** Source of maps and manifest painter order. */
+		public World|WorldStream $world
+		, /** Positive target for cached map renderers; currently visible maps are never evicted to meet it. */
+		public int $residentLimit = 8
+	)
 	{
 		if($residentLimit < 1)
 		{

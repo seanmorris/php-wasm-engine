@@ -2,19 +2,28 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Base for bounded unsigned protocol counters represented safely by PHP integers. */
+/**
+ * Base for bounded unsigned protocol counters represented safely by PHP integers.
+ *
+ * Subclasses inherit range validation, comparison, scalar access, and JSON conversion while remaining
+ * distinct protocol concepts in type declarations.
+ */
 abstract class UnsignedValue implements \JsonSerializable
 {
 
 	/**
 	 * Create and validate an unsigned protocol value.
 	 *
-	 * @param int $value Scalar value or serialized fields to validate.
+	 * @param int $value Unsigned integer represented by the concrete protocol counter.
 	 * @param ?int $maximum Largest unsigned value accepted by this value object, or the runtime's
 	 * representable uint32 maximum when omitted.
 	 * @return void Stores the value; rejects values outside 0 through the maximum.
 	 */
-	public function __construct(private int $value, ?int $maximum = null)
+	public function __construct(
+		/** Unsigned integer represented by the concrete protocol counter. */
+		private int $value
+		, ?int $maximum = null
+	)
 	{
 		$maximum ??= self::representableMaximum();
 
@@ -42,7 +51,7 @@ abstract class UnsignedValue implements \JsonSerializable
 	/**
 	 * Compare this unsigned protocol value with another value of the same kind.
 	 *
-	 * @param self $other Validated other used by this unsigned protocol value.
+	 * @param self $other Unsigned value of the same concrete protocol type to compare.
 	 * @return bool True when both values represent the same identity.
 	 */
 	public function equals(self $other): bool

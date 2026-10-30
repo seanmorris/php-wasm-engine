@@ -70,6 +70,172 @@ const callbackParameters = value => {
 	return {url, source};
 };
 
+const PRIVATE_EVENT = 'org.seanmorris.phonics.private.v1';
+const CLAIM_EVENT = 'org.seanmorris.phonics.claim.v1';
+const ADMISSION_EVENT = 'org.seanmorris.phonics.admission.v1';
+const INVITE_DATA = 'org.seanmorris.phonics.invite_data.v1';
+const INVITE_LIMIT = 128 * 1024;
+const utf8 = new TextEncoder;
+// Matrix canonicalizes JSON objects; authenticate a fixed field order, not wire key order.
+
+const authenticatedHeader = h => utf8.encode(JSON.stringify([
+	h.v, h.id, h.purpose, h.from, h.device, h.to, h.at, h.nonce
+]));
+
+const decode64 = value => {
+	if(typeof value !== 'string' || !/^[\w-]+$/.test(value)) throw new Error('Invalid invitation encoding');
+
+	return Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0));
+};
+
+const pause = (ms, signal) => new Promise((resolve, reject) => {
+	signal?.throwIfAborted();
+
+	const abort = () => { clearTimeout(timer); reject(signal.reason); };
+
+	const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
+	signal?.addEventListener('abort', abort, {once: true});
+});
+
+/** A link is a capability, never an executable URL or an account credential. */
+export function parseMatrixInvite(value)
+{
+	const encoded = typeof value === 'string'
+		? new URL(value, globalThis.location?.href ?? 'https://localhost/').hash.slice(1)
+		: null;
+
+	if(encoded !== null && (!encoded.startsWith('phonics-invite=') || encoded.length > 4096))
+	throw new MatrixLobbyError('invite_link', 'Invalid invitation link');
+
+	let data;
+
+	try
+	{
+		data = encoded === null
+			? structuredClone(value)
+			: JSON.parse(new TextDecoder().decode(decode64(encoded.slice(15))));
+	}
+	catch
+	{
+		throw new MatrixLobbyError('invite_link', 'Invalid invitation link');
+	}
+
+	if(!data || Object.keys(data).sort().join(',') !== 'device,expiresAt,host,id,provider,secret,server,v'
+		|| data.v !== 1 || data.provider !== 'matrix' || !/^[\w-]{36}$/.test(data.id)
+		|| typeof data.device !== 'string' || !data.device || data.device.length > 255
+		|| typeof data.secret !== 'string' || decode64(data.secret).length !== 32
+		|| !Number.isSafeInteger(data.expiresAt)
+	) throw new MatrixLobbyError('invite_link', 'Invalid invitation link');
+
+	data.server = cleanServer(data.server);
+	peer(data.host);
+
+	return Object.freeze(data);
+}
+
+/** Purpose-separated authenticated encryption for the private Matrix signaling protocol. */
+export class MatrixInviteCipher
+{
+
+	constructor(invitation)
+	{
+		this.invitation = parseMatrixInvite(invitation);
+		this.keys = new Map;
+		this.seen = new Map;
+	}
+
+	async key(purpose, from)
+	{
+		const label = `${purpose}:${from}`;
+
+		if(this.keys.size >= 64 && !this.keys.has(label)) this.keys.delete(this.keys.keys().next().value);
+
+		if(!this.keys.has(label))
+		this.keys.set(label, (async () => {
+			const material = await crypto.subtle.importKey('raw', decode64(this.invitation.secret), 'HKDF', false, [
+				'deriveKey'
+			]);
+
+			return crypto.subtle.deriveKey({
+				name: 'HKDF'
+				, hash: 'SHA-256'
+				, salt: utf8.encode(this.invitation.id)
+				, info: utf8.encode(`phonics.matrix.v1:${label}`)
+			}, material, {name: 'AES-GCM', length: 256}, false, [
+				'encrypt', 'decrypt'
+			]
+			);
+		})());
+
+		return this.keys.get(label);
+	}
+
+	async seal(purpose, from, device, to, value)
+	{
+		const bytes = utf8.encode(JSON.stringify(value));
+
+		if(bytes.length > INVITE_LIMIT) throw new MatrixLobbyError('invite_size', 'Invitation message is too large');
+
+		const header = {
+			v: 1
+			, id: this.invitation.id
+			, purpose
+			, from
+			, device
+			, to
+			, at: Date.now()
+			, nonce: randomValue(12)
+		};
+
+		const ciphertext = await crypto.subtle.encrypt({
+			name: 'AES-GCM'
+			, iv: decode64(header.nonce)
+			, additionalData: authenticatedHeader(header)
+		}, await this.key(purpose, from), bytes
+		);
+
+		return {header, ciphertext: base64Url(new Uint8Array(ciphertext))};
+	}
+
+	async open(envelope, {purpose, sender, device, to, stored = false})
+	{
+		if(JSON.stringify(envelope).length > INVITE_LIMIT * 2) throw new Error('Oversized invitation message');
+
+		const h = envelope?.header;
+
+		if(!h || Object.keys(h).sort().join(',') !== 'at,device,from,id,nonce,purpose,to,v'
+			|| h.v !== 1 || h.id !== this.invitation.id || h.purpose !== purpose || h.from !== sender
+			|| (device !== undefined && h.device !== device) || h.to !== to
+			|| !Number.isSafeInteger(h.at) || h.at > Date.now() + 60_000
+			|| (!stored && h.at < Date.now() - 120_000) || decode64(h.nonce).length !== 12
+		)
+		throw new Error('Invalid invitation sender or context');
+
+		const replay = `${sender}:${h.nonce}`;
+
+		if(this.seen.has(replay)) return null;
+
+		const plaintext = await crypto.subtle.decrypt({
+			name: 'AES-GCM'
+			, iv: decode64(h.nonce)
+			, additionalData: authenticatedHeader(h)
+		}, await this.key(purpose, sender), decode64(envelope.ciphertext)
+		);
+
+		const result = JSON.parse(new TextDecoder().decode(plaintext));
+
+		if(this.seen.has(replay)) return null;
+
+		this.seen.set(replay, h.at);
+
+		for(const [key, at] of this.seen) if(at < Date.now() - 120_000) this.seen.delete(key);
+
+		if(this.seen.size > 4096) throw new Error('Invitation replay window exhausted');
+
+		return result;
+	}
+}
+
 /** Matrix Client-Server API implementation of the Phonics lobby provider contract. */
 export class MatrixLobbyProvider extends EventTarget
 {
@@ -95,9 +261,22 @@ export class MatrixLobbyProvider extends EventTarget
 			, heartbeat = 15_000
 			, syncTimeout = 30_000
 			, invitationTtl = 30_000
+			, guest = false
+			, locks = globalThis.navigator?.locks
+			, inviteLifetime = 15 * 60_000
 		} = {}
 	) {
 		super();
+
+		if(guest) storage = oauthStorage = null;
+
+		this.guest = guest;
+		this.locks = locks;
+		this.inviteLifetime = inviteLifetime;
+		this.inviteRooms = new Map;
+		this.cleanupTasks = new Map;
+		this.inviteLinkCapabilityResult = null;
+		this.inviteLinkCapabilityTask = null;
 
 		this.fetch = (...args) => fetcher(...args);
 		this.storage = storage;
@@ -129,8 +308,8 @@ export class MatrixLobbyProvider extends EventTarget
 		this.heartbeat = heartbeat;
 		this.syncTimeout = syncTimeout;
 		this.invitationTtl = invitationTtl;
-		this.controller = new AbortController;
-		this.signal = signal ? AbortSignal.any([signal, this.controller.signal]) : this.controller.signal;
+		this.externalSignal = signal ?? null;
+		this.resetConnectionSignal();
 		this.roomId = null;
 		this.since = null;
 		this.connected = false;
@@ -139,6 +318,15 @@ export class MatrixLobbyProvider extends EventTarget
 		this.invitations = new Map;
 		this.lastInvite = new Map;
 		this.transaction = 0;
+	}
+
+	/** Create a fresh connection lifetime while retaining the provider's external lifetime. */
+	resetConnectionSignal()
+	{
+		this.controller = new AbortController;
+		this.signal = this.externalSignal
+			? AbortSignal.any([this.externalSignal, this.controller.signal])
+			: this.controller.signal;
 	}
 
 	profile()
@@ -158,6 +346,7 @@ export class MatrixLobbyProvider extends EventTarget
 	{
 		const nextHomeserver = this.authorizeHomeserver(homeserver);
 		const nextRoom = String(room).trim();
+		const homeserverChanged = nextHomeserver !== this.homeserver;
 
 		if(!nextRoom) throw new MatrixLobbyError('matrix_config', 'Matrix lobby channel is required');
 
@@ -177,6 +366,12 @@ export class MatrixLobbyProvider extends EventTarget
 
 		this.homeserver = nextHomeserver;
 		this.room = nextRoom;
+
+		if(homeserverChanged)
+		{
+			this.inviteLinkCapabilityResult = null;
+			this.inviteLinkCapabilityTask = null;
+		}
 
 		this.storageKey = `phonics.matrix.session:${this.homeserver}`;
 		const saved = readStorage(this.storage, this.storageKey) ?? {};
@@ -397,17 +592,912 @@ export class MatrixLobbyProvider extends EventTarget
 		await this.announcePresence();
 
 		this.heartbeatTimer = setInterval(() => {
-			this.announcePresence().catch(error => this.dispatchEvent(event('error', error)));
+			this.announcePresence().catch(
+				error => this.dispatchEvent(event(this.recoverable(error) ? 'signalingstatus' : 'error', error))
+			);
 		}, this.heartbeat
 		);
 
-		this.syncTask = this.syncLoop();
-
-		this.syncTask.catch(error => {
-			if(!this.closed && !this.signal.aborted) this.dispatchEvent(event('error', error));
-		});
+		this.startSync();
+		void this.retryCleanup();
+		this.cleanupTimer = setInterval(() => void this.retryCleanup(), 30_000);
 
 		return this.profile();
+	}
+
+	/**
+	 * Verify that this homeserver can create the isolated guest session required by private links.
+	 * Matrix does not advertise guest registration as a read-only capability, so the probe registers
+	 * one disposable guest and immediately revokes its token. The result is retained for this provider
+	 * session so opening and rendering the lobby never repeats the mutation.
+	 */
+	async inviteLinkCapability({refresh = false} = {})
+	{
+		this.requireConnected();
+
+		if(this.guest || !this.deviceId)
+		return Object.freeze({supported: false, reason: 'host-session-required'});
+
+		if(!refresh && this.inviteLinkCapabilityResult) return this.inviteLinkCapabilityResult;
+
+		if(!refresh && this.inviteLinkCapabilityTask) return this.inviteLinkCapabilityTask;
+
+		const homeserver = this.homeserver;
+
+		this.inviteLinkCapabilityTask = (async () => {
+			let registration;
+
+			try
+			{
+				registration = await this.request(
+					'POST'
+					, '/_matrix/client/v3/register?kind=guest'
+					, {
+						auth: false
+						, body: {initial_device_display_name: `${this.clientName} invite capability check`}
+						, signal: AbortSignal.any([this.signal, AbortSignal.timeout(15_000)])
+					}
+				);
+			}
+			catch(error)
+			{
+				return Object.freeze({
+					supported: false
+					, reason: error?.status === 403 ? 'guest-registration-disabled' : 'guest-registration-unverified'
+				});
+			}
+
+			if(!registration.access_token || !registration.user_id || !registration.device_id)
+			return Object.freeze({supported: false, reason: 'guest-onboarding-required'});
+
+			try
+			{
+				await this.revokeGuestProbe(registration.access_token);
+			}
+			catch
+			{
+				return Object.freeze({supported: false, reason: 'guest-probe-cleanup-failed'});
+			}
+
+			return Object.freeze({supported: true, reason: null});
+		})();
+
+		try
+		{
+			const result = await this.inviteLinkCapabilityTask;
+
+			if(this.homeserver === homeserver) this.inviteLinkCapabilityResult = result;
+
+			return result;
+		}
+		finally
+		{
+			this.inviteLinkCapabilityTask = null;
+		}
+	}
+
+	/** Revoke the disposable guest token without replacing or exposing the host session. */
+	async revokeGuestProbe(accessToken)
+	{
+		let response;
+
+		try
+		{
+			response = await this.fetch(new URL('/_matrix/client/v3/logout', this.homeserver), {
+				method: 'POST'
+				, headers: {
+					'Accept': 'application/json'
+					, 'Content-Type': 'application/json'
+					, 'Authorization': `Bearer ${accessToken}`
+				}
+				, body: '{}'
+				, signal: AbortSignal.any([this.signal, AbortSignal.timeout(15_000)])
+				, redirect: 'error'
+			});
+		}
+		catch(error)
+		{
+			throw new MatrixLobbyError('matrix_transport', 'Matrix guest capability cleanup failed', {cause: error});
+		}
+
+		if(!response.ok)
+		throw new MatrixLobbyError(
+			'matrix_guest_cleanup'
+			, `Matrix guest capability cleanup returned HTTP ${response.status}`
+			, {status: response.status}
+		);
+	}
+
+	/** Freeze an encrypted invitation in a dedicated room. No SDP is generated here. */
+	async createInviteLink(payload, {url = this.location?.href} = {})
+	{
+		this.requireConnected();
+
+		if(this.guest || !this.deviceId)
+		throw new MatrixLobbyError('invite_host', 'Sign in as a host to create an invitation');
+
+		const capability = await this.inviteLinkCapability();
+
+		if(!capability.supported)
+		throw new MatrixLobbyError(
+			'matrix_guest_unavailable'
+			, 'This homeserver does not support anonymous invitation links.'
+			, {details: {reason: capability.reason}}
+		);
+
+		await this.cancelInviteLink();
+
+		const invitation = parseMatrixInvite({
+			v: 1
+			, provider: 'matrix'
+			, server: this.homeserver
+			, host: this.userId
+			, device: this.deviceId
+			, id: crypto.randomUUID()
+			, secret: randomValue(32)
+			, expiresAt: Date.now() + this.inviteLifetime
+		});
+
+		const powers = this.invitePowers();
+
+		const created = await this.request('POST', '/_matrix/client/v3/createRoom', {
+			body: {
+				visibility: 'private'
+				, preset: 'private_chat'
+				, room_version: '11'
+				, creation_content: {'m.federate': false}
+				, power_level_content_override: powers
+				, initial_state: [
+					{type: 'm.room.join_rules', state_key: '', content: {join_rule: 'invite'}}
+					, {type: 'm.room.guest_access', state_key: '', content: {guest_access: 'can_join'}}
+					, {type: 'm.room.history_visibility', state_key: '', content: {history_visibility: 'shared'}}
+					, {type: 'm.room.retention', state_key: '', content: {max_lifetime: 1_800_000}}
+				]
+			}
+		});
+
+		const state = {
+			invitation
+			, abort: new AbortController
+			, roomId: created.room_id
+			, cipher: new MatrixInviteCipher(invitation)
+			, host: true
+			, payload: structuredClone(payload)
+			, closed: false
+			, events: new Set
+		};
+
+		this.linkState = state;
+		this.inviteRooms.set(state.roomId, state);
+
+		try
+		{
+			await this.ownRoom(state);
+			this.journalRoom(state.roomId, 'active');
+			const content = await state.cipher.seal('invitation', this.userId, this.deviceId, '*', payload);
+			state.eventId = (await this.roomSend(state, INVITE_DATA, content)).event_id;
+			const link = new URL(url);
+			link.hash = `phonics-invite=${base64Url(utf8.encode(JSON.stringify(invitation)))}`;
+
+			state.timer = setTimeout(
+				() => { if(!state.claim) void this.cancelInviteLink('Invitation expired'); }
+				, this.inviteLifetime
+			);
+
+			this.dispatchEvent(event('invitestatus', {state: 'waiting', expiresAt: invitation.expiresAt}));
+
+			return {
+				id: invitation.id
+				, from: this.userId
+				, to: null
+				, payload
+				, expiresAt: invitation.expiresAt
+				, url: link.href
+				, privateLink: true
+			};
+		}
+		catch(error)
+		{
+			await this.cancelInviteLink();
+			throw error;
+		}
+	}
+
+	invitePowers(closed = false)
+	{
+		return {
+			users: {[this.userId]: 100}
+			, users_default: 0
+			, events_default: 100
+			, state_default: 100
+			, invite: 100
+			, kick: 100
+			, ban: 100
+			, redact: 100
+			, events: {[PRIVATE_EVENT]: closed ? 100 : 0, [INVITE_DATA]: 100}
+		};
+	}
+
+	/** A fresh guest provider must be constructed without persistent storage. */
+	async joinInviteLink(value)
+	{
+		if(!this.guest || this.accessToken)
+		throw new MatrixLobbyError('invite_guest', 'Invitation needs an isolated guest session');
+
+		const invitation = parseMatrixInvite(value);
+
+		if(invitation.expiresAt <= Date.now())
+		throw new MatrixLobbyError('invitation_expired', 'This invitation has expired. Ask the host for a new link.');
+
+		if(this.authorizeHomeserver(invitation.server) !== this.homeserver)
+		throw new Error('Invitation homeserver differs');
+
+		const state = {
+			invitation
+			, abort: new AbortController
+			, cipher: new MatrixInviteCipher(invitation)
+			, host: false
+			, closed: false
+			, peerId: invitation.host
+			, peerDevice: invitation.device
+			, claimId: crypto.randomUUID()
+			, events: new Set
+		};
+
+		this.linkState = state;
+		const pending = Promise.withResolvers();
+		state.admission = pending;
+		pending.promise.catch(() => {});
+
+		state.timer = setTimeout(
+			() => pending.reject(
+				new MatrixLobbyError(
+					'invite_unavailable'
+					, 'The host did not admit this invitation. It may be cancelled or already claimed.'
+				)
+			)
+			, 120_000
+		);
+
+		try
+		{
+			let registration;
+
+			try
+			{
+				registration = await this.request(
+					'POST'
+					, '/_matrix/client/v3/register?kind=guest'
+					, {
+						auth: false
+						, body: {}
+						, signal: AbortSignal.any([this.signal, state.abort.signal, AbortSignal.timeout(120_000)])
+					}
+				);
+			}
+			catch(error)
+			{
+				throw new MatrixLobbyError(
+					'matrix_guest_unavailable'
+					, 'This homeserver does not allow automatic guest registration. The host must select a guest-enabled homeserver.'
+					, {cause: error}
+				);
+			}
+
+			if(!registration.access_token || !registration.device_id)
+			throw new MatrixLobbyError(
+				'matrix_guest_unavailable'
+				, 'Guest registration requires extra onboarding on this homeserver'
+			);
+
+			if(state.closed) throw new Error('Invitation cancelled');
+
+			this.accessToken = registration.access_token;
+			this.userId = peer(registration.user_id);
+			this.deviceId = registration.device_id;
+			this.displayName = 'Guest';
+			this.connected = true;
+			this.startSync();
+
+			const claim = async () => {
+				if(state.closed || state.admissionComplete) return;
+
+				const content = await state.cipher.seal(
+					'claim'
+					, this.userId
+					, this.deviceId
+					, invitation.host
+					, {claimId: state.claimId}
+				);
+
+				await this.deviceSend(invitation.host, invitation.device, CLAIM_EVENT, content);
+			};
+
+			await claim();
+			state.claimTimer = setInterval(() => claim().catch(() => {}), 5000);
+			const payload = await pending.promise;
+			clearTimeout(state.timer);
+			clearInterval(state.claimTimer);
+			state.timer = setTimeout(() => void this.cancelInviteLink('Resource setup timed out'), 15 * 60_000);
+
+			return {
+				id: invitation.id
+				, from: invitation.host
+				, to: this.userId
+				, payload
+				, expiresAt: Date.now() + 15 * 60_000
+				, privateLink: true
+			};
+		}
+		catch(error)
+		{
+			await this.cancelInviteLink(error.message);
+			throw error;
+		}
+	}
+
+	async deviceSend(user, device, type, content)
+	{
+		return this.request('PUT', `/_matrix/client/v3/sendToDevice/${type}/${crypto.randomUUID()}`, {
+			body: {messages: {[user]: {[device]: content}}}
+		});
+	}
+
+	async consumeDevice(item)
+	{
+		const state = this.linkState;
+
+		if(!state || state.closed || ![CLAIM_EVENT, ADMISSION_EVENT].includes(item.type)) return;
+
+		try
+		{
+			if(state.host && item.type === CLAIM_EVENT)
+			{
+				if(state.invitation.expiresAt <= Date.now() && !state.claim) return;
+
+				const content = await state.cipher.open(
+					item.content
+					, {purpose: 'claim', sender: item.sender, to: this.userId}
+				);
+
+				if(state.closed || !content || typeof content.claimId !== 'string' || content.claimId.length > 100)
+				return;
+
+				const device = item.content.header.device;
+
+				if(typeof device !== 'string' || !device || device.length > 255) return;
+
+				if(state.claim && (state.peerId !== item.sender || state.peerDevice !== device
+					|| state.claim !== content.claimId
+				))
+				return;
+
+				// Reserve synchronously after authentication, before the first Matrix mutation.
+				if(!state.claim)
+				{
+					clearTimeout(state.timer);
+					state.timer = setTimeout(() => void this.cancelInviteLink('Resource setup timed out'), 15 * 60_000);
+				}
+
+				state.claim = content.claimId;
+				state.peerId = item.sender;
+				state.peerDevice = device;
+
+				if(!state.admitted)
+				{
+					state.admitting ??= this.request(
+						'POST'
+						, `/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/invite`
+						, {
+							body: {user_id: item.sender}
+							, signal: AbortSignal.any([this.signal, state.abort.signal, AbortSignal.timeout(30_000)])
+						}
+					).finally(() => { state.admitting = null; });
+
+					await state.admitting;
+
+					if(state.closed) return;
+
+					state.admitted = true;
+				}
+
+				const reply = await state.cipher.seal(
+					'admission'
+					, this.userId
+					, this.deviceId
+					, state.peerId
+					, {claimId: state.claim, roomId: state.roomId, eventId: state.eventId}
+				);
+
+				if(state.closed) return;
+
+				await this.deviceSend(state.peerId, state.peerDevice, ADMISSION_EVENT, reply);
+				this.dispatchEvent(event('invitestatus', {state: 'admitted'}));
+			}
+			else if(!state.host && item.type === ADMISSION_EVENT && !state.admissionComplete
+				&& item.sender === state.peerId
+			){
+				const reply = await state.cipher.open(
+					item.content
+					, {purpose: 'admission', sender: state.peerId, device: state.peerDevice, to: this.userId}
+				);
+
+				if(state.closed || item.sender !== state.peerId || !reply || reply.claimId !== state.claimId) return;
+
+				state.roomId = reply.roomId;
+
+				const joined = await this.request(
+					'POST'
+					, `/_matrix/client/v3/join/${encodeURIComponent(reply.roomId)}`
+					, {
+						body: {}
+						, signal: AbortSignal.any([this.signal, state.abort.signal, AbortSignal.timeout(30_000)])
+					}
+				);
+
+				if(state.closed) return;
+
+				if(joined.room_id !== reply.roomId) throw new Error('Invitation room differs');
+
+				state.roomId = reply.roomId;
+				this.inviteRooms.set(state.roomId, state);
+
+				const stored = await this.request(
+					'GET'
+					, `/_matrix/client/v3/rooms/${encodeURIComponent(
+						state.roomId
+					)}/event/${encodeURIComponent(
+						reply.eventId
+					)}`
+				);
+
+				if(stored.sender !== state.peerId || stored.type !== INVITE_DATA)
+				throw new Error('Invalid invitation event');
+
+				const payload = await state.cipher.open(
+					stored.content
+					, {purpose: 'invitation', sender: state.peerId, device: state.peerDevice, to: '*', stored: true}
+				);
+
+				if(state.closed) return;
+
+				if(!payload) throw new Error('Missing invitation');
+
+				state.admissionComplete = true;
+				state.admission.resolve(payload);
+			}
+		}
+		catch(error)
+		{
+			// Unauthenticated ciphertext must never stop the sync loop or reserve admission.
+			if(error instanceof MatrixLobbyError && error.status)
+			this.dispatchEvent(event('signalingstatus', {state: 'retrying', code: error.code}));
+		}
+	}
+
+	async roomSend(state, type, content, transaction = crypto.randomUUID())
+	{
+		if(state.closed) throw new MatrixLobbyError('invite_closed', 'Invitation is closed');
+
+		const result = await this.request(
+			'PUT'
+			, `/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/send/${type}/${transaction}`
+			, {
+				body: content
+				, signal: AbortSignal.any([this.signal, state.abort.signal, AbortSignal.timeout(30_000)])
+			}
+		);
+
+		if(result.event_id) this.recordEvent(state, result.event_id);
+
+		return result;
+	}
+
+	async privateSend(kind, payload)
+	{
+		const state = this.linkState;
+
+		if(!state || state.closed || !state.peerId)
+		throw new MatrixLobbyError('invite_closed', 'Private invitation is unavailable');
+
+		if((state.queued ?? 0) >= 128) throw new MatrixLobbyError('invite_queue', 'Private signaling queue is full');
+
+		state.queued = (state.queued ?? 0) + 1;
+		const task = (state.writes ?? Promise.resolve()).then(() => this.writePrivate(state, kind, payload));
+		state.writes = task.catch(() => {});
+
+		try { return await task; } finally { state.queued--; }
+	}
+
+	async writePrivate(state, kind, payload)
+	{
+		if(state.closed) throw new MatrixLobbyError('invite_closed', 'Private invitation is unavailable');
+
+		const content = await state.cipher.seal('message', this.userId, this.deviceId, state.peerId, {kind, payload});
+		const transaction = crypto.randomUUID();
+		const deadline = Date.now() + 30_000;
+
+		for(; ;)
+		{
+			try
+			{
+				return await this.roomSend(state, PRIVATE_EVENT, content, transaction);
+			}
+			catch(error)
+			{
+				if(state.closed || this.signal.aborted || Date.now() >= deadline || !this.recoverable(error))
+				throw error;
+
+				await pause(
+					Math.min(5000, error.details?.retry_after_ms ?? 1000)
+					, AbortSignal.any([this.signal, state.abort.signal])
+				);
+			}
+		}
+	}
+
+	async consumePrivate(state, item)
+	{
+		if(!state.closed && state.host && item.type === 'm.room.member' && item.state_key === state.peerId
+			&& ['leave', 'ban'].includes(item.content?.membership)
+		){
+			this.dispatchEvent(event('inviteclosed', {reason: 'Guest left'}));
+			void this.cancelInviteLink();
+
+			return;
+		}
+
+		if(item.type !== PRIVATE_EVENT || !item.content?.ciphertext || item.sender !== state.peerId || state.closed)
+		return;
+
+		let message;
+
+		try
+		{
+			message = await state.cipher.open(
+				item.content
+				, {purpose: 'message', sender: state.peerId, device: state.peerDevice, to: this.userId}
+			);
+		}
+		catch
+		{
+			return;
+		}
+
+		if(!message || state.closed) return;
+
+		this.recordEvent(state, item.event_id);
+
+		if(message.kind === 'ready' && state.host && !state.ready)
+		{
+			state.ready = true;
+			clearTimeout(state.timer);
+
+			this.dispatchEvent(
+				event('invitationstate', {id: state.invitation.id, state: 'accepted', peerId: state.peerId})
+			);
+		}
+		else if(message.kind === 'signal')
+		this.dispatchEvent(event('signal', {from: item.sender, payload: message.payload}));
+		else if(message.kind === 'close')
+		{
+			this.dispatchEvent(event('inviteclosed', {reason: 'Peer left the invitation'}));
+			void this.cancelInviteLink('Peer left');
+		}
+	}
+
+	async readyInviteLink()
+	{
+		clearTimeout(this.linkState?.timer);
+		await this.privateSend('ready', {});
+	}
+
+	async cancelInviteLink(reason = 'Invitation cancelled')
+	{
+		const state = this.linkState;
+
+		if(!state) return;
+
+		this.linkState = null;
+		clearTimeout(state.timer);
+		clearInterval(state.claimTimer);
+		state.closed = true;
+		state.abort.abort(new MatrixLobbyError('invite_cancelled', reason));
+		state.admission?.reject(new MatrixLobbyError('invite_cancelled', reason));
+		this.inviteRooms.delete(state.roomId);
+		this.dispatchEvent(event('invitestatus', {state: 'closed', reason}));
+
+		if(state.host)
+		{
+			this.journalRoom(state.roomId, 'pending');
+
+			return this.cleanupRoom(state.roomId, state);
+		}
+
+		if(state.roomId)
+		{
+			try
+			{
+				await this.request(
+					'POST'
+					, `/_matrix/client/v3/rooms/${encodeURIComponent(state.roomId)}/leave`
+					, {body: {}, cleanup: true, signal: AbortSignal.timeout(10_000)}
+				);
+			}
+			catch
+			{
+			}
+		}
+
+		this.connected = false;
+		this.controller.abort(new MatrixLobbyError('invite_closed', reason));
+		this.accessToken = this.userId = this.deviceId = null;
+	}
+
+	journalKey() { return `phonics.matrix.cleanup:${this.homeserver}:${this.userId}`; }
+
+	readJournal()
+	{
+		let stored = this.cleanupJournal ?? {};
+
+		try
+		{
+			if(this.storage && typeof this.storage.key === 'function')
+			{
+				stored = {};
+				const prefix = this.journalKey() + ':room:';
+
+				for(let index = 0; index < this.storage.length; index++)
+				{
+					const key = this.storage.key(index);
+
+					if(key?.startsWith(prefix)) stored[key.slice(prefix.length)] = readStorage(this.storage, key);
+				}
+			}
+			else stored = readStorage(this.storage, this.journalKey()) ?? stored;
+		}
+		catch
+		{
+		}
+
+		for(const [room, record] of this.journalFallback ?? [])
+		{
+			if(record) stored[room] = record;
+			else delete stored[room];
+		}
+
+		return Object.fromEntries(
+			Object.entries(stored).filter(
+				([room, record]) => room.startsWith('!') && ['active', 'pending', 'redacted'].includes(record?.status)
+			)
+		);
+	}
+
+	persistRoom(roomId, record)
+	{
+		try
+		{
+			// Separate keys prevent two live tabs from overwriting each other's obligations.
+			if(this.storage && typeof this.storage.key === 'function')
+			{
+				const key = this.journalKey() + ':room:' + roomId;
+
+				if(record) this.storage.setItem(key, JSON.stringify(record));
+				else this.storage.removeItem(key);
+			}
+			else this.storage?.setItem(this.journalKey(), JSON.stringify(this.cleanupJournal));
+
+			this.journalFallback?.delete(roomId);
+		}
+		catch
+		{
+			(this.journalFallback ??= new Map).set(roomId, record);
+		}
+	}
+
+	recordEvent(state, eventId)
+	{
+		if(!state.host || typeof eventId !== 'string' || state.events.has(eventId)) return;
+
+		state.events.add(eventId);
+
+		if(state.events.size > 512) state.events.delete(state.events.values().next().value);
+
+		const journal = this.readJournal();
+		const record = journal[state.roomId];
+
+		if(!record) return;
+
+		record.events = [...new Set([...(record.events ?? []), eventId])].slice(-512);
+		this.cleanupJournal = journal;
+		this.persistRoom(state.roomId, record);
+	}
+
+	journalRoom(roomId, status)
+	{
+		const journal = this.cleanupJournal = this.readJournal();
+
+		if(status === 'done') delete journal[roomId];
+		else journal[roomId] = {...journal[roomId], status, updatedAt: Date.now()};
+
+		this.persistRoom(roomId, journal[roomId]);
+	}
+
+	async ownRoom(state)
+	{
+		if(!this.locks?.request) return;
+
+		const acquired = Promise.withResolvers(), release = Promise.withResolvers();
+		state.releaseLock = release.resolve;
+
+		state.lockTask = this.locks.request(`${this.journalKey()}:${state.roomId}`, async () => {
+			acquired.resolve();
+			await release.promise;
+		});
+
+		state.lockTask.catch(acquired.reject);
+		await acquired.promise;
+	}
+
+	async cleanupRoom(roomId, owned = null)
+	{
+		if(this.cleanupTasks.has(roomId)) return this.cleanupTasks.get(roomId);
+
+		const run = async () => {
+			const signal = AbortSignal.timeout(10_000);
+
+			const request = (method, suffix, body) => this.request(
+				method
+				, `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/${suffix}`
+				, {body, signal, cleanup: true}
+			);
+
+			this.dispatchEvent(event('cleanupstatus', {state: 'cleaning'}));
+
+			try
+			{
+				this.journalRoom(roomId, 'pending');
+				await request('PUT', 'state/m.room.power_levels', this.invitePowers(true));
+				await request('PUT', 'state/m.room.guest_access', {guest_access: 'forbidden'});
+
+				for(const id of this.readJournal()[roomId]?.events ?? [])
+				{
+					try
+					{
+						await request('PUT', `redact/${encodeURIComponent(id)}/${crypto.randomUUID()}`, {});
+					}
+					catch(error)
+					{
+						if(error.code !== 'M_NOT_FOUND') throw error;
+					}
+				}
+
+				let from, count = 0;
+				const seen = new Set;
+
+				do
+				{
+					const query = new URLSearchParams({dir: 'b', limit: '100'});
+
+					if(from) query.set('from', from);
+
+					const page = await request('GET', `messages?${query}`);
+
+					for(const item of page.chunk ?? [])
+					if([PRIVATE_EVENT, INVITE_DATA].includes(item.type) && Object.keys(item.content ?? {}).length)
+					await request('PUT', `redact/${encodeURIComponent(item.event_id)}/${crypto.randomUUID()}`, {});
+
+					if(!page.end || page.end === from || seen.has(page.end) || !(page.chunk?.length)) break;
+
+					seen.add(page.end);
+					from = page.end;
+
+					if(++count > 1000) throw new Error('Cleanup history limit exceeded');
+				}
+				while(!signal.aborted);
+
+				// Persist progress so a crash after leaving can retry forget without room access.
+				this.journalRoom(roomId, 'redacted');
+				await request('POST', 'leave', {});
+				await request('POST', 'forget', {});
+				this.journalRoom(roomId, 'done');
+				this.dispatchEvent(event('cleanupstatus', {state: 'complete'}));
+			}
+			catch
+			{
+				this.dispatchEvent(event('cleanupstatus', {state: 'pending'}));
+			}
+			finally
+			{
+				owned?.releaseLock?.();
+			}
+		};
+
+		const task = (async () => {
+			if(owned || !this.locks?.request) return run();
+
+			await this.locks.request(
+				`${this.journalKey()}:${roomId}`
+				, {ifAvailable: true}
+				, async lock => { if(lock) await run(); }
+			);
+		})();
+
+		this.cleanupTasks.set(roomId, task);
+
+		try { await task; } finally { this.cleanupTasks.delete(roomId); }
+	}
+
+	async retryCleanup()
+	{
+		if(this.guest || !this.userId) return;
+
+		const journal = this.cleanupJournal = this.readJournal();
+
+		for(const [room, value] of Object.entries(journal))
+		{
+			if(this.closed || this.inviteRooms.has(room)) continue;
+
+			if(value.status === 'redacted')
+			{
+				try
+				{
+					const options = {body: {}, cleanup: true, signal: AbortSignal.timeout(10_000)};
+					await this.request('POST', `/_matrix/client/v3/rooms/${encodeURIComponent(room)}/leave`, options);
+					await this.request('POST', `/_matrix/client/v3/rooms/${encodeURIComponent(room)}/forget`, options);
+					this.journalRoom(room, 'done');
+				}
+				catch
+				{
+				}
+			}
+			else if(value.status === 'pending' || this.locks?.request) await this.cleanupRoom(room);
+		}
+	}
+
+	recoverable(error) { return error.code === 'matrix_transport' || error.status === 429 || error.status >= 500; }
+
+	startSync()
+	{
+		this.syncTask ??= this.syncLoop();
+
+		this.syncTask.catch(
+			error => { if(!this.closed && !this.signal.aborted) this.dispatchEvent(event('error', error)); }
+		);
+	}
+
+	async iceServers({refresh = false} = {})
+	{
+		if(!refresh && this.turn && this.turn.expiresAt > Date.now() + 60_000) return this.turn.servers;
+
+		try
+		{
+			const value = await this.request(
+				'GET'
+				, '/_matrix/client/v3/voip/turnServer'
+				, {signal: AbortSignal.any([this.signal, AbortSignal.timeout(10_000)])}
+			);
+
+			const uris = (value.uris ?? []).filter(uri => typeof uri === 'string' && /^turns?:/.test(uri));
+
+			if(!uris.length) throw new Error('No relay configured');
+
+			const servers = [{urls: uris, username: value.username, credential: value.password}];
+			this.turn = {servers, expiresAt: Date.now() + Math.max(0, Number(value.ttl) || 0) * 1000};
+
+			return servers;
+		}
+		catch
+		{
+			this.dispatchEvent(
+				event(
+					'signalingstatus'
+					, {state: 'no-relay', message: 'No TURN relay is available; some networks cannot connect.'}
+				)
+			);
+
+			return [];
+		}
 	}
 
 	async invite(peerId, payload = {})
@@ -437,6 +1527,8 @@ export class MatrixLobbyProvider extends EventTarget
 	async respond(invitation, answer)
 	{
 		this.requireConnected();
+
+		if(invitation.privateLink) return answer === 'accepted' ? this.readyInviteLink() : this.cancelInviteLink();
 
 		if(!['accepted','rejected'].includes(answer)) throw new TypeError('Invalid invitation response');
 
@@ -477,6 +1569,8 @@ export class MatrixLobbyProvider extends EventTarget
 	async signalPeer(peerId, payload)
 	{
 		this.requireConnected();
+
+		if(this.linkState?.peerId === peerId) return this.privateSend('signal', payload);
 
 		await this.send(SIGNAL, {
 			id: crypto.randomUUID()
@@ -519,6 +1613,80 @@ export class MatrixLobbyProvider extends EventTarget
 		if(this.since) query.set('since', this.since);
 
 		const result = await this.request('GET', `/_matrix/client/v3/sync?${query}`);
+
+		for(const item of result.to_device?.events ?? []) await this.consumeDevice(item);
+
+		for(const [roomId, state] of this.inviteRooms)
+		{
+			if(result.rooms?.leave?.[roomId])
+			{
+				this.dispatchEvent(event('inviteclosed', {reason: 'The private invitation was closed'}));
+				void this.cancelInviteLink();
+				continue;
+			}
+
+			const timeline = result.rooms?.join?.[roomId]?.timeline;
+
+			if(!timeline) continue;
+
+			if(timeline.limited)
+			{
+				let from = timeline.prev_batch, pages = 0;
+				const history = [];
+
+				while(from && pages++ < 40)
+				{
+					const page = await this.request(
+						'GET'
+						, `/_matrix/client/v3/rooms/${encodeURIComponent(
+							roomId
+						)}/messages?dir=b&limit=100&from=${encodeURIComponent(
+							from
+						)}`
+					);
+
+					let found = false;
+
+					for(const item of page.chunk ?? [])
+					{
+						if(item.event_id === state.lastEvent)
+						{
+							found = true;
+							break;
+						}
+
+						history.push(item);
+					}
+
+					if(found || !page.chunk?.length || !page.end || page.end === from)
+					{
+						from = null;
+						break;
+					}
+
+					from = page.end;
+				}
+
+				if(from)
+				{
+					this.dispatchEvent(
+						event('inviteclosed', {reason: 'Signaling history exceeded the recovery limit'})
+					);
+
+					void this.cancelInviteLink();
+					continue;
+				}
+
+				for(const item of history.reverse()) await this.consumePrivate(state, item);
+			}
+
+			for(const item of timeline.events ?? [])
+			{
+				await this.consumePrivate(state, item);
+				state.lastEvent = item.event_id;
+			}
+		}
+
 		this.since = result.next_batch ?? this.since;
 		const timeline = result.rooms?.join?.[this.roomId]?.timeline?.events ?? [];
 
@@ -531,7 +1699,29 @@ export class MatrixLobbyProvider extends EventTarget
 
 	async syncLoop()
 	{
-		while(!this.closed && !this.signal.aborted) await this.syncOnce();
+		let failures = 0;
+
+		while(!this.closed && !this.signal.aborted)
+		{
+			try
+			{
+				await this.syncOnce();
+				failures = 0;
+			}
+			catch(error)
+			{
+				if(this.closed || this.signal.aborted) return;
+
+				if(!this.recoverable(error)) throw error;
+
+				this.dispatchEvent(event('signalingstatus', {state: 'retrying'}));
+
+				await pause(
+					Math.min(30_000, error.details?.retry_after_ms ?? 500 * 2 ** Math.min(++failures, 6))
+					, this.signal
+				);
+			}
+		}
 	}
 
 	consume(item)
@@ -624,9 +1814,12 @@ export class MatrixLobbyProvider extends EventTarget
 		return this.requestUrl(method, new URL(path, this.homeserver), options);
 	}
 
-	async requestUrl(method, target, {body, form, auth = true, retry = true} = {})
-	{
-		this.signal.throwIfAborted();
+	async requestUrl(
+		method
+		, target
+		, {body, form, auth = true, retry = true, signal = this.signal, cleanup = false} = {}
+	){
+		signal.throwIfAborted();
 		const headers = {'Accept': 'application/json'};
 
 		if(body !== undefined) headers['Content-Type'] = 'application/json';
@@ -634,7 +1827,7 @@ export class MatrixLobbyProvider extends EventTarget
 
 		if(auth)
 		{
-			await this.ensureAccessToken();
+			if(!cleanup) await this.ensureAccessToken();
 
 			if(!this.accessToken) throw new MatrixLobbyError('matrix_auth_required', 'Matrix login is required');
 
@@ -651,7 +1844,7 @@ export class MatrixLobbyProvider extends EventTarget
 				, body: body !== undefined
 					? JSON.stringify(body)
 					: form === undefined ? undefined : new URLSearchParams(form)
-				, signal: this.signal
+				, signal
 				, redirect: 'error'
 			});
 		}
@@ -668,11 +1861,11 @@ export class MatrixLobbyProvider extends EventTarget
 
 		try { value = await response.json(); } catch {}
 
-		if(response.status === 401 && auth && retry && this.refreshToken)
+		if(response.status === 401 && auth && retry && this.refreshToken && !cleanup)
 		{
 			await this.refreshAccessToken();
 
-			return this.requestUrl(method, target, {body, form, auth, retry: false});
+			return this.requestUrl(method, target, {body, form, auth, retry: false, signal, cleanup});
 		}
 
 		if(!response.ok)
@@ -793,22 +1986,114 @@ export class MatrixLobbyProvider extends EventTarget
 
 	logoutLocal()
 	{
-		this.accessToken = this.refreshToken = this.userId = this.deviceId = null;
+		this.accessToken = this.refreshToken = this.userId = this.deviceId = this.displayName = null;
 		this.expiresAt = 0;
+		this.clientId = this.tokenEndpoint = this.revocationEndpoint = null;
+		this.authApi = 'legacy';
 
 		try { this.storage?.removeItem(this.storageKey); } catch {}
 	}
 
+	/**
+	 * Revoke the current Matrix/OAuth session, stop its live connection, and retain a reusable provider.
+	 * Local credentials are always removed even when a remote endpoint is unavailable.
+	 * @returns {Promise<{remote: boolean, failures: Error[]}>} Remote cleanup status.
+	 */
+	async logout()
+	{
+		if(this.logoutTask) return this.logoutTask;
+
+		this.logoutTask = (async () => {
+			const accessToken = this.accessToken;
+			const refreshToken = this.refreshToken;
+			const clientId = this.clientId;
+			const revocationEndpoint = this.revocationEndpoint;
+			const failures = [];
+
+			clearInterval(this.cleanupTimer);
+			clearInterval(this.heartbeatTimer);
+
+			await Promise.allSettled([
+				this.cancelInviteLink('Signed out')
+				, ...this.cleanupTasks.values()
+			]);
+
+			this.connected = false;
+			this.controller.abort(new MatrixLobbyError('matrix_logout', 'Matrix session signed out'));
+			await Promise.allSettled([this.syncTask]);
+
+			const remote = [];
+
+			if(accessToken)
+			remote.push(this.request('POST', '/_matrix/client/v3/logout', {
+				body: {}
+				, cleanup: true
+				, retry: false
+				, signal: AbortSignal.timeout(15_000)
+			}));
+
+			if(revocationEndpoint && clientId)
+			{
+				const tokens = [
+					[refreshToken, 'refresh_token']
+					, [accessToken, 'access_token']
+				];
+
+				for(const [token, tokenTypeHint] of tokens)
+				{
+					if(!token) continue;
+
+					remote.push(this.requestUrl('POST', revocationEndpoint, {
+						auth: false
+						, retry: false
+						, signal: AbortSignal.timeout(15_000)
+						, form: {token, token_type_hint: tokenTypeHint, client_id: clientId}
+					}));
+				}
+			}
+
+			for(const result of await Promise.allSettled(remote))
+			if(result.status === 'rejected') failures.push(result.reason);
+
+			this.logoutLocal();
+			this.roomId = this.since = this.turn = null;
+			this.syncTask = this.refreshTask = null;
+			this.peers.clear();
+			this.invitations.clear();
+			this.lastInvite.clear();
+			this.inviteLinkCapabilityResult = null;
+			this.inviteLinkCapabilityTask = null;
+
+			if(!this.closed) this.resetConnectionSignal();
+
+			return Object.freeze({remote: failures.length === 0, failures: Object.freeze(failures)});
+		})();
+
+		try
+		{
+			return await this.logoutTask;
+		}
+		finally
+		{
+			this.logoutTask = null;
+		}
+	}
+
 	close()
 	{
-		if(this.closed) return;
+		if(this.closed) return this.closeTask;
 
+		const cancelled = this.cancelInviteLink('Session closed');
+		this.closeTask = Promise.allSettled([cancelled, ...this.cleanupTasks.values()]);
 		this.closed = true;
 		this.connected = false;
+		clearInterval(this.cleanupTimer);
 		clearInterval(this.heartbeatTimer);
 		this.controller.abort(new MatrixLobbyError('lobby_closed', 'Matrix lobby closed'));
 		this.peers.clear();
 		this.invitations.clear();
+
+		return this.closeTask;
 	}
 
 	requireConnected()

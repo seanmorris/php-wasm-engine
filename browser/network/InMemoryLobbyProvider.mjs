@@ -3,9 +3,20 @@ import {PeerId} from './Values.mjs';
 
 const event = (type, detail) => new CustomEvent(type, {detail});
 
-/** Shared deterministic room used by tests and offline examples. */
+/**
+ * Shared deterministic room used by tests and offline examples.
+ *
+ * Multiple provider instances share this hub to exercise discovery, invitations, chat, and signaling
+ * deterministically without accounts or external services.
+ */
 export class InMemoryLobbyHub
 {
+	/** Clock function used for deterministic timestamps and expiry. */
+	now;
+
+	/** In-memory lobby rooms indexed by room identifier. */
+	rooms;
+
 
 	/**
 	 * Create an empty set of in-memory rooms.
@@ -96,9 +107,41 @@ export class InMemoryLobbyHub
 	}
 }
 
-/** LobbyProvider implementation with no network or account dependency. */
+/**
+ * LobbyProvider implementation with no network or account dependency.
+ *
+ * The provider implements the lobby contract against an in-process hub, giving tests and offline examples
+ * the same event shape as a remote service.
+ */
 export class InMemoryLobbyProvider extends EventTarget
 {
+	/** In-memory lobby hub shared by connected test providers. */
+	hub;
+
+	/** Validated identifier of the connected lobby peer. */
+	peerId;
+
+	/** Display name advertised to other lobby peers. */
+	displayName;
+
+	/** Lobby room identifier used by this provider. */
+	room;
+
+	/** Lifetime of newly created invitations in milliseconds. */
+	invitationTtl;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** Known invitations indexed by invitation identifier. */
+	invitations;
+
+	/** Whether this lobby provider is connected to its room. */
+	connected;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
 
 	/**
 	 * Create a disconnected provider for one peer in a shared hub.

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Format-specific state retained while a neutral source scope is active. */
+/**
+ * Format-specific state retained while a neutral source scope is active.
+ *
+ * Adapters return this boundary so the neutral runtime can inspect identity, expose content, and release
+ * format-specific state exactly once.
+ */
 interface ActiveScope
 {
 

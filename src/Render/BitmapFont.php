@@ -5,7 +5,12 @@ namespace Phonics\Render;
 use Phonics\Tiled\Loader;
 use Phonics\Tiled\TileMap;
 
-/** A font assembled from annotated Tiled tilesets, independent of GPU allocation. */
+/**
+ * A font assembled from annotated Tiled tilesets, independent of GPU allocation.
+ *
+ * Glyph metrics, aliases, fallback behavior, and themed symbol sheets are resolved before renderers allocate
+ * atlas or GPU resources.
+ */
 final class BitmapFont
 {
 	/** Synthetic map containing every glyph and symbol tileset used by the font atlas. */
@@ -16,8 +21,11 @@ final class BitmapFont
 	public float $spaceAdvance;
 	/** Preferred symbol theme used before generic glyph fallback. */
 	public string $theme = 'generic';
+	/** Glyph metrics indexed by Unicode codepoint. */
 	private array $glyphs = [];
+	/** Fallback glyph used when a requested codepoint is absent. */
 	private string $fallback;
+	/** Whether glyph lookup folds lowercase text to uppercase. */
 	private bool $caseFold;
 
 	/**

@@ -1,3 +1,4 @@
+export {readInviteLink} from './network/InviteLink.mjs';
 export {NetworkError} from './network/Errors.mjs';
 export {InMemoryLobbyHub, InMemoryLobbyProvider} from './network/InMemoryLobbyProvider.mjs';
 export {LobbyController} from './network/LobbyController.mjs';

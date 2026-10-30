@@ -6,7 +6,7 @@ const transitions = Object.freeze({
 	idle: ['connecting','closed']
 	, connecting: ['available','auth-required','failed','closed']
 	, 'auth-required': ['connecting','failed','closed']
-	, available: ['inviting','invited','negotiating','closed','failed']
+	, available: ['inviting','invited','negotiating','signing-out','closed','failed']
 	, inviting: ['available','negotiating','closed','failed']
 	, invited: ['available','negotiating','closed','failed']
 	, negotiating: ['connected','available','closed','failed']
@@ -15,13 +15,91 @@ const transitions = Object.freeze({
 	, ready: ['starting','available','closed','failed']
 	, starting: ['playing','available','closed','failed']
 	, playing: ['available','closed','failed']
+	, 'signing-out': ['auth-required','failed','closed']
 	, failed: ['connecting','available','closed']
 	, closed: []
 });
 
-/** Finite lobby/invitation coordinator independent of Matrix and WebRTC classes. */
+/**
+ * Finite lobby/invitation coordinator independent of Matrix and WebRTC classes.
+ *
+ * It serializes authentication, discovery, invitation, private-link, resource, signaling, match,
+ * cancellation, and sign-out transitions behind observable snapshots.
+ */
 export class LobbyController extends EventTarget
 {
+	/** Lobby and signaling provider used by this controller. */
+	provider;
+
+	/** Factory that creates a transport for an accepted match. */
+	transportFactory;
+
+	/** Callback that prepares local match data for an invitation. */
+	prepareInvitation;
+
+	/** Negotiated protocol compatibility record. */
+	protocol;
+
+	/** Abort controller governing the lifetime of lobby operations. */
+	controller;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** Current lobby controller state. */
+	state;
+
+	/** Discovered lobby peers in provider order. */
+	peers;
+
+	/** Known invitations indexed by invitation identifier. */
+	invitations;
+
+	/** Invitation currently offered to another peer. */
+	outgoing;
+
+	/** Match metadata accepted for the active peer connection. */
+	match;
+
+	/** Active network transport used by this session or bridge. */
+	transport;
+
+	/** Signaling messages waiting for transport creation. */
+	signalQueue;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
+	/** Detected private-link support state for the active provider. */
+	inviteLinkSupport;
+
+	/** Pending capability probe for private invitation links. */
+	inviteLinkSupportTask;
+
+	/** Authenticated lobby profile for the local peer. */
+	profile;
+
+	/** Pending provider logout operation, if one is running. */
+	logoutTask;
+
+	/** Result of the most recently completed provider logout. */
+	logoutResult;
+
+	/** Current private-link join attempt, including cancellation state. */
+	joinAttempt;
+
+	/** Invitation currently being accepted, if any. */
+	activeInvitation;
+
+	/** Locally prepared resource payload for the invitation being accepted. */
+	acceptPayload;
+
+	/** Pending cleanup of provider state for the finished match. */
+	matchCleanup;
+
+	/** Shared promise for the in-progress controller shutdown. */
+	closeTask;
+
 
 	/**
 	 * Create an idle controller and subscribe to the provider's lobby events.
@@ -63,6 +141,9 @@ export class LobbyController extends EventTarget
 		this.transport = null;
 		this.signalQueue = [];
 		this.closed = false;
+		this.inviteLinkSupport = typeof provider.createInviteLink === 'function' ? 'checking' : 'unsupported';
+		this.inviteLinkSupportTask = null;
+		this.logoutResult = null;
 		this.install();
 	}
 
@@ -80,6 +161,7 @@ export class LobbyController extends EventTarget
 			const profile = await this.provider.connect();
 			this.profile = profile;
 			this.move('available', {profile});
+			void this.checkInviteLinkSupport();
 
 			return profile;
 		}
@@ -139,8 +221,63 @@ export class LobbyController extends EventTarget
 		throw new NetworkError('lobby_state', `Cannot change lobby configuration while ${this.state}`);
 
 		this.provider.configure(configuration);
+		this.inviteLinkSupport = typeof this.provider.createInviteLink === 'function' ? 'checking' : 'unsupported';
+		this.inviteLinkSupportTask = null;
 
 		return this.connect();
+	}
+
+	/** Detect optional private-link support without failing the rest of the lobby. */
+	async checkInviteLinkSupport({refresh = false} = {})
+	{
+		if(typeof this.provider.createInviteLink !== 'function')
+		{
+			this.inviteLinkSupport = 'unsupported';
+
+			return false;
+		}
+
+		if(typeof this.provider.inviteLinkCapability !== 'function')
+		{
+			this.inviteLinkSupport = 'supported';
+			this.dispatchEvent(event('update', this.snapshot()));
+
+			return true;
+		}
+
+		if(!refresh && this.inviteLinkSupportTask) return this.inviteLinkSupportTask;
+
+		this.inviteLinkSupport = 'checking';
+		const homeserver = this.provider.homeserver;
+
+		this.inviteLinkSupportTask = (async () => {
+			let supported = false;
+
+			try
+			{
+				supported = Boolean((await this.provider.inviteLinkCapability({refresh})).supported);
+			}
+			catch
+			{
+			}
+
+			if(!this.closed && this.provider.homeserver === homeserver)
+			{
+				this.inviteLinkSupport = supported ? 'supported' : 'unsupported';
+				this.dispatchEvent(event('update', this.snapshot()));
+			}
+
+			return supported;
+		})();
+
+		try
+		{
+			return await this.inviteLinkSupportTask;
+		}
+		finally
+		{
+			this.inviteLinkSupportTask = null;
+		}
 	}
 
 	/**
@@ -157,6 +294,57 @@ export class LobbyController extends EventTarget
 		await this.provider.loginToken(token);
 
 		return this.connect();
+	}
+
+	/**
+	 * End the authenticated provider session while no invitation or match is active.
+	 * @returns {Promise<*>} Provider logout result.
+	 * @throws {NetworkError} lobby_auth when unsupported; lobby_state unless available.
+	 */
+	async logout()
+	{
+		if(this.logoutTask) return this.logoutTask;
+
+		if(typeof this.provider.logout !== 'function')
+		throw new NetworkError('lobby_auth', 'Selected lobby provider does not support sign-out');
+
+		this.requireState('available');
+		this.move('signing-out');
+
+		this.logoutTask = (async () => {
+			try
+			{
+				const result = await this.provider.logout();
+				this.logoutResult = result;
+				this.profile = null;
+				this.peers = [];
+				this.invitations.clear();
+				this.outgoing = null;
+				this.inviteLinkSupport = typeof this.provider.createInviteLink === 'function'
+					? 'checking'
+					: 'unsupported';
+
+				this.inviteLinkSupportTask = null;
+				this.move('auth-required', {logout: result});
+
+				return result;
+			}
+			catch(error)
+			{
+				this.fail(error);
+
+				throw error;
+			}
+		})();
+
+		try
+		{
+			return await this.logoutTask;
+		}
+		finally
+		{
+			this.logoutTask = null;
+		}
 	}
 
 	/**
@@ -188,6 +376,78 @@ export class LobbyController extends EventTarget
 		this.move('inviting', {invitation});
 
 		return invitation;
+	}
+
+	/** Create a single-use private link using an optional provider capability. */
+	async createInviteLink(selection = {})
+	{
+		this.requireState('available', 'inviting');
+
+		if(typeof this.provider.createInviteLink !== 'function')
+		throw new NetworkError('invite_unsupported', 'This provider cannot create private links');
+
+		if(!await this.checkInviteLinkSupport())
+		throw new NetworkError('invite_unsupported', 'This homeserver does not support anonymous invitation links');
+
+		if(this.outgoing) await this.cancel();
+
+		const prepared = await this.prepareInvitation(selection);
+		const sessionId = crypto.randomUUID();
+		const payload = {...prepared.publicPayload, sessionId, protocol: this.protocol, match: prepared.privatePayload};
+		const invitation = await this.provider.createInviteLink(payload);
+		this.outgoing = {invitation, peerId: null, sessionId, privatePayload: prepared.privatePayload};
+		this.move('inviting', {invitation});
+
+		return invitation;
+	}
+
+	/** Register/admit only after explicit activation, then resolve resources before SDP. */
+	async joinInviteLink(invitation, prepare = async () => ({}))
+	{
+		this.requireState('idle', 'failed');
+
+		if(typeof this.provider.joinInviteLink !== 'function')
+		throw new NetworkError('invite_unsupported', 'This provider cannot join private links');
+
+		this.move('connecting');
+		const attempt = new AbortController;
+		this.joinAttempt = attempt;
+
+		try
+		{
+			const admitted = await this.provider.joinInviteLink(invitation);
+			attempt.signal.throwIfAborted();
+			this.profile = this.provider.profile();
+			this.move('available');
+			const local = await prepare(admitted, attempt.signal);
+			attempt.signal.throwIfAborted();
+
+			return await this.accept(admitted, local);
+		}
+		catch(error)
+		{
+			await this.provider.cancelInviteLink?.();
+
+			if(!this.closed) this.fail(error);
+
+			throw error;
+		}
+		finally
+		{
+			if(this.joinAttempt === attempt) this.joinAttempt = null;
+		}
+	}
+
+	/** Cancel the active private invitation and return to ordinary lobby discovery. */
+	async cancelInviteLink()
+	{
+		this.joinAttempt?.abort(new NetworkError('invite_cancelled', 'Invitation cancelled'));
+		const cleanup = this.provider.cancelInviteLink?.();
+		this.outgoing = null;
+
+		if(!this.closed && transitions[this.state]?.includes('available')) this.move('available');
+
+		return cleanup;
 	}
 
 	/**
@@ -237,6 +497,8 @@ export class LobbyController extends EventTarget
 	{
 		if(!this.outgoing) return;
 
+		if(this.outgoing.invitation.privateLink) return this.cancelInviteLink();
+
 		await this.provider.cancel(this.outgoing.invitation.id, this.outgoing.peerId);
 		this.outgoing = null;
 		this.move('available');
@@ -279,6 +541,8 @@ export class LobbyController extends EventTarget
 	 */
 	closeMatch(reason = 'left match', {local = false} = {})
 	{
+		this.joinAttempt?.abort(new NetworkError('invite_cancelled', reason));
+		this.matchCleanup = this.provider.cancelInviteLink?.(reason);
 		const transport = this.transport, match = this.match;
 		this.transport = null;
 		this.match = null;
@@ -299,17 +563,19 @@ export class LobbyController extends EventTarget
 	 */
 	close()
 	{
-		if(this.closed) return;
+		if(this.closed) return this.closeTask;
 
 		this.closed = true;
 		this.closeMatch('lobby closed');
 		this.controller.abort(new NetworkError('lobby_closed', 'Lobby controller closed'));
-		this.provider.close?.();
+		this.closeTask = Promise.allSettled([this.matchCleanup, this.provider.close?.()]);
 		this.transport = null;
 		this.peers = [];
 		this.invitations.clear();
 		this.state = 'closed';
 		this.dispatchEvent(event('statechange', this.snapshot()));
+
+		return this.closeTask;
 	}
 
 	/**
@@ -326,6 +592,8 @@ export class LobbyController extends EventTarget
 			, invitations: [...this.invitations.values()]
 			, outgoing: this.outgoing
 			, match: this.match
+			, inviteLinkSupport: this.inviteLinkSupport
+			, logoutResult: this.logoutResult
 			, ...extra
 		});
 	}
@@ -359,6 +627,26 @@ export class LobbyController extends EventTarget
 
 		this.provider.addEventListener('chat', ({detail}) => this.dispatchEvent(event('chat', detail)));
 		this.provider.addEventListener('error', ({detail}) => this.fail(detail));
+
+		for(const type of ['invitestatus', 'cleanupstatus', 'signalingstatus'])
+		this.provider.addEventListener(type, ({detail}) => this.dispatchEvent(event(type, detail)));
+
+		this.provider.addEventListener('invitestatus', ({detail}) => {
+			if(detail.state !== 'closed') return;
+
+			this.joinAttempt?.abort(new NetworkError('invite_cancelled', detail.reason));
+
+			if(this.match) this.closeMatch(detail.reason);
+			else if(this.outgoing?.invitation.privateLink)
+			{
+				this.outgoing = null;
+
+				if(!this.closed && transitions[this.state]?.includes('available'))
+				this.move('available', {reason: detail.reason});
+			}
+		});
+
+		this.provider.addEventListener('inviteclosed', ({detail}) => this.closeMatch(detail.reason));
 		this.signal.addEventListener('abort', () => this.close(), {once: true});
 	}
 
@@ -374,6 +662,8 @@ export class LobbyController extends EventTarget
 		if(detail.state === 'accepted')
 		{
 			const outgoing = this.outgoing;
+
+			if(outgoing.invitation.privateLink) outgoing.peerId = detail.peerId;
 
 			await this.connectPeer({
 				peerId: outgoing.peerId
@@ -414,13 +704,24 @@ export class LobbyController extends EventTarget
 
 		this.move('negotiating', {match: this.match});
 
-		const transport = this.transportFactory({
+		const transport = await this.transportFactory({
 			polite: !initiator
 			, signal: this.signal
 			, sendSignal: payload => this.provider.signalPeer(peerId, {sessionId, payload})
 		});
 
+		if(this.closed || this.match?.sessionId !== sessionId)
+		{
+			transport.close();
+
+			return null;
+		}
+
 		this.transport = transport;
+
+		transport.addEventListener('recovery', ({detail}) => {
+			if(this.transport === transport && !this.closed) this.dispatchEvent(event('recovery', detail));
+		});
 
 		transport.addEventListener('message', ({detail}) => {
 			if(this.transport === transport && !this.closed) this.dispatchEvent(event('message', detail));
@@ -529,6 +830,8 @@ export class LobbyController extends EventTarget
 	fail(error)
 	{
 		if(this.closed) return;
+
+		if(this.match || this.provider.linkState) this.closeMatch(error.message ?? 'Connection failed');
 
 		if(this.state !== 'failed' && transitions[this.state]?.includes('failed')) this.move('failed', {error});
 		else this.dispatchEvent(event('error', error));

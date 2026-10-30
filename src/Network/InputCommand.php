@@ -2,10 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Device-independent, tick-stamped game command sampled for one player. */
+/**
+ * Device-independent, tick-stamped game command sampled for one player.
+ *
+ * The immutable value carries a player slot, simulation tick, sequence number, prediction identity, and
+ * normalized game-owned actions.
+ */
 final class InputCommand implements \JsonSerializable
 {
-	/** @var array<string,bool|int|float|string|null> */
+	/**
+ * Normalized action values sorted by stable action name.
+ *
+ * @var array<string,bool|int|float|string|null>
+ */
 	private array $actions;
 
 	/**
@@ -18,11 +27,11 @@ final class InputCommand implements \JsonSerializable
 	 * @return void Stores the command with its actions sorted by name; rejects invalid names or non-scalar values.
 	 */
 	public function __construct(
-		/** Player slot that originated the command. */
+		/** One-based player slot that originated the command. */
 		public PlayerSlot $player
-		, /** Simulation tick represented by the record. */
+		, /** Simulation tick associated with the command, event, or snapshot. */
 		public SimulationTick $tick
-		, /** Monotonic command or snapshot sequence. */
+		, /** Command or snapshot sequence used as a boundary. */
 		public CommandSequence $sequence
 		, array $actions
 	){
@@ -46,7 +55,7 @@ final class InputCommand implements \JsonSerializable
 	/**
 	 * Restore an input command from transport-safe fields.
 	 *
-	 * @param array $value Scalar value or serialized fields to validate.
+	 * @param array $value Transport fields for sequence, tick, player slot, and normalized actions.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self

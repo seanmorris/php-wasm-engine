@@ -2,12 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Compose ordered two-dimensional, three-dimensional, HUD, and overlay render passes. */
+/**
+ * Compose ordered two-dimensional, three-dimensional, HUD, and overlay render passes.
+ *
+ * Pass dependencies are resolved and cached by stable ID, then rendered in order and closed in reverse order
+ * when their owning scope ends.
+ */
 final class FramePipeline
 {
+	/** Registered render passes indexed by stable pass identifier. */
 	private array $passes = [];
+	/** Cached dependency-ordered render-pass list. */
 	private ?array $ordered = null;
+	/** Graphics or runtime generation for which current state is valid. */
 	private int $generation = -1;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -16,7 +25,10 @@ final class FramePipeline
 	 * @param object $device Device exposing ready(), begin(), present(), and generation.
 	 * @return void Creates an empty pipeline.
 	 */
-	public function __construct(public object $device) {}
+	public function __construct(
+		/** Device exposing ready(), begin(), present(), and generation. */
+		public object $device
+	) {}
 
 	/**
 	 * Add a uniquely named pass.

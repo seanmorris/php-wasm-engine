@@ -1,6 +1,35 @@
-/** Adapt canonical resources to the existing synchronous PHP streaming poll protocol. */
+/**
+ * Adapt canonical resources to the existing synchronous PHP streaming poll protocol.
+ *
+ * It accepts PHP polling requests, resolves canonical resources through the session store, and returns
+ * bounded status records suitable for the Vrzno bridge.
+ */
 export class SessionAssets
 {
+	/** Emscripten filesystem receiving resolved session assets. */
+	FS;
+
+	/** Shared canonical byte store used for acquisition and deduplication. */
+	store;
+
+	/** Resolved package records and their isolated mount roots. */
+	packages;
+
+	/** Abort signal governing every request owned by this bridge. */
+	signal;
+
+	/** Callback that resolves direct or pallet asset references. */
+	resolveReference;
+
+	/** Canonical cached resource entries indexed by URL. */
+	entries;
+
+	/** Asset source metadata indexed by normalized asset path. */
+	sources;
+
+	/** Mounted asset paths indexed by normalized destination. */
+	mounts;
+
 
 	/**
 	 * Bridge canonical URLs, package-relative layouts, and one WASM filesystem.

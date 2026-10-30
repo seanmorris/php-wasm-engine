@@ -1,6 +1,32 @@
-/** Shared, accessible corner shortcuts. Games supply their audio and fullscreen actions. */
+/**
+ * Shared, accessible corner shortcuts. Games supply their audio and fullscreen actions.
+ *
+ * It owns focusable mute and fullscreen controls, responsive placement, visibility, and disposal while
+ * applications provide the actual state-changing callbacks.
+ */
 export class QuickControls
 {
+	/** Existing element that receives the quick-control buttons. */
+	container;
+
+	/** Whether the container already had the controls CSS class. */
+	hadContainerClass;
+
+	/** Root element containing mute and fullscreen controls. */
+	root;
+
+	/** Button that toggles game audio muting. */
+	muteButton;
+
+	/** Button that toggles fullscreen for the game container. */
+	fullscreenButton;
+
+	/** Current user-visible or rasterization error message. */
+	error;
+
+	/** Whether this control created and must remove the error element. */
+	ownsError;
+
 
 	/**
 	 * Attach accessible mute and fullscreen shortcuts to a game overlay.

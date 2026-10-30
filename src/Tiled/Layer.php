@@ -2,14 +2,31 @@
 declare(strict_types=1);
 namespace Phonics\Tiled;
 
-/** Flattened Tiled tile, object, or image layer with inherited display properties. */
+/**
+ * Flattened Tiled tile, object, or image layer with inherited display properties.
+ *
+ * Nested group transforms and properties are flattened into one runtime record while retaining the original
+ * layer kind and source metadata.
+ */
 final class Layer
 {
-	/** @var list<Chunk> Sparse tile chunks in authored order. */
+	/**
+ * Infinite-map tile chunks keyed by chunk coordinates.
+ *
+ * @var list<Chunk> Sparse tile chunks in authored order.
+ */
 	public array $chunks = [];
-	/** @var list<array<string,mixed>> Translated Tiled objects in authored order. */
+	/**
+ * Authored layer objects in source order.
+ *
+ * @var list<array<string,mixed>> Translated Tiled objects in authored order.
+ */
 	public array $objects = [];
-	/** @var array<string,mixed> Inherited custom properties keyed by name. */
+	/**
+ * Decoded custom properties indexed by property name.
+ *
+ * @var array<string,mixed> Inherited custom properties keyed by name.
+ */
 	public array $properties = [];
 	/** Effective visibility after flattening parent groups. */
 	public bool $visible = true;
@@ -23,7 +40,11 @@ final class Layer
 	public float $parallaxX = 1;
 	/** Accumulated vertical camera parallax factor. */
 	public float $parallaxY = 1;
-	/** @var array{float,float,float,float} Accumulated normalized RGBA tint. */
+	/**
+ * RGBA tint inherited through the Tiled layer hierarchy.
+ *
+ * @var array{float,float,float,float} Accumulated normalized RGBA tint.
+ */
 	public array $tint = [1,1,1,1];
 	/** Canonical source URL of an image layer, or null for other layer kinds. */
 	public ?string $image = null;
@@ -35,9 +56,17 @@ final class Layer
 	public bool $repeatX = false;
 	/** Whether the image repeats across the vertical world axis. */
 	public bool $repeatY = false;
-	/** @var list<array{image:string,duration:float}> Optional timed image-layer frames. */
+	/**
+ * Animation frames for an image layer.
+ *
+ * @var list<array{image:string,duration:float}> Optional timed image-layer frames.
+ */
 	public array $imageFrames = [];
-	/** @var array{float,float,float,float}|null Color-key RGBA value removed during upload. */
+	/**
+ * Optional transparent source color as normalized RGBA.
+ *
+ * @var array{float,float,float,float}|null Color-key RGBA value removed during upload.
+ */
 	public ?array $transparentColor = null;
 
 	/**
@@ -48,7 +77,14 @@ final class Layer
 	 * @param string $type Tiled layer kind, such as tilelayer, objectgroup, or imagelayer.
 	 * @return void Initializes an empty layer ready for chunks, objects, or an image.
 	 */
-	public function __construct(public int $id, public string $name, public string $type) {}
+	public function __construct(
+		/** Tiled layer identifier. */
+		public int $id
+		, /** Editor-visible layer name. */
+		public string $name
+		, /** Tiled layer kind, such as tilelayer, objectgroup, or imagelayer. */
+		public string $type
+	) {}
 
 	/**
 	 * Locate a tile coordinate among this layer's sparse chunks.

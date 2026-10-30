@@ -1,6 +1,17 @@
-/** Master output gain for the pinned php-sdl-wasm runtime's SDL2 audio bridge. */
+/**
+ * Master output gain for the pinned php-sdl-wasm runtime's SDL2 audio bridge.
+ *
+ * The wrapper locates the runtime-owned audio graph, applies persistent mute and gain preferences, and
+ * reports state without taking ownership of SDL playback.
+ */
 export class SdlAudio
 {
+	/** Whether audio output is currently muted. */
+	muted;
+
+	/** Web Audio gain node controlling SDL output volume. */
+	gain;
+
 
 	/**
 * Observe output devices before SDL connects them to its own AudioContext.

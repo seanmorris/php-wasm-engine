@@ -2,9 +2,15 @@
 declare(strict_types=1);
 namespace Phonics\Spatial;
 
-/** Static AABB tree. Huge or negative coordinates do not allocate empty grid cells. */
+/**
+ * Static AABB tree. Huge or negative coordinates do not allocate empty grid cells.
+ *
+ * Construction recursively partitions finite entries, and queries traverse only intersecting nodes instead
+ * of hashing unbounded coordinates into a grid.
+ */
 final class BoundsIndex
 {
+	/** Root node of the immutable bounding-volume tree. */
 	private array $root;
 
 	/**

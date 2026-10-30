@@ -4,7 +4,12 @@ namespace Phonics\Physics;
 use Phonics\Tiled\TileMap;
 use Phonics\Tiled\Loader;
 
-/** Compile loaded Tiled collision objects and tiles into game-neutral Terrain geometry. */
+/**
+ * Compile loaded Tiled collision objects and tiles into game-neutral Terrain geometry.
+ *
+ * Compilation applies map and layer transforms, preserves object ownership metadata, and produces reusable
+ * collision handles for later removal.
+ */
 final class MapTerrain
 {
 

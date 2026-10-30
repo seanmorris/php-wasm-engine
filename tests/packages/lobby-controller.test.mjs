@@ -175,3 +175,82 @@ test('lobby controller completes popup OAuth before reconnecting', async () => {
 	assert.deepEqual(provider.options, {replaceHistory: false});
 	controller.close();
 });
+
+test('lobby controller signs out an idle authenticated provider and can authenticate again', async () => {
+
+	class AuthProvider extends EventTarget
+	{
+
+		authorized = true;
+
+		async connect()
+		{
+			if(!this.authorized)
+			{
+				const error = new Error('login');
+				error.code = 'matrix_auth_required';
+
+				throw error;
+			}
+
+			return {id: '@player:matrix.example'};
+		}
+
+		async logout()
+		{
+			this.authorized = false;
+
+			return {remote: true, failures: []};
+		}
+
+		async completeOAuth()
+		{
+			this.authorized = true;
+
+			return true;
+		}
+
+		close() {}
+	}
+
+	const provider = new AuthProvider;
+	const controller = new LobbyController({provider, transportFactory: () => new FakeTransport});
+	await controller.connect();
+	const result = await controller.logout();
+
+	assert.equal(controller.state, 'auth-required');
+	assert.equal(controller.snapshot().profile, null);
+	assert.equal(controller.snapshot().logoutResult.remote, true);
+	assert.deepEqual(result, {remote: true, failures: []});
+	await controller.completeOAuth('https://game.example/#state=value&code=code');
+	assert.equal(controller.state, 'available');
+	assert.equal(controller.snapshot().profile.id, '@player:matrix.example');
+	controller.close();
+});
+
+test('lobby controller hides private links until homeserver guest support is verified', async () => {
+	const checked = Promise.withResolvers();
+
+	class LinkProvider extends EventTarget
+	{
+		homeserver = 'https://matrix.example';
+
+		async connect() { return {id: '@host:matrix.example'}; }
+
+		async inviteLinkCapability() { return checked.promise; }
+
+		async createInviteLink() { throw new Error('must remain hidden'); }
+
+		close() {}
+	}
+
+	const controller = new LobbyController({provider: new LinkProvider, transportFactory: () => new FakeTransport});
+	await controller.connect();
+	assert.equal(controller.snapshot().inviteLinkSupport, 'checking');
+	const updated = new Promise(resolve => controller.addEventListener('update', resolve, {once: true}));
+	checked.resolve({supported: false, reason: 'guest-registration-disabled'});
+	await updated;
+	assert.equal(controller.snapshot().inviteLinkSupport, 'unsupported');
+	await assert.rejects(controller.createInviteLink({}), {code: 'invite_unsupported'});
+	controller.close();
+});

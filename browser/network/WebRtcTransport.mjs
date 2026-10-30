@@ -14,9 +14,22 @@ const nativeRecord = (value, label) => {
 	return record;
 };
 
+/**
+ * Validated WebRTC session description carried through the signaling provider.
+ *
+ * It accepts native or plain descriptions, validates the description type and SDP text, and freezes the
+ * portable fields before signaling data reaches an RTCPeerConnection.
+ */
 class SessionDescriptionSignal
 {
+	/** WebRTC session-description type. */
+	type;
 
+	/** Serialized Session Description Protocol document. */
+	sdp;
+
+
+	/** Validate and freeze a WebRTC session description. */
 	constructor(value)
 	{
 		value = nativeRecord(value, 'WebRTC session description');
@@ -30,12 +43,32 @@ class SessionDescriptionSignal
 		Object.freeze(this);
 	}
 
+	/** Serialize the session description for the signaling provider. */
 	toJSON() { return {type: this.type, sdp: this.sdp}; }
 }
 
+/**
+ * Validated WebRTC ICE candidate associated with one negotiation generation.
+ *
+ * The immutable signal preserves the portable candidate, media section, line index, and username fragment
+ * after validating the fields supplied by a native or plain candidate record.
+ */
 class IceCandidateSignal
 {
+	/** Optional ICE candidate carried by this signaling envelope. */
+	candidate;
 
+	/** Media-section identifier associated with the ICE candidate. */
+	sdpMid;
+
+	/** Media-section index associated with the ICE candidate. */
+	sdpMLineIndex;
+
+	/** ICE username fragment associated with the candidate. */
+	usernameFragment;
+
+
+	/** Validate and freeze a WebRTC ICE candidate. */
 	constructor(value)
 	{
 		value = nativeRecord(value, 'WebRTC ICE candidate');
@@ -60,6 +93,7 @@ class IceCandidateSignal
 		Object.freeze(this);
 	}
 
+	/** Serialize every portable ICE candidate field. */
 	toJSON()
 	{
 		return {
@@ -71,9 +105,19 @@ class IceCandidateSignal
 	}
 }
 
+/**
+ * Immutable signaling envelope containing exactly one description or ICE candidate.
+ *
+ * Construction requires exactly one validated session description or ICE candidate, keeping malformed or
+ * ambiguous signaling records out of the peer connection.
+ *
+ * @property {SessionDescriptionSignal} [description] Validated session description when this is an offer or answer.
+ * @property {IceCandidateSignal} [candidate] Validated ICE candidate when this is a candidate update.
+ */
 class WebRtcSignalingMessage
 {
 
+	/** Validate an envelope containing exactly one signaling record. */
 	constructor(value)
 	{
 		if(!value || typeof value !== 'object') throw new TypeError('WebRTC signaling message must be an object');
@@ -90,6 +134,7 @@ class WebRtcSignalingMessage
 		Object.freeze(this);
 	}
 
+	/** Serialize the contained description or candidate. */
 	toJSON()
 	{
 		if(this.description) return {description: this.description.toJSON()};
@@ -98,9 +143,125 @@ class WebRtcSignalingMessage
 	}
 }
 
-/** Role-aware WebRTC transport with perfect negotiation and two traffic classes. */
+/**
+ * Role-aware WebRTC transport with perfect negotiation and two traffic classes.
+ *
+ * It owns perfect negotiation, reliable and realtime data channels, ICE recovery generations, bounded send
+ * queues, state events, and idempotent closure.
+ */
 export class WebRtcTransport extends EventTarget
 {
+	/** Callback that sends serialized signaling to the remote peer. */
+	sendSignal;
+
+	/** Callback that refreshes ICE server credentials. */
+	refreshIceServers;
+
+	/** Delay before starting ICE recovery in milliseconds. */
+	recoveryDelay;
+
+	/** Delay between ICE restart attempts in milliseconds. */
+	recoveryRetry;
+
+	/** Maximum ICE recovery duration in milliseconds. */
+	recoveryTimeout;
+
+	/** Current local ICE recovery generation. */
+	generation;
+
+	/** Latest ICE recovery generation completed by both peers. */
+	completedGeneration;
+
+	/** Whether ICE recovery is currently in progress. */
+	recovering;
+
+	/** Whether this peer yields during perfect-negotiation collisions. */
+	polite;
+
+	/** Maximum channel startup wait in milliseconds. */
+	timeout;
+
+	/** Maximum permitted serialized packet size in bytes. */
+	maximumPacketBytes;
+
+	/** Maximum queued bytes permitted on one data channel. */
+	maximumBufferedBytes;
+
+	/** Abort controller for every operation owned by this transport. */
+	controller;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** RTCPeerConnection owned by this transport. */
+	pc;
+
+	/** Open and pending RTC data channels indexed by traffic class. */
+	channels;
+
+	/** ICE candidates waiting for a remote description. */
+	pendingCandidates;
+
+	/** ICE candidates queued by remote recovery generation. */
+	futureCandidates;
+
+	/** Latest remote ICE recovery generation observed. */
+	remoteGeneration;
+
+	/** Whether local perfect negotiation is creating an offer. */
+	makingOffer;
+
+	/** Whether an impolite peer is ignoring a colliding offer. */
+	ignoreOffer;
+
+	/** Whether perfect negotiation is applying a remote answer. */
+	settingRemoteAnswer;
+
+	/** Whether a remote session description is currently being applied. */
+	applyingRemoteDescription;
+
+	/** Whether startup has completed or is currently committed. */
+	started;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
+	/** Number of realtime packets dropped under backpressure. */
+	droppedRealtime;
+
+	/** Total payload bytes sent by this transport. */
+	sentBytes;
+
+	/** Total payload bytes received by this transport. */
+	receivedBytes;
+
+	/** Whether this peer creates the initial data channels and offer. */
+	initiator;
+
+	/** Promise resolved when both WebRTC data channels are ready. */
+	opened;
+
+	/** Resolve function for the data-channel readiness promise. */
+	resolveOpen;
+
+	/** Reject function for the data-channel readiness promise. */
+	rejectOpen;
+
+	/** Whether the peer connection recovered connectivity. */
+	recoveryConnected;
+
+	/** Timer scheduling the next ICE restart. */
+	restartTimer;
+
+	/** Timer enforcing or scheduling transport recovery. */
+	recoveryTimer;
+
+	/** Timer scheduling a later ICE recovery attempt. */
+	retryTimer;
+
+	/** Whether both data channels have opened at least once. */
+	everOpened;
+
 
 	/**
 	 * Create a peer connection and install its negotiation, channel, and abort handlers.
@@ -122,10 +283,15 @@ export class WebRtcTransport extends EventTarget
 		{
 			RTCPeerConnection: PeerConnection = globalThis.RTCPeerConnection
 			, iceServers = []
+			, iceTransportPolicy = 'all'
 			, polite = false
 			, sendSignal
 			, signal
 			, timeout = 20_000
+			, refreshIceServers = null
+			, recoveryDelay = 3000
+			, recoveryRetry = 10_000
+			, recoveryTimeout = 30_000
 			, maximumPacketBytes = 1024 * 1024
 			, maximumBufferedBytes = 4 * 1024 * 1024
 		} = {}
@@ -137,15 +303,24 @@ export class WebRtcTransport extends EventTarget
 		if(typeof sendSignal !== 'function') throw new TypeError('WebRtcTransport requires sendSignal');
 
 		this.sendSignal = sendSignal;
+		this.refreshIceServers = refreshIceServers;
+		this.recoveryDelay = recoveryDelay;
+		this.recoveryRetry = recoveryRetry;
+		this.recoveryTimeout = recoveryTimeout;
+		this.generation = 0;
+		this.completedGeneration = 0;
+		this.recovering = false;
 		this.polite = Boolean(polite);
 		this.timeout = timeout;
 		this.maximumPacketBytes = maximumPacketBytes;
 		this.maximumBufferedBytes = maximumBufferedBytes;
 		this.controller = new AbortController;
 		this.signal = signal ? AbortSignal.any([signal, this.controller.signal]) : this.controller.signal;
-		this.pc = new PeerConnection({iceServers});
+		this.pc = new PeerConnection({iceServers, iceTransportPolicy});
 		this.channels = new Map;
 		this.pendingCandidates = [];
+		this.futureCandidates = new Map;
+		this.remoteGeneration = -1;
 		this.makingOffer = false;
 		this.ignoreOffer = false;
 		this.settingRemoteAnswer = false;
@@ -171,6 +346,7 @@ export class WebRtcTransport extends EventTarget
 		if(this.started) return this.opened;
 
 		this.started = true;
+		this.initiator = initiator;
 
 		this.opened = new Promise((resolve, reject) => {
 			this.resolveOpen = resolve;
@@ -208,6 +384,51 @@ export class WebRtcTransport extends EventTarget
 
 		try
 		{
+			if(message?.recovery)
+			{
+				if(message.recovery === 'request' && this.initiator && Number.isSafeInteger(message.generation)
+					&& message.generation >= this.completedGeneration
+				) this.beginRecovery(true);
+				else if(message.recovery === 'pause' && !this.initiator && Number.isSafeInteger(message.generation)
+					&& message.generation > this.completedGeneration
+				){
+					if(message.generation > this.generation) this.adoptGeneration(message.generation);
+
+					this.beginRecovery(false, false);
+					this.connectionChanged();
+				}
+
+				return;
+			}
+
+			const generation = message.generation ?? 0;
+
+			if(!Number.isSafeInteger(generation) || generation < 0) throw new Error('Invalid negotiation generation');
+
+			if(generation < this.generation) return;
+
+			if(generation > this.generation)
+			{
+				if(this.initiator) return;
+
+				if(message.candidate)
+				{
+					if(this.futureCandidates.size >= 128) throw new Error('Too many future ICE candidates');
+
+					this.futureCandidates.set(
+						message
+						, {generation, candidate: new IceCandidateSignal(message.candidate).toJSON()}
+					);
+
+					return;
+				}
+
+				if(message.description?.type !== 'offer') return;
+
+				this.adoptGeneration(generation);
+				this.beginRecovery(false, false);
+			}
+
 			const signal = new WebRtcSignalingMessage(message);
 
 			if(signal.description)
@@ -232,6 +453,7 @@ export class WebRtcTransport extends EventTarget
 				try
 				{
 					await this.pc.setRemoteDescription(description);
+					this.remoteGeneration = generation;
 				}
 				finally
 				{
@@ -242,10 +464,17 @@ export class WebRtcTransport extends EventTarget
 				if(description.type === 'rollback') this.pendingCandidates.length = 0;
 				else await this.flushCandidates();
 
+				this.connectionChanged();
+
 				if(description.type === 'offer')
 				{
 					await this.pc.setLocalDescription();
-					await this.transmitSignal({description: this.pc.localDescription});
+
+					await this.transmitSignal({description: this.pc.localDescription}).catch(error => {
+						if(!this.everOpened) throw error;
+
+						this.signalingFailed(error);
+					});
 				}
 			}
 			else
@@ -254,7 +483,7 @@ export class WebRtcTransport extends EventTarget
 
 				if(this.ignoreOffer) return;
 
-				if(this.applyingRemoteDescription || !this.pc.remoteDescription)
+				if(this.applyingRemoteDescription || !this.pc.remoteDescription || this.remoteGeneration !== generation)
 				{
 					this.queueCandidate(candidate);
 
@@ -339,12 +568,14 @@ export class WebRtcTransport extends EventTarget
 		if(this.closed) return;
 
 		this.closed = true;
+		this.clearRecoveryTimers();
 		this.controller.abort(new NetworkError('transport_closed', reason));
 
 		for(const channel of this.channels.values()) try { channel.close(); } catch {}
 
 		this.channels.clear();
 		this.pendingCandidates.length = 0;
+		this.futureCandidates.clear();
 
 		try { this.pc.close(); } catch {}
 
@@ -360,7 +591,7 @@ export class WebRtcTransport extends EventTarget
 	{
 
 		this.pc.onicecandidate = ({candidate}) => {
-			if(candidate) this.transmitSignal({candidate}).catch(error => this.fail(error));
+			if(candidate) this.transmitSignal({candidate}).catch(error => this.signalingFailed(error));
 		};
 
 		this.pc.ondatachannel = ({channel}) => this.attach(channel);
@@ -374,7 +605,7 @@ export class WebRtcTransport extends EventTarget
 			}
 			catch(error)
 			{
-				this.fail(networkFailure('webrtc_offer', 'Cannot create WebRTC offer', error));
+				this.signalingFailed(networkFailure('webrtc_offer', 'Cannot create WebRTC offer', error));
 			}
 			finally
 			{
@@ -382,14 +613,146 @@ export class WebRtcTransport extends EventTarget
 			}
 		};
 
-		this.pc.onconnectionstatechange = () => {
-			this.dispatchEvent(event('statechange', this.diagnostics()));
+		this.pc.onconnectionstatechange = () => this.connectionChanged();
 
-			if(['failed','closed'].includes(this.pc.connectionState))
-			this.fail(new NetworkError('webrtc_connection', `WebRTC ${this.pc.connectionState}`));
-		};
+		this.pc.oniceconnectionstatechange = () => this.connectionChanged();
 
 		this.signal.addEventListener('abort', () => this.close('cancelled'), {once: true});
+	}
+
+	/** Advance transport readiness or recovery after a peer-connection state change. */
+	connectionChanged()
+	{
+		if(this.closed) return;
+
+		this.dispatchEvent(event('statechange', this.diagnostics()));
+
+		if(this.pc.connectionState === 'closed')
+		return this.fail(new NetworkError('webrtc_connection', 'WebRTC closed'));
+
+		const failed = this.pc.connectionState === 'failed' || this.pc.iceConnectionState === 'failed';
+		const disconnected = this.pc.connectionState === 'disconnected'
+			|| this.pc.iceConnectionState === 'disconnected';
+
+		if(failed || disconnected) this.beginRecovery(failed);
+		else if(this.recovering && this.pc.connectionState === 'connected' && !this.recoveryConnected)
+		{
+			this.recoveryConnected = true;
+			clearTimeout(this.restartTimer);
+			clearTimeout(this.retryTimer);
+			this.dispatchEvent(event('recovery', {state: 'resynchronizing', generation: this.generation}));
+		}
+	}
+
+	/** Start bounded ICE recovery after a previously usable connection fails. */
+	beginRecovery(immediate = false, notify = true)
+	{
+		if(this.closed || !this.everOpened) return;
+
+		if(this.recovering)
+		{
+			if(this.recoveryConnected)
+			{
+				this.recoveryConnected = false;
+				this.dispatchEvent(event('recovery', {state: 'reconnecting', generation: this.generation}));
+
+				if(this.initiator)
+				this.restartTimer = setTimeout(() => void this.restartConnection(), immediate ? 0 : this.recoveryDelay);
+			}
+			else if(immediate && this.initiator)
+			{
+				clearTimeout(this.restartTimer);
+				this.restartTimer = setTimeout(() => void this.restartConnection(), 0);
+			}
+
+			return;
+		}
+
+		this.recovering = true;
+		this.recoveryConnected = false;
+
+		if(this.initiator) this.generation++;
+
+		this.dispatchEvent(event('recovery', {state: 'reconnecting', generation: this.generation}));
+
+		if(notify)
+		void this.sendSignal({recovery: this.initiator ? 'pause' : 'request', generation: this.generation}).catch(
+			() => {
+			}
+		);
+
+		this.recoveryTimer = setTimeout(
+			() => this.fail(new NetworkError('webrtc_recovery_timeout', 'Connection recovery timed out'))
+			, this.recoveryTimeout
+		);
+
+		if(this.initiator)
+		{
+			this.restartTimer = setTimeout(() => void this.restartConnection(), immediate ? 0 : this.recoveryDelay);
+			this.retryTimer = setTimeout(() => void this.restartConnection(), this.recoveryRetry);
+		}
+	}
+
+	/** Request a new ICE generation and schedule recovery timeouts. */
+	async restartConnection()
+	{
+		if(this.closed || !this.recovering || this.recoveryConnected || !this.initiator) return;
+
+		try
+		{
+			const iceServers = await this.refreshIceServers?.();
+
+			if(this.closed || !this.recovering) return;
+
+			if(iceServers) this.pc.setConfiguration({...this.pc.getConfiguration(), iceServers});
+
+			this.pc.restartIce();
+		}
+		catch(error)
+		{
+			this.dispatchEvent(event('signalingstatus', {state: 'retrying', message: error.message}));
+		}
+	}
+
+	/** Adopt a newer remote negotiation generation and discard stale candidates. */
+	adoptGeneration(generation)
+	{
+		this.generation = generation;
+		this.pendingCandidates.length = 0;
+
+		for(const [key, value] of this.futureCandidates)
+		{
+			if(value.generation === generation) this.queueCandidate(value.candidate);
+
+			if(value.generation <= generation) this.futureCandidates.delete(key);
+		}
+	}
+
+	/** Report a signaling failure and close the unusable transport. */
+	signalingFailed(error)
+	{
+		if(this.closed) return;
+
+		if(!this.everOpened) return this.fail(error);
+
+		// Matrix downtime alone must not tear down functioning data channels.
+		this.dispatchEvent(event('signalingstatus', {state: 'retrying', message: error.message}));
+	}
+
+	/** Cancel every timer owned by the current recovery attempt. */
+	clearRecoveryTimers()
+	{
+		clearTimeout(this.restartTimer);
+		clearTimeout(this.retryTimer);
+		clearTimeout(this.recoveryTimer);
+	}
+
+	/** Called only after the game's authoritative recovery barrier has completed. */
+	finishRecovery()
+	{
+		this.clearRecoveryTimers();
+		this.recovering = false;
+		this.completedGeneration = this.generation;
 	}
 
 	/**
@@ -401,7 +764,7 @@ export class WebRtcTransport extends EventTarget
 	{
 		const signal = new WebRtcSignalingMessage(value);
 
-		await this.sendSignal(signal.toJSON());
+		await this.sendSignal({...signal.toJSON(), ...(this.generation ? {generation: this.generation} : {})});
 	}
 
 	/**
@@ -504,6 +867,7 @@ export class WebRtcTransport extends EventTarget
 			|| this.channels.get('realtime')?.readyState !== 'open'
 		) return;
 
+		this.everOpened = true;
 		this.resolveOpen?.(this);
 		this.resolveOpen = this.rejectOpen = null;
 		this.dispatchEvent(event('open', this.diagnostics()));

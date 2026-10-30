@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Physics;
 
-/** Earliest continuous terrain contact, its surface normal, ownership, and metadata. */
+/**
+ * Earliest continuous terrain contact, its surface normal, ownership, and metadata.
+ *
+ * Collision queries return this immutable contact description so movement policy can distinguish time,
+ * normal, owner, and one-way metadata.
+ */
 final class Hit
 {
 	/** Deprecated platformer annotation retained until 1.0. */
@@ -24,13 +29,20 @@ final class Hit
 	 * @return void Stores the contact data without modifying terrain or a body.
 	 */
 	public function __construct(
+		/** Fraction of the queried displacement at impact, from zero to one. */
 		public float $t
-		, public float $x
-		, public float $y
-		, public float $nx
-		, public float $ny
-		, public bool $oneWay = false
-		, public ?int $shape = null
+		, /** Contact X coordinate in world pixels. */
+		public float $x
+		, /** Contact Y coordinate in world pixels. */
+		public float $y
+		, /** X component of the outward unit surface normal. */
+		public float $nx
+		, /** Y component of the outward unit surface normal. */
+		public float $ny
+		, /** Whether the contacted edge belongs to a one-way platform. */
+		public bool $oneWay = false
+		, /** Removable terrain handle, or null for permanent geometry. */
+		public ?int $shape = null
 		, array|bool $grinding = false
 	){
 		$this->metadata = is_array($grinding) ? $grinding : [];

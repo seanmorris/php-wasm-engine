@@ -3,17 +3,37 @@ declare(strict_types=1);
 namespace Phonics\Tiled;
 use Phonics\Asset\Assets;
 
-/** PHP selects maps and resolves dependencies; the host only transfers files. */
+/**
+ * PHP selects maps and resolves dependencies; the host only transfers files.
+ *
+ * It tracks selected, loading, ready, failed, and releasable maps while requesting bytes through the browser
+ * bridge without moving format policy into JavaScript.
+ */
 final class WorldStream
 {
+	/** Map loading states and retained asset references by placement identity. */
 	private array $states = [], $references = [];
-	/** @var list<TileMap> Maps activated by the latest update. */
+	/**
+ * Map placements that became resident during the latest update.
+ *
+ * @var list<TileMap> Maps activated by the latest update.
+ */
 	public array $entered = [];
-	/** @var list<TileMap> Maps evicted by the latest update. */
+	/**
+ * Map placements released during the latest update.
+ *
+ * @var list<TileMap> Maps evicted by the latest update.
+ */
 	public array $exited = [];
-	/** @var array<string,string> Current loading failures keyed by placement identity. */
+	/**
+ * Current loading failures keyed by placement identity.
+ *
+ * @var array<string,string> Current loading failures keyed by placement identity.
+ */
 	public array $errors = [];
+	/** Callbacks that acquire and release one streamed map resource. */
 	private $request, $release;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -30,11 +50,14 @@ final class WorldStream
 	 * @return void Creates an empty streaming state; no files are requested until update.
 	 */
 	public function __construct(
+		/** Indexed world manifest and shared map loader. */
 		public World $world
 		, ?callable $request = null
 		, ?callable $release = null
-		, public float $loadMargin = 256
-		, public float $retainMargin = 768
+		, /** Nonnegative preload distance around the requested rectangle in pixels. */
+		public float $loadMargin = 256
+		, /** Eviction margin in pixels, at least as large as loadMargin. */
+		public float $retainMargin = 768
 	){
 		if(!is_finite($loadMargin) || !is_finite($retainMargin) || $loadMargin < 0
 			|| $retainMargin < $loadMargin

@@ -27,9 +27,86 @@ const bytes = value => {
 	return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 };
 
-/** Reusable game launcher for ordered resources, start selection, and declared match settings. */
+/**
+ * Reusable game launcher for ordered resources, start selection, and declared match settings.
+ *
+ * The modal validates ordered resources, derives playable starts and match modes, retains editor state, and
+ * returns one explicit launch selection to its caller.
+ */
 export class GameLauncher
 {
+	/** Resource negotiator used to prepare local and remote content. */
+	negotiator;
+
+	/** Game iframe whose application configuration is being edited. */
+	frame;
+
+	/** World descriptor used to configure this operation. */
+	world;
+
+	/** Callback that prepares resources for an offline game. */
+	prepareLocal;
+
+	/** Callback that opens multiplayer for prepared settings. */
+	openNetwork;
+
+	/** Abort controller used to cancel work owned by this view. */
+	abort;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** Launcher resource controls indexed by slot identifier. */
+	resourceEntries;
+
+	/** Resource input currently receiving a drag operation. */
+	dragged;
+
+	/** Element focused before this modal opened. */
+	previousFocus;
+
+	/** Whether the launcher is preparing an offline game. */
+	local;
+
+	/** Callback that restores the page theme after modal closure. */
+	releaseTheme;
+
+	/** Callback invoked with validated launcher configuration. */
+	onSubmit;
+
+	/** Modal dialog element owned by this view. */
+	dialog;
+
+	/** Document title text or modal heading element. */
+	title;
+
+	/** Button that closes the current modal view. */
+	closeButton;
+
+	/** File input controls indexed by resource slot. */
+	resourceInputs;
+
+	/** Live output element displaying current operation status. */
+	status;
+
+	/** Button that closes the launcher without starting a game. */
+	cancelButton;
+
+	/** Button that opens the multiplayer lobby. */
+	onlineButton;
+
+	/** Primary action button used to complete launcher setup. */
+	primary;
+
+	/** Launcher controls representing editable game settings. */
+	settingInputs;
+
+	/** Fieldset containing game-owned match settings. */
+	matchFields;
+
+	/** Select control for the match starting map. */
+	mapSelect;
+
 
 	/**
 	 * Create a launcher bound to one normalized world and resource negotiator.
@@ -88,6 +165,54 @@ export class GameLauncher
 		}
 
 		this.title.focus({preventScroll: true});
+	}
+
+	/** Prompt only for one missing, ordered host requirement; match settings stay fixed. */
+	pickRequiredResource(offer, {index = 0, error, signal} = {})
+	{
+		const pending = Promise.withResolvers();
+		const dialog = element('dialog', {class: 'phonics-modal phonics-launcher', 'aria-label': 'Required game file'});
+		const header = element('header');
+		header.append(element('h2', {}, 'Choose required game file'));
+		const body = element('div', {class: 'phonics-launcher-body'});
+		body.append(element('p', {}, `${index + 1}. ${offer.label ?? offer.slot}`));
+
+		if(error) body.append(element('p', {}, error.message));
+
+		const label = element('label', {}, 'Local WAD or resource file');
+		const input = element('input', {type: 'file'});
+		label.append(input);
+		body.append(label);
+		const footer = element('footer', {class: 'phonics-modal-actions'});
+		const cancel = element('button', {type: 'button'}, 'Cancel invitation');
+		const choose = element('button', {type: 'button', class: 'phonics-modal-primary'}, 'Use file');
+		choose.disabled = true;
+		footer.append(cancel, choose);
+		dialog.append(header, body, footer);
+		const abortSignal = signal ? AbortSignal.any([signal, this.signal]) : this.signal;
+
+		const abort = () => pending.reject(abortSignal.reason ?? new Error('Invitation cancelled'));
+		input.addEventListener('change', () => { choose.disabled = !input.files?.length; });
+
+		choose.addEventListener('click', () => { if(input.files?.[0]) pending.resolve(input.files[0]); });
+
+		cancel.addEventListener('click', () => pending.reject(new Error('Invitation cancelled')));
+
+		dialog.addEventListener(
+			'cancel'
+			, event => { event.preventDefault(); pending.reject(new Error('Invitation cancelled')); }
+		);
+
+		abortSignal.addEventListener('abort', abort, {once: true});
+		this.frame.append(dialog);
+		dialog.showModal();
+		input.focus();
+
+		if(abortSignal.aborted) abort();
+
+		return pending.promise.finally(
+			() => { abortSignal.removeEventListener('abort', abort); dialog.close(); dialog.remove(); }
+		);
 	}
 
 	/** Open as an editor which retains changes without launching a game. */

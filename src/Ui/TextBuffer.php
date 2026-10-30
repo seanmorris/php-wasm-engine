@@ -4,7 +4,12 @@ namespace Phonics\Ui;
 
 use Phonics\Render\BitmapFont;
 
-/** A single-line UTF-8 buffer; cursor offsets are Unicode codepoints, as in SDL text events. */
+/**
+ * A single-line UTF-8 buffer; cursor offsets are Unicode codepoints, as in SDL text events.
+ *
+ * Insertion, deletion, movement, and selection operate on codepoint offsets so multibyte input behaves like
+ * SDL text-editing events.
+ */
 final class TextBuffer
 {
 	/** Committed single-line UTF-8 text. */

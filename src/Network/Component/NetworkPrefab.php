@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network\Component;
 
-/** Whitelisted game-owned factory identity used for remote spawn records. */
+/**
+ * Whitelisted game-owned factory identity used for remote spawn records.
+ *
+ * Remote creation uses this identifier to select a registered factory rather than instantiating arbitrary
+ * classes from packet data.
+ */
 final class NetworkPrefab
 {
 	/**

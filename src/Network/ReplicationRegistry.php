@@ -4,14 +4,31 @@ namespace Phonics\Network;
 
 use Phonics\Ecs\Registry;
 
-/** Whitelist of component codecs and prefab factories used by a match profile. */
+/**
+ * Whitelist of component codecs and prefab factories used by a match profile.
+ *
+ * All packet-controlled construction and component decoding must pass through registrations in this catalog,
+ * keeping remote data on explicit allowlists.
+ */
 final class ReplicationRegistry
 {
-	/** @var array<string,ComponentCodec> */
+	/**
+ * Component codecs indexed by transport schema name.
+ *
+ * @var array<string,ComponentCodec>
+ */
 	private array $schemas = [];
-	/** @var array<class-string,string> */
+	/**
+ * Component codecs indexed by concrete component class.
+ *
+ * @var array<class-string,string>
+ */
 	private array $types = [];
-	/** @var array<string,array{spawn:callable,despawn:?callable}> */
+	/**
+ * Allowlisted remote entity factories indexed by prefab name.
+ *
+ * @var array<string,array{spawn:callable,despawn:?callable}>
+ */
 	private array $prefabs = [];
 
 	/**
@@ -96,8 +113,8 @@ final class ReplicationRegistry
 	 *
 	 * @param Registry $registry ECS registry whose replicated state is read or changed.
 	 * @param int $entity Local ECS entity ID to capture, update, or remove.
-	 * @param array<string,array{version:int,payload:array<string,mixed>}> $components Validated components used by this
-	 * replication registry.
+	 * @param array<string,array{version:int,payload:array<string,mixed>}> $components Versioned payloads keyed by
+	 * registered transport schema.
 	 * @return void No value is returned.
 	 */
 	public function apply(Registry $registry, int $entity, array $components): void

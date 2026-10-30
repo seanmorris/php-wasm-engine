@@ -6,12 +6,21 @@ use Phonics\Ecs\Registry;
 use Phonics\Ecs\Scheduler;
 use Phonics\Render\FramePipeline;
 
-/** Resolve adapters and declarative bindings into reference-counted active scopes. */
+/**
+ * Resolve adapters and declarative bindings into reference-counted active scopes.
+ *
+ * It opens sources lazily, matches descriptors to system-set bindings, reference-counts active scopes,
+ * restores scope state, and tears ownership down deterministically.
+ */
 final class WorldRuntime
 {
+	/** Registered adapters, system sets, source definitions, and opened sources by stable name. */
 	private array $adapters = [], $systemSets = [], $definitions = [], $sources = [];
+	/** Scope catalogs, system bindings, active scopes, and saved scope state. */
 	private array $catalogs = [], $bindings = [], $active = [], $state = [];
+	/** Shared runtime services exposed to content adapters. */
 	private array $services = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -24,10 +33,12 @@ final class WorldRuntime
 	 * @return void Initializes empty adapter, source, binding, and scope registries.
 	 */
 	public function __construct(
+		/** Host services used to open sources. */
 		private AdapterContext $adaptersContext
 		, ?Registry $registry = null
 		, ?Scheduler $scheduler = null
-		, public ?FramePipeline $pipeline = null
+		, /** Optional render pipeline. */
+		public ?FramePipeline $pipeline = null
 	){
 		$this->registry = $registry ?? new Registry;
 		$this->scheduler = $scheduler ?? new Scheduler($this->registry);

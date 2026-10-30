@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Tiled;
 
-/** Reversible orthogonal or isometric conversion between tile and pixel coordinates. */
+/**
+ * Reversible orthogonal or isometric conversion between tile and pixel coordinates.
+ *
+ * The conversion object centralizes orientation math so loaders, collision, rendering, and pointer tools
+ * agree on map coordinates.
+ */
 final class Projection
 {
 
@@ -17,10 +22,14 @@ final class Projection
 	 * @return void Validates the supported orientation and positive tile dimensions.
 	 */
 	public function __construct(
+		/** Supported map orientation: orthogonal or isometric. */
 		public string $orientation
-		, public int $tileWidth
-		, public int $tileHeight
-		, public int $mapHeight = 0
+		, /** Tile grid width in pixels. */
+		public int $tileWidth
+		, /** Tile grid height in pixels. */
+		public int $tileHeight
+		, /** Finite map height in tiles, used for the isometric horizontal origin; zero for infinite maps. */
+		public int $mapHeight = 0
 	){
 		if(!in_array($orientation, ['orthogonal','isometric'], true))
 		{

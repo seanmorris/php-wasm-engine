@@ -1,6 +1,20 @@
-/** Canonical URLs identify shared bytes; scopes own cancellable references, not cache paths. */
+/**
+ * Canonical URLs identify shared bytes; scopes own cancellable references, not cache paths.
+ *
+ * Concurrent consumers share one fetch and immutable byte result, while scope handles track cancellation and
+ * release independently from the canonical cache entry.
+ */
 export class ResourceStore
 {
+	/** Fetch adapter used to retrieve canonical resource URLs. */
+	fetch;
+
+	/** Maximum number of resource fetch retries. */
+	retries;
+
+	/** Canonical cached resource entries indexed by URL. */
+	entries;
+
 
 	/**
 	 * Create a canonical byte cache shared by independently owned scopes.

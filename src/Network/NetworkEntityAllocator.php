@@ -2,16 +2,35 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Monotonic host allocator and bidirectional network/local ECS identity map. */
+/**
+ * Monotonic host allocator and bidirectional network/local ECS identity map.
+ *
+ * Only the host allocates new network IDs; both peers use the mapping to translate stable packet identities
+ * to transient registry entities.
+ */
 final class NetworkEntityAllocator
 {
+	/** First network entity identifier available to this allocator. */
 	private int $first;
+	/** Next network entity identifier to allocate. */
 	private int $next;
-	/** @var array<int,int> */
+	/**
+ * Local entity IDs indexed by stable network entity ID.
+ *
+ * @var array<int,int>
+ */
 	private array $networkToLocal = [];
-	/** @var array<int,int> */
+	/**
+ * Stable network entity IDs indexed by local entity ID.
+ *
+ * @var array<int,int>
+ */
 	private array $localToNetwork = [];
-	/** @var array<int,true> */
+	/**
+ * Network entity IDs retired after authoritative destruction.
+ *
+ * @var array<int,true>
+ */
 	private array $retired = [];
 
 	/**

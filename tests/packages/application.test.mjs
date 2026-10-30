@@ -115,6 +115,7 @@ test('archive resources preserve binary bytes, declaring URLs, queries and remot
 			abi: 1
 			, id: 'app'
 			, code: 'hash'
+			, application: 'application/phonics.json'
 			, packages: [
 				{name: 'app', path: 'application/phonics.json', base: '../'}
 				, {name: '@seanmorris/phonics', path: 'core/phonics.json', base: '../.phonics/core/'}
@@ -126,6 +127,7 @@ test('archive resources preserve binary bytes, declaring URLs, queries and remot
 
 	const scope = archive.store.scope();
 	const source = 'https://game.test/nested/maps/a.world';
+	assert.equal(archive.applicationUrl, 'https://game.test/nested/phonics.json');
 	assert.deepEqual(await scope.read(source), new Uint8Array([0,255,128]));
 	assert.equal(archive.source(archive.stream(source)), source);
 	assert.equal(archive.source(archive.stream(source) + '#start'), source + '#start');

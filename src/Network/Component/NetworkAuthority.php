@@ -4,7 +4,12 @@ namespace Phonics\Network\Component;
 
 use Phonics\Network\AuthorityOwner;
 
-/** Declares which participant may originate commands for an entity. */
+/**
+ * Declares which participant may originate commands for an entity.
+ *
+ * Replication systems read this component to reject commands or component changes from participants that do
+ * not own the entity.
+ */
 final class NetworkAuthority
 {
 
@@ -15,7 +20,7 @@ final class NetworkAuthority
 	 * @return void Stores the authority owner.
 	 */
 	public function __construct(
-		/** Participant allowed to control the entity. */
+		/** Host or peer allowed to control the entity. */
 		public AuthorityOwner $owner
 	){
 	}

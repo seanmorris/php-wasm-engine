@@ -16,9 +16,113 @@ const element = (name, attributes = {}, text = '') => {
 	return result;
 };
 
-/** Accessible session-owned Matrix chat lobby. Game configuration lives in a reusable launcher modal. */
+/**
+ * Accessible session-owned Matrix chat lobby. Game configuration lives in a reusable launcher modal.
+ *
+ * The overlay renders controller snapshots, forwards deliberate user actions, preserves accessibility and
+ * focus, and leaves game settings to the shared launcher.
+ */
 export class LobbyOverlay
 {
+	/** Lobby controller observed and driven by this overlay. */
+	controller;
+
+	/** Game launcher reopened from this lobby overlay. */
+	launcher;
+
+	/** Game iframe associated with the active lobby. */
+	frame;
+
+	/** World descriptor used to configure this operation. */
+	world;
+
+	/** Game configuration rendered by the lobby overlay. */
+	configuration;
+
+	/** Abort controller used to cancel work owned by this view. */
+	abort;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** Element focused before this modal opened. */
+	previousFocus;
+
+	/** Callback that restores the page theme after modal closure. */
+	releaseTheme;
+
+	/** Modal dialog element owned by this view. */
+	dialog;
+
+	/** Document title text or modal heading element. */
+	title;
+
+	/** Button that reopens game settings from the lobby. */
+	settingsButton;
+
+	/** Button that closes the current modal view. */
+	closeButton;
+
+	/** Element displaying the connected homeserver. */
+	server;
+
+	/** Live output element displaying current operation status. */
+	status;
+
+	/** Container for lobby authentication controls. */
+	oauthActions;
+
+	/** Button that begins Matrix OAuth authentication. */
+	oauthButton;
+
+	/** Button that cancels the active OAuth popup flow. */
+	oauthCancelButton;
+
+	/** Container for authenticated session controls. */
+	sessionActions;
+
+	/** Button that signs the current user out of the lobby provider. */
+	logoutButton;
+
+	/** Container for private invitation controls. */
+	linkActions;
+
+	/** Button that creates a private invitation URL. */
+	createLink;
+
+	/** Button that copies the active private invitation URL. */
+	copyLink;
+
+	/** Button that revokes the active private invitation. */
+	cancelLink;
+
+	/** Read-only field containing the active private invitation URL. */
+	linkValue;
+
+	/** Section containing peers, invitations, and lobby chat. */
+	roomView;
+
+	/** Live region containing received lobby chat messages. */
+	chatLog;
+
+	/** Form used to submit a lobby chat message. */
+	chatForm;
+
+	/** Text field used to compose a lobby chat message. */
+	messageInput;
+
+	/** Section displaying incoming game invitations. */
+	incoming;
+
+	/** List element displaying available lobby peers. */
+	peers;
+
+	/** Abort controller for the active OAuth popup flow. */
+	oauthAbort;
+
+	/** Whether an OAuth authentication request is pending. */
+	oauthPending;
+
 
 	/**
 	 * Build the lobby dialog inside the game frame and subscribe to controller events.
@@ -123,7 +227,53 @@ export class LobbyOverlay
 		this.oauthCancelButton = element('button', {type: 'button'}, 'Cancel');
 		this.oauthCancelButton.hidden = true;
 		this.oauthActions.append(this.oauthButton, this.oauthCancelButton);
-		toolbar.append(this.server, this.status, this.oauthActions);
+		this.sessionActions = element('div', {'class': 'phonics-lobby-auth-actions'});
+		this.logoutButton = element('button', {type: 'button'}, 'Sign out');
+		this.sessionActions.append(this.logoutButton);
+		toolbar.append(this.server, this.status, this.oauthActions, this.sessionActions);
+
+		this.linkActions = element(
+			'section'
+			, {class: 'phonics-lobby-auth-actions', 'aria-label': 'Private invitation'}
+		);
+
+		this.createLink = element('button', {type: 'button'}, 'Create invite link');
+		this.copyLink = element('button', {type: 'button'}, 'Copy link');
+		this.cancelLink = element('button', {type: 'button'}, 'Cancel invitation');
+		this.linkValue = element('input', {type: 'text', readonly: '', 'aria-label': 'Private invite link'});
+		this.linkActions.append(this.createLink, this.linkValue, this.copyLink, this.cancelLink);
+		toolbar.append(this.linkActions);
+
+		this.createLink.addEventListener('click', () => this.launcher.open({
+			title: 'Create private game'
+			, submitLabel: 'Create invite link'
+			, onSubmit: async values => { await this.controller.createInviteLink(values); this.open(); }
+		}), {signal: this.signal});
+
+		this.copyLink.addEventListener('click', async () => {
+			try
+			{
+				await navigator.clipboard.writeText(this.linkValue.value);
+				this.status.textContent = 'Invite link copied';
+			}
+			catch
+			{
+				this.linkValue.select();
+				this.status.textContent = 'Copy the selected invite link';
+			}
+		}, {signal: this.signal});
+
+		this.cancelLink.addEventListener(
+			'click'
+			, () => this.controller.cancelInviteLink().catch(error => this.showError(error))
+			, {signal: this.signal}
+		);
+
+		for(const type of ['invitestatus', 'cleanupstatus', 'signalingstatus'])
+		this.controller.addEventListener(type, ({detail}) => {
+			this.render(this.controller.snapshot());
+			this.status.textContent = detail.message ?? detail.reason ?? detail.state ?? 'Connecting';
+		}, {signal: this.signal});
 		this.buildRoom();
 		this.dialog.append(header, toolbar, this.roomView);
 		this.frame.append(this.dialog);
@@ -174,6 +324,12 @@ export class LobbyOverlay
 		}, {signal: this.signal});
 
 		this.oauthButton.addEventListener('click', () => this.signIn(), {signal: this.signal});
+
+		this.logoutButton.addEventListener(
+			'click'
+			, () => this.controller.logout().catch(error => this.showError(error))
+			, {signal: this.signal}
+		);
 
 		this.oauthCancelButton.addEventListener('click', () => {
 			this.oauthAbort?.abort(new Error('Matrix sign-in was cancelled'));
@@ -231,7 +387,7 @@ export class LobbyOverlay
 	 */
 	render(state)
 	{
-		const busy = ['connecting','negotiating','loading','starting'].includes(state.state);
+		const busy = ['connecting','negotiating','loading','starting','signing-out'].includes(state.state);
 
 		const roomReady = ['available','invited','inviting','negotiating','connected','loading','ready','starting']
 			.includes(state.state);
@@ -242,11 +398,27 @@ export class LobbyOverlay
 
 		this.status.textContent = state.state === 'auth-required'
 			? 'Sign-in required'
-			: state.error?.message ?? state.state.replaceAll('-', ' ');
+			: state.state === 'signing-out'
+				? 'Signing out…'
+				: state.error?.message ?? state.state.replaceAll('-', ' ');
 
 		this.oauthActions.hidden = state.state !== 'auth-required' && !this.oauthPending;
 		this.oauthButton.hidden = state.state !== 'auth-required' && !this.oauthPending;
-		this.roomView.hidden = !roomReady;
+		this.sessionActions.hidden = this.controller.provider.guest
+			|| typeof this.controller.provider.logout !== 'function'
+			|| !state.profile;
+
+		this.logoutButton.disabled = state.state !== 'available';
+		this.roomView.hidden = !roomReady || this.controller.provider.guest;
+		const link = state.outgoing?.invitation?.url ?? '';
+		this.linkActions.hidden = typeof this.controller.provider.createInviteLink !== 'function'
+			|| (state.inviteLinkSupport !== 'supported' && !link);
+
+		this.createLink.hidden = this.controller.provider.guest || !['available', 'inviting'].includes(state.state);
+		this.createLink.disabled = this.controller.provider.guest;
+		this.linkValue.value = link;
+		this.linkValue.hidden = this.copyLink.hidden = !link;
+		this.cancelLink.hidden = !link && !this.controller.joinAttempt;
 		this.renderPeers(state);
 		this.renderInvitations(state);
 	}

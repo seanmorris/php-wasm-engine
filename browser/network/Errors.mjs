@@ -1,6 +1,26 @@
-/** Failure with a stable category, declaring resource, and dependency chain. */
+/**
+ * Failure with a stable category, declaring resource, and dependency chain.
+ *
+ * The error keeps machine-readable failure codes and dependency context alongside the human message so UI
+ * and recovery code can respond without parsing text.
+ */
 export class NetworkError extends Error
 {
+	/** Stable JavaScript error class name. */
+	name;
+
+	/** Machine-readable network error category. */
+	code;
+
+	/** Resource or package that declared the failed operation. */
+	declaring;
+
+	/** Ordered dependency chain that led to the failure. */
+	chain;
+
+	/** Additional immutable context associated with the failure. */
+	details;
+
 
 	/**
 	 * Create a categorized failure with frozen declaration context.

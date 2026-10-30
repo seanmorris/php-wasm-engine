@@ -18,9 +18,53 @@ const originPolicy = values => {
 	};
 };
 
-/** Acquire, verify, and bind world-declared resource slots without interpreting their format. */
+/**
+ * Acquire, verify, and bind world-declared resource slots without interpreting their format.
+ *
+ * Peers exchange requirements and offers, resolve local or remote candidates, verify content, mount accepted
+ * bytes, and report readiness without parsing WADs or worlds.
+ */
 export class ResourceNegotiator
 {
+	/** World descriptor used to configure this operation. */
+	world;
+
+	/** Cancellable resource scope owned by this operation. */
+	scope;
+
+	/** Abort signal that cancels asynchronous work owned here. */
+	signal;
+
+	/** Validated resource acquisition policy. */
+	policy;
+
+	/** Local host or guest role used during resource negotiation. */
+	role;
+
+	/** Callback receiving resource-resolution progress updates. */
+	onProgress;
+
+	/** Resource inspector functions indexed by inspector name. */
+	inspectors;
+
+	/** Verified resources indexed by requirement slot. */
+	resolved;
+
+	/** Temporary object URLs owned and revoked by the negotiator. */
+	objectUrls;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
+	/** Whether resource acquisition accepts every allowed URL origin. */
+	allowAnyOrigin;
+
+	/** Explicit URL origins allowed by resource policy. */
+	origins;
+
+	/** Maximum resource or queued-packet byte count. */
+	maximumBytes;
+
 
 	/**
 	 * Bind negotiation to one normalized world and a scope of the shared resource store.

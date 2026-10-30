@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Host or peer authority assignment for one replicated entity/component. */
+/**
+ * Host or peer authority assignment for one replicated entity/component.
+ *
+ * The value represents either host authority or one validated peer identity and is serialized explicitly in
+ * replication policy data.
+ */
 final class AuthorityOwner implements \JsonSerializable
 {
 
@@ -13,7 +18,12 @@ final class AuthorityOwner implements \JsonSerializable
 	 * @param ?PeerId $peer Owning peer for peer authority, or null for the host.
 	 * @return void Stores the assignment.
 	 */
-	private function __construct(private string $kind, private ?PeerId $peer = null) {}
+	private function __construct(
+		/** Authority kind: host or peer. */
+		private string $kind
+		, /** Owning peer for peer authority, or null for the host. */
+		private ?PeerId $peer = null
+	) {}
 
 	/**
 	 * Create an authority assignment owned by the host.
@@ -33,7 +43,7 @@ final class AuthorityOwner implements \JsonSerializable
 	/**
 	 * Restore an authority assignment from transport-safe fields.
 	 *
-	 * @param array $value Scalar value or serialized fields to validate.
+	 * @param array $value Transport record naming host authority or one owning peer.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self
@@ -63,7 +73,7 @@ final class AuthorityOwner implements \JsonSerializable
 	/**
 	 * Compare this authority assignment with another value of the same kind.
 	 *
-	 * @param self $other Validated other used by this authority assignment.
+	 * @param self $other Host or peer authority assignment to compare.
 	 * @return bool True when both values represent the same identity.
 	 */
 	public function equals(self $other): bool

@@ -4,7 +4,12 @@ namespace Phonics\Ui;
 
 use Phonics\Render\BitmapFont;
 
-/** A non-solid, map-authored line of bitmap text in world coordinates. */
+/**
+ * A non-solid, map-authored line of bitmap text in world coordinates.
+ *
+ * The component retains text, alignment, color, width, and map placement as presentation data without
+ * participating in terrain collision.
+ */
 final class TextActor
 {
 
@@ -23,15 +28,24 @@ final class TextActor
 	 * @return void Validates and retains renderer-independent world text state.
 	 */
 	public function __construct(
+		/** Text content to display. */
 		public string $text
-		, public float $x
-		, public float $y
-		, public float $width = INF
-		, public float $scale = 1
-		, public array $tint = [1, 1, 1, 1]
-		, public string $align = 'left'
-		, public float $opacity = 1
-		, public ?int $sourceId = null
+		, /** World X coordinate in pixels. */
+		public float $x
+		, /** World Y coordinate in pixels. */
+		public float $y
+		, /** Width in pixels. */
+		public float $width = INF
+		, /** Positive text scale. */
+		public float $scale = 1
+		, /** RGBA multiplier for the font glyphs. */
+		public array $tint = [1, 1, 1, 1]
+		, /** Horizontal text alignment. */
+		public string $align = 'left'
+		, /** Layer opacity from zero to one. */
+		public float $opacity = 1
+		, /** Original Tiled object ID for diagnostics and editing, if any. */
+		public ?int $sourceId = null
 	){
 		BitmapFont::characters($text);
 

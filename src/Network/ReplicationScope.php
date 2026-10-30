@@ -2,15 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Stable lifetime boundary for replicated entities, normally session or source:scope. */
+/**
+ * Stable lifetime boundary for replicated entities, normally session or source:scope.
+ *
+ * Scopes group identities and cleanup across map, source, or session transitions without overloading prefab
+ * or component names.
+ */
 final class ReplicationScope implements \JsonSerializable
 {
+	/** Canonical session or source-scope identifier. */
 	private string $value;
 
 	/**
 	 * Create and validate a replication scope.
 	 *
-	 * @param string $value Scalar value or serialized fields to validate.
+	 * @param string $value Candidate session or source-scope identifier.
 	 * @return void Stores the scope after validating its spelling.
 	 */
 	public function __construct(string $value)
@@ -31,7 +37,7 @@ final class ReplicationScope implements \JsonSerializable
 	/**
 	 * Compare this replication scope with another value of the same kind.
 	 *
-	 * @param self $other Validated other used by this replication scope.
+	 * @param self $other Replication scope identifier to compare.
 	 * @return bool True when both values represent the same identity.
 	 */
 	public function equals(self $other): bool { return $this->value === $other->value; }

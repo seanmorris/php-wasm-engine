@@ -2,12 +2,25 @@
 declare(strict_types=1);
 namespace Phonics\Tiled;
 
-/** Loaded Tiled map with mutable placement/layers and shared normalized tileset definitions. */
+/**
+ * Loaded Tiled map with mutable placement/layers and shared normalized tileset definitions.
+ *
+ * The model indexes global tile IDs, exposes flattened layers, and carries placement separately so one
+ * loaded map can be positioned by a world manifest.
+ */
 final class TileMap
 {
-	/** @var list<Layer> Flattened display and object layers in painter order. */
+	/**
+ * Flattened runtime layers in authored painter order.
+ *
+ * @var list<Layer> Flattened display and object layers in painter order.
+ */
 	public array $layers = [];
-	/** @var list<array<string,mixed>> Normalized tilesets sorted by first global tile ID. */
+	/**
+ * Resolved tileset definitions in first-global-ID order.
+ *
+ * @var list<array<string,mixed>> Normalized tilesets sorted by first global tile ID.
+ */
 	public array $tilesets = [];
 	/** Mutable horizontal world placement in pixels. */
 	public float $x = 0;
@@ -41,7 +54,12 @@ final class TileMap
 	 * orientation/bounds.
 	 * @return void Initializes projection and empty flattened layer and tileset collections.
 	 */
-	public function __construct(public string $path, public array $data)
+	public function __construct(
+		/** Map source path used to resolve dependent assets. */
+		public string $path
+		, /** Decoded Tiled map containing tile dimensions and optional orientation/bounds. */
+		public array $data
+	)
 	{
 		$this->identity = $path;
 

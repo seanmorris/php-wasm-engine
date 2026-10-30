@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Immutable host/guest identity, player slots, and game-owned match settings. */
+/**
+ * Immutable host/guest identity, player slots, and game-owned match settings.
+ *
+ * The context is installed from the browser handshake and gives simulation code one typed source for role,
+ * identities, slots, and negotiated settings.
+ */
 final class MatchContext implements \JsonSerializable
 {
 
@@ -19,7 +24,7 @@ final class MatchContext implements \JsonSerializable
 	 * @return void Stores the match identity after validating the role, distinct slots, digest and descriptor.
 	 */
 	public function __construct(
-		/** Local host or guest role. */
+		/** Local match role, host or guest. */
 		public string $role
 		, /** Player slot controlled by this runtime. */
 		public PlayerSlot $localSlot
@@ -29,9 +34,9 @@ final class MatchContext implements \JsonSerializable
 		public PeerId $localPeer
 		, /** Opaque identity of the connected participant. */
 		public PeerId $remotePeer
-		, /** Integrity digest of the match descriptor. */
+		, /** Integrity digest of the negotiated match descriptor. */
 		public string $descriptorDigest
-		, /** Canonical negotiated match descriptor. */
+		, /** Canonical game, content, settings, and player declaration. */
 		public array $descriptor
 	){
 		if(!in_array($role, ['host','guest'], true)) throw new \InvalidArgumentException("Invalid match role $role");
@@ -47,7 +52,7 @@ final class MatchContext implements \JsonSerializable
 	/**
 	 * Restore a match context from transport-safe fields.
 	 *
-	 * @param array $value Scalar value or serialized fields to validate.
+	 * @param array $value Negotiated session, peer, slot, host, and settings transport fields.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self

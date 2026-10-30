@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** SDL standardized physical controller buttons and axes, independent of logical aliases. */
+/**
+ * SDL standardized physical controller buttons and axes, independent of logical aliases.
+ *
+ * The constants describe physical positions only; binding profiles decide which logical action a button,
+ * trigger, or stick axis controls.
+ */
 final class Pad
 {
 	/** Standardized A or bottom face-button index. */

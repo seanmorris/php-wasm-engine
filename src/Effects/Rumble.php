@@ -2,10 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Effects;
 
-/** Device-neutral queued dual-motor haptics. */
+/**
+ * Device-neutral queued dual-motor haptics.
+ *
+ * Callers enqueue immediate or delayed motor envelopes, then sample the strongest active contribution for
+ * the current frame.
+ */
 class Rumble
 {
-	/** @var list<array{remaining:float,duration:int,strong:float,weak:float}> */
+	/**
+ * Active controller-rumble envelopes in insertion order.
+ *
+ * @var list<array{remaining:float,duration:int,strong:float,weak:float}>
+ */
 	private array $pulses = [];
 
 	/**

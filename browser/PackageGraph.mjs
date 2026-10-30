@@ -50,9 +50,44 @@ export function packagePath(path)
 	return path;
 }
 
-/** Resolve imports and the complete executable graph before activating any code. */
+/**
+ * Resolve imports and the complete executable graph before activating any code.
+ *
+ * The graph validates package contracts, resolves dependency order, verifies declared files, and exposes
+ * canonical exports and bootstraps for one application session.
+ */
 export class PackageGraph
 {
+	/** Cancellable resource scope owned by this operation. */
+	scope;
+
+	/** Origins from which executable package code may be loaded. */
+	codeOrigins;
+
+	/** PHP version available to package requirement checks. */
+	phpVersion;
+
+	/** PHP extensions available to package requirement checks. */
+	extensions;
+
+	/** Package records participating in the current application. */
+	packages;
+
+	/** Resolved package aliases indexed by alias name. */
+	aliases;
+
+	/** Package namespace prefixes indexed for autoloading. */
+	namespaces;
+
+	/** Packages in resolved dependency activation order. */
+	order;
+
+	/** Package activation stack used to detect dependency cycles. */
+	active;
+
+	/** Package names whose activation has completed. */
+	activated;
+
 
 	/**
 	 * Create an empty graph bound to one cancellable resource scope.
@@ -179,6 +214,31 @@ export class PackageGraph
 			this.packages.delete(url);
 			throw new Error(`${[...chain, url].join(' -> ')}: ${error.message}`, {cause: error});
 		}
+	}
+
+	/**
+	 * Resolve application dependencies without adding them to the world's import aliases.
+	 * @param {string|URL} reference Executable application's manifest reference.
+	 * @returns {Promise<object>} Application-scoped package record for resolving its own configuration.
+	 * @throws {Error} For unloadable or incompatible application dependencies.
+	 */
+	async application(reference)
+	{
+		const record = await this.manifest(reference);
+		const dependencies = new Map(record.dependencies);
+
+		for(const [alias, declaration] of Object.entries(record.data.application?.dependencies ?? {}))
+		{
+			const dependency = typeof declaration === 'string' ? {url: declaration} : declaration;
+			const target = await this.manifest(new URL(dependency.url, record.url));
+
+			if(dependency.version && !satisfies(target.data.version, dependency.version))
+				throw new Error(`Incompatible application dependency ${alias} in ${record.url}`);
+
+			dependencies.set(alias, target);
+		}
+
+		return {...record, dependencies};
 	}
 
 	/**

@@ -4,7 +4,12 @@ namespace Phonics\Render;
 use Phonics\Tiled\Layer;
 use Phonics\Tiled\TileMap;
 
-/** Camera-relative image layout, independent of SDL and the GPU. */
+/**
+ * Camera-relative image layout, independent of SDL and the GPU.
+ *
+ * The pure layout model computes anchored, repeated image rectangles from camera motion for use by any
+ * compatible renderer.
+ */
 final class Parallax
 {
 

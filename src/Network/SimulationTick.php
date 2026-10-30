@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Fixed-step simulation position encoded as an unsigned protocol counter. */
+/**
+ * Fixed-step simulation position encoded as an unsigned protocol counter.
+ *
+ * The typed counter is shared by commands, snapshots, and reliable events so temporal comparisons cannot
+ * silently mix units.
+ */
 final class SimulationTick extends UnsignedValue
 {
 
@@ -19,7 +24,7 @@ final class SimulationTick extends UnsignedValue
 	/**
 	 * Measure signed wrapped distance from another simulation tick.
 	 *
-	 * @param self $other Validated other used by this simulation tick.
+	 * @param self $other Earlier or later tick from which wrapped distance is measured.
 	 * @return int Signed wrapped tick distance.
 	 */
 	public function distanceFrom(self $other): int

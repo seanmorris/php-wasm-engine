@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Ui;
 
-/** Frame-rate-independent, non-overshooting motion for responsive UI positions. */
+/**
+ * Frame-rate-independent, non-overshooting motion for responsive UI positions.
+ *
+ * The helpers converge predictably across frame rates without overshoot, making them suitable for menu
+ * cursors, panels, and other presentation state.
+ */
 final class Easing
 {
 

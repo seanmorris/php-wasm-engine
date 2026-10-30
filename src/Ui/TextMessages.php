@@ -4,12 +4,23 @@ namespace Phonics\Ui;
 
 use Phonics\Render\BitmapFont;
 
-/** Transient text state deliberately independent of DOM and GPU resources. */
+/**
+ * Transient text state deliberately independent of DOM and GPU resources.
+ *
+ * It owns timed center messages, dialogs, focus prompts, and badges as observable state that renderers may
+ * present without triggering DOM mutations.
+ */
 final class TextMessages
 {
-	/** @var array<string,mixed>|null */
+	/**
+ * Active center, dialog, focus, and demo overlay message records.
+ *
+ * @var array<string,mixed>|null
+ */
 	private ?array $center = null, $dialog = null, $focus = null, $demo = null;
+	/** Current message timeline in seconds. */
 	private float $time = 0;
+	/** Whether the game currently owns keyboard focus. */
 	private ?bool $focused = null;
 
 	/**
@@ -171,7 +182,8 @@ final class TextMessages
 		$previous = $this->focused;
 		$this->focused = $focused;
 
-		if($previous === null)
+		// Focus is sampled every frame; only transitions may restart the dismissal timer.
+		if($previous === null || $previous === $focused)
 		{
 			return;
 		}
@@ -216,7 +228,7 @@ final class TextMessages
 	 * @param string $text Text content to display.
 	 * @param array $color Text or panel color.
 	 * @param float|null $duration Duration in seconds.
-	 * @return array<string,mixed> Result of this operation.
+	 * @return array<string,mixed> Validated internal message with normalized color and expiry time.
 	 */
 	private function message(string $text, array $color, ?float $duration): array
 	{
@@ -251,7 +263,7 @@ final class TextMessages
 	 * Return the public fields of one retained message.
 	 *
 	 * @param array|null $message Message state to inspect or render.
-	 * @return array<string,mixed>|null Result of this operation.
+	 * @return array<string,mixed>|null Public message fields without the internal expiry timestamp.
 	 */
 	private function snapshotMessage(?array $message): ?array
 	{

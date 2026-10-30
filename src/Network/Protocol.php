@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Binary network framing compatible with the browser protocol implementation. */
+/**
+ * Binary network framing compatible with the browser protocol implementation.
+ *
+ * Encoding and decoding enforce magic bytes, versions, bounds, message families, and payload lengths before
+ * packets enter replication code.
+ */
 final class Protocol
 {
 	/**
@@ -25,11 +30,11 @@ final class Protocol
 	/**
 	 * Create and validate a binary protocol codec.
 	 *
-	 * @param int $maximumBytes Validated maximum bytes used by this binary protocol codec.
+	 * @param int $maximumBytes Largest encoded payload accepted by this codec, in bytes.
 	 * @return void Rejects a nonpositive maximum size.
 	 */
 	public function __construct(
-		/** Largest payload accepted by the binary codec. */
+		/** Largest encoded payload accepted by this codec, in bytes. */
 		public int $maximumBytes = 1048576
 	){
 		if($maximumBytes < 1) throw new \OutOfRangeException('Protocol maximum bytes must be positive');

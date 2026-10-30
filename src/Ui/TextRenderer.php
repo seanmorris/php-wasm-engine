@@ -11,15 +11,31 @@ use Phonics\Render\RectRenderer;
 use Phonics\Render\Sprite;
 use Phonics\Render\SpriteRenderer;
 
-/** Draw map text and transient message overlays from the framework's shared bitmap font. */
+/**
+ * Draw map text and transient message overlays from the framework's shared bitmap font.
+ *
+ * The renderer shares font and atlas resources with menus while batching camera-space actors separately from
+ * screen-space transient overlays.
+ */
 final class TextRenderer
 {
+	/** Sprite batch renderer used for glyph quads. */
 	private SpriteRenderer $sprites;
+	/** Rectangle renderer used for text backgrounds and decorations. */
 	private RectRenderer $rects;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
-	/** @var array<string,array{sprites:list<Sprite>,width:float,height:float}> */
+	/**
+ * Cached glyph layouts indexed by text and style identity.
+ *
+ * @var array<string,array{sprites:list<Sprite>,width:float,height:float}>
+ */
 	private array $layouts = [];
-	/** @var array{worldActors:int,worldGlyphs:int,overlayGlyphs:int} Latest render counts. */
+	/**
+ * Latest world and overlay text-rendering counters.
+ *
+ * @var array{worldActors:int,worldGlyphs:int,overlayGlyphs:int} Latest render counts.
+ */
 	public array $snapshot = ['worldActors' => 0, 'worldGlyphs' => 0, 'overlayGlyphs' => 0];
 
 	/**
@@ -29,7 +45,11 @@ final class TextRenderer
 	 * @param Atlas $atlas Shared texture atlas; ownership stays with its caller.
 	 * @return void Creates independent sprite and rectangle batch renderers over the borrowed atlas.
 	 */
-	public function __construct(private BitmapFont $font, Atlas $atlas)
+	public function __construct(
+		/** Bitmap font used to lay out text. */
+		private BitmapFont $font
+		, Atlas $atlas
+	)
 	{
 		$this->sprites = new SpriteRenderer($atlas);
 		$this->rects = new RectRenderer;
@@ -241,7 +261,7 @@ final class TextRenderer
 	 *
 	 * @param string $text Text content to display.
 	 * @param float $scale Positive text scale.
-	 * @param float $wrap Wrap value used by this operation.
+	 * @param float $wrap Maximum line width in pixels, or infinity to disable wrapping.
 	 * @param array $color Text or panel color.
 	 * @param string $align Horizontal text alignment.
 	 * @return array{sprites:list<Sprite>,width:float,height:float} Cached origin-relative glyph layout.
@@ -263,16 +283,16 @@ final class TextRenderer
 	/**
 	 * Append glyph instances to the current render batch.
 	 *
-	 * @param array $target Target value used by this operation.
+	 * @param list<Sprite> $target Output sprite batch that receives cloned, positioned glyphs.
 	 * @param string $text Text content to display.
 	 * @param float $x World X coordinate in pixels.
 	 * @param float $y World Y coordinate in pixels.
 	 * @param float $scale Positive text scale.
 	 * @param array $color Text or panel color.
-	 * @param float $wrap Wrap value used by this operation.
+	 * @param float $wrap Maximum line width in pixels, or infinity to disable wrapping.
 	 * @param string $align Horizontal text alignment.
-	 * @param float|null $alignWidth Align Width value used by this operation.
-	 * @return array{sprites:list<Sprite>,width:float,height:float} Result of this operation.
+	 * @param float|null $alignWidth Optional alignment box width in pixels.
+	 * @return array{sprites:list<Sprite>,width:float,height:float} Glyph layout appended to the target batch.
 	 */
 	private function append(
 		array &$target
@@ -301,17 +321,17 @@ final class TextRenderer
 	/**
 	 * Add a compact dark backing rectangle and its text to an overlay batch.
 	 *
-	 * @param array $boxes Boxes value used by this operation.
-	 * @param array $glyphs Glyphs value used by this operation.
+	 * @param list<array> $boxes Output rectangle batch that receives the panel background.
+	 * @param list<Sprite> $glyphs Output sprite batch that receives panel text glyphs.
 	 * @param string $text Text content to display.
 	 * @param float $x World X coordinate in pixels.
 	 * @param float $y World Y coordinate in pixels.
 	 * @param float $scale Positive text scale.
 	 * @param array $color Text or panel color.
-	 * @param float $pad Pad value used by this operation.
-	 * @param float $wrap Wrap value used by this operation.
+	 * @param float $pad Background padding around the laid-out text in pixels.
+	 * @param float $wrap Maximum line width in pixels, or infinity to disable wrapping.
 	 * @param string $align Horizontal text alignment.
-	 * @return void Completes the operation.
+	 * @return void Appends one background rectangle and its positioned glyph sprites.
 	 */
 	private function panelText(
 		array &$boxes

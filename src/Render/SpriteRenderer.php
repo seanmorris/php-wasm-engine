@@ -4,11 +4,19 @@ namespace Phonics\Render;
 
 use Phonics\Ecs\Registry;
 
-/** Batch sprites and layered ECS sprite components through a shared Atlas. */
+/**
+ * Batch sprites and layered ECS sprite components through a shared Atlas.
+ *
+ * It resolves animations and entity transforms into instanced atlas records, preserving stable layer order
+ * with minimal draw calls.
+ */
 final class SpriteRenderer
 {
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
+	/** Restorable vertex-array and sprite instance-buffer handles. */
 	private array $vao = [],$buffers = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** Instanced draw calls submitted by the latest render operation. */
 	public int $draws = 0;
@@ -21,7 +29,10 @@ final class SpriteRenderer
 	 * @param Atlas $atlas Shared atlas containing every sprite GID supplied to render.
 	 * @return void Allocates sprite GPU resources without taking ownership of atlas textures.
 	 */
-	public function __construct(public Atlas $atlas)
+	public function __construct(
+		/** Shared atlas containing every sprite GID supplied to render. */
+		public Atlas $atlas
+	)
 	{
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/sprites.vert')

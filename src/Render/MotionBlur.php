@@ -2,9 +2,15 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Measure camera travel for a frame-rate-independent directional motion-blur response. */
+/**
+ * Measure camera travel for a frame-rate-independent directional motion-blur response.
+ *
+ * It derives direction and strength from camera displacement, clamps stalls and teleports, and retains only
+ * the history required by the blur pass.
+ */
 final class MotionBlur
 {
+	/** Previous camera position and zoom used to derive blur motion. */
 	private ?float $x = null, $y = null, $zoom = null;
 
 	/**

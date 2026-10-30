@@ -8,18 +8,31 @@ use Phonics\Input\Key;
 use Phonics\Input\Pad;
 use Phonics\Input\Source;
 
-/** Reusable gameplay binding pages with a neutral-before-capture state machine. */
+/**
+ * Reusable gameplay binding pages with a neutral-before-capture state machine.
+ *
+ * It builds device-specific pages, waits for the activating input to return neutral, resolves conflicts
+ * explicitly, and delegates persistence to the application.
+ */
 class BindingMenu
 {
 	/** Current input-label theme used for human-readable source names. */
 	public string $theme = 'keyboard';
+	/** Physical sources captured for the pending binding edit. */
 	private ?array $capture = null;
+	/** Whether binding capture is armed after activation returned to neutral. */
 	private bool $armed = false;
+	/** Current binding conflict or capture message. */
 	private string $message = '';
+	/** Callback that persists accepted binding changes. */
 	private \Closure $save;
+	/** Callback that restores device-specific default bindings. */
 	private \Closure $reset;
+	/** Logical action codes exposed on this binding page. */
 	private \Closure $allowed;
+	/** Additional rows appended to the binding page. */
 	private \Closure $extras;
+	/** Callback that receives binding-menu status messages. */
 	private \Closure $status;
 
 	/**
@@ -35,8 +48,10 @@ class BindingMenu
 	 * @return void Stores the profile, action rows and callbacks, substituting neutral defaults for omitted hooks.
 	 */
 	public function __construct(
+		/** Mutable gameplay binding profile edited by these pages. */
 		private Bindings $bindings
-		, private array $actions
+		, /** Named code, direction and label rows. */
+		private array $actions
 		, callable $save
 		, callable $reset
 		, ?callable $allowed = null

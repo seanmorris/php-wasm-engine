@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** One validated binary protocol packet plus its WebRTC delivery class. */
+/**
+ * One validated binary protocol packet plus its WebRTC delivery class.
+ *
+ * The value keeps validated header metadata and payload bytes together after decoding, including the
+ * delivery channel required by the transport.
+ */
 final class Packet
 {
 
@@ -23,27 +28,27 @@ final class Packet
 	 * @return void Stores the packet fields after validating the channel and message family.
 	 */
 	public function __construct(
-		/** WebRTC delivery class. */
+		/** WebRTC delivery class, either control or realtime. */
 		public string $channel
-		, /** Stable message-family number. */
+		, /** Stable message-family number for the payload. */
 		public int $family
-		, /** Protocol header flags. */
+		, /** Protocol bit flags carried in the packet header. */
 		public int $flags
-		, /** Numeric protocol session identifier. */
+		, /** Numeric session identifier carried in the packet header. */
 		public int $session
-		, /** Numeric packet peer identifier or opaque prediction peer. */
+		, /** Session peer associated with authority or input ownership. */
 		public int $peer
-		, /** Monotonic command or snapshot sequence. */
+		, /** Command or snapshot sequence used as a boundary. */
 		public int $sequence
-		, /** Simulation tick represented by the record. */
+		, /** Simulation tick associated with the command, event, or snapshot. */
 		public SimulationTick $tick
-		, /** Newest acknowledged packet sequence. */
+		, /** Newest received packet sequence acknowledged by this packet. */
 		public int $ack
-		, /** Acknowledgement bit window. */
+		, /** Bit window acknowledging earlier packet sequences. */
 		public int $ackBits
-		, /** Payload schema version. */
+		, /** Stable schema identifier or payload schema version. */
 		public int $schema
-		, /** Validated JSON-safe payload fields. */
+		, /** Validated scalar data carried by the message or component. */
 		public array $payload
 	){
 		if(!in_array($channel, ['control','realtime'], true))

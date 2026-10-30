@@ -8,12 +8,21 @@ use Phonics\Render\Camera;
 use Phonics\Render\RectRenderer;
 use Phonics\Render\SpriteRenderer;
 
-/** Bitmap card headings, text, prompts, and file progress over an optional scene backdrop. */
+/**
+ * Bitmap card headings, text, prompts, and file progress over an optional scene backdrop.
+ *
+ * It converts card content and progress into shared bitmap-font batches using consistent logical alignment
+ * over a game-supplied backdrop.
+ */
 final class CardRenderer
 {
 	/** Font glyph atlas, either owned here or borrowed from the caller. */
 	public Atlas $atlas;
-	/** @var array<string,mixed> Mutable card typography, spacing, color, and panel settings. */
+	/**
+ * Mutable card typography, color, alignment, and backdrop style.
+ *
+ * @var array<string,mixed> Mutable card typography, spacing, color, and panel settings.
+ */
 	public array $style = [
 		'scale' => 2
 		, 'align' => 'center'
@@ -22,10 +31,15 @@ final class CardRenderer
 		, 'backdropDim' => .25
 	];
 
+	/** Sprite renderer used for card glyph batches. */
 	private SpriteRenderer $sprites;
+	/** Rectangle renderer used for card backdrops and rules. */
 	private RectRenderer $rects;
+	/** Whether this renderer owns and must close its atlas. */
 	private bool $ownsAtlas;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Current and next-frame cached text layouts. */
 	private array $cache = [], $nextCache = [];
 
 	/**
@@ -35,7 +49,11 @@ final class CardRenderer
 	 * @param Atlas|null $atlas Matching font atlas to borrow; null creates an owned atlas.
 	 * @return void Allocates graphics; a borrowed atlas must outlive this renderer.
 	 */
-	public function __construct(public BitmapFont $font, ?Atlas $atlas = null)
+	public function __construct(
+		/** Annotated font and themed input symbols used by the cards. */
+		public BitmapFont $font
+		, ?Atlas $atlas = null
+	)
 	{
 		$this->ownsAtlas = $atlas === null;
 		$this->atlas = $atlas ?? new Atlas($font->map);

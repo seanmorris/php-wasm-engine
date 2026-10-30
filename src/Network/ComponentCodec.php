@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Explicit, game-registered component serializer; arbitrary object reflection is forbidden. */
+/**
+ * Explicit, game-registered component serializer; arbitrary object reflection is forbidden.
+ *
+ * Implementations define their schema, version, component class, policy, and validating conversion in both
+ * transport directions.
+ */
 interface ComponentCodec
 {
 

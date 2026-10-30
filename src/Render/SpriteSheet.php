@@ -4,12 +4,21 @@ namespace Phonics\Render;
 use Phonics\Tiled\Loader;
 use Phonics\Tiled\TileMap;
 
-/** Named animation facade over one annotated external Tiled tileset. */
+/**
+ * Named animation facade over one annotated external Tiled tileset.
+ *
+ * Callers request semantic animation names while the sheet handles tile metadata, timing, anchors, and
+ * construction of atlas-backed sprites.
+ */
 final class SpriteSheet
 {
 	/** Synthetic single-tileset map used by Atlas and Sprite frame lookup. */
 	public TileMap $map;
-	/** @var array<string,int> Animation names mapped to their first global tile IDs. */
+	/**
+ * Authored animation definitions indexed by semantic name.
+ *
+ * @var array<string,int> Animation names mapped to their first global tile IDs.
+ */
 	public array $animations = [];
 
 	/**

@@ -6,11 +6,21 @@ use Phonics\Ecs\Registry;
 use Phonics\Tiled\Loader;
 use Phonics\Tiled\TileMap;
 
-/** Promote Tiled TextActor objects into non-colliding world text ECS entities. */
+/**
+ * Promote Tiled TextActor objects into non-colliding world text ECS entities.
+ *
+ * The system recognizes authored text objects, constructs components through the registry, and reports
+ * whether a scope supplied any usable text.
+ */
 final class TextActors
 {
-	/** @var list<int> Entity IDs allocated from the level's object layers. */
+	/**
+ * Text actor entity IDs owned by each active content scope.
+ *
+ * @var list<int> Entity IDs allocated from the level's object layers.
+ */
 	private array $entities = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -22,7 +32,11 @@ final class TextActors
 	 * @param TileMap $map Loaded Tiled map defining this stage.
 	 * @return void Creates entities immediately and retains their IDs for level cleanup.
 	 */
-	public function __construct(private Registry $registry, TileMap $map)
+	public function __construct(
+		/** Entity registry to update. */
+		private Registry $registry
+		, TileMap $map
+	)
 	{
 		foreach($map->layers as $layer)
 		{

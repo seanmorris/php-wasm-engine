@@ -1,6 +1,35 @@
-/** Lazy, failure-tolerant Web Audio playback for package-local effects. */
+/**
+ * Lazy, failure-tolerant Web Audio playback for package-local effects.
+ *
+ * Samples decode on demand, share an output graph, honor mute and volume state, and fail softly when browser
+ * audio is unavailable or still locked.
+ */
 export class SamplePlayer
 {
+	/** PHP-Wasm module exposing decoded sample playback. */
+	module;
+
+	/** Session asset resolver used to load audio samples. */
+	assets;
+
+	/** Base package URL used to resolve sample assets. */
+	packageUrl;
+
+	/** Whether audio output is currently muted. */
+	muted;
+
+	/** Factory used to create the browser audio context. */
+	contextFactory;
+
+	/** Lazily created Web Audio context. */
+	context;
+
+	/** Decoded audio samples cached by canonical reference. */
+	samples;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
 
 	/**
 	 * Create a lazy sample cache for assets mounted in the PHP filesystem.

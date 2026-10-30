@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Immutable authoritative full or baseline-relative ECS snapshot. */
+/**
+ * Immutable authoritative full or baseline-relative ECS snapshot.
+ *
+ * The record carries sequence, tick, optional baseline, entity changes, and removals after validating their
+ * transport-safe shape.
+ */
 final class WorldSnapshot implements \JsonSerializable
 {
 
@@ -12,23 +17,23 @@ final class WorldSnapshot implements \JsonSerializable
 	 * @param SnapshotSequence $sequence Command or snapshot sequence used as a boundary.
 	 * @param SimulationTick $tick Simulation tick associated with the command, event, or snapshot.
 	 * @param ?SnapshotSequence $baseline Prior snapshot sequence used to encode a delta, or null for a full snapshot.
-	 * @param array<int,array<string,mixed>> $entities Bidirectional network/local entity identity map.
-	 * @param list<int> $despawned Validated despawned used by this world snapshot.
+	 * @param array<int,array<string,mixed>> $entities Replicated records keyed by positive network entity ID.
+	 * @param list<int> $despawned Network entity IDs removed by this snapshot.
 	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgements.
 	 * @return void Stores the snapshot after validating entity IDs, despawns, acknowledgements and JSON encoding.
 	 */
 	public function __construct(
-		/** Monotonic command or snapshot sequence. */
+		/** Command or snapshot sequence used as a boundary. */
 		public SnapshotSequence $sequence
-		, /** Simulation tick represented by the record. */
+		, /** Simulation tick associated with the command, event, or snapshot. */
 		public SimulationTick $tick
-		, /** Baseline snapshot sequence or null for a full snapshot. */
+		, /** Prior snapshot sequence used to encode a delta, or null for a full snapshot. */
 		public ?SnapshotSequence $baseline
-		, /** Network and local entity identity map. */
+		, /** Replicated records keyed by positive network entity ID. */
 		public array $entities
-		, /** Network IDs removed since the baseline. */
+		, /** Network entity IDs removed by this snapshot. */
 		public array $despawned = []
-		, /** Last accepted command sequence per player slot. */
+		, /** Player-slot keyed command acknowledgements. */
 		public array $acknowledged = []
 	){
 		foreach($entities as $id => $record)
@@ -49,7 +54,7 @@ final class WorldSnapshot implements \JsonSerializable
 	/**
 	 * Restore a world snapshot from transport-safe fields.
 	 *
-	 * @param array $value Scalar value or serialized fields to validate.
+	 * @param array $value Transport fields for sequence, tick, baseline, entities, despawns, and acknowledgements.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self

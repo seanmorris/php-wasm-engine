@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Ecs;
 
-/** Immutable-by-convention boolean expression over ECS component types. */
+/**
+ * Immutable-by-convention boolean expression over ECS component types.
+ *
+ * Queries compose all, any, and negated terms without binding themselves to a registry, so the registry can
+ * cache candidate snapshots by expression.
+ */
 final class Query
 {
 
@@ -13,7 +18,12 @@ final class Query
 	 * @param list<Query|class-string> $terms Component types or nested predicates to combine.
 	 * @return void Creates an immutable-by-convention query description.
 	 */
-	private function __construct(public string $operation, public array $terms) {}
+	private function __construct(
+		/** Boolean operation: all, any, or not. */
+		public string $operation
+		, /** Component types or nested predicates to combine. */
+		public array $terms
+	) {}
 
 	/**
 	 * Build a predicate requiring every supplied term to match.

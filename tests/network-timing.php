@@ -398,4 +398,30 @@ verifyNetworkTiming(
 	, 'normal direct-peer tick lead remains stable without repeated clock rebases'
 );
 
+// Recovery pumps packets while fixed simulation and input sampling remain paused.
+$leadHostSession->beginRecovery('host-recovery');
+$leadGuestSession->beginRecovery('guest-recovery');
+$leadHostWorld->get($leadHostIds[2], NetworkTimingPosition::class)->x = 42.0;
+$leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x = 999.0;
+$pausedTick = $leadHostClock->current()->value();
+verifyNetworkTiming(!$leadGuestSession->recover(false), 'disconnected guest waits without resuming');
+verifyNetworkTiming($leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x === 999.0, 'stale pre-recovery snapshots cannot correct the owner');
+$hostRecovered = $guestRecovered = false;
+for($step = 0; $step < 10; $step++)
+{
+	$leadWire->advance();
+	$hostRecovered = $leadHostSession->recover(true);
+	$guestRecovered = $leadGuestSession->recover(true);
+	if($hostRecovered && $guestRecovered) break;
+}
+verifyNetworkTiming($hostRecovered && $guestRecovered, 'both peers pass the full-state recovery barrier');
+verifyNetworkTiming($leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x === 42.0, 'recovery deliberately corrects the local predicted owner');
+verifyNetworkTiming($leadGuestEntities->local(new NetworkEntityId(2)) === $leadGuestIds[2], 'recovery preserves the existing entity ID');
+verifyNetworkTiming($leadHostClock->current()->value() === $pausedTick && $leadGuestClock->current()->value() === $pausedTick, 'recovery aligns paused network clocks without advancing simulation');
+$leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x = 43.0;
+$leadHostSession->afterStep($leadHostWorld, 1 / 35);
+$leadWire->advance();
+$leadGuestSession->beforeStep($leadGuestWorld, 1 / 35);
+verifyNetworkTiming($leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x === 43.0, 'ordinary snapshots resume preserving owner prediction after the one-time correction');
+
 echo "$checks direct peer timing checks passed\n";

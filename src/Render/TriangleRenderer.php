@@ -2,12 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Instanced solid triangles for projected geometry and transient effects. */
+/**
+ * Instanced solid triangles for projected geometry and transient effects.
+ *
+ * The renderer streams position and color instances through one restorable program for lightweight geometry
+ * that does not justify a mesh object.
+ */
 final class TriangleRenderer
 {
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
+	/** Restorable vertex-array and instance-buffer handles. */
 	private array $vao = [], $buffers = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Whether renderer resources are bound for the current context generation. */
 	private bool $bound = false;
 
 	/**
@@ -16,7 +25,10 @@ final class TriangleRenderer
 	 * @param bool $exclusive Keep the shader bound between draws when this renderer owns the pass.
 	 * @return void Compiles the triangle program and allocates its vertex array and buffer.
 	 */
-	public function __construct(private bool $exclusive = false)
+	public function __construct(
+		/** Keep the shader bound between draws when this renderer owns the pass. */
+		private bool $exclusive = false
+	)
 	{
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/triangles.vert')

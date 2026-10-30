@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Catalog and activate stable scopes from one opened content source. */
+/**
+ * Catalog and activate stable scopes from one opened content source.
+ *
+ * The opened source exposes descriptors before activation, allowing the runtime to match bindings and
+ * acquire only requested stable scopes.
+ */
 interface ContentSource
 {
 

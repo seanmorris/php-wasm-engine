@@ -231,3 +231,75 @@ test('Matrix popup completion leaves the opener history unchanged', async () => 
 	assert.equal(provider.accessToken, 'popup-access');
 	provider.close();
 });
+
+test('Matrix logout stops syncing, revokes OAuth credentials, clears storage, and remains reusable', async () => {
+
+	const values = new Map;
+	const sessionKey = 'phonics.matrix.session:https://matrix.example';
+
+	values.set(sessionKey, JSON.stringify({
+		accessToken: 'oauth-access'
+		, refreshToken: 'oauth-refresh'
+		, expiresAt: Date.now() + 300_000
+		, clientId: 'public-client'
+		, tokenEndpoint: 'https://auth.example/token'
+		, revocationEndpoint: 'https://auth.example/revoke'
+		, authApi: 'oauth'
+		, userId: '@oauth:matrix.example'
+		, deviceId: 'DEVICE'
+	}));
+
+	const storage = {
+		getItem: key => values.get(key) ?? null
+		, setItem: (key, value) => values.set(key, value)
+		, removeItem: key => values.delete(key)
+	};
+
+	const calls = [];
+	let syncAborted = false;
+
+	const fetch = async (url, options) => {
+		url = new URL(url);
+		calls.push({url, options});
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@oauth:matrix.example', device_id: 'DEVICE'});
+
+		if(url.pathname.includes('/join/')) return response({room_id: '!room:matrix.example'});
+
+		if(url.pathname.endsWith('/sync'))
+		return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => {
+			syncAborted = true;
+			reject(options.signal.reason);
+		}, {once: true}));
+
+		return response({});
+	};
+
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, fetch
+		, storage
+		, heartbeat: 60_000
+	});
+
+	await provider.connect();
+	const result = await provider.logout();
+
+	const revoked = calls.filter(({url}) => url.href === 'https://auth.example/revoke')
+		.map(({options}) => Object.fromEntries(new URLSearchParams(options.body)));
+
+	assert.equal(result.remote, true);
+	assert.deepEqual(result.failures, []);
+	assert.equal(syncAborted, true);
+	assert.equal(provider.connected, false);
+	assert.equal(provider.signal.aborted, false);
+	assert.equal(provider.accessToken, null);
+	assert.equal(provider.refreshToken, null);
+	assert.equal(values.has(sessionKey), false);
+	assert.equal(calls.some(({url}) => url.pathname.endsWith('/logout')), true);
+	assert.deepEqual(revoked.map(value => value.token).sort(), ['oauth-access','oauth-refresh']);
+	assert.deepEqual(revoked.map(value => value.client_id), ['public-client','public-client']);
+	await assert.rejects(provider.connect(), {code: 'matrix_auth_required'});
+	provider.close();
+});

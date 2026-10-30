@@ -11,9 +11,35 @@ const encode = bytes => {
 
 const decode = value => Uint8Array.from(atob(value), character => character.charCodeAt(0));
 
-/** Bounded browser/PHP packet queues with explicit realtime shedding. */
+/**
+ * Bounded browser/PHP packet queues with explicit realtime shedding.
+ *
+ * Reliable traffic is retained within hard bounds, realtime traffic may shed stale packets, and match resets
+ * do not invalidate the bridge shared with PHP.
+ */
 export class NetworkBridge
 {
+	/** Maximum number of incoming packets retained at once. */
+	maximumPackets;
+
+	/** Maximum resource or queued-packet byte count. */
+	maximumBytes;
+
+	/** Incoming packet queue drained by the PHP bridge. */
+	incoming;
+
+	/** Total bytes currently held in the incoming packet queue. */
+	incomingBytes;
+
+	/** Active network transport used by this session or bridge. */
+	transport;
+
+	/** Number of packets discarded because input limits were exceeded. */
+	dropped;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
 
 	/**
 	 * Create empty browser-to-PHP queues with packet and byte limits.

@@ -3,9 +3,15 @@ declare(strict_types=1);
 namespace Phonics\Tiled;
 use Phonics\Asset\Assets;
 
-/** Load, normalize, cache, and provenance-track supported Tiled JSON resources. */
+/**
+ * Load, normalize, cache, and provenance-track supported Tiled JSON resources.
+ *
+ * External tilesets, templates, properties, encodings, and nested layers are resolved against their
+ * declaring resource so provenance survives caching.
+ */
 final class Loader
 {
+	/** Loaded tile maps cached by canonical resource reference. */
 	private array $maps = [];
 	/** Byte and decoded-JSON cache used for maps, worlds, templates, tilesets, and images. */
 	public Assets $assets;
@@ -272,8 +278,8 @@ final class Loader
 				$layer->objects = array_map(/**
 				 * Apply the registered component factory.
 				 *
-				 * @param mixed $object Tiled object definition to resolve.
-				 * @return mixed Result of this operation.
+				 * @param array $object Raw Tiled object record from the layer.
+				 * @return array Object record after templates, defaults, and source paths are resolved.
 				 */
 					fn($object) => $this->object($object, $map), $data['objects'] ?? []
 				);
@@ -378,7 +384,7 @@ final class Loader
 	 * @param TileMap $map Loaded Tiled map defining this stage.
 	 * @param array $chain Canonical template references already being resolved.
 	 * @param string|null $source Canonical URL of the declaring resource.
-	 * @return array Result of this operation.
+	 * @return array Resolved object with template defaults merged beneath instance properties.
 	 */
 	private function object(array $object, TileMap $map, array $chain = [], ?string $source = null): array
 	{

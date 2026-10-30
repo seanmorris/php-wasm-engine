@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Host services available while a content adapter opens a source. */
+/**
+ * Host services available while a content adapter opens a source.
+ *
+ * Resolution and reads retain source provenance, while optional services let adapters integrate with shared
+ * ECS, rendering, and host facilities.
+ */
 final class AdapterContext
 {
 
@@ -15,9 +20,12 @@ final class AdapterContext
 	 * @return void Stores callbacks without performing I/O.
 	 */
 	public function __construct(
+		/** Resolve a reference against its declaring source. */
 		private $resolve = null
-		, private $read = null
-		, private array $services = []
+		, /** Read one canonical resource as bytes. */
+		private $read = null
+		, /** Optional engine or host services keyed by stable names. */
+		private array $services = []
 	){
 	}
 

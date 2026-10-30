@@ -4,7 +4,12 @@ namespace Phonics\Effects;
 
 use Phonics\Ecs\Registry;
 
-/** Advance every ParticleBurst component and retire completed particle entities. */
+/**
+ * Advance every ParticleBurst component and retire completed particle entities.
+ *
+ * The system advances effect state in the ECS registry and destroys burst entities only after their finite
+ * animation has completed.
+ */
 final class ParticleSystem
 {
 

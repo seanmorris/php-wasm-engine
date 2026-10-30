@@ -2,34 +2,59 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Poll SDL and browser events into gameplay controls, UI events, text input, and sequences. */
+/**
+ * Poll SDL and browser events into gameplay controls, UI events, text input, and sequences.
+ *
+ * One poll updates gamepads, keyboard, mouse, focus, text, pointer, and rebinding candidates, after which
+ * frame and fixed-step consumers sample named actions independently.
+ */
 final class SdlInput
 {
 	/** Whether SDL delivered a quit request during the latest poll. */
 	public bool $quit = false;
+	/** Held keys and buffered keyboard and pointer presses. */
 	private array $keys = [], $pressedKeys = [], $pressedButtons = [];
 	/** Connected controller manager owned by this input reader. */
 	public Gamepads $gamepads;
 	/** Stateful command-sequence recognizer fed from logical controls. */
 	public Sequences $sequences;
+	/** Legacy button bindings indexed by logical button number. */
 	private array $bindings = [];
-	/** @var array<int,array{buttons:list<int>,axes:array<int,int>}> Gameplay controller overrides. */
+	/**
+ * Legacy controller button and axis overrides by logical action.
+ *
+ * @var array<int,array{buttons:list<int>,axes:array<int,int>}> Gameplay controller overrides.
+ */
 	private array $padBindings = [];
+	/** Whether incoming events are being discarded during focus recovery. */
 	private bool $discarding = false;
+	/** Monotonic time supplied to logical input sequences. */
 	private float $sequenceTime = 0;
+	/** Sequence inputs suppressed until their physical source is released. */
 	private array $sequenceBlocked = [];
+	/** Whether the input reader is focused and whether it has been closed. */
 	private bool $focused = true, $closed = false;
+	/** Whether controller state must reset on the next poll. */
 	private bool $resetPads = false;
+	/** Browser canvas and the focus, blur, and mouse listeners attached to it. */
 	private $canvas = null, $focusListener = null, $blurListener = null, $mouseListener = null;
+	/** Whether the browser reports pointer lock on the game canvas. */
 	private bool $pointerLocked = false;
+	/** Browser window and keyboard listener used outside SDL events. */
 	private $keyboardWindow = null, $keyListener = null;
+	/** Browser key states indexed by normalized physical key code. */
 	private array $browserKeys = [];
 	/** Whether the newest browser mouse-down originated on the canvas. */
 	private ?bool $browserMouseTarget = null;
+	/** Buffered UI input events in arrival order. */
 	private array $uiEvents = [];
+	/** UI actions suppressed until their source returns to neutral. */
 	private array $uiBlocked = [];
+	/** Whether text-editing events currently belong to the UI. */
 	private bool $uiEditing = false;
+	/** Whether SDL text input is active and whether ownership is changing. */
 	private bool $textInput = false, $switchingText = false;
+	/** UI text buffer receiving SDL text-editing events. */
 	private $textTarget = null;
 	/** Input revision incremented after polling so consumers can detect fresh snapshots. */
 	public int $generation = 0;
@@ -39,6 +64,7 @@ final class SdlInput
 	public ?ActionInput $actions = null;
 	/** Radial right-stick dead zone for the signed profile. */
 	public float $lookDeadZone = .12;
+	/** Latest look-axis activity timestamps indexed by device. */
 	private array $lookActivity = [];
 
 	/**

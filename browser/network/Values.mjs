@@ -87,22 +87,38 @@ export async function sha256(value)
 	return `sha256-${btoa(binary)}`;
 }
 
-/** Opaque identity whose kind prevents primitive strings from crossing service boundaries unnoticed. */
+/**
+ * Opaque identity whose kind prevents primitive strings from crossing service boundaries unnoticed.
+ *
+ * The base validates and freezes opaque identifiers once, providing canonical string and JSON forms to its
+ * exported semantic subclasses.
+ */
 class Identifier
 {
+	/** Validated canonical identifier string. */
+	value;
 
+
+	/** Validate and freeze one opaque identifier value. */
 	constructor(value, label)
 	{
 		this.value = identity(value, label);
 		Object.freeze(this);
 	}
 
+	/** Return the canonical string representation. */
 	toString() { return this.value; }
 
+	/** Serialize the identifier as its canonical scalar value. */
 	toJSON() { return this.value; }
 }
 
-/** Opaque PeerId value; its string form is the validated identifier. */
+/**
+ * Opaque PeerId value; its string form is the validated identifier.
+ *
+ * Using a distinct type keeps lobby identities, WebRTC peers, and match participants from being confused
+ * with arbitrary strings.
+ */
 export class PeerId extends Identifier
 {
 
@@ -114,7 +130,12 @@ export class PeerId extends Identifier
 	constructor(value) { super(value, 'PeerId'); }
 }
 
-/** Opaque SessionId value; its string form is the validated identifier. */
+/**
+ * Opaque SessionId value; its string form is the validated identifier.
+ *
+ * The opaque value identifies one lobby or match lifetime independently of the room or provider that carries
+ * signaling.
+ */
 export class SessionId extends Identifier
 {
 
@@ -126,7 +147,12 @@ export class SessionId extends Identifier
 	constructor(value) { super(value, 'SessionId'); }
 }
 
-/** Opaque ResourceSlotId value; its string form is the validated identifier. */
+/**
+ * Opaque ResourceSlotId value; its string form is the validated identifier.
+ *
+ * The opaque value names one ordered application resource requirement without exposing file paths as
+ * protocol identity.
+ */
 export class ResourceSlotId extends Identifier
 {
 
@@ -138,9 +164,29 @@ export class ResourceSlotId extends Identifier
 	constructor(value) { super(value, 'ResourceSlotId'); }
 }
 
-/** One discoverable archive which may satisfy a local resource requirement. */
+/**
+ * One discoverable archive which may satisfy a local resource requirement.
+ *
+ * The immutable value describes one potential archive by URL, content identity, size, and provenance for
+ * later acquisition.
+ *
+ * @property {string} [url] Canonical retrievable source URL, when the candidate declares one.
+ * @property {string} [integrity] SHA-256 SRI identity, when known before acquisition.
+ * @property {number} [bytes] Exact byte length, when known before acquisition.
+ */
 export class ResourceCandidate
 {
+	/** Identifier unique within the containing resource requirement. */
+	id;
+
+	/** Human-readable candidate label. */
+	label;
+
+	/** Accepted source file names for local candidate matching. */
+	names;
+
+	/** Immutable inspector criteria used for local matching. */
+	criteria;
 
 	/**
 	 * Validate and freeze one candidate archive description.
@@ -182,9 +228,37 @@ export class ResourceCandidate
 	toJSON() { return {...this}; }
 }
 
-/** Content-qualified description of data each peer must acquire independently. */
+/**
+ * Content-qualified description of data each peer must acquire independently.
+ *
+ * A requirement combines a stable slot with ordering, optionality, content constraints, and the candidate
+ * set each peer may resolve independently.
+ */
 export class ResourceRequirement
 {
+	/** Stable resource-slot identifier. */
+	id;
+
+	/** Human-readable requirement label. */
+	label;
+
+	/** Accepted source file names for this requirement. */
+	names;
+
+	/** Resource inspector reference used to profile local candidates. */
+	inspector;
+
+	/** Equivalence rule used to compare peer resources. */
+	equivalence;
+
+	/** Immutable inspector criteria required of a match. */
+	criteria;
+
+	/** Guard slots required before profile equivalence can be accepted. */
+	profileRequires;
+
+	/** Immutable candidate archives that may satisfy this requirement. */
+	candidates;
 
 	/**
 	 * Validate and freeze one content requirement and its candidates.
@@ -254,9 +328,40 @@ export class ResourceRequirement
 	toJSON() { return {...this}; }
 }
 
-/** Immutable remote/local acquisition offer for one world-owned resource slot. */
+/**
+ * Immutable remote/local acquisition offer for one world-owned resource slot.
+ *
+ * The offer is safe to exchange because construction validates the selected candidate and transport metadata
+ * against its declared requirement.
+ *
+ * @property {string} [url] Canonical source URL for a retrievable offer.
+ * @property {ResourceRequirement} [requirement] Local matching requirement for a local-only offer.
+ */
 export class ResourceOffer
 {
+	/** Stable resource slot satisfied by this offer. */
+	slot;
+
+	/** SHA-256 SRI identity of the offered bytes. */
+	integrity;
+
+	/** Exact byte length of the offered resource. */
+	bytes;
+
+	/** Resource role interpreted by the application. */
+	role;
+
+	/** Optional content-adapter reference. */
+	adapter;
+
+	/** Non-negative placement order within the application stack. */
+	order;
+
+	/** Human-readable resource label. */
+	label;
+
+	/** Acquisition mode: retrievable or local. */
+	distribution;
 
 	/**
 	 * Validate and freeze one acquisition offer.
@@ -335,9 +440,25 @@ export class ResourceOffer
 	toJSON() { return {...this}; }
 }
 
-/** A verified offer whose bytes may have come from an equivalent local mirror. */
+/**
+ * A verified offer whose bytes may have come from an equivalent local mirror.
+ *
+ * The value joins a verified offer to acquired bytes and canonical provenance after local or peer-assisted
+ * resolution succeeds.
+ */
 export class ResolvedResource
 {
+	/** Validated offer whose requirement was resolved. */
+	offer;
+
+	/** Canonical URL from which the verified bytes were acquired. */
+	sourceUrl;
+
+	/** Optional filesystem path at which the bytes were mounted. */
+	mountPath;
+
+	/** Compatibility evidence safe to exchange with the peer. */
+	resolution;
 
 	/**
 	 * Pair an offer with the source that supplied its bytes.
@@ -379,9 +500,31 @@ export class ResolvedResource
 	toJSON() { return {...this.offer, sourceUrl: this.sourceUrl, resolution: this.resolution}; }
 }
 
-/** Safe compatibility evidence for a locally resolved resource; never contains its URL or bytes. */
+/**
+ * Safe compatibility evidence for a locally resolved resource; never contains its URL or bytes.
+ *
+ * It records the slot, hash, byte length, placement order, candidate identity, and inspector profile needed
+ * to prove that one locally acquired resource matches the peer's offer.
+ */
 export class ResourceResolution
 {
+	/** Stable resource slot represented by this evidence. */
+	slot;
+
+	/** SHA-256 SRI identity of the verified bytes. */
+	integrity;
+
+	/** Exact byte length of the verified resource. */
+	bytes;
+
+	/** Non-negative placement order within the application stack. */
+	order;
+
+	/** Matched candidate identifier, or an empty string. */
+	candidate;
+
+	/** Immutable inspector profile used for equivalence. */
+	profile;
 
 	/**
 	 * Validate and freeze compatibility evidence.
@@ -423,9 +566,17 @@ export class ResourceResolution
 	toJSON() { return {...this}; }
 }
 
-/** Ordered content identity exchanged before either peer activates a source. */
+/**
+ * Ordered content identity exchanged before either peer activates a source.
+ *
+ * It sorts immutable resource offers, rejects duplicate slot and order pairs, and provides a canonical digest
+ * used to reject incompatible content before gameplay.
+ */
 export class ContentManifest
 {
+	/** Immutable resource offers sorted by placement order and slot. */
+	resources;
+
 
 	/**
 	 * Sort offers by order then slot and reject duplicate slot/order pairs.
@@ -467,9 +618,38 @@ export class ContentManifest
 	async digest() { return sha256(canonicalJson(this)); }
 }
 
-/** Immutable compatibility and content identity for one match. */
+/**
+ * Immutable compatibility and content identity for one match.
+ *
+ * It freezes protocol and application identity, selected game start, package revisions, ordered content,
+ * settings, and player count as the handoff from the lobby to a network session.
+ */
 export class MatchDescriptor
 {
+	/** Negotiated protocol compatibility record. */
+	protocol;
+
+	/** Application descriptor negotiated for the current match. */
+	application;
+
+	/** Selected game and network mode identifier. */
+	game;
+
+	/** Selected application start scope and initialization data. */
+	start;
+
+	/** Package records participating in the current application. */
+	packages;
+
+	/** Verified resource manifest required by the match. */
+	content;
+
+	/** Immutable game-owned match settings. */
+	settings;
+
+	/** Immutable negotiated player assignments. */
+	players;
+
 
 	/**
 	 * Validate and freeze one match description.

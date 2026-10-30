@@ -2,15 +2,33 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Host-side ownership, tick-window, sequence, rate, and game-rule validation. */
+/**
+ * Host-side ownership, tick-window, sequence, rate, and game-rule validation.
+ *
+ * Accepted commands advance per-player sequence and rate state only after generic protocol checks and the
+ * game-owned rule callback all succeed.
+ */
 final class CommandValidator
 {
-	/** @var array<int,PeerId> */
+	/**
+ * Latest validated player ownership indexed by peer identity.
+ *
+ * @var array<int,PeerId>
+ */
 	private array $owners = [];
-	/** @var array<string,int> */
+	/**
+ * Latest accepted command sequence indexed by peer and player slot.
+ *
+ * @var array<string,int>
+ */
 	private array $latest = [];
-	/** @var array<string,array<int,int>> */
+	/**
+ * Per-peer command rate windows and counters.
+ *
+ * @var array<string,array<int,int>>
+ */
 	private array $rates = [];
+	/** Game-owned callback that validates normalized input actions. */
 	private $gameRule;
 
 	/**
@@ -24,11 +42,11 @@ final class CommandValidator
 	 * or a per-tick limit below one.
 	 */
 	public function __construct(
-		/** Accepted number of ticks behind the host. */
+		/** Maximum number of ticks a command may trail the host. */
 		public int $pastTicks = 8
-		, /** Accepted number of ticks ahead of the host. */
+		, /** Maximum number of ticks a command may lead the host. */
 		public int $futureTicks = 8
-		, /** Maximum commands accepted for one player and tick. */
+		, /** Maximum accepted commands for one player and tick. */
 		public int $maximumPerTick = 4
 		, ?callable $gameRule = null
 	){

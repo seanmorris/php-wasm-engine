@@ -2,13 +2,23 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Timed, device-independent input recognition; no SDL or rendering dependency. */
+/**
+ * Timed, device-independent input recognition; no SDL or rendering dependency.
+ *
+ * Definitions are compiled into unambiguous press, release, text, and direction steps, with progress
+ * retained only inside each sequence timeout.
+ */
 final class Sequences
 {
+	/** Compiled sequence definitions, active candidates, and completed matches. */
 	private array $definitions = [], $candidates = [], $matches = [];
+	/** Held control state and press timestamps used by sequence recognition. */
 	private array $held = [], $since = [];
+	/** Latest sequence clock time, or null before the first update. */
 	private ?float $time = null;
+	/** Current horizontal facing used by relative direction steps. */
 	private int $facing = 1;
+	/** Most recently resolved directional input. */
 	private string $direction = 'neutral';
 
 	/**

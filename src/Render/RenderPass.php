@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Ordered, restorable renderer owned by a session or active content scope. */
+/**
+ * Ordered, restorable renderer owned by a session or active content scope.
+ *
+ * Implementations expose stable dependency metadata, render from a shared frame context, restore graphics
+ * resources, and release owned state.
+ */
 interface RenderPass
 {
 

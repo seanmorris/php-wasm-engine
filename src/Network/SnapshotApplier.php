@@ -6,15 +6,33 @@ use Phonics\Ecs\Registry;
 use Phonics\Network\Component\NetworkIdentity;
 use Phonics\Network\Component\NetworkPrefab;
 
-/** Applies whitelisted spawn, component, and despawn records to a receiving ECS registry. */
+/**
+ * Applies whitelisted spawn, component, and despawn records to a receiving ECS registry.
+ *
+ * It rejects stale sequences, resolves stable identities through the allocator, and delegates all creation
+ * and decoding to the replication registry.
+ */
 final class SnapshotApplier
 {
-	/** @var array<int,array<string,mixed>> */
+	/**
+ * Latest decoded component state indexed by network entity and schema.
+ *
+ * @var array<int,array<string,mixed>>
+ */
 	private array $state = [];
-	/** @var array<int,array<int,array<string,mixed>>> */
+	/**
+ * Decoded full snapshot baselines indexed by snapshot sequence.
+ *
+ * @var array<int,array<int,array<string,mixed>>>
+ */
 	private array $baselines = [];
+	/** Newest snapshot sequence accepted from the authoritative peer. */
 	private ?SnapshotSequence $sequence = null;
-	/** @var (callable(Registry,int,ComponentCodec):bool)|null */
+	/**
+ * Optional callback that accepts or rejects decoded component records.
+ *
+ * @var (callable(Registry,int,ComponentCodec):bool)|null
+ */
 	private $componentFilter;
 
 	/**
@@ -26,9 +44,9 @@ final class SnapshotApplier
 	 * @return void Creates a snapshot applier with optional component authority filtering.
 	 */
 	public function __construct(
-		/** Registered component and prefab whitelist. */
+		/** Whitelist of component codecs and prefab factories. */
 		public ReplicationRegistry $replication
-		, /** Network and local entity identity map. */
+		, /** Bidirectional network/local entity identity map. */
 		public NetworkEntityAllocator $entities
 		, ?callable $componentFilter = null
 	){

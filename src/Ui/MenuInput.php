@@ -4,11 +4,19 @@ namespace Phonics\Ui;
 use Phonics\Input\InputCode;
 use Phonics\Input\Source;
 
-/** Translate host-neutral button snapshots and text/pointer events into menu commands. */
+/**
+ * Translate host-neutral button snapshots and text/pointer events into menu commands.
+ *
+ * It applies navigation, editing, text, pointer, and repeat behavior to the menu model while keeping SDL key
+ * numbers out of menu definitions.
+ */
 final class MenuInput
 {
+	/** Held menu actions and their next repeat timestamps. */
 	private array $held = [], $next = [];
+	/** Pointer drag state indexed by pointer button. */
 	private ?array $drag = null;
+	/** Callback that writes selected menu text to the clipboard. */
 	private $copy;
 
 	/**

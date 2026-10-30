@@ -5,7 +5,12 @@ namespace Phonics\Ui;
 use Phonics\Engine;
 use Phonics\Render\BitmapFont;
 
-/** Optional SDL/Engine adapter; Menu itself remains scriptable without a runtime. */
+/**
+ * Optional SDL/Engine adapter; Menu itself remains scriptable without a runtime.
+ *
+ * The adapter polls shared menu input, suspends engine simulation, renders after the world, and restores
+ * focus without putting runtime dependencies into the menu model.
+ */
 final class PauseMenu
 {
 	/** Owned screen-space menu renderer. */
@@ -16,7 +21,9 @@ final class PauseMenu
 	public string $theme = 'auto';
 	/** Total real time in seconds used by animated menu presentation. */
 	public float $time = 0;
+	/** Graphics or runtime generation for which current state is valid. */
 	private int $generation = -1;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -27,7 +34,13 @@ final class PauseMenu
 	 * @param BitmapFont $font Annotated font plus optional themed symbols.
 	 * @return void Creates owned graphics and installs the input handler.
 	 */
-	public function __construct(private Engine $engine, public Menu $menu, BitmapFont $font)
+	public function __construct(
+		/** Engine whose gameplay pauses while this menu captures input. */
+		private Engine $engine
+		, /** Application-defined root page and bindings. */
+		public Menu $menu
+		, BitmapFont $font
+	)
 	{
 		$this->renderer = new MenuRenderer($font);
 

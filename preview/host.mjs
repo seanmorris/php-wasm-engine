@@ -1,4 +1,5 @@
 import {Phonics} from '../engine/browser/Phonics.mjs';
+import {readInviteLink} from '../engine/browser/network/InviteLink.mjs';
 import {PreviewPreloader} from './Preloader.mjs';
 
 window.Phonics = Phonics;
@@ -48,6 +49,12 @@ export function mountPreview(root = document, options = {})
 
 		try
 		{
+			const inviteUrl = options.invitation ?? (readInviteLink(location.href) ? location.href : null);
+			const invitation = inviteUrl ? readInviteLink(inviteUrl) : null;
+
+			if(invitation) history.replaceState(history.state, '', location.pathname + location.search);
+
+			delete options.invitation;
 			await session?.dispose();
 
 			if(current !== generation) return;
@@ -57,6 +64,7 @@ export function mountPreview(root = document, options = {})
 
 			session = await Phonics.run(url, {
 				canvas
+				, network: invitation ? {invitation: inviteUrl} : options.network
 				, init: {
 					...options.init
 					, ...(new URLSearchParams(location.search).has('world')
@@ -75,6 +83,7 @@ export function mountPreview(root = document, options = {})
 				}
 				, policy: {
 					codeOrigins: [location.origin, ...codeOrigins]
+					, ...(invitation ? {signalingOrigins: [invitation.server]} : {})
 					, ...(configuredDataOrigins === undefined
 						? {}
 						: {dataOrigins: configuredDataOrigins}
@@ -93,6 +102,13 @@ export function mountPreview(root = document, options = {})
 			preloader.complete();
 			status.textContent = 'Ready';
 			canvas.focus();
+
+			if(invitation)
+			{
+				if(!session.lobby?.joinInviteLink) throw new Error('This application does not support invitations');
+
+				await session.lobby.joinInviteLink(invitation);
+			}
 		}
 		catch(error)
 		{
@@ -134,7 +150,15 @@ export function mountPreview(root = document, options = {})
 
 		if(input) input.value = world;
 
-		void launch(world);
+		// A generic-loader URL may be unfurled too: its form is the explicit activation gate.
+		if(options.invitation || !location.hash.startsWith('#phonics-invite=')) void launch(world);
+		else
+		{
+			status.textContent = 'Join the private game when you are ready.';
+			const submit = form?.querySelector('[type="submit"]');
+
+			if(submit) submit.textContent = 'Join game';
+		}
 	}
 
 	return {launch, stop, session: () => session};

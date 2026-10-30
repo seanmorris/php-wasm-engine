@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Ui;
 
-/** Deterministic, renderer-independent sequencing with readiness and fresh-press guards. */
+/**
+ * Deterministic, renderer-independent sequencing with readiness and fresh-press guards.
+ *
+ * Fresh-input guards prevent the action that opened or advanced a sequence from skipping the next card,
+ * while readiness gates support asynchronous transitions.
+ */
 final class CardSequence
 {
 	/** Lifecycle state: idle, opening, waiting, shown, closing, complete, or cancelled. */
@@ -10,11 +15,17 @@ final class CardSequence
 	/** Active seconds since the current card was entered, including its fade-in. */
 	public float $elapsed = 0;
 
+	/** Index of the currently active card. */
 	private int $index = -1;
+	/** Timestamp when the current card first became ready. */
 	private float $readyTime = 0;
+	/** Timestamp when the current card began closing. */
 	private float $closingTime = 0;
+	/** Current opacity applied during card exit. */
 	private float $exitOpacity = 1;
+	/** Whether the advance action was held on the previous update. */
 	private bool $held = true;
+	/** Whether the current card has satisfied its readiness gate. */
 	private bool $ready = false;
 
 	/**
@@ -23,7 +34,10 @@ final class CardSequence
 	 * @param list<Card> $cards Cards visited in order; an empty sequence completes on start.
 	 * @return void Validates definitions without invoking callbacks.
 	 */
-	public function __construct(private array $cards)
+	public function __construct(
+		/** Cards visited in order; an empty sequence completes on start. */
+		private array $cards
+	)
 	{
 		$ids = [];
 

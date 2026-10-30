@@ -1,6 +1,17 @@
-/** Session-scoped registry for optional browser providers and transports. */
+/**
+ * Session-scoped registry for optional browser providers and transports.
+ *
+ * It maps a service type and stable ID to a factory, rejects duplicate registration and use after closure,
+ * and can enumerate the implementations available for one service type.
+ */
 export class ServiceRegistry
 {
+	/** Registered services indexed by service name. */
+	services;
+
+	/** Whether the instance is closed and rejects further work. */
+	closed;
+
 
 	/**
 	 * Create an empty, open registry.

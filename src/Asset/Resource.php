@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Asset;
 
-/** Canonical source identity is independent of an optional local transport mount. */
+/**
+ * Canonical source identity is independent of an optional local transport mount.
+ *
+ * The value preserves public provenance while resolving the transport path needed by PHP streams, SDL
+ * consumers, or mounted application archives.
+ */
 final class Resource
 {
 
@@ -17,6 +22,7 @@ final class Resource
 		return dirname(__DIR__, 2) . '/' . $path;
 	}
 
+	/** Public asset references mapped to mounted paths and source provenance. */
 	private static array $mounts = [], $sources = [];
 
 	/**

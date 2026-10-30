@@ -4,11 +4,19 @@ namespace Phonics\Render;
 use Phonics\Tiled\Layer;
 use Phonics\Tiled\TileMap;
 
-/** Repeats images in the fragment shader: one quad per layer, regardless of camera size. */
+/**
+ * Repeats images in the fragment shader: one quad per layer, regardless of camera size.
+ *
+ * It loads each image once, computes anchored repeat coverage, and draws visible layers without emitting one
+ * quad for every repeated tile.
+ */
 final class ImageRenderer
 {
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
+	/** Restorable vertex array, cached image textures, and source heights. */
 	private array $vao = [], $textures = [], $heights = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** Image-layer draw calls submitted during the latest render. */
 	public int $draws = 0;
@@ -21,7 +29,10 @@ final class ImageRenderer
 	 * @param TileMap $map Map supplying image layers and their world placement.
 	 * @return void Initializes lazy texture storage owned by this renderer.
 	 */
-	public function __construct(public TileMap $map)
+	public function __construct(
+		/** Map supplying image layers and their world placement. */
+		public TileMap $map
+	)
 	{
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/images.vert')

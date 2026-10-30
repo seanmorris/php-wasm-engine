@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Mutable world-space view rectangle and world-to-screen magnification. */
+/**
+ * Mutable world-space view rectangle and world-to-screen magnification.
+ *
+ * It holds the authoritative view center, logical dimensions, zoom, and coordinate conversions used
+ * consistently by world and overlay renderers.
+ */
 final class Camera
 {
 
@@ -17,11 +22,16 @@ final class Camera
 	 * @return void Stores the camera pose and dimensions.
 	 */
 	public function __construct(
+		/** Left world coordinate in pixels. */
 		public float $x = 0
-		, public float $y = 0
-		, public int $width = 960
-		, public int $height = 540
-		, public float $zoom = 1
+		, /** Top world coordinate in pixels. */
+		public float $y = 0
+		, /** Viewport width in output pixels. */
+		public int $width = 960
+		, /** Viewport height in output pixels. */
+		public int $height = 540
+		, /** Positive world-to-screen scale factor. */
+		public float $zoom = 1
 	){
 	}
 

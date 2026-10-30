@@ -2,10 +2,17 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Current and previous logical input snapshots with analog values and edge detection. */
+/**
+ * Current and previous logical input snapshots with analog values and edge detection.
+ *
+ * Consumers can read analog strengths as well as pressed, released, and held edges without knowing which
+ * physical device supplied the action.
+ */
 final class Controls
 {
+	/** Current and previous logical action strengths. */
 	private array $current = [], $previous = [];
+	/** Buffered action press counts awaiting consumption. */
 	private array $presses = [];
 
 	/**

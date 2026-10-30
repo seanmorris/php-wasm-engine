@@ -2,10 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Bounded command history used for redundant sends, acknowledgement, and replay. */
+/**
+ * Bounded command history used for redundant sends, acknowledgement, and replay.
+ *
+ * Commands remain available for redundant delivery and reconciliation until acknowledgement removes the
+ * corresponding sequence prefix.
+ */
 final class InputHistory
 {
-	/** @var array<int,InputCommand> */
+	/**
+ * Unacknowledged commands indexed by command sequence.
+ *
+ * @var array<int,InputCommand>
+ */
 	private array $commands = [];
 
 	/**
@@ -15,7 +24,7 @@ final class InputHistory
 	 * @return void Rejects a capacity outside 1 through 4096.
 	 */
 	public function __construct(
-		/** Maximum retained entry count. */
+		/** Maximum number of entries retained by the bounded collection. */
 		public int $capacity = 128
 	){
 		if($capacity < 1 || $capacity > 4096) throw new \OutOfRangeException('Input history capacity is invalid');

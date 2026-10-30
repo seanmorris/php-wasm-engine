@@ -106,3 +106,41 @@ test('TextMessages expose MB2 dialog, center, focus, and demo state without a DO
 	rejects(fn() => $messages->showDemo('pause'));
 	rejects(fn() => $messages->showDialog([], 'Guide'));
 });
+
+test('TextMessages focus recovery expires when focus is sampled every display frame', function() {
+	$messages = new TextMessages;
+	$messages->setFocused(true);
+	$messages->setFocused(false);
+
+	for($frame = 0; $frame < 60; $frame++)
+	{
+		$messages->update(1 / 60);
+		$messages->setFocused(false);
+	}
+
+	check($messages->snapshot()['focus'] !== null);
+	$messages->setFocused(true);
+
+	for($frame = 0; $frame < 30; $frame++)
+	{
+		$messages->update(1 / 60);
+		$messages->setFocused(true);
+	}
+
+	check($messages->snapshot()['focus'] !== null);
+	// Losing focus during the dismissal delay must keep the warning visible again.
+	$messages->setFocused(false);
+	$messages->update(.25);
+	$messages->update(.25);
+	check($messages->snapshot()['focus'] !== null);
+	$messages->setFocused(true);
+
+	for($frame = 0; $frame < 60; $frame++)
+	{
+		$messages->update(1 / 60);
+		$messages->setFocused(true);
+	}
+
+	check($messages->snapshot()['focus'] === null);
+	check($messages->snapshot()['focused'] === true);
+});

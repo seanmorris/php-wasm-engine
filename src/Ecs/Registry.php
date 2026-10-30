@@ -2,16 +2,29 @@
 declare(strict_types=1);
 namespace Phonics\Ecs;
 
-/** Object components, stable entity IDs, type indexes, snapshot queries. */
+/**
+ * Object components, stable entity IDs, type indexes, snapshot queries.
+ *
+ * Structural changes maintain hierarchy-aware indexes and invalidate query snapshots, while deferred
+ * operations let systems mutate entities safely during iteration.
+ */
 final class Registry
 {
+	/** Canonical class and interface names cached by input type name. */
 	private static array $canonicalNames = [];
+	/** Next stable entity identifier to allocate. */
 	private int $next = 1;
+	/** Component tables, hierarchy indexes, deferred commands, and component listeners. */
 	private array $entities = [], $index = [], $commands = [], $listeners = [];
+	/** Resolved component hierarchies and immutable query snapshots. */
 	private array $typeCache = [], $queryCache = [];
+	/** Whether any listener observes component addition or removal. */
 	private bool $observesAdded = false, $observesRemoved = false;
+	/** Total entity identifiers retained across cached query snapshots. */
 	private int $cachedIds = 0;
+	/** Maximum number of immutable query snapshots retained by one registry. */
 	private const QUERY_CACHE_ENTRIES = 64;
+	/** Maximum total entity IDs retained across cached query snapshots. */
 	private const QUERY_CACHE_IDS = 131072;
 
 	/**

@@ -2,10 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Bounded tick-ordered samples for game-owned interpolation and extrapolation. */
+/**
+ * Bounded tick-ordered samples for game-owned interpolation and extrapolation.
+ *
+ * Samples are retained by tick within a fixed capacity, providing deterministic neighboring values to a
+ * game-owned presentation strategy.
+ */
 final class SnapshotBuffer
 {
-	/** @var array<int,WorldSnapshot> */
+	/**
+ * Authoritative snapshots indexed by simulation tick.
+ *
+ * @var array<int,WorldSnapshot>
+ */
 	private array $samples = [];
 
 	/**
@@ -16,9 +25,9 @@ final class SnapshotBuffer
 	 * @return void Rejects a capacity outside 2 through 256 or a delay outside 0 through capacity minus one.
 	 */
 	public function __construct(
-		/** Maximum retained entry count. */
+		/** Maximum number of entries retained by the bounded collection. */
 		public int $capacity = 32
-		, /** Interpolation delay in host ticks. */
+		, /** Number of host ticks kept behind for interpolation. */
 		public int $delayTicks = 2
 	){
 		if($capacity < 2 || $capacity > 256 || $delayTicks < 0 || $delayTicks >= $capacity)

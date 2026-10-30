@@ -2,9 +2,15 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Reference-counted handle that keeps one stable source scope active. */
+/**
+ * Reference-counted handle that keeps one stable source scope active.
+ *
+ * Cloning or retaining a lease increments ownership, and idempotent release deactivates the scope only after
+ * the final holder lets go.
+ */
 final class ScopeLease
 {
+	/** Whether this lease has released its ownership reference. */
 	private bool $released = false;
 
 	/**
@@ -17,10 +23,14 @@ final class ScopeLease
 	 * @return void Stores the active context.
 	 */
 	public function __construct(
+		/** World-local source ID. */
 		public string $sourceId
-		, public string $scopeId
-		, public ScopeContext $context
-		, private $release
+		, /** Stable source-local scope ID. */
+		public string $scopeId
+		, /** Shared active scope context. */
+		public ScopeContext $context
+		, /** Decrement callback invoked once. */
+		private $release
 	){
 	}
 

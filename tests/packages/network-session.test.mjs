@@ -522,6 +522,32 @@ test('a ready host waits for the guest to finish loading before sending game rea
 	assert.deepEqual(errors, []);
 });
 
+test('both started peers pause input for recovery and retain their match when it completes', async t => {
+	const {peers, connect, play} = await matchPeers(t);
+	await connect();
+	await play();
+
+	for(const peer of peers)
+	{
+		assert.equal(peer.started, true);
+		const match = peer.match;
+		let completed = 0;
+
+		peer.transport.finishRecovery = () => completed++;
+		peer.controller.dispatchEvent(new CustomEvent('recovery', {detail: {state: 'reconnecting'}}));
+		const id = peer.recovery.id;
+		assert.equal(peer.sendGameplay(MessageFamily.input, {}), false);
+		peer.controller.dispatchEvent(new CustomEvent('recovery', {detail: {state: 'resynchronizing'}}));
+		assert.equal(peer.recovery.id, id);
+		peer.recovered('stale-recovery');
+		assert.equal(completed, 0);
+		peer.recovered(id);
+		assert.equal(completed, 1);
+		assert.equal(peer.recovery, null);
+		assert.equal(peer.match, match);
+	}
+});
+
 test('leaving a match clears replication state and both peers can play again with reversed roles', async t => {
 	const {peers: [host, guest], connect, play} = await matchPeers(t);
 	const ended = [];
@@ -698,4 +724,75 @@ test('application handshakes reject changed code and mixed launch protocols befo
 			, error => error.code === 'match_application'
 		);
 	}
+});
+
+test('private invitations freeze the application and prompt only for missing local resources', async () => {
+	const application = {id: world.game, code: 'sha256-build'};
+	const accepted = [], picked = [];
+	const file = new Blob(['matching local addon']);
+	const negotiator = {
+
+		reset() {}
+
+		, maps() { return []; }
+
+
+		, async accept(offer, {source, stackIndex}) {
+			accepted.push({slot: offer.slot, source, stackIndex});
+
+			if(offer.slot === 'addon' && source !== file) throw new Error('Local addon is missing');
+		}
+	};
+
+	const session = new NetworkSession({controller: new EventTarget, world, application, negotiator});
+
+	const descriptor = new MatchDescriptor({
+		game: world.game
+		, protocol: '2.0.0'
+		, application
+		, start: world.start
+		, settings: {mode: 'cooperative', skill: '2'}
+	});
+
+	const digest = await descriptor.digest();
+	const invitation = {
+		payload: {
+			descriptorDigest: digest
+			, match: {
+				descriptor
+				, descriptorDigest: digest
+				, offers: [{slot: 'base-wad', distribution: 'local'}
+					, {slot: 'music', distribution: 'retrievable'}
+					, {slot: 'addon', distribution: 'local'}
+				]
+			}
+		}
+	};
+
+	const before = JSON.stringify(invitation);
+
+	const selection = await session.prepareInviteGuest(invitation, {
+		pickResource: async offer => {
+			picked.push(offer.slot);
+
+			return file;
+		}
+	});
+
+	assert.deepEqual(picked, ['addon']);
+	assert.deepEqual(selection.resources, {'base-wad': [null], music: [null], addon: [file]});
+	assert.equal(JSON.stringify(invitation), before, 'guest resource selection must not edit host settings');
+	assert.equal(accepted.length, 4);
+
+	const incompatible = new NetworkSession({
+		controller: new EventTarget
+		, world
+		, application: {...application, code: 'sha256-other'}
+		, negotiator: {
+
+			reset() { assert.fail('Code mismatch must fail before acquiring resources'); }
+		}
+	});
+
+	await assert.rejects(incompatible.prepareInviteGuest(invitation), {code: 'match_application'});
 });

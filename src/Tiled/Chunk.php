@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Tiled;
 
-/** Mutable sparse Tiled chunk storing packed little-endian GIDs and upload revision. */
+/**
+ * Mutable sparse Tiled chunk storing packed little-endian GIDs and upload revision.
+ *
+ * Random access decodes packed GIDs lazily and revision tracking tells renderers exactly when an uploaded
+ * chunk slice became stale.
+ */
 final class Chunk
 {
 	/** Revision incremented after each tile edit so renderers can refresh GPU data. */
@@ -19,11 +24,16 @@ final class Chunk
 	 * @return void Creates an unmodified chunk with revision zero.
 	 */
 	public function __construct(
+		/** Left tile coordinate, including negative infinite-map coordinates. */
 		public int $x
-		, public int $y
-		, public int $width
-		, public int $height
-		, public string $data
+		, /** Top tile coordinate. */
+		public int $y
+		, /** Positive number of tile columns. */
+		public int $width
+		, /** Positive number of tile rows. */
+		public int $height
+		, /** Row-major GID bytes; length must equal width times height times four. */
+		public string $data
 	){
 		if($width < 1 || $height < 1 || strlen($data) !== $width * $height * 4)
 		{

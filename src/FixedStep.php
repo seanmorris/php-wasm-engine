@@ -2,9 +2,15 @@
 declare(strict_types=1);
 namespace Phonics;
 
-/** Bounded fixed-step accumulator with interpolation and dropped-stall accounting. */
+/**
+ * Bounded fixed-step accumulator with interpolation and dropped-stall accounting.
+ *
+ * Elapsed frame time is capped before entering the accumulator, preventing long stalls from producing
+ * unbounded catch-up while preserving a render interpolation fraction.
+ */
 final class FixedStep
 {
+	/** Unsimulated elapsed seconds retained between frames. */
 	private float $accumulator = 0;
 	/** Total elapsed seconds discarded because a frame exceeded the catch-up cap. */
 	public float $droppedTime = 0;
@@ -16,7 +22,12 @@ final class FixedStep
 	 * @param int $maxSteps Maximum updates permitted during one advance call; at least one.
 	 * @return void Creates an empty time accumulator.
 	 */
-	public function __construct(public float $step = 1 / 60, public int $maxSteps = 8)
+	public function __construct(
+		/** Positive simulation interval in seconds. */
+		public float $step = 1 / 60
+		, /** Maximum updates permitted during one advance call; at least one. */
+		public int $maxSteps = 8
+	)
 	{
 		if($step <= 0 || $maxSteps < 1)
 		{

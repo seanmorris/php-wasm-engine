@@ -2,15 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Opaque session peer identity kept distinct from provider-specific user IDs. */
+/**
+ * Opaque session peer identity kept distinct from provider-specific user IDs.
+ *
+ * Construction validates the identifier once, after which string conversion and JSON serialization are safe
+ * at protocol and provider boundaries.
+ */
 final class PeerId implements \JsonSerializable
 {
+	/** Canonical opaque identity for one session peer. */
 	private string $value;
 
 	/**
 	 * Create and validate a peer ID.
 	 *
-	 * @param string $value Scalar value or serialized fields to validate.
+	 * @param string $value Candidate printable session peer identity.
 	 * @return void Stores the trimmed ID; rejects empty, overlong or control-character values.
 	 */
 	public function __construct(string $value)
@@ -33,7 +39,7 @@ final class PeerId implements \JsonSerializable
 	/**
 	 * Compare this peer ID with another value of the same kind.
 	 *
-	 * @param self $other Validated other used by this peer ID.
+	 * @param self $other Opaque peer identity to compare in constant time.
 	 * @return bool True when both values represent the same identity.
 	 */
 	public function equals(self $other): bool { return hash_equals($this->value, $other->value); }

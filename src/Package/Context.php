@@ -11,7 +11,12 @@ use Phonics\Asset\Resource;
 use Phonics\World\AdapterContext;
 use Phonics\World\WorldRuntime;
 
-/** Session-scoped systems, factories, and cleanup for independently published modules. */
+/**
+ * Session-scoped systems, factories, and cleanup for independently published modules.
+ *
+ * A module uses this facade to register systems, factories, adapters, bindings, state, and reverse-order
+ * cleanup without taking ownership of the whole engine.
+ */
 final class Context
 {
 	/** Entity registry shared by the game and every activated module. */
@@ -24,7 +29,9 @@ final class Context
 	public Loader $loader;
 	/** Source-format-neutral adapter, scope, state, and system-set runtime. */
 	public WorldRuntime $runtime;
+	/** Registered runtime handles and reverse-order cleanup callbacks. */
 	private array $registered = [], $cleanup = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -35,7 +42,12 @@ final class Context
 	 * @param Scheduler|null $systems Scheduler shared by the session, or null to create one.
 	 * @return void Initializes independent factory and Tiled-loader services.
 	 */
-	public function __construct(public array $world = [], ?Registry $entities = null, ?Scheduler $systems = null)
+	public function __construct(
+		/** Neutral or legacy Tiled world document, including its source identity. */
+		public array $world = []
+		, ?Registry $entities = null
+		, ?Scheduler $systems = null
+	)
 	{
 		$this->entities = $entities ?? new Registry;
 		$this->systems = $systems ?? new Scheduler($this->entities);

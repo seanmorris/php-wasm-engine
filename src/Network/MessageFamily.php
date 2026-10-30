@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Stable protocol family numbers shared with browser/network/Protocol.mjs. */
+/**
+ * Stable protocol family numbers shared with browser/network/Protocol.mjs.
+ *
+ * Keeping the numeric catalog in PHP mirrors the JavaScript protocol encoder and prevents ad hoc message
+ * numbers in gameplay systems.
+ */
 final class MessageFamily
 {
 	/**
@@ -70,6 +75,7 @@ final class MessageFamily
 	 */
 	public const DIAGNOSTICS = 16;
 
+	/** Complete allowlist of message-family numbers accepted by the binary decoder. */
 	private const VALUES = [
 		self::HELLO,self::COMPATIBILITY,self::RESOURCE_MANIFEST,self::RESOURCE_READY
 		, self::GAME_READY

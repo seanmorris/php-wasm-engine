@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** A physical source, independent of the logical action that uses it. */
+/**
+ * A physical source, independent of the logical action that uses it.
+ *
+ * Instances provide stable serialization, conflict identity, device grouping, direction, and display hints
+ * for a key, button, axis, or wheel direction.
+ */
 final class Source implements \JsonSerializable
 {
 	/** Keyboard key source kind. */
@@ -52,7 +57,14 @@ final class Source implements \JsonSerializable
 	 * @param int $sign Axis direction, or one for buttons.
 	 * @return void Validates and stores the physical source.
 	 */
-	public function __construct(public readonly string $kind, public readonly int $code, public readonly int $sign = 1)
+	public function __construct(
+		/** Physical input kind. */
+		public readonly string $kind
+		, /** Key, button or axis identifier. */
+		public readonly int $code
+		, /** Axis direction, or one for buttons. */
+		public readonly int $sign = 1
+	)
 	{
 		$valid = match($kind)
 		{

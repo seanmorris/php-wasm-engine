@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Shared logical commands. Game actions start above the reserved engine range. */
+/**
+ * Shared logical commands. Game actions start above the reserved engine range.
+ *
+ * The constants reserve a stable engine range for shared navigation and lifecycle actions, leaving higher
+ * values available to applications without collisions.
+ */
 final class InputCode
 {
 	/** Highest code reserved for shared engine actions. */

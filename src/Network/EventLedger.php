@@ -2,10 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Bounded idempotence ledger for reliable gameplay events. */
+/**
+ * Bounded idempotence ledger for reliable gameplay events.
+ *
+ * Event identities are retained within a fixed capacity so retransmitted reliable messages remain harmless
+ * without allowing history to grow forever.
+ */
 final class EventLedger
 {
-	/** @var array<string,true> */
+	/**
+ * Accepted event identities in bounded insertion order.
+ *
+ * @var array<string,true>
+ */
 	private array $seen = [];
 
 	/**
@@ -15,7 +24,7 @@ final class EventLedger
 	 * @return void Rejects a capacity outside 1 through 65536.
 	 */
 	public function __construct(
-		/** Maximum retained entry count. */
+		/** Maximum number of entries retained by the bounded collection. */
 		public int $capacity = 4096
 	){
 		if($capacity < 1 || $capacity > 65536) throw new \OutOfRangeException('Event ledger capacity is invalid');

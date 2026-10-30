@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Register a reusable group of systems and render passes for one active scope. */
+/**
+ * Register a reusable group of systems and render passes for one active scope.
+ *
+ * Implementations attach game behavior to a neutral scope context and rely on that context to own every
+ * registration and cleanup action.
+ */
 interface SystemSet
 {
 

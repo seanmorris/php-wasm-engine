@@ -2,10 +2,17 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Vrzno-safe gameplay packet bridge; browser code owns framing sequence numbers. */
+/**
+ * Vrzno-safe gameplay packet bridge; browser code owns framing sequence numbers.
+ *
+ * PHP exchanges structured payloads through the browser callback while this bridge enforces open-state and
+ * payload boundaries before crossing the Vrzno boundary.
+ */
 final class BrowserBridge
 {
+	/** Browser callback that drains one incoming network packet. */
 	private $receiver;
+	/** Browser callback that sends one encoded network packet. */
 	private $sender;
 
 	/**
@@ -33,6 +40,7 @@ final class BrowserBridge
 		$this->protocol = $protocol ?? new Protocol;
 	}
 
+	/** Packet protocol encoder and decoder owned by this bridge. */
 	private Protocol $protocol;
 
 	/**

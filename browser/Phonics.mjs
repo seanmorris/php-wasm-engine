@@ -11,6 +11,8 @@ const oauthPopupCallback = relayOAuthPopup();
 const quote = value => "'" + String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'") + "'";
 
 /**
+ * Browser options controlling application acquisition, policy, runtime creation, and progress reporting.
+ *
  * @typedef {object} RunOptions
  * @property {HTMLCanvasElement} [canvas] Display target; defaults to the first canvas.
  * @property {object} [runtime] Runtime URL or a create({canvas, signal}) factory with Phar available.
@@ -25,6 +27,8 @@ const quote = value => "'" + String(value).replaceAll('\\', '\\\\').replaceAll("
  */
 
 /**
+ * Ready application runtime and the resources needed to inspect or dispose its browser session.
+ *
  * @typedef {object} PhonicsSession
  * @property {string} url Application URL.
  * @property {AbortSignal} signal Session cancellation signal.
@@ -209,7 +213,7 @@ export async function run(applicationUrl, options = {})
 		host.importModule = async code => {
 			signal.throwIfAborted();
 
-			if(/\bimport\s*(?:\(|[\s\S]*?\bfrom\s*['"]|['"])/.test(code))
+			if(/\bimport\b\s*(?:\(|[\s\S]*?\bfrom\s*['"]|['"])/.test(code))
 				throw new Error('Application browser module must be a self-contained bundle');
 
 			const blob = URL.createObjectURL(new Blob([code], {type: 'text/javascript'}));
@@ -291,5 +295,8 @@ export async function run(applicationUrl, options = {})
 	}
 }
 
+/** Public browser entrypoints for running a packaged Phonics application and observing its loading progress. */
 export const Phonics = {run, LoadProgress};
+
+/** Default browser API namespace. */
 export default Phonics;

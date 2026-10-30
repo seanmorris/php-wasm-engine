@@ -2,12 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Component codec backed by game-owned encode/decode callbacks. */
+/**
+ * Component codec backed by game-owned encode/decode callbacks.
+ *
+ * It packages a component type, schema version, replication policy, and validating callbacks behind the same
+ * interface as a dedicated codec class.
+ */
 final class CallbackComponentCodec implements ComponentCodec
 {
+	/** Transport schema name exposed by this codec. */
 	private string $schema;
+	/** Concrete component class encoded by this codec. */
 	private string $componentType;
+	/** Callback that converts a component to validated transport data. */
 	private $encoder;
+	/** Callback that converts transport data to a component. */
 	private $decoder;
 
 	/**
@@ -46,7 +55,9 @@ final class CallbackComponentCodec implements ComponentCodec
 		$this->replicationPolicy = $policy ?? new ReplicationPolicy;
 	}
 
+	/** Schema version emitted and accepted by this codec. */
 	private int $codecVersion;
+	/** Replication policy governing this component schema. */
 	private ReplicationPolicy $replicationPolicy;
 
 	/**

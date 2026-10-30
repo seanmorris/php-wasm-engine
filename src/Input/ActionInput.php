@@ -2,10 +2,17 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Physical buffering shared by render-frame look, fixed-step actions, and rebinding. */
+/**
+ * Physical buffering shared by render-frame look, fixed-step actions, and rebinding.
+ *
+ * It buffers digital taps and relative motion between polls while sampling absolute axes from their latest
+ * values, preventing short input from disappearing between simulation steps.
+ */
 final class ActionInput
 {
+	/** Held strengths, press counts, relative deltas, source metadata, and capture candidates. */
 	private array $held = [], $presses = [], $relative = [], $sources = [], $motion = [];
+	/** Digital presses retained for the current display frame. */
 	private array $framePresses = [];
 
 	/**
@@ -14,7 +21,10 @@ final class ActionInput
 	 * @param Bindings $bindings Editable action bindings.
 	 * @return void Initializes an empty input buffer.
 	 */
-	public function __construct(public Bindings $bindings) {}
+	public function __construct(
+		/** Editable action bindings. */
+		public Bindings $bindings
+	) {}
 
 	/**
 	 * Clear transient capture candidates at the start of an event poll.

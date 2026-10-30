@@ -2,15 +2,30 @@
 declare(strict_types=1);
 namespace Phonics\Application;
 
-/** Executable application's connection to the browser platform and optional content runtime. */
+/**
+ * Executable application's connection to the browser platform and optional content runtime.
+ *
+ * It exposes the executable archive, mounted resources, browser bridge, and optional world runtime through
+ * one validated object passed to application code.
+ */
 final class Context
 {
-	/** @var array Host-supplied JSON initialization values available to the application bootstrap. */
+	/**
+ * Immutable application initialization data supplied by the executable manifest.
+ *
+ * @var array Host-supplied JSON initialization values available to the application bootstrap.
+ */
 	public readonly array $init;
+	/** Browser application host bridge supplied through Vrzno. */
 	private mixed $host;
+	/** Verified PHP entry path prepared by the most recent composition. */
 	private string $entry;
 
-	/** Connect the running PHAR to the browser host and register its declared archive members. */
+	/**
+	 * Connect the running PHAR to the browser host and register its declared archive members.
+	 *
+	 * @return void Initializes the browser host and exposes validated initialization data.
+	 */
 	public function __construct()
 	{
 		if(!function_exists('vrzno_env')) throw new \RuntimeException('This application requires the Phonics browser host');
@@ -20,6 +35,13 @@ final class Context
 		$root = 'phar://' . \Phar::running(false) . '/';
 		$descriptor = file_get_contents($root . 'application.json');
 		$members = array_fill_keys(json_decode($descriptor, true, flags: JSON_THROW_ON_ERROR)['members'], true);
+		/**
+		 * Copy one declared archive member to a browser-requested mount point.
+		 *
+		 * @param string $member Declared application-archive member to copy.
+		 * @param string $target Validated temporary filesystem destination.
+		 * @return void Copies the member or throws when either path violates the archive contract.
+		 */
 		$copy = static function(string $member, string $target) use ($root, $members): void {
 			if(!isset($members[$member])) throw new \RuntimeException('Undeclared archive member: ' . $member);
 			if(!str_starts_with($target, '/phonics/archive-read/')) throw new \RuntimeException('Invalid archive read target');
@@ -55,6 +77,11 @@ final class Context
 		foreach($data['bootstraps'] as $bootstrap) require_once $bootstrap;
 		$phonics = new \Phonics\Package\Context($data['world']);
 		$phonics->factories->strictReferences = true;
+		/**
+		 * Remove refresh ownership and close the composed package context.
+		 *
+		 * @return void Releases systems, resources, and the registered refresh callback.
+		 */
 		$close = static function() use ($phonics, &$close): void {
 			vrzno_env('onRefresh')->delete($close);
 			$phonics->close();

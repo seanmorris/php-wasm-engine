@@ -5,10 +5,19 @@ namespace Phonics\Render;
 use Phonics\Ecs\Query;
 use Phonics\Ecs\Registry;
 
-/** Several independently positioned sprites attached to one entity. */
+/**
+ * Several independently positioned sprites attached to one entity.
+ *
+ * The component keeps child sprite offsets and ordering together so one entity can render a composite visual
+ * without spawning presentation-only entities.
+ */
 final class SpriteGroup
 {
-	/** @var list<Sprite> Sprites in painter order, with world-space positions. */
+	/**
+ * Ordered child sprites and their local offsets.
+ *
+ * @var list<Sprite> Sprites in painter order, with world-space positions.
+ */
 	public array $sprites;
 
 	/**

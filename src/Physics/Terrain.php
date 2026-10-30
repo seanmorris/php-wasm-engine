@@ -2,13 +2,23 @@
 declare(strict_types=1);
 namespace Phonics\Physics;
 
-/** Segment broadphase plus exact ray/segment intersection. Polygons may be concave. */
+/**
+ * Segment broadphase plus exact ray/segment intersection. Polygons may be concave.
+ *
+ * Broadphase indexes prune candidates before continuous tests, while stable shape handles support removal
+ * and expose shared polygon boundaries correctly.
+ */
 class Terrain
 {
+	/** Collision segments, spatial cells, shared edges, and opposite-edge links. */
 	private array $segments = [], $grid = [], $edges = [], $opposites = [];
+	/** Collision polygons and their broadphase spatial cells. */
 	private array $polygons = [], $polygonGrid = [];
+	/** Registered collision shape records indexed by stable handle. */
 	private array $shapes = [];
+	/** Owning shape handle indexed by collision segment handle. */
 	private array $segmentShapes = [];
+	/** Next stable handles allocated for shapes, segments, and polygons. */
 	private int $nextShape = 1, $nextSegment = 0, $nextPolygon = 0;
 	/** Number of exact ray queries performed, exposed for diagnostics and benchmarks. */
 	public int $raycasts = 0;
@@ -21,7 +31,11 @@ class Terrain
 	 * @param int $cellSize Positive broadphase cell size in world pixels.
 	 * @return void Initializes terrain with shared geometry unless a shape selects a plane.
 	 */
-	public function __construct(array $shapes = [], private int $cellSize = 64)
+	public function __construct(
+		array $shapes = []
+		, /** Positive broadphase cell size in world pixels. */
+		private int $cellSize = 64
+	)
 	{
 		if($cellSize < 1)
 		{

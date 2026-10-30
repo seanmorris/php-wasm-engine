@@ -2,12 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Instanced solid rectangles for screen-space panels, sliders, and text selections. */
+/**
+ * Instanced solid rectangles for screen-space panels, sliders, and text selections.
+ *
+ * A single restorable program batches colored rectangle instances, including clipping and border data used
+ * throughout the UI.
+ */
 final class RectRenderer
 {
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
+	/** Restorable vertex-array and rectangle instance-buffer handles. */
 	private array $vao = [], $buffers = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Whether renderer resources are bound for the current context generation. */
 	private bool $bound = false;
 
 	/**
@@ -17,7 +26,10 @@ final class RectRenderer
 	 * the context. Leave false when other renderers or external GL code can change the program.
 	 * @return void Allocates resources owned exclusively by this renderer.
 	 */
-	public function __construct(private bool $exclusive = false)
+	public function __construct(
+		/** Retain the program binding when this renderer owns every draw in the context. Leave false when other renderers or external GL code can change the program. */
+		private bool $exclusive = false
+	)
 	{
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.vert')

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Idempotent reliable gameplay event such as a pickup, sound, score, or transition. */
+/**
+ * Idempotent reliable gameplay event such as a pickup, sound, score, or transition.
+ *
+ * The immutable record combines event identity, tick, scope, type, payload, and optional prediction key for
+ * idempotent delivery.
+ */
 final class ReliableEvent implements \JsonSerializable
 {
 
@@ -16,13 +21,13 @@ final class ReliableEvent implements \JsonSerializable
 	 * @return void Stores the event after validating its ID, type and JSON-safe payload.
 	 */
 	public function __construct(
-		/** Stable event or prefab identifier. */
+		/** Stable identifier for an authority, event, prefab, or network entity. */
 		public string $id
-		, /** Simulation tick represented by the record. */
+		, /** Simulation tick associated with the command, event, or snapshot. */
 		public SimulationTick $tick
-		, /** Stable game-owned event type. */
+		, /** Stable game-owned reliable event type. */
 		public string $type
-		, /** Validated JSON-safe payload fields. */
+		, /** Validated scalar data carried by the message or component. */
 		public array $payload = []
 	){
 		if(!preg_match('/^[A-Za-z0-9][A-Za-z0-9_.:\/-]{0,127}$/', $id))
@@ -37,7 +42,7 @@ final class ReliableEvent implements \JsonSerializable
 	/**
 	 * Restore a reliable event from transport-safe fields.
 	 *
-	 * @param array $value Scalar value or serialized fields to validate.
+	 * @param array $value Transport fields containing event sequence, tick, kind, and payload.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** Signed held values, relative displacement and counted presses sampled independently. */
+/**
+ * Signed held values, relative displacement and counted presses sampled independently.
+ *
+ * A frame retains contributions by device until the consumer applies device-specific sensitivity, and keeps
+ * held values separate from consumable deltas and press counts.
+ */
 final class ActionFrame
 {
 
@@ -16,10 +21,14 @@ final class ActionFrame
 	 * @return void Initializes the sampled action channels.
 	 */
 	public function __construct(
+		/** Signed merged strengths. */
 		public array $values = []
-		, public array $deltas = []
-		, public array $presses = []
-		, public array $devices = []
+		, /** Signed relative displacement. */
+		public array $deltas = []
+		, /** Signed press counts. */
+		public array $presses = []
+		, /** Strengths grouped by device. */
+		public array $devices = []
 	){
 	}
 

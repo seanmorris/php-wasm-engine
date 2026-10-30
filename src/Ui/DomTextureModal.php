@@ -4,12 +4,21 @@ namespace Phonics\Ui;
 
 use Phonics\Engine;
 
-/** Capture menu-style input for a browser-rendered HTML texture modal. */
+/**
+ * Capture menu-style input for a browser-rendered HTML texture modal.
+ *
+ * It forwards navigation, confirm, cancel, paging, and accelerated scroll pulses through the browser bridge
+ * while leaving HTML rendering outside PHP.
+ */
 final class DomTextureModal
 {
+	/** Held navigation states and their next repeat timestamps. */
 	private array $held = [], $next = [];
+	/** Graphics or runtime generation for which current state is valid. */
 	private int $generation = -1;
+	/** Active input theme used to choose control hints. */
 	private string $theme = 'keyboard';
+	/** Latest browser DOM-texture state returned through the bridge. */
 	private array $state = ['open' => false, 'ready' => false, 'scroll' => 0, 'maxScroll' => 0];
 
 	/**
@@ -19,7 +28,12 @@ final class DomTextureModal
 	 * @param MenuRenderer|null $hintRenderer Optional shared bitmap renderer for themed back hints.
 	 * @return void Starts closed and keeps all rendering state in the browser bridge.
 	 */
-	public function __construct(private object $bridge, private ?MenuRenderer $hintRenderer = null) {}
+	public function __construct(
+		/** Browser DomTexture instance supplied through vrzno_env(). */
+		private object $bridge
+		, /** Optional shared bitmap renderer for themed back hints. */
+		private ?MenuRenderer $hintRenderer = null
+	) {}
 
 	/**
 	 * Open trusted HTML from an application-owned source.
@@ -184,7 +198,7 @@ final class DomTextureModal
 	 * Scroll the modal by the requested offset.
 	 *
 	 * @param float $amount Signed scroll distance in document pixels.
-	 * @return void Completes the operation.
+	 * @return void Scrolls the bridge and refreshes the cached modal state.
 	 */
 	private function scrollBy(float $amount): void
 	{
@@ -195,8 +209,8 @@ final class DomTextureModal
 	/**
 	 * Scroll the modal to the requested position.
 	 *
-	 * @param float $offset Offset value used by this operation.
-	 * @return void Completes the operation.
+	 * @param float $offset Absolute vertical document position in pixels.
+	 * @return void Positions the bridge and refreshes the cached modal state.
 	 */
 	private function scrollTo(float $offset): void
 	{
@@ -207,7 +221,7 @@ final class DomTextureModal
 	/**
 	 * Decode the bridge snapshot without allowing malformed diagnostic state to interrupt input.
 	 *
-	 * @return void Completes the operation.
+	 * @return void Replaces cached state when the bridge returns a valid JSON object.
 	 */
 	private function synchronize(): void
 	{
@@ -229,9 +243,9 @@ final class DomTextureModal
 	/**
 	 * Advance held durations using the same first-press and accelerated repeat cadence as MenuInput.
 	 *
-	 * @param array $buttons Buttons value used by this operation.
+	 * @param array<string,float> $buttons Logical UI action strengths for the current frame.
 	 * @param float $elapsed Elapsed time in seconds.
-	 * @return void Completes the operation.
+	 * @return void Advances held durations and clears repeat deadlines for released actions.
 	 */
 	private function advance(array $buttons, float $elapsed): void
 	{
@@ -251,9 +265,9 @@ final class DomTextureModal
 	/**
 	 * Return first press and optional accelerated repeats for one logical action.
 	 *
-	 * @param string $key Key value used by this operation.
-	 * @param bool $repeat Repeat value used by this operation.
-	 * @return int Result of this operation.
+	 * @param string $key Logical UI action whose press and hold state should be sampled.
+	 * @param bool $repeat Whether a held action should emit accelerated repeat pulses.
+	 * @return int Number of fresh or repeated action pulses due this frame.
 	 */
 	private function pulses(string $key, bool $repeat = false): int
 	{

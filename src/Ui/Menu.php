@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Ui;
 
-/** Declarative menu state and live bindings, usable without SDL or a renderer. */
+/**
+ * Declarative menu state and live bindings, usable without SDL or a renderer.
+ *
+ * Pages and rows describe navigation, actions, ranges, choices, live labels, and callbacks while the model
+ * owns focus, editing, scrolling, and submenu history.
+ */
 final class Menu
 {
 	/** Stack rows from top to bottom and use vertical input for selection. */
@@ -23,7 +28,9 @@ final class Menu
 	public bool $loading = false;
 	/** User-facing asynchronous action failure, cleared by later navigation or activation. */
 	public ?string $error = null;
+	/** Current menu rows and parent-page navigation stack. */
 	private array $items = [], $stack = [];
+	/** Optional callback that lazily populates the current menu page. */
 	private $loader = null;
 
 	/**
@@ -33,7 +40,11 @@ final class Menu
 	 * @param string $title Root heading rendered above the rows.
 	 * @return void Initializes a closed menu and validates the root definitions.
 	 */
-	public function __construct(array $items = [], public string $title = 'Menu')
+	public function __construct(
+		array $items = []
+		, /** Root heading rendered above the rows. */
+		public string $title = 'Menu'
+	)
 	{
 		$this->setItems($items);
 	}

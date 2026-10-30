@@ -1,8 +1,34 @@
 const loadPhases = ['application','runtime','world','packages','code','assets','modules','game','ready'];
 
-/** Immutable progress snapshot emitted while a world becomes playable. */
+/**
+ * Immutable progress snapshot emitted while a world becomes playable.
+ *
+ * Each instance records completed, total, current resource, and phase information without exposing the
+ * mutable loader that produced it.
+ */
 export class LoadProgress
 {
+	/** Current world-loading phase. */
+	phase;
+
+	/** Concise activity label suitable for loading UI. */
+	label;
+
+	/** Work units completed within the current phase. */
+	completed;
+
+	/** Known work units in the current phase, or zero while indeterminate. */
+	total;
+
+	/** Canonical resource currently being processed, when known. */
+	resource;
+
+	/** Zero-based position of the current phase in the loading sequence. */
+	phaseIndex;
+
+	/** Total number of phases in the loading sequence. */
+	phaseCount;
+
 
 	/**
 	 * Describe one real loader phase and its completed unit count.

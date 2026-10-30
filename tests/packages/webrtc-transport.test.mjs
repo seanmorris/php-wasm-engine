@@ -173,3 +173,88 @@ test('WebRTC transport discards candidates that belong to an ignored colliding o
 	assert.equal(signals[0].description.type, 'answer');
 	transport.close();
 });
+
+test('recovery delays host restart, retries once, refreshes relay credentials, and has a hard deadline', async t => {
+	t.mock.timers.enable({apis: ['setTimeout']});
+	let restarts = 0, refreshes = 0;
+	const signals = [], states = [];
+
+	const transport = new WebRtcTransport(
+		{
+			RTCPeerConnection: FakePeerConnection
+			, sendSignal: async value => signals.push(value)
+			, refreshIceServers: async () => { refreshes++; return [{urls: 'turn:fixture'}]; }
+		}
+	);
+
+	t.after(() => transport.close());
+
+	transport.pc.restartIce = () => restarts++;
+
+	transport.pc.getConfiguration = () => ({});
+
+	transport.pc.setConfiguration = value => { transport.pc.configuration = value; };
+
+	transport.addEventListener('recovery', e => states.push(e.detail.state));
+	const opening = transport.start({initiator: true});
+
+	for(const channel of transport.pc.channels) channel.open();
+	await opening;
+	transport.pc.connectionState = 'disconnected';
+	transport.connectionChanged();
+	assert.equal(signals[0].recovery, 'pause');
+	t.mock.timers.tick(2999);
+	await Promise.resolve();
+	assert.equal(restarts, 0);
+	t.mock.timers.tick(1);
+	await Promise.resolve();
+	assert.equal(restarts, 1);
+	t.mock.timers.tick(7000);
+	await Promise.resolve();
+	assert.equal(restarts, 2);
+	assert.equal(refreshes, 2);
+	assert.deepEqual(transport.pc.configuration.iceServers, [{urls: 'turn:fixture'}]);
+	t.mock.timers.tick(19_999);
+	assert.equal(transport.closed, false);
+	t.mock.timers.tick(1);
+	assert.equal(transport.closed, true);
+	assert.deepEqual(states, ['reconnecting']);
+});
+
+test(
+	'recovered transport survives signaling failure and rejects stale generations while buffering future ICE'
+	, async t => {
+		t.mock.timers.enable({apis: ['setTimeout']});
+
+		const transport = new WebRtcTransport(
+			{RTCPeerConnection: FakePeerConnection, polite: true, sendSignal: async () => {}}
+		);
+
+		t.after(() => transport.close());
+		const opening = transport.start();
+		transport.attach(new FakeChannel('control'));
+		transport.attach(new FakeChannel('realtime'));
+
+		for(const channel of transport.channels.values()) channel.open();
+		await opening;
+		transport.pc.connectionState = 'connected';
+		await transport.receiveSignal({description: {type: 'offer', sdp: 'initial'}});
+		await transport.receiveSignal({generation: 1, candidate: {candidate: 'future'}});
+		assert.equal(transport.pc.candidates.length, 0);
+		await transport.receiveSignal({recovery: 'pause', generation: 1});
+		await transport.receiveSignal({generation: 1, description: {type: 'offer', sdp: 'restart'}});
+		assert.equal(transport.pc.candidates[0].candidate, 'future');
+		transport.finishRecovery();
+		await transport.receiveSignal({generation: 0, candidate: {candidate: 'stale'}});
+		await transport.receiveSignal({recovery: 'pause', generation: 1});
+		assert.equal(transport.pc.candidates.length, 1);
+		assert.equal(transport.recovering, false);
+		transport.signalingFailed(new Error('Matrix temporarily unavailable'));
+		assert.equal(transport.closed, false);
+		assert.equal(transport.send('control', new Uint8Array([1])), true);
+		t.mock.timers.tick(30_000);
+		assert.equal(transport.closed, false);
+		transport.channels.get('control').close();
+		assert.equal(transport.closed, true);
+	}
+);

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Aspect-preserving placement and pointer conversion for a fixed logical canvas. */
+/**
+ * Aspect-preserving placement and pointer conversion for a fixed logical canvas.
+ *
+ * Letterboxing and scale are derived from output dimensions, and the same transform converts browser pointer
+ * positions back to logical coordinates.
+ */
 final class LogicalViewport
 {
 
@@ -19,13 +24,20 @@ final class LogicalViewport
 	 * @return void The viewport is available through its promoted properties.
 	 */
 	private function __construct(
+		/** Width of the logical canvas. */
 		public float $logicalWidth
-		, public float $logicalHeight
-		, public float $x
-		, public float $y
-		, public float $width
-		, public float $height
-		, public float $scale
+		, /** Height of the logical canvas. */
+		public float $logicalHeight
+		, /** Horizontal output offset of the fitted canvas. */
+		public float $x
+		, /** Vertical output offset of the fitted canvas. */
+		public float $y
+		, /** Width of the fitted canvas in output coordinates. */
+		public float $width
+		, /** Height of the fitted canvas in output coordinates. */
+		public float $height
+		, /** Uniform scale from logical to output coordinates. */
+		public float $scale
 	){
 	}
 

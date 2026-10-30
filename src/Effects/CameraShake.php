@@ -4,13 +4,19 @@ namespace Phonics\Effects;
 
 use Phonics\Render\Camera;
 
-/** Frame-rate-independent alternating camera displacement with exponential decay. */
+/**
+ * Frame-rate-independent alternating camera displacement with exponential decay.
+ *
+ * The component tracks remaining amplitude and phase without owning a camera, allowing presentation code to
+ * apply shake without corrupting camera-follow state.
+ */
 final class CameraShake
 {
 	/** Current render-only horizontal displacement in world pixels. */
 	public float $x = 0;
 	/** Current render-only vertical displacement in world pixels. */
 	public float $y = 0;
+	/** Shake origin and elapsed effect age in seconds. */
 	private float $sourceX = 0, $sourceY = 0, $age = 0;
 
 	/**

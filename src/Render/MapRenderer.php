@@ -5,18 +5,31 @@ use Phonics\Tiled\TileMap;
 use Phonics\Tiled\Chunk;
 use Phonics\Tiled\Gid;
 
-/** RGBA8UI texture-array slices hold tile IDs, one instance per visible chunk/layer. */
+/**
+ * RGBA8UI texture-array slices hold tile IDs, one instance per visible chunk/layer.
+ *
+ * Visible chunks become compact integer texture slices and instanced page draws, avoiding per-tile geometry
+ * while retaining Tiled transforms and painter order.
+ */
 final class MapRenderer
 {
 	/** Owned tileset image and metadata atlas. */
 	public Atlas $atlas;
-	/** @var array{draws:int,instances:int,uploads:int} Latest tile-rendering statistics. */
+	/**
+ * Latest map-renderer draw, instance, and upload counters.
+ *
+ * @var array{draws:int,instances:int,uploads:int} Latest tile-rendering statistics.
+ */
 	public array $stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
 	/** Optional owned renderer for Tiled image layers. */
 	public ?ImageRenderer $images = null;
+	/** GPU page textures, buffers, vertex array, and visible grid ranges. */
 	private array $pages = [], $buffers = [], $vao = [],$gridRanges = [];
+	/** Cached layer layout records indexed by layer identity. */
 	private array $layout = [];
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
 	/**
@@ -25,7 +38,10 @@ final class MapRenderer
 	 * @param TileMap $map Loaded map whose tile and image layers will be drawn.
 	 * @return void Acquires GPU resources owned by this renderer.
 	 */
-	public function __construct(public TileMap $map)
+	public function __construct(
+		/** Loaded map whose tile and image layers will be drawn. */
+		public TileMap $map
+	)
 	{
 		$this->atlas = new Atlas($map);
 

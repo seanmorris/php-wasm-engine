@@ -2,11 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Asset;
 
-/** Cache per asset source. Supply a reader for remote files or custom archives. */
+/**
+ * Cache per asset source. Supply a reader for remote files or custom archives.
+ *
+ * Successful byte reads and JSON decodes are memoized independently, while explicit invalidation lets
+ * development and streaming hosts replace either representation safely.
+ */
 final class Assets
 {
+	/** Immutable asset bytes cached by canonical reference. */
 	private array $bytes = [];
+	/** Decoded JSON values cached by canonical reference. */
 	private array $json = [];
+	/** Callback that reads immutable bytes for one canonical reference. */
 	private $reader;
 
 	/**

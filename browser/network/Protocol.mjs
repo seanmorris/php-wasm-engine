@@ -186,9 +186,23 @@ export function decodeJsonPayload(packet)
 	}
 }
 
-/** Track a 32-packet acknowledgement window and reject stale duplicate sequences. */
+/**
+ * Track a 32-packet acknowledgement window and reject stale duplicate sequences.
+ *
+ * It tracks the newest unsigned sequence plus a compact acknowledgement mask, accepting bounded reordering
+ * while rejecting duplicates and stale traffic.
+ */
 export class SequenceWindow
 {
+	/** Largest sequence number accepted by the replay window. */
+	latest;
+
+	/** Bit window recording recently accepted sequence numbers. */
+	bits;
+
+	/** Whether the sequence window has accepted its first value. */
+	initialized;
+
 
 	/** Create an empty window that accepts its first sequence unconditionally. */
 	constructor() { this.latest = 0; this.bits = 0; this.initialized = false; }

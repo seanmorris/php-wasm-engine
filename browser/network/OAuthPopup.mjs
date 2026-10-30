@@ -111,7 +111,8 @@ export const relayOAuthPopup = (
 				notice.style.cssText = 'position:fixed;inset:0;z-index:2147483647;margin:0;padding:2rem;'
 					+ 'color:#f7f0d0;background:#080a14;font:18px/1.5 system-ui,sans-serif';
 
-				document.body.append(notice);
+				if(typeof document.body.replaceChildren === 'function') document.body.replaceChildren(notice);
+				else document.body.append(notice);
 			}
 			else document.body.textContent = 'Matrix sign-in complete. This window can now close.';
 		}

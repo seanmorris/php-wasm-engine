@@ -2,12 +2,21 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Captures terrain and applies a one-dimensional Gaussian blur along camera travel. */
+/**
+ * Captures terrain and applies a one-dimensional Gaussian blur along camera travel.
+ *
+ * The restorable pass renders selected scene content offscreen, then composites a bounded directional kernel
+ * without changing simulation state.
+ */
 final class MotionBlurRenderer
 {
+	/** Restorable shader program owned by this renderer. */
 	private Program $program;
+	/** Restorable fullscreen vertex array, framebuffer, and depth buffer. */
 	private array $vao = [], $framebuffer = [], $depthBuffer = [];
+	/** Captured scene texture and caller framebuffer used by the blur pass. */
 	private int $sceneTexture = 0, $targetFramebuffer = 0;
+	/** Whether the pass is closed and whether it is currently capturing a scene. */
 	private bool $closed = false, $capturing = false;
 	/** Composite draw calls submitted by the latest capture. */
 	public int $draws = 0;
@@ -19,7 +28,12 @@ final class MotionBlurRenderer
 	 * @param int $height Positive drawing-buffer height in pixels.
 	 * @return void Creates restorable color and depth resources for directional terrain blur.
 	 */
-	public function __construct(public int $width, public int $height)
+	public function __construct(
+		/** Positive drawing-buffer width in pixels. */
+		public int $width
+		, /** Positive drawing-buffer height in pixels. */
+		public int $height
+	)
 	{
 		if($width <= 0 || $height <= 0)
 		{

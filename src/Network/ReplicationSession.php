@@ -5,22 +5,51 @@ namespace Phonics\Network;
 use Phonics\Ecs\Registry;
 use Phonics\Network\Component\NetworkAuthority;
 
-/** Two-peer host-authoritative command and snapshot coordinator for fixed-step systems. */
+/**
+ * Two-peer host-authoritative command and snapshot coordinator for fixed-step systems.
+ *
+ * Before each fixed step it exchanges commands and control traffic; after the step the host publishes
+ * authoritative snapshots and events for guest reconciliation.
+ */
 final class ReplicationSession
 {
+	/** Network simulation clock advanced by this session. */
 	private NetworkClock $clock;
+	/** Next local input-command sequence number. */
 	private int $commandSequence = 0;
+	/** Next authoritative snapshot sequence number. */
 	private int $snapshotSequence = 0;
+	/** Unacknowledged local input commands retained for replay. */
 	private InputHistory $history;
+	/** Validator for received peer input commands. */
 	private CommandValidator $validator;
+	/** Authoritative world-snapshot builder. */
 	private SnapshotBuilder $builder;
+	/** Remote authoritative snapshot applier. */
 	private SnapshotApplier $applier;
+	/** Remote snapshot samples retained for interpolation. */
 	private SnapshotBuffer $buffer;
+	/** Ledger used to reject duplicate reliable events. */
 	private EventLedger $events;
+	/** Latest snapshot sequence acknowledged by the peer. */
 	private ?SnapshotSequence $peerBaseline = null;
+	/** Newest snapshot sequence accepted from the host. */
 	private ?SnapshotSequence $latestSnapshot = null;
+	/** Whether the next authoritative snapshot must contain a full baseline. */
 	private bool $forceFull = true;
-	/** @var array<int,InputCommand> */
+	/** Identifier of the active local recovery attempt. */
+	private ?string $recovery = null;
+	/** Identifier of the recovery request awaiting completion. */
+	private ?string $recoveryRequest = null;
+	/** Whether this peer initiated and owns the active recovery attempt. */
+	private bool $recoveringOwner = false;
+	/** Whether both peers completed the active recovery attempt. */
+	private bool $recoveryComplete = false;
+	/**
+ * Reliable events queued for authoritative transmission.
+ *
+ * @var array<int,InputCommand>
+ */
 	private array $pending = [];
 
 	/**
@@ -34,24 +63,32 @@ final class ReplicationSession
 	 * @param ReplicationCallbacks $callbacks Game-owned input and reliable-event callbacks.
 	 * @param int $snapshotInterval Ticks between authoritative snapshot sends.
 	 * @param int $fullSnapshotInterval Ticks between forced complete baselines.
-	 * @param ?callable $commandRule Validated command rule used by this replication session.
+	 * @param (callable(InputCommand):bool)|null $commandRule Optional game-specific input-command predicate.
 	 * @param ?NetworkClock $clock Match-lifetime clock shared by consecutive replication scopes.
 	 * @param ?ReplicationScope $scope Active world scope used to reject delayed traffic from another map.
 	 * @return void Creates a replication session for the active world scope.
 	 */
 	public function __construct(
+		/** ECS registry coordinated by this replication session. */
 		private Registry $world
-		, private ReplicationRegistry $replication
-		, private NetworkEntityAllocator $entities
-		, private BrowserBridge $bridge
-		, /** Negotiated match context. */
+		, /** Whitelist of component codecs and prefab factories. */
+		private ReplicationRegistry $replication
+		, /** Bidirectional network/local entity identity map. */
+		private NetworkEntityAllocator $entities
+		, /** Browser packet bridge used for gameplay messages. */
+		private BrowserBridge $bridge
+		, /** Negotiated peer identities, slots, and settings. */
 		public MatchContext $match
-		, private ReplicationCallbacks $callbacks
-		, private int $snapshotInterval = 2
-		, private int $fullSnapshotInterval = 70
+		, /** Game-owned input and reliable-event callbacks. */
+		private ReplicationCallbacks $callbacks
+		, /** Ticks between authoritative snapshot sends. */
+		private int $snapshotInterval = 2
+		, /** Ticks between forced complete baselines. */
+		private int $fullSnapshotInterval = 70
 		, ?callable $commandRule = null
 		, ?NetworkClock $clock = null
-		, private ?ReplicationScope $scope = null
+		, /** Active world scope used to reject delayed traffic from another map. */
+		private ?ReplicationScope $scope = null
 	){
 		if($snapshotInterval < 1 || $fullSnapshotInterval < $snapshotInterval)
 		throw new \InvalidArgumentException('Invalid snapshot intervals');
@@ -156,6 +193,78 @@ final class ReplicationSession
 	}
 
 	/**
+	 * Pause prediction without destroying entity identities or reliable-event deduplication.
+	 *
+	 * @param string $id Local identifier for this connection recovery attempt.
+	 * @return void Clears transient prediction state for the recovery attempt.
+	 */
+	public function beginRecovery(string $id): void
+	{
+		if($this->recovery === $id) return;
+
+		$this->recovery = $id;
+		$this->recoveryRequest = null;
+		$this->recoveryComplete = false;
+		$this->pending = [];
+		$this->history->clear();
+		$this->buffer->clear();
+		$this->peerBaseline = null;
+	}
+
+	/**
+	 * Pump only recovery traffic while gameplay is paused, using the existing RESYNC family.
+	 *
+	 * @param bool $connected Whether the transport is ready for the snapshot barrier.
+	 * @return bool True once the authoritative snapshot has been acknowledged and play may resume.
+	 */
+	public function recover(bool $connected): bool
+	{
+		if($this->recovery === null) return true;
+
+		if($connected && !$this->match->host() && $this->recoveryRequest === null)
+		{
+			$this->recoveryRequest = $this->recovery;
+			$this->bridge->send(MessageFamily::RESYNC, $this->outgoing([
+				'recovery' => $this->recovery, 'phase' => 'request'
+			]), $this->clock->current(), 'control');
+		}
+
+		foreach($this->bridge->receive() as $packet)
+		if($packet->family !== MessageFamily::INPUT) $this->receive($packet);
+
+		return $this->recoveryComplete;
+	}
+
+	/**
+	 * Apply one validated recovery-control payload to the current snapshot barrier.
+	 *
+	 * @param array $payload Decoded RESYNC payload containing a recovery ID and phase.
+	 * @return void Advances host or guest recovery state; malformed and stale payloads are ignored.
+	 */
+	private function recoverPacket(array $payload): void
+	{
+		$id = $payload['recovery'] ?? null;
+		if($this->recovery === null || !is_string($id) || strlen($id) > 100) return;
+
+		if($this->match->host() && ($payload['phase'] ?? null) === 'request')
+		{
+			$this->recoveryRequest = $id;
+			$snapshot = $this->builder->capture($this->world, new SnapshotSequence(++$this->snapshotSequence), $this->clock->current());
+			$this->bridge->send(MessageFamily::SNAPSHOT, $this->outgoing([
+				'snapshot' => $snapshot->jsonSerialize(), 'recovery' => $id
+			]), $this->clock->current(), 'control');
+		}
+		elseif($id === $this->recoveryRequest && ($payload['phase'] ?? null) === 'ack' && $this->match->host())
+		{
+			$this->bridge->send(MessageFamily::RESYNC, $this->outgoing(['recovery' => $id, 'phase' => 'resume']), $this->clock->current(), 'control');
+			$this->recoveryComplete = true;
+			$this->forceFull = true;
+		}
+		elseif(!$this->match->host() && $id === $this->recoveryRequest && ($payload['phase'] ?? null) === 'resume')
+		$this->recoveryComplete = true;
+	}
+
+	/**
 	 * Publish one host-owned reliable gameplay event.
 	 *
 	 * @param ReliableEvent $event Idempotent reliable gameplay event.
@@ -226,6 +335,7 @@ final class ReplicationSession
 			case MessageFamily::EVENT: $this->receiveEvent($packet->payload);
 				break;
 			case MessageFamily::RESYNC:
+				if(isset($packet->payload['recovery'])) { $this->recoverPacket($packet->payload); break; }
 				if($this->match->host()) $this->forceFull = true;
 
 				break;
@@ -280,10 +390,16 @@ final class ReplicationSession
 
 		if($this->latestSnapshot && $snapshot->sequence->value() <= $this->latestSnapshot->value()) return;
 
-		$this->clock->synchronize($snapshot->tick);
+		$correctOwner = $this->recovery !== null && !$this->recoveryComplete
+			&& $this->recoveryRequest !== null
+			&& ($payload['recovery'] ?? null) === $this->recoveryRequest && $snapshot->baseline === null;
+		if($this->recovery !== null && !$this->recoveryComplete && !$correctOwner) return;
+		if($correctOwner) $this->clock->rebase($snapshot->tick);
+		else $this->clock->synchronize($snapshot->tick);
 
 		try
 		{
+			$this->recoveringOwner = $correctOwner;
 			$this->applier->apply($this->world, $snapshot);
 		}
 		catch(\UnexpectedValueException $error)
@@ -297,6 +413,13 @@ final class ReplicationSession
 
 			return;
 		}
+
+		finally { $this->recoveringOwner = false; }
+
+		if($correctOwner)
+		$this->bridge->send(MessageFamily::RESYNC, $this->outgoing([
+			'recovery' => $this->recoveryRequest, 'phase' => 'ack'
+		]), $this->clock->current(), 'control');
 
 		$this->latestSnapshot = $snapshot->sequence;
 		$this->buffer->push($snapshot);
@@ -363,6 +486,8 @@ final class ReplicationSession
 	 */
 	private function shouldApplyComponent(Registry $registry, int $entity, ComponentCodec $codec): bool
 	{
+		if($this->recoveringOwner) return true;
+
 		if($codec->policy()->authority !== ReplicationPolicy::AUTHORITY_OWNER
 			|| !$registry->has($entity, NetworkAuthority::class)
 		) return true;

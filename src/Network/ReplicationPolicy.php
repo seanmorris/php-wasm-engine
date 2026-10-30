@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Validated delivery, authority, and presentation policy for one component codec. */
+/**
+ * Validated delivery, authority, and presentation policy for one component codec.
+ *
+ * Construction rejects incompatible combinations so delivery channel, authority, interpolation, and update
+ * semantics remain coherent for a schema.
+ */
 final class ReplicationPolicy implements \JsonSerializable
 {
 	/**
@@ -48,13 +53,13 @@ final class ReplicationPolicy implements \JsonSerializable
 	 * @return void Stores the policy after validating authority, delivery, interpolation and priority.
 	 */
 	public function __construct(
-		/** Allowed component-state origin. */
+		/** Participant allowed to originate this component state. */
 		public string $authority = self::AUTHORITY_HOST
-		, /** Transport delivery class. */
+		, /** Reliable or realtime transport class. */
 		public string $delivery = self::DELIVERY_REALTIME
-		, /** Sample presentation strategy. */
+		, /** Presentation strategy used between received samples. */
 		public string $interpolation = self::INTERPOLATE_NONE
-		, /** Realtime shedding priority. */
+		, /** Relative shedding priority for realtime state. */
 		public int $priority = 0
 	){
 		if(!in_array($authority, [self::AUTHORITY_HOST,self::AUTHORITY_OWNER,self::AUTHORITY_EITHER], true))

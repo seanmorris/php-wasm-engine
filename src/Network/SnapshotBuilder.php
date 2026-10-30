@@ -6,10 +6,19 @@ use Phonics\Ecs\Registry;
 use Phonics\Network\Component\NetworkIdentity;
 use Phonics\Network\Component\NetworkPrefab;
 
-/** Captures whitelisted components and derives deltas from retained authoritative baselines. */
+/**
+ * Captures whitelisted components and derives deltas from retained authoritative baselines.
+ *
+ * The host compares captured allowlisted state with retained baselines and emits full or delta records plus
+ * authoritative despawns.
+ */
 final class SnapshotBuilder
 {
-	/** @var array<int,array<int,array<string,mixed>>> */
+	/**
+ * Captured component baselines indexed by snapshot sequence.
+ *
+ * @var array<int,array<int,array<string,mixed>>>
+ */
 	private array $baselines = [];
 
 	/**
@@ -20,9 +29,9 @@ final class SnapshotBuilder
 	 * @return void Rejects a baseline capacity outside 1 through 256.
 	 */
 	public function __construct(
-		/** Registered component and prefab whitelist. */
+		/** Whitelist of component codecs and prefab factories. */
 		public ReplicationRegistry $replication
-		, /** Maximum retained authoritative baselines. */
+		, /** Maximum authoritative baselines retained for deltas. */
 		public int $baselineCapacity = 32
 	){
 		if($baselineCapacity < 1 || $baselineCapacity > 256)

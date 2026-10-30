@@ -68,6 +68,46 @@ test('pallets, direct URLs, dependency ordering and verified PHP prerequisites',
 	scope.close();
 });
 
+test('application dependencies resolve independently of world aliases and preserve version checks', async () => {
+	for(const dependency of ['../lobby/phonics.json', {url: '../lobby/phonics.json', version: '^0.1.0'}])
+	{
+		const {graph, scope} = setup({
+			[origin + '/app/phonics.json']: manifest('App', {
+				application: {dependencies: {lobby: dependency}}
+				, dependencies: {shared: {url: '../shared/phonics.json', version: '^0.1.0'}}
+			})
+			, [origin + '/lobby/phonics.json']: manifest('Lobby')
+			, [origin + '/world/phonics.json']: manifest('World')
+			, [origin + '/shared/phonics.json']: manifest('Shared')
+		});
+
+		const application = await graph.application(origin + '/app/phonics.json');
+
+		const resolve = reference => graph.resolve(reference, application.url, application);
+
+		assert.equal((await resolve('@lobby/module')).record.data.name, 'Lobby');
+		assert.equal((await resolve('@shared/module')).record.data.name, 'Shared');
+		assert.equal((await resolve('../lobby/phonics.json#module')).record.data.name, 'Lobby');
+		assert.equal(graph.aliases.has('lobby'), false);
+		assert.equal((await graph.manifest(application.url)).dependencies.has('lobby'), false);
+
+		await graph.imports({type: 'phonics-world', imports: {lobby: './phonics.json'}}, origin + '/world/map.json');
+		assert.equal((await resolve('@lobby/module')).record.data.name, 'Lobby');
+		assert.equal((await graph.resolve('@lobby/module', origin + '/world/map.json')).record.data.name, 'World');
+		scope.close();
+	}
+
+	const {graph, scope} = setup({
+		[origin + '/app/phonics.json']: manifest('App', {
+			application: {dependencies: {lobby: {url: '../lobby/phonics.json', version: '^2.0.0'}}}
+		})
+		, [origin + '/lobby/phonics.json']: manifest('Lobby')
+	});
+
+	await assert.rejects(graph.application(origin + '/app/phonics.json'), /Incompatible application dependency lobby/);
+	scope.close();
+});
+
 test('load progress exposes immutable phase and resource counts', () => {
 	const progress = new LoadProgress('assets', 'Loading package asset', {
 		completed: 2

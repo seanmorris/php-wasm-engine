@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
-/** Declarative source definition retained independently from its active adapter state. */
+/**
+ * Declarative source definition retained independently from its active adapter state.
+ *
+ * It keeps adapter choice, canonical resources, options, and metadata serializable before the source is
+ * opened or its slots are resolved.
+ */
 final class SourceDefinition
 {
 
@@ -17,11 +22,16 @@ final class SourceDefinition
 	 * @return void Validates stable identifiers and stores immutable definition data.
 	 */
 	public function __construct(
+		/** World-local source ID. */
 		public string $id
-		, public string $adapter
-		, public array $resources = []
-		, public array $options = []
-		, public string $sourceUrl = ''
+		, /** Adapter export reference. */
+		public string $adapter
+		, /** Ordered canonical resource records. */
+		public array $resources = []
+		, /** Adapter-specific declarative options. */
+		public array $options = []
+		, /** Canonical URL of the world declaring this source. */
+		public string $sourceUrl = ''
 	){
 		if(!preg_match('/^[A-Za-z][A-Za-z0-9_.-]*$/', $id))
 		throw new \InvalidArgumentException("Invalid content source ID $id");

@@ -2,11 +2,19 @@
 declare(strict_types=1);
 namespace Phonics\Network;
 
-/** Game-owned command sampling/application and reliable-event hooks. */
+/**
+ * Game-owned command sampling/application and reliable-event hooks.
+ *
+ * The callback set is the deliberate boundary where a game samples and applies commands or handles reliable
+ * events without coupling core networking to game components.
+ */
 final class ReplicationCallbacks
 {
+	/** Callback that samples one local player command. */
 	private $sample;
+	/** Callback that applies one accepted command to simulation state. */
 	private $apply;
+	/** Callback that handles one accepted reliable event. */
 	private $event;
 
 	/**

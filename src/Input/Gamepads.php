@@ -2,17 +2,27 @@
 declare(strict_types=1);
 namespace Phonics\Input;
 
-/** SDL owns browser discovery and mappings. Handles are keyed by SDL instance ID. */
+/**
+ * SDL owns browser discovery and mappings. Handles are keyed by SDL instance ID.
+ *
+ * It opens and closes SDL controller handles, tracks the active device, and exposes raw or
+ * dead-zone-filtered standardized values without assigning game actions.
+ */
 final class Gamepads
 {
+	/** Open controller handles, sampled values, and temporarily blocked controls. */
 	private array $handles = [], $axes = [], $buttons = [], $blockedAxes = [], $blockedButtons = [];
+	/** Unfiltered axes and axes suppressed until they return to neutral. */
 	private array $rawAxes = [], $blockedRawAxes = [];
+	/** Per-axis dead zone applied by the legacy controller API. */
 	private float $deadZone;
+	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** SDL instance ID of the controller that most recently produced meaningful input. */
 	public ?int $activeId = null;
 	/** Monotonic count incremented whenever the active controller changes or supplies input. */
 	public int $activity = 0;
+	/** Controller display names indexed by SDL instance identifier. */
 	private array $names = [];
 
 	/**

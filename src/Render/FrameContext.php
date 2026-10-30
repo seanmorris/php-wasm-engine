@@ -2,7 +2,12 @@
 declare(strict_types=1);
 namespace Phonics\Render;
 
-/** Values shared by ordered render passes for one presented frame. */
+/**
+ * Values shared by ordered render passes for one presented frame.
+ *
+ * The immutable frame value carries device, camera, viewport, timing, interpolation, and game-owned
+ * presentation state through the pass pipeline.
+ */
 final class FrameContext
 {
 
@@ -15,9 +20,12 @@ final class FrameContext
 	 * @return void Stores values for pass rendering.
 	 */
 	public function __construct(
+		/** Device exposing ready(), begin(), and present(). */
 		public object $device
-		, public float $alpha
-		, public int $generation
+		, /** Fixed-step interpolation fraction. */
+		public float $alpha
+		, /** Graphics generation used for context restoration. */
+		public int $generation
 	){
 	}
 }
