@@ -27,7 +27,7 @@ source:
 templates:
   landing: site/tools/jsdoc-landing.mjs
 validation:
-  summaries: off
+  summaries: error
   parameters: off
   returns: off
   brokenSee: warn

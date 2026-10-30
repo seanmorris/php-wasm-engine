@@ -125,6 +125,32 @@ Keyboard shortcuts are suspended while a text field is editing, so typed charact
 
 `BindingMenu` builds Controls pages for a `Phonics\Input\Bindings` profile. Pass the profile, the named action rows, and game-owned `save` and `reset` callbacks; optional callbacks reject reserved sources, add device-specific settings, and describe persistence state. `item()` returns the root row to place in a menu. Call `update($menu, $engine->input->actions, $focused)` before ordinary menu input: while `capturing()` is true, it waits for neutral input and then consumes the next fresh physical input as a binding.
 
+```php
+use Phonics\Ui\BindingMenu;
+use Phonics\Ui\Menu;
+
+// $profile is the Bindings profile installed with $engine->input->useBindings().
+$bindings = new BindingMenu(
+	$profile
+	, [
+		'left' => [Actions::MOVE_X, -1, 'Move left']
+		, 'right' => [Actions::MOVE_X, 1, 'Move right']
+		, 'fire' => [Actions::FIRE, 1, 'Fire']
+	]
+	, $settings->save(...)
+	, $settings->reset(...)
+	, Actions::allowed(...)
+	, status: static fn(): string => $settings->sessionOnly ? 'Changes apply to this session' : ''
+);
+
+$menu = new Menu(['controls' => $bindings->item('Controls')], 'Paused');
+
+// Each UI frame, before ordinary menu navigation sees the same input:
+$captured = $bindings->update($menu, $engine->input->actions, $focused);
+```
+
+The rows name an action code, a signed direction, and a label. `allowed` keeps reserved sources such as Escape and Start out of gameplay rows, and `status` describes session-only persistence. [Named action profiles](input.md#named-action-profiles) shows how the profile itself is built.
+
 ## Cards
 
 A `Card` describes one timed screen: an ID, title, text, `duration` (null waits for activation), `skipAfter`, fade times, whether it is skippable, an optional polled `ready` gate, and `onEnter`/`onLeave` hooks. `CardSequence` visits cards in order without a renderer:
@@ -164,6 +190,28 @@ $messages->showDemo('play', 2.5);
 
 ## DOM texture modals
 
-`DomTextureModal` shows trusted, application-owned HTML rendered by the browser's DOM texture bridge over the finished scene. `show($title, $html)` opens it, `update($engine, $elapsed, $menu)` captures familiar menu controls while it is visible, `render()` draws it, and `close()` returns to the menu page beneath it. PHP-Noid, PHPTris, and Doom-Phonics use it for their PHP information panels.
+`DomTextureModal` shows trusted, application-owned HTML rendered by the browser's DOM texture bridge over the finished scene. `show($title, $html)` opens it, `update($engine, $elapsed, $menu)` captures familiar menu controls while it is visible, `render()` draws it, and `close()` returns to the menu page beneath it. PHP-Noid, PHPTris, and Doom-Phonics use it for their PHP information panels:
 
-See the [UI API](api-ui.html) for every class and member, and [Sane-Phonics menus and browser controls](../packages/sane-phonics/docs/menus.md) for a complete game menu built on these parts.
+```php
+use Phonics\Ui\DomTextureModal;
+
+$info = new DomTextureModal(vrzno_env('domTexture'), $menuRenderer);
+
+// From a menu row's callback:
+ob_start();
+phpinfo();
+$info->show('PHP Info', (string)ob_get_clean());
+
+// In the engine input handler, where true keeps the frame captured:
+if($info->isOpen()) return $info->update($engine, $elapsed, $menu);
+
+// After the world render:
+$info->render($width, $height);
+
+// In the engine cleanup callback:
+$info->close();
+```
+
+The second constructor argument is an optional `MenuRenderer` whose font draws the themed back hint; without it the bridge shows a plain text hint. `isOpen()` and `state()` expose the panel for diagnostics and browser tests.
+
+See the [UI API](../src/Ui) for every class and member, and [Sane-Phonics menus and browser controls](../packages/sane-phonics/docs/menus.md) for a complete game menu built on these parts.

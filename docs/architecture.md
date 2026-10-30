@@ -31,7 +31,34 @@ A `phonics-world` content document declares:
 - `start`, `transitions`, and `view` — initial scope, scope changes, and optional viewport dimensions.
 - `init` — game-owned initialization data.
 
-Tiled `.world` resources remain supported. `phonics.import.<alias>`, `phonics.start`, and `phonics.modules` retain their meaning. `phonics.game` is no longer used. The `game` and `network` fields in a content document cannot override the application's selections.
+A document that opens a WAD through an adapter, binds one system set to its maps, and starts at the first map looks like this:
+
+```json
+{
+  "type": "phonics-world",
+  "schemaVersion": 1,
+  "imports": {"doom": "https://cdn.example/doom-phonics/0.1.0/phonics.json"},
+  "sources": {
+    "episode": {
+      "adapter": "@doom/wad",
+      "resources": [{"url": "./licensed/base.wad", "role": "iwad", "integrity": "sha256-…"}]
+    }
+  },
+  "bindings": [
+    {"id": "episode-gameplay", "use": "@doom/episode", "on": {"source": "episode", "kind": "map"}, "options": {"skill": 2}}
+  ],
+  "transitions": [
+    {"id": "e1m1-e1m2", "from": {"source": "episode", "scope": "E1M1"}, "to": {"source": "episode", "scope": "E1M2"}}
+  ],
+  "start": {"source": "episode", "scope": "E1M1"},
+  "view": {"width": 960, "height": 540},
+  "init": {"startMap": "E1M1"}
+}
+```
+
+[Load a world](../site/pages/worlds.md) walks through a complete document, including resource slots that the player or a match supplies.
+
+Tiled `.world` resources are supported alongside these documents: `phonics.import.<alias>`, `phonics.start`, and `phonics.modules` properties carry the same meaning. Content never selects the game or the network configuration. A `phonics.game` property, or `game` and `network` fields in a content document, cannot override the application's selections.
 
 A ready session exposes its application URL and code identity, PHP runtime, abort signal, and asynchronous `dispose()`. Applications that use composition additionally expose their world, graph, assets, and network services. Disposal aborts outstanding requests, closes PHP resources and browser services, and releases scoped bytes. Dispose the previous session before launching another application. Stage transitions stay inside the existing runtime.
 
@@ -95,7 +122,15 @@ Framework UI includes bitmap fonts, editable text buffers, menu input and render
 
 `Phonics\World` activates content without assuming a file format. Each package module's `Context` owns a `WorldRuntime` that shares the session registry and scheduler. Packages register `ContentAdapter` factories and `SystemSet` factories under their resolved export IDs; a `ContentAdapter` opens a `SourceDefinition` into a `ContentSource`, which catalogs stable `ScopeDescriptor`s and activates one scope at a time.
 
-`WorldRuntime::activate($source, $scope)` returns a reference-counted `ScopeLease`. The first lease activates the adapter's scope and then every binding whose selector matches it, in `after` order. Each activation receives a `ScopeContext`, which owns the systems, entities, render passes, and cleanup it registers. Releasing the last lease snapshots the adapter scope, runs the context's cleanup in reverse order, destroys the entities it owns, and keeps its JSON-serializable state for a later activation of the same scope. See the [World runtime API](api-world.html).
+`WorldRuntime::activate($source, $scope)` returns a reference-counted `ScopeLease`. The first lease activates the adapter's scope and then every binding whose selector matches it, in `after` order. Each activation receives a `ScopeContext`, which owns the systems, entities, render passes, and cleanup it registers. Releasing the last lease snapshots the adapter scope, runs the context's cleanup in reverse order, destroys the entities it owns, and keeps its JSON-serializable state for a later activation of the same scope.
+
+```php
+$lease = $phonics->runtime->activate('episode', 'E1M1');
+// The scope's systems, entities, and render passes stay active while any lease is held.
+$lease->release();
+```
+
+See the [World runtime API](../src/World) for the adapter, source, and scope classes.
 
 ## Networking
 
@@ -106,14 +141,35 @@ Multiplayer is optional and selected by the application's network configuration:
 - `lobby.provider` — a `lobby-provider` export, with provider `options`.
 - `transport` — a `transport` export reference, or `{use, options}`.
 
+Doom-Phonics keeps its configuration in a JSON file beside the application and passes it as the third argument to `compose()`:
+
+```json
+{
+  "activation": "menu",
+  "players": {"min": 2, "max": 2},
+  "lobby": {
+    "provider": "@matrix/lobby",
+    "options": {"homeserver": "https://matrix.org", "room": "#doom-phonics:matrix.org"}
+  },
+  "transport": "@phonics/webrtc"
+}
+```
+
+```php
+$network = json_decode(file_get_contents(__DIR__ . '/application-network.json'), true, flags: JSON_THROW_ON_ERROR);
+$phonics = $app->compose(__DIR__ . '/worlds/game.world', __DIR__ . '/phonics.json#game', $network);
+```
+
 The core manifest exports `webrtc` as a transport and `memory-lobby` as an in-memory lobby provider. An application without network configuration activates no lobby or transport. PHAR applications use match protocol `2.0.0`, with application ID and executable-code digest separate from the content manifest. Peers with differing code or protocol are rejected before simulation begins. Verified remote code dependencies participate in that digest; WAD selection remains part of resource negotiation.
 
-In the browser, a `LobbyController` runs the lobby and invitation state machine independently of Matrix and WebRTC classes. A `ResourceNegotiator` acquires, verifies, and binds the files for world-declared resource slots without interpreting their format. `NetworkSession` coordinates the match and resource handshake for one controller, and `WebRtcTransport` carries packets on an ordered `control` channel and an unordered `realtime` channel with no retransmits. `NetworkBridge` keeps bounded packet queues between the browser and PHP. These classes are exported from [`@seanmorris/phonics/networking`](api-js/modules/networking/).
+A game package opts in through that configuration, a `ReplicationRegistry` that names the component codecs and prefabs it replicates, and the `NetworkIdentity`, `NetworkAuthority`, and `NetworkPrefab` components on entities that exist on both peers; its fixed-step systems then drive a `ReplicationSession`. The remaining classes are framework services behind those entry points.
 
-In PHP, `BrowserBridge` exchanges validated binary packets with the browser through the `phonicsNetworkReceive` and `phonicsNetworkSend` bridge functions. `ReplicationSession` coordinates host-authoritative commands and snapshots for two peers in fixed-step systems. Games register explicit component codecs and prefabs in a `ReplicationRegistry`; arbitrary objects are never serialized by reflection. `CommandValidator` checks command ownership, tick windows, sequence, and rate on the host, and `SnapshotBuilder` and `SnapshotApplier` move whitelisted components between registries. Entities opt in with `NetworkIdentity`, `NetworkAuthority`, and `NetworkPrefab` components. See the [Networking API](api-network.html). [Doom-Phonics multiplayer](../packages/doom-phonics/docs/multiplayer.md) shows a complete game built on these layers.
+In the browser, a `LobbyController` runs the lobby and invitation state machine independently of Matrix and WebRTC classes. A `ResourceNegotiator` acquires, verifies, and binds the files for world-declared resource slots without interpreting their format. `NetworkSession` coordinates the match and resource handshake for one controller, and `WebRtcTransport` carries packets on an ordered `control` channel and an unordered `realtime` channel with no retransmits. `NetworkBridge` keeps bounded packet queues between the browser and PHP. These classes are exported from [`@seanmorris/phonics/networking`](../browser/network).
+
+In PHP, `BrowserBridge` exchanges validated binary packets with the browser through the `phonicsNetworkReceive` and `phonicsNetworkSend` bridge functions. `ReplicationSession` coordinates host-authoritative commands and snapshots for two peers in fixed-step systems. Games register explicit component codecs and prefabs in a `ReplicationRegistry`; arbitrary objects are never serialized by reflection. `CommandValidator` checks command ownership, tick windows, sequence, and rate on the host, and `SnapshotBuilder` and `SnapshotApplier` move whitelisted components between registries. Entities opt in with `NetworkIdentity`, `NetworkAuthority`, and `NetworkPrefab` components. See the [Networking API](../src/Network). [Doom-Phonics multiplayer](../packages/doom-phonics/docs/multiplayer.md) shows a complete game built on these layers.
 
 ## Compatibility boundary
 
-The supported PHP namespace is `Phonics\`. Pre-1.0 `PhpWasmEngine\` names remain aliases and resolve consistently in mixed ECS lookups. The former `Phonics.loadWorld()` launch API is retired. Browser consumers call `Phonics.run()` with an executable archive; the development example adapter uses the same entry point.
+The supported PHP namespace is `Phonics\`. Pre-1.0 `PhpWasmEngine\` names remain aliases and resolve consistently in mixed ECS lookups. Browser consumers have one launch entry point, `Phonics.run()` with an executable archive; the development example adapter uses it too.
 
 Compatibility adapters do not make the core depend on a game package. An application archive carries its PHP dependencies. The browser PHP/SDL runtime is distributed separately and remains host-controlled. Native desktop gameplay is outside this application contract.

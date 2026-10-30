@@ -8,59 +8,23 @@ const games = ['sane-phonics','php-noid','php-tris','php-slalom','php-buster','d
 
 for(const game of games) await pack(path.join(root, 'packages', game));
 
-const files = new Set(
-	games.flatMap(game => ['phar','phar.integrity'].map(extension => `packages/${game}/dist/game.${extension}`))
-);
-
-for(const directory of [''
-	, 'packages/sane-phonics/'
-	, 'packages/php-noid/'
-	, 'packages/php-tris/'
-	, 'packages/php-slalom/'
-	, 'packages/php-buster/'
-	, 'packages/doom-phonics/'
-	, 'packages/phonics-matrix/'
-	, 'packages/tiled-phonics/'
-]){
-	const manifest = JSON.parse(await fs.readFile(path.join(root, directory, 'phonics.json')));
-
-	for(const file of ['phonics.json'
-		, ...(manifest.php?.files ?? [])
-		, ...(manifest.browser?.files
-		?? []
-		)
-		, ...(manifest.assets ?? [])
-	])
-		files.add(directory + file);
-}
-
-// Preserve the deprecated /engine/examples entry points and assets in the demo distribution.
-for(const file of await fs.readdir(path.join(root, 'examples')))
-	if(file.endsWith('.php') && !file.startsWith('generate-')) files.add('examples/' + file);
-
-for(const file of await fs.readdir(path.join(root, 'examples/assets'))) files.add('examples/assets/' + file);
-
-for(const name of files)
-{
-	const destination = path.join(root, 'docs/dist/engine', name);
-	await fs.mkdir(path.dirname(destination), {recursive: true});
-	await fs.copyFile(path.join(root, name), destination);
-}
+// Only the browser host and its imports run outside the application archives.
+const browserFiles = ['browser/Phonics.mjs'
+	, 'browser/ResourceStore.mjs'
+	, 'browser/PackageGraph.mjs'
+	, 'browser/ArchiveResources.mjs'
+	, 'browser/LoadProgress.mjs'
+	, 'browser/network/OAuthPopup.mjs'
+	, 'browser/network/InviteLink.mjs'
+];
 
 // The documentation distribution carries its licensed, playable reference world. Keep these
 // outside the package manifest so npm/Composer consumers never download demo WAD data.
-const demoFiles = ['episode-one.phonics-world.json'
-	, 'episode-one-online.phonics-world.json'
-	, 'skulltag-stress.phonics-world.json'
-	, 'portal-demo.phonics-world.json'
-	, 'portal-rooms.phonics-world.json'
-	, 'camera-mirrors.phonics-world.json'
-	, 'pool-3d.phonics-world.json'
-	, 'layered-navigation.phonics-world.json'
-	, 'layered-navigation.html'
-
-	, 'DOOM1.WAD'
+const demoFiles = ['DOOM1.WAD'
 	, 'PORTALS.WAD'
+	, 'layered-navigation.html'
+	, 'SEEDED.WAD'
+	, 'seeded-navigation.html'
 	, 'SKULLTAG-WEAPONS.WAD'
 	, 'SKULLTAG_ACTORS.lmp'
 	, 'SKULLTAG-WEAPONS.DEC'
@@ -69,23 +33,26 @@ const demoFiles = ['episode-one.phonics-world.json'
 	, 'SHAREWARE-LICENSE.txt'
 ];
 
-for(const name of demoFiles)
+const files = [
+	...browserFiles
+	, ...games.flatMap(game => ['phar','phar.integrity'].map(extension => `packages/${game}/dist/game.${extension}`))
+	, ...demoFiles.map(name => 'packages/doom-phonics/demo/' + name)
+	, 'packages/doom-phonics/DOOM1_OGG.wad'
+];
+
+// Rebuild this generated tree so incremental builds also remove retired loose packages.
+const engine = path.join(root, 'docs/dist/engine');
+
+for(const name of files) await fs.access(path.join(root, name));
+
+await fs.rm(engine, {recursive: true, force: true});
+
+for(const name of files)
 {
-	const source = path.join(root, 'packages/doom-phonics/demo', name);
-	const destination = path.join(root, 'docs/dist/engine/packages/doom-phonics/demo', name);
+	const destination = path.join(engine, name);
 	await fs.mkdir(path.dirname(destination), {recursive: true});
-	await fs.copyFile(source, destination);
+	await fs.copyFile(path.join(root, name), destination);
 }
-
-await fs.copyFile(
-	path.join(root, 'packages/doom-phonics/DOOM1_OGG.wad')
-	, path.join(root, 'docs/dist/engine/packages/doom-phonics/DOOM1_OGG.wad')
-);
-
-await fs.writeFile(
-	path.join(root, 'docs/dist/engine/engine-files.json')
-	, JSON.stringify([...files].filter(file => !file.endsWith('.mjs')))
-);
 
 const runtime = await runtimeDirectory();
 const manifest = JSON.parse(await fs.readFile(path.join(runtime, 'php8.4-sdl.manifest.json')));
@@ -101,10 +68,11 @@ await fs.mkdir(path.join(root, 'docs/dist/runtime/extensions/zlib'), {recursive:
 
 for(const name of ['8.4.mjs','php8.4-zlib.so','libz.so','LICENSE','LICENSE-GPL','NOTICE','package.json'])
 	await fs.copyFile(path.join(zlib, name), path.join(root, 'docs/dist/runtime/extensions/zlib', name));
-console.log('Built the Phonics preview, embedded game documentation, package manifests and runtime in docs/dist.');
 
 const phar = await pharExtension();
 await fs.mkdir(path.join(root, 'docs/dist/runtime/extensions/phar'), {recursive: true});
 
 for(const name of ['php8.4-phar.so','LICENSE','LICENSE-GPL','NOTICE','package.json'])
 await fs.copyFile(path.join(phar, name), path.join(root, 'docs/dist/runtime/extensions/phar', name));
+
+console.log('Built the Phonics browser host, application PHARs, external game assets and runtime in docs/dist.');

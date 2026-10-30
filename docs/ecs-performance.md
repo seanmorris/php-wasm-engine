@@ -20,21 +20,51 @@ At 10,000 entities, two fresh browser runs against the current ECS produced thes
 | Replace 1,000 components | 2.41 ms |
 | Create and destroy 1,000 entities | 10.95 ms |
 
-Repeated direct and composed queries without structural changes take about 2.6–8.0 µs with the result cache. Those measurements consume the snapshot's count and boundary IDs; they do not iterate every returned entity. A direct type query forced cold by a structural change measured about 86 µs. The sparse membership workload checks all 10,000 entities for a component present on ten of them. The movement-system workload includes queries, component lookups, position updates, scheduler dispatch, per-system timing, and command flushing. It excludes physics and rendering.
+Repeated direct and composed queries without structural changes take about 2.6–8.0 µs with the result cache. Those measurements consume the snapshot's count and boundary IDs; they do not iterate every returned entity. The sparse membership workload checks all 10,000 entities for a component present on ten of them. The movement-system workload includes queries, component lookups, position updates, scheduler dispatch, per-system timing, and command flushing. It excludes physics and rendering.
 
-The earlier exact-name fast paths avoid alias reflection and hierarchy scans for canonical component names and query terms. Compared with the [first](../benchmarks/results/ecs-browser-10000-2026-10-29-before-fast-path-run-1.json) and [second](../benchmarks/results/ecs-browser-10000-2026-10-29-before-fast-path-run-2.json) original records, exact lookup fell from 21.17 ms to 9.23 ms per 10,000 calls and the movement workload fell from 15.93 ms to 7.21 ms. Interface lookup also improved because canonical hierarchy names can be recognized directly from the type index.
+The lifecycle workloads are also measured one phase at a time, with fixture construction outside the timer:
 
-The earlier query pass caches direct type snapshots, retains one local component array per lookup, and canonicalizes membership queries only when their raw type index is absent. Against the [first](../benchmarks/results/ecs-browser-10000-2026-10-29-before-snapshot-cache-run-1.json) and [second](../benchmarks/results/ecs-browser-10000-2026-10-29-before-snapshot-cache-run-2.json) preceding records, repeated direct queries fell from 72.71 µs to 2.65 µs, exact lookup fell from 10.01 ms to 9.23 ms, and 10,000 mostly negative membership checks fell from 12.86 ms to 7.02 ms.
+| Phase, per 1,000 entities | Median |
+| --- | ---: |
+| Add components | 3.57 ms |
+| Remove components | 3.32 ms |
+| Create entities | 8.16 ms |
+| Destroy entities | 3.27 ms |
 
-The first lifecycle pass caches component hierarchies, detects lifecycle observers once when they are registered, and consolidates index and query-cache work when no callback can observe intermediate state. Replacing the sole component of a concrete type updates its stored object without rebuilding unchanged memberships. Against the [first](../benchmarks/results/ecs-browser-10000-2026-10-29-before-lifecycle-fast-path-run-1.json) and [second](../benchmarks/results/ecs-browser-10000-2026-10-29-before-lifecycle-fast-path-run-2.json) immediately preceding records, add/remove fell from 11.04 ms to 7.89 ms, replacement from 11.64 ms to 2.48 ms, and create/destroy from 29.41 ms to 18.70 ms. Those are reductions of 28.5%, 78.7%, and 36.4%.
-
-The entity batching pass builds each initial component table once and retires whole entities without per-component storage changes or index-count decrements. Against fresh [first](../benchmarks/results/ecs-browser-10000-2026-10-29-before-entity-batching-run-1.json) and [second](../benchmarks/results/ecs-browser-10000-2026-10-29-before-entity-batching-run-2.json) baseline runs at `75e6eb4`, create/destroy fell from 18.43 ms to 10.95 ms (40.6%). Creation alone fell 25.1% and destruction 57.0%. Native create/destroy fell from 1.80 ms to 1.25 ms (30.2%) against the corresponding [first](../benchmarks/results/ecs-native-10000-2026-10-29-before-entity-batching-run-1.json) and [second](../benchmarks/results/ecs-native-10000-2026-10-29-before-entity-batching-run-2.json) native baselines.
-
-The split browser diagnostics measure add at 3.57 ms, remove at 3.32 ms, create at 8.16 ms, and destroy at 3.27 ms per 1,000 entities. Their fixture construction occurs outside the timer. With no-op added and removed listeners installed, the combined add/remove, replacement, and create/destroy cases measure 11.67 ms, 12.74 ms, and 33.36 ms. This observed path retains event order and fresh-query visibility inside every callback.
+With no-op added and removed listeners installed, the combined add/remove, replacement, and create/destroy cases measure 11.67 ms, 12.74 ms, and 33.36 ms. That observed path retains event order and fresh-query visibility inside every callback.
 
 The matching native PHP fixture retains about 6.91 MB of registry storage. Six warmed query workloads, including the 10,000-ID direct type snapshot, retain another 810,112 bytes. The WASM build does not expose PHP allocator statistics, so memory figures are native-only.
 
 The samples were recorded on one shared Linux host on 2026-10-29. Browser figures pool fourteen samples from two independent headless-browser runs; the [first](../benchmarks/results/ecs-browser-10000-2026-10-29-entity-batching-run-1.json) and [second](../benchmarks/results/ecs-browser-10000-2026-10-29-entity-batching-run-2.json) records retain every sample. The [first native record](../benchmarks/results/ecs-native-10000-2026-10-29-entity-batching-run-1.json) and [second native record](../benchmarks/results/ecs-native-10000-2026-10-29-entity-batching-run-2.json) also contain seven samples each. Native PHP was 8.2.33 on 64-bit Linux; browser PHP was the pinned 8.4.1 SDL build on wasm32 in Chromium 152.0.7977.75. JIT was disabled. The browser benchmark runs the PHP workload in a headless browser without the game demos or development server. Results vary with hardware and host load.
+
+### Optimization history
+
+The current figures come from four passes made on 2026-10-29. Each row compares the pooled medians of the two browser runs recorded immediately before a pass with the two recorded immediately after it, so every "after" figure except the last was superseded by the next pass; the table above is the current state.
+
+| Pass | Change | Workload | Before | After |
+| --- | --------------------------- | ------------------ | -----: | -----: |
+| 1 | Exact-name fast paths avoid alias reflection and hierarchy scans for canonical component names and query terms. | 10,000 exact lookups | 21.16 ms | 10.01 ms |
+| | | 10,000 interface lookups | 21.50 ms | 15.28 ms |
+| | | Movement system | 15.93 ms | 8.02 ms |
+| 2 | The query pass caches direct type snapshots, keeps one local component array per lookup, and canonicalizes membership queries only when their raw type index is absent. | Cached direct type query | 72.71 µs | 2.51 µs |
+| | | 10,000 sparse membership checks | 12.86 ms | 6.80 ms |
+| | | 10,000 exact lookups | 10.01 ms | 8.11 ms |
+| 3 | The lifecycle pass caches component hierarchies, detects observers once at registration, consolidates index and query-cache work when no callback can observe intermediate state, and replaces the sole component of a concrete type in place. | Add and remove 1,000 components | 11.04 ms | 7.89 ms |
+| | | Replace 1,000 components | 11.64 ms | 2.48 ms |
+| | | Create and destroy 1,000 entities | 29.41 ms | 18.70 ms |
+| 4 | Entity batching builds each initial component table once and retires whole entities without per-component storage changes or index-count decrements. | Create and destroy 1,000 entities | 18.43 ms | 10.95 ms |
+| | | Create 1,000 entities | 10.89 ms | 8.16 ms |
+| | | Destroy 1,000 entities | 7.61 ms | 3.27 ms |
+| | | Native create and destroy, 1,000 entities | 1.80 ms | 1.25 ms |
+
+The records behind each boundary, all at 10,000 entities:
+
+- Before pass 1: browser [run 1](../benchmarks/results/ecs-browser-10000-2026-10-29-before-fast-path-run-1.json) and [run 2](../benchmarks/results/ecs-browser-10000-2026-10-29-before-fast-path-run-2.json); [native](../benchmarks/results/ecs-native-10000-2026-10-29-before-fast-path.json).
+- Before pass 2: browser [run 1](../benchmarks/results/ecs-browser-10000-2026-10-29-before-snapshot-cache-run-1.json) and [run 2](../benchmarks/results/ecs-browser-10000-2026-10-29-before-snapshot-cache-run-2.json); [native](../benchmarks/results/ecs-native-10000-2026-10-29-before-snapshot-cache.json).
+- Before pass 3: browser [run 1](../benchmarks/results/ecs-browser-10000-2026-10-29-before-lifecycle-fast-path-run-1.json) and [run 2](../benchmarks/results/ecs-browser-10000-2026-10-29-before-lifecycle-fast-path-run-2.json); [native](../benchmarks/results/ecs-native-10000-2026-10-29-before-lifecycle-fast-path.json).
+- After pass 3: browser [run 1](../benchmarks/results/ecs-browser-10000-2026-10-29-run-1.json) and [run 2](../benchmarks/results/ecs-browser-10000-2026-10-29-run-2.json); [native](../benchmarks/results/ecs-native-10000-2026-10-29.json).
+- Before pass 4, at `75e6eb4`: browser [run 1](../benchmarks/results/ecs-browser-10000-2026-10-29-before-entity-batching-run-1.json) and [run 2](../benchmarks/results/ecs-browser-10000-2026-10-29-before-entity-batching-run-2.json); native [run 1](../benchmarks/results/ecs-native-10000-2026-10-29-before-entity-batching-run-1.json) and [run 2](../benchmarks/results/ecs-native-10000-2026-10-29-before-entity-batching-run-2.json).
+- After pass 4: the current records linked above.
 
 ## Registry design
 

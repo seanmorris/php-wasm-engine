@@ -85,8 +85,6 @@ $endif$
     <header class="page-header api-page-header">
       <?php renderBreadcrumbs(['home' => 'Documentation']); ?>
       <h1>$if(display-title)$$display-title$$else$$title$$endif$</h1>
-      $if(description-meta)$<p class="subtitle">$description-meta$</p>$endif$
-      $if(source-url)$<a class="api-source" href="$source-url$" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>$endif$
     </header>
     $elseif(hero)$
     $else$

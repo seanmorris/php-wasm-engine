@@ -42,7 +42,6 @@ const games = [
 		, canvas: [960, 540]
 		, canvasLabel: 'PHP-Noid game canvas'
 		, chapters: [['index', 'PHP-Noid']
-			, ['playing', 'Playing PHP-Noid']
 			, ['campaign', 'Campaign authoring']
 			, [
 				'architecture', 'Architecture and performance'
@@ -57,7 +56,6 @@ const games = [
 		, canvas: [960, 540]
 		, canvasLabel: 'PHPTris game canvas'
 		, chapters: [['index', 'PHPTris']
-			, ['playing', 'Playing and scoring']
 			, ['challenges', 'Challenge tracks']
 			, [
 				'world-authoring', 'World authoring'
@@ -74,7 +72,6 @@ const games = [
 		, canvasLabel: 'PHP Slalom game canvas'
 		, aspectClass: 'game-aspect-8-5'
 		, chapters: [['index', 'PHP Slalom']
-			, ['playing', 'Playing and replays']
 			, ['architecture', 'Architecture']
 		]
 	}
@@ -88,7 +85,6 @@ const games = [
 		, canvasLabel: 'PHP Buster game canvas'
 		, aspectClass: 'game-aspect-2-3'
 		, chapters: [['index', 'PHP Buster']
-			, ['playing', 'Playing and scoring']
 			, ['architecture', 'Architecture']
 		]
 	}
@@ -101,11 +97,12 @@ const games = [
 		, canvasLabel: 'Doom-Phonics game canvas'
 		, dataOrigins: ['*']
 		, chapters: [['index', 'Doom-Phonics']
-			, ['playing', 'Playing and controls']
 			, ['launcher', 'WAD stacks and launcher']
 			, ['wad-and-decorate', 'WAD and DECORATE']
 			, ['multiplayer', 'Multiplayer and replication']
 			, ['rendering', 'Rendering and performance']
+			, ['seeded-levels', 'Seeded layered levels']
+			, ['procedural-structures', 'Parametric room structures']
 		]
 	}
 ];
@@ -141,6 +138,16 @@ function sitePage(resolved)
 
 		return page === 'index' ? './' : page.endsWith('/index') ? page.slice(0, -'index'.length) : page + '.html';
 	}
+
+	// Links to framework source directories publish as the generated reference pages for those
+	// namespaces, so the same Markdown reads correctly on GitHub and on the site.
+	const php = /^src(?:\/([A-Za-z]+(?:\/[A-Za-z]+)*))?\/?$/.exec(resolved);
+
+	if(php) return php[1] ? `api-${php[1].replaceAll('/', '-').toLowerCase()}.html` : 'api.html';
+
+	if(/^browser\/network\/?$/.test(resolved)) return 'api-js/modules/networking/';
+
+	if(/^browser\/?$/.test(resolved)) return 'api-js/';
 
 	return null;
 }
@@ -240,11 +247,14 @@ for(const game of games)
 			return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${resolved}${fragment}${end}`;
 		});
 
+		const overviewTitle = slug === 'index' ? '    title: Overview\n' : '';
+
 		const header = `---\ntitle: ${JSON.stringify(
 			title
 		)}\ndescription-meta: ${JSON.stringify(
 			slug === 'index' ? game.description : `${title} in ${game.title}.`
-		)}\nllms: games\nmenus:\n  documentation:\n${slug === 'index' ? '    title: Overview\n' : ''}    parent: game-${game.slug}\n    weight: ${weight}\n---\n`;
+		)}\nllms: games\nmenus:\n  documentation:\n`
+			+ `${overviewTitle}    parent: game-${game.slug}\n    weight: ${weight}\n---\n`;
 
 		const embedClass = game.aspectClass ? ` ${game.aspectClass}` : '';
 		const dataOrigins = game.dataOrigins
@@ -261,7 +271,7 @@ for(const game of games)
 
 // Reflection and source parsing run after authored/imported pages are staged so
 // the generated API reference participates in the same SMGen render.
-await import('./api-reference.mjs');
+const {apiSourceLink} = await import('./api-reference.mjs');
 
 const jsDoc = path.join(root, 'node_modules/smgen-plugins/packages/smgen-jsdoc/bin/smgen-jsdoc');
 
@@ -304,7 +314,18 @@ for(const file of javascriptPages)
 		else if(relative.startsWith('values/')) menu.parent = 'api-js-values';
 	}
 
-	const body = source.slice(match[0].length).replace(/^(?:# [^\r\n]+\r?\n+)/, '');
+	let body = source.slice(match[0].length).replace(/^(?:# [^\r\n]+\r?\n+)/, '');
+
+	// Keep the complete generated comment in the article, followed by the shared
+	// source button. The page header supplies only the title and breadcrumbs.
+	if(metadata['api-page'] && metadata['source-url'])
+	{
+		body = body.replace(
+			`\n[View source](${metadata['source-url']})\n`
+			, `\n${apiSourceLink(metadata['source-url'])}\n`
+		);
+	}
+
 	const normalized = `---\n${stringify(metadata, {lineWidth: 0})}---\n\n${body}`;
 
 	await fs.writeFile(page, normalized);

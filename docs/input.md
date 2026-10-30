@@ -40,9 +40,121 @@ remain available, including Z for jump and left Shift for action.
 The left stick also supplies buttons 12–15 at proportional strength after the
 configured dead zone. D-pad input overrides that stick axis. Triggers retain
 their analog strength. The browser or operating system may reserve Guide and
-some keyboard shortcuts.
+some keyboard shortcuts. `lightdash` is a compatibility alias for button 2,
+matching `InputCode::LIGHTDASH`; new games name their own actions instead, as
+described next.
 
-Replace keyboard bindings without changing pad numbering:
+## Named action profiles
+
+`InputCode` reserves logical codes through `0xFFFF` for the engine, and its
+shared `YES`, `NO`, `PAUSE`, directional, paging, home/end and revert aliases
+serve UI commands directly. Game commands start at `InputCode::GAME_START`
+(`0x10000`). A `Bindings` profile maps each action, in each signed direction,
+to physical `Source` alternatives: SDL keys and controller buttons use the
+named `Key` and `Pad` constants; mouse motion, wheel movement and controller
+axes use signed directional halves.
+
+```php
+use Phonics\Input\Bindings;
+use Phonics\Input\InputCode;
+use Phonics\Input\Key;
+use Phonics\Input\Pad;
+use Phonics\Input\Source;
+
+final class Actions
+{
+	public const MOVE_X = InputCode::GAME_START;
+	public const FIRE = InputCode::GAME_START + 1;
+	public const NEXT_WEAPON = InputCode::GAME_START + 2;
+	public const TURN = InputCode::GAME_START + 3;
+}
+
+$key = static fn(int|string $code): Source => new Source(Source::KEY, is_string($code) ? ord($code) : $code);
+
+$bindings = new Bindings([
+	Actions::MOVE_X => [
+		-1 => [$key(Key::LEFT), $key('a'), new Source(Source::PAD_AXIS, Pad::LEFT_X, -1)]
+		, 1 => [$key(Key::RIGHT), $key('d'), new Source(Source::PAD_AXIS, Pad::LEFT_X, 1)]
+	]
+	, Actions::FIRE => [
+		1 => [$key(Key::SPACE), new Source(Source::MOUSE_BUTTON, Source::PRIMARY), new Source(Source::PAD_BUTTON, Pad::A)]
+	]
+	, Actions::NEXT_WEAPON => [
+		1 => [new Source(Source::WHEEL, Source::Y, 1), new Source(Source::PAD_BUTTON, Pad::RB)]
+	]
+	, Actions::TURN => [
+		-1 => [$key('q'), new Source(Source::PAD_AXIS, Pad::RIGHT_X, -1), new Source(Source::MOUSE_AXIS, Source::X, -1)]
+		, 1 => [$key('e'), new Source(Source::PAD_AXIS, Pad::RIGHT_X, 1), new Source(Source::MOUSE_AXIS, Source::X, 1)]
+	]
+]);
+
+$engine->input->useBindings($bindings);
+```
+
+The defaults define which actions and directions exist. Keyboard/mouse and
+controller alternatives are then edited and restored independently. `bind()`
+refuses a source that another action already uses unless the call names a
+`replace` or `share` policy; `remove()` drops just that source:
+
+```php
+$bindings->bind(Actions::FIRE, 1, $key('f'));                   // Add an alternative.
+$bindings->bind(Actions::NEXT_WEAPON, 1, $key('f'), 'replace'); // F now advances weapons instead.
+$bindings->bind(Actions::FIRE, 1, $key('f'), 'share');          // F does both.
+$bindings->remove(Actions::FIRE, 1, $key(Key::SPACE));          // Only this source.
+$bindings->reset(Source::CONTROLLER);                           // Controller defaults; keyboard edits stay.
+```
+
+`jsonSerialize()` and `restore()` persist a profile per device group; the
+[gameplay binding pages](ui.md#gameplay-binding-pages) edit one from a menu.
+
+Once a profile is installed, fixed updates read signed `Controls::value()`
+values in `[-1,1]`, buffered digital taps, and `Controls::pressCount()` for
+wheel pulses or repeated taps:
+
+```php
+// In a fixed-step system:
+$x = $engine->controls->value(Actions::MOVE_X);               // -1 to 1; opposing inputs subtract.
+$fired = $engine->controls->pressed(Actions::FIRE);           // Buffered since the previous step.
+$steps = $engine->controls->pressCount(Actions::NEXT_WEAPON); // Wheel pulses or repeated taps.
+```
+
+Opposing inputs subtract; alternatives in one direction use their strongest
+strength. Absolute axes always use their latest sample. The legacy
+`snapshot()`, button binding methods and sequence observer remain available.
+
+`Engine::setFrameInputHandler()` runs after UI, pause and focus gating, before
+fixed updates. Its delta is capped at the fixed clock's stall limit. Read
+`$engine->input->frameActions()` there to consume relative displacement once
+per display frame:
+
+```php
+use Phonics\Engine;
+
+$engine->setFrameInputHandler(static function(Engine $engine, float $elapsed) use ($camera): void {
+	$frame = $engine->input->frameActions();
+
+	$camera->yaw += $frame->value(Actions::TURN, Source::CONTROLLER) * 180 * $elapsed
+		+ $frame->value(Actions::TURN, Source::KEYBOARD) * 120 * $elapsed
+		+ $frame->delta(Actions::TURN) * .1;
+});
+```
+
+`ActionFrame::value($code, $device)` retains held strengths per device group:
+`Source::KEYBOARD` covers keys and mouse buttons, and `Source::CONTROLLER`
+covers pad buttons and axes. Mouse motion and wheel movement arrive separately
+through `ActionFrame::delta($code)`, so applications can apply different
+keyboard, controller and mouse gains. Fixed-step action reads do not consume
+mouse displacement, and display-frame reads do not consume fixed-step press
+counts.
+
+Doom-Phonics uses this hook for display-rate mouse and controller look; its
+bindings, Controls menu and look settings are described under
+[Doom-Phonics controls](../packages/doom-phonics/docs/index.md#controls).
+
+## Rebind legacy buttons
+
+Games that read numbered buttons directly can replace keyboard bindings
+without changing pad numbering:
 
 ```php
 $engine->input->bindButton(0, [SDLK_SPACE]);
@@ -70,9 +182,6 @@ Rebinding discards held input and partial sequences. Menu navigation and text
 editing keep their own UI bindings. For separate players, read individual SDL
 instance IDs through `Gamepads`, then feed each player's logical snapshot into
 its own `Controls` and `Sequences` objects.
-
-`lightdash` is a legacy compatibility alias for button 2, matching
-`InputCode::LIGHTDASH`. New games should name their own actions instead.
 
 ## Observe a code
 
@@ -183,40 +292,3 @@ observer must not be fed the buffered `snapshot()` again.
 ## Inspect recognition
 
 Use `progress()` to show partial input and `drain()` to log completed sequence names. Keep presentation and gameplay responses outside the recognizer: the same definitions can drive a debug action, menu shortcut, accessibility feature, or game move. Tests can feed timestamped snapshots directly without SDL.
-
-## Named action profiles
-
-`InputCode` reserves logical codes through `0xFFFF` for the engine. New game
-commands start at `InputCode::GAME_START` (`0x10000`). Existing legacy button
-IDs remain supported. Use the shared `YES`, `NO`, `PAUSE`, directional,
-paging, home/end and revert aliases directly for UI commands.
-
-`Source` describes physical input independently of its action: SDL keys and
-controller buttons use the named `Key` and `Pad` constants; mouse motion,
-wheel movement and controller axes use signed directional halves. A `Bindings`
-profile maps each action and direction to alternatives. Keyboard/mouse and
-controller alternatives can be edited or restored independently. `bind()`
-requires a `replace` or `share` policy when a source conflicts with another
-action; `remove()` removes just that source.
-
-Install a profile with `$engine->input->useBindings($bindings)`. Fixed updates
-then receive signed `Controls::value()` values in `[-1,1]`, buffered digital
-taps, and `Controls::pressCount()` for wheel pulses or repeated taps. Opposing
-inputs subtract; alternatives in one direction use their strongest strength.
-Absolute axes always use their latest sample. The legacy `snapshot()`, button
-binding methods and sequence observer remain available.
-
-`Engine::setFrameInputHandler()` runs after UI, pause and focus gating, before
-fixed updates. Its delta is capped at the fixed clock's stall limit. Read
-`$engine->input->frameActions()` here to consume relative displacement once
-per display frame. `ActionFrame::value($code, $device)` retains held strengths
-per device group: `Source::KEYBOARD` covers keys and mouse buttons, and
-`Source::CONTROLLER` covers pad buttons and axes. Mouse motion and wheel
-movement arrive separately through `ActionFrame::delta($code)`, so
-applications can apply different keyboard, controller and mouse gains.
-Fixed-step action reads do not consume mouse displacement, and display-frame
-reads do not consume fixed-step press counts.
-
-Doom-Phonics uses this hook for display-rate mouse and controller look; its
-bindings, Controls menu and look settings are described in
-[Doom-Phonics playing and controls](../packages/doom-phonics/docs/playing.md).

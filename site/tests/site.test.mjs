@@ -41,6 +41,65 @@ const read = name => {
 	return reads.get(file);
 };
 
+async function readArchive(archive, member)
+{
+	const {stdout} = await promisify(execFile)('php', [
+		'-r'
+		, 'echo file_get_contents("phar://" . $argv[1] . "/" . $argv[2]);'
+		, archive, member
+	]);
+
+	return stdout;
+}
+
+test('production keeps package manifests and bundled game files inside executable archives', async() => {
+	const engine = path.join(output, 'engine');
+	const deployed = await files(engine);
+	const games = ['sane-phonics', 'php-noid', 'php-tris', 'php-slalom', 'php-buster', 'doom-phonics'];
+
+	assert.deepEqual(
+		deployed.filter(name => /(?:\.php|\.json|\.world|\.tmj|\.tsj)$/.test(name))
+		, []
+		, 'Production must not publish loose manifests, PHP, worlds, or bundled maps'
+	);
+
+	for(const slug of games)
+	{
+		const archive = path.join(engine, 'packages', slug, 'dist/game.phar');
+		const bytes = await fs.readFile(archive);
+		const integrity = 'sha256-' + createHash('sha256').update(bytes).digest('base64');
+		assert.equal((await fs.readFile(archive + '.integrity', 'utf8')).trim(), integrity);
+		const manifest = JSON.parse(await readArchive(archive, 'application/phonics.json'));
+		assert.equal(manifest.name, '@seanmorris/' + slug);
+		assert.ok((await readArchive(archive, 'application/' + manifest.application.entry)).startsWith('<?php'));
+		assert.equal(JSON.parse(await readArchive(archive, 'core/phonics.json')).name, '@seanmorris/phonics');
+
+		const loose = deployed.filter(name => name.startsWith(`packages/${slug}/`) && !name.includes('/dist/'));
+
+		if(slug !== 'doom-phonics') assert.deepEqual(loose, [], slug);
+	}
+
+	// Every deployed browser module must be reachable from the host's static imports.
+	const modules = new Set();
+
+	async function visit(name)
+	{
+		if(modules.has(name)) return;
+
+		modules.add(name);
+		const source = await fs.readFile(path.join(engine, name), 'utf8');
+
+		for(const match of source.matchAll(/^import\s+.*?\s+from\s+['"]([^'"]+)['"]/gm))
+			await visit(path.posix.join(path.posix.dirname(name), match[1]));
+	}
+
+	await visit('browser/Phonics.mjs');
+	const preview = await fs.readFile(path.join(output, 'preview/host.mjs'), 'utf8');
+
+	for(const match of preview.matchAll(/from\s*["']\.\.\/engine\/([^"']+)["']/g)) await visit(match[1]);
+	assert.deepEqual(deployed.filter(name => name.endsWith('.mjs')).sort(), [...modules].sort());
+});
+
 test('all planned pages have navigation, contents for sections, and a drafting outline', async() => {
 	for(const page of pages)
 	{
@@ -82,7 +141,7 @@ test('all planned pages have navigation, contents for sections, and a drafting o
 
 test('SMGen breadcrumbs follow the documentation menu hierarchy', async() => {
 	const install = await read('install.html');
-	const game = await read('games/doom-phonics/playing.html');
+	const game = await read('games/doom-phonics/launcher.html');
 	const api = await read('api-phonics-ecs-scheduler.html');
 	const javascriptApi = await read('api-js/classes/quick-controls/quick-controls.html');
 
@@ -100,7 +159,7 @@ test('SMGen breadcrumbs follow the documentation menu hierarchy', async() => {
 				'/games/'
 			)}">Games</a></li><li><a href="${publicPath(
 				'/games/doom-phonics/'
-			)}">Doom-Phonics</a></li><li aria-current="page">Playing and controls</li>`
+			)}">Doom-Phonics</a></li><li aria-current="page">WAD stacks and launcher</li>`
 		)
 	);
 
@@ -250,7 +309,7 @@ test('every public game type has a nested package reference page', async() => {
 
 			assert.ok(index.includes(item.name), item.name);
 			assert.ok(page.includes(`<h1>${item.name}</h1>`), item.name);
-			assert.ok(page.includes('View source'), item.name);
+			assert.match(page, /class="api-source"[^>]*>View\s+source/, item.name);
 		}
 	}
 });
@@ -258,12 +317,13 @@ test('every public game type has a nested package reference page', async() => {
 test('the static Doom-Phonics example includes its integrity-matched content stack', async() => {
 	const directory = path.join(output, 'engine/packages/doom-phonics/demo');
 	const packageDirectory = path.dirname(directory);
-	const manifest = JSON.parse(await fs.readFile(path.join(packageDirectory, 'phonics.json'), 'utf8'));
-	const world = JSON.parse(await fs.readFile(path.join(directory, 'episode-one.phonics-world.json'), 'utf8'));
+	const archive = path.join(packageDirectory, 'dist/game.phar');
+	const manifest = JSON.parse(await readArchive(archive, 'application/phonics.json'));
+	const world = JSON.parse(await readArchive(archive, 'application/demo/episode-one.phonics-world.json'));
 
 	assert.ok(manifest.preload.includes('resources/language.txt'));
 
-	for(const name of manifest.preload) await fs.access(path.join(packageDirectory, name));
+	for(const name of manifest.preload) assert.ok((await readArchive(archive, 'application/' + name)).length, name);
 
 	for(const [index, name] of [
 		'DOOM1.WAD'
@@ -293,7 +353,7 @@ test('the static Doom-Phonics example includes its integrity-matched content sta
 		, ['portal-rooms.phonics-world.json','portal-rooms','PORTAL2']
 		, ['camera-mirrors.phonics-world.json','camera-mirrors','CAMERAS']
 	]){
-		const portalWorld = JSON.parse(await fs.readFile(path.join(directory, file), 'utf8'));
+		const portalWorld = JSON.parse(await readArchive(archive, 'application/demo/' + file));
 
 		for(const [index,name] of ['DOOM1.WAD','PORTALS.WAD'].entries())
 		{

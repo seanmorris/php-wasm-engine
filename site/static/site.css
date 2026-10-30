@@ -270,8 +270,9 @@ h1 { margin: .35rem 0 .75rem; font-family: var(--font-display); font-size: clamp
 .breadcrumbs a { color: var(--muted); text-decoration: none; }
 .breadcrumbs a:hover { color: var(--link); text-decoration: underline; }
 .breadcrumbs [aria-current="page"] { color: var(--ink); font-weight: 600; }
+/* The complete API description uses the article's body typography below the title. */
+.api-page-header { margin-bottom: 1.25rem; padding-bottom: 0; border-bottom: 0; }
 .api-page-header h1 { margin-top: .35rem; }
-.api-page-header .subtitle { margin-bottom: .9rem; }
 .api-source { display: inline-flex; gap: .3rem; align-items: center; padding: .3rem .65rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .8rem; font-weight: 600; text-decoration: none; transition: border-color 120ms ease, color 120ms ease; }
 .api-source:hover { border-color: var(--line-strong); color: var(--link); }
 .api-page-header + article > h2:first-child { margin-top: 0; }

@@ -1,1 +1,0 @@
-../packages/sane-phonics/docs/startup.md

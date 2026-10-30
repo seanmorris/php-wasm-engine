@@ -1,14 +1,14 @@
 # PHPTris
 
-PHPTris is a falling-block package with three solo modes and five progressive challenge tracks. It demonstrates deterministic board logic, a compact ECS integration, keyboard/controller/touch input, Tiled-authored challenge metadata, and an SDL/WebGL presentation.
+PHPTris is a falling-block package with three solo modes and five progressive challenge tracks. It demonstrates deterministic board logic, a compact ECS integration, keyboard, controller, and touch input, Tiled-authored challenge metadata, and an SDL/WebGL presentation.
 
-Load its world through the launcher or import the package manifest to reuse individual game modules.
+Load its world through the launcher, or import the package manifest to reuse individual game modules.
 
 ## How to play
 
-Move and rotate each falling piece so completed rows span the board. Cleared rows make room and increase the score; a stack that reaches the top ends the run. Use the preview queue to plan ahead, hold one piece for later, soft drop when positioning matters, and hard drop when the landing is safe. The three solo modes change the objective, while the challenge tracks add ranked goals.
+Move and rotate each falling piece so completed rows span the board. Cleared rows make room and add score; a stack that reaches the top ends the run. Plan with the preview queue, hold one piece for later, soft drop to position a piece, and hard drop when the landing is safe. The three solo modes share one board, preview queue, hold slot, line clearing, and level progression and differ only in objective and scoring; the challenge tracks add ranked goals.
 
-Keyboard, controller, and touch input all drive the same fixed-step board. A fresh-press guard keeps the button used to start a run from rotating or dropping its first piece.
+Keyboard, controller, and touch drive the same fixed-step board, which renders independently at display rate. Touch controls appear on touch devices, and pushing the left stick up also hard drops. A fresh-press guard keeps the button that starts a run from rotating or dropping its first piece.
 
 ## Controls
 
@@ -24,7 +24,6 @@ Keyboard, controller, and touch input all drive the same fixed-step board. A fre
 
 ## What to study
 
-- [Playing and scoring](playing.md) covers controls and solo rules.
 - [Challenge tracks](challenges.md) explains the ranked objectives.
 - [World authoring](world-authoring.md) describes package resources and Tiled data.
 - [Architecture](architecture.md) maps the game loop to public PHP types.

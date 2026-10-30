@@ -35,6 +35,81 @@ async function openGame(page, slug, title)
 	await page.getByRole('button', {name: `Load and play ${title}`, exact: true}).click();
 }
 
+test('Sane-Phonics clears its focus warning after keyboard and controller recovery', async({page}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+
+	await page.addInitScript(() => {
+		window.focusPad = {
+			id: 'Xbox 360 Controller'
+			, index: 0
+			, connected: true
+			, mapping: 'standard'
+			, timestamp: 1
+			, axes: [0, 0, 0, 0]
+			, buttons: Array.from({length: 17}, () => ({pressed: false, value: 0}))
+		};
+
+		Object.defineProperty(navigator, 'getGamepads', {value: () => [window.focusPad]});
+
+		window.focusPadStart = pressed => {
+			window.focusPad.buttons[9] = {pressed, value: Number(pressed)};
+			window.focusPad.timestamp++;
+		};
+	});
+
+	await page.goto('/games/sane-phonics/?world=/engine/packages/sane-phonics/worlds/platformer.world');
+	await page.getByRole('button', {name: 'Load and play Sane-Phonics', exact: true}).click();
+	const canvas = page.locator('canvas');
+
+	const state = key => canvas.evaluate((canvas, key) => JSON.parse(canvas.dataset[key] ?? 'null'), key);
+	await expect(canvas).toHaveAttribute('data-scene', 'platformer', {timeout: 60000});
+	await expect.poll(async() => (await state('messages'))?.focused).toBe(true);
+
+	for(const device of ['keyboard', 'controller'])
+	{
+		if(device === 'keyboard') await page.keyboard.press('p');
+		else await page.evaluate(() => window.focusPadStart(true));
+
+		await expect.poll(async() => (await state('menu'))?.open).toBe(true);
+		await expect.poll(async() => (await state('menu'))?.theme).toBe(device === 'keyboard' ? 'keyboard' : 'xbox');
+		await page.evaluate(() => window.focusPadStart(false));
+
+		// Lose canvas ownership, then suspend the tab with the warning still visible.
+		await page.locator('#stop').focus();
+		await expect.poll(async() => (await state('messages'))?.focused).toBe(false);
+
+		await expect.poll(async() => (await state('messages'))?.focus?.text)
+			.toBe('Click the game to enable keyboard control.');
+
+		await page.evaluate(() => {
+			Object.defineProperty(document, 'hidden', {configurable: true, value: true});
+			document.dispatchEvent(new Event('visibilitychange'));
+		});
+
+		await page.waitForTimeout(100);
+
+		await page.evaluate(() => {
+			Object.defineProperty(document, 'hidden', {configurable: true, value: false});
+			document.dispatchEvent(new Event('visibilitychange'));
+		});
+
+		await canvas.click({position: {x: 5, y: 5}});
+		await expect.poll(async() => (await state('messages'))?.focused).toBe(true);
+		await expect.poll(async() => (await state('messages'))?.focus).toBeNull();
+
+		// Fresh input still operates the menu after recovery, including controller Start.
+		if(device === 'keyboard') await page.keyboard.press('p');
+		else await page.evaluate(() => window.focusPadStart(true));
+
+		await expect.poll(async() => (await state('menu'))?.open).toBe(false);
+		await page.evaluate(() => window.focusPadStart(false));
+	}
+
+	await page.locator('#stop').click();
+	expect(errors).toEqual([]);
+});
+
 test('all guide pages fit desktop, tablet and mobile without loading a game runtime', async({page}) => {
 	test.setTimeout(60000 + guidePages.length * 3 * 1000);
 
@@ -393,7 +468,7 @@ test('long sidebar links wrap inside their highlight', async({page}) => {
 	expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
 });
 
-test('API class header groups breadcrumbs, summary, and source without repetition', async({page}) => {
+test('API class introductions keep uniform comment text above the source button', async({page}) => {
 	await page.goto('/api-phonics-ecs-scheduler.html');
 
 	const summary = 'Execute named ECS systems in dependency order and flush deferred entity changes.';
@@ -424,15 +499,71 @@ test('API class header groups breadcrumbs, summary, and source without repetitio
 	}
 
 	await expect(header.getByRole('heading', {level: 1})).toHaveText('Phonics\\Ecs\\Scheduler');
-	await expect(header.locator('.subtitle')).toHaveText(summary);
 
-	const source = header.getByRole('link', {name: 'View source'});
-	await expect(source).toHaveAttribute('href', /src\/Ecs\/Scheduler\.php#L\d+$/);
-	await expect(source).toHaveAttribute('target', '_blank');
-	await expect(source).toHaveAttribute('rel', 'noopener noreferrer');
+	const examples = [
+		{
+			url: '/api-phonics-ecs-scheduler.html'
+			, summary
+			, source: /src\/Ecs\/Scheduler\.php#L\d+$/
+		}
+		, {
+			url: '/api-js/classes/load-progress/load-progress.html'
+			, summary: 'Immutable progress snapshot emitted while a world becomes playable.'
+			, source: /browser\/LoadProgress\.mjs#L\d+$/
+		}
+	];
 
-	await expect(page.locator('article')).not.toContainText(summary);
-	await expect(page.locator('article > h2').first()).toHaveText('Declaration');
+	for(const example of examples)
+	{
+		await page.goto(example.url);
+		await expect(header.locator('.subtitle, .api-source')).toHaveCount(0);
+		await expect(page.locator('main p').filter({hasText: example.summary})).toHaveCount(1);
+		await expect(page.locator('article > p').first()).toHaveText(example.summary);
+
+		const source = page.getByRole('link', {name: 'View source', exact: true});
+		await expect(source).toHaveCount(1);
+		await expect(source).toHaveClass('api-source');
+		await expect(source).toHaveAttribute('href', example.source);
+		await expect(source).toHaveAttribute('target', '_blank');
+		await expect(source).toHaveAttribute('rel', 'noopener noreferrer');
+		await expect(page.locator('article > h2').first()).toHaveText('Declaration');
+
+		for(const width of [1280, 390])
+		{
+			await page.setViewportSize({width, height: 900});
+
+			for(const theme of ['light', 'dark'])
+			{
+				await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+
+				const styles = await page.locator('article > p').evaluateAll(paragraphs => {
+					return paragraphs.slice(0, 2).map(p => {
+						const style = getComputedStyle(p);
+
+						return [
+							style.color, style.fontFamily, style.fontSize, style.fontWeight
+							, style.lineHeight, style.letterSpacing, style.marginBottom
+						];
+					});
+				});
+
+				expect(styles).toHaveLength(2);
+				expect(styles[0]).toEqual(styles[1]);
+
+				// Read both bounds together while the responsive navigation settles.
+				const bounds = await source.evaluate(button => {
+					const description = button.closest('article').querySelectorAll(':scope > p')[1];
+
+					return {
+						descriptionBottom: description.getBoundingClientRect().bottom
+						, buttonTop: button.getBoundingClientRect().top
+					};
+				});
+
+				expect(bounds.buttonTop).toBeGreaterThanOrEqual(bounds.descriptionBottom);
+			}
+		}
+	}
 });
 
 test('navigation prefetches on hover and starts on primary mousedown', async({page}) => {
@@ -477,7 +608,7 @@ test('the programming reference filters symbols without a round trip', async({pa
 	await expect(jsStatus).toHaveText(`1 of ${jsTotal} API entries`);
 });
 
-test('production exposes the unified documentation and generic preview', async({page}) => {
+test('production exposes the unified documentation and generic preview', async({page, request}) => {
 	const failed = [];
 	const retired = /\/(?:sane-phonics|php-noid|php-tris|php-slalom|php-buster|doom-phonics)\/$/;
 
@@ -491,6 +622,15 @@ test('production exposes the unified documentation and generic preview', async({
 		const response = await page.goto(route);
 		expect(response.status()).toBe(404);
 	}
+
+	for(const route of ['/engine/phonics.json'
+		, '/engine/autoload.php', '/engine/engine-files.json'
+		, '/engine/packages/php-noid/phonics.json'
+		, '/engine/packages/php-noid/browser/game.mjs'
+		, '/engine/packages/php-noid/worlds/campaign.world'
+		, '/engine/packages/doom-phonics/demo/episode-one.phonics-world.json'
+	])
+		expect((await request.get(route)).status(), route).toBe(404);
 
 	const preview = await page.goto('/preview/');
 	expect(preview.status()).toBe(200);
@@ -564,8 +704,9 @@ test('PHP Buster starts, moves, fires, pauses, and cleans up in its documentatio
 });
 
 test('Matrix OAuth returns through a popup without navigating the running host', async({page}) => {
-	await page.goto('/preview/');
+	await page.goto('/games/doom-phonics/');
 	const original = page.url();
+	await expect(page.locator('[data-game-runtime]')).toBeHidden();
 
 	await page.evaluate(async() => {
 		const {authorizeWithPopup} = await import('/engine/browser/network/OAuthPopup.mjs');
@@ -597,19 +738,33 @@ test('Matrix OAuth returns through a popup without navigating the running host',
 	await page.getByRole('button', {name: 'Test Matrix popup'}).dispatchEvent('click');
 	const popup = await opened;
 
-	// The popup relays only after its own preview host imports the browser runtime.
+	// The always-loaded site shell relays before either copy activates the game runtime.
 	await expect.poll(() => page.evaluate(() => window.oauthCallbackUrl ?? null), {timeout: 20000})
 		.toContain('code=test-code');
 
 	await expect.poll(() => popup.isClosed()).toBe(true);
 	expect(page.url()).toBe(original);
 	expect(await page.evaluate(() => window.oauthPopupResult)).toBe('connected');
+	await expect(page.locator('[data-game-runtime]')).toBeHidden();
 });
 
 test('all games start and clean up inside the shared site design', async({page}) => {
 	test.setTimeout(240000);
 
 	const errors = [];
+	const loosePackageRequests = [], failedResources = [];
+
+	page.on('request', request => {
+		const pathname = new URL(request.url()).pathname;
+
+		if(pathname.startsWith('/engine/') && /(?:\.php|phonics\.json|engine-files\.json)$/.test(pathname))
+			loosePackageRequests.push(pathname);
+	});
+
+	page.on('response', response => {
+		if(new URL(response.url()).pathname.startsWith('/engine/') && response.status() >= 400)
+			failedResources.push(response.url());
+	});
 
 	await page.addInitScript(() => {
 		window.doomAudioStarts = 0;
@@ -655,6 +810,14 @@ test('all games start and clean up inside the shared site design', async({page})
 	await page.waitForFunction(() => Boolean(document.querySelector('canvas').dataset.intro));
 	await page.locator('#stop').click();
 	await expect(page.locator('#status')).toContainText('Stopped');
+
+	for(const [slug, title] of [['php-slalom', 'PHP Slalom'], ['php-buster', 'PHP Buster']])
+	{
+		await openGame(page, slug, title);
+		await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
+		await page.locator('#stop').click();
+		await expect(page.locator('#status')).toHaveText('Stopped');
+	}
 
 	await page.route('**/DOOM1.WAD', async route => {
 		await new Promise(resolve => setTimeout(resolve, 500));
@@ -1051,6 +1214,23 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect(page.locator('#status')).toHaveText('Stopped');
 
 	expect(errors).toEqual([]);
+	expect(loosePackageRequests).toEqual([]);
+	expect(failedResources).toEqual([]);
+});
+
+test('Doom resolves an alternate demo world from its PHAR', async({page}) => {
+	const requested = [];
+	page.on('request', request => requested.push(new URL(request.url()).pathname));
+
+	await page.goto('/games/doom-phonics/?world=/engine/packages/doom-phonics/demo/portal-rooms.phonics-world.json');
+	await page.getByRole('button', {name: 'Load and play Doom-Phonics', exact: true}).click();
+	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
+
+	expect(await page.evaluate(() => window.previewSession.world.start.scope)).toBe('PORTAL2');
+	expect(requested.filter(name => name.endsWith('.phonics-world.json'))).toEqual([]);
+	expect(requested).toContain('/engine/packages/doom-phonics/demo/PORTALS.WAD');
+	await page.locator('#stop').click();
+	await expect(page.locator('#status')).toHaveText('Stopped');
 });
 
 test('Doom native framebuffer follows a high-density display through fullscreen', async({browser}) => {
@@ -1114,4 +1294,147 @@ test('Doom native framebuffer follows a high-density display through fullscreen'
 	{
 		await context.close();
 	}
+});
+
+test('PHPTris retains its board and drawing across context loss and GPU process resets', async({page, browser}) => {
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	page.on('console', message => { if(message.type() === 'error') errors.push(message.text()); });
+
+	await openGame(page, 'php-tris', 'PHPTris');
+	await expect(page.locator('#status')).toHaveText('Ready');
+	await page.locator('[data-action="start"]').click();
+
+	const state = () => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpTris));
+	await expect.poll(async() => (await state()).phase).toBe('playing');
+	await page.keyboard.press('KeyC');
+	await expect.poll(async() => (await state()).held).not.toBeNull();
+	await page.keyboard.press('Space');
+	await expect.poll(async() => (await state()).placed).toBe(1);
+	await page.locator('[data-action="pause"]').click();
+	await expect.poll(async() => (await state()).page).toBe('pause');
+
+	await page.evaluate(async() => {
+		const canvas = document.querySelector('canvas'), gl = canvas.getContext('webgl2');
+		const module = await previewSession.php.binary, status = module.phpTrisStatus;
+		window.trisRecovery = {frames: 0, losses: [], restores: 0, capture: true, pixels: null};
+
+		module.phpTrisStatus = json => {
+			status(json);
+			trisRecovery.frames++;
+
+			if(!trisRecovery.capture) return;
+
+			trisRecovery.capture = false;
+			const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+			gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+			let hash = 2166136261;
+
+			for(const byte of pixels) hash = Math.imul(hash ^ byte, 16777619);
+
+			trisRecovery.pixels = hash;
+			trisRecovery.error = gl.getError();
+		};
+
+		canvas.addEventListener('webglcontextlost', event => trisRecovery.losses.push(event.defaultPrevented));
+
+		canvas.addEventListener('webglcontextrestored', () => {
+			trisRecovery.restores++;
+			trisRecovery.capture = true;
+		});
+	});
+
+	await expect.poll(() => page.evaluate(() => trisRecovery.pixels)).not.toBeNull();
+	const before = await state();
+	const pixels = await page.evaluate(() => trisRecovery.pixels);
+	const cdp = await browser.newBrowserCDPSession();
+	let cycle = 0;
+
+	for(const kind of ['between frames', 'during drawing', 'delayed loss status', 'GPU process reset'])
+	{
+		cycle++;
+
+		if(kind === 'GPU process reset') await cdp.send('Browser.crashGpuProcess');
+		else
+		await page.evaluate(kind => {
+			const gl = document.querySelector('canvas').getContext('webgl2');
+			window.trisLoss = gl.getExtension('WEBGL_lose_context');
+
+			if(kind === 'between frames') return trisLoss.loseContext();
+
+			const isProgram = gl.isProgram.bind(gl);
+
+			gl.isProgram = program => {
+				gl.isProgram = isProgram;
+				trisLoss.loseContext();
+
+				if(kind === 'delayed loss status')
+				{
+					// A real GPU reset can invalidate programs before the immediate loss query updates.
+					const isContextLost = gl.isContextLost.bind(gl);
+
+					gl.isContextLost = () => {
+						gl.isContextLost = isContextLost;
+
+						return false;
+					};
+				}
+
+				return isProgram(program);
+			};
+		}, kind
+		);
+
+		await expect.poll(() => page.evaluate(() => trisRecovery.losses.length)).toBe(cycle);
+		expect(errors, kind).toEqual([]);
+		expect(await page.evaluate(() => trisRecovery.losses.at(-1)), kind).toBe(true);
+
+		if(kind !== 'GPU process reset')
+		{
+			const frames = await page.evaluate(() => trisRecovery.frames);
+			await page.waitForTimeout(200);
+			expect(await page.evaluate(() => trisRecovery.frames)).toBe(frames);
+			await page.evaluate(() => trisLoss.restoreContext());
+		}
+
+		await expect.poll(() => page.evaluate(() => trisRecovery.restores), {timeout: 15000}).toBe(cycle);
+		await expect.poll(() => page.evaluate(() => trisRecovery.capture)).toBe(false);
+		expect(await state(), kind).toEqual(before);
+		expect(await page.evaluate(() => trisRecovery.pixels), kind).toBe(pixels);
+		expect(await page.evaluate(() => trisRecovery.error), kind).toBe(0);
+		expect(errors, kind).toEqual([]);
+	}
+
+	await cdp.detach();
+	await page.locator('[data-action="resume"]').click();
+	await expect.poll(async() => (await state()).elapsed).toBeGreaterThan(before.elapsed);
+	await page.locator('#stop').click();
+	await expect(page.locator('#status')).toHaveText('Stopped');
+	expect(errors).toEqual([]);
+});
+
+test('a rendering error with a healthy context still stops and reports the original failure', async({page}) => {
+	const diagnostics = [];
+	page.on('console', message => { if(message.type() === 'error') diagnostics.push(message.text()); });
+
+	await openGame(page, 'php-tris', 'PHPTris');
+	await expect(page.locator('#status')).toHaveText('Ready');
+
+	await page.evaluate(() => {
+		const gl = document.querySelector('canvas').getContext('webgl2');
+		const isProgram = gl.isProgram.bind(gl);
+		window.invalidProgramChecks = 0;
+
+		gl.isProgram = () => {
+			gl.isProgram = isProgram;
+			invalidProgramChecks++;
+
+			return false;
+		};
+	});
+
+	await expect.poll(() => diagnostics.join('')).toContain('program must name a live program');
+	expect(await page.evaluate(() => invalidProgramChecks)).toBe(1);
+	expect(await page.locator('canvas').evaluate(canvas => [canvas.width, canvas.height])).toEqual([0, 0]);
+	expect(await page.locator('canvas').evaluate(canvas => canvas.getContext('webgl2').isContextLost())).toBe(false);
 });

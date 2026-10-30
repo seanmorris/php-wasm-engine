@@ -1,3 +1,50 @@
+const oauthPopupCallback = (() => {
+	let callback;
+
+	try
+	{
+		callback = new URL(location.href);
+	}
+	catch
+	{
+		return false;
+	}
+
+	const id = callback.searchParams.get('phonics.oauth.popup');
+	const fragment = new URLSearchParams(callback.hash.startsWith('#') ? callback.hash.slice(1) : '');
+	const source = fragment.has('code') || fragment.has('error') || fragment.has('state')
+		? fragment
+		: callback.searchParams;
+
+	return Boolean(
+		id
+		&& /^[A-Za-z0-9_-]{16,128}$/.test(id)
+		&& source.get('state')
+		&& (source.has('code') || source.has('error'))
+	);
+})();
+
+if(oauthPopupCallback)
+{
+	document.title = 'Completing Matrix sign-in';
+	const notice = document.createElement('p');
+	notice.textContent = 'Completing Matrix sign-in…';
+	notice.setAttribute('role', 'status');
+	notice.style.cssText = 'position:fixed;inset:0;z-index:2147483647;margin:0;padding:2rem;'
+		+ 'color:#f7f0d0;background:#080a14;font:18px/1.5 system-ui,sans-serif';
+
+	document.body.replaceChildren(notice);
+
+	const base = document.querySelector('meta[name="smgen-base-url"]')?.content.replace(/\/$/, '') ?? '';
+
+	void import(`${base}/engine/browser/network/OAuthPopup.mjs`).then(({relayOAuthPopup}) => {
+		if(!relayOAuthPopup()) throw new Error('Matrix sign-in callback was not accepted');
+	}).catch(error => {
+		notice.textContent = 'Could not complete Matrix sign-in. Close this window and try again.';
+		console.error(error);
+	});
+}
+
 const embeddedGame = new URLSearchParams(location.search).get('embed') === '1';
 
 if(embeddedGame) document.documentElement.dataset.gameEmbed = 'true';
@@ -528,6 +575,18 @@ for(const embed of document.querySelectorAll('.game-embed[data-title]'))
 {
 	const trigger = embed.querySelector('.game-embed-poster');
 	const runtime = embed.querySelector('[data-game-runtime]');
+	// Reading the fragment changes presentation only. Registration starts on activation.
+	const invitationUrl = location.hash.startsWith('#phonics-invite=') ? location.href : null;
+
+	if(invitationUrl && trigger)
+	{
+		const label = trigger.querySelector('.game-embed-play-label') ?? trigger.querySelector(':scope > span');
+
+		if(label) label.textContent = 'Join game';
+
+		trigger.setAttribute('aria-label', 'Join game');
+	}
+
 
 	trigger?.addEventListener('click', async() => {
 		if(!runtime || embed.dataset.loading !== undefined) return;
@@ -543,7 +602,11 @@ for(const embed of document.querySelectorAll('.game-embed[data-title]'))
 			const {mountPreview} = await import(host);
 			runtime.hidden = false;
 			trigger.remove();
-			mountPreview(runtime, {application: world, title: embed.dataset.title, dataOrigins});
+
+			mountPreview(
+				runtime
+				, {application: world, title: embed.dataset.title, dataOrigins, invitation: invitationUrl}
+			);
 		}
 		catch(error)
 		{

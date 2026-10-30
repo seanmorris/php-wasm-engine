@@ -302,6 +302,12 @@ function memberDoc(doc)
 	return result;
 }
 
+/** Render the shared API source button after the complete documentation comment. */
+export function apiSourceLink(source)
+{
+	return `<a class="api-source" href="${html(source)}" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>`;
+}
+
 function declaration(item)
 {
 	const modifiers = [item.final ? 'final' : '', item.abstract ? 'abstract' : '', item.readonly ? 'readonly' : '', item.kind]
@@ -334,7 +340,7 @@ function phpClassPage(item, aliases, config = null)
 		, 'source-url': source
 		, ...(config ? {llms: 'games'} : {})
 	});
-	if(item.doc.description) body += `${item.doc.description}\n\n`;
+	body += `${memberDoc(item.doc)}\n${apiSourceLink(source)}\n\n`;
 	body += `## Declaration\n\n\`\`\`php\n${declaration(item)}\n\`\`\`\n`;
 	const oldNames = Object.entries(aliases).filter(([, target]) => target === item.name).map(([old]) => old);
 

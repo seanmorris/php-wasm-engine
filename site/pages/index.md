@@ -1,9 +1,9 @@
 ---
 title: Phonics
-description-meta: Compose a world. Bring it to life.
+description-meta: A PHP game engine for the browser.
 eyebrow: PHP · Tiled · SDL · WebGL 2
 hero:
-  lead: Build games from worlds, systems, and reusable packages. Author in Tiled. Run PHP in the browser.
+  lead: Write the game in PHP. Lay out its worlds in Tiled. Ship it as one executable archive.
   actions:
     - label: Start the quickstart
       href: quickstart.html
@@ -58,11 +58,11 @@ jsonld:
 ---
 
 
-<div class="flow" aria-label="An executable PHAR loads game code and resources in browser PHP and SDL"><span><b>01</b>Application PHAR<small>Authored PHP bootstrap</small></span><span><b>02</b>Code &amp; resources<small>Systems, worlds &amp; assets</small></span><span><b>03</b>PHP + SDL<small>A playable session</small></span></div>
+<div class="flow" aria-label="One executable archive carries the game into browser PHP and SDL"><span><b>01</b>Executable PHAR<small>Your bootstrap picks the game</small></span><span><b>02</b>Worlds and modules<small>Maps, systems, and assets</small></span><span><b>03</b>Browser session<small>PHP, SDL, and WebGL 2</small></span></div>
 
-## An executable PHP application is the entry point
+## One archive is the whole game
 
-The browser runs an executable PHAR. Its PHP bootstrap chooses the game and can compose content from packaged worlds, external URLs, and reusable modules. Worlds describe resources and their bindings; the application controls startup. The same browser host runs every game.
+Your game is an executable PHAR. The browser fetches it, starts PHP, and runs your bootstrap, which picks the game and assembles its world from maps, modules, and assets, packaged or remote. The host page is the same for every game:
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
@@ -72,20 +72,20 @@ const session = await Phonics.run('/dist/game.phar', {
   runtime: {url: '/runtime/php8.4-sdl.mjs'}
 });
 
-// Release the runtime and session-owned resources when leaving.
+// Release the runtime when the host leaves the game.
 await session.dispose();
 ```
 
-## Choose your starting point
+Gameplay code is ordinary PHP. It runs natively under your tests and in WebAssembly for players.
 
-- **Build your first game:** follow the [quickstart tutorial](quickstart.html), from a new package to a playable world.
-- **Play and inspect:** explore the [complete game packages](games/), from platforming and puzzles to PHP Slalom and Doom.
-- **Design a world:** [add package URLs in Tiled](tiled.html), place entities, and preview your saved world with its application.
-- **Start your own game:** use the [game-package CLI](cli.html) to scaffold, preview, validate, and build.
-- **Write a module:** [register PHP systems and factories](modules.html) against the shared session context.
+## Where to start
 
-## What belongs in the framework
+- **New here?** The [quickstart](quickstart.html) takes you from an empty package to a world you can edit in Tiled and in PHP.
+- **Want to see it first?** [Play six finished games](games/), from a platformer to Doom. Each is an independent package.
+- **Authoring content?** [Import packages in Tiled](tiled.html), place entities, and preview the saved world.
+- **Building a package?** The [CLI](cli.html) scaffolds, previews, validates, and builds it.
+- **Extending a game?** [Write a module](modules.html) that adds PHP systems and factories to the shared session.
 
-Phonics owns ECS scheduling, Tiled parsing and streaming, asset lifetimes, geometry queries, rendering, input, text, menus, and generic effects. Game packages own movement rules, cameras, HUDs, enemies, and courses.
+## The engine ends where your game begins
 
-Every game package is an independent peer and declares its own code and assets. Legacy `PhpWasmEngine\` aliases remain until Phonics 1.0; install Sane-Phonics when using its old gameplay aliases.
+Phonics owns the engine: scheduling, Tiled loading and streaming, asset lifetimes, collision queries, rendering, input, text, menus, and effects. Your package owns the game: movement, cameras, HUD, enemies, and levels. Packages are peers. Each declares its own code and assets, and none depends on another game.
