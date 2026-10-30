@@ -56,6 +56,18 @@ try
 	if(await hash(report) !== await hash(path.join(root, 'packages/doom-phonics/demo/layered-navigation.html')))
 		throw Error('Generated layered navigation report differs from its geometry and graph');
 
+	const seeded = path.join(directory, 'seeded');
+
+	execFileSync(
+		'php'
+		, [path.join(root, 'packages/doom-phonics/tools/generate-seeded.php'), `--output=${seeded}`]
+		, {stdio: 'pipe'}
+	);
+
+	for(const file of ['SEEDED.WAD', 'seeded-level.phonics-world.json', 'seeded-navigation.html'])
+		if(await hash(path.join(seeded, file)) !== await hash(path.join(root, 'packages/doom-phonics/demo', file)))
+			throw Error(`Generated seeded level differs: ${file}`);
+
 	console.log('Generated package worlds and assets match their generators.');
 }
 finally

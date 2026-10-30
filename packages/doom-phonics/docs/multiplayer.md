@@ -18,3 +18,15 @@ Online play is available in worlds that declare a `network` section, such as the
 4. Accepting an offer uses the same launcher form. Each player selects their own copies of the archives: offers carry the map, archive order, safe filenames, profiles, sizes, and integrity digests, never archive bytes or local URLs. A compatible freely distributable base archive may stand in for the first stack entry, while every later archive must match exactly.
 
 Closing the connection returns the game to its disconnected screen, as described above.
+
+## Invite someone without a Matrix account
+
+1. Sign in to the lobby on a homeserver that permits automatic guest registration. Keep the hosting tab open.
+2. Select **Create invite link**, choose the WAD stack, map, mode, and skill, and copy the link. Creating another link cancels the old one.
+3. The recipient opens the link and selects **Join game** on the gameplay poster. Previewing the link does not claim it. No Matrix login or account setup is shown.
+4. Available resources load automatically. If a required local WAD is missing, the recipient selects their own compatible file in the indicated stack position. The host's match settings remain fixed; WAD bytes are never transferred between players.
+5. The first valid recipient starts the connection automatically. **Cancel invitation** closes an unused link. Links expire after fifteen minutes without admission.
+
+The default Matrix server is not guaranteed to allow guests. The lobby checks guest registration once and hides **Create invite link** when the selected server cannot support an anonymous recipient. Select a guest-enabled server in Networking to enable it. The receiving player is never sent through an account-registration flow. Relay support also depends on the server's TURN configuration; some networks cannot connect without it.
+
+During a temporary connection loss, **Reconnecting…** pauses gameplay while the display and menus continue. The host attempts ICE recovery and a full authoritative state refresh before resuming. Recovery has a thirty-second limit. Closing the match schedules host-owned cleanup of both players' encrypted signaling messages; a thirty-minute room retention request is an additional, server-dependent backstop. The signaling room remains available throughout a live match, including map changes.

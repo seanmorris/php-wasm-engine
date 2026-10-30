@@ -66,6 +66,7 @@ final class DoomMenuController implements MenuOverlay
 	/** Route SDL UI frames even while simulation is paused, then resume browser look input. */
 	public function update(Engine $engine, float $elapsed): bool
 	{
+		$recovering = $this->game->recoveringNetwork();
 		$this->game->advanceTransition($elapsed);
 		$action = $this->browserAction ? (string)($this->browserAction)() : '';
 
@@ -233,9 +234,9 @@ final class DoomMenuController implements MenuOverlay
 			$this->game->playMenuSound(SoundCue::menuMove());
 		}
 
-		$engine->userPaused = $this->menu->isOpen || $this->atTitle || $this->game->transitioning();
+		$engine->userPaused = $recovering || $this->menu->isOpen || $this->atTitle || $this->game->transitioning();
 
-		return $captured || $browserCaptured || $this->menu->isOpen || $this->atTitle
+		return $recovering || $captured || $browserCaptured || $this->menu->isOpen || $this->atTitle
 			|| $this->game->transitioning();
 	}
 

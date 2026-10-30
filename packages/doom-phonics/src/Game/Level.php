@@ -83,6 +83,46 @@ final class Level
 
 	public function nextCameraPortalId(): int { return count($this->cameraPortalLinks); }
 
+	/**
+	 * Find liquid touching a body, including its continuation through a plane portal.
+	 *
+	 * The player changes sector when the eye crosses the seam, while the lower body
+	 * can still be submerged on the other side. A flooded source column may also
+	 * extend above its portal ceiling. Translate that live water interval into the
+	 * destination frame so thrust and buoyancy remain continuous during the exit.
+	 */
+	public function waterSurface(float $x,float $y,float $z,float $height): ?float
+	{
+		return $this->portalWaterSurface($x,$y,$z,$height,[]);
+	}
+
+	/** Follow liquid intervals through passable planes with bounded reciprocal traversal. */
+	private function portalWaterSurface(float $x,float $y,float $z,float $height,array $visited): ?float
+	{
+		$sector=$this->sectorAt($x,$y);
+		if(isset($visited[$sector->index]) || count($visited)>=8) return null;
+		$visited[$sector->index]=true;
+		$surface=$sector->waterSurface($x,$y,$z,$height);
+		if($surface!==null) return $surface;
+		foreach([0,1] as $plane) {
+			$link=$this->cameraPortalForPlane($sector->index,$plane)?->link;
+			if(!$link?->passable() || !$link->flipsVertical()) continue;
+			$origin=$plane ? $sector->ceilingZ($x,$y) : $sector->floorZ($x,$y);
+			// An upper liquid cannot touch the body before its head reaches the seam.
+			// A lower column can extend above its ceiling when the room is flooded.
+			if($plane && $z+$height<=$origin) continue;
+			if(!$plane && $sector->supportZ($x,$y,$z)>$origin+.001) continue;
+			if($plane && $sector->headroomZ($x,$y,$z)<$origin-.001) continue;
+			[$rx,$ry]=$link->point($x,$y);
+			$remote=$this->sectorAt($rx,$ry);
+			$destination=$plane ? $remote->floorZ($rx,$ry) : $remote->ceilingZ($rx,$ry);
+			$offset=$destination-$origin;
+			$water=$this->portalWaterSurface($rx,$ry,$z+$offset,$height,$visited);
+			if($water!==null) $surface=max($surface ?? -INF,$water-$offset);
+		}
+		return $surface;
+	}
+
 	public function addCameraPortalLink(CameraPortalLink $link): void
 	{
 		$this->cameraPortalLinks[$link->id] = $link;

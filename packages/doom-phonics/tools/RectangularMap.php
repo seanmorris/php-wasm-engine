@@ -139,6 +139,7 @@ final class RectangularMap
 			$edges[$key]['args'] = $boundary['args'];
 			if(isset($boundary['flags'])) $edges[$key]['flags'] = $boundary['flags'];
 			if(isset($boundary['texture'])) $edges[$key]['switch'] = $boundary['texture'];
+			if(isset($boundary['lowerTexture'])) $edges[$key]['lowerTexture'] = $boundary['lowerTexture'];
 			if($boundary['portal'] ?? false)
 			{
 				if($edges[$key]['left'] !== null) throw new \RuntimeException('Wall portal requires an exterior boundary');
@@ -164,13 +165,13 @@ final class RectangularMap
 			$lineIds[$key] = intdiv(strlen($lines), 16);
 			$twoSided = $edge['left'] !== null;
 			$right = intdiv(strlen($sides), 30);
-			$sides .= pack('v2a8a8a8v', 0, 0, 'STARTAN3', 'STARTAN3', $edge['switch'] ?? ($twoSided ? '-' : 'STARTAN3'), $edge['right']);
+			$sides .= pack('v2a8a8a8v', 0, 0, 'STARTAN3', $edge['lowerTexture'] ?? 'STARTAN3', $edge['switch'] ?? ($twoSided ? '-' : 'STARTAN3'), $edge['right']);
 			$left = 0xffff;
 
 			if($twoSided)
 			{
 				$left = intdiv(strlen($sides), 30);
-				$sides .= pack('v2a8a8a8v', 0, 0, 'STARTAN3', 'STARTAN3', '-', $edge['left']);
+				$sides .= pack('v2a8a8a8v', 0, 0, 'STARTAN3', $edge['lowerTexture'] ?? 'STARTAN3', '-', $edge['left']);
 			}
 
 			$lines .= pack('v3C6v2', ...[

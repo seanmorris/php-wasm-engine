@@ -44,6 +44,7 @@ final class EpisodeGame
 	private ?ScreenWipe $wipe;
 	private ?DoomMatch $match = null;
 	private ?ViewInput $viewOwner = null;
+	private ?string $networkRecoveryId = null;
 	private ?LevelIntermission $intermission = null;
 	private float $levelStartedAt = 0;
 	private int $levelBaseKills = 0, $levelBaseItems = 0, $levelBaseSecrets = 0;
@@ -55,6 +56,33 @@ final class EpisodeGame
 	public bool $complete = false;
 	public float $updateMs = 0;
 	public float $renderMs = 0;
+
+	/** Keep network recovery alive while fixed gameplay and input are suspended. */
+	public function recoveringNetwork(): bool
+	{
+		if(!$this->match?->replication || !function_exists('vrzno_env')) return false;
+		$read = vrzno_env('phonicsNetworkRecovery');
+		if(!$read || !($json = (string)$read()))
+		{
+			$this->networkRecoveryId = null;
+			return false;
+		}
+		$state = json_decode($json, true, 16, JSON_THROW_ON_ERROR);
+		if($this->networkRecoveryId !== (string)$state['id'])
+		{
+			$this->networkRecoveryId = (string)$state['id'];
+			$this->engine->input->reset();
+		}
+		$this->engine->controls->reset();
+		if($this->match->replication->recover((string)$state['id'], ($state['state'] ?? '') === 'resynchronizing'))
+		{
+			$done = vrzno_env('phonicsNetworkRecovered');
+			if($done) $done((string)$state['id']);
+			$this->engine->input->reset();
+			$this->viewOwner?->release();
+		}
+		return true;
+	}
 
 	public function __construct(
 		public Context $phonics

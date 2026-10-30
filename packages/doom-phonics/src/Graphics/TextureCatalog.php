@@ -70,6 +70,16 @@ final class TextureCatalog
 	/** @return list<string> Available composite wall texture names. */
 	public function textureNames(): array { return array_keys($this->definitions); }
 
+	/**
+	 * Describe a composite texture without decoding its pixels, including patch placements.
+	 *
+	 * @return array{name:string,width:int,height:int,patches:list<array{name:string,x:int,y:int}>}|null
+	 */
+	public function textureDefinition(string $name): ?array
+	{
+		return $this->definitions[strtoupper($name)] ?? null;
+	}
+
 	/** @return list<string> Available flat names. */
 	public function flatNames(): array { return array_keys($this->flats); }
 

@@ -3784,6 +3784,7 @@ verifyWad(
 require __DIR__ . '/line-specials.php';
 require __DIR__ . '/sector-volumes.php';
 require __DIR__ . '/layered-navigation.php';
+require __DIR__ . '/seeded-generation.php';
 require __DIR__ . '/game-modes.php';
 require __DIR__ . '/input.php';
 require __DIR__ . '/graphics-atlas.php';

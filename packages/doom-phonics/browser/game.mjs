@@ -541,6 +541,10 @@ export function activate({module, canvas, services, session})
 			enqueue(detail.local ? 'network-leave' : 'network-end');
 		}, {signal: abort.signal});
 
+		session.network.addEventListener('recovery', ({detail}) => {
+			readout.textContent = detail.state === 'playing' ? 'Connected' : 'Reconnecting…';
+		}, {signal: abort.signal});
+
 		session.network.addEventListener('error', ({detail}) => {
 			readout.textContent = detail?.message ?? 'Online match failed';
 		}, {signal: abort.signal});

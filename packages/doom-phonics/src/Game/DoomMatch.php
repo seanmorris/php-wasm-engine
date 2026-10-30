@@ -13,6 +13,7 @@ final class DoomMatch
 	public MultiplayerMode $mode;
 	public int $fragLimit;
 	public NetworkClock $clock;
+	public ?\DoomPhonics\System\EpisodeNetworkSystem $replication = null;
 
 	public function __construct(public MatchContext $network)
 	{

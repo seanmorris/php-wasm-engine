@@ -2,6 +2,8 @@
 declare(strict_types=1);
 namespace DoomPhonics\Tools;
 
+require_once __DIR__ . "/PolygonGeometry.php";
+
 /**
  * Cut a roofed portal passage into the inside edge of a rectangular room.
  *
@@ -17,8 +19,9 @@ final class PortalRecess
 		$x = $point[0] - $normal[0];
 		$y = $point[1] - $normal[1];
 		foreach($cells as $id => $cell)
-		if($x > $cell['x0'] && $x < $cell['x1'] && $y > $cell['y0'] && $y < $cell['y1']) return $id;
-		throw new \InvalidArgumentException('Entrance does not face a rectangular cell');
+		if($x > $cell['x0'] && $x < $cell['x1'] && $y > $cell['y0'] && $y < $cell['y1']
+			&& (!isset($cell['polygon']) || PolygonGeometry::contains($cell['polygon'],$x,$y))) return $id;
+		throw new \InvalidArgumentException('Entrance does not face a map region');
 	}
 
 	/** Split a room into its retained core, optional jambs, and a recessed opening. */

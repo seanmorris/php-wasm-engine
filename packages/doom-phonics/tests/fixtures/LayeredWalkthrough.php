@@ -26,6 +26,8 @@ final class LayeredWalkthrough
 	public LineSpecials $specials;
 	/** Recorded endpoints after each completed part of the route. */
 	public array $checkpoints = [];
+	/** Maximum command strength; short generated passages use a cautious walk. */
+	public float $travelStrength = .6;
 	private Registry $registry;
 	private PlayerMovementSystem $movement;
 	private PlayerState $player;
@@ -64,7 +66,7 @@ final class LayeredWalkthrough
 			$distance = hypot($x - $this->pose->x,$y - $this->pose->y);
 			if($distance < 6) return;
 			$this->pose->angle = atan2($y - $this->pose->y,$x - $this->pose->x);
-			$this->command->forward = min(.6,$distance / 100);
+			$this->command->forward = min($this->travelStrength,$distance / 100);
 			$this->tick();
 		}
 		throw new \RuntimeException("Walk stalled toward $x,$y at " . json_encode($this->position()));
@@ -74,7 +76,7 @@ final class LayeredWalkthrough
 	public function enter(int $sector, float $angle, float $pitch = 0): void
 	{
 		$this->pose->angle = $angle;
-		$this->command->forward = .6;
+		$this->command->forward = $this->travelStrength;
 		$this->command->pitch = $pitch;
 		for($tick = 0; $tick < 1200; $tick++)
 		{

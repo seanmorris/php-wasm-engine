@@ -2,8 +2,10 @@
 declare(strict_types=1);
 namespace DoomPhonics\Tools;
 
+require_once __DIR__ . "/PolygonGeometry.php";
+
 /**
- * Select connected rectangular sectors below a common maximum water surface.
+ * Select connected polygonal sectors below a common maximum water surface.
  *
  * Shared edges and explicitly supplied wall-portal connections carry water only
  * through open vertical intervals. This is an authoring flood fill, not a timed
@@ -29,6 +31,11 @@ final class FloodBasin
 		foreach($cells as $b => $other)
 		{
 			if($b <= $a) continue;
+			if(isset($cell['polygon']) || isset($other['polygon']))
+			{
+				if(PolygonGeometry::shared(PolygonGeometry::points($cell),PolygonGeometry::points($other))) $join($a,$b);
+				continue;
+			}
 			$vertical = ($cell['x1'] === $other['x0'] || $other['x1'] === $cell['x0'])
 				&& max($cell['y0'],$other['y0']) < min($cell['y1'],$other['y1']);
 			$horizontal = ($cell['y1'] === $other['y0'] || $other['y1'] === $cell['y0'])

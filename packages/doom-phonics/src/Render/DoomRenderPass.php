@@ -116,12 +116,15 @@ final class DoomRenderPass implements RenderPass
 			&& abs($sector->floor - $sector->previousFloor) > 1e-6
 			&& abs($pose->z - $sector->floorZ($pose->x, $pose->y)) <= .1;
 
+		// Stair easing applies only while supported. During swimming or a plane
+		// warp it can leave the eye behind in the old sector's vertical frame.
 		$smoothHeight = !$this->registry->has($entity, Body::class)
-			|| !$this->renderer->level->boundsCrossCameraPortal(
+			|| ($this->registry->get($entity, Body::class)->grounded
+			&& !$this->renderer->level->boundsCrossCameraPortal(
 				$x
 				, $y
 				, $this->registry->get($entity, Body::class)->radius
-			);
+			));
 
 		$z = $this->cameraHeight->follow($pose->zAt($alpha), $smoothHeight, $supportedByMovingFloor);
 		$pitch = $this->registry->has($entity, ViewInput::class)

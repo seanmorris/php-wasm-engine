@@ -2,7 +2,7 @@
 
 `@seanmorris/doom-phonics` is a source-format adapter, renderer, and reusable set of first-person systems for Phonics. It parses IWAD/PWAD resources and classic binary maps in native PHP and does not depend on Sane-Phonics or a Tiled runtime.
 
-Player and author guides live in [`docs/`](docs/index.md): [playing](docs/playing.md), [the launcher](docs/launcher.md), [WAD and DECORATE support](docs/wad-and-decorate.md), [multiplayer](docs/multiplayer.md), and [rendering](docs/rendering.md).
+Player and author guides live in [`docs/`](docs/index.md): [the launcher](docs/launcher.md), [WAD and DECORATE support](docs/wad-and-decorate.md), [multiplayer](docs/multiplayer.md), and [rendering](docs/rendering.md).
 
 The browser host resizes the SDL/WebGL framebuffer to the canvas's physical display size, including fullscreen and high-density displays. Native resolution is the default. The Episode system set's `renderScale` option defines the alternate Classic resolution scale; `0.5` renders the three-dimensional scene at half width and height, upscales it with nearest sampling, and keeps the weapon, status bar, menus, and screen wipes at the full output resolution. Indexed WAD textures and sprites retain their blocky nearest-neighbor sampling in both modes while Native keeps polygon and billboard edges sharp. The renderer batches static map geometry, visible masked actors, and the HUD separately; it also uses BSP sectors, the WAD REJECT table, and camera-frustum culling before expanding sprite vertices. A compact depth-only mesh preserves finite sky ceilings and shared-sky portal clipping without drawing seams over the panoramic sky.
 
@@ -135,6 +135,16 @@ php packages/doom-phonics/tests/run.php
 The report is also served at `/engine/packages/doom-phonics/demo/layered-navigation.html`. Select the start, initial water height, and whether reachable controls may be used; it highlights reachable regions and the route to the balcony, and can download the graph and physical witnesses as JSON. Regenerate the report after changing the layout. `LayeredPrototype::build(depth: 240)` demonstrates pushing the basement/cavern down while leaving the building and upper storey pinned in place.
 
 This bounded prototype uses empty convex rectangles, translation-only anchors, one water model, and settled water states. It is not yet a random planar subdivision generator, arbitrary obstacle navmesh, or timed flood solver. General polygon rooms, more environmental state, sloped catwalks and vertical halls remain in the full Virtual Office design (plan #2228).
+
+## Seeded layered level generator
+
+[Seeded levels](docs/seeded-levels.md) extend the prototype into a deterministic three-layer room generator. It writes a separate `SEEDED.WAD`, world JSON and interactive report; it does not replace `PORTALS.WAD`. Room networks vary by seed, with recessed portal passages, local elevation, a flood-dependent ledge, callable lifts, and curved stairs around a solid core. Disconnected candidates gain hallways; height repairs or lifts resolve short stair approaches; layer spacing expands to retain overhead clearance.
+
+```sh
+php packages/doom-phonics/tools/generate-seeded.php --seed=first-light --rooms=5
+```
+
+Open `/games/doom-phonics/?world=/engine/packages/doom-phonics/demo/seeded-level.phonics-world.json` after rebuilding manifests, application archives and the site. The report is at `/engine/packages/doom-phonics/demo/seeded-navigation.html`. See the guide for arbitrary seeds, alternate output directories, gameplay, deterministic repair records and the exact connectivity guarantee.
 
 ## Skulltag D2ST9 stress world
 

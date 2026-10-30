@@ -99,7 +99,7 @@ final class PlayerMovementSystem
 			$velocity->x += (cos($pose->angle) * $forward + sin($pose->angle) * $strafe) * $this->acceleration * $dt;
 			$velocity->y += (sin($pose->angle) * $forward - cos($pose->angle) * $strafe) * $this->acceleration * $dt;
 			$drag = pow($this->friction, $dt * 35);
-			$water = $sector->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
+			$water = $this->collision->level->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
 			if($water !== null)
 			{
 				$drag *= pow(.94, $dt * 35);

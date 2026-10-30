@@ -31,7 +31,7 @@ final class VerticalPhysics
 		$sector = $this->level->sectorAt($pose->x, $pose->y);
 		$floor = $sector->supportZ($pose->x, $pose->y, $pose->z, $body->grounded ? $this->maxStep : 0);
 		$ceiling = $sector->headroomZ($pose->x, $pose->y, max($floor, $pose->z));
-		$water = $sector->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
+		$water = $this->level->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
 		if($water !== null)
 		{
 			// Buoyancy and drag replace the dry initial-fall impulse. Movement supplies

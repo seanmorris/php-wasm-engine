@@ -55,6 +55,7 @@ final class EpisodeNetworkSystem
 		, ?BrowserBridge $bridge = null
 		, ?Level $level = null
 	){
+		$match->replication = $this;
 		$this->entities = new NetworkEntityAllocator;
 		$this->scope = new ReplicationScope($scope);
 		$this->portalInterpolation = $level ? new PortalInterpolation($level) : null;
@@ -116,7 +117,27 @@ final class EpisodeNetworkSystem
 		$this->session->afterStep($registry, $dt);
 	}
 
-	public function close(): void { $this->session->clear(); }
+	public function close(): void
+	{
+		if($this->match->replication === $this) $this->match->replication = null;
+		$this->session->clear();
+	}
+
+	/** Pump the authoritative recovery barrier without advancing world simulation. */
+	public function recover(string $id, bool $connected): bool
+	{
+		$this->session->beginRecovery($id);
+		foreach($this->world->query(PlayerCommand::class) as $entity)
+		{
+			$command = $this->world->get($entity, PlayerCommand::class);
+			$command->apply(['pitch' => $command->pitch]);
+			if($this->world->has($entity, ViewInput::class)) $this->world->get($entity, ViewInput::class)->release();
+		}
+		$complete = $this->session->recover($connected);
+		if($complete)
+		foreach($this->world->query(Transform::class) as $entity) $this->world->get($entity, Transform::class)->beginStep();
+		return $complete;
+	}
 
 	public function validCommand(InputCommand $command): bool
 	{

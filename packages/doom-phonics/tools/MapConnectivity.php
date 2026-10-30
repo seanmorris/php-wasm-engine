@@ -4,6 +4,8 @@ namespace DoomPhonics\Tools;
 
 require_once __DIR__ . '/TraversalGraph.php';
 require_once __DIR__ . '/RectangularMap.php';
+require_once __DIR__ . '/LiftTraversal.php';
+require_once __DIR__ . '/DoorTraversal.php';
 
 use DoomPhonics\Archive\Archive;
 use DoomPhonics\Map\MapData;
@@ -19,8 +21,8 @@ use DoomPhonics\Game\VerticalPhysics;
 /**
  * Compile a small generated map into physically checked, conditional connections.
  *
- * The scope is empty convex rectangles with flat floors, one liquid model and
- * settled switch states. Walking openings and wall portals are swept using game
+ * The scope is empty convex polygons with flat floors, one liquid model and
+ * settled switch states, repeatable doors and callable lift cycles. Walking openings and portals use game
  * collision; floor portals are tested using game gravity. This is not a general
  * navmesh, timing solver or guarantee for arbitrary obstacle-filled WADs.
  */
@@ -30,8 +32,46 @@ final class MapConnectivity
 	/** Load the emitted bytes through the same map parser and structural setup as the game. */
 	public static function level(array $prototype): Level
 	{
-		$archive = new Archive(RectangularMap::archive($prototype['lumps']),'LAYERS.WAD');
-		return new Level(new MapData('LAYERS',$archive->mapLumps('LAYERS')));
+		$name = $prototype['map'] ?? 'LAYERS';
+		$archive = new Archive(RectangularMap::archive($prototype['lumps']),$name . '.WAD');
+		return new Level(new MapData($name,$archive->mapLumps($name)));
+	}
+
+	/** Summarize entrance-to-exit paths inside each room at each settled water level. */
+	public static function rooms(array $layers,TraversalGraph $graph): array
+	{
+		$result=[];
+		foreach($layers as $name=>$layer) {
+			if($layer['plane']==='connector') continue;
+			$ids=array_fill_keys(array_column($layer['cells'],'id'),true); $entrances=[];
+			foreach($layer['anchors'] as $port=>$anchor) {
+				[$x,$y]=$anchor['point']; [$nx,$ny]=$anchor['normal'];
+				foreach($layer['cells'] as $cell)
+				if(PolygonGeometry::contains(PolygonGeometry::points($cell),$x-$nx*18,$y-$ny*18)) {
+					$entrances[$port]=$cell['id']; break;
+				}
+			}
+			$edges=array_values(array_filter($graph->edges,static fn($e)=>isset($ids[$e['from']],$ids[$e['to']]) && !$e['effects']));
+			$routes=$oneWay=[];
+			foreach(['dry','shallow','full'] as $water) {
+				$adjacency=[];
+				foreach($edges as $edge) if(!isset($edge['requires']['water']) || in_array($water,$edge['requires']['water'],true))
+				$adjacency[$edge['from']][$edge['to']]=$edge['mode'];
+				foreach($adjacency as $from=>$targets) foreach($targets as $to=>$mode)
+				if(!isset($adjacency[$to][$from])) $oneWay[$water][]=compact('from','to','mode');
+				foreach($entrances as $port=>$region) {
+					$queue=[$region]; $seen=[$region=>[]];
+					for($i=0;$i<count($queue);$i++) foreach($adjacency[$queue[$i]]??[] as $to=>$mode) {
+						if(isset($seen[$to])) continue;
+						$seen[$to]=array_merge($seen[$queue[$i]],[$mode]); $queue[]=$to;
+					}
+					foreach($entrances as $exit=>$target) if($exit!==$port)
+					$routes[$water][$port][$exit]=isset($seen[$target]) ? array_values(array_unique($seen[$target])) : null;
+				}
+			}
+			$result[$name]=compact('entrances','routes','oneWay');
+		}
+		return $result;
 	}
 
 	/** Build a graph with runtime-tested opening witnesses for the selected player profile. */
@@ -46,10 +86,19 @@ final class MapConnectivity
 		foreach($prototype['regions'] as $name => $id) $graph->region($name,$prototype['cells'][$id]);
 		$collision = new Collision($level,$profile['step']);
 		$waterStates = ['dry' => -$prototype['depth'],'shallow' => -intdiv($prototype['depth'],2),'full' => 0];
-		$fits = static function(int $id) use ($prototype,$profile): bool {
+		$doorRegions=[];
+		foreach($prototype['doors'] ?? [] as $door)
+		{
+			$id=$prototype['regions'][$door['region']];
+			$height=DoorTraversal::verify($level,$door,$prototype['regions'],$profile);
+			// Probe passage geometry at the height just proven attainable by Use.
+			$level->sectors[$id]->ceiling=$height;
+			$doorRegions[$id]=true;
+		}
+		$fits = static function(int $id) use ($prototype,$profile,$level): bool {
 			$c = $prototype['cells'][$id];
 			return min($c['x1'] - $c['x0'],$c['y1'] - $c['y0']) > 2 * $profile['radius']
-				&& $c['ceiling'] - $c['floor'] >= $profile['height'];
+				&& $level->sectors[$id]->ceiling - $c['floor'] >= $profile['height'];
 		};
 		foreach($level->map->linedefs as $lineId => $line)
 		{
@@ -93,7 +142,7 @@ final class MapConnectivity
 				}
 				if(!$allowed) continue;
 				$mode = $target - $floor > $profile['step'] ? 'swim' : ($floor - $target > $profile['step'] ? 'drop' : 'walk');
-				$graph->connect($names[$from],$names[$to],$mode,count($allowed) === 3 ? [] : ['water' => $allowed],[], $witnesses);
+				$graph->connect($names[$from],$names[$to],isset($doorRegions[$to]) ? 'door' : $mode,count($allowed) === 3 ? [] : ['water' => $allowed],[], $witnesses);
 			}
 		}
 		$level->sectors[$prototype['model']]->ceiling = -$prototype['depth'];
@@ -115,20 +164,43 @@ final class MapConnectivity
 			throw new \RuntimeException('Emitted wall portal does not realize its spatial pin');
 			$graph->connect($names[$sourceId],$names[$targetId],'portal',[],[],['start' => $start,'end' => $end]);
 		}
-		$upper = $prototype['cells'][$prototype['regions']['upper.well']];
-		$lower = $prototype['cells'][$prototype['regions']['building.well']];
-		if($fits($prototype['regions']['upper.well']) && $fits($prototype['regions']['building.well'])
-			&& $upper['floor'] - $lower['floor'] <= $profile['drop'])
+		foreach($prototype['falls'] ?? [['upper.well','building.well']] as [$upperName,$lowerName])
 		{
-			$pose = new Transform(($upper['x0'] + $upper['x1']) / 2,($upper['y0'] + $upper['y1']) / 2,$upper['floor']);
-			$start = [$pose->x,$pose->y,$pose->z];
-			$velocity = new Velocity;
-			$body = new Body($profile['radius'],$profile['height'],grounded: false);
-			$physics = new VerticalPhysics($level,$profile['step']);
-			for($i = 0; $i < 100; $i++) $physics->step($pose,$velocity,$body,1 / 35);
-			if($level->sectorAt($pose->x,$pose->y)->index !== $prototype['regions']['building.well'] || !$body->grounded)
-			throw new \RuntimeException('Gallery floor portal has no safe landing');
-			$graph->connect('upper.well','building.well','floor-portal',[],[],['start' => $start,'end' => [$pose->x,$pose->y,$pose->z]]);
+			$upper = $prototype['cells'][$prototype['regions'][$upperName]];
+			$lower = $prototype['cells'][$prototype['regions'][$lowerName]];
+			$link = $level->cameraPortalForPlane($prototype['regions'][$upperName],0)?->link;
+			$landingHeight = $link?->cameraZ($upper['floor'],$level) ?? $upper['floor'];
+			if($fits($prototype['regions'][$upperName]) && $fits($prototype['regions'][$lowerName])
+				&& $landingHeight - $lower['floor'] <= $profile['drop'])
+			{
+				$pose = new Transform(($upper['x0'] + $upper['x1']) / 2,($upper['y0'] + $upper['y1']) / 2,$upper['floor']);
+				$start = [$pose->x,$pose->y,$pose->z];
+				$velocity = new Velocity;
+				$body = new Body($profile['radius'],$profile['height'],grounded: false);
+				$physics = new VerticalPhysics($level,$profile['step']);
+				for($i = 0; $i < 100; $i++) $physics->step($pose,$velocity,$body,1 / 35);
+				// A stacked gallery can pass straight through intermediate apertures.
+				// Only the actual grounded destination is a navigable landing.
+				$destination=$lowerName; $seen=[];
+				while($level->cameraPortalForPlane($prototype['regions'][$destination],0)?->link->passable()) {
+					if(isset($seen[$destination])) throw new \RuntimeException('Cyclic floor portal stack');
+					$seen[$destination]=true; $next=null;
+					foreach($prototype['falls'] as [$a,$b]) if($a===$destination) { $next=$b; break; }
+					if($next===null) throw new \RuntimeException('Unregistered gallery drop');
+					$destination=$next;
+				}
+				if($level->sectorAt($pose->x,$pose->y)->index !== $prototype['regions'][$destination] || !$body->grounded)
+				throw new \RuntimeException("Floor portal $upperName has no safe landing in $destination");
+				$graph->connect($upperName,$destination,'floor-portal',[],[],['start' => $start,'end' => [$pose->x,$pose->y,$pose->z]]);
+			}
+		}
+		foreach($prototype['lifts'] ?? [] as $lift)
+		{
+			if(!$fits($prototype['regions'][$lift['platform']]) || !$fits($prototype['regions'][$lift['low']])) continue;
+			$witness = LiftTraversal::verify($level,$lift,$prototype['regions'],$profile);
+			$graph->connect($lift['low'],$lift['platform'],'elevator',[],[],$witness['up']);
+			$graph->connect($lift['platform'],$lift['high'],'elevator',[],[],$witness['up']);
+			$graph->connect($lift['high'],$lift['low'],'elevator',[],[],$witness['down']);
 		}
 		foreach($prototype['actions'] as $action)
 		{

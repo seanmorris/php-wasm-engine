@@ -925,7 +925,7 @@ final class GlesMapRenderer
 		$viewSector = $this->level->sectors[$cameraSector];
 		$region = $viewSector->heightTransfer?->region($x, $y, $z + 41, $alpha) ?? 0;
 		$blend = $viewSector->heightTransfer?->blend($region) ?? [0.0,0.0,0.0,0.0];
-		if(!$viewSector->heightTransfer && $viewSector->waterSurface($x, $y, $z + 41, .01) !== null)
+		if(!$viewSector->heightTransfer && $this->level->waterSurface($x, $y, $z + 41, .01) !== null)
 		$blend = [0.0,.31,.65,.35];
 		foreach([$this->program,$this->spriteProgram,$this->skyProgram,$this->beamProgram] as $program)
 		{

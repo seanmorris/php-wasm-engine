@@ -264,6 +264,7 @@ for(const [directory, definition] of definitions)
 			, 'demo/portal-rooms.phonics-world.json'
 			, 'demo/pool-3d.phonics-world.json'
 			, 'demo/layered-navigation.phonics-world.json'
+			, 'demo/seeded-level.phonics-world.json'
 		];
 
 		definition.application.dependencies = {matrix: '../phonics-matrix/phonics.json'};

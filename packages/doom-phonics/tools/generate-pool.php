@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Staircase.php';
 require_once __DIR__ . '/RectangularCells.php';
+require_once __DIR__ . '/WaterFlat.php';
 
 use DoomPhonics\Tools\Staircase;
 use DoomPhonics\Tools\RectangularCells;
@@ -409,17 +410,7 @@ return static function(): array {
 	// An original, tileable 64x64 flat in Doom's blue palette ramp. Shareware
 	// DOOM1 has no FWATER1, so the demo supplies its own surface without copying
 	// any IWAD artwork. Integer waves keep regeneration byte-for-byte stable.
-	$water = '';
-	$wave = static function(int $phase): int {
-		$phase &= 31;
-		return $phase < 16 ? $phase : 31 - $phase;
-	};
-	for($y = 0; $y < 64; $y++)
-	for($x = 0; $x < 64; $x++)
-	{
-		$ripple = $wave($x + intdiv($wave($y * 2), 2)) + $wave($y + intdiv($wave($x * 2), 2));
-		$water .= chr(198 + intdiv($ripple, 4));
-	}
+	$water = DoomPhonics\Tools\WaterFlat::bytes();
 
 	return [
 		'F_START' => ''
