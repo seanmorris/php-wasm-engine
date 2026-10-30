@@ -46,6 +46,8 @@ final class GlesMapRenderer
 	private Program $mirrorProgram;
 	private IndexedAtlas $atlas;
 	private MapMesh $mesh;
+	/** Current view used to order translucent model surfaces after actors. */
+	private array $volumeView = [0.0,0.0,0.0,1.0];
 	private ViewProjection $projection;
 	private RenderViewport $viewport;
 	private PitchMode $pitchMode;
@@ -180,7 +182,7 @@ final class GlesMapRenderer
 	private function create(): void
 	{
 		glGenVertexArrays(8, $this->vao);
-		glGenBuffers(8, $this->buffers);
+		glGenBuffers(10, $this->buffers);
 		glBindVertexArray($this->vao[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
 		$bytes = $this->mesh->bytes();
@@ -342,15 +344,6 @@ final class GlesMapRenderer
 
 		glBindTexture(GL_TEXTURE_2D, $this->textures[3]);
 		$this->sectorBytes = $this->sectorData();
-		$planes = [];
-
-		foreach(['floor','ceiling'] as $plane)
-		foreach($this->level->sectors as $sector)
-		{
-			array_push($planes, ...$sector->{$plane . 'Slope'});
-			$planes[] = (float)($sector->{$plane . 'LightSource'} ?? $sector->index);
-		}
-
 		glTexImage2D(
 			GL_TEXTURE_2D
 			, 0
@@ -360,7 +353,7 @@ final class GlesMapRenderer
 			, 0
 			, GL_RGBA
 			, GL_FLOAT
-			, $this->sectorBytes . pack('f*', ...$planes)
+			, $this->sectorBytes
 		);
 
 		$this->configurePrograms();
@@ -576,7 +569,7 @@ final class GlesMapRenderer
 		$rightY = -cos($angle);
 		$forwardX = cos($angle);
 		$forwardY = sin($angle);
-		$cameraSector ??= $this->level->map->sectorAt((int)$cameraX, (int)$cameraY);
+		$cameraSector ??= $this->level->map->sectorAt($cameraX, $cameraY);
 		$connectedSectors = $this->level->map->connectedSectors($cameraSector);
 		$halfWidth = tan(deg2rad($this->fov / 2));
 		$opaque = [];
@@ -620,7 +613,7 @@ final class GlesMapRenderer
 			{
 				$cached['x'] = $pose->x;
 				$cached['y'] = $pose->y;
-				$cached['sector'] = $this->level->map->sectorAt((int)$pose->x, (int)$pose->y);
+				$cached['sector'] = $this->level->map->sectorAt($pose->x, $pose->y);
 			}
 
 			$actorSector = $cached['sector'];
@@ -928,7 +921,20 @@ final class GlesMapRenderer
 
 		$nearPlane ??= $this->visiblePortalNearPlane($x, $y);
 
-		$meshUpdates = $this->mesh->sync($this->level, $this->atlas);
+		$cameraSector ??= $this->level->map->sectorAt($x, $y);
+		$viewSector = $this->level->sectors[$cameraSector];
+		$region = $viewSector->heightTransfer?->region($x, $y, $z + 41, $alpha) ?? 0;
+		$blend = $viewSector->heightTransfer?->blend($region) ?? [0.0,0.0,0.0,0.0];
+		if(!$viewSector->heightTransfer && $viewSector->waterSurface($x, $y, $z + 41, .01) !== null)
+		$blend = [0.0,.31,.65,.35];
+		foreach([$this->program,$this->spriteProgram,$this->skyProgram,$this->beamProgram] as $program)
+		{
+			$program->use();
+			glUniform4f($program->location('viewBlend'), ...$blend);
+		}
+		$this->volumeView = [$x,$y,$z + 41,$alpha];
+		$meshUpdates = [...$this->mesh->sync($this->level, $this->atlas),
+			...$this->mesh->syncTransfers($this->level, $this->atlas, $region)];
 		$materials = hrtime(true);
 
 		if($meshUpdates)
@@ -939,19 +945,19 @@ final class GlesMapRenderer
 		}
 
 		$meshUpload = hrtime(true);
-		$sectorBytes = $this->sectorData($alpha);
+		$sectorBytes = $this->sectorData($alpha, $region);
 		$sectors = hrtime(true);
 
 		if($sectorBytes !== $this->sectorBytes)
 		{
 			glActiveTexture(GL_TEXTURE3);
 			glBindTexture(GL_TEXTURE_2D, $this->textures[3]);
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, count($this->level->sectors), 1, GL_RGBA, GL_FLOAT, $sectorBytes);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, count($this->level->sectors), 3, GL_RGBA, GL_FLOAT, $sectorBytes);
 			$this->sectorBytes = $sectorBytes;
 		}
 
 		$sectorUpload = hrtime(true);
-		$cameraSector ??= $this->level->map->sectorAt((int)$x, (int)$y);
+		$cameraSector ??= $this->level->map->sectorAt($x, $y);
 		$cameraComponent = $this->sectorComponents[$cameraSector] ?? $cameraSector;
 		$this->bindTextures();
 		$this->renderSky($angle, $pitch);
@@ -970,7 +976,11 @@ final class GlesMapRenderer
 		glDisable(GL_BLEND);
 		glDisable(GL_CULL_FACE);
 		glBindVertexArray($this->vao[0]);
-		glDrawArrays(GL_TRIANGLES, 0, $this->mesh->vertexCount());
+		glUniform1f($this->program->location('surfaceAlpha'), 1);
+		glUniform1i($this->program->location('surfaceLight'), -1);
+		glUniform1i($this->program->location('clipSectorBounds'), 0);
+		glDrawArrays(GL_TRIANGLES, 0, $this->mesh->baseVertexCount);
+		$this->drawVolumes(false);
 		glBindVertexArray(0);
 		$this->renderCameraTextureSurfaces($x, $y, $z, $angle, $pitch, $nearPlane);
 		$this->renderCameraPortalSurfaces($x, $y, $z, $angle, $pitch, $nearPlane);
@@ -1046,7 +1056,7 @@ final class GlesMapRenderer
 		);
 
 		$this->cameraPortalFrame = [
-			'camera' => [$x,$y,$z,$cameraSector ?? $this->level->map->sectorAt((int)$x, (int)$y),$alpha]
+			'camera' => [$x,$y,$z,$cameraSector ?? $this->level->map->sectorAt($x, $y),$alpha]
 			, 'visible' => array_keys($this->cameraPortalVisible)
 			, 'targets' => []
 		];
@@ -1178,6 +1188,7 @@ final class GlesMapRenderer
 				);
 
 				$this->renderBeams($registry, $camera->x, $camera->y, $feet, $camera->angle, $camera->pitch, $alpha);
+				$this->renderTranslucentVolumes();
 			}
 			finally
 			{
@@ -1247,6 +1258,7 @@ final class GlesMapRenderer
 					, $pitch
 					, $alpha
 				);
+				$this->renderTranslucentVolumes();
 			}
 			finally
 			{
@@ -1423,6 +1435,7 @@ final class GlesMapRenderer
 				, $alpha
 				, $nearPlane
 			);
+			$this->renderTranslucentVolumes();
 		}
 		finally
 		{
@@ -1503,7 +1516,7 @@ final class GlesMapRenderer
 		if(!$this->mesh->cameraTextures->vertexCount()) return;
 
 		$program = $this->cameraTextureProgram;
-		$cameraSector = $this->level->map->sectorAt((int)round($x), (int)round($y));
+		$cameraSector = $this->level->map->sectorAt($x, $y);
 		$program->use();
 		glUniform3f($program->location('camera'), $x, $y, $z + PlayerState::VIEW_HEIGHT);
 		glUniform2f($program->location('forward'), cos($angle), sin($angle));
@@ -2125,20 +2138,72 @@ final class GlesMapRenderer
 		}
 	}
 
-	private function sectorData(float $alpha = 1): string
+	/** Pack rendered planes separately from physical sector heights for each camera view. */
+	private function sectorData(float $alpha = 1, int $region = 0): string
 	{
-		$values = [];
+		$values = $floors = $ceilings = [];
 		$alpha = max(0, min(1, $alpha));
-
 		foreach($this->level->sectors as $sector)
 		{
-			$values[] = $sector->previousFloor + ($sector->floor - $sector->previousFloor) * $alpha;
-			$values[] = $sector->previousCeiling + ($sector->ceiling - $sector->previousCeiling) * $alpha;
-			$values[] = (float)$sector->light;
+			$view = $sector->heightTransfer?->view($sector, $region);
+			$floor = $view && !($sector->heightTransfer->flags & 4) ? $view['floor'] : [$sector,0];
+			$ceiling = $view && !($sector->heightTransfer->flags & 4) ? $view['ceiling'] : [$sector,1];
+			$values[] = $floor[1] ? $floor[0]->ceilingAt($alpha) : $floor[0]->floorAt($alpha);
+			$values[] = $ceiling[1] ? $ceiling[0]->ceilingAt($alpha) : $ceiling[0]->floorAt($alpha);
+			$values[] = (float)($view['light'] ?? $sector->light);
 			$values[] = (float)($this->sectorComponents[$sector->index] ?? $sector->index);
+			array_push($floors, ...$floor[0]->{$floor[1] ? 'ceilingSlope' : 'floorSlope'});
+			$floors[] = (float)($sector->floorLightSource ?? $sector->index);
+			array_push($ceilings, ...$ceiling[0]->{$ceiling[1] ? 'ceilingSlope' : 'floorSlope'});
+			$ceilings[] = (float)($sector->ceilingLightSource ?? $sector->index);
 		}
+		return $values ? pack('f*', ...$values,...$floors,...$ceilings) : pack('f*', 0,128,255,0,0,0,0,0,0,0,0,0);
+	}
 
-		return $values ? pack('f*', ...$values) : pack('f*', 0, 128, 255, 0);
+	/** Composite translucent water after world actors, in the currently configured view. */
+	public function renderTranslucentVolumes(): void
+	{
+		if($this->closed || !$this->mesh->volumeSpans) return;
+		$this->bindTextures();
+		$this->program->use();
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_CULL_FACE);
+		glBindVertexArray($this->vao[0]);
+		$this->drawVolumes(true);
+		glBindVertexArray(0);
+	}
+
+	/** Draw opaque model surfaces immediately or sort translucent faces back to front. */
+	private function drawVolumes(bool $transparent): void
+	{
+		$batches = VolumeDrawList::build($this->mesh, $this->level, $this->volumeView, $transparent);
+		if(!$batches) return;
+		$indices = [];
+		foreach($batches as $batch) array_push($indices, ...$batch['indices']);
+		$bytes = pack('V*', ...$indices);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, $this->buffers[$transparent ? 9 : 8]);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STREAM_DRAW);
+		if($transparent)
+		{
+			glEnable(GL_BLEND);
+			glDepthMask(false);
+		}
+		$offset = 0;
+		foreach($batches as $batch)
+		{
+			glUniform1f($this->program->location('surfaceAlpha'), $batch['opacity']);
+			glUniform1i($this->program->location('surfaceLight'), $batch['light']);
+			glUniform1i($this->program->location('clipSectorBounds'), (int)$batch['clipBounds']);
+			if($transparent) glBlendFunc(GL_SRC_ALPHA, $batch['additive'] ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+			$count = count($batch['indices']);
+			glDrawElements(GL_TRIANGLES, $count, GL_UNSIGNED_INT, $offset);
+			$offset += $count * 4;
+		}
+		glUniform1f($this->program->location('surfaceAlpha'), 1);
+		glUniform1i($this->program->location('surfaceLight'), -1);
+		glUniform1i($this->program->location('clipSectorBounds'), 0);
+		glDepthMask(true);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	}
 
 	private function release(): void

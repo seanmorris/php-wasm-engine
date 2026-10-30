@@ -46,7 +46,7 @@ final class HexenMapSetup
 
 	public static function structuralThing(int $type): bool
 	{
-		return HexenCameraPortalSetup::structuralThing($type) || HexenCameraObjectSetup::structuralThing($type);
+		return $type === 9045 || HexenCameraPortalSetup::structuralThing($type) || HexenCameraObjectSetup::structuralThing($type);
 	}
 
 	/** Anchor the shared edge to the neighbor and retain the farthest target vertex's height. */

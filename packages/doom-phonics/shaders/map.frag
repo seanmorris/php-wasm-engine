@@ -11,9 +11,13 @@ uniform int palettePage;
 uniform int fixedLightMap;
 uniform int extraLight;
 uniform int cameraComponent;
+uniform float surfaceAlpha;
+uniform int surfaceLight;
+uniform vec4 viewBlend;
 
 in vec4 textureUvs;
 in float viewDepth;
+in vec2 sectorClearance;
 flat in ivec2 textureIds;
 flat in ivec2 lightLevels;
 flat in ivec2 sectorComponents;
@@ -21,9 +25,11 @@ out vec4 color;
 
 void main()
 {
+	if(min(sectorClearance.x, sectorClearance.y) <= .001) discard;
 	vec2 textureUv = gl_FrontFacing ? textureUvs.xy : textureUvs.zw;
 	int textureId = gl_FrontFacing ? textureIds.x : textureIds.y;
 	int lightLevel = gl_FrontFacing ? lightLevels.x : lightLevels.y;
+	if(surfaceLight >= 0) lightLevel = surfaceLight;
 	int sectorComponent = gl_FrontFacing ? sectorComponents.x : sectorComponents.y;
 	if(sectorComponent != cameraComponent) discard;
 	if(textureId < 0) discard;
@@ -40,4 +46,6 @@ void main()
 	int lightMap = clamp(int(round(float(255 - effectiveLight) / 8.0)) + distanceShade, 0, lightRows - 1);
 	int colorMap = fixedLightMap >= 0 ? fixedLightMap : lightMap;
 	color = texelFetch(paletteMap, ivec2(sourceIndex, palettePage * paletteRows + colorMap), 0);
+	color.rgb = mix(color.rgb, viewBlend.rgb, viewBlend.a);
+	color.a *= surfaceAlpha;
 }

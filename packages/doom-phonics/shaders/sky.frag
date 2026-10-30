@@ -16,6 +16,7 @@ uniform int pitchMode;
 
 in vec2 screenPosition;
 out vec4 color;
+uniform vec4 viewBlend;
 
 void main()
 {
@@ -44,4 +45,5 @@ void main()
 	int sourceIndex = int(round(indexed.r * 255.0));
 	int colorMap = fixedLightMap >= 0 ? fixedLightMap : 0;
 	color = texelFetch(paletteMap, ivec2(sourceIndex, palettePage * paletteRows + colorMap), 0);
+	color.rgb = mix(color.rgb, viewBlend.rgb, viewBlend.a);
 }

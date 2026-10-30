@@ -367,6 +367,18 @@ final class LineSpecials
 				$activated = $this->startMover($mover) || $activated;
 			}
 		}
+		elseif($number === 47 || $number === 69)
+		{
+			// Ceiling_MoveToValue[Times8]: tag, speed, height, negative, change.
+			// A control-sector ceiling also moves every 3D floor that references it.
+			$target = $delay * ($number === 69 ? 8 : 1) * ($lip ? -1 : 1);
+
+			foreach($this->level->tags[$tag] ?? [] as $sectorId)
+			{
+				if($speed <= 0 || $this->level->sectors[$sectorId]->ceiling === (float)$target) continue;
+				$activated = $this->startMover(SectorMover::ceiling($sectorId, $target, $speed * 35 / 8)) || $activated;
+			}
+		}
 		elseif($number === 107)
 		{
 			$activated = $this->level->retargetCameraPortals($tag, $speed, $id);

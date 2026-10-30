@@ -45,6 +45,17 @@ try
 				throw Error(`Generated asset differs: ${name}/${folder}/${file}`);
 	}
 
+	const report = path.join(directory, 'layered-navigation.html');
+
+	execFileSync(
+		'php'
+		, [path.join(root, 'packages/doom-phonics/tools/generate-layered-report.php'), report]
+		, {stdio: 'pipe'}
+	);
+
+	if(await hash(report) !== await hash(path.join(root, 'packages/doom-phonics/demo/layered-navigation.html')))
+		throw Error('Generated layered navigation report differs from its geometry and graph');
+
 	console.log('Generated package worlds and assets match their generators.');
 }
 finally

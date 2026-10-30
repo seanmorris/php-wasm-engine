@@ -66,7 +66,7 @@ final class CameraPortalMesh
 		, PitchMode $pitchMode = PitchMode::Perspective
 	): array {
 		$candidates = [];
-		$cameraSector ??= $level->map->sectorAt((int)round($x), (int)round($y));
+		$cameraSector ??= $level->map->sectorAt($x, $y);
 		$visibleSectors = $level->map->connectedSectors($cameraSector);
 		$eye = $z + 41;
 		$forwardX = cos($angle);

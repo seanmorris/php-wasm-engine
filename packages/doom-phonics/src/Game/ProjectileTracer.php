@@ -9,7 +9,7 @@ use DoomPhonics\Component\Transform;
 final class ProjectileTracer
 {
 
-	public function __construct(public Level $level) {}
+	public function __construct(public Level $level, private bool $sight = false) {}
 
 	public function trace(
 		Transform $pose
@@ -458,7 +458,7 @@ final class ProjectileTracer
 		$portal = $this->level->portal($lineId);
 
 		if($portal)
-		return $portal->admitsProjectile($bottom, $height, .001, $x, $y) ? null : ProjectileImpact::WALL;
+		return $portal->admitsProjectile($bottom, $height, .001, $x, $y, $this->sight) ? null : ProjectileImpact::WALL;
 
 		$terminal = $this->level->terminalSector($lineId);
 
@@ -562,6 +562,7 @@ final class ProjectileTracer
 		, float $to
 	): ?ProjectileImpact {
 		$sector = $this->level->sectors[$sectorId];
+		$volumeHit = $this->volumePlane($pose, $body, $dx, $dy, $dz, $sector, $from, $to);
 		$floor = $pose->z - $sector->floorZ($pose->x, $pose->y);
 		$ceiling = $pose->z + $body->height - $sector->ceilingZ($pose->x, $pose->y);
 		$floorRate = $dz - $sector->floorSlope[0] * $dx - $sector->floorSlope[1] * $dy;
@@ -591,7 +592,8 @@ final class ProjectileTracer
 			$surface = ProjectileImpact::CEILING;
 		}
 
-		if($fraction === null || $fraction < $from - 1e-7 || $fraction > $to + 1e-7) return null;
+		if($fraction === null || $fraction < $from - 1e-7 || $fraction > $to + 1e-7) return $volumeHit;
+		if($volumeHit && $volumeHit->fraction < $fraction) return $volumeHit;
 
 		$fraction = min($to, max($from, $fraction));
 		$plane = $surface === ProjectileImpact::FLOOR ? 0 : 1;
@@ -608,8 +610,45 @@ final class ProjectileTracer
 			, $body->radius
 			, $sectorId
 			, $plane
-		)) return null;
+		)) return $volumeHit;
 
 		return new ProjectileImpact($surface, $fraction, $crossX, $crossY, $pose->z + $dz * $fraction, $sectorId);
+	}
+
+	/** Clip a swept body against each blocking slab, including vertical rays and sloped models. */
+	private function volumePlane(
+		Transform $pose, Body $body, float $dx, float $dy, float $dz,
+		SectorState $sector, float $from, float $to
+	): ?ProjectileImpact {
+		$nearest = null;
+		foreach($sector->volumes as $volume)
+		{
+			if(!$volume->blocks($this->sight)) continue;
+			$enter = $from;
+			$exit = $to;
+			$surface = ProjectileImpact::WALL;
+			$top = $volume->top($pose->x, $pose->y);
+			$bottom = $volume->bottom($pose->x, $pose->y);
+			// Both inequalities must be positive inside the expanded volume.
+			$planes = [
+				[$top - $pose->z, $volume->top($pose->x + $dx, $pose->y + $dy) - $top - $dz, ProjectileImpact::FLOOR],
+				[$pose->z + $body->height - $bottom, $dz - $volume->bottom($pose->x + $dx, $pose->y + $dy) + $bottom, ProjectileImpact::CEILING]
+			];
+			foreach($planes as [$distance,$rate,$kind])
+			{
+				if(abs($rate) < 1e-9)
+				{
+					if($distance < .001) continue 2;
+					continue;
+				}
+				$cross = -$distance / $rate;
+				if($rate > 0 && $cross >= $enter) { $enter = $cross; $surface = $kind; }
+				elseif($rate < 0) $exit = min($exit, $cross);
+			}
+			if($enter > $exit + 1e-7 || $exit <= $from || $enter > $to || ($nearest && $enter >= $nearest->fraction)) continue;
+			$nearest = new ProjectileImpact($surface, $enter, $pose->x + $dx * $enter,
+				$pose->y + $dy * $enter, $pose->z + $dz * $enter, $sector->index);
+		}
+		return $nearest;
 	}
 }

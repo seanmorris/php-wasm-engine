@@ -22,7 +22,7 @@ final class Collision
 		$result = $this->moveAndSlide($transform, $body, $dx, $dy, $entity);
 
 		$sector = $this->level->sectorAt($transform->x, $transform->y);
-		$floor = $sector->floorZ($transform->x, $transform->y);
+		$floor = $sector->supportZ($transform->x, $transform->y, $transform->z, $body->grounded ? $this->maxStep : 0);
 		$transform->z = max($transform->z, $floor);
 
 		if($body->grounded && $transform->z - $floor <= $this->maxStep + .01)
@@ -368,8 +368,8 @@ final class Collision
 		$t = max(0, min(1, (($x - $a['x']) * $dx + ($y - $a['y']) * $dy) / max(1, $dx * $dx + $dy * $dy)));
 		$x = $a['x'] + $dx * $t;
 		$y = $a['y'] + $dy * $t;
-		$floor = max($front->floorZ($x, $y), $back->floorZ($x, $y));
-		$ceiling = min($front->ceilingZ($x, $y), $back->ceilingZ($x, $y));
+		$floor = max($front->supportZ($x, $y, $z, $this->maxStep), $back->supportZ($x, $y, $z, $this->maxStep));
+		$ceiling = min($front->headroomZ($x, $y, max($z, $floor)), $back->headroomZ($x, $y, max($z, $floor)));
 
 		return $floor - $z > $this->maxStep || $ceiling - max($z, $floor) < $height;
 	}

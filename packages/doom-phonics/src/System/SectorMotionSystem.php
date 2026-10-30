@@ -134,7 +134,40 @@ final class SectorMotionSystem
 
 			$pose = $registry->get($entity, Transform::class);
 
-			if($this->level->sectorAt($pose->x, $pose->y)->index !== $mover->sector) continue;
+			$occupied = $this->level->sectorAt($pose->x, $pose->y);
+			if($occupied->index !== $mover->sector)
+			{
+				// Model sectors live elsewhere in the map. Their solid tops carry actors
+				// in each target sector; liquid surfaces never push or crush swimmers.
+				foreach($occupied->volumes as $volume)
+				{
+					if($volume->model !== $sector || !$volume->solid()) continue;
+					$top = $volume->top($pose->x, $pose->y);
+					$plane = $mover->movesFloor() ? 0 : 1;
+					$topDelta = $volume->topPlane() === $plane ? $delta : 0;
+					$bottom = $volume->bottom($pose->x, $pose->y) + ($volume->bottomPlane() === $plane ? $delta : 0);
+					$canCarry = !$registry->has($entity, Projectile::class)
+						&& !$registry->has($entity, RemoteProjectile::class)
+						&& !$registry->get($entity, ActorState::class)->definition->hasFlag('SPAWNCEILING');
+					if($canCarry && (abs($pose->z - $top) <= .1
+						|| ($topDelta > 0 && $pose->z >= $top && $pose->z < $top + $topDelta)))
+					{
+						$carried[$entity] ??= $pose->z;
+						$pose->z = $top + $topDelta;
+					}
+					if(!$registry->has($entity, Body::class)) continue;
+					$height = $registry->get($entity, Body::class)->height;
+					$blocked = $pose->z + $height > $occupied->headroomZ($pose->x, $pose->y, max($pose->z, $top)) + .01
+						|| ($pose->z < $top + $topDelta - .01 && $pose->z + $height > $bottom + .01);
+					if($blocked)
+					{
+						foreach($carried as $carriedEntity => $oldZ)
+						$registry->get($carriedEntity, Transform::class)->z = $oldZ;
+						return false;
+					}
+				}
+				continue;
+			}
 
 			$floor = $sector->floorZ($pose->x, $pose->y);
 			$ceiling = $sector->ceilingZ($pose->x, $pose->y);

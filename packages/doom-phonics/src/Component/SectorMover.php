@@ -59,6 +59,12 @@ final class SectorMover
 		return new self($sector, self::FLOOR, self::PLATFORM, $target, $speed);
 	}
 
+	/** Move a ceiling to an absolute height without a door's wait or return phase. */
+	public static function ceiling(int $sector, float $target, float $speed): self
+	{
+		return new self($sector, self::CEILING, 'ceiling', $target, $speed);
+	}
+
 	public static function stairs(int $sector, float $target): self
 	{
 		return new self($sector, self::FLOOR, self::STAIRS, $target, 8.75);

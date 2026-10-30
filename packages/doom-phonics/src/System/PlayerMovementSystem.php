@@ -76,7 +76,8 @@ final class PlayerMovementSystem
 				$view?->release();
 			}
 
-			$floorBefore = $this->collision->level->sectorAt($pose->x, $pose->y)->floorZ($pose->x, $pose->y);
+			$sector = $this->collision->level->sectorAt($pose->x, $pose->y);
+			$floorBefore = $sector->supportZ($pose->x, $pose->y, $pose->z);
 			$body->grounded = $pose->z <= $floorBefore + .01 && $velocity->z <= 0;
 			$pose->angle -= ($dead ? 0 : ($command?->turn ?? $this->controls->value(DoomActions::TURN))) * 2.5 * $dt;
 			$pose->angle += $dead ? 0 : ($command?->consumeYaw() ?? ($view?->consumeYaw() ?? 0));
@@ -98,6 +99,13 @@ final class PlayerMovementSystem
 			$velocity->x += (cos($pose->angle) * $forward + sin($pose->angle) * $strafe) * $this->acceleration * $dt;
 			$velocity->y += (sin($pose->angle) * $forward - cos($pose->angle) * $strafe) * $this->acceleration * $dt;
 			$drag = pow($this->friction, $dt * 35);
+			$water = $sector->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
+			if($water !== null)
+			{
+				$drag *= pow(.94, $dt * 35);
+				$pitch = $command?->pitch ?? $view?->pitch ?? 0;
+				$velocity->z += sin($pitch) * $forward * $this->acceleration * $dt;
+			}
 			$velocity->x *= $drag;
 			$velocity->y *= $drag;
 			$horizontal = hypot($velocity->x, $velocity->y);
@@ -131,9 +139,11 @@ final class PlayerMovementSystem
 				? $registry->get($entity, Gravity::class)->scale
 				: 1.0;
 
-			$this->verticalPhysics->step($pose, $velocity, $body, $dt, $gravityScale, $player->viewHeight);
-
+			// Resolve wall portals before sampling support/headroom: the horizontal
+			// endpoint can lie outside the source room until it enters destination space.
 			if(!$dead) $this->specials->cross($pose->previousX, $pose->previousY, $pose, $player);
+
+			$this->verticalPhysics->step($pose, $velocity, $body, $dt, $gravityScale, $player->viewHeight);
 
 			$use = !$dead && ($command
 				? $command->consumeUse()

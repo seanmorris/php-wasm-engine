@@ -15,9 +15,11 @@ uniform vec2 projection;
 uniform float cameraPitch;
 uniform float nearPlane;
 uniform int pitchMode;
+uniform bool clipSectorBounds;
 
 out vec4 textureUvs;
 out float viewDepth;
+out vec2 sectorClearance;
 flat out ivec2 textureIds;
 flat out ivec2 lightLevels;
 flat out ivec2 sectorComponents;
@@ -72,6 +74,11 @@ void main()
 	textureIds = ivec2(round(aTextures));
 	int rightSector = int(round(aSideSectors.x));
 	int leftSector = int(round(aSideSectors.y));
+	// Interpolate signed plane distances so sloped and moving target boundaries
+	// also clip partially buried faces. Real sector surfaces own exact contact.
+	sectorClearance = clipSectorBounds
+		? vec2(worldZ - sectorPlaneHeight(rightSector, 0), sectorPlaneHeight(rightSector, 1) - worldZ)
+		: vec2(1.0);
 	sectorComponents = ivec2(
 		int(round(texelFetch(sectorHeights, ivec2(rightSector, 0), 0).a)),
 		int(round(texelFetch(sectorHeights, ivec2(leftSector, 0), 0).a))

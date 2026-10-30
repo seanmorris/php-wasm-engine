@@ -61,7 +61,7 @@ final class ActorFactory
 		{
 			$type = (int)($thing['type'] ?? 0);
 
-			if($map->format === 'HEXEN' && HexenMapSetup::structuralThing($type)) continue;
+			if($type === 9045 || ($map->format === 'HEXEN' && HexenMapSetup::structuralThing($type))) continue;
 
 			if($playerStartType === $type && $customStart === null) $customStart = $thing;
 

@@ -133,7 +133,7 @@ final class ActorObstacles
 		if($cached && $cached['x'] === $pose->x && $cached['y'] === $pose->y)
 		return $cached['sector'];
 
-		$sector = $this->level?->map->sectorAt((int)round($pose->x), (int)round($pose->y)) ?? 0;
+		$sector = $this->level?->map->sectorAt($pose->x, $pose->y) ?? 0;
 		$this->sectors[$entity] = ['x' => $pose->x,'y' => $pose->y,'sector' => $sector];
 
 		return $sector;

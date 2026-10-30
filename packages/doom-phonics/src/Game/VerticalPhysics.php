@@ -29,14 +29,26 @@ final class VerticalPhysics
 	): void {
 		$portalAnchorHeight = max(0.0, min($body->height, $portalAnchorHeight ?? $body->height * .5));
 		$sector = $this->level->sectorAt($pose->x, $pose->y);
-		$floor = $sector->floorZ($pose->x, $pose->y);
-		$ceiling = $sector->ceilingZ($pose->x, $pose->y);
+		$floor = $sector->supportZ($pose->x, $pose->y, $pose->z, $body->grounded ? $this->maxStep : 0);
+		$ceiling = $sector->headroomZ($pose->x, $pose->y, max($floor, $pose->z));
+		$water = $sector->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
+		if($water !== null)
+		{
+			// Buoyancy and drag replace the dry initial-fall impulse. Movement supplies
+			// swimming thrust; actors without input slowly settle through the liquid.
+			$gravityScale *= .08;
+			$velocity->z *= pow(.8, max(0, $dt) * 35);
+		}
 		$floorPortal = $this->level->cameraPortalForPlane($sector->index, 0)?->link;
 		$ceilingPortal = $this->level->cameraPortalForPlane($sector->index, 1)?->link;
+		// A portal replaces only the sector's own plane. A solid 3D floor may
+		// supply a nearer support or headroom plane and must still stop the body.
 		$passableFloor = ($floorPortal?->passable() ?? false)
+			&& abs($floor - $sector->floorZ($pose->x, $pose->y)) < .001
 			&& $this->level->boundsWithinCameraPortalPlane($pose->x, $pose->y, $body->radius, $sector->index, 0);
 
 		$passableCeiling = ($ceilingPortal?->passable() ?? false)
+			&& abs($ceiling - $sector->ceilingZ($pose->x, $pose->y)) < .001
 			&& $this->level->boundsWithinCameraPortalPlane($pose->x, $pose->y, $body->radius, $sector->index, 1);
 
 		if($floorPortal && !$passableFloor)
@@ -70,7 +82,7 @@ final class VerticalPhysics
 		{
 			$elapsed = max(0, $dt);
 
-			if(abs($velocity->z) < 1e-9 && $gravityScale > 0)
+			if($water === null && abs($velocity->z) < 1e-9 && $gravityScale > 0)
 			$velocity->z = DoomGravity::initialVelocity($this->acceleration, $gravityScale);
 			else $velocity->z -= $this->acceleration * $gravityScale * $elapsed;
 

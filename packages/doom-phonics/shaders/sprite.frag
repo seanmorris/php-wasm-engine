@@ -17,6 +17,7 @@ flat in int textureId;
 flat in int lightLevel;
 flat in float opacity;
 out vec4 color;
+uniform vec4 viewBlend;
 
 void main()
 {
@@ -34,4 +35,5 @@ void main()
 	int colorMap = fixedLightMap >= 0 ? fixedLightMap : lightMap;
 	color = texelFetch(paletteMap, ivec2(sourceIndex, palettePage * paletteRows + colorMap), 0);
 	color.a *= opacity;
+	color.rgb = mix(color.rgb, viewBlend.rgb, viewBlend.a);
 }

@@ -64,8 +64,11 @@ final class LinePortal
 		, float $tolerance = .001
 		, ?float $x = null
 		, ?float $y = null
+		, bool $sight = false
 	): bool {
 		return $bottom >= $this->floor($x, $y) - $tolerance
-			&& ($this->sharesOpenSky() || $bottom + $height <= $this->ceiling($x, $y) + $tolerance);
+			&& ($this->sharesOpenSky() || $bottom + $height <= $this->ceiling($x, $y) + $tolerance)
+			&& !$this->rightState->blocksVolume($x ?? 0, $y ?? 0, $bottom, $height, $sight)
+			&& !$this->leftState->blocksVolume($x ?? 0, $y ?? 0, $bottom, $height, $sight);
 	}
 }

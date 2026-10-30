@@ -4,8 +4,8 @@ declare(strict_types=1);
 /**
  * Generate the freely distributable Hexen-format portal demonstration maps.
  *
- * The PWAD contains geometry and map records only. It uses Doom shareware texture,
- * flat, sprite and sound names supplied by the IWAD in the demonstration world.
+ * The PWAD contains original map records and a procedurally generated water flat.
+ * Other textures, sprites and sounds come from the demo world's Doom shareware IWAD.
  */
 
 $destination = $argv[1] ?? dirname(__DIR__) . '/demo/PORTALS.WAD';
@@ -889,7 +889,10 @@ ANIMDEFS
 	]
 ];
 
-foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom()] as $mapLumps)
+$buildPool = require __DIR__ . '/generate-pool.php';
+require_once __DIR__ . '/LayeredPrototype.php';
+
+foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom(),$buildPool(),\DoomPhonics\Tools\LayeredPrototype::build()['lumps']] as $mapLumps)
 foreach($mapLumps as $name => $bytes) $lumps[] = [$name,$bytes];
 $data = $directory = '';
 
@@ -907,5 +910,22 @@ throw new RuntimeException("Cannot create $folder");
 
 if(file_put_contents($destination, $wad) !== strlen($wad))
 throw new RuntimeException("Cannot write $destination");
+
+// Keep direct-launch worlds usable after regenerating the checked-in WAD.
+// An alternate output path leaves both the demo and its world definitions alone.
+if(realpath($destination) === realpath(dirname(__DIR__) . '/demo/PORTALS.WAD'))
+{
+	$integrity = 'sha256-' . base64_encode(hash('sha256', $wad, true));
+	foreach(glob(dirname(__DIR__) . '/demo/*.phonics-world.json') as $file)
+	{
+		$json = file_get_contents($file);
+		$world = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+		foreach($world['sources'] ?? [] as $source)
+		foreach($source['resources'] ?? [] as $resource)
+		if(($resource['url'] ?? null) === './PORTALS.WAD' && isset($resource['integrity']))
+		$json = str_replace($resource['integrity'], $integrity, $json);
+		if($json !== file_get_contents($file)) file_put_contents($file, $json);
+	}
+}
 
 fwrite(STDOUT, "Generated $destination (" . strlen($wad) . " bytes).\n");

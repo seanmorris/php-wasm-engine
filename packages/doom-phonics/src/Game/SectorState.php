@@ -22,6 +22,54 @@ final class SectorState
 	/** @var array{float,float,float} Plane offsets: dx*x + dy*y + constant. */
 	public array $floorSlope = [0.0,0.0,0.0], $ceilingSlope = [0.0,0.0,0.0];
 	public ?int $floorLightSource = null, $ceilingLightSource = null;
+	/** @var list<SectorVolume> Live solid, decorative and swimmable model volumes. */
+	public array $volumes = [];
+	/** Optional Boom fake-plane definition; never changes physical boundaries. */
+	public ?HeightTransfer $heightTransfer = null;
+	/** WaterZone enables swimming below a transferred floor in classic maps. */
+	public bool $waterZone = false;
+
+	/** Find the support below a body, optionally allowing an ordinary step onto a slab. */
+	public function supportZ(float $x, float $y, float $z, float $step = 0): float
+	{
+		$floor = $this->floorZ($x, $y);
+		foreach($this->volumes as $volume)
+		if($volume->solid() && ($top = $volume->top($x, $y)) <= $z + $step + .01)
+		$floor = max($floor, $top);
+		return $floor;
+	}
+
+	/** Find the nearest solid underside above a body's feet. */
+	public function headroomZ(float $x, float $y, float $z): float
+	{
+		$ceiling = $this->ceilingZ($x, $y);
+		foreach($this->volumes as $volume)
+		if($volume->solid() && $volume->top($x, $y) > $z + .01)
+		$ceiling = min($ceiling, $volume->bottom($x, $y));
+		return $ceiling;
+	}
+
+	/** Return the highest liquid surface overlapping the body's vertical interval. */
+	public function waterSurface(float $x, float $y, float $z, float $height): ?float
+	{
+		$surface = null;
+		foreach($this->volumes as $volume)
+		if($volume->swimmable() && $volume->overlaps($x, $y, $z, $height))
+		$surface = max($surface ?? -INF, $volume->top($x, $y));
+		$transfer = $this->heightTransfer;
+		if($transfer && (($transfer->flags & 8) || $this->waterZone)
+			&& $z < $transfer->model->floorZ($x, $y) && $z + $height > $this->floorZ($x, $y))
+		$surface = max($surface ?? -INF, $transfer->model->floorZ($x, $y));
+		return $surface;
+	}
+
+	/** Test whether a shot or sight interval overlaps a blocking 3D volume. */
+	public function blocksVolume(float $x, float $y, float $z, float $height, bool $sight = false): bool
+	{
+		foreach($this->volumes as $volume)
+		if($volume->blocks($sight) && $volume->overlaps($x, $y, $z, $height)) return true;
+		return false;
+	}
 
 	/* Legacy motion fields remain public until the pre-1.0 compatibility window ends. */
 	public float $targetFloor;

@@ -18,6 +18,8 @@ final class MapMeshBuilder
 	{
 		$this->planes();
 		$this->walls();
+		$this->mesh->baseVertexCount = $this->mesh->vertexCount();
+		(new VolumeMeshBuilder($this->level, $this->atlas, $this->mesh))->build();
 		$this->mesh->watch($this->level);
 
 		return $this->mesh;

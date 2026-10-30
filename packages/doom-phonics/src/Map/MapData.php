@@ -565,8 +565,8 @@ final class MapData
 		foreach($this->neighbors as &$neighbors) $neighbors = array_values(array_unique($neighbors));
 	}
 
-	/** @param int $x Map X. @param int $y Map Y. @return int Sector index containing the point. */
-	public function sectorAt(int $x, int $y): int
+	/** Locate a map-space point without rounding it across a BSP partition or portal seam. */
+	public function sectorAt(float $x, float $y): int
 	{
 		if(!$this->nodes || !$this->subsectors || !$this->segs) return 0;
 

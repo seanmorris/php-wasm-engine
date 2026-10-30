@@ -75,9 +75,10 @@ final class Level
 			HexenMapSetup::apply($this);
 
 			foreach($map->linedefs as $line)
-			if(!in_array($line['action'], [0,12,57,70,80,100,101,107,121,156,181,182,206,210,211], true))
+			if(!in_array($line['action'], [0,12,47,57,69,70,80,100,101,107,121,156,160,181,182,206,209,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
 		}
+		SectorVolumeSetup::apply($this);
 	}
 
 	public function nextCameraPortalId(): int { return count($this->cameraPortalLinks); }
@@ -422,9 +423,10 @@ final class Level
 		return $this->sectors[$right ?? $left];
 	}
 
+	/** Return the sector containing the full-precision simulation or camera position. */
 	public function sectorAt(float $x, float $y): SectorState
 	{
-		return $this->sectors[$this->map->sectorAt((int)round($x), (int)round($y))] ?? $this->sectors[0];
+		return $this->sectors[$this->map->sectorAt($x, $y)] ?? $this->sectors[0];
 	}
 
 	/** @return list<SectorState> */

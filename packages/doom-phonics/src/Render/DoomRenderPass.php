@@ -110,7 +110,7 @@ final class DoomRenderPass implements RenderPass
 		$alpha = max(0, min(1, $frame->alpha));
 		$x = $pose->xAt($alpha);
 		$y = $pose->yAt($alpha);
-		$cameraSector = $this->renderer->level->map->sectorAt((int)$pose->x, (int)$pose->y);
+		$cameraSector = $this->renderer->level->map->sectorAt($pose->x, $pose->y);
 		$sector = $this->renderer->level->sectors[$cameraSector] ?? null;
 		$supportedByMovingFloor = $sector !== null
 			&& abs($sector->floor - $sector->previousFloor) > 1e-6
@@ -181,6 +181,7 @@ final class DoomRenderPass implements RenderPass
 		);
 
 		$this->renderer->renderBeams($this->registry, $x, $y, $z, $angle, $pitch, $alpha);
+		$this->renderer->renderTranslucentVolumes();
 		$this->target?->compose();
 		$this->renderer->renderOverlay($this->registry, $this->settings->reticle());
 		$this->menu?->render($this->renderer);

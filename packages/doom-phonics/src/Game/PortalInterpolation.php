@@ -27,8 +27,8 @@ final class PortalInterpolation
 
 		if($rawError < 64 * 64) return null;
 
-		$previousSector = $this->level->map->sectorAt((int)round($pose->previousX), (int)round($pose->previousY));
-		$currentSector = $this->level->map->sectorAt((int)round($pose->x), (int)round($pose->y));
+		$previousSector = $this->level->map->sectorAt($pose->previousX, $pose->previousY);
+		$currentSector = $this->level->map->sectorAt($pose->x, $pose->y);
 		$best = null;
 		$bestPoint = null;
 		$bestError = $rawError;

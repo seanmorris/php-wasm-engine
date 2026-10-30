@@ -262,6 +262,8 @@ for(const [directory, definition] of definitions)
 			, 'demo/episode-one.phonics-world.json'
 			, 'demo/skulltag-stress.phonics-world.json'
 			, 'demo/portal-rooms.phonics-world.json'
+			, 'demo/pool-3d.phonics-world.json'
+			, 'demo/layered-navigation.phonics-world.json'
 		];
 
 		definition.application.dependencies = {matrix: '../phonics-matrix/phonics.json'};
