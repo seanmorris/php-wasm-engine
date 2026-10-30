@@ -10,25 +10,28 @@ require_once __DIR__ . '/SpiralStaircase.php';
  * The lower floor runs straight into the first landing. Every tread turns toward
  * the ledge; the top landing faces along it. Unoccupied space inside the turn
  * remains part of the lower room, while the exterior wall follows the curved
- * stairs. Existing entrances stay on the lower floor and retain their widths.
+ * stairs. A supplied entrance plan connects the upper ledge to an exit, while
+ * the opposite entrance stays below. Standalone callers can keep both at floor
+ * level when authoring a ledge without a doorway.
  */
 final class CornerStaircase
 {
 	/** Carve a free corner of a rectangular room, avoiding entrances and reserved features. */
-	public static function carve(array &$layer,string $name): bool
+	public static function carve(array &$layer,string $name,?array $connection=null): bool
 	{
-		if(isset($layer['cluster']) || isset($layer['lift']) || isset($layer['terrain']) || isset($layer['gallery'])
+		if(isset($layer['cluster']) || isset($layer['lift']) || isset($layer['elevation']) || isset($layer['gallery'])
 			|| ($layer['joinCandidate']??false) || isset($layer['footprint']['wallSlope'])) return false;
 		foreach($layer['cells'] as $c) if(isset($c['verticalPortal'])) return false;
 		$core=$layer['cells'][0]; $shell=PolygonGeometry::points($core);
 		if(count($shell)!==4 || min($core['x1']-$core['x0'],$core['y1']-$core['y0'])<768) return false;
-		$turn=null;
+		$turn=$connection['rotation']??null;
+		if($turn===null)
 		foreach([['north','east'],['west','north'],['south','west'],['east','south']] as $r=>$sides)
 		if(!isset($layer['anchors'][$sides[0]]) && !isset($layer['anchors'][$sides[1]])) { $turn=$r; break; }
 		if($turn===null) return false;
 		$w=$turn%2 ? $core['y1']-$core['y0'] : $core['x1']-$core['x0'];
 		$h=$turn%2 ? $core['x1']-$core['x0'] : $core['y1']-$core['y0'];
-		$stair=SpiralStaircase::build(steps:4,width:160,headroom:192);
+		$stair=SpiralStaircase::build(steps:$connection['count']??4,width:160,headroom:192);
 		$size=$stair['size']; $inner=$stair['inner']; $outer=$stair['outer']; $ledgeWidth=$outer-$inner;
 		$dx=$w-$size; $dy=$h-$size; $floor=$core['floor']; $roof=max($core['ceiling'],$floor+$stair['height']+192);
 		$fields=array_replace($core,['ceiling'=>$roof]); $cells=[];
@@ -60,7 +63,26 @@ final class CornerStaircase
 		$layer['cells']=array_merge($cells,array_slice($layer['cells'],1));
 		$layer['ceiling']=$roof;
 		$layer['cornerStair']=['sweep'=>90,'height'=>$stair['height'],'width'=>$stair['width'],'inner'=>$inner,
-			'rotation'=>$turn*90,'route'=>$route,'ledge'=>"$name.ledge",'low'=>"$name.core"];
+			'rotation'=>$turn*90,'route'=>$route,'ledge'=>"$name.ledge",'low'=>"$name.core",'steps'=>$stair['steps']]
+			+ ($connection ? ['exit'=>$connection['exit']] : []);
 		return true;
+	}
+
+	/** Fit a quarter-turn ledge against the higher of two opposed entrances. */
+	public static function connection(array $footprint,array $dimensions,array $elevation): ?array
+	{
+		if(count($elevation['floors'])!==2 || $elevation['rise']>64) return null;
+		$p=$footprint['polygon']; $x0=min(array_column($p,0)); $y0=min(array_column($p,1));
+		$w=max(array_column($p,0))-$x0; $h=max(array_column($p,1))-$y0;
+		if(min($w,$h)<768) return null;
+		$exit=array_search(max($elevation['floors']),$elevation['floors'],true);
+		$rotation=match($exit) {'north'=>0,'west'=>1,'south'=>2,'east'=>3};
+		$axis=$rotation%2; $span=$axis ? $h : $w;
+		$center=$dimensions[$axis]/2-($axis ? $y0 : $x0);
+		if($rotation>=2) $center=$span-$center;
+		$stair=SpiralStaircase::build(steps:$elevation['count']);
+		// The entire entrance, including player clearance, must meet flat ledge.
+		if($center-80<0 || $center+80>$span-$stair['size']+128) return null;
+		return compact('rotation','exit')+['kind'=>'corner'];
 	}
 }

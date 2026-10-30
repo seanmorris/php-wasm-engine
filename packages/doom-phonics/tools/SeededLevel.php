@@ -5,7 +5,7 @@ namespace DoomPhonics\Tools;
 require_once __DIR__ . '/PlanarRooms.php';
 require_once __DIR__ . '/RoomOutline.php';
 require_once __DIR__ . '/RoomJoin.php';
-require_once __DIR__ . '/RoomRelief.php';
+require_once __DIR__ . '/RoomElevation.php';
 require_once __DIR__ . '/SpiralStaircase.php';
 require_once __DIR__ . '/CornerStaircase.php';
 require_once __DIR__ . '/SpatialLayout.php';
@@ -30,7 +30,9 @@ require_once __DIR__ . '/MapConnectivity.php';
 final class SeededLevel
 {
 	/** Changes to the generation algorithm require a new reproducibility version. */
-	public const VERSION = 11;
+	public const VERSION = 12;
+	/** Keep topology stable when refining individual room geometry. */
+	private const RANDOM_REVISION = 11;
 	/** Reserve space for longer stair flights and bent approaches around each core. */
 	public const ROOM_SIZE = 1280;
 	/** Minimum open headroom in ordinary rooms, approaches and spiral landings. */
@@ -49,7 +51,7 @@ final class SeededLevel
 		if(!in_array($switchPanels,['patch','texture'],true)) throw new \InvalidArgumentException('Unknown switch panel style');
 		if($doorChance<0 || $doorChance>100) throw new \InvalidArgumentException('Door chance must be 0–100');
 		$withDoors = $portalDoors === 'doors' || ($portalDoors === 'seeded' && (new SeedSequence('portal-doors:' . $seed))->integer(0,1) === 1);
-		$random = new SeedSequence('phonics-seeded-' . self::VERSION . ':' . $seed);
+		$random = new SeedSequence('phonics-seeded-' . self::RANDOM_REVISION . ':' . $seed);
 		$repairs = [];
 		// Leave a basement slab while keeping the drain height in a Hexen byte.
 		$depth = self::HEADROOM+self::STOREY_SLAB+$random->integer(0,1)*16;
@@ -162,6 +164,22 @@ final class SeededLevel
 				isset($spec['liftTag']) ? array_key_first($ports[$name]) : null);
 		}
 		RoomJoin::approach($footprints,$specs,$pins,$roomDimensions,$passages);
+		// Use existing passage elevations to carry useful routes across room interiors.
+		$elevations=[];
+		foreach(['ground','upper'] as $plane) {
+			$selected=0;
+			foreach($specs as $name=>$spec) {
+				if($spec['plane']!==$plane || str_ends_with($name,'.0') || $name==='upper.'.($rooms-1)
+					|| isset($spec['liftTag']) || isset($spec['gallery']) || ($spec['joinCandidate']??false)) continue;
+				$plan=RoomElevation::plan($footprints[$name],$roomDimensions[$name],$passages[$name]);
+				if(!$plan) continue;
+				$corner=CornerStaircase::connection($footprints[$name],$roomDimensions[$name],$plan);
+				$elevations[$name]=$corner ? array_replace($plan,$corner) : $plan;
+				foreach($passages[$name] as &$passage) $passage['bend']=0;
+				unset($passage);
+				if(++$selected===2) break;
+			}
+		}
 		$layers = [];
 		foreach($specs as $name => $spec)
 		{
@@ -170,7 +188,7 @@ final class SeededLevel
 			$layers[$name] = self::room($name,$ports[$name],$spec['floor'],$ceiling,$spec['inset'],
 				$passages[$name],$spec['variant'],$layout === 'building',$spec['liftTag'] ?? 0, $layout === 'organic' ? match($name) {'ground.0'=>'conforming','upper.0'=>'circular',default=>null} : null,$withDoors,
 				// Shared bay dimensions keep cycles aligned while the footprints vary.
-				$dimensions[$spec['plane']][(int)substr($name,strrpos($name,'.')+1)][0],$seed,$doorChance,$dimensions[$spec['plane']][(int)substr($name,strrpos($name,'.')+1)],$spec['gallery']??false,$footprints[$name])
+				$dimensions[$spec['plane']][(int)substr($name,strrpos($name,'.')+1)][0],$seed,$doorChance,$dimensions[$spec['plane']][(int)substr($name,strrpos($name,'.')+1)],$spec['gallery']??false,$footprints[$name],$elevations[$name]??null)
 				+ ['plane'=>$spec['plane'],'grid'=>$spec['grid'],'localFloor'=>$spec['floor'],'merged'=>null,'joinCandidate'=>$spec['joinCandidate']??false];
 		}
 		// A high north ledge is only reachable from below after using the pump.
@@ -215,23 +233,13 @@ final class SeededLevel
 
 		$falls=$layout==='organic' ? [['upper.0.core','basement.0.arrival']] : [];
 		$verticalConnections=$layout==='organic' ? [['from'=>'upper.0.core','to'=>'basement.0.arrival','kind'=>'hub']] : [];
-		// Keep the ledges at the original entrance height and lower only the interior.
-		if($layout==='organic') foreach(['ground'=>'trench','upper'=>'bowl'] as $plane=>$kind) {
-			foreach($layers as $name=>&$layer) {
-				if($layer['plane']!==$plane || $layer['localFloor']<64
-					|| isset($layer['cluster']) || isset($layer['lift']) || ($layer['joinCandidate']??false)
-					|| in_array($name,$galleryRooms,true) || $name==='upper.'.($rooms-1)) continue;
-				if(RoomRelief::carve($layer,$name,$kind)) break;
-			}
-			unset($layer);
-		}
 
-		// Separate ordinary rooms provide shafts; relief, moving lifts, spawn and goal stay clear.
+		// Separate ordinary rooms provide shafts; stair rooms, moving lifts, spawn and goal stay clear.
 		$sites=new SeedSequence('vertical-portals:'.$seed);
 		$available=[];
 		foreach(['basement','ground','upper'] as $plane) {
 			$available[$plane]=$sites->shuffle(array_keys(array_filter($layers,static fn($r,$n)=>
-				$r['plane']===$plane && !isset($r['cluster']) && !isset($r['lift']) && !isset($r['terrain']) && !($r['joinCandidate']??false)
+				$r['plane']===$plane && !isset($r['cluster']) && !isset($r['lift']) && !isset($r['elevation']) && !($r['joinCandidate']??false)
 				&& $n!=="$plane.0" && $n!=='basement.1' && $n!=='upper.'.($rooms-1),ARRAY_FILTER_USE_BOTH)));
 		}
 		$galleryStack=[];
@@ -255,11 +263,6 @@ final class SeededLevel
 			$verticalConnections[]=compact('from','to')+['kind'=>'shaft','width'=>192,'recess'=>32];
 		}
 
-		foreach($layers as $name=>&$layer) {
-			if($layer['plane']!=='ground' || $name==='ground.0') continue;
-			if(CornerStaircase::carve($layer,$name)) break;
-		}
-		unset($layer);
 		$merged=RoomJoin::apply($layers,$pins,$seed);
 		foreach($merged as $join) $repairs[]=['kind'=>'merge','room'=>implode(' + ',$join['rooms']),
 			'reason'=>'Remove a short hallway, retaining the offset polygon union'];
@@ -447,7 +450,7 @@ final class SeededLevel
 
 	/** Build an irregular core and passages whose floors never reverse direction. */
 	private static function room(string $name,array $ports,int $floor,int $ceiling,int $inset,
-		array $passages,int $variant=0,bool $building=false,int $liftTag=0,?string $clusterKind=null,bool $withDoors=false,int $size=self::ROOM_SIZE,string $seed='',int $doorChance=0,?array $dimensions=null,bool $gallery=false,?array $footprint=null): array
+		array $passages,int $variant=0,bool $building=false,int $liftTag=0,?string $clusterKind=null,bool $withDoors=false,int $size=self::ROOM_SIZE,string $seed='',int $doorChance=0,?array $dimensions=null,bool $gallery=false,?array $footprint=null,?array $elevation=null): array
 	{
 		$dimensions ??= [$size,$size];
 		[$spanX,$spanY]=$dimensions;
@@ -459,9 +462,15 @@ final class SeededLevel
 		$footprint ??= RoomOutline::footprint($name,[$spanX,$spanY],$inset,$seed,$building,$gallery,$liftTag ? array_key_first($ports) : null);
 		$cells=$cluster['cells'] ?? [PolygonGeometry::cell(self::cell("$name.core",0,0,1,1,$floor,$ceiling),$footprint['polygon'])];
 		$body=$cells[0];
+		if(($elevation['kind']??null)==='corner') $cells[0]['floor']=min($elevation['from'],$elevation['to']);
+		elseif($elevation) {
+			$cells=RoomElevation::cells($body,$elevation);
+			$elevation['route']=array_column($cells,'id');
+		}
 		$anchors = []; $lift = null; $corridors = [];
 		foreach($ports as $direction => $width)
 		{
+			$entryFloor=$elevation['floors'][$direction]??$floor;
 			$passage = $passages[$direction]; $height = $passage['height']; $roof = $passage['ceiling'];
 			$size=in_array($direction,['east','west'],true) ? $spanX : $spanY;
 			$center=in_array($direction,['east','west'],true) ? $cy : $cx;
@@ -510,18 +519,18 @@ final class SeededLevel
 					[128,min($lo,$lo+$bend),256,max($hi,$hi+$bend)],[256,$lo,320,$hi],[320,$lo,$inset,$hi]];
 				foreach($turns as $i=>$bounds)
 				{
-					$step = $floor + (int)round(($height-$floor)*($i+1)/count($turns)/16)*16;
+					$step = $entryFloor + (int)round(($height-$entryFloor)*($i+1)/count($turns)/16)*16;
 					$parts[] = self::cell("$name.$direction.$i",... [...$rect(...$bounds),$step,$roof]);
 				}
 			}
 			else
 			{
-				$count = max(1,intdiv(abs($height-$floor),16));
+				$count = max(1,intdiv(abs($height-$entryFloor),16));
 				for($i=0;$i<$count;$i++)
 				{
 					$u0 = $i*64; $u1 = $i === $count-1 ? $inset : ($i+1)*64;
-					$step = $floor + ($height <=> $floor)*16*($i+1);
-					if($floor === $height) $step = $floor;
+					$step = $entryFloor + ($height <=> $entryFloor)*16*($i+1);
+					if($entryFloor === $height) $step = $entryFloor;
 					$parts[] = self::cell("$name.$direction.$i",... [...$rect($u0,$lo,$u1,$hi),$step,$roof]);
 				}
 			}
@@ -535,11 +544,17 @@ final class SeededLevel
 				$parts=array_merge($prefix,$parts);
 			}
 
-			$corridors[$direction] = ['from'=>$floor,'to'=>$height,'bend'=>$bend,'length'=>$inset+abs($bend),
+			$corridors[$direction] = ['from'=>$entryFloor,'to'=>$height,'bend'=>$bend,'length'=>$inset+abs($bend),
 				'width'=>$width,'cells'=>array_column($parts,'id')];
 			array_push($cells,...$parts);
 		}
-		return compact('cells','anchors','ceiling','corridors','footprint') + ($cluster ? ['cluster'=>array_diff_key($cluster,['cells'=>true])] : []) + ($lift ? ['lift'=>$lift] : []);
+		$ceiling=max($ceiling,...array_column($cells,'ceiling'));
+		$result=compact('cells','anchors','ceiling','corridors','footprint') + ($cluster ? ['cluster'=>array_diff_key($cluster,['cells'=>true])] : []) + ($lift ? ['lift'=>$lift] : []);
+		if(($elevation['kind']??null)==='corner') {
+			if(!CornerStaircase::carve($result,$name,$elevation)) throw new \LogicException('Reserved corner stair no longer fits');
+			$elevation['route']=[$name.'.core',...$result['cornerStair']['route'],$name.'.ledge'];
+		}
+		return $result+($elevation ? ['elevation'=>$elevation] : []);
 	}
 
 	/** Add at most one door per physical connection, using an existing flat landing. */

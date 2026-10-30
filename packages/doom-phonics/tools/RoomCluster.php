@@ -73,6 +73,8 @@ final class RoomCluster
 			$rooms[$i]=self::cell($id,$polygon,$floor,$ceiling)+['room'=>"$name.owner-".$groups[$i]];
 			if($groups[$i]===0 || $groups[$i]===$garden) {
 				$rooms[$i]['outdoor']=$groups[$i]===0 ? 'courtyard' : 'garden';
+				$rooms[$i]['ceiling']=$ceiling+OutdoorSpace::ROOF_THICKNESS;
+				$rooms[$i]['alignTextures']=true;
 				$rooms[$i]['ceilingTexture']='F_SKY1'; $rooms[$i]['floorTexture']='FLOOR7_1';
 				$rooms[$i]['light']=224;
 			}

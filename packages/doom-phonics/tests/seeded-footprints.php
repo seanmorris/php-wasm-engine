@@ -46,28 +46,11 @@ foreach(['all','none'] as $mode) {
 }
 
 // Shared slopes, half-door crops and room subgraphs describe actual generated geometry.
-$slopes=[]; $terrain=[];
+$slopes=[];
 foreach($default['layers'] as $name=>$layer) {
 	if(isset($layer['footprint']['wallSlope']) && !isset($layer['cluster'])) $slopes[$layer['plane']][]=json_encode($layer['footprint']['wallSlope']);
-	if(!isset($layer['terrain'])) continue;
-	$terrain[$layer['terrain']['kind']]=$name;
-	$low=$layer['terrain']['low']; $nav=$default['roomNavigation'][$name];
-	$drops=array_filter($nav['oneWay']['dry']??[],static fn($e)=>$e['to']===$low && $e['mode']==='drop');
-	verifyWad((bool)$drops,'lowered room centers have physically checked one-way drops');
-	$summary=array_values($drops)[0];
-	$drop=array_values(array_filter($default['graph']->edges,static fn($e)=>$e['from']===$summary['from'] && $e['to']===$summary['to'] && $e['mode']==='drop'))[0];
-	$return=$default['graph']->search($low,['water'=>'dry'],false)['routes'][$drop['from']];
-	$local=$default; $local['start']=$drop['from'];
-	$trace=\DoomPhonics\Tests\SeededWalkthrough::run(\DoomPhonics\Tools\MapConnectivity::level($local),$local,[$drop,...$return]);
-	verifyWad(end($trace)['sector']===$default['regions'][$drop['from']],'ordinary player physics traverses the drop and stair return without position corrections');
-	foreach($layer['terrain']['ledges'] as $ledge) {
-		$return=$default['graph']->search($low,['water'=>'dry'],false);
-		verifyWad(in_array($ledge,$return['reachable'],true),'a lowered room has a real stair return to all surrounding ledges');
-	}
-	foreach($nav['routes']['dry']??[] as $ports) foreach($ports as $route)
-	verifyWad($route!==null,'all ordinary room entrances have internal return routes without leaving the room');
+	verifyWad(!isset($layer['terrain']),'ordinary rooms no longer receive isolated decorative center pits');
 }
-verifyWad(isset($terrain['trench'],$terrain['bowl']),'default map includes both an E1M4-style trench and a rounded lowered-center room');
 foreach($slopes as $values) verifyWad(count(array_unique($values))===1,'neighboring angled rooms use the same layer-wide slope');
 foreach([90,180,270] as $sweep) foreach([0,2,4,6] as $rotation) {
 	$c=\DoomPhonics\Tools\RoomCluster::circular('arc',64,256,false,$sweep,$rotation);

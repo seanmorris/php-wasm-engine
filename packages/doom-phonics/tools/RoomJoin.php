@@ -57,7 +57,7 @@ final class RoomJoin
 			$left=$layers[$a]; $right=$layers[$b];
 			if($left['plane']!==$right['plane'] || $left['localFloor']!==$right['localFloor'] || $left['ceiling']!==$right['ceiling']) continue;
 			foreach([$left,$right] as $layer) {
-				if(isset($layer['cluster']) || isset($layer['lift']) || isset($layer['gallery']) || isset($layer['terrain'])
+				if(isset($layer['cluster']) || isset($layer['lift']) || isset($layer['gallery']) || isset($layer['elevation'])
 					|| isset($layer['cornerStair']) || isset($layer['footprint']['wallSlope']) || !str_ends_with($layer['cells'][0]['id'],'.core')) continue 2;
 				foreach($layer['cells'] as $c) if(isset($c['verticalPortal'])) continue 3;
 			}

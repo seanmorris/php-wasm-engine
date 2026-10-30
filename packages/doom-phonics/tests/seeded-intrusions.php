@@ -25,18 +25,10 @@ $outdoors=$cluster['outdoors'];
 verifyWad(count($cluster['intrusion']['entrances'])>=2,'an edge garden connects multiple neighboring interiors');
 foreach(array_merge($outdoors['courtyard'],$outdoors['garden']) as $id)
 verifyWad($default['cells'][$default['regions'][$id]]['ceilingTexture']==='F_SKY1','courtyard and garden both have sky ceilings');
-verifyWad($outdoors['rim']!==null && $outdoors['trench']!==null,'the default garden demonstrates a horizon wall and lower ground');
+verifyWad($outdoors['rim']!==null && !isset($outdoors['trench']),'the garden has a horizon wall without an incidental center pit');
 $rim=array_values(array_filter($default['cells'],static fn($c)=>$c['id']===$outdoors['rim']['region']))[0];
 verifyWad(!$rim['traversable'] && $rim['floor']===$rim['ceiling'] && $rim['ceilingTexture']==='F_SKY1',
 	'the garden boundary uses a solid collapsed sky sector like MAP01');
-$low=$outdoors['trench']['low'];
-$drop=array_values(array_filter($default['graph']->edges,static fn($e)=>$e['to']===$low && $e['mode']==='drop'))[0];
-$back=$default['graph']->search($low,['water'=>'dry'],false)['routes'][$drop['from']];
-$local=$default; $local['start']=$drop['from'];
-$trace=SeededWalkthrough::run(MapConnectivity::level($local),$local,[$drop,...$back]);
-verifyWad(end($trace)['sector']===$default['regions'][$drop['from']],
-	'ordinary movement drops into the garden trench and climbs back to the ledge');
-
 // Verify the horizon wall is a real obstruction, independently of graph metadata.
 $level=MapConnectivity::level($default);
 $rimId=array_search($rim['id'],array_column($default['cells'],'id'),true); $blocked=false;

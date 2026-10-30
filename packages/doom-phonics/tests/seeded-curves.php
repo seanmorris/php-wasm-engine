@@ -54,9 +54,11 @@ foreach($default['layers'] as $name=>$layer) {
 	verifyWad(max($layer['footprint']['dimensions'])<=(isset($layer['gallery']) ? 1152 : 896),'ordinary rooms are bounded independently of large neighboring bays');
 	foreach($layer['corridors']??[] as $corridor) verifyWad($corridor['width']>=128,'generated hallways no longer use the cramped half-width profile');
 	if(!isset($layer['cornerStair'])) continue;
-	$corners++; $corner=$layer['cornerStair']; $fixture=$default; $fixture['start']=$corner['low'];
+	$corners++; $corner=$layer['cornerStair'];
+	verifyWad(isset($corner['exit']) && $layer['elevation']['floors'][$corner['exit']]===max($layer['elevation']['floors']),
+		'the corner stair now serves a higher entrance instead of an isolated ledge'); $fixture=$default; $fixture['start']=$corner['low'];
 	$up=$default['graph']->search($corner['low'],['water'=>'dry'],false)['routes'][$corner['ledge']];
-	verifyWad(count(array_filter($up,static fn($e)=>str_contains($e['to'],'.curve.step-')))===4,'reaching the ledge requires the gradually turning quarter staircase');
+	verifyWad(count(array_filter($up,static fn($e)=>str_contains($e['to'],'.curve.step-')))===$corner['steps'],'reaching the ledge requires the gradually turning quarter staircase');
 	$down=$default['graph']->search($corner['ledge'],['water'=>'dry'],false)['routes'][$corner['low']];
 	$trace=SeededWalkthrough::run(MapConnectivity::level($default),$fixture,[...$up,...$down]);
 	verifyWad(end($trace)['sector']===$default['regions'][$corner['low']],'the room corner stair and full-length ledge have a real return route');

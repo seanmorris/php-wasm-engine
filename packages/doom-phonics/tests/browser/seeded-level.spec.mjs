@@ -55,7 +55,8 @@ test('seed report exposes layered geometry, repairs and the flood prerequisite',
 	expect(report.layers['ground.0'].cluster.kind).toBe('conforming');
 	expect(report.layers['ground.0'].cluster.intrusion.entrances.length).toBeGreaterThanOrEqual(2);
 	expect(report.layers['ground.0'].cluster.outdoors.rim).not.toBeNull();
-	expect(report.layers['ground.0'].cluster.outdoors.trench).not.toBeNull();
+	expect(report.layers['ground.0'].cluster.outdoors.trench).toBeUndefined();
+	expect(Object.values(report.layers).filter(layer => layer.elevation).length).toBeGreaterThan(0);
 	expect(report.layers['ground.0'].cluster.pattern).toBe('outline-first');
 	expect(report.layers['ground.0'].cluster.minimumRoomSize).toBe(384);
 	expect(report.layers['ground.0'].cluster.outline.length).toBeGreaterThan(4);
@@ -434,13 +435,13 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 		await capture(`seeded-${name}.png`);
 	}
 
-	// Inspect each lowered room from a real high ledge.
+	// Inspect exterior roofs and openings from the courtyard and garden.
 	const outdoor = report.layers['ground.0'].cluster.outdoors;
 
-	for(const [label,id] of [['courtyard', outdoor.courtyard[0]], ['garden', outdoor.trench.low]])
+	for(const [label,id] of [['courtyard', outdoor.courtyard[0]], ['garden', outdoor.garden[0]]])
 	{
 		const target = report.cells[report.sectorIds[id]];
-		const ledge = report.cells[report.sectorIds[label === 'garden' ? outdoor.trench.ledges.at(-1) : id]];
+		const ledge = target;
 		const [x,y] = ledge.center;
 		const angle = label === 'garden' ? Math.atan2(target.center[1]-y, target.center[0]-x) : .7;
 
@@ -455,22 +456,24 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 		await capture(`seeded-${label}.png`);
 	}
 
-	for(const layer of Object.values(report.layers).filter(l => l.terrain))
+	for(const [name,layer] of Object.entries(report.layers).filter(([,l]) => l.elevation?.kind === 'stairs'))
 	{
-		const terrain = layer.terrain;
-		const ledge = report.cells[report.sectorIds[terrain.ledges.at(-1)]];
-		const low = report.cells[report.sectorIds[terrain.low]];
-		const angle = Math.atan2(low.center[1]-ledge.center[1], low.center[0]-ledge.center[0]);
+		const route = layer.elevation.route;
+		const first = report.cells[report.sectorIds[route[0]]];
+		const last = report.cells[report.sectorIds[route.at(-1)]];
+		const low = first.floor < last.floor ? first : last;
+		const high = low === first ? last : first;
+		const angle = Math.atan2(high.center[1]-low.center[1], high.center[0]-low.center[0]);
 
 		await run(`
-			$seedPose->x=$seedPose->previousX=${ledge.center[0]};
-			$seedPose->y=$seedPose->previousY=${ledge.center[1]};
-			$seedPose->z=$seedPose->previousZ=${ledge.floor};
-			$seedPose->angle=${angle}; $seedView->setPitch(-.35);
+			$seedPose->x=$seedPose->previousX=${low.center[0]};
+			$seedPose->y=$seedPose->previousY=${low.center[1]};
+			$seedPose->z=$seedPose->previousZ=${low.floor};
+			$seedPose->angle=${angle}; $seedView->setPitch(0);
 		`
 		);
 
-		await capture(`seeded-${terrain.kind}.png`);
+		await capture(`seeded-elevation-${name}.png`);
 	}
 
 	const fullDoor = report.doors.find(d => d.width === 128);
