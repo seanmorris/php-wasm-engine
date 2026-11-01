@@ -195,7 +195,12 @@ test('camera portals recurse through destination spaces and occlude unresolved v
 	assert.match(renderer, /\$link->reciprocalId/);
 	assert.doesNotMatch(renderer, /isset\(\$path\[\$link->id\]\)/);
 	assert.match(renderer, /\$connectedSectors = \$this->level->map->connectedSectors\(\$cameraSector\)/);
-	assert.match(renderer, /\$link->destinationSector\s*,\s*\$nearPlane\s*,\s*\$viewBlend\s*\);\s*\$this->renderActors/);
+
+	assert.match(
+		renderer
+		, /\$link->destinationSector\s*,\s*\$nearPlane\s*,\s*\$viewBlend\s*\);\s*\$this->renderActors/
+	);
+
 	assert.match(portalSurfaces, /location\('portalReady'\), 0/);
 	assert.doesNotMatch(portalSurfaces, /glColorMask\(false, false, false, false\)/);
 	assert.match(renderer, /location\('cameraComponent'\)/);
