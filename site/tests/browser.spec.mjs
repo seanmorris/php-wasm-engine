@@ -1438,3 +1438,24 @@ test('a rendering error with a healthy context still stops and reports the origi
 	expect(await page.locator('canvas').evaluate(canvas => [canvas.width, canvas.height])).toEqual([0, 0]);
 	expect(await page.locator('canvas').evaluate(canvas => canvas.getContext('webgl2').isContextLost())).toBe(false);
 });
+
+test('PHP Billiards creates its cross-origin iframe only after activation and can stop it', async ({page}) => {
+	const requests = [];
+
+	await page.route('https://seanmorris.github.io/phonics-examples/embed/php-billiards/', async route => {
+		requests.push(route.request().url());
+		await route.fulfill({contentType: 'text/html',body: '<!doctype html><title>PHP Billiards fixture</title>'});
+	});
+
+	await page.goto('/games/php-billiards/');
+	await expect(page.locator('iframe')).toHaveCount(0);
+	expect(requests).toEqual([]);
+	await page.getByRole('button', {name: 'Load and play PHP Billiards'}).click();
+	const frame = page.locator('iframe[title="PHP Billiards game"]');
+	await expect(frame).toHaveAttribute('src', 'https://seanmorris.github.io/phonics-examples/embed/php-billiards/');
+	await expect(page.getByRole('status')).toHaveText('Ready');
+	expect(requests).toEqual(['https://seanmorris.github.io/phonics-examples/embed/php-billiards/']);
+	await page.getByRole('button', {name: 'Stop'}).click();
+	await expect(frame).toHaveCount(0);
+	await expect(page.getByRole('button', {name: 'Load and play PHP Billiards'})).toBeVisible();
+});

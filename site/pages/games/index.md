@@ -17,6 +17,7 @@ Each game owns its maps, assets, factories, systems, rendering choices, and life
 <li><a href="php-slalom/"><img src="../images/games/php-slalom-768.webp" width="768" height="432" loading="lazy" decoding="async" alt="PHP Slalom gameplay"><strong>PHP Slalom</strong><span>Arcade steering, six stages, and compact deterministic replays.</span></a></li>
 <li><a href="php-buster/"><img src="../images/games/php-buster-768.webp" width="768" height="432" loading="lazy" decoding="async" alt="PHP Buster gameplay"><strong>PHP Buster</strong><span>Blockade waves, weapon upgrades, and local scores.</span></a></li>
 <li><a href="doom-phonics/"><img src="../images/games/doom-phonics-768.webp" width="768" height="432" loading="lazy" decoding="async" alt="Doom-Phonics gameplay"><strong>Doom-Phonics</strong><span>WAD maps, DECORATE actors, and multiplayer.</span></a></li>
+<li><a href="php-billiards/"><img src="../images/games/php-billiards.svg" width="1280" height="720" loading="lazy" decoding="async" alt="PHP Billiards gameplay"><strong>PHP Billiards</strong><span>A direct 3D practice table with deterministic PHP physics.</span></a></li>
 </ul>
 
-Use these builds as working examples of the [package contract](../packages.html), or open the [generic preview](../preview/) to load a separate world.
+Use these builds as working examples of the [package contract](../packages.html). Examples that compose a world can also be opened through the [generic preview](../preview/).

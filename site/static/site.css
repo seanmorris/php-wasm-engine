@@ -531,6 +531,7 @@ article :is(h2, h3, h4) code { padding: 0; border: 0; background: none; font-siz
 .game-selector span { padding: 0 1.1rem 1rem; color: var(--muted); font-size: .875rem; line-height: 1.5; }
 .game-embed { margin: 0 0 2.5rem; }
 .game-embed-poster { position: relative; display: block; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; padding: 0; background: #05070a; color: white; cursor: pointer; }
+.game-embed-poster[hidden] { display: none; }
 .game-embed-poster::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgb(2 7 13 / 20%), rgb(2 7 13 / 55%)); pointer-events: none; transition: background-color 160ms ease; }
 .game-embed-poster img { display: block; width: 100%; aspect-ratio: var(--game-aspect, 16 / 9); border: 0; object-fit: contain; background: #05070a; color: #f4f7fb; transition: transform 400ms ease; }
 .game-embed-poster:hover img { transform: scale(1.015); }
@@ -544,6 +545,7 @@ article :is(h2, h3, h4) code { padding: 0; border: 0; background: none; font-siz
 .game-embed-runtime #game-frame { position: relative; width: 100%; min-width: 0; margin: 0; aspect-ratio: var(--game-runtime-aspect, 16 / 9); background: #05070a; }
 .game-aspect-2-3 .game-embed-runtime #game-frame { width: min(100%, 66.6667vh); max-height: 100vh; margin-inline: auto; }
 .game-embed-runtime #game-frame > canvas { display: block; width: 100%; height: 100%; max-width: none; margin: 0; border: 0; border-radius: 0; object-fit: contain; }
+.external-game-runtime iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; background: #05070a; }
 .game-embed-controls { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 2.8rem; padding: .45rem .6rem; border-top: 1px solid var(--line); background: var(--tint); }
 .game-embed-controls #status { min-width: 0; margin: 0; color: var(--muted); font: .78rem/1.4 var(--font-mono); overflow-wrap: anywhere; }
 .game-embed-controls #stop { flex: none; padding: .35rem .65rem; }

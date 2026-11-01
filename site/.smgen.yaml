@@ -378,6 +378,12 @@ MENUS:
         parent: games
         weight: 50
         expanded: false
+      - id: game-php-billiards
+        group: true
+        title: PHP Billiards
+        parent: games
+        weight: 60
+        expanded: false
       - id: game-doom-phonics-api
         group: true
         title: PHP API

@@ -10,6 +10,7 @@ II. Select a game
     D. PHP Slalom: arcade steering, six stages, and deterministic replays
     E. PHP Buster: Blockade waves, weapon upgrades, and local scores
     F. Doom-Phonics: WAD maps, DECORATE actors, and multiplayer
+    G. PHP Billiards: a direct 3D practice table with deterministic PHP physics
 III. Use the games as references
     A. Working examples of the package contract
-    B. The generic preview for separate worlds
+    B. The generic preview for examples that compose worlds

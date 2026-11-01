@@ -571,7 +571,7 @@ if(apiFilter)
 	update();
 }
 
-for(const embed of document.querySelectorAll('.game-embed[data-title]'))
+for(const embed of document.querySelectorAll('.game-embed[data-title]:not([data-external-game-embed])'))
 {
 	const trigger = embed.querySelector('.game-embed-poster');
 	const runtime = embed.querySelector('[data-game-runtime]');
@@ -621,4 +621,45 @@ for(const embed of document.querySelectorAll('.game-embed[data-title]'))
 			console.error(error);
 		}
 	});
+}
+
+for(const embed of document.querySelectorAll('[data-external-game-embed][data-frame]'))
+{
+	const trigger = embed.querySelector('.game-embed-poster');
+	const runtime = embed.querySelector('[data-external-game-runtime]');
+	const status = runtime?.querySelector('[role="status"]');
+	const stop = runtime?.querySelector('button');
+	let frame = null;
+
+	const close = () => {
+		frame?.remove();
+		frame = null;
+
+		if(runtime) runtime.hidden = true;
+
+		if(trigger)
+		{
+			trigger.hidden = false;
+			trigger.disabled = false;
+		}
+	};
+
+	trigger?.addEventListener('click', () => {
+		if(!runtime || frame) return;
+
+		trigger.disabled = true;
+		frame = document.createElement('iframe');
+		frame.title = `${embed.dataset.title} game`;
+		frame.allow = 'fullscreen; gamepad';
+		frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-pointer-lock allow-downloads');
+		frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+		frame.addEventListener('load', () => { if(status) status.textContent = 'Ready'; }, {once: true});
+		frame.src = embed.dataset.frame;
+		runtime.insertBefore(frame, runtime.firstChild);
+		runtime.hidden = false;
+		trigger.hidden = true;
+	});
+
+	stop?.addEventListener('click', close);
+	addEventListener('pagehide', close, {once: true});
 }
