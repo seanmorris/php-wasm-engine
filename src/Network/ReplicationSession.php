@@ -35,6 +35,18 @@ final class ReplicationSession
 	private ?SnapshotSequence $peerBaseline = null;
 	/** Newest snapshot sequence accepted from the host. */
 	private ?SnapshotSequence $latestSnapshot = null;
+	/** Host tick of the newest accepted snapshot. */
+	private ?SimulationTick $latestTick = null;
+	/** Newest local command the host had applied in the newest accepted snapshot. */
+	private ?CommandSequence $acknowledged = null;
+	/** Newest remote command this host has applied to its simulation. */
+	private ?CommandSequence $applied = null;
+	/**
+ * Snapshot sequence each predicted entity was last corrected from.
+ *
+ * @var array<int,int>
+ */
+	private array $corrected = [];
 	/** Whether the next authoritative snapshot must contain a full baseline. */
 	private bool $forceFull = true;
 	/** Identifier of the active local recovery attempt. */
@@ -176,8 +188,8 @@ final class ReplicationSession
 				? $this->peerBaseline
 				: null;
 
-			$latest = $this->validator->latest($this->match->remotePeer, $this->match->remoteSlot);
-			$acknowledged = $latest ? [$this->match->remoteSlot->value() => $latest->value()] : [];
+			// Acknowledge what the snapshot's state includes: an accepted command waiting for its tick is not in it yet.
+			$acknowledged = $this->applied ? [$this->match->remoteSlot->value() => $this->applied->value()] : [];
 			$snapshot = $this->builder->capture($registry, $sequence, $tick, $baseline, $acknowledged);
 
 			$this->bridge->send(
@@ -299,6 +311,64 @@ final class ReplicationSession
 	public function samples(): SnapshotBuffer { return $this->buffer; }
 
 	/**
+	 * Take the host's newest result for an entity this guest predicts, once per snapshot.
+	 *
+	 * The snapshot's owner-authoritative components for the entity are decoded into detached components, alongside
+	 * the retained local commands the host had not applied when it built the snapshot. The game can rewind the entity
+	 * to those components and replay the commands it has already simulated.
+	 *
+	 * @param int $entity Locally owned, network-bound entity.
+	 * @return ?OwnerCorrection The correction, or null on the host, before a snapshot that acknowledges a local
+	 * command, when this snapshot was already taken for the entity, when the entity or its owned records are
+	 * absent, or when the retained commands no longer reach back to the acknowledgement.
+	 */
+	public function correction(int $entity): ?OwnerCorrection
+	{
+		if($this->match->host() || !$this->latestSnapshot || !$this->latestTick || !$this->acknowledged) return null;
+
+		$sequence = $this->latestSnapshot->value();
+
+		if(($this->corrected[$entity] ?? null) === $sequence) return null;
+
+		$id = $this->entities->network($entity);
+		$records = $id ? $this->applier->record($id) : null;
+
+		if($records === null) return null;
+
+		$components = [];
+
+		foreach($records as $schema => $record)
+		{
+			$codec = $this->replication->codec($schema);
+
+			if($codec->policy()->authority !== ReplicationPolicy::AUTHORITY_OWNER) continue;
+
+			if(($record['version'] ?? null) !== $codec->version() || !is_array($record['payload'] ?? null))
+			throw new \UnexpectedValueException("Incompatible payload for replication schema $schema");
+
+			$components[$codec->componentType()] = $codec->decode($record['payload']);
+		}
+
+		if(!$components) return null;
+
+		$commands = $this->history->after($this->acknowledged);
+
+		// A history that overflowed has lost commands the host has not applied, so a replay would come up short.
+		if($commands && $commands[0]->sequence->value() > $this->acknowledged->value() + 1) return null;
+
+		$this->corrected[$entity] = $sequence;
+
+		return new OwnerCorrection(
+			$entity
+			, $this->latestSnapshot
+			, $this->latestTick
+			, $this->acknowledged
+			, $components
+			, $commands
+		);
+	}
+
+	/**
 	 * Discard all retained replication session state.
 	 *
 	 * @return void No value is returned.
@@ -312,6 +382,9 @@ final class ReplicationSession
 		$this->buffer->clear();
 		$this->events->clear();
 		$this->pending = [];
+		$this->latestTick = null;
+		$this->acknowledged = $this->applied = null;
+		$this->corrected = [];
 	}
 
 	/**
@@ -422,14 +495,12 @@ final class ReplicationSession
 		]), $this->clock->current(), 'control');
 
 		$this->latestSnapshot = $snapshot->sequence;
+		$this->latestTick = $snapshot->tick;
 		$this->buffer->push($snapshot);
 		$acknowledged = $snapshot->acknowledged[$this->match->localSlot->value()] ?? null;
+		$this->acknowledged = $acknowledged === null ? null : new CommandSequence((int)$acknowledged);
 
-		if($acknowledged !== null)
-		{
-			$ack = new CommandSequence((int)$acknowledged);
-			$this->history->acknowledge($ack);
-		}
+		if($this->acknowledged) $this->history->acknowledge($this->acknowledged);
 	}
 
 	/**
@@ -462,6 +533,8 @@ final class ReplicationSession
 
 			$this->callbacks->apply($command);
 			unset($this->pending[$sequence]);
+
+			if(!$this->applied || $command->sequence->value() > $this->applied->value()) $this->applied = $command->sequence;
 		}
 	}
 

@@ -424,4 +424,105 @@ $leadWire->advance();
 $leadGuestSession->beforeStep($leadGuestWorld, 1 / 35);
 verifyNetworkTiming($leadGuestWorld->get($leadGuestIds[2], NetworkTimingPosition::class)->x === 43.0, 'ordinary snapshots resume preserving owner prediction after the one-time correction');
 
+// A guest rewinds its predicted player to the host's result and replays the commands the host has not applied yet.
+// The host pushes the guest's player once; the guest's replay reaches the same place instead of drifting forever.
+$replayScope = new ReplicationScope('E1M4');
+[$replayHostWorld,$replayHostEntities,$replayHostIds] = networkTimingWorld($replayScope, $hostPeer, $guestPeer, 0, 0);
+[$replayGuestWorld,$replayGuestEntities,$replayGuestIds] = networkTimingWorld($replayScope, $hostPeer, $guestPeer, 0, 0);
+$replayWire = new DirectPeerWire(1);
+$replayHostClock = new NetworkClock;
+$replayGuestClock = new NetworkClock(new SimulationTick(6));
+$replayHostForward = 0.0;
+$replayGuestSequence = 0;
+$replayTicks = [];
+
+$replayHostSession = new ReplicationSession(
+	$replayHostWorld
+	, $replication
+	, $replayHostEntities
+	, $replayWire->bridge('host')
+	, $hostMatch
+	, new ReplicationCallbacks(
+		static fn(PlayerSlot $slot, SimulationTick $tick): array => ['forward' => 0]
+		, static function(InputCommand $command) use (&$replayHostForward, $guestSlot): void {
+			if($command->player->equals($guestSlot)) $replayHostForward = (float)($command->actions()['forward'] ?? 0);
+		}
+	)
+	, 1
+	, 70
+	, null
+	, $replayHostClock
+	, $replayScope
+);
+
+$replayGuestSession = new ReplicationSession(
+	$replayGuestWorld
+	, $replication
+	, $replayGuestEntities
+	, $replayWire->bridge('guest')
+	, $guestMatch
+	, new ReplicationCallbacks(
+		static fn(PlayerSlot $slot, SimulationTick $tick): array => ['forward' => 1]
+		, static function(InputCommand $command) use (&$replayGuestSequence, &$replayTicks, $guestSlot): void {
+			if(!$command->player->equals($guestSlot)) return;
+
+			$replayGuestSequence = $command->sequence->value();
+			$replayTicks[$replayGuestSequence] = $command->tick->value();
+		}
+	)
+	, 1
+	, 70
+	, null
+	, $replayGuestClock
+	, $replayScope
+);
+
+$corrections = [];
+$appliedBeforeTick = true;
+$takenOnce = true;
+
+for($step = 0; $step < 16; $step++)
+{
+	$replayHostSession->beforeStep($replayHostWorld, 1 / 35);
+	$replayGuestSession->beforeStep($replayGuestWorld, 1 / 35);
+	$own = $replayGuestWorld->get($replayGuestIds[2], NetworkTimingPosition::class);
+	$correction = $replayGuestSession->correction($replayGuestIds[2]);
+
+	if($correction)
+	{
+		$takenOnce = $takenOnce && $replayGuestSession->correction($replayGuestIds[2]) === null;
+		$acknowledged = $correction->acknowledged->value();
+		$appliedBeforeTick = $appliedBeforeTick && $replayTicks[$acknowledged] <= $correction->tick->value();
+		$own->x = $correction->component(NetworkTimingPosition::class)->x;
+
+		// This step's command has not run locally yet, so only earlier ones are replayed.
+		foreach($correction->commands as $command)
+		if($command->sequence->value() < $replayGuestSequence) $own->x += (float)$command->actions()['forward'];
+
+		$corrections[] = $own->x;
+	}
+
+	$host = $replayHostWorld->get($replayHostIds[2], NetworkTimingPosition::class);
+	$host->x += $replayHostForward + ($step === 8 ? 5 : 0);
+	$own->x += 1;
+	$replayHostSession->afterStep($replayHostWorld, 1 / 35);
+	$replayGuestSession->afterStep($replayGuestWorld, 1 / 35);
+	$replayWire->advance();
+}
+
+verifyNetworkTiming(
+	$replayHostSession->correction($replayHostIds[2]) === null && count($corrections) > 8 && $takenOnce
+	, 'the guest takes one correction per snapshot for its predicted entity, and the host none'
+);
+
+verifyNetworkTiming(
+	$appliedBeforeTick
+	, 'snapshots acknowledge the guest commands the host has applied, not ones still waiting for their tick'
+);
+
+verifyNetworkTiming(
+	$replayGuestWorld->get($replayGuestIds[2], NetworkTimingPosition::class)->x === 21.0
+	, 'replaying unacknowledged commands over the host result keeps 16 predicted steps and adds the host push'
+);
+
 echo "$checks direct peer timing checks passed\n";

@@ -88,6 +88,21 @@ final class SnapshotApplier
 	public function sequence(): ?SnapshotSequence { return $this->sequence; }
 
 	/**
+	 * Read one entity's merged authoritative component records from the newest applied snapshot.
+	 *
+	 * The records include components the component filter kept from being installed.
+	 *
+	 * @param NetworkEntityId $id Network entity to read.
+	 * @return ?array<string,mixed> Encoded component records keyed by schema, or null when the entity is absent.
+	 */
+	public function record(NetworkEntityId $id): ?array
+	{
+		$components = $this->state[$id->value()]['components'] ?? null;
+
+		return is_array($components) ? $components : null;
+	}
+
+	/**
 	 * Discard all retained snapshot applier state.
 	 *
 	 * @return void No value is returned.
