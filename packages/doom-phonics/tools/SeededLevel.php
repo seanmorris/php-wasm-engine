@@ -3,6 +3,8 @@ declare(strict_types=1);
 namespace DoomPhonics\Tools;
 
 require_once __DIR__ . '/PlanarRooms.php';
+require_once __DIR__ . '/OrganicLayout.php';
+require_once __DIR__ . '/RoomFeatures.php';
 require_once __DIR__ . '/RoomOutline.php';
 require_once __DIR__ . '/RoomJoin.php';
 require_once __DIR__ . '/RoomElevation.php';
@@ -18,6 +20,7 @@ require_once __DIR__ . '/PlanePortalSite.php';
 require_once __DIR__ . '/PortalGallery.php';
 require_once __DIR__ . '/FloodBasin.php';
 require_once __DIR__ . '/MapConnectivity.php';
+require_once __DIR__ . '/RouteTraversal.php';
 
 /**
  * Generate reproducible basement, ground and upper planar room networks.
@@ -30,7 +33,7 @@ require_once __DIR__ . '/MapConnectivity.php';
 final class SeededLevel
 {
 	/** Changes to the generation algorithm require a new reproducibility version. */
-	public const VERSION = 12;
+	public const VERSION = 13;
 	/** Keep topology stable when refining individual room geometry. */
 	private const RANDOM_REVISION = 11;
 	/** Reserve space for longer stair flights and bent approaches around each core. */
@@ -42,6 +45,27 @@ final class SeededLevel
 
 	/** Build a fresh map and certify all regions with the runtime movement rules. */
 	public static function build(string $seed = 'first-light', int $rooms = 14, string $layout = 'organic', string $portalDoors = 'seeded', string $switchPanels = 'patch',int $doorChance=30,string $galleryHalls='seeded'): array
+	{
+		$failures=[]; $started=hrtime(true);
+		for($recovery=0;$recovery<3;$recovery++) {
+			try {
+				$result=self::attempt($seed,$rooms,$layout,$portalDoors,$switchPanels,$doorChance,$galleryHalls,$recovery);
+				foreach($failures as $reason) $result['repairs'][]=['kind'=>'generation-recovery','reason'=>$reason];
+				$result['recovery']=$recovery;
+				$retryMs=max(0,(hrtime(true)-$started)/1e6-$result['timings']['totalMs']);
+				$result['timings']['recoveryMs']=$retryMs; $result['timings']['totalMs']+=$retryMs;
+				return $result;
+			} catch(\LogicException|\RuntimeException $error) {
+				if($layout!=='organic' || $rooms<2 || $rooms>16 || !in_array($portalDoors,['seeded','open','doors'],true)
+					|| !in_array($switchPanels,['patch','texture'],true) || !in_array($galleryHalls,['seeded','all','none'],true) || $doorChance<0 || $doorChance>100 || $recovery===2) throw $error;
+				$failures[]=$error->getMessage();
+			}
+		}
+		throw new \LogicException('No certified layout');
+	}
+
+	/** Each bounded attempt builds and certifies a complete candidate before returning it. */
+	private static function attempt(string $seed,int $rooms,string $layout,string $portalDoors,string $switchPanels,int $doorChance,string $galleryHalls,int $recovery): array
 	{
 		$started = hrtime(true);
 		if(!in_array($galleryHalls,['seeded','all','none'],true)) throw new \InvalidArgumentException('Unknown gallery hallway style');
@@ -58,7 +82,12 @@ final class SeededLevel
 		$steps = $random->integer(12,16);
 		$mirror = (bool)$random->integer(0,1);
 		$stairSweep=(new SeedSequence('stair-sweep:'.$seed))->integer(0,1) ? 90 : 180;
+		$stairSweep=$layout==='organic' ? 180 : $stairSweep;
 		$upperPort = $stairSweep===180 ? 'north' : ($mirror ? 'west' : 'east');
+		if($layout==='organic') {
+			$organic=OrganicLayout::build($seed,$rooms,$depth,$upperPort,$withDoors,$doorChance,self::room(...),self::cavern(...),$recovery,$mirror);
+			['layers'=>$layers,'pins'=>$pins,'topology'=>$topology,'repairs'=>$repairs,'galleryRooms'=>$galleryRooms]=$organic;
+		} else {
 		$topology = [
 			'basement' => PlanarRooms::build($random,$rooms,['north'],[[0,1]]),
 			'ground' => PlanarRooms::build($random,$rooms,['north','south'],[[0,1],[0,-1]]),
@@ -130,7 +159,7 @@ final class SeededLevel
 			$passage['bend'] = $bend ? ($random->integer(0,1) ? 128 : -128) : 0;
 			if(($delta > 32 || $bend) && !isset($spec['liftTag']) && $name !== 'basement.0')
 			{
-				$spec['inset'] = max($spec['inset'],$bend ? 384 : (int)ceil($delta/32)*128);
+				$spec['inset'] = max($spec['inset'],$bend ? 576 : max(0,intdiv($delta,16)-1)*64+256);
 				$repairs[] = ['kind'=>$bend ? 'bend' : 'lengthen','room'=>$name,'port'=>$port,
 					'reason'=>$bend ? 'Route a dogleg with level turning landings' : 'Lengthen the approach to fit a monotonic stair flight'];
 			}
@@ -194,6 +223,7 @@ final class SeededLevel
 		// A high north ledge is only reachable from below after using the pump.
 		$layers['basement.0'] = self::cavern($ports['basement.0'],$depth,$passages['basement.0'],$layout==='organic' ? 1920 : 1280,$dimensions['basement'][0])
 			+ ['plane'=>'basement','grid'=>[0,0],'localFloor'=>0];
+		}
 		[$poolX,$poolY]=$layers['basement.0']['contentOffset'] ?? [0,0];
 		if($layout === 'organic')
 		{
@@ -231,6 +261,7 @@ final class SeededLevel
 			$switches[]=$switch+['id'=>$id,'effects'=>['water'=>$negative ? 'dry' : 'full']];
 		}
 
+		foreach($topology as $plane=>$network) foreach($network['history']??[] as $event) $repairs[]=$event+['layer'=>$plane,'reason'=>'Conform room ownership to the planar embedding'];
 		$falls=$layout==='organic' ? [['upper.0.core','basement.0.arrival']] : [];
 		$verticalConnections=$layout==='organic' ? [['from'=>'upper.0.core','to'=>'basement.0.arrival','kind'=>'hub']] : [];
 
@@ -239,8 +270,8 @@ final class SeededLevel
 		$available=[];
 		foreach(['basement','ground','upper'] as $plane) {
 			$available[$plane]=$sites->shuffle(array_keys(array_filter($layers,static fn($r,$n)=>
-				$r['plane']===$plane && !isset($r['cluster']) && !isset($r['lift']) && !isset($r['elevation']) && !($r['joinCandidate']??false)
-				&& $n!=="$plane.0" && $n!=='basement.1' && $n!=='upper.'.($rooms-1),ARRAY_FILTER_USE_BOTH)));
+				$r['plane']===$plane && !isset($r['cluster']) && !isset($r['lift']) && !isset($r['elevation']) && !($r['joinCandidate']??false) && !($r['ledgeCandidate']??false)
+				&& $n!=="$plane.0" && !in_array($r['role']??'', ['spawn','goal']) && $n!=='basement.1' && $n!=='upper.'.($rooms-1),ARRAY_FILTER_USE_BOTH)));
 		}
 		$galleryStack=[];
 		foreach(['upper','ground','basement'] as $plane) if(isset($galleryRooms[$plane])) {
@@ -257,16 +288,33 @@ final class SeededLevel
 		foreach([['ground','basement'],['upper','ground']] as [$above,$below])
 		for($i=0;$i<max(1,intdiv($rooms,4))-($galleryStack ? 1 : 0) && $available[$above] && $available[$below];$i++) {
 			$a=array_pop($available[$above]); $b=array_pop($available[$below]);
-			$from=PlanePortalSite::carve($layers[$a],$a,true);
-			$to=PlanePortalSite::carve($layers[$b],$b,false);
+			$beforeA=$layers[$a]; $beforeB=$layers[$b];
+			try {
+				$from=PlanePortalSite::carve($layers[$a],$a,true);
+				$to=PlanePortalSite::carve($layers[$b],$b,false);
+			} catch(\InvalidArgumentException $error) {
+				$layers[$a]=$beforeA; $layers[$b]=$beforeB;
+				$repairs[]=['kind'=>'optional-portal','rooms'=>[$a,$b],'reason'=>$error->getMessage()];
+				continue;
+			}
 			$falls[]=[$from,$to];
 			$verticalConnections[]=compact('from','to')+['kind'=>'shaft','width'=>192,'recess'=>32];
 		}
 
-		$merged=RoomJoin::apply($layers,$pins,$seed);
+		if($layout==='organic' && !$recovery) {
+			require_once __DIR__.'/RaisedLedge.php';
+			$terraces=[];
+			foreach((new SeedSequence('terrace-rooms:'.$seed))->shuffle(array_keys($layers)) as $name) {
+				$plane=$layers[$name]['plane'];
+				if(!isset($terraces[$plane]) && RaisedLedge::carve($layers[$name],$name,$seed)) $terraces[$plane]=true;
+			}
+			foreach($layers as $name=>&$layer) if(!isset($layer['terrace'])) RoomFeatures::apply($layer,$name,$seed);
+		}
+		unset($layer);
+		$merged=$layout==='building' ? RoomJoin::apply($layers,$pins,$seed) : [];
 		foreach($merged as $join) $repairs[]=['kind'=>'merge','room'=>implode(' + ',$join['rooms']),
 			'reason'=>'Remove a short hallway, retaining the offset polygon union'];
-		self::connectionDoors($layers,$pins,$seed,$doorChance);
+		if($layout==='building') self::connectionDoors($layers,$pins,$seed,$doorChance);
 		$required = max(array_column(array_filter($layers,static fn($r)=>$r['plane'] === 'ground'),'ceiling')) + self::STOREY_SLAB;
 		if($steps * 16 < $required)
 		{
@@ -367,7 +415,9 @@ final class SeededLevel
 		$model = count($cells);
 		$cells[] = self::cell('water-model',18000,16384,18064,16448,-$depth,-$depth,200);
 		$cells[$model]['floorTexture'] = $cells[$model]['ceilingTexture'] = 'P3WATER';
-		$boundaries[] = ['from'=>[18000,16384],'to'=>[18000,16448],'action'=>160,'args'=>[100,6,2,166,0]];
+		// The basin is bounded by real walls and floors. A control-wall texture
+		// would add translucent moving wall copies at wet/dry sector boundaries.
+		$boundaries[] = ['from'=>[18000,16384],'to'=>[18000,16448],'action'=>160,'args'=>[100,6,2,166,0],'texture'=>'-'];
 		[$x,$y,$z] = $layers['basement.0']['packed'];
 		$actions = [];
 		foreach($switches as $switch)
@@ -381,6 +431,10 @@ final class SeededLevel
 		}
 
 		$start = 'basement.1.core'; $goal = 'upper.' . ($rooms-1) . '.core';
+		if($layout==='organic') foreach($layers as $name=>$layer) {
+			if(($layer['role']??null)==='spawn') $start=$layer['cells'][0]['id'];
+			if(($layer['role']??null)==='goal') $goal=$layer['cells'][0]['id'];
+		}
 		$things = [];
 		foreach([[$start,1],[$goal,2013]] as [$region,$type])
 		{
@@ -406,6 +460,8 @@ final class SeededLevel
 		$lumps = PolygonMap::build($map,$cells,$boundaries,$controls,$things);
 		$wadDone = hrtime(true);
 		$result = compact('map','seed','rooms','layout','merged','layers','pins','positions','topology','repairs','cells','regions','connections','verticalConnections','actions','model','lumps','depth','waterSectors','start','goal','falls','lifts','doors','portalDoors','switchPanels','doorChance','galleryHalls','galleryStack');
+		$result['waterStates']=['dry'=>-$depth,'shallow'=>-intdiv($depth,2),'full'=>0];
+		$result['roles']=[]; foreach($layers as $name=>$layer) if(isset($layer['role'])) $result['roles'][$layer['role']][]=$name;
 		$result['overlaps'] = self::overlaps($layers);
 		if($result['overlaps']) throw new \LogicException('Generator reservations overlap: ' . json_encode($result['overlaps']));
 		$graph = MapConnectivity::compile($result,['drop'=>512]);
@@ -414,12 +470,23 @@ final class SeededLevel
 		{
 			$check = $graph->search($start,['water'=>$water]);
 			if(count($check['reachable']) !== count($regions) || $check['traps'])
-			throw new \LogicException('Generator movement invariant failed ['.$seed.','.$rooms.']: ' . json_encode(array_diff(array_keys($regions),$check['reachable'])));
+			throw new \LogicException('Generator movement invariant failed ['.$seed.','.$rooms.']: ' . json_encode(['unreachable'=>array_diff(array_keys($regions),$check['reachable']),'traps'=>array_values(array_unique(array_column($check['traps'],'region'))),'water'=>$water]));
 			$checks[$water] = ['reachable'=>count($check['reachable']),'states'=>$check['states'],'traps'=>count($check['traps'])];
+		}
+		foreach(['dry','shallow','full'] as $water) {
+			$outbound=$graph->search($start,['water'=>$water])['routes'][$goal];
+			$endState=$outbound ? end($outbound)['state']['water'] : $water;
+			$return=$graph->search($goal,['water'=>$endState])['routes'][$start];
+			RouteTraversal::run(MapConnectivity::level($result),$result,array_merge($outbound,$return),$water);
 		}
 		$result['checks'] = $checks;
 		$result['graph'] = $graph;
 		$result['roomNavigation'] = MapConnectivity::rooms($layers,$graph);
+		foreach($result['roomNavigation'] as $name=>$navigation) {
+			if(!in_array($layers[$name]['role']??null,['room','spawn','goal'],true)) continue;
+			foreach($navigation['routes'] as $water=>$entrances) foreach($entrances as $from=>$exits) foreach($exits as $to=>$route)
+			if($route===null) throw new \LogicException("Disconnected room entrances in $name ($water): $from -> $to");
+		}
 		$finished = hrtime(true);
 		$result['timings'] = ['layoutMs'=>($layoutDone-$started)/1e6,'wadMs'=>($wadDone-$layoutDone)/1e6,
 			'validationMs'=>($finished-$wadDone)/1e6,'totalMs'=>($finished-$started)/1e6];
@@ -573,7 +640,7 @@ final class SeededLevel
 				$ids=$corridor['cells']; $last=end($ids); $byId=array_column($layer['cells'],null,'id');
 				$cell=$byId[$last]; $anchor=$layer['anchors'][$port]; [$nx,$ny]=$anchor['normal'];
 				$length=$nx ? $cell['x1']-$cell['x0'] : $cell['y1']-$cell['y0'];
-				if($length<128 || ($length>128 && $length<168)) { unset($layer); continue; }
+				if(($corridor['from']!==$corridor['to'] && $length<384) || $length<128 || ($length>128 && $length<168)) { unset($layer); continue; }
 				[$x,$y]=$anchor['point']; $id="$name.$port.door";
 				$p=[];
 				$half=intdiv($anchor['size'][0],2);

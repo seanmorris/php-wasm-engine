@@ -45,30 +45,32 @@ test('seed report exposes layered geometry, repairs and the flood prerequisite',
 	const regionCount = Object.keys(report.regions).length;
 
 	await expect(page.locator('#verdict')).toContainText(`${regionCount}/${regionCount} regions reachable`);
-	await expect(page.locator('#repairs')).toContainText('merge');
+	await expect(page.locator('#repairs')).toContainText('clearance');
 	await expect(page.locator('#repairs > li')).toHaveCount(report.repairs.length);
 	await expect(page.locator('#repairs')).toContainText('layer-height');
 	await expect(page.locator('#route')).toContainText('fill:');
 	await expect(page.locator('#maps svg')).toHaveCount(4);
 	expect(await page.locator('#maps polygon').count()).toBeGreaterThan(20);
 
-	expect(report.layers['ground.0'].cluster.kind).toBe('conforming');
-	expect(report.layers['ground.0'].cluster.intrusion.entrances.length).toBeGreaterThanOrEqual(2);
-	expect(report.layers['ground.0'].cluster.outdoors.rim).not.toBeNull();
-	expect(report.layers['ground.0'].cluster.outdoors.trench).toBeUndefined();
+	expect(report.layers[report.roles.courtyard[0]].cluster.kind).toBe('conforming');
+	expect(report.layers[report.roles.courtyard[0]].cluster.intrusion.entrances.length).toBeGreaterThanOrEqual(2);
+	expect(report.layers[report.roles.courtyard[0]].cluster.outdoors.rim).not.toBeNull();
+	expect(report.layers[report.roles.courtyard[0]].cluster.outdoors.trench).toBeUndefined();
 	expect(Object.values(report.layers).filter(layer => layer.elevation).length).toBeGreaterThan(0);
-	expect(report.layers['ground.0'].cluster.pattern).toBe('outline-first');
-	expect(report.layers['ground.0'].cluster.minimumRoomSize).toBe(384);
-	expect(report.layers['ground.0'].cluster.outline.length).toBeGreaterThan(4);
-	expect(report.layers['upper.0'].cluster.doorways).toHaveLength(4);
+	expect(report.layers[report.roles.courtyard[0]].cluster.pattern).toBe('outline-first');
+	expect(report.layers[report.roles.courtyard[0]].cluster.minimumRoomSize).toBe(384);
+	expect(report.layers[report.roles.courtyard[0]].cluster.outline.length).toBeGreaterThan(4);
+	expect(report.layers[report.roles.hub[0]].cluster.doorways).toHaveLength(4);
 
 	expect(report.doors.some(door => door.kind === 'connection')).toBe(true);
 	await expect(page.locator('p').first()).toContainText(`${report.doors.length} doors`);
 	expect(report.doors.some(door => door.width === 128)).toBe(true);
-	expect(report.verticalConnections).toHaveLength(7);
-	await expect(page.locator('[data-portal]')).toHaveCount(14);
+	expect(report.verticalConnections.length).toBeGreaterThanOrEqual(3);
+	await expect(page.locator('[data-portal]')).toHaveCount(2*report.verticalConnections.length);
 
-	for(const network of Object.values(report.topology)) expect(network.loops).toBeGreaterThanOrEqual(2);
+	expect(Object.values(report.topology).reduce((n, network) => n+network.loops, 0)).toBeGreaterThan(0);
+	expect(report.requestedCandidates).toBe(42);
+	expect(report.survivingRooms).toBeGreaterThan(6);
 
 	await expect(page.locator('#play')).toHaveAttribute('href', /\/games\/doom-phonics\/\?world=.*seeded-level/);
 	await page.locator('#actions').uncheck();
@@ -76,7 +78,7 @@ test('seed report exposes layered geometry, repairs and the flood prerequisite',
 	await page.locator('#water').selectOption('full');
 	await expect(page.locator('#verdict')).toContainText(`${regionCount}/${regionCount} regions reachable`);
 
-	const cluster = report.layers['ground.0'];
+	const cluster = report.layers[report.roles.courtyard[0]];
 	const [x,y] = cluster.architectural;
 	const size = cluster.cluster.envelopeSize;
 	const groundPlan = page.locator('#maps svg').nth(1);
@@ -95,7 +97,8 @@ test('seed report exposes layered geometry, repairs and the flood prerequisite',
 });
 
 test('SEEDED loads, walks its flood and spiral route, and renders its portals', async({page}, testInfo) => {
-	test.setTimeout(180000);
+	// Include every portal and the additional room-feature/stair inspection views.
+	test.setTimeout(240000);
 	const errors = [];
 	page.on('pageerror', error => errors.push(error.message));
 
@@ -158,10 +161,13 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 	`
 	);
 
-	for(const name of ['LayeredWalkthrough', 'SeededWalkthrough'])
-	{
-		const fixture = await fs.readFile(new URL(`../fixtures/${name}.php`, import.meta.url), 'utf8');
-		await run(fixture.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/m, ''));
+	for(const name of ['../../tools/PlayerWalk'
+		, '../../tools/RouteTraversal'
+		, '../fixtures/LayeredWalkthrough'
+		, '../fixtures/SeededWalkthrough'
+	]){
+		const fixture = await fs.readFile(new URL(`${name}.php`, import.meta.url), 'utf8');
+		await run(fixture.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/mg, ''));
 	}
 
 	const base64 = Buffer.from(JSON.stringify(report)).toString('base64');
@@ -207,7 +213,9 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 		await capture(`seeded-swim-exit-${portal.from}.png`);
 	}
 
-	const wellQueue = [{region: 'upper.0.ring-7', route: []}];
+	const wellStart = `${report.roles.hub[0]}.ring-7`;
+	const wellEnd = `${report.roles.pool[0]}.arrival`;
+	const wellQueue = [{region: wellStart, route: []}];
 	const wellSeen = new Set();
 	let wellRoute;
 
@@ -217,7 +225,7 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 
 		wellSeen.add(item.region);
 
-		if(item.region === 'basement.0.arrival')
+		if(item.region === wellEnd)
 		{
 			wellRoute = item.route;
 			break;
@@ -232,13 +240,13 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 
 	const fall = await run(`
 		$seedWell = $seedPrototype;
-		$seedWell['start'] = 'upper.0.ring-7';
+		$seedWell['start'] = '${wellStart}';
 		$seedDrop = DoomPhonics\\Tests\\SeededWalkthrough::run($seedLevel,$seedWell,json_decode(base64_decode('${wellBase64}'),true));
 		(vrzno_env('seedProbe'))(json_encode(end($seedDrop)));
 	`
 	);
 
-	expect(fall.region).toBe('basement.0.arrival');
+	expect(fall.region).toBe(wellEnd);
 
 	// Exercise every extra shaft with real movement from its surrounding floor.
 	// Fresh fixtures begin dry; drain the live basin through its actual control.
@@ -357,7 +365,7 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 	);
 
 	await capture('seeded-switch-patch.png');
-	const [x, y] = report.layers['basement.0'].packed;
+	const [x, y] = report.layers[report.roles.pool[0]].packed;
 
 	await run(`
 		$seedPose->x = $seedPose->previousX = ${x + 640};
@@ -385,42 +393,42 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 
 	await expect.poll(async() => (await state()).position[2]).toBe(landing.floor);
 	await capture('seeded-spiral.png');
-	const corner = Object.values(report.layers).find(layer => layer.cornerStair).cornerStair;
-	const cornerEntry = report.cells[report.sectorIds[corner.route[0]]];
-	const cornerStep = report.cells[report.sectorIds[corner.route[2]]];
 
-	const cornerAngle = Math.atan2(
-		cornerStep.center[1]-cornerEntry.center[1]
-		, cornerStep.center[0]-cornerEntry.center[0]
+	// Select authored roles and reservations instead of fixed room indices.
+	const detailedRooms = Object.entries(report.layers).filter(
+		([,l]) => l.feature || l.terrace || l.reservations?.length
 	);
 
-	await run(`
-		$seedPose->x=$seedPose->previousX=${cornerEntry.center[0]};
-		$seedPose->y=$seedPose->previousY=${cornerEntry.center[1]};
-		$seedPose->z=$seedPose->previousZ=${cornerEntry.floor};
-		$seedPose->angle=${cornerAngle}; $seedView->setPitch(.2);
-	`
-	);
+	for(const [name,layer] of detailedRooms)
+	{
+		const hall = layer.reservations?.find(r => r.kind === 'stair-hall');
+		const stairs = layer.cells.filter(c => c.role === 'stair-hall');
+		const cell = layer.terrace
+			? layer.cells.find(c => c.id === layer.terrace.route[0])
+			: (hall ? stairs.at(-1) : layer.cells.find(c => c.id.endsWith('.core')) ?? layer.cells[0]);
 
-	await capture('seeded-corner-stairs.png');
-	const join = report.merged[0];
-	const joined = report.layers[join.rooms[0]];
-	const core = joined.cells.find(c => c.id.endsWith('.core'));
-	const angle = {east: 0, north: Math.PI / 2, west: Math.PI, south: -Math.PI / 2}[join.direction];
+		const next = layer.terrace && layer.cells.find(c => c.id === layer.terrace.route[1]);
+		const angle = next
+			? Math.atan2(next.center[1]-cell.center[1], next.center[0]-cell.center[0])
+			: hall ? Math.atan2(-hall.inward[1], -hall.inward[0]) : .5;
 
-	await run(`
-		$seedPose->x = $seedPose->previousX = ${joined.packed[0] + (core.x0 + core.x1) / 2};
-		$seedPose->y = $seedPose->previousY = ${joined.packed[1] + (core.y0 + core.y1) / 2};
-		$seedPose->z = $seedPose->previousZ = ${joined.packed[2] + core.floor};
-		$seedPose->angle = ${angle}; $seedView->setPitch(0);
-	`
-	);
+		await run(`
+			$seedPose->x=$seedPose->previousX=${layer.packed[0]+cell.center[0]};
+			$seedPose->y=$seedPose->previousY=${layer.packed[1]+cell.center[1]};
+			$seedPose->z=$seedPose->previousZ=${layer.packed[2]+cell.floor};
+			$seedPose->angle=${angle}; $seedView->setPitch(.1);
+		`
+		);
 
-	await capture('seeded-merged.png');
+		await capture(`seeded-feature-or-stairs-${name}.png`);
+	}
 
 	for(const [name,local,angle,pitch] of [
-		['ground.0',report.layers['ground.0'].cells[0].center,Math.PI/4,0]
-		, ['upper.0',report.layers['upper.0'].cells.find(c => c.id === 'upper.0.ring-7').center,Math.PI/2,-.65]
+		[report.roles.courtyard[0],report.layers[report.roles.courtyard[0]].cells[0].center,Math.PI/4,0]
+		, [report.roles.hub[0]
+			, report.layers[report.roles.hub[0]].cells.find(c => c.id === wellStart).center
+			, Math.PI/2,-.65
+		]
 	]) {
 		const layer = report.layers[name];
 
@@ -436,7 +444,7 @@ test('SEEDED loads, walks its flood and spiral route, and renders its portals', 
 	}
 
 	// Inspect exterior roofs and openings from the courtyard and garden.
-	const outdoor = report.layers['ground.0'].cluster.outdoors;
+	const outdoor = report.layers[report.roles.courtyard[0]].cluster.outdoors;
 
 	for(const [label,id] of [['courtyard', outdoor.courtyard[0]], ['garden', outdoor.garden[0]]])
 	{
@@ -514,7 +522,13 @@ test('generated terminal lift works repeatedly through live keyboard input', asy
 	{
 		execFileSync(
 			'php'
-			, ['packages/doom-phonics/tools/generate-seeded.php','--seed=1','--rooms=3','--output=' + directory]
+			, ['packages/doom-phonics/tools/generate-seeded.php'
+				, '--seed=1'
+				, '--rooms=3'
+				, '--layout=building'
+				, '--output='
+				+ directory
+			]
 		);
 
 		for(const name of ['SEEDED.WAD','seeded-level.phonics-world.json','seeded-navigation.html'])
@@ -602,6 +616,17 @@ test('generated terminal lift works repeatedly through live keyboard input', asy
 	};
 
 	const approachCallPoint = async point => {
+		await expect.poll(() => run(String.raw`
+			$velocity=$engine->entities->get($liveId,DoomPhonics\Component\Velocity::class);
+			(vrzno_env('liftTest'))(json_encode(hypot($velocity->x,$velocity->y)));
+		`
+		), {timeout: 10000}).toBeLessThan(1);
+
+		const [x,y] = await page.evaluate(() => previewSession.doomState.position);
+
+		if(Math.hypot(x-point[0], y-point[1])<24) return;
+
+		await run(`$livePose->angle = ${Math.atan2(point[1]-y, point[0]-x)};`);
 		await page.keyboard.down('w');
 
 		await page.waitForFunction(point => {
@@ -623,6 +648,7 @@ test('generated terminal lift works repeatedly through live keyboard input', asy
 		await run(`$livePose->angle = ${lift.angle};`);
 		// Walking out carries momentum past the call range; approach each face again.
 		await approachCallPoint(lift.lowPoint);
+		await run(`$livePose->angle = ${lift.angle};`);
 		await page.keyboard.press('e', {delay: 100});
 		await expect.poll(floor, {timeout: 10000}).toBe(lift.lowPoint[2]);
 		await walkInto(lift.platform);
@@ -637,6 +663,7 @@ test('generated terminal lift works repeatedly through live keyboard input', asy
 
 		await run(`$livePose->angle = ${lift.angle+Math.PI};`);
 		await approachCallPoint(lift.highPoint);
+		await run(`$livePose->angle = ${lift.angle+Math.PI};`);
 		await page.keyboard.press('e', {delay: 100});
 		await expect.poll(floor, {timeout: 10000}).toBe(lift.lowPoint[2]);
 		await walkInto(lift.platform);

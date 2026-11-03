@@ -46,14 +46,29 @@ test('flooded portal water is textured from above and below at near and distant 
 	`
 	);
 
-	for(const name of ['LayeredWalkthrough','SeededWalkthrough'])
-	{
-		const source = await fs.readFile(new URL(`../fixtures/${name}.php`, import.meta.url), 'utf8');
-		await run(source.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/m, ''));
+	for(const name of ['../../tools/PlayerWalk'
+		, '../../tools/RouteTraversal'
+		, '../fixtures/LayeredWalkthrough'
+		, '../fixtures/SeededWalkthrough'
+	]){
+		const source = await fs.readFile(new URL(`${name}.php`, import.meta.url), 'utf8');
+		await run(source.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/mg, ''));
 	}
 
 	const encoded = Buffer.from(JSON.stringify({...report,regions: report.sectorIds})).toString('base64');
 	await run(`$r=json_decode(base64_decode('${encoded}'),true);`);
+
+	const liquidSides = await run(String.raw`
+		$visibleSides=0;
+		foreach($mesh->volumeSpans as $span) if($span['volume']?->swimmable()) {
+			$v=array_slice($mesh->vertices,$span['first']*16,16);
+			if($v[8]>=0 && ($v[4]>=0 || $v[5]>=0)) $visibleSides++;
+		}
+		(vrzno_env('waterProbe'))(json_encode($visibleSides));
+	`
+	);
+
+	expect(liquidSides, 'rising water must not draw moving wall-texture copies').toBe(0);
 
 	const capture = async name => {
 		await page.evaluate(async() => { for(let i = 0; i < 8; i++) await new Promise(requestAnimationFrame); });
@@ -102,6 +117,7 @@ test('flooded portal water is textured from above and below at near and distant 
 		);
 
 		expect(portal).toBeTruthy();
+		expect(report.cells[report.sectorIds[portal.to]].ceiling).toBeGreaterThanOrEqual(report.waterStates.full);
 
 		await run(
 			`$portal=json_decode('${JSON.stringify(
@@ -113,7 +129,10 @@ test('flooded portal water is textured from above and below at near and distant 
 		for(const distance of [128,32])
 		{
 			const c = report.cells[report.sectorIds[id]];
-			const eye = direction === 'above' ? c.floor+32+distance : c.ceiling-distance;
+			// Aim at the flush surface while keeping the above-water body's feet above the portal.
+			const eye = direction === 'above'
+				? c.floor+Math.max(64, distance*Math.tan(.75))
+				: c.ceiling-distance*Math.tan(.75);
 
 			await run(`
 				$pose->x=$pose->previousX=${c.center[0]-distance}; $pose->y=$pose->previousY=${c.center[1]};

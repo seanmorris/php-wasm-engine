@@ -110,7 +110,7 @@ final class PolygonMap
 		foreach($boundaries as $boundary)
 		{
 			$key = $edgeKey($vertex(...$boundary['from']), $vertex(...$boundary['to']));
-			if(!isset($edges[$key])) throw new \RuntimeException('Action boundary must match a complete split edge');
+			if(!isset($edges[$key])) throw new \RuntimeException('Action boundary must match a complete split edge: '.json_encode($boundary));
 			$edges[$key]['action'] = $boundary['action'];
 			$edges[$key]['args'] = $boundary['args'];
 			if(isset($boundary['flags'])) $edges[$key]['flags'] = $boundary['flags'];

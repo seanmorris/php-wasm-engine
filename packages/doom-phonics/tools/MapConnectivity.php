@@ -85,7 +85,7 @@ final class MapConnectivity
 		$names = array_flip($prototype['regions']);
 		foreach($prototype['regions'] as $name => $id) $graph->region($name,$prototype['cells'][$id]);
 		$collision = new Collision($level,$profile['step']);
-		$waterStates = ['dry' => -$prototype['depth'],'shallow' => -intdiv($prototype['depth'],2),'full' => 0];
+		$waterStates = $prototype['waterStates'] ?? ['dry' => -$prototype['depth'],'shallow' => -intdiv($prototype['depth'],2),'full' => 0];
 		$doorRegions=[];
 		foreach($prototype['doors'] ?? [] as $door)
 		{
@@ -117,6 +117,15 @@ final class MapConnectivity
 				if($level->cameraPortalForPlane($from,0)?->link->passable()) continue;
 				$start = [$x + $dx * $inset,$y + $dy * $inset];
 				$end = [$x - $dx * $inset,$y - $dy * $inset];
+				// A thin convex fragment may share its floor with several neighbors. A
+				// witness must actually end in the region the graph claims it enters.
+				$located=false;
+				foreach([.5,.25,.75] as $fraction) foreach([$inset,8,2,.5] as $distance) {
+					$wx=$p['x']+($q['x']-$p['x'])*$fraction; $wy=$p['y']+($q['y']-$p['y'])*$fraction;
+					$start=[$wx+$dx*$distance,$wy+$dy*$distance]; $end=[$wx-$dx*$distance,$wy-$dy*$distance];
+					if($level->sectorAt(...$start)->index===$from && $level->sectorAt(...$end)->index===$to) { $located=true; break 2; }
+				}
+				if(!$located) continue;
 				$source = $level->sectors[$from]; $destination = $level->sectors[$to];
 				$floor = $source->floorZ(...$start); $target = $destination->floorZ(...$end);
 				if($floor - $target > $profile['drop']) continue;
@@ -170,8 +179,11 @@ final class MapConnectivity
 			$lower = $prototype['cells'][$prototype['regions'][$lowerName]];
 			$link = $level->cameraPortalForPlane($prototype['regions'][$upperName],0)?->link;
 			$landingHeight = $link?->cameraZ($upper['floor'],$level) ?? $upper['floor'];
+			$dropLimit=$profile['drop'];
+			foreach($prototype['verticalConnections']??[] as $connection)
+			if($connection['from']===$upperName && $connection['kind']==='gallery') $dropLimit=max($dropLimit,$lower['ceiling']-$lower['floor']);
 			if($fits($prototype['regions'][$upperName]) && $fits($prototype['regions'][$lowerName])
-				&& $landingHeight - $lower['floor'] <= $profile['drop'])
+				&& $landingHeight - $lower['floor'] <= $dropLimit)
 			{
 				$pose = new Transform(($upper['x0'] + $upper['x1']) / 2,($upper['y0'] + $upper['y1']) / 2,$upper['floor']);
 				$start = [$pose->x,$pose->y,$pose->z];
@@ -219,6 +231,53 @@ final class MapConnectivity
 			throw new \RuntimeException('Water control does not produce its declared state');
 			$graph->connect($action['region'],$action['region'],$action['id'],[],$action['effects'],['point' => $action['point']]);
 		}
+		self::certifyInteriors($level,$prototype,$graph,$profile,$waterStates);
 		return $graph;
 	}
+	/** Verify that crossing witnesses can be joined continuously inside their convex region.
+	 * Pillars are solid voids and are decomposed into separate regions, so a graph
+	 * route must physically go around them. A local crossing alone is insufficient.
+	 */
+	private static function certifyInteriors(Level $level,array $prototype,TraversalGraph $graph,array $profile,array $waterStates): void
+	{
+		$collision=new Collision($level,$profile['step']);
+		$blocked=[]; $moving=[]; foreach($prototype['lifts']??[] as $lift) $moving[$lift['platform']]=true;
+		foreach($waterStates as $state=>$surface) {
+			$level->sectors[$prototype['model']]->ceiling=$surface;
+			$points=[];
+			foreach($graph->edges as $edge) {
+				if(isset($edge['requires']['water']) && !in_array($state,$edge['requires']['water'],true)) continue;
+				if($edge['mode']==='elevator') continue;
+				$w=$edge['witness'][$state]??$edge['witness'];
+				if(isset($w['start'])) $points[$edge['from']][]=$w['start'];
+				if(isset($w['end'])) $points[$edge['to']][]=$w['end'];
+				if(isset($w['point'])) $points[$edge['from']][]=$w['point'];
+			}
+			foreach($points as $name=>$entries) {
+				$id=$prototype['regions'][$name]; $cell=$prototype['cells'][$id];
+				if(isset($moving[$name]) || $level->cameraPortalForPlane($id,0)?->link->passable()) continue;
+				$entries=array_values(array_unique($entries,SORT_REGULAR));
+				foreach($entries as $i=>$a) foreach($entries as $j=>$b) {
+					if($i===$j) continue;
+					$z=max($cell['floor'],$a[2]??$cell['floor'],$b[2]??$cell['floor']);
+					if($z+$profile['height']>$level->sectors[$id]->ceiling) continue;
+					$pose=new Transform($a[0],$a[1],$z);
+					$hit=$collision->move($pose,new Body($profile['radius'],$profile['height']),$b[0]-$a[0],$b[1]-$a[1]);
+					if($hit || hypot($pose->x-$b[0],$pose->y-$b[1])>.01)
+					$blocked[$name][$state]=true;
+				}
+			}
+		}
+		// A different player profile may not fit an otherwise valid map. Keep its
+		// graph conservative instead of treating incompatible witnesses as a clique.
+		foreach($graph->edges as $i=>&$edge) if(isset($blocked[$edge['from']])) {
+			$allowed=$edge['requires']['water']??array_keys($waterStates);
+			$allowed=array_values(array_diff($allowed,array_keys($blocked[$edge['from']])));
+			if(!$allowed) { unset($graph->edges[$i]); continue; }
+			$edge['requires']['water']=$allowed;
+		} unset($edge);
+		$graph->edges=array_values($graph->edges);
+
+	}
+
 }

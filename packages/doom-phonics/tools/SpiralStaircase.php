@@ -22,10 +22,10 @@ final class SpiralStaircase
 			|| $innerRadius<0 || $headroom<56 || $treadDepth<40)
 		throw new \InvalidArgumentException('Curved stairs need usable tread depth, width and headroom');
 		$angle=deg2rad($sweep)/$steps;
-		$inner=(int)(ceil(max($innerRadius,$sweep===270 ? 160 : 0,($treadDepth+4)/(2*sin($angle/2)))/16)*16);
+		$inner=(int)(ceil(max($innerRadius,$sweep===270 ? 256 : 0,($treadDepth+4)/(2*sin($angle/2)))/16)*16);
 		// The chord between radial faces is slightly narrower than its radius difference.
 		$outer=$inner+(int)(ceil(($width+4)/cos($angle/2)/8)*8);
-		$height=$steps*$rise; $landing=128;
+		$height=$steps*$rise; $landing=256;
 		$fields=['ceiling'=>$height+$headroom,'floorTexture'=>'FLOOR0_1','ceilingTexture'=>'CEIL3_5','light'=>208,'tag'=>0];
 		$innerPoints=$outerPoints=[];
 		for($i=0;$i<=$steps;$i++) {
@@ -61,6 +61,6 @@ final class SpiralStaircase
 			if($mirror) { $anchor['point'][0]=$size-$anchor['point'][0]; $anchor['normal'][0]*=-1; }
 		}
 		unset($anchor);
-		return compact('cells','anchors','size','height','inner','outer','width','rise','steps','mirror','sweep','treadDepth');
+		return compact('cells','anchors','size','height','inner','outer','width','rise','steps','mirror','sweep','treadDepth','landing');
 	}
 }

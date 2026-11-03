@@ -26,7 +26,7 @@ verifyWad((bool)array_filter($allConnections['doors'],static fn($d)=>$d['kind']=
 $pairs=[];
 foreach($allConnections['doors'] as $door)
 {
-	$pairs[]=json_encode($door['connection']);
+	$pairs[]=$door['connectionId']??json_encode($door['connection']);
 	foreach([[0,1],[1,0]] as [$from,$to])
 	{
 		$local=$allConnections; $local['start']=$door['faces'][$from]['neighbor'];
@@ -98,10 +98,13 @@ foreach($details['doors'] as $door)
 		verifyWad(abs($lintel['ceiling']-$lintel['floor']-$bigdoor->height)<.01,'fixed lintels constrain both sides to the panel height');
 		$depth=PolygonGeometry::area(PolygonGeometry::points($lintel))/$door['width'];
 		verifyWad(abs($depth-($door['recess']??40))<.01 && $depth>=36,'door panels sit behind fixed lintels on the integer map grid');
-		$other=$lintel['joins'][0]; $adjacent=$details['cells'][$details['regions'][$other]];
-		$shared=PolygonGeometry::shared(PolygonGeometry::points($lintel),PolygonGeometry::points($adjacent));
-		verifyWad($shared!==null && abs(hypot($shared[1][0]-$shared[0][0],$shared[1][1]-$shared[0][1])-$door['width'])<.01,
-			'lintels meet the neighboring wall at its existing plane across the entire entrance');
+		$span=0;
+		foreach($details['cells'] as $adjacent) {
+			if(in_array($adjacent['id'],[$lintel['id'],$door['region']],true)) continue;
+			$shared=PolygonGeometry::shared(PolygonGeometry::points($lintel),PolygonGeometry::points($adjacent));
+			if($shared) $span+=hypot($shared[1][0]-$shared[0][0],$shared[1][1]-$shared[0][1]);
+		}
+		verifyWad(abs($span-$door['width'])<.01,'lintels meet the complete neighboring wall across all convex subdivisions');
 	}
 }
 foreach($detailLevel->map->linedefs as $line)

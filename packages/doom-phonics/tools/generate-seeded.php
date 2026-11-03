@@ -30,6 +30,9 @@ if(!preg_match('/^(?:[0-9]|[1-9][0-9]|100)$/D',$options['door-chance'])) throw n
 if($options['output'] === '') throw new InvalidArgumentException('Output directory cannot be empty');
 $prototype = SeededLevel::build($options['seed'],(int)$options['rooms'],$options['layout'],$options['portal-doors'],$options['switch-panels'],(int)$options['door-chance'],$options['gallery-halls']);
 $metadata = ['generator'=>'phonics-layered','version'=>SeededLevel::VERSION,'seed'=>$options['seed'],'roomsPerLayer'=>(int)$options['rooms'],'layout'=>$options['layout'],'portalDoors'=>$options['portal-doors'],'switchPanels'=>$options['switch-panels'],'doorChance'=>(int)$options['door-chance'],'galleryHalls'=>$options['gallery-halls']];
+$metadata['requestedCandidates']=3*(int)$options['rooms'];
+$metadata['survivingRooms']=array_sum(array_map(static fn($n)=>$n['surviving']??count($n['rooms']),$prototype['topology']));
+$metadata['waterStates']=$prototype['waterStates'];
 $wad = RectangularMap::archive(['F_START'=>'','P3WATER'=>WaterFlat::bytes(),'F_END'=>'',
 	'GENINFO'=>json_encode($metadata,JSON_THROW_ON_ERROR)] + $prototype['lumps']);
 $world = json_decode(file_get_contents(dirname(__DIR__) . '/demo/layered-navigation.phonics-world.json'),true,512,JSON_THROW_ON_ERROR);
@@ -42,7 +45,7 @@ $world['bindings'][0]['on']['source'] = 'seeded-level';
 $world['start'] = ['source'=>'seeded-level','scope'=>'SEEDED'];
 $graph = $prototype['graph'];
 $report = $metadata + array_intersect_key($prototype,array_flip([
-	'cells','layers','positions','topology','repairs','checks','start','goal','depth','lifts','doors','connections','verticalConnections','falls','actions','merged','galleryStack','roomNavigation'
+	'cells','layers','positions','topology','repairs','checks','start','goal','depth','model','lifts','doors','connections','verticalConnections','falls','actions','merged','galleryStack','roomNavigation','roles','recovery'
 ]));
 $report['outlines'] = [];
 foreach(['basement','ground','upper','connector'] as $plane)
@@ -69,16 +72,16 @@ foreach(['SEEDED.WAD'=>$wad,'seeded-level.phonics-world.json'=>json_encode($worl
 	'seeded-navigation.html'=>$html] as $name=>$bytes)
 if(file_put_contents($destination . '/' . $name,$bytes) !== strlen($bytes)) throw new RuntimeException('Cannot write ' . $name);
 fwrite(STDOUT,'Generated ' . $destination . '/SEEDED.WAD: ' . json_encode($options['seed']) . ', '
-	. count($prototype['topology']) * (int)$options['rooms'] . ' room envelopes, ' . count($graph->regions) . ' traversable regions, '
+	. $metadata['requestedCandidates'] . ' requested candidates, ' . $metadata['survivingRooms'] . ' surviving logical rooms, ' . count($graph->regions) . ' traversable regions, '
 	. count($prototype['doors']) . ' doors, ' . count($prototype['verticalConnections']) . ' vertical portal pairs, ' . count($prototype['lifts']) . ' lifts, ' . count($prototype['repairs']) . " repairs; no unreachable regions or traps.\n");
 
 $generation = $prototype['timings'];
 $elapsed = (hrtime(true)-$started)/1e6;
 $measurement = $metadata + ['timings'=>['layoutMs'=>$generation['layoutMs'],'wadMs'=>$generation['wadMs'],
-	'validationMs'=>$generation['validationMs'],'outputMs'=>max(0,$elapsed-$generation['totalMs']),'totalMs'=>$elapsed],
+	'validationMs'=>$generation['validationMs'],'recoveryMs'=>$generation['recoveryMs'],'outputMs'=>max(0,$elapsed-$generation['totalMs']),'totalMs'=>$elapsed],
 	'regions'=>count($graph->regions),'wadBytes'=>strlen($wad),'peakMemoryBytes'=>memory_get_peak_usage(true)];
-fwrite(STDOUT,sprintf("Time: %.2f ms total (layout %.2f, WAD/BSP %.2f, validation %.2f, output %.2f ms).\n",
-	$elapsed,$generation['layoutMs'],$generation['wadMs'],$generation['validationMs'],$measurement['timings']['outputMs']));
+fwrite(STDOUT,sprintf("Time: %.2f ms total (layout %.2f, WAD/BSP %.2f, validation %.2f, recovery %.2f, output %.2f ms).\n",
+	$elapsed,$generation['layoutMs'],$generation['wadMs'],$generation['validationMs'],$generation['recoveryMs'],$measurement['timings']['outputMs']));
 if($options['timings'] !== '')
 {
 	$path = $options['timings'];

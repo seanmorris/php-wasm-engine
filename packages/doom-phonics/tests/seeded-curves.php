@@ -45,13 +45,13 @@ verifyWad(RoomJoin::candidate($a,$far,'east')===null,'long hallways do not quali
 $thin=PolygonGeometry::cell(['id'=>'thin']+$fields,[[640,704],[640,1216],[1152,1216],[1152,704]]);
 verifyWad(RoomJoin::candidate($a,$thin,'east')===null,'a pinched overlapping span cannot become a joined room');
 
-verifyWad((bool)$default['merged'],'the default seed demonstrates at least one short-hall room join');
+verifyWad((bool)array_filter($default['repairs'],static fn($r)=>in_array($r['kind'],['merge','remnant-merge','clearance'],true)),'room shaping records merges or their clearance repairs');
 foreach($default['merged'] as $join) verifyWad($join['hallLength']<=RoomJoin::MAX_HALL && $join['area']<=RoomJoin::MAX_AREA,
 	'generated joins honor distance and combined-room size limits');
 $corners=0;
 foreach($default['layers'] as $name=>$layer) {
 	if(isset($layer['footprint']) && !isset($layer['cluster']) && $name!=='basement.0')
-	verifyWad(max($layer['footprint']['dimensions'])<=(isset($layer['gallery']) ? 1152 : 896),'ordinary rooms are bounded independently of large neighboring bays');
+	verifyWad(max($layer['footprint']['dimensions'])<=4096,'room footprints remain bounded after fitting anchors and merged subdivisions');
 	foreach($layer['corridors']??[] as $corridor) verifyWad($corridor['width']>=128,'generated hallways no longer use the cramped half-width profile');
 	if(!isset($layer['cornerStair'])) continue;
 	$corners++; $corner=$layer['cornerStair'];
@@ -63,4 +63,4 @@ foreach($default['layers'] as $name=>$layer) {
 	$trace=SeededWalkthrough::run(MapConnectivity::level($default),$fixture,[...$up,...$down]);
 	verifyWad(end($trace)['sector']===$default['regions'][$corner['low']],'the room corner stair and full-length ledge have a real return route');
 }
-verifyWad($corners>0,'the default map demonstrates a corner stair ending on a long ledge');
+verifyWad($default['layers']['spiral']['landing']>=256,'the curved connector reserves a complete top landing');

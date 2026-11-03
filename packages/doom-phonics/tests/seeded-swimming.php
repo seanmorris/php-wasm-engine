@@ -7,8 +7,12 @@ use DoomPhonics\Tests\SeededWalkthrough;
 $swimCount=0;
 foreach($default['verticalConnections'] as $portal) {
  $source=$default['cells'][$default['regions'][$portal['to']]];
+ if(in_array($default['regions'][$portal['to']],$default['waterSectors'],true))
+ verifyWad($source['ceiling'] >= $default['waterStates']['full'],'the full basin surface never rises above a flooded portal ceiling');
  if($source['ceiling']>0 || !in_array($portal['kind'],['shaft','gallery'],true)) continue;
  $level=MapConnectivity::level($default);
+ foreach($level->sectors[$default['regions'][$portal['to']]]->volumes as $volume)
+ verifyWad($volume->texture==='-','rising water does not create textured side faces over the real walls');
  $trace=SeededWalkthrough::swimPortal($level,$default,$portal); $crossed=false;
  foreach($trace['frames'] as $frame) {
   if($frame['sector']===$trace['target']) $crossed=true;

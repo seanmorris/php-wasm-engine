@@ -60,10 +60,13 @@ test('distant portal walls retain the submerged observer color exactly once', as
 	`
 	);
 
-	for(const name of ['LayeredWalkthrough','SeededWalkthrough'])
-	{
-		const source = await fs.readFile(new URL(`../fixtures/${name}.php`, import.meta.url), 'utf8');
-		await run(source.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/m, ''));
+	for(const name of ['../../tools/PlayerWalk'
+		, '../../tools/RouteTraversal'
+		, '../fixtures/LayeredWalkthrough'
+		, '../fixtures/SeededWalkthrough'
+	]){
+		const source = await fs.readFile(new URL(`${name}.php`, import.meta.url), 'utf8');
+		await run(source.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/mg, ''));
 	}
 
 	const encoded = Buffer.from(JSON.stringify({...report, regions: report.sectorIds})).toString('base64');

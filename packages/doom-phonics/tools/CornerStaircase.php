@@ -32,15 +32,15 @@ final class CornerStaircase
 		$w=$turn%2 ? $core['y1']-$core['y0'] : $core['x1']-$core['x0'];
 		$h=$turn%2 ? $core['x1']-$core['x0'] : $core['y1']-$core['y0'];
 		$stair=SpiralStaircase::build(steps:$connection['count']??4,width:160,headroom:192);
-		$size=$stair['size']; $inner=$stair['inner']; $outer=$stair['outer']; $ledgeWidth=$outer-$inner;
+		$landing=$stair['landing']; $size=$stair['size']; $inner=$stair['inner']; $outer=$stair['outer']; $ledgeWidth=$outer-$inner;
 		$dx=$w-$size; $dy=$h-$size; $floor=$core['floor']; $roof=max($core['ceiling'],$floor+$stair['height']+192);
 		$fields=array_replace($core,['ceiling'=>$roof]); $cells=[];
 		$rect=static fn($x0,$y0,$x1,$y1)=>[[$x0,$y0],[$x0,$y1],[$x1,$y1],[$x1,$y0]];
 		foreach([
 			['core',0,0,$w,$dy,0],['corner-floor',0,$dy,$dx,$h-$ledgeWidth,0],
 			['ledge',0,$h-$ledgeWidth,$dx,$h,$stair['height']],
-			['corner-entry',$dx,$dy,$dx+128+$inner,$dy+128,0],
-			['corner-inside',$dx,$dy+128,$dx+128,$dy+128+$inner,0]
+			['corner-entry',$dx,$dy,$dx+$landing+$inner,$dy+$landing,0],
+			['corner-inside',$dx,$dy+$landing,$dx+$landing,$dy+$landing+$inner,0]
 		] as [$id,$x0,$y0,$x1,$y1,$z])
 		$cells[]=PolygonGeometry::cell(array_replace($fields,['id'=>"$name.$id",'floor'=>$floor+$z]),$rect($x0,$y0,$x1,$y1));
 		$route=[];
@@ -51,7 +51,7 @@ final class CornerStaircase
 			if(!str_starts_with($c['id'],'step-')) continue;
 			// Fill the inside with low floor; these seams are not walls or passages.
 			$cells[]=PolygonGeometry::cell(array_replace($fields,['id'=>"$id.inside"]),
-				[[$dx+128,$dy+128],[$c['polygon'][1][0]+$dx,$c['polygon'][1][1]+$dy],[$c['polygon'][0][0]+$dx,$c['polygon'][0][1]+$dy]]);
+				[[$dx+$landing,$dy+$landing],[$c['polygon'][1][0]+$dx,$c['polygon'][1][1]+$dy],[$c['polygon'][0][0]+$dx,$c['polygon'][0][1]+$dy]]);
 		}
 		foreach($cells as &$c) {
 			$p=array_map(static function($v) use($turn,$w,$h,$core) {

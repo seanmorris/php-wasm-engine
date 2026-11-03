@@ -39,7 +39,7 @@ test(
 
 			return result;
 		}, source
-		);
+		).catch(error => { throw new Error(`${error.message}\n${errors.join('\n')}`); });
 
 		await run(String.raw`
 		$engine->userPaused = true;
@@ -52,8 +52,11 @@ test(
 	`
 		);
 
-		const fixture = await fs.readFile(new URL('../fixtures/LayeredWalkthrough.php', import.meta.url), 'utf8');
-		await run(fixture.replace(/^<\?php\s*/, ''));
+		for(const name of ['../../tools/PlayerWalk', '../fixtures/LayeredWalkthrough'])
+		{
+			const fixture = await fs.readFile(new URL(`${name}.php`, import.meta.url), 'utf8');
+			await run(fixture.replace(/^<\?php\s*/, '').replace(/^require_once .*;$/mg, ''));
+		}
 
 		const checkpoints = await run(String.raw`
 		$layerWalk = new DoomPhonics\Tests\LayeredWalkthrough($layerLevel);

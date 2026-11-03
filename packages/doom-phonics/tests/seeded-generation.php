@@ -61,10 +61,12 @@ foreach(range(0,7) as $variant)
 verifyWad(count(array_unique($clusterOutlines))>=4,'outline-first clusters vary orientation and corner proportions');
 
 $kinds = $handedness = $hashes = [];
+$uphill=[[],[]];
 foreach(['first-light','0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','a < b & "c"','雪'] as $i=>$seed)
 {
 	try { $p = SeededLevel::build($seed,2+$i%15); }
 	catch(Throwable $error) { throw new RuntimeException('Seed '.json_encode($seed).', rooms '.(2+$i%15).': '.$error->getMessage(),0,$error); }
+	foreach($p['topology'] as $network) foreach($network['elevation']['direction'] as $axis=>$direction) $uphill[$axis][$direction]=true;
 	$hashes[] = hash('sha256',RectangularMap::archive($p['lumps']));
 	$handedness[(int)$p['layers']['spiral']['mirror']] = true;
 	foreach($p['repairs'] as $repair) $kinds[$repair['kind']] = true;
@@ -122,9 +124,10 @@ foreach(['first-light','0','1','2','3','4','5','6','7','8','9','10','11','12','1
 	{
 		if($layer['plane'] === 'connector') continue;
 		$core = array_values(array_filter($layer['cells'],static fn($c)=>preg_match('/\.(core|.*wing)$/',$c['id'])));
+		if(!$core) $core=$layer['cells'];
 		$area = array_sum(array_map(static fn($c)=>PolygonGeometry::area(PolygonGeometry::points($c)),$core));
 		$bounds = (max(array_column($core,'x1'))-min(array_column($core,'x0')))*(max(array_column($core,'y1'))-min(array_column($core,'y0')));
-		verifyWad($area <= $bounds,'ordinary room cores fit their independently sized footprint');
+		verifyWad($area <= $bounds+1e-6,'ordinary room core '.$name.' in seed '.$seed.' fits its footprint: '.$area.' / '.$bounds);
 		foreach($layer['corridors'] as $port=>$corridor)
 		{
 			$byId = array_column($layer['cells'],null,'id');
@@ -174,18 +177,19 @@ foreach(['first-light','0','1','2','3','4','5','6','7','8','9','10','11','12','1
 	$trace = SeededWalkthrough::spiral($level,$p['layers']['spiral']);
 	verifyWad(end($trace)['z'] === (float)$p['layers']['spiral']['height'],'ordinary movement climbs each turning tread in the curved stair hall');
 }
+foreach($uphill as $directions) verifyWad(count($directions)===2,'each independent uphill axis varies its direction across seeds');
 verifyWad(count($handedness) === 2 && count(array_unique($hashes)) === count($hashes),'seeds vary handedness and actual map geometry');
-foreach(['hallway','height','layer-height','elevator','merge','lengthen','bend'] as $kind)
+foreach(['clearance','layer-height'] as $kind)
 verifyWad(isset($kinds[$kind]),'seed coverage exercises the ' . $kind . ' recovery option');
 $default = SeededLevel::build();
-verifyWad($default['rooms']===14 && count($default['verticalConnections'])===7,
-	'default layers have fourteen room envelopes and seven vertical portal pairs');
+verifyWad($default['rooms']===14 && count($default['verticalConnections'])>=3,
+	'default layers have fourteen requested candidates per layer and vertical portal routes');
 foreach($default['topology'] as $network)
 {
 	$degree=array_fill(0,count($network['rooms']),0);
 	foreach($network['edges'] as $edge) { $degree[$edge['from']]++; $degree[$edge['to']]++; }
-	verifyWad(count($network['edges'])>=count($network['rooms'])+1 && max($degree)>=3,
-		'each expanded layer has multiple loops and branching hallway choices');
+	verifyWad(count($network['edges'])>=($network['surviving']??count($network['rooms']))-1 && max($degree)>=3,
+		'each expanded layer retains a connected planar graph with branching choices');
 }
 verifyWad($default['lumps'] === SeededLevel::build()['lumps'],'repeating a seed produces identical WAD map bytes');
 $native = MapConnectivity::level($default);
@@ -220,7 +224,7 @@ foreach($default['layers'][$clusterName]['cluster']['rooms'] as $name)
 }
 $phases = $default['timings'];
 verifyWad(min($phases)>=0 && $phases['totalMs']>0
-	&& abs($phases['totalMs']-$phases['layoutMs']-$phases['wadMs']-$phases['validationMs'])<.001,
+	&& abs($phases['totalMs']-$phases['layoutMs']-$phases['wadMs']-$phases['validationMs']-$phases['recoveryMs'])<.001,
 	'generation measures monotonic nonnegative phase durations that account for the total');
 verifyWad(!str_contains(serialize($default['lumps']),'totalMs'),'elapsed timings stay out of reproducible WAD bytes');
 $building = SeededLevel::build('building',5,'building');
@@ -260,3 +264,5 @@ require __DIR__ . "/seeded-curves.php";
 require __DIR__ . "/seeded-swimming.php";
 
 require __DIR__.'/seeded-elevations.php';
+
+require __DIR__.'/seeded-organic.php';

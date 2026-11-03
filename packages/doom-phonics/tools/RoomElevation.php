@@ -26,7 +26,7 @@ final class RoomElevation
 			if($rise<32 || $rise>96) continue;
 			$count=intdiv($rise,16); $middle=intdiv($count,2); $center=intdiv($dimensions[$axis],2);
 			$start=$center-96-($middle-1)*48; $end=$center+96+($count-$middle-1)*48;
-			if($start-min(array_column($p,$axis))<160 || max(array_column($p,$axis))-$end<160) continue;
+			if($start-min(array_column($p,$axis))<256 || max(array_column($p,$axis))-$end<256) continue;
 			$sign=$to<=>$from; $floors=[];
 			foreach($passages as $port=>$passage) {
 				$floor=$port===$a ? $from : ($port===$b ? $to : $from+$sign*16*$middle);

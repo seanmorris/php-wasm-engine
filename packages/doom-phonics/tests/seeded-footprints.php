@@ -16,7 +16,10 @@ foreach($default['layers'] as $name=>$layer) {
 	verifyWad(count($p)>=4,'ordinary rooms retain clear, simple outlines');
 }
 verifyWad(count(array_unique($footprints))>=6,'room widths and depths vary independently before wall deformation');
-verifyWad($leaning>=4 && $leaning<=18,'a minority of ordinary rooms use gentle coordinated diagonals');
+verifyWad($leaning===0,'organic rooms no longer use independent shearing');
+$compounds=[];
+foreach($default['layers'] as $layer) if(count($layer['footprint']['sourceRectangles']??[])>1) $compounds[$layer['plane']]=true;
+verifyWad(count($compounds)===3,'the default map retains compound rectangle rooms on every layer after cuts and clearance repairs');
 verifyWad($default['layers']['upper.0']['cluster']['minimumRoomSize']>=448
 	&& $default['layers']['upper.0']['cluster']['outerDiameter']>=1152,'concentric chamber and surrounding hall have larger minimum dimensions');
 foreach($default['layers']['basement.0']['ledges'] as $name) {
