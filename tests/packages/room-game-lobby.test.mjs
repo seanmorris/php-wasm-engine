@@ -45,7 +45,7 @@ const opening = (number = 1, nonce = 4, phrase = 0) => ({
 	, phrase
 });
 
-const seedFixture = async (t, version = 2) => {
+const seedFixture = async (t, version = 2, seat = {}) => {
 	const provider = new EventTarget;
 
 	provider.profile = () => ({id: 'observer'});
@@ -89,18 +89,24 @@ const seedFixture = async (t, version = 2) => {
 
 	const session = protocol.sessions.get(root);
 
-	if(session) await consume('seat', 'host', {players: ['host', 'guest'], commit_deadline: Date.now() + 60_000});
+	if(session)
+	await consume('seat', 'host', {players: ['host', 'guest'], commit_deadline: Date.now() + 60_000, ...seat});
 
 	return {protocol, session, consume};
 };
 
-const stalledExchange = async (t, missing = 'reveal') => {
+const stalledExchange = async (t, missing = 'reveal', options = {}) => {
 	const hub = new InMemoryLobbyHub;
 	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host'});
 	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest'});
 	const retained = storage();
-	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: retained});
-	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: storage()});
+	const configuredGame = {...game, ...options};
+	const host = new RoomGameProtocol({provider: hostProvider, game: configuredGame, session: {}, storage: retained});
+
+	const guest = new RoomGameProtocol(
+		{provider: guestProvider, game: configuredGame, session: {}, storage: storage()}
+	);
+
 	const protocols = [host, guest];
 
 	t.after(() => {
@@ -124,6 +130,136 @@ const stalledExchange = async (t, missing = 'reveal') => {
 
 	return {hub, hostProvider, guestProvider, host, guest, root, session, retained, protocols};
 };
+
+test('seedTimeoutMs validates its units and defaults to a two-minute exchange', t => {
+	const provider = new EventTarget;
+
+	const make = value => new RoomGameProtocol({provider, game: {...game, seedTimeoutMs: value}, session: {}});
+
+	for(const value of [undefined, 1, 30_000, 120_000, 300_000, 7_200_000, 2_147_483_647])
+	{
+		const protocol = make(value);
+		t.after(() => protocol.close());
+		assert.equal(protocol.game.seedTimeoutMs, value ?? 120_000);
+	}
+
+	for(const value of [null, 0, -1, 1.5, NaN, Infinity, '120000', false, {}, 2_147_483_648, Number.MAX_SAFE_INTEGER])
+	assert.throws(() => make(value), {name: 'RangeError', message: /game\.seedTimeoutMs.*milliseconds/});
+});
+
+test('custom seed timeouts share one absolute deadline and expire without a winner', async t => {
+	for(const seedTimeoutMs of [15_000, 45_000, 120_000, 300_000, 7_200_000, 2_147_483_647])
+	await t.test(`${seedTimeoutMs} ms`, async t => {
+		const {hub, hostProvider, host, guest, root, session} = await stalledExchange(t, 'reveal', {seedTimeoutMs});
+		const offered = hub.history(hostProvider.room).find(item => item.event_id === root);
+		assert.equal(offered.content['org.seanmorris.phonics.game.v1'].game.seedTimeoutMs, seedTimeoutMs);
+		const seat = hub.history(hostProvider.room).find(item => item.content.kind === 'seat').content;
+		assert.equal(seat.seed_timeout_ms, seedTimeoutMs);
+		assert.equal(seat.seed_deadline, session.seedDeadline);
+		assert.equal(guest.sessions.get(root).seedDeadline, session.seedDeadline);
+		assert.equal(session.seedDeadline, session.commitDeadline + 60_000, 'preserve the durable deadline encoding');
+		clearTimeout(session.deadlineTimer);
+		t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.seedDeadline - seedTimeoutMs});
+		host.armRevealDeadline(session);
+		t.mock.timers.tick(seedTimeoutMs - 1);
+		assert.equal(session.status, 'committing');
+		t.mock.timers.tick(1);
+		assert.equal(session.status, 'expired');
+		assert.equal(session.outcome, undefined);
+		assert.equal(hub.history(hostProvider.room).filter(item => item.content.kind === 'resign').length, 0);
+	});
+});
+
+test('reload restores the recorded custom deadline without restarting its budget', async t => {
+	const seedTimeoutMs = 45_000;
+
+	const {hostProvider, host, root, session, retained, protocols} = await stalledExchange(
+		t
+		, 'reveal'
+		, {seedTimeoutMs}
+	);
+
+	host.close();
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.seedDeadline - 5_000});
+
+	const replay = new RoomGameProtocol(
+		{provider: hostProvider, game: {...game, seedTimeoutMs}, session: {}, storage: retained}
+	);
+
+	protocols.push(replay);
+	await replay.connect();
+	assert.equal(replay.sessions.get(root).seedDeadline, session.seedDeadline);
+	t.mock.timers.tick(4_999);
+	assert.equal(replay.sessions.get(root).status, 'committing');
+	t.mock.timers.tick(1);
+	assert.equal(replay.sessions.get(root).status, 'expired');
+	assert.equal(replay.sessions.get(root).outcome, undefined);
+});
+
+test('table compatibility includes the timeout and treats omitted values as the historical default', async t => {
+	for(const [local, remote, accepted] of [
+		[undefined, undefined, true]
+		, [undefined, 120_000, true]
+		, [120_000, undefined, true]
+		, [45_000, 45_000, true]
+		, [45_000, undefined, false]
+		, [45_000, 120_000, false]
+		, [undefined, 45_000, false]
+		, [undefined, null, false]
+		, [undefined, '120000', false]
+		, [undefined, 0, false]
+	]){
+		const protocol = new RoomGameProtocol(
+			{provider: new EventTarget, game: {...game, seedTimeoutMs: local}, session: {}}
+		);
+
+		t.after(() => protocol.close());
+
+		await protocol.consume({
+			event_id: '$timeout-offer'
+			, type: 'org.seanmorris.phonics.game.v1'
+			, sender: 'host'
+			, content: {
+				v: 2
+				, kind: 'offer'
+				, session_id: 'timeout-offer'
+				, host: 'host'
+				, game: {...game, seedTimeoutMs: remote}
+				, created_at: Date.now()
+				, expires_at: Date.now() + 60_000
+			}
+		});
+
+		assert.equal(protocol.sessions.has('$timeout-offer'), accepted, `${local} vs ${remote}`);
+	}
+});
+
+test('the starting gun rejects inconsistent timing fields and cannot be replaced to extend its deadline', async t => {
+	const now = Date.now();
+	t.mock.method(Date, 'now', () => now);
+	const fields = {seed_timeout_ms: 120_000, seed_deadline: now + 120_000};
+	const {session, consume} = await seedFixture(t, 2, fields);
+	assert.equal(session.seedDeadline, fields.seed_deadline);
+	await consume('seat', 'host', {...fields, players: ['host', 'guest'], commit_deadline: now + 300_000});
+	assert.equal(session.seedDeadline, fields.seed_deadline);
+
+	for(const invalid of [
+		{seed_timeout_ms: 300_000}
+		, {seed_timeout_ms: null}
+		, {seed_timeout_ms: '120000'}
+		, {seed_deadline: fields.seed_deadline + 1}, {seed_deadline: null}
+		, {seed_deadline: undefined}
+		, {seed_timeout_ms: undefined}
+		, {commit_deadline: Number.MAX_SAFE_INTEGER}
+	]){
+		const {session} = await seedFixture(t, 2, {...fields, ...invalid});
+		assert.equal(session.seats, undefined, JSON.stringify(invalid));
+		assert.equal(session.status, 'open');
+	}
+
+	const legacy = await seedFixture(t);
+	assert.equal(legacy.session.seedDeadline, now + 120_000);
+});
 
 test('a withholding peer cannot win through the honest player\'s seed timeout or later departure', async t => {
 	const {hub, hostProvider, host, guest, root, session, retained} = await stalledExchange(t);

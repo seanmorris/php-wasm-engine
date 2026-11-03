@@ -8,7 +8,10 @@ const ROOM_MESSAGE = 'm.room.message';
 const RELATION = 'org.seanmorris.phonics.game.v1';
 // The Matrix event family stays stable; the envelope version gates incompatible seed commitments.
 const PROTOCOL_VERSION = 2;
-const SEED_REVEAL_GRACE = 60_000;
+const DEFAULT_SEED_TIMEOUT_MS = 120_000;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+// Preserve the existing wire encoding: the exchange ends 60 seconds after commit_deadline.
+const LEGACY_REVEAL_GRACE_MS = 60_000;
 const UNKNOWN_ROOT_RETRY = 60_000;
 const UNKNOWN_ROOT_LIMIT = 1024;
 const encoder = new TextEncoder;
@@ -48,8 +51,10 @@ const validSeedMaterial = value => value && validSeedValue(value.contribution) &
 
 const seedStorageKey = (session, player) => `phonics.game.seed:v2:${session.root}:${player}`;
 
+const seedTimeoutMs = game => game.seedTimeoutMs === undefined ? DEFAULT_SEED_TIMEOUT_MS : game.seedTimeoutMs;
+
 const seedEventInTime = (session, item) => Number.isSafeInteger(item.origin_server_ts)
-	&& item.origin_server_ts < session.commitDeadline + SEED_REVEAL_GRACE;
+	&& item.origin_server_ts < session.seedDeadline;
 
 const hex = bytes => [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 
@@ -128,7 +133,8 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
 	&& typeof content.session_id === 'string' && typeof content.game === 'object'
 	&& content.game.id === game.id && content.game.protocol === game.protocol
 	&& content.game.rules === game.rules && content.game.application === game.application
-	&& content.game.runtime === game.runtime && Number.isSafeInteger(content.expires_at);
+	&& content.game.runtime === game.runtime && seedTimeoutMs(content.game) === game.seedTimeoutMs
+	&& Number.isSafeInteger(content.expires_at);
 
 /**
  * Durable, deterministic two-player room protocol.
@@ -139,7 +145,7 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
 export class RoomGameProtocol extends EventTarget
 {
 
-	/** Create a room-game coordinator over one connected lobby provider. */
+	/** Create a room-game coordinator; game.seedTimeoutMs sets the total seed exchange budget (default 120,000 ms). */
 	constructor(
 		{
 			provider
@@ -152,8 +158,13 @@ export class RoomGameProtocol extends EventTarget
 		}
 	){
 		super();
+		const timeout = seedTimeoutMs(game);
+
+		if(!Number.isSafeInteger(timeout) || timeout < 1 || timeout > MAX_TIMER_DELAY_MS)
+		throw new RangeError(`game.seedTimeoutMs must be an integer from 1 to ${MAX_TIMER_DELAY_MS} milliseconds`);
+
 		this.provider = provider;
-		this.game = Object.freeze({...game});
+		this.game = Object.freeze({...game, seedTimeoutMs: timeout});
 		this.session = session;
 		this.storage = storage;
 		this.signal = signal;
@@ -756,11 +767,18 @@ export class RoomGameProtocol extends EventTarget
 				if(!session.joiners.includes(item.sender)) session.joiners.push(item.sender);
 
 				if(me === session.offer.host && session.joiners.length === 1)
-				await this.child(session, 'seat', {
-					players: [session.offer.host, item.sender]
-					, commit_deadline: Date.now() + 60_000
-				}, `seat:${item.sender}`
-				);
+				{
+					const timeout = seedTimeoutMs(session.offer.game);
+					const deadline = Date.now() + timeout;
+
+					await this.child(session, 'seat', {
+						players: [session.offer.host, item.sender]
+						, seed_timeout_ms: timeout
+						, seed_deadline: deadline
+						, commit_deadline: deadline - LEGACY_REVEAL_GRACE_MS
+					}, `seat:${item.sender}`
+					);
+				}
 
 				break;
 
@@ -768,10 +786,20 @@ export class RoomGameProtocol extends EventTarget
 				if(item.sender !== session.offer.host || session.seats || !Array.isArray(content.players)
 					|| content.players.length !== 2 || content.players[0] !== session.offer.host
 					|| content.players[0] === content.players[1] || !Number.isSafeInteger(content.commit_deadline)
+					|| !Number.isSafeInteger(content.commit_deadline + LEGACY_REVEAL_GRACE_MS)
+				) break;
+
+				// Older transcripts omit both explicit fields. New starting guns must agree with the offered budget
+				// and the legacy deadline so every supported reader expires at the same instant.
+				if((content.seed_deadline !== undefined || content.seed_timeout_ms !== undefined)
+					&& (content.seed_timeout_ms !== seedTimeoutMs(session.offer.game)
+						|| content.seed_deadline !== content.commit_deadline + LEGACY_REVEAL_GRACE_MS
+					)
 				) break;
 
 				session.seats = [...content.players];
 				session.commitDeadline = content.commit_deadline;
+				session.seedDeadline = content.seed_deadline ?? content.commit_deadline + LEGACY_REVEAL_GRACE_MS;
 				session.status = 'committing';
 
 				if(!replay)
@@ -1091,11 +1119,14 @@ export class RoomGameProtocol extends EventTarget
 
 		if(this.closed || session.status !== 'committing' || session.reveals.size === 2) return;
 
-		const delay = Math.max(0, session.commitDeadline + SEED_REVEAL_GRACE - Date.now());
+		const delay = Math.max(0, session.seedDeadline - Date.now());
 
 		if(delay > 0)
 		{
-			session.deadlineTimer = setTimeout(() => this.armRevealDeadline(session), delay);
+			session.deadlineTimer = setTimeout(
+				() => this.armRevealDeadline(session)
+				, Math.min(delay, MAX_TIMER_DELAY_MS)
+			);
 
 			return;
 		}
