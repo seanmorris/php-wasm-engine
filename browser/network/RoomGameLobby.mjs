@@ -8,6 +8,7 @@ const ROOM_MESSAGE = 'm.room.message';
 const RELATION = 'org.seanmorris.phonics.game.v1';
 // The Matrix event family stays stable; the envelope version gates incompatible seed commitments.
 const PROTOCOL_VERSION = 2;
+const SEED_REVEAL_GRACE = 60_000;
 const UNKNOWN_ROOT_RETRY = 60_000;
 const UNKNOWN_ROOT_LIMIT = 1024;
 const encoder = new TextEncoder;
@@ -46,6 +47,9 @@ const validSeedMaterial = value => value && validSeedValue(value.contribution) &
 	&& Number.isInteger(value.phrase) && value.phrase >= 0 && value.phrase < SEED_PHRASES.length;
 
 const seedStorageKey = (session, player) => `phonics.game.seed:v2:${session.root}:${player}`;
+
+const seedEventInTime = (session, item) => Number.isSafeInteger(item.origin_server_ts)
+	&& item.origin_server_ts < session.commitDeadline + SEED_REVEAL_GRACE;
 
 const hex = bytes => [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 
@@ -460,7 +464,7 @@ export class RoomGameProtocol extends EventTarget
 		const me = this.connected ? this.profile().id : null;
 
 		if(session?.localRole === 'player' && session.seats?.includes(me)
-			&& !['complete','frozen'].includes(session.status)
+			&& !['complete','frozen','expired'].includes(session.status)
 		)
 		await this.child(session, 'resign', {player: me, reason: 'left'}, `resign:${me}`);
 		else if(me && session?.localRole === 'player' && !session.seats && session.status === 'open')
@@ -537,6 +541,8 @@ export class RoomGameProtocol extends EventTarget
 	{
 		const session = this.currentPlayer();
 
+		if(session.status !== 'ready') return;
+
 		await this.child(
 			session
 			, 'ready'
@@ -576,6 +582,8 @@ export class RoomGameProtocol extends EventTarget
 	async resign(reason = 'resigned')
 	{
 		const session = this.currentPlayer();
+
+		if(!['committing','ready','active'].includes(session.status)) return;
 
 		await this.child(
 			session
@@ -724,6 +732,8 @@ export class RoomGameProtocol extends EventTarget
 
 		if(!session) return;
 
+		if(session.seats && ['complete','frozen','expired'].includes(session.status)) return;
+
 		if(session.events.has(item.event_id) || content.session_id !== session.offer.session_id
 			|| content.v !== PROTOCOL_VERSION
 		)
@@ -764,13 +774,19 @@ export class RoomGameProtocol extends EventTarget
 				session.commitDeadline = content.commit_deadline;
 				session.status = 'committing';
 
-				if(!replay && session.seats.includes(me)) await this.commit(session);
+				if(!replay)
+				{
+					this.armRevealDeadline(session);
+
+					if(session.seats.includes(me)) await this.commit(session);
+				}
 
 				break;
 
 			case 'commit':
 				if(session.status !== 'committing' || !session.seats?.includes(item.sender)
 					|| content.player !== item.sender
+					|| !seedEventInTime(session, item)
 					|| !/^[a-f0-9]{64}$/.test(content.commit) || session.commits.has(item.sender)
 				) break;
 
@@ -783,6 +799,7 @@ export class RoomGameProtocol extends EventTarget
 			case 'reveal':
 				if(session.status !== 'committing' || !session.seats?.includes(item.sender)
 					|| content.player !== item.sender
+					|| !seedEventInTime(session, item)
 					|| session.reveals.has(item.sender)
 				) break;
 
@@ -792,6 +809,9 @@ export class RoomGameProtocol extends EventTarget
 
 					const expected = await this.commitDigest(session, item.sender, content);
 
+					// A deadline, resignation, or invalid competing reveal may finish the exchange during hashing.
+					if(session.status !== 'committing' || session.reveals.has(item.sender)) return;
+
 					if(expected !== session.commits.get(item.sender))
 					return this.freeze(session, 'Invalid seed reveal');
 
@@ -800,7 +820,9 @@ export class RoomGameProtocol extends EventTarget
 				}
 				catch
 				{
-					return this.freeze(session, 'Invalid seed reveal');
+					if(session.status === 'committing') this.freeze(session, 'Invalid seed reveal');
+
+					return;
 				}
 
 				if(session.reveals.size === 2) await this.seed(session);
@@ -808,32 +830,13 @@ export class RoomGameProtocol extends EventTarget
 				break;
 
 			case 'ready':
-				if(!session.seats?.includes(item.sender) || content.player !== item.sender
+				if(!['committing','ready'].includes(session.status)
+					|| !session.seats?.includes(item.sender) || content.player !== item.sender
 					|| typeof content.hash !== 'string'
 				) break;
 
 				session.ready.set(item.sender, content.hash);
-
-				if(session.ready.size === 2)
-				{
-					const hashes = [...session.ready.values()];
-
-					console.log('Phonics deterministic initial-state handshake', {
-						session: session.root
-						, reports: Object.fromEntries(session.ready)
-					});
-
-					if(hashes[0] !== hashes[1]) return this.freeze(session, 'Initial state hashes differ');
-
-					session.hash = hashes[0];
-					session.status = 'active';
-					this.confirmAdapter(session);
-					this.dispatchEvent(event('change', this.snapshot()));
-
-					void this.provider.setActivity({state: 'active', root, game: this.game.id}).catch(
-						error => this.fail(error)
-					);
-				}
+				this.confirmReady(session);
 
 				break;
 
@@ -941,7 +944,11 @@ export class RoomGameProtocol extends EventTarget
 			case 'resign':
 				if(content.player !== item.sender || !session.seats?.includes(item.sender)) break;
 
+				// Old clients could publish a resignation for the waiting player after the seed deadline.
+				if(session.status === 'committing' && !seedEventInTime(session, item)) break;
+
 				session.status = 'complete';
+				clearTimeout(session.deadlineTimer);
 				session.outcome = {
 					winner: session.seats.find(player => player !== item.sender)
 					, reason: content.reason
@@ -958,6 +965,11 @@ export class RoomGameProtocol extends EventTarget
 	/** Resume only after history has restored existing commitments and reveals. */
 	async resumeSeedExchange(session)
 	{
+		if(session.status !== 'committing') return;
+
+		// Replay first, then expire incomplete history before publishing any new private material.
+		this.armRevealDeadline(session);
+
 		if(!this.connected || session.status !== 'committing' || !session.seats?.includes(this.profile().id)) return;
 
 		if(!session.commits.has(this.profile().id)) await this.commit(session);
@@ -992,6 +1004,10 @@ export class RoomGameProtocol extends EventTarget
 	/** Create, retain, and publish a commitment to a contribution, independent nonce, and random phrase. */
 	async commit(session)
 	{
+		this.armRevealDeadline(session);
+
+		if(this.closed || session.status !== 'committing') return;
+
 		const me = this.profile().id;
 		let material;
 
@@ -1022,6 +1038,10 @@ export class RoomGameProtocol extends EventTarget
 
 		session.localSeedMaterial = material;
 		const value = await this.commitDigest(session, me, material);
+		this.armRevealDeadline(session);
+
+		if(this.closed || session.status !== 'committing') return;
+
 		await this.child(session, 'commit', {player: me, commit: value}, `commit:${me}`);
 
 		if(session.status === 'committing') this.armRevealDeadline(session);
@@ -1048,9 +1068,11 @@ export class RoomGameProtocol extends EventTarget
 	/** Reveal the locally retained contribution after both commitments exist. */
 	async reveal(session)
 	{
+		this.armRevealDeadline(session);
 		const me = this.profile().id;
 
-		if(session.commits.size !== 2 || session.reveals.has(me) || session.status !== 'committing') return;
+		if(this.closed || session.commits.size !== 2 || session.reveals.has(me) || session.status !== 'committing')
+		return;
 
 		let material;
 
@@ -1061,23 +1083,53 @@ export class RoomGameProtocol extends EventTarget
 		await this.child(session, 'reveal', {player: me, ...material}, `reveal:${me}`);
 	}
 
-	/** Schedule deterministic forfeiture when a seated player withholds its reveal. */
+	/** Expire an incomplete seed exchange at its original deadline without resigning either player. */
 	armRevealDeadline(session)
 	{
 		clearTimeout(session.deadlineTimer);
-		const delay = Math.max(0, session.commitDeadline - Date.now()) + 60_000;
+		delete session.deadlineTimer;
 
-		session.deadlineTimer = setTimeout(() => {
-			if(session.reveals.size < 2 && session.seats?.includes(this.profile().id))
-			void this.resign('seed reveal timeout');
-		}, delay
-		);
+		if(this.closed || session.status !== 'committing' || session.reveals.size === 2) return;
+
+		const delay = Math.max(0, session.commitDeadline + SEED_REVEAL_GRACE - Date.now());
+
+		if(delay > 0)
+		{
+			session.deadlineTimer = setTimeout(() => this.armRevealDeadline(session), delay);
+
+			return;
+		}
+
+		session.status = 'expired';
+		session.error = 'The seed exchange timed out. No winner was declared. Leave this table to start a new game.';
+		this.forgetSeedMaterial(session);
+
+		if(this.selected === session.root)
+		{
+			this.adapter?.stop?.({reason: session.error, expired: true});
+
+			if(this.connected) void this.provider.setActivity(null).catch(error => this.fail(error));
+		}
+
+		this.dispatchEvent(event('change', this.snapshot()));
+	}
+
+	/** Discard the locally retained opening after success or expiry. */
+	forgetSeedMaterial(session)
+	{
+		delete session.localSeedMaterial;
+
+		try { this.storage?.removeItem(seedStorageKey(session, this.profile().id)); } catch { }
 	}
 
 	/** Derive the shared seed and breaker from verified contributions. */
 	async seed(session)
 	{
 		if(session.seed) return this.startIfPossible(session);
+
+		if(this.closed || session.status !== 'committing' || session.reveals.size !== 2) return;
+
+		clearTimeout(session.deadlineTimer);
 
 		const pairs = [...session.reveals].sort(([a], [b]) => a.localeCompare(b));
 		const promises = [...session.commits].sort(([a], [b]) => a.localeCompare(b));
@@ -1090,7 +1142,7 @@ export class RoomGameProtocol extends EventTarget
 			for(let index = 0; index < product.length; index++) product[index] ^= bytes[index];
 		}
 
-		session.seed = await digest(
+		const seed = await digest(
 			'Phonics deterministic game seed v1'
 			, session.root
 			, this.game.runtime
@@ -1099,6 +1151,11 @@ export class RoomGameProtocol extends EventTarget
 			, ...pairs.flat()
 		);
 
+		const breakerDigest = await digest('Phonics deterministic game breaker v1', seed, ...session.seats);
+
+		if(this.closed || session.status !== 'committing') return;
+
+		session.seed = seed;
 		session.seedHandshake = {
 			session: session.root
 			, commitmentVersion: PROTOCOL_VERSION
@@ -1111,21 +1168,44 @@ export class RoomGameProtocol extends EventTarget
 
 		console.log('Phonics deterministic seed handshake', session.seedHandshake);
 
-		const breakerDigest = await digest('Phonics deterministic game breaker v1', session.seed, ...session.seats);
 		session.turn = session.seats[parseInt(breakerDigest.slice(0, 2), 16) % session.seats.length];
 		session.status = 'ready';
-		clearTimeout(session.deadlineTimer);
-
-		delete session.localSeedMaterial;
-
-		try { this.storage?.removeItem(seedStorageKey(session, this.profile().id)); } catch { }
+		this.forgetSeedMaterial(session);
 
 		await this.startIfPossible(session);
+		this.confirmReady(session);
+	}
+
+	/** Buffer early readiness reports until both openings have produced a verified seed. */
+	confirmReady(session)
+	{
+		if(session.status !== 'ready' || !session.seed || session.ready.size !== 2) return;
+
+		const hashes = [...session.ready.values()];
+
+		console.log('Phonics deterministic initial-state handshake', {
+			session: session.root
+			, reports: Object.fromEntries(session.ready)
+		});
+
+		if(hashes[0] !== hashes[1]) return this.freeze(session, 'Initial state hashes differ');
+
+		session.hash = hashes[0];
+		session.status = 'active';
+		this.confirmAdapter(session);
+		this.dispatchEvent(event('change', this.snapshot()));
+
+		if(this.connected && this.selected === session.root)
+		void this.provider.setActivity({state: 'active', root: session.root, game: this.game.id}).catch(
+			error => this.fail(error)
+		);
 	}
 
 	/** Start or restore the attached application when table state is sufficient. */
 	async startIfPossible(session)
 	{
+		if(this.closed || !['ready','active','complete'].includes(session.status)) return;
+
 		if(this.selected !== session.root || !session.seed || session.started || !this.adapter) return;
 
 		session.started = true;
@@ -1247,6 +1327,7 @@ export class RoomGameProtocol extends EventTarget
 	/** Freeze a divergent session and notify the attached game and UI. */
 	freeze(session, reason)
 	{
+		clearTimeout(session.deadlineTimer);
 		session.status = 'frozen';
 		session.error = String(reason);
 
@@ -1798,6 +1879,7 @@ export class EmbeddedRoomLobby
 				, active: 'In progress'
 				, frozen: 'Paused'
 				, complete: 'Finished'
+				, expired: 'Expired'
 			}[table.status]
 				?? 'Starting…';
 
@@ -1891,6 +1973,17 @@ export class EmbeddedRoomLobby
 		if(!waiting)
 		{
 			this.ticker.stop();
+
+			return;
+		}
+
+		if(selected.status === 'expired')
+		{
+			this.ticker.stop();
+			this.waitingTitle.textContent = 'Table expired';
+			this.waitingText.textContent = selected.error ?? 'This table is no longer available.';
+			this.linkRow.hidden = true;
+			this.cancelButton.textContent = 'Leave table';
 
 			return;
 		}

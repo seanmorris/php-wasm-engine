@@ -49,15 +49,19 @@ const seedFixture = async (t, version = 2) => {
 	const provider = new EventTarget;
 
 	provider.profile = () => ({id: 'observer'});
+
+	provider.setActivity = async () => {};
+
 	const protocol = new RoomGameProtocol({provider, game, session: {}, storage: storage()});
 	t.after(() => protocol.close());
 	const root = '$seed-fixture', sessionId = 'session-fixture';
 	let sequence = 0;
 
-	const consume = (kind, player, body = {}) => protocol.consume({
+	const consume = (kind, player, body = {}, sentAt = Date.now()) => protocol.consume({
 		event_id: `$fixture-${++sequence}`
 		, type: 'org.seanmorris.phonics.game.v1'
 		, sender: player
+		, origin_server_ts: sentAt
 		, content: {
 			v: version
 			, kind
@@ -89,6 +93,248 @@ const seedFixture = async (t, version = 2) => {
 
 	return {protocol, session, consume};
 };
+
+const stalledExchange = async (t, missing = 'reveal') => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest'});
+	const retained = storage();
+	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: retained});
+	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: storage()});
+	const protocols = [host, guest];
+
+	t.after(() => {
+		for(const protocol of protocols) protocol.close();
+		hostProvider.close();
+		guestProvider.close();
+	});
+
+	// The withholding peer does not cooperate with client-side deadlines either.
+
+	guest[missing] = async () => {};
+
+	guest.armRevealDeadline = () => {};
+
+	await host.connect();
+	await guest.connect();
+	const root = await host.create();
+	await guest.join(root);
+	const session = host.sessions.get(root);
+	await until(() => missing === 'reveal' ? session.reveals.size === 1 : session.commits.size === 1);
+
+	return {hub, hostProvider, guestProvider, host, guest, root, session, retained, protocols};
+};
+
+test('a withholding peer cannot win through the honest player\'s seed timeout or later departure', async t => {
+	const {hub, hostProvider, host, guest, root, session, retained} = await stalledExchange(t);
+	const stops = [];
+	host.attachGame({stop: detail => stops.push(detail)});
+	clearTimeout(session.deadlineTimer);
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline - 60_000});
+	host.armRevealDeadline(session);
+	t.mock.timers.tick(119_999);
+	assert.equal(session.status, 'committing');
+	t.mock.timers.tick(1);
+	assert.equal(session.status, 'expired');
+	assert.equal(session.outcome, undefined);
+	assert.equal(session.seed, undefined);
+	assert.equal(retained.getItem(`phonics.game.seed:v2:${root}:host`), null);
+	assert.equal(session.localSeedMaterial, undefined);
+	assert.equal(stops.length, 1);
+	assert.equal(stops[0].winner, undefined);
+	assert.match(stops[0].reason, /timed out/i);
+	assert.equal(host.snapshot().tables[0].resumable, false);
+	assert.equal(host.snapshot().tables[0].spectatable, false);
+
+	await guest.child(
+		guest.sessions.get(root)
+		, 'reveal'
+		, {player: 'guest', ...guest.sessions.get(root).localSeedMaterial}
+		, 'late-reveal'
+	);
+
+	for(const peer of [host, guest]) await peer.reportReady('late-ready');
+	assert.equal(session.status, 'expired');
+	assert.equal(session.seed, undefined);
+	await host.leave();
+	assert.equal(host.selected, null);
+	assert.equal(hub.history(hostProvider.room).filter(item => item.content.kind === 'resign').length, 0);
+	assert.notEqual(await host.create(), root);
+});
+
+test('reload keeps the original seed deadline and expired history publishes no new opening', async t => {
+	const {hub, hostProvider, host, root, session, retained, protocols} = await stalledExchange(t);
+	host.close();
+	const transcriptLength = hub.history(hostProvider.room).length;
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline + 40_000});
+	const resumed = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: retained});
+	protocols.push(resumed);
+	await resumed.connect();
+	assert.equal(resumed.sessions.get(root).status, 'committing');
+	t.mock.timers.tick(19_999);
+	assert.equal(resumed.sessions.get(root).status, 'committing');
+	t.mock.timers.tick(1);
+	assert.equal(resumed.sessions.get(root).status, 'expired');
+	resumed.close();
+
+	t.mock.method(
+		crypto
+		, 'getRandomValues'
+		, () => { throw new Error('Expired history must not create another opening'); }
+	);
+
+	for(const peerId of ['host', 'observer'])
+	{
+		const provider = peerId === 'host' ? hostProvider : new InMemoryLobbyProvider({hub, peerId});
+		const replay = new RoomGameProtocol({provider, game, session: {}, storage: retained});
+		protocols.push(replay);
+
+		if(provider !== hostProvider) t.after(() => provider.close());
+
+		await replay.connect();
+		assert.equal(replay.sessions.get(root).status, 'expired');
+		assert.equal(replay.sessions.get(root).outcome, undefined);
+	}
+
+	assert.equal(hub.history(hostProvider.room).length, transcriptLength);
+});
+
+test('a missing commitment also expires without a resignation', async t => {
+	const {hub, hostProvider, host, session} = await stalledExchange(t, 'commit');
+	clearTimeout(session.deadlineTimer);
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline - 60_000});
+	host.armRevealDeadline(session);
+	t.mock.timers.tick(120_000);
+	assert.equal(session.status, 'expired');
+	assert.equal(session.outcome, undefined);
+	assert.equal(hub.history(hostProvider.room).filter(item => item.content.kind === 'resign').length, 0);
+});
+
+test('late seed events and legacy timeout resignations cannot resurrect an expired exchange on replay', async t => {
+	const {protocol, session, consume} = await seedFixture(t);
+	const host = opening(), guest = opening(2, 5);
+	await consume('commit', 'host', {commit: await protocol.commitDigest(session, 'host', host)});
+	await consume('commit', 'guest', {commit: await protocol.commitDigest(session, 'guest', guest)});
+	await consume('reveal', 'host', host);
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline + 60_000});
+	await consume('reveal', 'guest', guest);
+	await consume('ready', 'host', {hash: 'late-ready'});
+	await consume('ready', 'guest', {hash: 'late-ready'});
+	await consume('resign', 'host', {reason: 'seed reveal timeout'});
+	await protocol.resumeSeedExchange(session);
+	assert.equal(session.status, 'expired');
+	assert.equal(session.reveals.size, 1);
+	assert.equal(session.seed, undefined);
+	assert.equal(session.outcome, undefined);
+});
+
+test('completed timely history still loads after expiry and readiness cannot skip seed verification', async t => {
+	const {protocol, session, consume} = await seedFixture(t);
+	const sentAt = session.commitDeadline + 59_999;
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline + 180_000});
+	await consume('ready', 'host', {hash: 'initial'});
+	await consume('ready', 'guest', {hash: 'initial'});
+	assert.equal(session.status, 'committing');
+	assert.equal(session.seed, undefined);
+
+	for(const [player, material] of [['host', opening()], ['guest', opening(2, 5)]])
+	await consume('commit', player, {commit: await protocol.commitDigest(session, player, material)}, sentAt);
+	await consume('reveal', 'host', opening(), sentAt);
+	await consume('reveal', 'guest', opening(2, 5), sentAt);
+	assert.equal(session.status, 'active');
+	assert.match(session.seed, /^[a-f0-9]{64}$/);
+	assert.equal(session.hash, 'initial');
+	await protocol.resumeSeedExchange(session);
+	protocol.armRevealDeadline(session);
+	t.mock.timers.tick(120_000);
+	assert.equal(session.status, 'active');
+});
+
+test('missing, invalid, and expired server timestamps cannot supply a commitment or reveal', async t => {
+	for(const kind of ['commit', 'reveal'])
+	for(const timestamp of [null, NaN, Infinity, 'future', 'deadline', 'later'])
+	{
+		const {protocol, session, consume} = await seedFixture(t);
+		const material = opening();
+		const commit = await protocol.commitDigest(session, 'host', material);
+
+		if(kind === 'reveal') await consume('commit', 'host', {commit});
+
+		const sentAt = timestamp === 'deadline'
+			? session.commitDeadline + 60_000
+			: timestamp === 'later' ? session.commitDeadline + 60_001 : timestamp;
+
+		await consume(kind, 'host', kind === 'commit' ? {commit} : material, sentAt);
+		assert.equal(session[kind === 'commit' ? 'commits' : 'reveals'].size, 0);
+		assert.equal(session.seed, undefined);
+	}
+});
+
+test('an old seed timer cannot stop or resign a different selected table', async t => {
+	const {protocol, session} = await seedFixture(t);
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline - 60_000});
+	const selected = {...session, root: '$new-table', status: 'active', seed: 'new-seed'};
+	protocol.sessions.set(selected.root, selected);
+	protocol.selected = selected.root;
+	const stops = [];
+	protocol.adapter = {stop: value => stops.push(value)};
+	protocol.armRevealDeadline(session);
+	t.mock.timers.tick(120_000);
+	assert.equal(session.status, 'expired');
+	assert.equal(selected.status, 'active');
+	assert.equal(selected.outcome, undefined);
+	assert.equal(protocol.selected, selected.root);
+	assert.equal(stops.length, 0);
+});
+
+test('frozen, resigned, and closed exchanges stay stopped when a stale deadline callback runs', async t => {
+	for(const finish of ['freeze', 'resign', 'close'])
+	await t.test(finish, async t => {
+		const {protocol, session, consume} = await seedFixture(t);
+		t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline - 60_000});
+		const schedule = t.mock.method(globalThis, 'setTimeout');
+		protocol.armRevealDeadline(session);
+		const callback = schedule.mock.calls[0].arguments[0];
+
+		if(finish === 'freeze') protocol.freeze(session, 'Invalid seed reveal');
+		else if(finish === 'resign') await consume('resign', 'guest', {reason: 'left'});
+		else protocol.close();
+
+		const status = session.status;
+		t.mock.timers.tick(120_000);
+		callback();
+		assert.equal(session.status, status);
+
+		if(finish === 'resign') assert.deepEqual(session.outcome, {winner: 'host', reason: 'left'});
+		else assert.equal(session.outcome, undefined);
+
+		await consume('ready', 'host', {hash: 'late'});
+		await consume('ready', 'guest', {hash: 'late'});
+		assert.equal(session.status, status);
+	});
+});
+
+test('a reveal still hashing when its deadline passes cannot restart the exchange', async t => {
+	const {protocol, session, consume} = await seedFixture(t);
+	const host = opening(), guest = opening(2, 5);
+	const guestCommit = await protocol.commitDigest(session, 'guest', guest);
+	await consume('commit', 'host', {commit: await protocol.commitDigest(session, 'host', host)});
+	await consume('commit', 'guest', {commit: guestCommit});
+	await consume('reveal', 'host', host);
+	t.mock.timers.enable({apis: ['Date', 'setTimeout'], now: session.commitDeadline + 59_999});
+	protocol.armRevealDeadline(session);
+	let finish;
+	t.mock.method(protocol, 'commitDigest', () => new Promise(resolve => { finish = resolve; }));
+
+	const pending = consume('reveal', 'guest', guest);
+	t.mock.timers.tick(1);
+	assert.equal(session.status, 'expired');
+	finish(guestCommit);
+	await pending;
+	assert.equal(session.status, 'expired');
+	assert.equal(session.reveals.size, 1);
+	assert.equal(session.seed, undefined);
+});
 
 test('room games commit and reveal a shared seed before acknowledged deterministic actions', async () => {
 	const hub = new InMemoryLobbyHub;
