@@ -1752,6 +1752,7 @@ export class EmbeddedRoomLobby
 		else await this.run(() => this.protocol.leave());
 	}
 
+	/** Return the leave control to its normal label after a confirmation is used or times out. */
 	resetLeave()
 	{
 		clearTimeout(this.confirmTimer);
@@ -1787,6 +1788,7 @@ export class EmbeddedRoomLobby
 		}
 	}
 
+	/** Copy the invite link, falling back to selecting it where clipboard access is denied. */
 	async copyLink()
 	{
 		const link = this.linkInput.value;
@@ -1896,6 +1898,7 @@ export class EmbeddedRoomLobby
 		this.peersEmpty.hidden = others.length > 0;
 	}
 
+	/** Name the players, or the watched pairing, in the in-game sidebar. */
 	renderMatch(selected, me, playing)
 	{
 		if(!playing || !selected) return;
@@ -1907,6 +1910,7 @@ export class EmbeddedRoomLobby
 		if(!this.confirmingLeave) this.leaveButton.textContent = spectating ? 'Stop watching' : 'Leave table';
 	}
 
+	/** Show the waiting card with its invite link and countdown while a table is not yet seated. */
 	renderWaiting(selected, playing)
 	{
 		const waiting = Boolean(selected) && !playing;
@@ -1959,6 +1963,7 @@ export class EmbeddedRoomLobby
 		}
 	}
 
+	/** Build one table row with the actions this account may take on it. */
 	tableItem(table, me)
 	{
 		const item = node('li', {class: 'phonics-room-item'});
@@ -1987,6 +1992,7 @@ export class EmbeddedRoomLobby
 		return item;
 	}
 
+	/** Build one person row with their activity and, when idle, a challenge action. */
 	peerItem(peer, me, snapshot)
 	{
 		const item = node('li', {class: 'phonics-room-item'});
@@ -2035,6 +2041,7 @@ export class EmbeddedRoomLobby
 		this.appendLog(node('div', {class: 'phonics-room-message is-system'}, text));
 	}
 
+	/** Append a log entry, trim old history, and keep the newest line in view. */
 	appendLog(entry)
 	{
 		this.chatEmpty.remove();
