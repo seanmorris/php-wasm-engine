@@ -882,9 +882,7 @@ test('all games start and clean up inside the shared site design', async({page})
 	await press('ArrowDown');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('online-play');
 
-	await press('Enter');
-	await expect.poll(async() => (await doomState()).menu?.screen).toBe('online');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('enter-lobby');
+	// Online Play opens the lobby directly; its Matrix settings live under Settings.
 	await press('Enter');
 	await expect(page.locator('.phonics-lobby')).toHaveAttribute('open', '');
 	await expect(page.locator('.phonics-lobby-status')).toHaveText('Sign-in required');
@@ -902,6 +900,35 @@ test('all games start and clean up inside the shared site design', async({page})
 	await page.getByRole('button', {name: 'Close game settings'}).click();
 	await page.getByRole('button', {name: 'Close lobby'}).click();
 	await page.locator('canvas').focus();
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('online-play');
+
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('wad-stack');
+	await press('Enter');
+	await expect(page.locator('.phonics-launcher')).toHaveAttribute('open', '');
+	await expect(page.locator('.phonics-lobby')).not.toHaveAttribute('open', '');
+	await expect(page.getByRole('button', {name: 'Start locally'})).toBeVisible();
+	await expect(page.locator('select[name="match:mode"]')).toHaveValue('singleplayer');
+	await expect(page.locator('input[name="resource:wad-stack"]')).toHaveAttribute('multiple', '');
+	await expect(page.locator('select[name="match:map"] option')).toHaveCount(9, {timeout: 30000});
+	await expect(page.locator('select[name="match:map"]')).toHaveValue('E1M1');
+	await page.getByRole('button', {name: 'Close game settings'}).click();
+	await page.locator('canvas').focus();
+
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('settings');
+
+	await expect.poll(() => page.evaluate(() => window.doomAudioStarts)).toBeGreaterThan(soundsBeforeMenu);
+	await expect.poll(() => page.evaluate(() => window.doomAudioPeak)).toBeGreaterThan(.1);
+	await expect.poll(() => page.evaluate(() => window.doomAudioStates.at(-1))).toBe('running');
+
+	await press('Enter');
+	await expect.poll(async() => (await doomState()).menu?.screen).toBe('settings');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('input');
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('sound');
+	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('video');
 
 	await press('ArrowDown');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('networking');
@@ -942,39 +969,11 @@ test('all games start and clean up inside the shared site design', async({page})
 	await expect.poll(matrixConfiguration).toMatchObject({room: '#test-lobby:matrix.org'});
 
 	await press('Escape');
-	await expect.poll(async() => (await doomState()).menu?.screen).toBe('online');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('networking');
-	await press('Escape');
-	await expect.poll(async() => (await doomState()).menu?.screen).toBe('title');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('online-play');
-
-	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('wad-stack');
-	await press('Enter');
-	await expect(page.locator('.phonics-launcher')).toHaveAttribute('open', '');
-	await expect(page.locator('.phonics-lobby')).not.toHaveAttribute('open', '');
-	await expect(page.getByRole('button', {name: 'Start locally'})).toBeVisible();
-	await expect(page.locator('select[name="match:mode"]')).toHaveValue('singleplayer');
-	await expect(page.locator('input[name="resource:wad-stack"]')).toHaveAttribute('multiple', '');
-	await expect(page.locator('select[name="match:map"] option')).toHaveCount(9, {timeout: 30000});
-	await expect(page.locator('select[name="match:map"]')).toHaveValue('E1M1');
-	await page.getByRole('button', {name: 'Close game settings'}).click();
-	await page.locator('canvas').focus();
-
-	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('settings');
-
-	await expect.poll(() => page.evaluate(() => window.doomAudioStarts)).toBeGreaterThan(soundsBeforeMenu);
-	await expect.poll(() => page.evaluate(() => window.doomAudioPeak)).toBeGreaterThan(.1);
-	await expect.poll(() => page.evaluate(() => window.doomAudioStates.at(-1))).toBe('running');
-
-	await press('Enter');
 	await expect.poll(async() => (await doomState()).menu?.screen).toBe('settings');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('input');
-	await press('ArrowDown');
-	await expect.poll(async() => (await doomState()).menu?.selected).toBe('sound');
-	await press('ArrowDown');
+	await expect.poll(async() => (await doomState()).menu?.selected).toBe('networking');
+	await press('ArrowUp');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('video');
+
 	await press('Enter');
 	await expect.poll(async() => (await doomState()).menu?.screen).toBe('video');
 	await expect.poll(async() => (await doomState()).menu?.selected).toBe('fullscreen');
