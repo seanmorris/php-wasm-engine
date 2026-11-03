@@ -59,11 +59,12 @@ test('resource offers retain URLs but identify equivalent bytes by integrity', a
 });
 
 test('Matrix defaults to Matrix.org and honors authorized overrides', () => {
-	assert.equal(matrixConfiguration().homeserver, 'https://matrix.org');
+	assert.equal(matrixConfiguration({room: '#game:matrix.org'}).homeserver, 'https://matrix.org');
+	assert.throws(() => matrixConfiguration(), /must declare its own lobby chat room/);
 
 	assert.equal(
 		matrixConfiguration(
-			{homeserver: 'https://world.example'}
+			{homeserver: 'https://world.example', room: '#game:world.example'}
 			, {homeserver: 'https://session.example/path'}
 			, {signalingOrigins: ['https://session.example']}
 		).homeserver
@@ -72,7 +73,7 @@ test('Matrix defaults to Matrix.org and honors authorized overrides', () => {
 
 	assert.throws(
 		() => matrixConfiguration(
-			{homeserver: 'https://world.example'}
+			{homeserver: 'https://world.example', room: '#game:world.example'}
 			, {}
 			, {signalingOrigins: ['https://host.example']}
 		)

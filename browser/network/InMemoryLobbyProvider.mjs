@@ -27,6 +27,8 @@ export class InMemoryLobbyHub
 	{
 		this.now = now;
 		this.rooms = new Map;
+		this.events = new Map;
+		this.sequence = 0;
 	}
 
 	/**
@@ -105,6 +107,33 @@ export class InMemoryLobbyHub
 		for(const provider of this.rooms.get(sender.room)?.values() ?? [])
 		provider.dispatchEvent(event(type, {...detail, from: sender.peerId}));
 	}
+
+	/** Store one durable room event and dispatch it to every connected member. */
+	game(sender, content, transaction, type = 'org.seanmorris.phonics.game.v1')
+	{
+		const room = this.events.get(sender.room) ?? [];
+		const prior = room.find(item => item.transaction === transaction && item.sender === sender.peerId);
+
+		if(prior) return prior;
+
+		const item = Object.freeze({
+			event_id: `$memory-${++this.sequence}`
+			, type
+			, sender: sender.peerId
+			, origin_server_ts: this.now()
+			, content: structuredClone(content)
+			, transaction
+		});
+
+		room.push(item);
+		this.events.set(sender.room, room);
+		this.broadcast(sender, 'gameevent', {event: item});
+
+		return item;
+	}
+
+	/** Return durable events from a room in insertion order. */
+	history(roomId) { return structuredClone(this.events.get(roomId) ?? []); }
 }
 
 /**
@@ -168,13 +197,14 @@ export class InMemoryLobbyProvider extends EventTarget
 		this.invitations = new Map;
 		this.connected = false;
 		this.closed = false;
+		this.activity = null;
 	}
 
 	/**
 	 * Describe this peer for presence lists.
 	 * @returns {{id: string, displayName: string}} Frozen peer profile.
 	 */
-	profile() { return Object.freeze({id: this.peerId, displayName: this.displayName}); }
+	profile() { return Object.freeze({id: this.peerId, displayName: this.displayName, activity: this.activity}); }
 
 	/**
 	 * Join the hub room once.
@@ -282,7 +312,71 @@ export class InMemoryLobbyProvider extends EventTarget
 
 		if(!text || text.length > 1000) throw new NetworkError('chat_message', 'Chat message is empty or too long');
 
-		this.hub.broadcast(this, 'chat', {text, sentAt: this.hub.now()});
+		const sentAt = this.hub.now();
+
+		this.hub.game(this, {
+			msgtype: 'm.text'
+			, body: text
+			, 'org.seanmorris.phonics.sent_at': sentAt
+		}, `chat:${crypto.randomUUID()}`, 'm.room.message'
+		);
+
+		this.hub.broadcast(this, 'chat', {text, sentAt});
+	}
+
+	/** Send one durable deterministic-game room event with an idempotent transaction identifier. */
+	async gameEvent(content, transaction = crypto.randomUUID())
+	{
+		this.requireConnected();
+		const item = this.hub.game(this, content, String(transaction));
+
+		return {event_id: item.event_id};
+	}
+
+	/** Publish a game offer as a standard Matrix-style room message with interoperable fallback text. */
+	async gameOffer(content, transaction = crypto.randomUUID())
+	{
+		this.requireConnected();
+		const item = this.hub.game(this, content, String(transaction), 'm.room.message');
+
+		return {event_id: item.event_id};
+	}
+
+	/** Read one room event by identifier. */
+	async roomEvent(eventId)
+	{
+		this.requireConnected();
+		const item = this.hub.history(this.room).find(value => value.event_id === eventId);
+
+		if(!item) throw new NetworkError('room_event', `Unknown room event: ${eventId}`);
+
+		return item;
+	}
+
+	/** Read related game events for one root event in deterministic room order. */
+	async relations(rootId)
+	{
+		this.requireConnected();
+
+		return this.hub.history(this.room).filter(item => item.content?.['m.relates_to']?.event_id === rootId);
+	}
+
+	/** Read recent durable room events, optionally restricted to one event type. */
+	async roomHistory({type, types, limit = 200} = {})
+	{
+		this.requireConnected();
+		const selected = Array.isArray(types) ? new Set(types) : type ? new Set([type]) : null;
+		const values = this.hub.history(this.room).filter(item => !selected || selected.has(item.type));
+
+		return values.slice(-Math.max(1, Math.min(1000, Number(limit) || 200)));
+	}
+
+	/** Advertise this browser's current waiting, active, or spectating session. */
+	async setActivity(activity)
+	{
+		this.requireConnected();
+		this.activity = activity === null ? null : structuredClone(activity);
+		this.hub.presence(this.room);
 	}
 
 	/**

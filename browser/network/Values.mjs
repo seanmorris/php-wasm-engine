@@ -728,8 +728,9 @@ export class MatchDescriptor
  * @param {{homeserver?: string, room?: string}} [sessionOptions] Session overrides, preferred over world options.
  * @param {{signalingOrigins?: Iterable<string>}} [policy] Allowed signaling origins; defaults to the homeserver origin.
  * @returns {Readonly<{homeserver: string, room: string}>} Homeserver origin (default `https://matrix.org`) and
- * room (default `#phonics:matrix.org`).
- * @throws {NetworkError} With code matrix_config for an invalid URL or signaling_origin for a disallowed origin.
+ * the game's explicitly declared lobby chat room.
+ * @throws {NetworkError} With code matrix_config for an invalid URL or missing room, or signaling_origin for a
+ * disallowed origin.
  */
 export function matrixConfiguration(worldOptions = {}, sessionOptions = {}, policy = {})
 {
@@ -756,8 +757,13 @@ export function matrixConfiguration(worldOptions = {}, sessionOptions = {}, poli
 	if(!origins.has(homeserver.origin))
 	throw new NetworkError('signaling_origin', `Matrix homeserver origin is not allowed: ${homeserver.origin}`);
 
+	const room = sessionOptions.room ?? worldOptions.room;
+
+	if(typeof room !== 'string' || !room.trim())
+	throw new NetworkError('matrix_config', 'A Matrix-enabled game must declare its own lobby chat room');
+
 	return Object.freeze({
 		homeserver: homeserver.origin
-		, room: sessionOptions.room ?? worldOptions.room ?? '#phonics:matrix.org'
+		, room: room.trim()
 	});
 }

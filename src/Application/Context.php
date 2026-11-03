@@ -20,6 +20,8 @@ final class Context
 	private mixed $host;
 	/** Verified PHP entry path prepared by the most recent composition. */
 	private string $entry;
+	/** Whether the packaged browser runtime has already been activated for this application. */
+	private bool $runtime = false;
 
 	/**
 	 * Connect the running PHAR to the browser host and register its declared archive members.
@@ -70,7 +72,7 @@ final class Context
 	 */
 	public function compose(string $world, string $entry, ?array $network = null): \Phonics\Package\Context
 	{
-		$this->browser('phar://' . \Phar::running(false) . '/runtime.mjs');
+		$this->runtime();
 		$data = json_decode(vrzno_await((vrzno_env('phonicsCompose'))(json_encode([
 			'world' => $this->init['world'] ?? $world, 'entry' => $entry, 'network' => $network
 		], JSON_THROW_ON_ERROR))), true, flags: JSON_THROW_ON_ERROR);
@@ -108,6 +110,29 @@ final class Context
 		foreach($data['factories'] as $factory) $phonics->factories->alias($factory['id'], $factory['class']);
 		$this->entry = $data['entry'];
 		return $phonics;
+	}
+
+	/**
+	 * Create a room-backed lobby for an application that owns its game loop directly.
+	 *
+	 * The lobby resolves its provider from the application's declared dependencies. It does not compose a world,
+	 * negotiate content, or create a gameplay transport; deterministic applications exchange related room events.
+	 *
+	 * @param array $configuration Lobby provider, room, game identity, rules, and presentation configuration.
+	 * @return void Installs the embedded lobby shell and exposes its browser game port on the application session.
+	 */
+	public function lobby(array $configuration): void
+	{
+		$this->runtime();
+		vrzno_await((vrzno_env('phonicsLobby'))(json_encode($configuration, JSON_THROW_ON_ERROR)));
+	}
+
+	/** Activate the verified browser runtime at most once for this application. */
+	private function runtime(): void
+	{
+		if($this->runtime) return;
+		$this->runtime = true;
+		$this->browser('phar://' . \Phar::running(false) . '/runtime.mjs');
 	}
 
 	/**

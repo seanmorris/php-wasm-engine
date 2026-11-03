@@ -3,6 +3,8 @@ const INVITATION = 'org.seanmorris.phonics.invitation.v1';
 const INVITATION_STATE = 'org.seanmorris.phonics.invitation_state.v1';
 const SIGNAL = 'org.seanmorris.phonics.signal.v1';
 const CHAT = 'org.seanmorris.phonics.chat.v1';
+const GAME = 'org.seanmorris.phonics.game.v1';
+const ROOM_MESSAGE = 'm.room.message';
 const CONFIGURATION_KEY = 'phonics.matrix.configuration';
 const OAUTH_PENDING_PREFIX = 'phonics.matrix.oauth:';
 
@@ -74,6 +76,14 @@ const PRIVATE_EVENT = 'org.seanmorris.phonics.private.v1';
 const CLAIM_EVENT = 'org.seanmorris.phonics.claim.v1';
 const ADMISSION_EVENT = 'org.seanmorris.phonics.admission.v1';
 const INVITE_DATA = 'org.seanmorris.phonics.invite_data.v1';
+
+const SYNC_ROOM_EVENTS = Object.freeze([
+	PRESENCE, INVITATION, INVITATION_STATE, SIGNAL, CHAT, GAME, ROOM_MESSAGE
+	, PRIVATE_EVENT, INVITE_DATA, 'm.room.member'
+]);
+
+const SYNC_DEVICE_EVENTS = Object.freeze([CLAIM_EVENT, ADMISSION_EVENT]);
+
 const INVITE_LIMIT = 128 * 1024;
 const utf8 = new TextEncoder;
 // Matrix canonicalizes JSON objects; authenticate a fixed field order, not wire key order.
@@ -243,7 +253,7 @@ export class MatrixLobbyProvider extends EventTarget
 	constructor(
 		{
 			homeserver = 'https://matrix.org'
-			, room = '#phonics:matrix.org'
+			, room = null
 			, accessToken = null
 			, userId = null
 			, deviceId = null
@@ -259,11 +269,15 @@ export class MatrixLobbyProvider extends EventTarget
 			, signal
 			, presenceTtl = 45_000
 			, heartbeat = 15_000
-			, syncTimeout = 30_000
+			, syncTimeout = 10_000
+			, syncMinInterval = 2_000
+			, syncEmptyDelay = 2_000
+			, syncEmptyMaxDelay = 60_000
 			, invitationTtl = 30_000
 			, guest = false
 			, locks = globalThis.navigator?.locks
 			, inviteLifetime = 15 * 60_000
+			, configurationKey = CONFIGURATION_KEY
 		} = {}
 	) {
 		super();
@@ -285,12 +299,19 @@ export class MatrixLobbyProvider extends EventTarget
 		this.history = browserHistory;
 		this.clientName = String(clientName);
 		this.clientUri = clientUri;
+		this.configurationKey = String(configurationKey || CONFIGURATION_KEY);
 
 		this.authorizeHomeserver = value => cleanServer(authorizeHomeserver(value));
-		this.defaults = Object.freeze({homeserver: this.authorizeHomeserver(homeserver), room: String(room)});
-		const configured = readStorage(storage, CONFIGURATION_KEY) ?? {};
+
+		this.defaults = Object.freeze({
+			homeserver: this.authorizeHomeserver(homeserver)
+			, room: room === null ? null : String(room)
+		});
+
+		const configured = readStorage(storage, this.configurationKey) ?? {};
 		this.homeserver = this.authorizeHomeserver(configured.homeserver ?? homeserver);
-		this.room = String(configured.room ?? room);
+		this.room = configured.room ?? room;
+		this.room = this.room === null ? null : String(this.room);
 		this.storageKey = `phonics.matrix.session:${this.homeserver}`;
 		const saved = readStorage(storage, this.storageKey) ?? {};
 
@@ -306,7 +327,10 @@ export class MatrixLobbyProvider extends EventTarget
 		this.authApi = saved.authApi ?? (this.refreshToken ? 'oauth' : 'legacy');
 		this.presenceTtl = presenceTtl;
 		this.heartbeat = heartbeat;
-		this.syncTimeout = syncTimeout;
+		this.syncTimeout = Math.max(1, Number(syncTimeout) || 10_000);
+		this.syncMinInterval = Math.max(1, Number(syncMinInterval) || 2_000);
+		this.syncEmptyDelay = Math.max(this.syncMinInterval, Number(syncEmptyDelay) || 2_000);
+		this.syncEmptyMaxDelay = Math.max(this.syncEmptyDelay, Number(syncEmptyMaxDelay) || 60_000);
 		this.invitationTtl = invitationTtl;
 		this.externalSignal = signal ?? null;
 		this.resetConnectionSignal();
@@ -318,6 +342,7 @@ export class MatrixLobbyProvider extends EventTarget
 		this.invitations = new Map;
 		this.lastInvite = new Map;
 		this.transaction = 0;
+		this.activity = null;
 	}
 
 	/** Create a fresh connection lifetime while retaining the provider's external lifetime. */
@@ -332,7 +357,12 @@ export class MatrixLobbyProvider extends EventTarget
 	profile()
 	{
 		return Object.freeze(
-			{id: this.userId, displayName: this.displayName ?? this.userId, homeserver: this.homeserver}
+			{
+				id: this.userId
+				, displayName: this.displayName ?? this.userId
+				, homeserver: this.homeserver
+				, activity: this.activity
+			}
 		);
 	}
 
@@ -345,14 +375,14 @@ export class MatrixLobbyProvider extends EventTarget
 	configure({homeserver = this.homeserver, room = this.room} = {})
 	{
 		const nextHomeserver = this.authorizeHomeserver(homeserver);
-		const nextRoom = String(room).trim();
+		const nextRoom = typeof room === 'string' ? room.trim() : '';
 		const homeserverChanged = nextHomeserver !== this.homeserver;
 
 		if(!nextRoom) throw new MatrixLobbyError('matrix_config', 'Matrix lobby channel is required');
 
 		try
 		{
-			this.storage?.setItem(CONFIGURATION_KEY, JSON.stringify({
+			this.storage?.setItem(this.configurationKey, JSON.stringify({
 				homeserver: nextHomeserver
 				, room: nextRoom
 			}));
@@ -575,16 +605,41 @@ export class MatrixLobbyProvider extends EventTarget
 		if(!this.accessToken)
 		throw new MatrixLobbyError('matrix_auth_required', 'Continue with Matrix to enter the lobby');
 
+		if(!this.room)
+		throw new MatrixLobbyError('matrix_config', 'This Matrix-enabled game must declare its own lobby chat room.');
+
 		const who = await this.request('GET', '/_matrix/client/v3/account/whoami');
 		this.userId = peer(who.user_id);
 		this.deviceId = who.device_id ?? this.deviceId;
 		this.displayName ??= this.userId;
 		this.save();
 
-		const joined = await this.request(
-			'POST'
-			, `/_matrix/client/v3/join/${encodeURIComponent(this.room)}`
-			, {body: {}}
+		let joined;
+
+		try
+		{
+			joined = await this.request('POST', `/_matrix/client/v3/join/${encodeURIComponent(this.room)}`, {body: {}});
+		}
+		catch(error)
+		{
+			if(error.code !== 'M_NOT_FOUND') throw error;
+
+			throw new MatrixLobbyError(
+				'matrix_lobby_missing'
+				, `Matrix lobby ${this.room} does not exist. Create it as a public chat room, not a Space.`
+				, {cause: error, status: error.status, details: error.details}
+			);
+		}
+
+		const creation = await this.request(
+			'GET'
+			, `/_matrix/client/v3/rooms/${encodeURIComponent(joined.room_id)}/state/m.room.create/`
+		);
+
+		if(creation.type === 'm.space')
+		throw new MatrixLobbyError(
+			'matrix_lobby_space'
+			, `Matrix lobby ${this.room} is a Space. Configure a chat room instead.`
 		);
 
 		this.roomId = joined.room_id;
@@ -1455,7 +1510,11 @@ export class MatrixLobbyProvider extends EventTarget
 		}
 	}
 
-	recoverable(error) { return error.code === 'matrix_transport' || error.status === 429 || error.status >= 500; }
+	recoverable(error)
+	{
+		return error.code === 'matrix_sync' || error.code === 'matrix_transport'
+			|| error.status === 429 || error.status >= 500;
+	}
 
 	startSync()
 	{
@@ -1589,8 +1648,144 @@ export class MatrixLobbyProvider extends EventTarget
 		if(!text || text.length > 1000) throw new MatrixLobbyError('chat_message', 'Chat message is empty or too long');
 
 		const sentAt = Date.now();
-		await this.send(CHAT, {text, sentAt});
+
+		await this.send(ROOM_MESSAGE, {
+			msgtype: 'm.text'
+			, body: text
+			, 'org.seanmorris.phonics.sent_at': sentAt
+		});
+
 		this.dispatchEvent(event('chat', {from: this.userId, text, sentAt}));
+	}
+
+	/** Publish a readable, clickable table offer with namespaced machine-readable metadata. */
+	async gameOffer(content, transaction = crypto.randomUUID())
+	{
+		this.requireConnected();
+		const body = structuredClone(content);
+		const result = await this.send(ROOM_MESSAGE, body, String(transaction));
+		const item = {
+			event_id: result.event_id
+			, type: ROOM_MESSAGE
+			, sender: this.userId
+			, origin_server_ts: Date.now()
+			, content: body
+		};
+
+		this.dispatchEvent(event('gameevent', {event: item}));
+
+		return result;
+	}
+
+	/** Send one durable deterministic-game event and apply the accepted local echo. */
+	async gameEvent(content, transaction = crypto.randomUUID())
+	{
+		this.requireConnected();
+		const body = structuredClone(content);
+		const result = await this.send(GAME, body, String(transaction));
+		const item = {
+			event_id: result.event_id
+			, type: GAME
+			, sender: this.userId
+			, origin_server_ts: Date.now()
+			, content: body
+		};
+
+		this.dispatchEvent(event('gameevent', {event: item}));
+
+		return result;
+	}
+
+	/** Read one stored event from the connected public lobby room. */
+	async roomEvent(eventId)
+	{
+		this.requireConnected();
+
+		return this.request(
+			'GET'
+			, `/_matrix/client/v3/rooms/${encodeURIComponent(this.roomId)}/event/${encodeURIComponent(eventId)}`
+		);
+	}
+
+	/** Read every game child related to a root, following Matrix pagination with a fixed safety bound. */
+	async relations(rootId)
+	{
+		this.requireConnected();
+		const values = [], seen = new Set;
+		let from = null;
+
+		for(let pageNumber = 0; pageNumber < 100; pageNumber++)
+		{
+			const query = new URLSearchParams({dir: 'f', limit: '100'});
+
+			if(from) query.set('from', from);
+
+			const page = await this.request(
+				'GET'
+				, `/_matrix/client/v1/rooms/${encodeURIComponent(this.roomId)}/relations/${encodeURIComponent(
+					rootId
+				)}/${encodeURIComponent('org.seanmorris.phonics.game.v1')}/${encodeURIComponent(GAME)}?${query}`
+			);
+
+			for(const item of page.chunk ?? [])
+			if(!seen.has(item.event_id))
+			{
+				seen.add(item.event_id);
+				values.push(item);
+			}
+
+			if(!page.next_batch || page.next_batch === from || !(page.chunk?.length)) break;
+
+			from = page.next_batch;
+		}
+
+		return values;
+	}
+
+	/** Read recent public-room events in chronological order. */
+	async roomHistory({type, types, limit = 200} = {})
+	{
+		this.requireConnected();
+		limit = Math.max(1, Math.min(1000, Number(limit) || 200));
+		const selected = new Set(Array.isArray(types) ? types : type ? [type] : []);
+		const values = [], seen = new Set;
+		let from = null, pages = 0;
+
+		while(values.length < limit && pages++ < 20)
+		{
+			const query = new URLSearchParams({dir: 'b', limit: String(Math.min(100, limit - values.length))});
+
+			if(from) query.set('from', from);
+
+			if(selected.size) query.set('filter', JSON.stringify({types: [...selected]}));
+
+			const page = await this.request(
+				'GET'
+				, `/_matrix/client/v3/rooms/${encodeURIComponent(this.roomId)}/messages?${query}`
+			);
+
+			for(const item of page.chunk ?? [])
+			if((!selected.size || selected.has(item.type)) && !seen.has(item.event_id))
+			{
+				seen.add(item.event_id);
+				values.push(item);
+			}
+
+			if(!page.end || page.end === from || !(page.chunk?.length)) break;
+
+			from = page.end;
+		}
+
+		return values.slice(0, limit).reverse();
+	}
+
+	/** Advertise this browser's current waiting, active, or spectating table. */
+	async setActivity(activity)
+	{
+		this.requireConnected();
+		this.activity = activity === null ? null : structuredClone(activity);
+
+		return this.announcePresence();
 	}
 
 	async announcePresence()
@@ -1602,6 +1797,7 @@ export class MatrixLobbyProvider extends EventTarget
 			, displayName: this.displayName
 			, expiresAt: Date.now() + this.presenceTtl
 			, protocol: '1.0.0'
+			, activity: this.activity
 		});
 	}
 
@@ -1609,10 +1805,31 @@ export class MatrixLobbyProvider extends EventTarget
 	{
 		this.requireConnected();
 		const query = new URLSearchParams({timeout: String(this.syncTimeout)});
+		const rooms = [this.roomId, ...this.inviteRooms.keys()].filter(Boolean);
+
+		query.set('filter', JSON.stringify({
+			presence: {types: []}
+			, account_data: {types: []}
+			, to_device: {types: SYNC_DEVICE_EVENTS}
+			, room: {
+				rooms
+				, account_data: {types: []}
+				, ephemeral: {types: []}
+				, state: {types: ['m.room.member']}
+				, timeline: {types: SYNC_ROOM_EVENTS, limit: 100}
+			}
+		}));
 
 		if(this.since) query.set('since', this.since);
 
 		const result = await this.request('GET', `/_matrix/client/v3/sync?${query}`);
+
+		if(typeof result.next_batch !== 'string' || !result.next_batch)
+		throw new MatrixLobbyError(
+			'matrix_sync'
+			, 'Matrix sync response did not include a continuation token'
+			, {details: {retry_after_ms: this.syncMinInterval}}
+		);
 
 		for(const item of result.to_device?.events ?? []) await this.consumeDevice(item);
 
@@ -1625,7 +1842,10 @@ export class MatrixLobbyProvider extends EventTarget
 				continue;
 			}
 
-			const timeline = result.rooms?.join?.[roomId]?.timeline;
+			const joined = result.rooms?.join?.[roomId];
+			const timeline = joined?.timeline;
+
+			for(const item of joined?.state?.events ?? []) await this.consumePrivate(state, item);
 
 			if(!timeline) continue;
 
@@ -1697,16 +1917,50 @@ export class MatrixLobbyProvider extends EventTarget
 		return result;
 	}
 
+	/** Whether a sync response contains work for one of the rooms this provider owns. */
+	syncResponseHasEvents(result)
+	{
+		if(result.to_device?.events?.length) return true;
+
+		for(const roomId of [this.roomId, ...this.inviteRooms.keys()])
+		{
+			const room = result.rooms?.join?.[roomId];
+
+			if(room?.timeline?.events?.length || room?.state?.events?.length || result.rooms?.leave?.[roomId])
+			return true;
+		}
+
+		return false;
+	}
+
 	async syncLoop()
 	{
-		let failures = 0;
+		let failures = 0, rapidEmptyResponses = 0;
 
 		while(!this.closed && !this.signal.aborted)
 		{
 			try
 			{
-				await this.syncOnce();
+				const started = Date.now();
+				const result = await this.syncOnce();
 				failures = 0;
+				const elapsed = Date.now() - started;
+				const rapid = elapsed < Math.max(1_000, this.syncTimeout * .8);
+				let delay = Math.max(0, this.syncMinInterval - elapsed);
+
+				if(!rapid || this.syncResponseHasEvents(result)) rapidEmptyResponses = 0;
+				else
+				{
+					delay = Math.max(
+						delay
+						, Math.min(
+							this.syncEmptyMaxDelay
+							, this.syncEmptyDelay * 2 ** Math.min(rapidEmptyResponses++, 6)
+						)
+					);
+				}
+
+				if(delay > 0) await pause(delay, this.signal);
 			}
 			catch(error)
 			{
@@ -1716,17 +1970,19 @@ export class MatrixLobbyProvider extends EventTarget
 
 				this.dispatchEvent(event('signalingstatus', {state: 'retrying'}));
 
-				await pause(
-					Math.min(30_000, error.details?.retry_after_ms ?? 500 * 2 ** Math.min(++failures, 6))
-					, this.signal
-				);
+				const exponential = 500 * 2 ** Math.min(++failures, 6);
+				const backoff = Math.min(30_000, error.details?.retry_after_ms ?? exponential);
+
+				await pause(Math.max(this.syncMinInterval, backoff), this.signal);
 			}
 		}
 	}
 
 	consume(item)
 	{
-		if(!item || typeof item.content !== 'object' || item.sender === this.userId) return;
+		if(!item || typeof item.content !== 'object') return;
+
+		if(item.sender === this.userId) return;
 
 		const content = item.content;
 
@@ -1738,6 +1994,7 @@ export class MatrixLobbyProvider extends EventTarget
 				id: item.sender
 				, displayName: String(content.displayName ?? item.sender)
 				, expiresAt: content.expiresAt
+				, activity: content.activity ?? null
 			});
 
 			this.publishPresence();
@@ -1771,6 +2028,18 @@ export class MatrixLobbyProvider extends EventTarget
 
 			this.dispatchEvent(event('chat', {from: item.sender, text: content.text, sentAt: content.sentAt}));
 		}
+		else if(item.type === ROOM_MESSAGE)
+		{
+			if(content[GAME]) this.dispatchEvent(event('gameevent', {event: structuredClone(item)}));
+			else if(content.msgtype === 'm.text' && typeof content.body === 'string' && content.body.length <= 1000)
+			this.dispatchEvent(event('chat', {
+				from: item.sender
+				, text: content.body
+				, sentAt: content['org.seanmorris.phonics.sent_at'] ?? item.origin_server_ts
+			}));
+		}
+		else if(item.type === GAME)
+		this.dispatchEvent(event('gameevent', {event: structuredClone(item)}));
 	}
 
 	expirePresence(now = Date.now())
@@ -1794,10 +2063,8 @@ export class MatrixLobbyProvider extends EventTarget
 		}));
 	}
 
-	async send(type, content)
+	async send(type, content, transaction = `${Date.now()}-${++this.transaction}`)
 	{
-		const transaction = `${Date.now()}-${++this.transaction}`;
-
 		return this.request(
 			'PUT'
 			, `/_matrix/client/v3/rooms/${encodeURIComponent(

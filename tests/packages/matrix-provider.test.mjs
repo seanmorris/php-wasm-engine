@@ -34,14 +34,100 @@ test('Matrix provider defaults to Matrix.org and scopes stored sessions by homes
 		return response({event_id: '$event'});
 	};
 
-	const provider = new MatrixLobbyProvider({accessToken: 'token', fetch, storage, heartbeat: 60_000});
+	const provider = new MatrixLobbyProvider({
+		accessToken: 'token'
+		, room: '#game:matrix.org'
+		, fetch
+		, storage
+		, heartbeat: 60_000
+	});
 
 	assert.equal(provider.homeserver, 'https://matrix.org');
+	assert.equal(provider.syncTimeout, 10_000);
+	assert.equal(provider.syncMinInterval, 2_000);
+	assert.equal(provider.syncEmptyDelay, 2_000);
 	await provider.connect();
 	assert.equal(provider.profile().id, '@host:matrix.org');
 	assert.equal(values.has('phonics.matrix.session:https://matrix.org'), true);
 	assert.match(calls[0].options.headers.Authorization, /Bearer token/);
+	await provider.chat('ordinary room text');
+
+	await provider.gameOffer({
+		msgtype: 'm.text'
+		, body: 'Join PHP Billiards: https://games.example/#phonics-game=test'
+		, 'org.seanmorris.phonics.game.v1': {v: 1, kind: 'offer'}
+	}, 'offer-test'
+	);
+
+	const messages = calls.filter(call => call.url.pathname.includes('/send/m.room.message/'));
+	assert.equal(messages.length, 2);
+	assert.equal(JSON.parse(messages[0].options.body).body, 'ordinary room text');
+	assert.equal(JSON.parse(messages[1].options.body)['org.seanmorris.phonics.game.v1'].kind, 'offer');
+
+	await provider.roomHistory({
+		types: ['m.room.message', 'org.seanmorris.phonics.game.v1']
+		, limit: 1000
+	});
+
+	const history = calls.filter(call => call.url.pathname.endsWith('/messages'));
+	assert.equal(history.length, 1);
+
+	assert.deepEqual(JSON.parse(history[0].url.searchParams.get('filter')).types, [
+		'm.room.message', 'org.seanmorris.phonics.game.v1'
+	]);
+
 	provider.close();
+});
+
+test('Matrix provider rejects missing lobby aliases and Spaces with actionable errors', async () => {
+
+	const createProvider = fetch => new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, room: '#billiards:matrix.example'
+		, accessToken: 'token'
+		, fetch
+	});
+
+	const missing = createProvider(async url => {
+		url = new URL(url);
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@host:matrix.example', device_id: 'DEVICE'});
+
+		return response({errcode: 'M_NOT_FOUND', error: 'Room alias not found'}, 404);
+	});
+
+	await assert.rejects(() => missing.connect(), error => {
+		assert.equal(error.code, 'matrix_lobby_missing');
+		assert.match(error.message, /public chat room, not a Space/);
+
+		return true;
+	});
+
+	missing.close();
+
+	const space = createProvider(async url => {
+		url = new URL(url);
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@host:matrix.example', device_id: 'DEVICE'});
+
+		if(url.pathname.includes('/join/')) return response({room_id: '!space:matrix.example'});
+
+		if(url.pathname.endsWith('/state/m.room.create/')) return response({type: 'm.space'});
+
+		return response({});
+	});
+
+	await assert.rejects(() => space.connect(), error => {
+		assert.equal(error.code, 'matrix_lobby_space');
+		assert.match(error.message, /is a Space.*chat room instead/);
+
+		return true;
+	});
+
+	assert.equal(space.connected, false);
+	space.close();
 });
 
 test('Matrix provider filters events by authenticated sender, recipient, and expiry', async () => {
@@ -89,6 +175,154 @@ test('Matrix provider filters events by authenticated sender, recipient, and exp
 	assert.equal(invitations[0].invitation.payload.mode, 'co-op');
 	assert.equal(signals.length, 0);
 	assert.equal(provider.loginPassword, undefined);
+	provider.close();
+});
+
+test('Matrix sync scopes events and backs off when a homeserver returns without long polling', async () => {
+	const syncs = [];
+
+	const fetch = async (url, options) => {
+		url = new URL(url);
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@host:matrix.example', device_id: 'DEVICE'});
+
+		if(url.pathname.includes('/join/')) return response({room_id: '!room:matrix.example'});
+
+		if(url.pathname.endsWith('/sync'))
+		{
+			syncs.push({at: Date.now(), query: url.searchParams});
+
+			return response({next_batch: `sync-${syncs.length}`, rooms: {join: {}}});
+		}
+
+		return response({event_id: '$event'});
+	};
+
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, room: '#game:matrix.example'
+		, accessToken: 'token'
+		, fetch
+		, heartbeat: 60_000
+		, syncMinInterval: 20
+		, syncEmptyDelay: 40
+		, syncEmptyMaxDelay: 160
+	});
+
+	await provider.connect();
+	await new Promise(resolve => setTimeout(resolve, 230));
+	assert.ok(syncs.length >= 3 && syncs.length <= 4, `expected adaptive backoff, received ${syncs.length} syncs`);
+	assert.ok(syncs[1].at - syncs[0].at >= 35, 'first empty response did not back off');
+	assert.ok(syncs[2].at - syncs[1].at >= 70, 'repeated empty responses did not increase backoff');
+	const filter = JSON.parse(syncs[0].query.get('filter'));
+	assert.deepEqual(filter.room.rooms, ['!room:matrix.example']);
+	assert.deepEqual(filter.presence.types, []);
+	assert.deepEqual(filter.account_data.types, []);
+	assert.ok(filter.room.timeline.types.includes('org.seanmorris.phonics.game.v1'));
+	assert.ok(filter.room.timeline.types.includes('m.room.message'));
+	assert.ok(filter.to_device.types.includes('org.seanmorris.phonics.claim.v1'));
+	provider.close();
+});
+
+test('Matrix sync retains a hard floor when every response contains a room event', async () => {
+	const syncs = [];
+
+	const fetch = async url => {
+		url = new URL(url);
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@host:matrix.example', device_id: 'DEVICE'});
+
+		if(url.pathname.includes('/join/')) return response({room_id: '!room:matrix.example'});
+
+		if(url.pathname.endsWith('/sync'))
+		{
+			syncs.push(Date.now());
+
+			return response({
+				next_batch: `sync-${syncs.length}`
+				, rooms: {
+					join: {
+						'!room:matrix.example': {
+							timeline: {
+								events: [{
+									type: 'org.seanmorris.phonics.game.v1'
+									, sender: '@guest:matrix.example'
+									, content: {}
+								}]
+							}
+						}
+					}
+				}
+			});
+		}
+
+		return response({event_id: '$event'});
+	};
+
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, room: '#game:matrix.example'
+		, accessToken: 'token'
+		, fetch
+		, heartbeat: 60_000
+		, syncMinInterval: 40
+		, syncEmptyDelay: 1
+		, syncEmptyMaxDelay: 1
+	});
+
+	await provider.connect();
+	await new Promise(resolve => setTimeout(resolve, 150));
+	assert.ok(syncs.length >= 3 && syncs.length <= 4, `event responses hot-looped ${syncs.length} syncs`);
+
+	for(let index = 1; index < syncs.length; index++)
+	assert.ok(syncs[index] - syncs[index - 1] >= 35, 'event response bypassed the hard sync floor');
+
+	provider.close();
+});
+
+test('Matrix sync applies the request floor to malformed and failed responses', async () => {
+	const syncs = [];
+
+	const fetch = async url => {
+		url = new URL(url);
+
+		if(url.pathname.endsWith('/account/whoami'))
+		return response({user_id: '@host:matrix.example', device_id: 'DEVICE'});
+
+		if(url.pathname.includes('/join/')) return response({room_id: '!room:matrix.example'});
+
+		if(url.pathname.endsWith('/sync'))
+		{
+			syncs.push(Date.now());
+
+			return syncs.length % 2
+				? response({rooms: {join: {}}})
+				: response({error: 'busy', retry_after_ms: 40}, 503);
+		}
+
+		return response({event_id: '$event'});
+	};
+
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, room: '#game:matrix.example'
+		, accessToken: 'token'
+		, fetch
+		, heartbeat: 60_000
+		, syncMinInterval: 40
+		, syncEmptyDelay: 40
+		, syncEmptyMaxDelay: 40
+	});
+
+	await provider.connect();
+	await new Promise(resolve => setTimeout(resolve, 135));
+	assert.ok(syncs.length >= 3 && syncs.length <= 4, `failures hot-looped ${syncs.length} syncs`);
+
+	for(let index = 1; index < syncs.length; index++)
+	assert.ok(syncs[index] - syncs[index - 1] >= 35, 'failure bypassed the hard sync floor');
+
 	provider.close();
 });
 
@@ -140,6 +374,7 @@ test('Matrix OAuth uses dynamic registration, PKCE, callback cleanup, and refres
 
 	const provider = new MatrixLobbyProvider({
 		homeserver: 'https://matrix.example'
+		, room: '#game:matrix.example'
 		, fetch
 		, storage
 		, oauthStorage: storage
@@ -278,6 +513,7 @@ test('Matrix logout stops syncing, revokes OAuth credentials, clears storage, an
 
 	const provider = new MatrixLobbyProvider({
 		homeserver: 'https://matrix.example'
+		, room: '#game:matrix.example'
 		, fetch
 		, storage
 		, heartbeat: 60_000

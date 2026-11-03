@@ -14,6 +14,7 @@ import {InMemoryLobbyProvider} from './network/InMemoryLobbyProvider.mjs';
 import {LobbyController} from './network/LobbyController.mjs';
 import {LobbyOverlay} from './network/LobbyOverlay.mjs';
 import {NetworkSession as BrowserNetworkSession} from './network/NetworkSession.mjs';
+import {EmbeddedRoomLobby, RoomGameProtocol} from './network/RoomGameLobby.mjs';
 import {ResourceNegotiator} from './network/ResourceNegotiator.mjs';
 import {ServiceRegistry} from './network/ServiceRegistry.mjs';
 import {matrixConfiguration} from './network/Values.mjs';
@@ -47,6 +48,124 @@ const decode = bytes => JSON.parse(new TextDecoder().decode(bytes));
 export function activate(host)
 {
 	const {session, module, canvas, signal, store, cleanup, report, options} = host;
+
+	module.phonicsLobby = async json => {
+		if(session.lobby) throw new Error('An application lobby is already configured');
+
+		const request = JSON.parse(json);
+
+		if(!request || typeof request.provider !== 'string' || !request.game?.id)
+		throw new Error('Direct application lobby requires a provider and game identity');
+
+		const scope = store.scope(signal);
+		cleanup.push(() => scope.close());
+
+		const graph = new PackageGraph(scope, {
+			origin: globalThis.location?.origin ?? new URL(host.archive.applicationUrl).origin
+			, ...options.policy
+			, phpVersion: options.runtime?.phpVersion ?? '8.4.0'
+			, extensions: ['sdl', 'vrzno', 'zlib', 'phar']
+		});
+
+		graph.aliases.set('phonics', await graph.manifest(host.archive.coreUrl));
+		const application = await graph.application(host.archive.applicationUrl);
+		const providerEntry = await graph.resolve(request.provider, application.url, application);
+
+		if(providerEntry.type !== 'lobby-provider')
+		throw new Error('Direct application lobby provider must name a lobby-provider export');
+
+		await graph.activateGraph(providerEntry);
+		const files = await graph.files();
+		const registry = new ServiceRegistry;
+		cleanup.push(() => registry.close());
+
+		if(providerEntry.record.data.name === '@seanmorris/phonics' && providerEntry.name === 'memory-lobby')
+		registry.register('lobby-provider', providerEntry.id, value => new InMemoryLobbyProvider(value));
+
+		const services = {
+			register: registry.register.bind(registry)
+			, unregister: registry.unregister.bind(registry)
+			, create: registry.create.bind(registry)
+			, list: registry.list.bind(registry)
+		};
+
+		for(const entry of graph.active.filter(value => value.browser))
+		{
+			const file = files.find(value => value.url === new URL(entry.browser, entry.record.url).href);
+
+			if(!file) throw new Error(`Missing verified browser export: ${entry.id}`);
+
+			const code = new TextDecoder().decode(file.bytes);
+
+			if(/\bimport\b\s*(?:\(|[\s\S]*?\bfrom\s*['"]|['"])/.test(code))
+			throw new Error(`Browser export must be a self-contained bundle: ${file.url}`);
+
+			const loaded = await host.importModule(code);
+
+			const close = await loaded.activate({
+				session
+				, module
+				, canvas
+				, services
+				, packageUrl: entry.record.url
+				, exportId: entry.id
+				, exportType: entry.type
+			});
+
+			if(typeof close === 'function') cleanup.push(close);
+		}
+
+		const overrides = options.network?.lobby;
+		let providerOptions = {...request.options, ...overrides, signal};
+
+		if(providerEntry.record.data.name === '@seanmorris/phonics-matrix')
+		providerOptions = {
+			...providerOptions
+			, ...matrixConfiguration(request.options, overrides, options.policy)
+			, authorizeHomeserver: homeserver => matrixConfiguration(
+				request.options
+				, {...overrides, homeserver}
+				, options.policy
+			).homeserver
+		};
+
+		const provider = registry.create('lobby-provider', providerEntry.id, providerOptions);
+		const game = {
+			...request.game
+			, title: request.title ?? request.game?.id
+			, application: String(session.application?.fingerprint ?? session.application?.id ?? '')
+			, runtime: String(session.runtime?.id ?? options.runtime?.id ?? options.runtime?.url ?? '')
+		};
+
+		const protocol = new RoomGameProtocol({provider, game, session, signal});
+
+		const overlay = new EmbeddedRoomLobby({
+			protocol
+			, canvas
+			, title: request.title ?? 'Online Play'
+			, signal
+		});
+
+		const lobby = {
+			protocol
+			, overlay
+			, open: () => overlay.open()
+			, close: () => overlay.close()
+			, attachGame: adapter => protocol.attachGame(adapter)
+		};
+
+		session.lobby = lobby;
+
+		cleanup.push(() => {
+			delete session.lobby;
+			overlay.dispose();
+			protocol.close();
+
+			return provider.close();
+		});
+
+		return JSON.stringify({game});
+	};
 
 	module.phonicsCompose = async json => {
 		const request = JSON.parse(json);

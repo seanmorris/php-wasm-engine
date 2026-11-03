@@ -31,7 +31,7 @@ Install `@seanmorris/phonics-matrix` beside `@seanmorris/phonics`. A Phonics wor
 }
 ```
 
-Without `options`, the provider uses `https://matrix.org` and the room `#phonics:matrix.org`. A host can override both through `run(url, {network: {lobby: {homeserver, room}}})`. If the host sets `policy.signalingOrigins`, the homeserver's origin must be in that list or loading fails. The OAuth return page must be served over HTTPS or from an HTTP loopback address (`localhost`, `127.0.0.1` or `[::1]`). [`application-network.json`](https://github.com/seanmorris/php-wasm-engine/blob/HEAD/packages/doom-phonics/application-network.json) is a complete example, including player counts and match fields.
+The provider defaults to `https://matrix.org`, but every Matrix-enabled game must declare its own normal chat room. The public `#phonics:matrix.org` address is a discovery Space and is not a lobby timeline. Current game rooms such as `#doom-phonics:matrix.org` and `#php-billiards:matrix.org` can be children of that Space. A host can override the homeserver and game room through `run(url, {network: {lobby: {homeserver, room}}})`. If the host sets `policy.signalingOrigins`, the homeserver's origin must be in that list or loading fails. The OAuth return page must be served over HTTPS or from an HTTP loopback address (`localhost`, `127.0.0.1` or `[::1]`). [`application-network.json`](https://github.com/seanmorris/php-wasm-engine/blob/HEAD/packages/doom-phonics/application-network.json) is a complete example, including player counts and match fields.
 
 ## Private invitation links
 

@@ -256,7 +256,16 @@ export async function run(applicationUrl, options = {})
 
 				host.archive = archive;
 				host.store = archive.store;
-				session.application = {id: archive.id, code: archive.code};
+				session.application = {
+					id: archive.id
+					, code: archive.code
+					, fingerprint: String(options.integrity ?? '')
+				};
+
+				session.runtime = Object.freeze({
+					id: String(options.runtime?.id ?? options.runtime?.url ?? 'custom-runtime')
+				});
+
 				cleanup.push(() => archive.close());
 			}
 			, activate: async code => {
