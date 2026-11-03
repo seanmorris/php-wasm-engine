@@ -323,3 +323,48 @@ test('unknown related events cannot recursively fetch cyclic roots', async () =>
 	assert.equal(eventLoads, 1, 'an immutable invalid root must be negative-cached');
 	protocol.close();
 });
+
+test('leaving an unseated table cancels it and a challenged player can decline', async () => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest', displayName: 'Guest'});
+
+	const protocol = provider => new RoomGameProtocol({
+		provider
+		, game
+		, session: {}
+		, storage: storage()
+		, location: new URL('https://games.example/billiards/')
+	});
+
+	const host = protocol(hostProvider);
+	const guest = protocol(guestProvider);
+	const notices = [];
+	host.addEventListener('notice', ({detail}) => notices.push(detail));
+	await host.connect();
+	await guest.connect();
+
+	const open = await host.create();
+	await until(() => guest.snapshot().tables.some(table => table.root === open && table.joinable));
+	assert.match(host.snapshot().tables.find(table => table.root === open).link, /#phonics-game=/);
+	await host.leave();
+	assert.equal(host.selected, null);
+	await until(() => !guest.snapshot().tables.some(table => table.root === open));
+	await assert.rejects(guest.join(open), /no longer open/);
+
+	const challenge = await host.create({target: 'guest'});
+	await until(() => guest.snapshot().tables.some(table => table.root === challenge && table.declinable));
+	const offered = guest.snapshot().tables.find(table => table.root === challenge);
+	assert.equal(offered.forMe, true);
+	assert.equal(offered.joinable, true);
+	await guest.decline(challenge);
+	await until(() => notices.some(notice => notice.kind === 'declined' && notice.root === challenge));
+	assert.equal(host.selected, null);
+	assert.equal(host.snapshot().tables.some(table => table.root === challenge), false);
+	assert.equal(guest.snapshot().tables.some(table => table.root === challenge), false);
+
+	host.close();
+	guest.close();
+	hostProvider.close();
+	guestProvider.close();
+});

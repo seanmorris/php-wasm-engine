@@ -358,9 +358,28 @@ export class RoomGameProtocol extends EventTarget
 
 		if(session.seats) throw new Error('This table already has two players');
 
+		if(session.status !== 'open') throw new Error('This table is no longer open');
+
 		this.select(root, 'player');
 		await this.child(session, 'join', {player: me}, `join:${me}`);
 		await this.provider.setActivity({state: 'waiting', root, game: this.game.id});
+	}
+
+	/** Decline a challenge addressed to this account before it is seated. */
+	async decline(root)
+	{
+		this.requireConnected();
+		const session = await this.load(root);
+		const me = this.profile().id;
+
+		if(session.offer.target !== me) throw new Error('This challenge is for another user');
+
+		if(session.seats) throw new Error('This table has already started');
+
+		await this.child(session, 'cancel', {player: me, reason: 'declined'}, `cancel:${me}`);
+		session.status = 'expired';
+		session.closedBy = me;
+		this.dispatchEvent(event('change', this.snapshot()));
 	}
 
 	/** Select an active table for read-only deterministic playback. */
@@ -402,15 +421,32 @@ export class RoomGameProtocol extends EventTarget
 		this.dispatchEvent(event('change', this.snapshot()));
 	}
 
-	/** Leave the selected table, resigning an unfinished player seat. */
+	/**
+	 * Leave the selected table: resign an unfinished seat, or cancel a table that has not been seated yet.
+	 *
+	 * Cancelling matters because the host's client seats the first joiner automatically; an abandoned open table
+	 * would otherwise stay joinable and could seat a host who already left.
+	 */
 	async leave()
 	{
 		const session = this.sessions.get(this.selected);
+		const me = this.connected ? this.profile().id : null;
 
-		if(session?.localRole === 'player' && session.seats?.includes(this.profile().id)
+		if(session?.localRole === 'player' && session.seats?.includes(me)
 			&& !['complete','frozen'].includes(session.status)
 		)
-		await this.child(session, 'resign', {player: this.profile().id, reason: 'left'}, `resign:${this.profile().id}`);
+		await this.child(session, 'resign', {player: me, reason: 'left'}, `resign:${me}`);
+		else if(me && session?.localRole === 'player' && !session.seats && session.status === 'open')
+		{
+			await this.child(session, 'cancel', {player: me, reason: 'left'}, `cancel:${me}`);
+
+			if(session.offer.host === me)
+			{
+				session.status = 'expired';
+				session.closedBy = me;
+			}
+			else session.joiners = (session.joiners ?? []).filter(player => player !== me);
+		}
 
 		this.adapter?.stop?.({reason: 'left'});
 		this.selected = null;
@@ -667,6 +703,8 @@ export class RoomGameProtocol extends EventTarget
 		switch(content.kind)
 		{
 			case 'join':
+				if(session.status !== 'open') break;
+
 				if(content.player !== item.sender || session.seats || item.sender === session.offer.host) break;
 
 				if(session.offer.target && session.offer.target !== item.sender) break;
@@ -828,6 +866,44 @@ export class RoomGameProtocol extends EventTarget
 
 				await this.settle(session, item.sender, content);
 				break;
+
+			case 'cancel':
+			{
+				// Before seating, the host withdraws a table, a challenged player declines it, or a joiner withdraws
+				// a pending join. Seated games end only through resign.
+				if(content.player !== item.sender || session.seats) break;
+
+				const {host, target} = session.offer;
+
+				if(item.sender !== host && item.sender !== target)
+				{
+					session.joiners = (session.joiners ?? []).filter(player => player !== item.sender);
+					break;
+				}
+
+				const wasOpen = session.status === 'open';
+				session.status = 'expired';
+				session.closedBy = item.sender;
+
+				if(this.selected === root && item.sender !== me)
+				{
+					this.selected = null;
+					this.dispatchEvent(event('selected', null));
+
+					if(!replay && this.connected) await this.provider.setActivity(null);
+				}
+
+				if(!replay && wasOpen && me && item.sender !== me && (me === host || me === target
+					|| session.joiners?.includes(me)
+				))
+				this.dispatchEvent(event('notice', {
+					kind: item.sender === host ? 'closed' : 'declined'
+					, root
+					, player: item.sender
+				}));
+
+				break;
+			}
 
 			case 'resign':
 				if(content.player !== item.sender || !session.seats?.includes(item.sender)) break;
@@ -1109,7 +1185,9 @@ export class RoomGameProtocol extends EventTarget
 			, selected: this.selected
 			, playing: Boolean(selected?.seed && selected?.seats)
 			, tables: [...this.sessions.values()].filter(
-				session => session.root === this.selected || !['complete','expired'].includes(session.status)
+				session => session.root === this.selected || (!['complete','expired'].includes(session.status)
+					&& (session.seats || session.offer.expires_at > Date.now())
+				)
 			).slice(-100).map(session => ({
 				root: session.root
 				, host: session.offer.host
@@ -1119,6 +1197,11 @@ export class RoomGameProtocol extends EventTarget
 				, open: session.status === 'open' && !session.seats
 				, joinable: session.status === 'open' && !session.seats && session.offer.host !== me
 					&& (!session.offer.target || session.offer.target === me)
+				, mine: Boolean(me) && session.offer.host === me
+				, forMe: Boolean(me) && session.offer.target === me
+				, declinable: session.status === 'open' && !session.seats && Boolean(me) && session.offer.target === me
+				, link: me && session.offer.host === me ? acceptUrl(this.location, session.offer.session_id) : null
+				, expiresAt: session.offer.expires_at
 				, resumable: Boolean(session.seats?.includes(me)) && !['complete','expired'].includes(session.status)
 				, spectatable: Boolean(session.seats) && !['expired'].includes(session.status)
 				, sequence: session.sequence
@@ -1164,6 +1247,7 @@ const node = (name, attributes = {}, text = '') => {
 
 const gameAspectRatio = value => {
 	if(Number.isFinite(value) && value > 0) return Number(value);
+
 	const match = String(value ?? '').match(/^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/);
 	const ratio = match ? Number(match[1]) / Number(match[2]) : 16 / 9;
 
@@ -1172,27 +1256,108 @@ const gameAspectRatio = value => {
 
 let themeCount = 0, theme = null;
 
+const ROOM_STYLE = `
+.phonics-room-game{--room-scrim:rgba(3,8,6,.66);--room-panel:rgba(10,18,15,.9);--room-raised:rgba(24,38,33,.94);
+--room-line:rgba(232,212,160,.16);--room-text:#f2efe6;--room-muted:#a9b5ad;--room-accent:#d9a441;--room-accent-strong:#f0c46a;
+--room-accent-text:#171106;--room-danger:#e0533d;--room-ok:#6bc78c;
+position:absolute;inset:0;display:none;z-index:5;box-sizing:border-box;color:var(--room-text);
+font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--room-scrim);
+-webkit-backdrop-filter:blur(10px) saturate(.85);backdrop-filter:blur(10px) saturate(.85);overflow:hidden}
+.phonics-room-game *,.phonics-room-game *::before,.phonics-room-game *::after{box-sizing:border-box}
+.phonics-room-game [hidden]{display:none!important}
+.phonics-room-game.is-open{display:grid;grid-template:"panel" minmax(0,1fr)/minmax(0,1fr);padding:clamp(.5rem,2.2vw,1.5rem)}
+.phonics-room-stage{display:none;grid-area:stage;min-width:0;min-height:0;background:#000;align-items:center;justify-content:center;overflow:hidden}
+.phonics-room-panel{grid-area:panel;justify-self:center;width:min(70rem,100%);min-height:0;max-height:100%;display:grid;
+grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);background:var(--room-panel);border:1px solid var(--room-line);border-radius:16px;
+box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
+.phonics-room-header{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--room-line)}
+.phonics-room-header h2{flex:1;min-width:0;margin:0;font-size:1.15rem;font-weight:700;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phonics-room-account{display:flex;align-items:center;gap:.45rem;min-width:0;overflow:hidden;color:var(--room-muted);font-size:.85rem;white-space:nowrap}
+.phonics-room-header button{flex:none}
+.phonics-room-dot{flex:none;width:.55rem;height:.55rem;border-radius:50%;background:var(--room-muted)}
+.phonics-room-game.is-connected .phonics-room-dot{background:var(--room-ok);box-shadow:0 0 0 3px rgba(107,199,140,.18)}
+.phonics-room-game.is-failed .phonics-room-dot{background:var(--room-danger)}
+.phonics-room-status{color:inherit}.phonics-room-me{color:var(--room-text);font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.phonics-room-body{display:grid;grid-template-columns:minmax(0,1fr) 19rem;min-height:0}
+.phonics-room-main{display:flex;flex-direction:column;gap:1.1rem;min-width:0;min-height:0;padding:1rem 1.1rem;overflow:auto}
+.phonics-room-main>*{flex:none}
+.phonics-room-rail{min-width:0;min-height:0;padding:1rem;border-left:1px solid var(--room-line);overflow:auto}
+.phonics-room-game h3{margin:0;font-size:.75rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--room-muted)}
+.phonics-room-section{display:flex;flex-direction:column;gap:.55rem;min-height:0}
+.phonics-room-section-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-height:2.5rem}
+.phonics-room-game button{font:inherit;font-weight:600;color:var(--room-text);background:var(--room-raised);border:1px solid var(--room-line);
+border-radius:10px;padding:.45rem .95rem;min-height:2.5rem;cursor:pointer;white-space:nowrap;transition:border-color .12s,background .12s,filter .12s}
+.phonics-room-game button:hover:not(:disabled){border-color:rgba(217,164,65,.65)}
+.phonics-room-game button:focus-visible,.phonics-room-game input:focus-visible{outline:2px solid var(--room-accent-strong);outline-offset:2px}
+.phonics-room-game button:disabled{opacity:.5;cursor:default}
+.phonics-room-game button.is-primary{background:linear-gradient(var(--room-accent-strong),var(--room-accent));color:var(--room-accent-text);border-color:transparent}
+.phonics-room-game button.is-primary:hover:not(:disabled){filter:brightness(1.07)}
+.phonics-room-game button.is-quiet{background:transparent}
+.phonics-room-game button.is-danger{background:var(--room-danger);border-color:transparent;color:#fff}
+.phonics-room-game input{font:inherit;color:var(--room-text);background:rgba(0,0,0,.32);border:1px solid var(--room-line);border-radius:10px;padding:.5rem .75rem;min-height:2.5rem;min-width:0}
+.phonics-room-game input:disabled{opacity:.5}
+.phonics-room-card{display:flex;flex-direction:column;gap:.65rem;padding:1rem 1.1rem;border:1px solid var(--room-line);border-radius:12px;background:var(--room-raised)}
+.phonics-room-card strong{font-size:1.05rem}.phonics-room-card p{margin:0;color:var(--room-muted)}
+.phonics-room-card .phonics-room-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.phonics-room-waiting{border-color:rgba(217,164,65,.55)}
+.phonics-room-pulse{display:inline-block;width:.6rem;height:.6rem;margin-right:.5rem;border-radius:50%;background:var(--room-accent);animation:phonics-room-pulse 1.4s ease-in-out infinite}
+@keyframes phonics-room-pulse{50%{opacity:.25;transform:scale(.7)}}
+@media(prefers-reduced-motion:reduce){.phonics-room-pulse{animation:none}}
+.phonics-room-link{flex:1 1 14rem;font-size:.85rem;color:var(--room-muted)}
+.phonics-room-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.phonics-room-item{display:flex;align-items:center;gap:.7rem;min-height:3rem;padding:.45rem .6rem;border:1px solid transparent;border-radius:10px;background:rgba(255,255,255,.035)}
+.phonics-room-item.is-for-you{border-color:rgba(217,164,65,.7);background:rgba(217,164,65,.1)}
+.phonics-room-avatar{flex:none;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;font-weight:700;font-size:.9rem;color:#0b1210}
+.phonics-room-who{display:flex;flex-direction:column;flex:1;min-width:0}
+.phonics-room-who b,.phonics-room-who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phonics-room-who span{color:var(--room-muted);font-size:.85rem}
+.phonics-room-actions{display:flex;gap:.4rem;flex:none}
+.phonics-room-game .phonics-room-item>button{min-height:2.1rem;padding:.3rem .7rem;font-size:.85rem}
+.phonics-room-empty{margin:0;padding:.25rem 0;color:var(--room-muted);font-size:.9rem}
+.phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
+.phonics-room-chat{flex:1;min-height:8rem;display:flex;flex-direction:column;gap:.45rem;padding:.65rem .75rem;overflow:auto;border:1px solid var(--room-line);border-radius:12px;background:rgba(0,0,0,.28)}
+.phonics-room-message{display:grid;grid-template-columns:auto 1fr;column-gap:.5rem;align-items:baseline;overflow-wrap:anywhere}
+.phonics-room-message b{font-weight:700}.phonics-room-message time{color:var(--room-muted);font-size:.75rem;justify-self:end}
+.phonics-room-message p{grid-column:1/-1;margin:0}
+.phonics-room-message.is-own b{color:var(--room-accent-strong)}
+.phonics-room-message.is-system{display:block;color:var(--room-muted);font-size:.88rem;font-style:italic}
+.phonics-room-chat-form{display:flex;gap:.5rem}.phonics-room-chat-form input{flex:1}
+.phonics-room-match{display:none}
+.phonics-room-game:not(.is-connected) .phonics-room-needs-connection{display:none}
+.phonics-room-game:not(.is-connected) .phonics-room-body{grid-template-columns:minmax(0,1fr)}
+.phonics-room-game:not(.is-connected) .phonics-room-panel{width:min(34rem,100%);align-self:center}
+.phonics-room-game.has-game{grid-template:"stage side" minmax(0,1fr)/minmax(0,1fr) clamp(16rem,24vw,21rem);padding:0;background:#000;-webkit-backdrop-filter:none;backdrop-filter:none}
+.phonics-room-game.has-game .phonics-room-stage{display:flex}
+.phonics-room-game.has-game .phonics-room-stage>canvas{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;aspect-ratio:16/9;object-fit:contain}
+.phonics-room-game.has-game .phonics-room-panel{grid-area:side;width:auto;max-height:none;border-width:0 0 0 1px;border-radius:0;box-shadow:none}
+.phonics-room-game.has-game .phonics-room-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+.phonics-room-game.has-game .phonics-room-rail{border-left:0;border-top:1px solid var(--room-line);max-height:11rem}
+.phonics-room-game.has-game .phonics-room-match{display:flex}
+.phonics-room-game.has-game .phonics-room-header h2,.phonics-room-game.has-game .phonics-room-header button{display:none}
+.phonics-room-game.has-game .phonics-room-lobby-only{display:none}
+.phonics-room-game.has-game .phonics-room-main>.phonics-room-chat-section{min-height:0}
+@media(max-width:42rem){
+.phonics-room-game.is-open{padding:0}
+.phonics-room-panel{width:100%;border-width:0;border-radius:0}
+.phonics-room-header{padding:.7rem .85rem;gap:.6rem}.phonics-room-header h2{font-size:1rem}
+.phonics-room-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;overflow:auto}
+.phonics-room-main{min-height:auto;overflow:visible;padding:.85rem}
+.phonics-room-rail{min-height:auto;overflow:visible;border-left:0;border-top:1px solid var(--room-line);padding:.85rem}
+.phonics-room-main>.phonics-room-chat-section{flex:none;min-height:auto}
+.phonics-room-chat{min-height:12rem;max-height:45vh}
+.phonics-room-game button{min-height:2.75rem}
+.phonics-room-game.has-game{grid-template:"stage" minmax(0,1.3fr) "side" minmax(0,1fr)/minmax(0,1fr)}
+.phonics-room-game.has-game .phonics-room-panel{border-width:1px 0 0}
+.phonics-room-game.has-game .phonics-room-body{overflow:hidden}.phonics-room-game.has-game .phonics-room-main{overflow:auto}
+.phonics-room-game.has-game .phonics-room-rail{display:none}}
+`;
+
 const useTheme = () => {
 	if(!theme)
 	{
 		theme = node('style');
 		theme.dataset.phonicsRoomGame = '';
-		theme.textContent = `
-.phonics-room-game{position:absolute;inset:0;display:none;grid-template-columns:minmax(0,1fr) clamp(14rem,20vw,19rem);grid-template-rows:minmax(0,1fr);z-index:5;background:#07100d;color:#e7eadf;font:14px/1.4 system-ui,sans-serif}
-.phonics-room-game.is-open{display:grid}.phonics-room-main{min-width:0;min-height:0;display:grid;grid-template-rows:minmax(0,1fr)}
-.phonics-room-stage{display:none;min-width:0;min-height:0;background:#000;align-items:center;justify-content:center;overflow:hidden}
-.phonics-room-game.has-game .phonics-room-main{grid-template-rows:minmax(0,1fr) clamp(8rem,22vh,12rem)}
-.phonics-room-game.has-game .phonics-room-stage{display:flex}.phonics-room-game.has-game .phonics-room-stage>canvas{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;aspect-ratio:16/9;object-fit:contain}
-.phonics-room-content{padding:1rem;overflow:auto}.phonics-room-game.has-game .phonics-room-content{padding:.65rem;border-top:1px solid #496452}
-.phonics-room-rail{min-width:0;overflow:auto;border-left:1px solid #496452;background:#0b1914;padding:.9rem}
-.phonics-room-game h2,.phonics-room-game h3{font:600 1rem/1.2 system-ui,sans-serif;margin:0 0 .75rem;color:#f0d68e}.phonics-room-game h2{font-size:1.25rem}
-.phonics-room-status{display:block;min-height:1.4em;margin:.4rem 0;color:#cdd9cf}.phonics-room-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.7rem 0}
-.phonics-room-game button,.phonics-room-game input{font:inherit;color:inherit;background:#173e31;border:1px solid #5f806c;border-radius:3px;padding:.45rem .65rem}.phonics-room-game button:hover{background:#245743}.phonics-room-game button:disabled{opacity:.45}
-.phonics-room-list{list-style:none;margin:.4rem 0 1rem;padding:0}.phonics-room-list li{display:flex;align-items:center;gap:.45rem;min-height:2rem;border-bottom:1px solid #20382e}.phonics-room-list li span{flex:1;overflow-wrap:anywhere}
-.phonics-room-chat{height:min(48vh,28rem);overflow:auto;border:1px solid #29483a;padding:.5rem;background:#050a08}.phonics-room-game.has-game .phonics-room-chat{height:4.7rem}.phonics-room-chat p{margin:.2rem 0;overflow-wrap:anywhere}.phonics-room-chat-form{display:flex;gap:.4rem;margin-top:.45rem}.phonics-room-chat-form input{flex:1;min-width:0}
-@media(max-width:42rem){.phonics-room-game.is-open{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.phonics-room-rail{border-left:0;border-top:1px solid #496452;max-height:10rem}.phonics-room-game.has-game .phonics-room-main{grid-template-rows:minmax(0,1fr) 8rem}}
-`;
-
+		theme.textContent = ROOM_STYLE;
 		document.head.append(theme);
 	}
 
@@ -1205,6 +1370,38 @@ const useTheme = () => {
 			theme = null;
 		} };
 };
+
+/** Readable fallback for a Matrix user identifier before presence supplies a display name. */
+const localpart = id => String(id ?? '').replace(/^@/, '').split(':')[0] || String(id ?? '');
+
+/** Stable, legible avatar tint for an identifier. */
+const avatarColor = id => {
+	let hash = 0;
+
+	for(const character of String(id)) hash = (hash * 31 + character.codePointAt(0)) >>> 0;
+
+	return `hsl(${hash % 360} 52% 66%)`;
+};
+
+const avatar = (id, name) => {
+	const item = node(
+		'span'
+		, {class: 'phonics-room-avatar', 'aria-hidden': 'true'}
+		, [...name][0]?.toUpperCase() ?? '?'
+	);
+
+	item.style.background = avatarColor(id);
+
+	return item;
+};
+
+const activityLabel = activity => ({
+	waiting: 'Waiting at a table'
+	, active: 'Playing'
+	, spectating: 'Watching a game'
+})[activity?.state] ?? 'In the lobby';
+
+const clock = new Intl.DateTimeFormat(undefined, {hour: 'numeric', minute: '2-digit'});
 
 /** Accessible embedded lobby shell used by direct applications. */
 export class EmbeddedRoomLobby
@@ -1220,75 +1417,210 @@ export class EmbeddedRoomLobby
 		this.chatFrame = null;
 		this.loginPending = null;
 		this.signal = signal;
+		this.snapshot = protocol.snapshot();
+		this.names = new Map;
+		this.phase = 'idle';
+		this.confirmTimer = null;
+		this.confirmingLeave = false;
+		this.countdown = null;
 		this.releaseTheme = useTheme();
-		this.root = node('section', {class: 'phonics-room-game', 'aria-label': title});
-		this.main = node('div', {class: 'phonics-room-main'});
-		this.stage = node('div', {class: 'phonics-room-stage'});
 		this.aspectRatio = gameAspectRatio(protocol.game.aspectRatio);
 		this.canvasSizing = null;
+
+		this.root = node('section', {class: 'phonics-room-game', 'aria-label': title});
+		this.stage = node('div', {class: 'phonics-room-stage'});
 		this.stageResize = new ResizeObserver(() => this.sizeStage());
 		this.stageResize.observe(this.stage);
-		this.content = node('div', {class: 'phonics-room-content'});
-		this.rail = node('aside', {class: 'phonics-room-rail'});
-		this.status = node('output', {class: 'phonics-room-status', 'aria-live': 'polite'}, 'Offline');
-		this.tableList = node('ul', {class: 'phonics-room-list'});
-		this.peerList = node('ul', {class: 'phonics-room-list'});
-		this.chatLog = node('div', {class: 'phonics-room-chat', 'aria-live': 'polite'});
-		this.chatForm = node('form', {class: 'phonics-room-chat-form'});
-		this.chatInput = node('input', {type: 'text', maxlength: '1000', placeholder: 'Message the lobby'});
-		this.openButton = node('button', {type: 'button'}, 'Open table');
-		this.leaveButton = node('button', {type: 'button'}, 'Leave table');
-		this.closeButton = node('button', {type: 'button'}, 'Back');
-		this.loginButton = node('button', {type: 'button'}, 'Continue with Matrix');
-		const parent = this.host;
-		parent.style.position ||= 'relative';
-		parent.append(this.root);
-		this.main.append(this.stage, this.content);
-		this.root.append(this.main, this.rail);
-		this.content.append(node('h2', {}, title), this.status);
-		const actions = node('div', {class: 'phonics-room-actions'});
-		actions.append(this.openButton, this.leaveButton, this.closeButton, this.loginButton);
+		this.panel = node('div', {class: 'phonics-room-panel'});
 
-		this.content.append(
-			actions
-			, node('h3', {}, 'Tables')
-			, this.tableList
-			, node('h3', {}, 'Lobby chat')
-			, this.chatLog
+		// Header: title, connection and account, and the way back to the game's own menu.
+		const header = node('header', {class: 'phonics-room-header'});
+		const account = node('div', {class: 'phonics-room-account'});
+		this.status = node('output', {class: 'phonics-room-status', 'aria-live': 'polite'}, 'Offline');
+		this.me = node('span', {class: 'phonics-room-me'});
+		account.append(node('span', {class: 'phonics-room-dot', 'aria-hidden': 'true'}), this.status, this.me);
+		this.closeButton = node('button', {type: 'button', class: 'is-quiet'}, 'Back');
+		header.append(node('h2', {}, title), account, this.closeButton);
+
+		const body = node('div', {class: 'phonics-room-body'});
+		this.content = node('div', {class: 'phonics-room-main'});
+
+		this.rail = node(
+			'aside'
+			, {class: 'phonics-room-rail phonics-room-section phonics-room-needs-connection', 'aria-label': 'People'}
+		);
+
+		// In a game, the sidebar names the players and owns the only way out, which confirms before forfeiting.
+		this.matchCard = node('div', {class: 'phonics-room-card phonics-room-match'});
+		this.matchTitle = node('strong');
+		this.leaveButton = node('button', {type: 'button'}, 'Leave table');
+		const matchRow = node('div', {class: 'phonics-room-row'});
+		matchRow.append(this.leaveButton);
+		this.matchCard.append(this.matchTitle, matchRow);
+
+		this.connectingCard = node('div', {class: 'phonics-room-card phonics-room-lobby-only'});
+
+		this.connectingCard.append(
+			node('strong', {}, 'Connecting to the lobby…')
+			, node('p', {}, 'Loading tables and chat.')
+		);
+
+		this.signinCard = node('div', {class: 'phonics-room-card phonics-room-lobby-only'});
+		this.loginButton = node('button', {type: 'button', class: 'is-primary'}, 'Continue with Matrix');
+		const signinRow = node('div', {class: 'phonics-room-row'});
+		signinRow.append(this.loginButton);
+
+		this.signinCard.append(
+			node('strong', {}, 'Play online with a Matrix account')
+			, node(
+				'p'
+				, {}
+				, 'Open tables, challenge people, and chat. Matrix is an open chat network, and accounts are free.'
+			)
+			, signinRow
+			, node('p', {}, 'Sign-in opens in a pop-up window.')
+		);
+
+		this.waitingCard = node('div', {class: 'phonics-room-card phonics-room-waiting phonics-room-lobby-only'});
+		this.waitingTitle = node('strong');
+		this.waitingText = node('p');
+
+		this.linkInput = node(
+			'input'
+			, {type: 'text', readonly: '', class: 'phonics-room-link', 'aria-label': 'Invite link'}
+		);
+
+		this.copyButton = node('button', {type: 'button'}, 'Copy link');
+		this.linkRow = node('div', {class: 'phonics-room-row'});
+		this.linkRow.append(this.linkInput, this.copyButton);
+		this.cancelButton = node('button', {type: 'button'}, 'Cancel table');
+		const waitingRow = node('div', {class: 'phonics-room-row'});
+		waitingRow.append(this.cancelButton);
+		this.waitingCard.append(this.waitingTitle, this.waitingText, this.linkRow, waitingRow);
+
+		const tables = node(
+			'section'
+			, {class: 'phonics-room-section phonics-room-lobby-only phonics-room-needs-connection'}
+		);
+
+		const tablesHead = node('div', {class: 'phonics-room-section-head'});
+		this.openButton = node('button', {type: 'button', class: 'is-primary'}, 'Open a table');
+		tablesHead.append(node('h3', {}, 'Tables'), this.openButton);
+		this.tableList = node('ul', {class: 'phonics-room-list'});
+
+		this.tablesEmpty = node(
+			'p'
+			, {class: 'phonics-room-empty'}
+			, 'No open tables yet. Open one, or challenge someone who is online.'
+		);
+
+		tables.append(tablesHead, this.tableList, this.tablesEmpty);
+
+		const chat = node(
+			'section'
+			, {class: 'phonics-room-section phonics-room-chat-section phonics-room-needs-connection'}
+		);
+
+		this.chatLog = node('div', {class: 'phonics-room-chat', role: 'log', 'aria-label': 'Lobby chat'});
+		this.chatEmpty = node('p', {class: 'phonics-room-empty'}, 'No messages yet. Say hello.');
+		this.chatLog.append(this.chatEmpty);
+		this.chatForm = node('form', {class: 'phonics-room-chat-form'});
+
+		this.chatInput = node(
+			'input'
+			, {type: 'text', maxlength: '1000', placeholder: 'Message the lobby', 'aria-label': 'Message the lobby'}
 		);
 
 		this.chatForm.append(this.chatInput, node('button', {type: 'submit'}, 'Send'));
-		this.content.append(this.chatForm);
-		this.rail.append(node('h3', {}, 'People'), this.peerList);
+		chat.append(node('div', {class: 'phonics-room-section-head'}, ''), this.chatLog, this.chatForm);
+		chat.firstChild.append(node('h3', {}, 'Lobby chat'));
+
+		this.peerHeading = node('h3', {}, 'People');
+		this.peerList = node('ul', {class: 'phonics-room-list'});
+		this.peersEmpty = node('p', {class: 'phonics-room-empty'}, 'Nobody else is here yet.');
+		this.rail.append(node('div', {class: 'phonics-room-section-head'}), this.peerList, this.peersEmpty);
+		this.rail.firstChild.append(this.peerHeading);
+
+		this.content.append(this.matchCard, this.connectingCard, this.signinCard, this.waitingCard, tables, chat);
+		body.append(this.content, this.rail);
+		this.panel.append(header, body);
+		this.root.append(this.stage, this.panel);
+		const parent = this.host;
+		parent.style.position ||= 'relative';
+		parent.append(this.root);
+
 		this.openButton.addEventListener('click', () => void this.run(() => protocol.create()));
-		this.leaveButton.addEventListener('click', () => void this.run(() => protocol.leave()));
-		this.closeButton.addEventListener('click', () => void this.close());
+		this.cancelButton.addEventListener('click', () => void this.run(() => protocol.leave()));
+		this.leaveButton.addEventListener('click', () => void this.requestLeave());
+		this.closeButton.addEventListener('click', () => void this.requestLeave({close: true}));
 		this.loginButton.addEventListener('click', () => void this.login());
+		this.copyButton.addEventListener('click', () => void this.copyLink());
 
 		this.chatForm.addEventListener('submit', input => {
 			input.preventDefault();
-			const value = this.chatInput.value;
+			const value = this.chatInput.value.trim();
+
+			if(!value) return;
+
 			this.chatInput.value = '';
 			void this.run(() => protocol.provider.chat(value));
 		});
+
+		this.keydown = input => {
+			if(input.key !== 'Escape' || this.root.classList.contains('has-game')) return;
+
+			if(input.target === this.chatInput && this.chatInput.value)
+			{
+				this.chatInput.value = '';
+
+				return;
+			}
+
+			input.preventDefault();
+			void this.requestLeave({close: true});
+		};
+
+		this.root.addEventListener('keydown', this.keydown);
 
 		this.change = ({detail}) => this.render(detail);
 
 		this.message = ({detail}) => this.addChat(detail);
 
-		this.error = ({detail}) => { this.status.textContent = detail?.message ?? String(detail); };
+		this.error = ({detail}) => this.setStatus(detail?.message ?? String(detail), 'error');
+
+		this.notice = ({detail}) => {
+			const name = this.displayName(detail?.player);
+			const text = detail?.kind === 'declined' ? `${name} declined your challenge.` : `${name} closed the table.`;
+			this.addSystem(text);
+			this.setStatus('Connected');
+		};
 
 		protocol.addEventListener('change', this.change);
 		protocol.addEventListener('chat', this.message);
 		protocol.addEventListener('error', this.error);
+		protocol.addEventListener('notice', this.notice);
 		signal?.addEventListener('abort', () => this.dispose(), {once: true});
-		this.render(protocol.snapshot());
+		this.render(this.snapshot);
+	}
+
+	/** Name a Matrix account by its presence display name, or by its localpart until presence arrives. */
+	displayName(id)
+	{
+		return this.names.get(id) ?? localpart(id);
+	}
+
+	/** Show connection state beside the account; errors also tint the indicator. */
+	setStatus(text, tone = null)
+	{
+		this.status.textContent = text;
+		this.root.classList.toggle('is-failed', tone === 'error');
 	}
 
 	/** Fit the game canvas from stage dimensions rather than its self-changing framebuffer dimensions. */
 	sizeStage()
 	{
 		if(!this.root.classList.contains('has-game')) return;
+
 		const {width,height} = this.stage.getBoundingClientRect();
 
 		if(width < 1 || height < 1) return;
@@ -1298,6 +1630,7 @@ export class EmbeddedRoomLobby
 			, this.canvas.style.getPropertyValue(name)
 			, this.canvas.style.getPropertyPriority(name)
 		]);
+
 		const fittedWidth = Math.min(width, height * this.aspectRatio);
 		const fittedHeight = fittedWidth / this.aspectRatio;
 		this.canvas.style.setProperty('width', `${fittedWidth}px`, 'important');
@@ -1318,25 +1651,44 @@ export class EmbeddedRoomLobby
 		this.canvasSizing = null;
 	}
 
-	/** Reveal the lobby, move in the canvas, and connect room history. */
+	/** Reveal the lobby over the running game and connect room history. */
 	async open()
 	{
-		this.stage.append(this.canvas);
 		this.root.classList.add('is-open');
 		this.canvas.inert = false;
-		this.status.textContent = 'Connecting…';
+		this.phase = 'connecting';
+		this.setStatus('Connecting…');
+		this.render(this.protocol.snapshot());
 
 		try
 		{
 			await this.protocol.connect();
-			this.status.textContent = 'Connected';
+			this.phase = 'ready';
+			this.setStatus('Connected');
+			this.render(this.protocol.snapshot());
+			this.focusPrimary();
 		}
 		catch(error)
 		{
-			this.status.textContent = error.message;
-			this.loginButton.hidden = error.code !== 'matrix_auth_required';
+			const signin = error.code === 'matrix_auth_required';
+			this.phase = signin ? 'signin' : 'failed';
+
+			// The sign-in card explains a missing session, so the header only needs a short state.
+			this.setStatus(signin ? 'Signed out' : error.message, signin ? null : 'error');
+			this.render(this.protocol.snapshot());
+			this.focusPrimary();
 			throw error;
 		}
+	}
+
+	/** Move keyboard focus to the action that matters most in the current state. */
+	focusPrimary()
+	{
+		const target = this.phase === 'signin'
+			? this.loginButton
+			: this.snapshot.selected && !this.snapshot.playing ? this.cancelButton : this.openButton;
+
+		if(!target.hidden && !target.disabled) target.focus({preventScroll: true});
 	}
 
 	/** Authenticate in a popup, reconnect the room protocol, and retain the running game page. */
@@ -1345,7 +1697,7 @@ export class EmbeddedRoomLobby
 		if(this.loginPending) return this.loginPending;
 
 		this.loginButton.disabled = true;
-		this.status.textContent = 'Opening Matrix sign-in…';
+		this.setStatus('Opening Matrix sign-in…');
 
 		this.loginPending = authorizeWithPopup({
 			begin: returnUrl => this.protocol.provider.beginOAuth(returnUrl)
@@ -1358,26 +1710,67 @@ export class EmbeddedRoomLobby
 			}
 			, signal: this.signal
 		}).then(() => {
-			this.status.textContent = 'Connected';
+			this.phase = 'ready';
+			this.setStatus('Connected');
 		}).catch(error => {
-			this.status.textContent = error.message;
+			this.setStatus(error.message, 'error');
 		}).finally(() => {
 			this.loginPending = null;
 			this.loginButton.disabled = false;
 			this.render(this.protocol.snapshot());
+			this.focusPrimary();
 		});
 
 		return this.loginPending;
 	}
 
+	/**
+	 * Leave the current table, or the lobby itself, confirming first when that would forfeit a game in progress.
+	 *
+	 * @param {{close?: boolean}} [options] Close the lobby after leaving.
+	 */
+	async requestLeave({close = false} = {})
+	{
+		const selected = this.snapshot.tables.find(table => table.root === this.snapshot.selected);
+		const forfeits = Boolean(selected?.resumable && ['committing','ready','active'].includes(selected.status));
+
+		if(forfeits && !this.confirmingLeave)
+		{
+			this.confirmingLeave = true;
+			this.leaveButton.textContent = 'Forfeit and leave?';
+			this.leaveButton.classList.add('is-danger');
+			this.leaveButton.focus({preventScroll: true});
+			clearTimeout(this.confirmTimer);
+			this.confirmTimer = setTimeout(() => this.resetLeave(), 4000);
+
+			return;
+		}
+
+		this.resetLeave();
+
+		if(close) await this.close();
+		else await this.run(() => this.protocol.leave());
+	}
+
+	resetLeave()
+	{
+		clearTimeout(this.confirmTimer);
+		this.confirmTimer = null;
+		this.confirmingLeave = false;
+		this.leaveButton.textContent = 'Leave table';
+		this.leaveButton.classList.remove('is-danger');
+	}
+
 	/** Leave the selected table and return the canvas to its original host. */
 	async close()
 	{
-		if(this.protocol.selected) await this.protocol.leave();
+		if(this.protocol.selected) await this.run(() => this.protocol.leave());
 
 		this.root.classList.remove('is-open', 'has-game');
 		this.restoreCanvasSizing();
-		this.host.append(this.canvas);
+
+		if(this.canvas.parentElement !== this.host) this.host.append(this.canvas);
+
 		this.protocol.dispatchEvent(event('closed', {}));
 	}
 
@@ -1390,69 +1783,265 @@ export class EmbeddedRoomLobby
 		}
 		catch(error)
 		{
-			this.status.textContent = error.message;
+			this.setStatus(error.message, 'error');
 		}
+	}
+
+	async copyLink()
+	{
+		const link = this.linkInput.value;
+
+		try
+		{
+			await navigator.clipboard.writeText(link);
+			this.copyButton.textContent = 'Copied';
+		}
+		catch
+		{
+			this.linkInput.select();
+			this.copyButton.textContent = 'Press Ctrl+C';
+		}
+
+		setTimeout(() => { this.copyButton.textContent = 'Copy link'; }, 2000);
+	}
+
+	/** Describe one table from the local player's point of view. */
+	describe(table, me)
+	{
+		const host = this.displayName(table.host);
+		const players = table.players.map(player => player === me ? 'You' : this.displayName(player));
+
+		if(table.players.length === 2)
+		{
+			const state = {
+				committing: 'Starting…'
+				, ready: 'Starting…'
+				, active: 'In progress'
+				, frozen: 'Paused'
+				, complete: 'Finished'
+			}[table.status]
+				?? 'Starting…';
+
+			return {name: `${players[0]} vs ${players[1]}`, detail: state};
+		}
+
+		const minutes = Math.max(1, Math.round((table.expiresAt - Date.now()) / 60000));
+
+		if(table.forMe) return {name: `${host} challenged you`, detail: 'Accept to start a game'};
+
+		if(table.target)
+		return {
+			name: `${host} challenged ${this.displayName(table.target)}`
+			, detail: 'Waiting for an answer'
+		};
+
+		return {name: `${host}’s table`, detail: `Open · expires in ${minutes} min`};
 	}
 
 	/** Render tables, controls, and people from one protocol snapshot. */
 	render(snapshot)
 	{
-		this.root.classList.toggle('has-game', Boolean(snapshot.playing));
-		if(snapshot.playing) this.sizeStage();
-		else this.restoreCanvasSizing();
-		this.leaveButton.hidden = !snapshot.selected;
+		this.snapshot = snapshot;
+		const me = snapshot.profile?.id ?? null;
+
+		const known = this.names.size;
+
+		for(const peer of snapshot.peers) if(peer.displayName) this.names.set(peer.id, peer.displayName);
+
+		// History often arrives before presence; relabel earlier messages once display names are known.
+		if(this.names.size !== known)
+		for(const label of this.chatLog.querySelectorAll('[data-sender]'))
+		if(label.dataset.sender !== snapshot.profile?.id) label.textContent = this.displayName(label.dataset.sender);
+
+
+		if(snapshot.connected && this.phase !== 'ready') this.phase = 'ready';
+
+		this.root.classList.toggle('is-connected', Boolean(snapshot.connected));
+		this.me.textContent = snapshot.connected && me ? `as ${this.displayName(me)}` : '';
+		this.connectingCard.hidden = this.phase !== 'connecting';
+		this.signinCard.hidden = this.phase !== 'signin' || snapshot.connected;
+		this.chatInput.disabled = !snapshot.connected;
+
+		// The game canvas stays live behind the frosted lobby and moves into the stage only for a seated game.
+		const playing = Boolean(snapshot.playing);
+		this.root.classList.toggle('has-game', playing);
+
+		if(playing)
+		{
+			if(this.canvas.parentElement !== this.stage) this.stage.append(this.canvas);
+
+			this.sizeStage();
+		}
+		else
+		{
+			this.restoreCanvasSizing();
+
+			if(this.canvas.parentElement === this.stage) this.host.append(this.canvas);
+
+			this.resetLeave();
+		}
+
+		const selected = snapshot.tables.find(table => table.root === snapshot.selected) ?? null;
+		this.renderMatch(selected, me, playing);
+		this.renderWaiting(selected, playing);
 		this.openButton.disabled = Boolean(snapshot.selected) || !snapshot.connected;
-		this.loginButton.hidden = snapshot.connected;
 
-		this.tableList.replaceChildren(...snapshot.tables.map(table => {
-			const item = node('li'), label = node('span', {}, `${table.host} · ${table.status}`);
-			item.append(label);
+		const listed = snapshot.tables.filter(table => table.root !== snapshot.selected);
+		this.tableList.replaceChildren(...listed.map(table => this.tableItem(table, me)));
+		this.tablesEmpty.hidden = listed.length > 0;
 
-			if(table.joinable)
-			{
-				const join = node('button', {type: 'button'}, 'Join');
-				join.addEventListener('click', () => void this.run(() => this.protocol.join(table.root)));
-				item.append(join);
-			}
-
-			if(table.resumable)
-			{
-				const resume = node('button', {type: 'button'}, 'Resume');
-				resume.addEventListener('click', () => void this.run(() => this.protocol.resume(table.root)));
-				item.append(resume);
-			}
-
-			if(table.spectatable)
-			{
-				const watch = node('button', {type: 'button'}, 'Watch');
-				watch.addEventListener('click', () => void this.run(() => this.protocol.spectate(table.root)));
-				item.append(watch);
-			}
-
-			return item;
-		}));
-
-		this.peerList.replaceChildren(...snapshot.peers.map(peer => {
-			const item = node('li'), label = node('span', {}, peer.displayName ?? peer.id);
-			item.append(label);
-
-			if(snapshot.connected && peer.id !== snapshot.profile?.id && !snapshot.selected)
-			{
-				const challenge = node('button', {type: 'button'}, 'Challenge');
-				challenge.addEventListener('click', () => void this.run(() => this.protocol.create({target: peer.id})));
-				item.append(challenge);
-			}
-
-			return item;
-		}));
+		const others = snapshot.peers.filter(peer => peer.id !== me);
+		this.peerHeading.textContent = snapshot.peers.length ? `People · ${snapshot.peers.length} online` : 'People';
+		this.peerList.replaceChildren(...snapshot.peers.map(peer => this.peerItem(peer, me, snapshot)));
+		this.peersEmpty.hidden = others.length > 0;
 	}
 
-	/** Append one interoperable Matrix text message to the compact room log. */
-	addChat({from, text})
+	renderMatch(selected, me, playing)
 	{
+		if(!playing || !selected) return;
+
+		const spectating = !selected.players.includes(me);
+		const [first, second] = selected.players.map(player => player === me ? 'You' : this.displayName(player));
+		this.matchTitle.textContent = spectating ? `Watching ${first} vs ${second}` : `${first} vs ${second}`;
+
+		if(!this.confirmingLeave) this.leaveButton.textContent = spectating ? 'Stop watching' : 'Leave table';
+	}
+
+	renderWaiting(selected, playing)
+	{
+		const waiting = Boolean(selected) && !playing;
+		this.waitingCard.hidden = !waiting;
+		clearInterval(this.countdown);
+		this.countdown = null;
+
+		if(!waiting) return;
+
+		const target = selected.target ? this.displayName(selected.target) : null;
+
+		if(selected.mine)
+		{
+			this.waitingTitle.replaceChildren(
+				node('span', {class: 'phonics-room-pulse', 'aria-hidden': 'true'})
+				, target ? `Waiting for ${target} to accept` : 'Waiting for an opponent'
+			);
+
+			this.linkInput.value = selected.link ?? '';
+			this.linkRow.hidden = !selected.link;
+			this.cancelButton.textContent = 'Cancel table';
+
+			const tick = () => {
+				const seconds = Math.max(0, Math.round((selected.expiresAt - Date.now()) / 1000));
+				const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+				this.waitingText.textContent = (target
+					? 'They can accept from the lobby, or you can send them this link.'
+					: 'Anyone in the lobby can join. To invite someone directly, send them this link.'
+				) + ` Open for ${time}.`;
+			};
+
+			tick();
+			this.countdown = setInterval(tick, 1000);
+		}
+		else
+		{
+			const spectating = !selected.players.includes(this.snapshot.profile?.id);
+
+			this.waitingTitle.replaceChildren(
+				node('span', {class: 'phonics-room-pulse', 'aria-hidden': 'true'})
+				, spectating ? 'Loading the game…' : `Joining ${this.displayName(selected.host)}’s table…`
+			);
+
+			this.waitingText.textContent = spectating
+				? 'The board appears as soon as the latest position loads.'
+				: 'The game starts as soon as both players have agreed on a fair rack.';
+
+			this.linkRow.hidden = true;
+			this.cancelButton.textContent = 'Leave';
+		}
+	}
+
+	tableItem(table, me)
+	{
+		const item = node('li', {class: 'phonics-room-item'});
+		const {name, detail} = this.describe(table, me);
+		const who = node('div', {class: 'phonics-room-who'});
+		who.append(node('b', {}, name), node('span', {}, detail));
+		item.classList.toggle('is-for-you', Boolean(table.forMe && table.joinable));
+		item.append(avatar(table.host, this.displayName(table.host)), who);
+		const actions = node('div', {class: 'phonics-room-actions'});
+
+		const button = (label, operation, primary = false) => {
+			const control = node('button', {type: 'button', class: primary ? 'is-primary' : ''}, label);
+			control.addEventListener('click', () => void this.run(operation));
+			actions.append(control);
+		};
+
+		if(table.joinable) button(table.forMe ? 'Accept' : 'Join', () => this.protocol.join(table.root), true);
+
+		if(table.declinable) button('Decline', () => this.protocol.decline(table.root));
+
+		if(table.resumable) button('Resume', () => this.protocol.resume(table.root), true);
+		else if(table.spectatable) button('Watch', () => this.protocol.spectate(table.root));
+
+		if(actions.childElementCount) item.append(actions);
+
+		return item;
+	}
+
+	peerItem(peer, me, snapshot)
+	{
+		const item = node('li', {class: 'phonics-room-item'});
+		const name = this.displayName(peer.id);
+		const who = node('div', {class: 'phonics-room-who'});
+
+		who.append(
+			node('b', {}, peer.id === me ? `${name} (you)` : name)
+			, node('span', {}, activityLabel(peer.activity))
+		);
+
+		item.append(avatar(peer.id, name), who);
+
+		if(snapshot.connected && peer.id !== me && !snapshot.selected && !peer.activity)
+		{
+			const challenge = node('button', {type: 'button'}, 'Challenge');
+			challenge.addEventListener('click', () => void this.run(() => this.protocol.create({target: peer.id})));
+			item.append(challenge);
+		}
+
+		return item;
+	}
+
+	/** Append one interoperable Matrix text message to the room log. */
+	addChat({from, text, sentAt})
+	{
+		const me = this.snapshot.profile?.id;
+		const message = node('div', {class: 'phonics-room-message'});
+		message.classList.toggle('is-own', from === me);
+		const time = Number.isFinite(sentAt)
+			? node('time', {datetime: new Date(sentAt).toISOString()}, clock.format(sentAt))
+			: node('time');
+
+		message.append(
+			node('b', {'data-sender': from}, from === me ? 'You' : this.displayName(from))
+			, time
+			, node('p', {}, text)
+		);
+
+		this.appendLog(message);
+	}
+
+	/** Append a lobby event, such as a declined challenge, in the room log's quieter style. */
+	addSystem(text)
+	{
+		this.appendLog(node('div', {class: 'phonics-room-message is-system'}, text));
+	}
+
+	appendLog(entry)
+	{
+		this.chatEmpty.remove();
+
 		if(this.chatLog.childElementCount >= 200) this.chatLog.firstElementChild.remove();
 
-		this.chatLog.append(node('p', {}, `${from}: ${text}`));
+		this.chatLog.append(entry);
 
 		this.chatFrame ??= requestAnimationFrame(() => {
 			this.chatFrame = null;
@@ -1468,11 +2057,16 @@ export class EmbeddedRoomLobby
 		this.disposed = true;
 
 		if(this.chatFrame !== null) cancelAnimationFrame(this.chatFrame);
+
+		clearInterval(this.countdown);
+		clearTimeout(this.confirmTimer);
 		this.stageResize.disconnect();
+		this.root.removeEventListener('keydown', this.keydown);
 
 		this.protocol.removeEventListener('change', this.change);
 		this.protocol.removeEventListener('chat', this.message);
 		this.protocol.removeEventListener('error', this.error);
+		this.protocol.removeEventListener('notice', this.notice);
 		this.restoreCanvasSizing();
 		this.host.append(this.canvas);
 		this.root.remove();
