@@ -72,6 +72,46 @@ test('lobby controller carries invitations into role-aware peer transports', asy
 	guest.close();
 });
 
+test('unanswered and withdrawn invitations release both lobbies', async () => {
+	const hub = new InMemoryLobbyHub;
+
+	const factory = options => new FakeTransport(options);
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', invitationTtl: 80});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest'});
+	const host = new LobbyController({provider: hostProvider, transportFactory: factory});
+	const guest = new LobbyController({provider: guestProvider, transportFactory: factory});
+	await host.connect();
+	await guest.connect();
+
+	// Nobody answers: the offer leaves the guest's list and the host may invite again.
+	const invited = waitState(guest, 'invited');
+	await host.invite('guest', {mode: 'deathmatch'});
+	await invited;
+	const hostReleased = waitState(host, 'available');
+	const guestReleased = waitState(guest, 'available');
+	const [hostState, guestState] = await Promise.all([hostReleased, guestReleased]);
+	assert.deepEqual(hostState.expired, {direction: 'outgoing', to: 'guest'});
+	assert.ok(guestState.expired?.from === 'host' || guestState.withdrawn?.from === 'host');
+	assert.equal(guest.invitations.size, 0);
+
+	// The host withdraws a fresh offer before it expires.
+	hostProvider.invitationTtl = 30_000;
+	const again = waitState(guest, 'invited');
+	await host.invite('guest', {mode: 'cooperative'});
+	await again;
+	const withdrawn = waitState(guest, 'available');
+	await host.cancel();
+	assert.equal((await withdrawn).withdrawn.from, 'host');
+	assert.equal(guest.invitations.size, 0);
+	assert.equal(host.expiries.size, 0);
+	assert.equal(guest.expiries.size, 0);
+	await guest.invite('host', {mode: 'deathmatch'});
+	assert.equal(guest.state, 'inviting');
+	host.close();
+	guest.close();
+	assert.equal(guest.expiries.size, 0);
+});
+
 test('cancelled signaling cannot fail a replacement match', async () => {
 	for(const queued of [true, false])
 	{

@@ -1,19 +1,5 @@
 import {useOverlayTheme} from '../OverlayTheme.mjs';
-
-const element = (name, attributes = {}, text = '') => {
-	const result = document.createElement(name);
-
-	for(const [key, value] of Object.entries(attributes))
-	{
-		if(key === 'class') result.className = value;
-		else if(key === 'type') result.type = value;
-		else result.setAttribute(key, value);
-	}
-
-	result.textContent = text;
-
-	return result;
-};
+import {node as element} from '../ui/LobbyKit.mjs';
 
 const selectionId = () => crypto.randomUUID();
 
@@ -171,20 +157,32 @@ export class GameLauncher
 	pickRequiredResource(offer, {index = 0, error, signal} = {})
 	{
 		const pending = Promise.withResolvers();
-		const dialog = element('dialog', {class: 'phonics-modal phonics-launcher', 'aria-label': 'Required game file'});
-		const header = element('header');
-		header.append(element('h2', {}, 'Choose required game file'));
-		const body = element('div', {class: 'phonics-launcher-body'});
-		body.append(element('p', {}, `${index + 1}. ${offer.label ?? offer.slot}`));
 
-		if(error) body.append(element('p', {}, error.message));
+		const dialog = element(
+			'dialog'
+			, {class: 'phonics-modal phonics-launcher phonics-ui', 'aria-label': 'Required game file'}
+		);
+
+		const header = element('header');
+		header.append(element('h2', {}, 'Choose a required game file'));
+		const body = element('div', {class: 'phonics-launcher-body'});
+
+		body.append(
+			element(
+				'p'
+				, {class: 'phonics-launcher-stack-help'}
+				, `The host’s game needs file ${index + 1}, ${offer.label ?? offer.slot}. Choose your copy to continue.`
+			)
+		);
+
+		if(error) body.append(element('p', {class: 'phonics-modal-output'}, error.message));
 
 		const label = element('label', {}, 'Local WAD or resource file');
 		const input = element('input', {type: 'file'});
 		label.append(input);
 		body.append(label);
 		const footer = element('footer', {class: 'phonics-modal-actions'});
-		const cancel = element('button', {type: 'button'}, 'Cancel invitation');
+		const cancel = element('button', {type: 'button', class: 'is-quiet'}, 'Cancel invitation');
 		const choose = element('button', {type: 'button', class: 'phonics-modal-primary'}, 'Use file');
 		choose.disabled = true;
 		footer.append(cancel, choose);
@@ -254,12 +252,18 @@ export class GameLauncher
 	{
 		this.dialog = element(
 			'dialog'
-			, {'class': 'phonics-modal phonics-launcher', 'aria-labelledby': 'phonics-launcher-title'}
+			, {'class': 'phonics-modal phonics-launcher phonics-ui', 'aria-labelledby': 'phonics-launcher-title'}
 		);
 
 		const header = element('header');
 		this.title = element('h2', {id: 'phonics-launcher-title', tabindex: '-1'}, 'Game settings');
-		this.closeButton = element('button', {type: 'button', 'aria-label': 'Close game settings'}, '×');
+
+		this.closeButton = element(
+			'button'
+			, {type: 'button', class: 'is-quiet is-icon', 'aria-label': 'Close game settings'}
+			, '×'
+		);
+
 		header.append(this.title, this.closeButton);
 		const body = element('div', {'class': 'phonics-launcher-body'});
 		this.resourceInputs = new Map;
@@ -270,7 +274,7 @@ export class GameLauncher
 		this.status = element('output', {'class': 'phonics-modal-output', 'aria-live': 'polite'});
 		body.append(this.status);
 		const actions = element('footer', {'class': 'phonics-modal-actions'});
-		this.cancelButton = element('button', {type: 'button'}, 'Cancel');
+		this.cancelButton = element('button', {type: 'button', class: 'is-quiet'}, 'Cancel');
 		this.onlineButton = element('button', {type: 'button'}, 'Play online');
 		this.onlineButton.hidden = true;
 		this.primary = element('button', {type: 'button', 'class': 'phonics-modal-primary'}, 'Done');
@@ -284,7 +288,7 @@ export class GameLauncher
 		const group = element('section', {'class': 'phonics-launcher-stack', 'data-slot': id});
 		const heading = element('div', {'class': 'phonics-launcher-stack-heading'});
 		heading.append(element('h3', {}, slot.label ?? id));
-		const add = element('button', {type: 'button'}, slot.multiple ? 'Add files' : 'Choose file');
+		const add = element('button', {type: 'button', class: 'is-small'}, slot.multiple ? 'Add files' : 'Choose file');
 		heading.append(add);
 		group.append(heading);
 
@@ -301,7 +305,7 @@ export class GameLauncher
 		const drop = element(
 			'div'
 			, {'class': 'phonics-launcher-drop', tabindex: '0', role: 'button'}
-			, slot.multiple ? 'Drop files here to add them to the stack' : 'Drop a file here'
+			, slot.multiple ? 'Drop files here, or press to choose them' : 'Drop a file here, or press to choose it'
 		);
 
 		const input = element(
@@ -600,8 +604,19 @@ export class GameLauncher
 			else meta.append(element('span', {}, 'Inspecting…'));
 
 			description.append(meta);
-			const up = element('button', {type: 'button', 'aria-label': `Move ${entry.label} earlier`}, '↑');
-			const down = element('button', {type: 'button', 'aria-label': `Move ${entry.label} later`}, '↓');
+
+			const up = element(
+				'button'
+				, {type: 'button', class: 'is-quiet', 'aria-label': `Move ${entry.label} earlier`}
+				, '↑'
+			);
+
+			const down = element(
+				'button'
+				, {type: 'button', class: 'is-quiet', 'aria-label': `Move ${entry.label} later`}
+				, '↓'
+			);
+
 			up.disabled = index === 0;
 			down.disabled = index === entries.length - 1;
 			up.addEventListener('click', () => this.#moveResource(id, entry.id, -1), {signal: this.signal});
@@ -609,7 +624,13 @@ export class GameLauncher
 			item.append(description, up, down);
 
 			const removable = !slot.required || entries.length > 1 || !entry.fallback;
-			const remove = element('button', {type: 'button', 'aria-label': `Remove ${entry.label}`}, '×');
+
+			const remove = element(
+				'button'
+				, {type: 'button', class: 'is-quiet', 'aria-label': `Remove ${entry.label}`}
+				, '×'
+			);
+
 			remove.disabled = !removable;
 
 			remove.addEventListener('click', () => {

@@ -85,6 +85,9 @@ export class LobbyController extends EventTarget
 	/** Result of the most recently completed provider logout. */
 	logoutResult;
 
+	/** Expiry timers for pending incoming and outgoing invitations, by invitation identifier. */
+	expiries;
+
 	/** Current private-link join attempt, including cancellation state. */
 	joinAttempt;
 
@@ -144,6 +147,7 @@ export class LobbyController extends EventTarget
 		this.inviteLinkSupport = typeof provider.createInviteLink === 'function' ? 'checking' : 'unsupported';
 		this.inviteLinkSupportTask = null;
 		this.logoutResult = null;
+		this.expiries = new Map;
 		this.install();
 	}
 
@@ -373,6 +377,7 @@ export class LobbyController extends EventTarget
 			, privatePayload: prepared.privatePayload
 		};
 
+		this.watchExpiry(invitation);
 		this.move('inviting', {invitation});
 
 		return invitation;
@@ -468,6 +473,8 @@ export class LobbyController extends EventTarget
 		this.activeInvitation = invitation;
 		this.acceptPayload = localPayload;
 		await this.provider.respond(invitation, 'accepted');
+		this.clearExpiry(invitation.id);
+		this.invitations.delete(invitation.id);
 
 		return this.connectPeer({
 			peerId: invitation.from
@@ -485,6 +492,7 @@ export class LobbyController extends EventTarget
 	async reject(invitation)
 	{
 		await this.provider.respond(invitation, 'rejected');
+		this.clearExpiry(invitation.id);
 		this.invitations.delete(invitation.id);
 		this.move('available', {invitation});
 	}
@@ -499,7 +507,9 @@ export class LobbyController extends EventTarget
 
 		if(this.outgoing.invitation.privateLink) return this.cancelInviteLink();
 
-		await this.provider.cancel(this.outgoing.invitation.id, this.outgoing.peerId);
+		const {invitation, peerId} = this.outgoing;
+		this.clearExpiry(invitation.id);
+		await this.provider.cancel(invitation.id, peerId);
 		this.outgoing = null;
 		this.move('available');
 	}
@@ -566,6 +576,10 @@ export class LobbyController extends EventTarget
 		if(this.closed) return this.closeTask;
 
 		this.closed = true;
+
+		for(const timer of this.expiries.values()) clearTimeout(timer);
+
+		this.expiries.clear();
 		this.closeMatch('lobby closed');
 		this.controller.abort(new NetworkError('lobby_closed', 'Lobby controller closed'));
 		this.closeTask = Promise.allSettled([this.matchCleanup, this.provider.close?.()]);
@@ -576,6 +590,78 @@ export class LobbyController extends EventTarget
 		this.dispatchEvent(event('statechange', this.snapshot()));
 
 		return this.closeTask;
+	}
+
+	/**
+	 * Expire an unanswered invitation at its deadline, so a stale offer cannot hold the lobby in `invited` or
+	 * `inviting`.
+	 * @param {{id: string, expiresAt?: number}} invitation Incoming or outgoing invitation.
+	 * @returns {void}
+	 */
+	watchExpiry(invitation)
+	{
+		if(!Number.isFinite(invitation.expiresAt) || this.closed) return;
+
+		this.clearExpiry(invitation.id);
+		const delay = Math.max(0, invitation.expiresAt - Date.now());
+		this.expiries.set(invitation.id, setTimeout(() => this.expire(invitation.id), delay));
+	}
+
+	/**
+	 * Stop watching one invitation's deadline.
+	 * @param {string} id Invitation identifier.
+	 * @returns {void}
+	 */
+	clearExpiry(id)
+	{
+		clearTimeout(this.expiries.get(id));
+		this.expiries.delete(id);
+	}
+
+	/**
+	 * Drop an invitation whose deadline passed: an incoming one leaves the list, and an unanswered outgoing
+	 * invite returns this peer to `available`. Private links expire through their provider.
+	 * @param {string} id Invitation identifier.
+	 * @returns {void}
+	 */
+	expire(id)
+	{
+		this.expiries.delete(id);
+
+		if(this.closed) return;
+
+		const incoming = this.invitations.get(id);
+
+		if(incoming)
+		{
+			this.dropInvitation(id, {expired: {direction: 'incoming', from: incoming.from}});
+
+			return;
+		}
+
+		const outgoing = this.outgoing;
+
+		if(this.state !== 'inviting' || outgoing?.invitation.id !== id || outgoing.invitation.privateLink) return;
+
+		this.outgoing = null;
+		void Promise.resolve(this.provider.cancel?.(id, outgoing.peerId)).catch(() => {});
+
+		this.move('available', {expired: {direction: 'outgoing', to: outgoing.peerId}});
+	}
+
+	/**
+	 * Remove an unanswered incoming invitation, leaving `invited` once none remain.
+	 * @param {string} id Invitation identifier.
+	 * @param {object} detail Snapshot detail describing why it was removed.
+	 * @returns {void}
+	 */
+	dropInvitation(id, detail)
+	{
+		this.clearExpiry(id);
+		this.invitations.delete(id);
+
+		if(this.state === 'invited' && !this.invitations.size) this.move('available', detail);
+		else this.dispatchEvent(event('update', this.snapshot(detail)));
 	}
 
 	/**
@@ -612,6 +698,7 @@ export class LobbyController extends EventTarget
 		this.provider.addEventListener('invitation', ({detail}) => {
 			const invitation = detail.invitation;
 			this.invitations.set(invitation.id, invitation);
+			this.watchExpiry(invitation);
 
 			if(this.state === 'available') this.move('invited', {invitation});
 			else this.dispatchEvent(event('update', this.snapshot({invitation})));
@@ -657,7 +744,24 @@ export class LobbyController extends EventTarget
 	 */
 	async invitationState(detail)
 	{
+		// A sender withdrew an invitation this peer has not answered.
+		if(this.invitations.has(detail.id) && ['cancelled','expired'].includes(detail.state))
+		{
+			const invitation = this.invitations.get(detail.id);
+
+			this.dropInvitation(detail.id, detail.state === 'cancelled'
+				? {withdrawn: invitation}
+				: {
+					expired: {direction: 'incoming', from: invitation.from}
+				}
+			);
+
+			return;
+		}
+
 		if(!this.outgoing || detail.id !== this.outgoing.invitation.id) return;
+
+		this.clearExpiry(detail.id);
 
 		if(detail.state === 'accepted')
 		{

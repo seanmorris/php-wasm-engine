@@ -1,3 +1,5 @@
+import {useOverlayTheme, useStyle} from '../OverlayTheme.mjs';
+import {ChatLog, DisplayNames, StatusLine, Ticker, copyText, node, personRow, timeLeft} from '../ui/LobbyKit.mjs';
 import {authorizeWithPopup} from './OAuthPopup.mjs';
 
 const GAME_EVENT = 'org.seanmorris.phonics.game.v1';
@@ -1231,20 +1233,6 @@ export class RoomGameProtocol extends EventTarget
 	}
 }
 
-const node = (name, attributes = {}, text = '') => {
-	const result = document.createElement(name);
-
-	for(const [key, value] of Object.entries(attributes))
-	{
-		if(key === 'class') result.className = value;
-		else result.setAttribute(key, value);
-	}
-
-	if(text) result.textContent = text;
-
-	return result;
-};
-
 const gameAspectRatio = value => {
 	if(Number.isFinite(value) && value > 0) return Number(value);
 
@@ -1254,74 +1242,24 @@ const gameAspectRatio = value => {
 	return Number.isFinite(ratio) && ratio > 0 ? ratio : 16 / 9;
 };
 
-let themeCount = 0, theme = null;
-
+/* Room layout only: the panel over the running game, its people rail, and the stage that takes the canvas
+ * during a seated game. Tokens, controls, cards, rows, and chat come from the shared overlay theme. */
 const ROOM_STYLE = `
-.phonics-room-game{--room-scrim:rgba(3,8,6,.66);--room-panel:rgba(10,18,15,.9);--room-raised:rgba(24,38,33,.94);
---room-line:rgba(232,212,160,.16);--room-text:#f2efe6;--room-muted:#a9b5ad;--room-accent:#d9a441;--room-accent-strong:#f0c46a;
---room-accent-text:#171106;--room-danger:#e0533d;--room-ok:#6bc78c;
-position:absolute;inset:0;display:none;z-index:5;box-sizing:border-box;color:var(--room-text);
-font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--room-scrim);
+.phonics-room-game{position:absolute;inset:0;display:none;z-index:5;background:var(--ui-scrim);
 -webkit-backdrop-filter:blur(10px) saturate(.85);backdrop-filter:blur(10px) saturate(.85);overflow:hidden}
-.phonics-room-game *,.phonics-room-game *::before,.phonics-room-game *::after{box-sizing:border-box}
-.phonics-room-game [hidden]{display:none!important}
 .phonics-room-game.is-open{display:grid;grid-template:"panel" minmax(0,1fr)/minmax(0,1fr);padding:clamp(.5rem,2.2vw,1.5rem)}
 .phonics-room-stage{display:none;grid-area:stage;min-width:0;min-height:0;background:#000;align-items:center;justify-content:center;overflow:hidden}
 .phonics-room-panel{grid-area:panel;justify-self:center;width:min(70rem,100%);min-height:0;max-height:100%;display:grid;
-grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);background:var(--room-panel);border:1px solid var(--room-line);border-radius:16px;
+grid-template-rows:auto minmax(0,1fr);grid-template-columns:minmax(0,1fr);background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:16px;
 box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
-.phonics-room-header{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--room-line)}
+.phonics-room-header{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;border-bottom:1px solid var(--ui-line)}
 .phonics-room-header h2{flex:1;min-width:0;margin:0;font-size:1.15rem;font-weight:700;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.phonics-room-account{display:flex;align-items:center;gap:.45rem;min-width:0;overflow:hidden;color:var(--room-muted);font-size:.85rem;white-space:nowrap}
 .phonics-room-header button{flex:none}
-.phonics-room-dot{flex:none;width:.55rem;height:.55rem;border-radius:50%;background:var(--room-muted)}
-.phonics-room-game.is-connected .phonics-room-dot{background:var(--room-ok);box-shadow:0 0 0 3px rgba(107,199,140,.18)}
-.phonics-room-game.is-failed .phonics-room-dot{background:var(--room-danger)}
-.phonics-room-status{color:inherit}.phonics-room-me{color:var(--room-text);font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .phonics-room-body{display:grid;grid-template-columns:minmax(0,1fr) 19rem;min-height:0}
 .phonics-room-main{display:flex;flex-direction:column;gap:1.1rem;min-width:0;min-height:0;padding:1rem 1.1rem;overflow:auto}
 .phonics-room-main>*{flex:none}
-.phonics-room-rail{min-width:0;min-height:0;padding:1rem;border-left:1px solid var(--room-line);overflow:auto}
-.phonics-room-game h3{margin:0;font-size:.75rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--room-muted)}
-.phonics-room-section{display:flex;flex-direction:column;gap:.55rem;min-height:0}
-.phonics-room-section-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-height:2.5rem}
-.phonics-room-game button{font:inherit;font-weight:600;color:var(--room-text);background:var(--room-raised);border:1px solid var(--room-line);
-border-radius:10px;padding:.45rem .95rem;min-height:2.5rem;cursor:pointer;white-space:nowrap;transition:border-color .12s,background .12s,filter .12s}
-.phonics-room-game button:hover:not(:disabled){border-color:rgba(217,164,65,.65)}
-.phonics-room-game button:focus-visible,.phonics-room-game input:focus-visible{outline:2px solid var(--room-accent-strong);outline-offset:2px}
-.phonics-room-game button:disabled{opacity:.5;cursor:default}
-.phonics-room-game button.is-primary{background:linear-gradient(var(--room-accent-strong),var(--room-accent));color:var(--room-accent-text);border-color:transparent}
-.phonics-room-game button.is-primary:hover:not(:disabled){filter:brightness(1.07)}
-.phonics-room-game button.is-quiet{background:transparent}
-.phonics-room-game button.is-danger{background:var(--room-danger);border-color:transparent;color:#fff}
-.phonics-room-game input{font:inherit;color:var(--room-text);background:rgba(0,0,0,.32);border:1px solid var(--room-line);border-radius:10px;padding:.5rem .75rem;min-height:2.5rem;min-width:0}
-.phonics-room-game input:disabled{opacity:.5}
-.phonics-room-card{display:flex;flex-direction:column;gap:.65rem;padding:1rem 1.1rem;border:1px solid var(--room-line);border-radius:12px;background:var(--room-raised)}
-.phonics-room-card strong{font-size:1.05rem}.phonics-room-card p{margin:0;color:var(--room-muted)}
-.phonics-room-card .phonics-room-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
-.phonics-room-waiting{border-color:rgba(217,164,65,.55)}
-.phonics-room-pulse{display:inline-block;width:.6rem;height:.6rem;margin-right:.5rem;border-radius:50%;background:var(--room-accent);animation:phonics-room-pulse 1.4s ease-in-out infinite}
-@keyframes phonics-room-pulse{50%{opacity:.25;transform:scale(.7)}}
-@media(prefers-reduced-motion:reduce){.phonics-room-pulse{animation:none}}
-.phonics-room-link{flex:1 1 14rem;font-size:.85rem;color:var(--room-muted)}
-.phonics-room-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
-.phonics-room-item{display:flex;align-items:center;gap:.7rem;min-height:3rem;padding:.45rem .6rem;border:1px solid transparent;border-radius:10px;background:rgba(255,255,255,.035)}
-.phonics-room-item.is-for-you{border-color:rgba(217,164,65,.7);background:rgba(217,164,65,.1)}
-.phonics-room-avatar{flex:none;display:grid;place-items:center;width:2rem;height:2rem;border-radius:50%;font-weight:700;font-size:.9rem;color:#0b1210}
-.phonics-room-who{display:flex;flex-direction:column;flex:1;min-width:0}
-.phonics-room-who b,.phonics-room-who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.phonics-room-who span{color:var(--room-muted);font-size:.85rem}
-.phonics-room-actions{display:flex;gap:.4rem;flex:none}
-.phonics-room-game .phonics-room-item>button{min-height:2.1rem;padding:.3rem .7rem;font-size:.85rem}
-.phonics-room-empty{margin:0;padding:.25rem 0;color:var(--room-muted);font-size:.9rem}
+.phonics-room-rail{min-width:0;min-height:0;padding:1rem;border-left:1px solid var(--ui-line);overflow:auto}
 .phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
-.phonics-room-chat{flex:1;min-height:8rem;display:flex;flex-direction:column;gap:.45rem;padding:.65rem .75rem;overflow:auto;border:1px solid var(--room-line);border-radius:12px;background:rgba(0,0,0,.28)}
-.phonics-room-message{display:grid;grid-template-columns:auto 1fr;column-gap:.5rem;align-items:baseline;overflow-wrap:anywhere}
-.phonics-room-message b{font-weight:700}.phonics-room-message time{color:var(--room-muted);font-size:.75rem;justify-self:end}
-.phonics-room-message p{grid-column:1/-1;margin:0}
-.phonics-room-message.is-own b{color:var(--room-accent-strong)}
-.phonics-room-message.is-system{display:block;color:var(--room-muted);font-size:.88rem;font-style:italic}
-.phonics-room-chat-form{display:flex;gap:.5rem}.phonics-room-chat-form input{flex:1}
 .phonics-room-match{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-needs-connection{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-body{grid-template-columns:minmax(0,1fr)}
@@ -1331,7 +1269,7 @@ border-radius:10px;padding:.45rem .95rem;min-height:2.5rem;cursor:pointer;white-
 .phonics-room-game.has-game .phonics-room-stage>canvas{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;aspect-ratio:16/9;object-fit:contain}
 .phonics-room-game.has-game .phonics-room-panel{grid-area:side;width:auto;max-height:none;border-width:0 0 0 1px;border-radius:0;box-shadow:none}
 .phonics-room-game.has-game .phonics-room-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
-.phonics-room-game.has-game .phonics-room-rail{border-left:0;border-top:1px solid var(--room-line);max-height:11rem}
+.phonics-room-game.has-game .phonics-room-rail{border-left:0;border-top:1px solid var(--ui-line);max-height:11rem}
 .phonics-room-game.has-game .phonics-room-match{display:flex}
 .phonics-room-game.has-game .phonics-room-header h2,.phonics-room-game.has-game .phonics-room-header button{display:none}
 .phonics-room-game.has-game .phonics-room-lobby-only{display:none}
@@ -1342,66 +1280,20 @@ border-radius:10px;padding:.45rem .95rem;min-height:2.5rem;cursor:pointer;white-
 .phonics-room-header{padding:.7rem .85rem;gap:.6rem}.phonics-room-header h2{font-size:1rem}
 .phonics-room-body{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;overflow:auto}
 .phonics-room-main{min-height:auto;overflow:visible;padding:.85rem}
-.phonics-room-rail{min-height:auto;overflow:visible;border-left:0;border-top:1px solid var(--room-line);padding:.85rem}
+.phonics-room-rail{min-height:auto;overflow:visible;border-left:0;border-top:1px solid var(--ui-line);padding:.85rem}
 .phonics-room-main>.phonics-room-chat-section{flex:none;min-height:auto}
-.phonics-room-chat{min-height:12rem;max-height:45vh}
-.phonics-room-game button{min-height:2.75rem}
+.phonics-room-game .phonics-ui-chat{min-height:12rem;max-height:45vh}
 .phonics-room-game.has-game{grid-template:"stage" minmax(0,1.3fr) "side" minmax(0,1fr)/minmax(0,1fr)}
 .phonics-room-game.has-game .phonics-room-panel{border-width:1px 0 0}
 .phonics-room-game.has-game .phonics-room-body{overflow:hidden}.phonics-room-game.has-game .phonics-room-main{overflow:auto}
 .phonics-room-game.has-game .phonics-room-rail{display:none}}
 `;
 
-const useTheme = () => {
-	if(!theme)
-	{
-		theme = node('style');
-		theme.dataset.phonicsRoomGame = '';
-		theme.textContent = ROOM_STYLE;
-		document.head.append(theme);
-	}
-
-	themeCount++;
-
-	return () => {
-		if(!--themeCount)
-		{
-			theme.remove();
-			theme = null;
-		} };
-};
-
-/** Readable fallback for a Matrix user identifier before presence supplies a display name. */
-const localpart = id => String(id ?? '').replace(/^@/, '').split(':')[0] || String(id ?? '');
-
-/** Stable, legible avatar tint for an identifier. */
-const avatarColor = id => {
-	let hash = 0;
-
-	for(const character of String(id)) hash = (hash * 31 + character.codePointAt(0)) >>> 0;
-
-	return `hsl(${hash % 360} 52% 66%)`;
-};
-
-const avatar = (id, name) => {
-	const item = node(
-		'span'
-		, {class: 'phonics-room-avatar', 'aria-hidden': 'true'}
-		, [...name][0]?.toUpperCase() ?? '?'
-	);
-
-	item.style.background = avatarColor(id);
-
-	return item;
-};
-
 const activityLabel = activity => ({
 	waiting: 'Waiting at a table'
 	, active: 'Playing'
 	, spectating: 'Watching a game'
 })[activity?.state] ?? 'In the lobby';
-
-const clock = new Intl.DateTimeFormat(undefined, {hour: 'numeric', minute: '2-digit'});
 
 /** Accessible embedded lobby shell used by direct applications. */
 export class EmbeddedRoomLobby
@@ -1414,20 +1306,22 @@ export class EmbeddedRoomLobby
 		this.canvas = canvas;
 		this.host = canvas.parentElement;
 		this.disposed = false;
-		this.chatFrame = null;
 		this.loginPending = null;
 		this.signal = signal;
 		this.snapshot = protocol.snapshot();
-		this.names = new Map;
+		this.names = new DisplayNames;
 		this.phase = 'idle';
+		this.failed = false;
 		this.confirmTimer = null;
 		this.confirmingLeave = false;
-		this.countdown = null;
-		this.releaseTheme = useTheme();
+		this.waiting = null;
+		this.ticker = new Ticker(() => this.tickWaiting());
+		this.releaseTheme = useOverlayTheme();
+		this.releaseRoomStyle = useStyle('room-game', ROOM_STYLE);
 		this.aspectRatio = gameAspectRatio(protocol.game.aspectRatio);
 		this.canvasSizing = null;
 
-		this.root = node('section', {class: 'phonics-room-game', 'aria-label': title});
+		this.root = node('section', {class: 'phonics-room-game phonics-ui', 'aria-label': title});
 		this.stage = node('div', {class: 'phonics-room-stage'});
 		this.stageResize = new ResizeObserver(() => this.sizeStage());
 		this.stageResize.observe(this.stage);
@@ -1435,39 +1329,38 @@ export class EmbeddedRoomLobby
 
 		// Header: title, connection and account, and the way back to the game's own menu.
 		const header = node('header', {class: 'phonics-room-header'});
-		const account = node('div', {class: 'phonics-room-account'});
-		this.status = node('output', {class: 'phonics-room-status', 'aria-live': 'polite'}, 'Offline');
-		this.me = node('span', {class: 'phonics-room-me'});
-		account.append(node('span', {class: 'phonics-room-dot', 'aria-hidden': 'true'}), this.status, this.me);
+		this.statusLine = new StatusLine({className: 'phonics-room-status'});
+		this.statusLine.set('Offline');
+		this.status = this.statusLine.text;
 		this.closeButton = node('button', {type: 'button', class: 'is-quiet'}, 'Back');
-		header.append(node('h2', {}, title), account, this.closeButton);
+		header.append(node('h2', {}, title), this.statusLine.element, this.closeButton);
 
 		const body = node('div', {class: 'phonics-room-body'});
 		this.content = node('div', {class: 'phonics-room-main'});
 
 		this.rail = node(
 			'aside'
-			, {class: 'phonics-room-rail phonics-room-section phonics-room-needs-connection', 'aria-label': 'People'}
+			, {class: 'phonics-room-rail phonics-ui-section phonics-room-needs-connection', 'aria-label': 'People'}
 		);
 
 		// In a game, the sidebar names the players and owns the only way out, which confirms before forfeiting.
-		this.matchCard = node('div', {class: 'phonics-room-card phonics-room-match'});
+		this.matchCard = node('div', {class: 'phonics-ui-card phonics-room-match'});
 		this.matchTitle = node('strong');
 		this.leaveButton = node('button', {type: 'button'}, 'Leave table');
-		const matchRow = node('div', {class: 'phonics-room-row'});
+		const matchRow = node('div', {class: 'phonics-ui-row'});
 		matchRow.append(this.leaveButton);
 		this.matchCard.append(this.matchTitle, matchRow);
 
-		this.connectingCard = node('div', {class: 'phonics-room-card phonics-room-lobby-only'});
+		this.connectingCard = node('div', {class: 'phonics-ui-card phonics-room-lobby-only'});
 
 		this.connectingCard.append(
 			node('strong', {}, 'Connecting to the lobby…')
 			, node('p', {}, 'Loading tables and chat.')
 		);
 
-		this.signinCard = node('div', {class: 'phonics-room-card phonics-room-lobby-only'});
+		this.signinCard = node('div', {class: 'phonics-ui-card phonics-room-lobby-only'});
 		this.loginButton = node('button', {type: 'button', class: 'is-primary'}, 'Continue with Matrix');
-		const signinRow = node('div', {class: 'phonics-room-row'});
+		const signinRow = node('div', {class: 'phonics-ui-row'});
 		signinRow.append(this.loginButton);
 
 		this.signinCard.append(
@@ -1481,36 +1374,36 @@ export class EmbeddedRoomLobby
 			, node('p', {}, 'Sign-in opens in a pop-up window.')
 		);
 
-		this.waitingCard = node('div', {class: 'phonics-room-card phonics-room-waiting phonics-room-lobby-only'});
+		this.waitingCard = node('div', {class: 'phonics-ui-card is-waiting phonics-room-lobby-only'});
 		this.waitingTitle = node('strong');
 		this.waitingText = node('p');
 
 		this.linkInput = node(
 			'input'
-			, {type: 'text', readonly: '', class: 'phonics-room-link', 'aria-label': 'Invite link'}
+			, {type: 'text', readonly: '', class: 'phonics-ui-link', 'aria-label': 'Invite link'}
 		);
 
 		this.copyButton = node('button', {type: 'button'}, 'Copy link');
-		this.linkRow = node('div', {class: 'phonics-room-row'});
+		this.linkRow = node('div', {class: 'phonics-ui-row'});
 		this.linkRow.append(this.linkInput, this.copyButton);
 		this.cancelButton = node('button', {type: 'button'}, 'Cancel table');
-		const waitingRow = node('div', {class: 'phonics-room-row'});
+		const waitingRow = node('div', {class: 'phonics-ui-row'});
 		waitingRow.append(this.cancelButton);
 		this.waitingCard.append(this.waitingTitle, this.waitingText, this.linkRow, waitingRow);
 
 		const tables = node(
 			'section'
-			, {class: 'phonics-room-section phonics-room-lobby-only phonics-room-needs-connection'}
+			, {class: 'phonics-ui-section phonics-room-lobby-only phonics-room-needs-connection'}
 		);
 
-		const tablesHead = node('div', {class: 'phonics-room-section-head'});
+		const tablesHead = node('div', {class: 'phonics-ui-section-head'});
 		this.openButton = node('button', {type: 'button', class: 'is-primary'}, 'Open a table');
 		tablesHead.append(node('h3', {}, 'Tables'), this.openButton);
-		this.tableList = node('ul', {class: 'phonics-room-list'});
+		this.tableList = node('ul', {class: 'phonics-ui-list'});
 
 		this.tablesEmpty = node(
 			'p'
-			, {class: 'phonics-room-empty'}
+			, {class: 'phonics-ui-empty'}
 			, 'No open tables yet. Open one, or challenge someone who is online.'
 		);
 
@@ -1518,13 +1411,12 @@ export class EmbeddedRoomLobby
 
 		const chat = node(
 			'section'
-			, {class: 'phonics-room-section phonics-room-chat-section phonics-room-needs-connection'}
+			, {class: 'phonics-ui-section phonics-room-chat-section phonics-room-needs-connection'}
 		);
 
-		this.chatLog = node('div', {class: 'phonics-room-chat', role: 'log', 'aria-label': 'Lobby chat'});
-		this.chatEmpty = node('p', {class: 'phonics-room-empty'}, 'No messages yet. Say hello.');
-		this.chatLog.append(this.chatEmpty);
-		this.chatForm = node('form', {class: 'phonics-room-chat-form'});
+		this.chat = new ChatLog({names: this.names, self: () => this.snapshot.profile?.id ?? null});
+		this.chatLog = this.chat.element;
+		this.chatForm = node('form', {class: 'phonics-ui-chat-form'});
 
 		this.chatInput = node(
 			'input'
@@ -1532,13 +1424,13 @@ export class EmbeddedRoomLobby
 		);
 
 		this.chatForm.append(this.chatInput, node('button', {type: 'submit'}, 'Send'));
-		chat.append(node('div', {class: 'phonics-room-section-head'}, ''), this.chatLog, this.chatForm);
+		chat.append(node('div', {class: 'phonics-ui-section-head'}, ''), this.chatLog, this.chatForm);
 		chat.firstChild.append(node('h3', {}, 'Lobby chat'));
 
 		this.peerHeading = node('h3', {}, 'People');
-		this.peerList = node('ul', {class: 'phonics-room-list'});
-		this.peersEmpty = node('p', {class: 'phonics-room-empty'}, 'Nobody else is here yet.');
-		this.rail.append(node('div', {class: 'phonics-room-section-head'}), this.peerList, this.peersEmpty);
+		this.peerList = node('ul', {class: 'phonics-ui-list'});
+		this.peersEmpty = node('p', {class: 'phonics-ui-empty'}, 'Nobody else is here yet.');
+		this.rail.append(node('div', {class: 'phonics-ui-section-head'}), this.peerList, this.peersEmpty);
 		this.rail.firstChild.append(this.peerHeading);
 
 		this.content.append(this.matchCard, this.connectingCard, this.signinCard, this.waitingCard, tables, chat);
@@ -1606,14 +1498,25 @@ export class EmbeddedRoomLobby
 	/** Name a Matrix account by its presence display name, or by its localpart until presence arrives. */
 	displayName(id)
 	{
-		return this.names.get(id) ?? localpart(id);
+		return this.names.name(id);
 	}
 
 	/** Show connection state beside the account; errors also tint the indicator. */
 	setStatus(text, tone = null)
 	{
-		this.status.textContent = text;
-		this.root.classList.toggle('is-failed', tone === 'error');
+		this.failed = tone === 'error';
+		this.root.classList.toggle('is-failed', this.failed);
+		this.statusLine.set(text, this.statusTone());
+	}
+
+	/** Tint the connection dot: failed, connected, connecting, or neutral. */
+	statusTone()
+	{
+		if(this.failed) return 'error';
+
+		if(this.snapshot.connected) return 'ok';
+
+		return this.phase === 'connecting' ? 'busy' : null;
 	}
 
 	/** Fit the game canvas from stage dimensions rather than its self-changing framebuffer dimensions. */
@@ -1791,18 +1694,7 @@ export class EmbeddedRoomLobby
 	/** Copy the invite link, falling back to selecting it where clipboard access is denied. */
 	async copyLink()
 	{
-		const link = this.linkInput.value;
-
-		try
-		{
-			await navigator.clipboard.writeText(link);
-			this.copyButton.textContent = 'Copied';
-		}
-		catch
-		{
-			this.linkInput.select();
-			this.copyButton.textContent = 'Press Ctrl+C';
-		}
+		this.copyButton.textContent = await copyText(this.linkInput.value, this.linkInput) ? 'Copied' : 'Press Ctrl+C';
 
 		setTimeout(() => { this.copyButton.textContent = 'Copy link'; }, 2000);
 	}
@@ -1846,20 +1738,14 @@ export class EmbeddedRoomLobby
 		this.snapshot = snapshot;
 		const me = snapshot.profile?.id ?? null;
 
-		const known = this.names.size;
-
-		for(const peer of snapshot.peers) if(peer.displayName) this.names.set(peer.id, peer.displayName);
-
 		// History often arrives before presence; relabel earlier messages once display names are known.
-		if(this.names.size !== known)
-		for(const label of this.chatLog.querySelectorAll('[data-sender]'))
-		if(label.dataset.sender !== snapshot.profile?.id) label.textContent = this.displayName(label.dataset.sender);
-
+		if(this.names.learn(snapshot.peers)) this.chat.relabel();
 
 		if(snapshot.connected && this.phase !== 'ready') this.phase = 'ready';
 
 		this.root.classList.toggle('is-connected', Boolean(snapshot.connected));
-		this.me.textContent = snapshot.connected && me ? `as ${this.displayName(me)}` : '';
+		this.statusLine.setDetail(snapshot.connected && me ? `as ${this.displayName(me)}` : '');
+		this.statusLine.set(this.status.textContent, this.statusTone());
 		this.connectingCard.hidden = this.phase !== 'connecting';
 		this.signinCard.hidden = this.phase !== 'signin' || snapshot.connected;
 		this.chatInput.disabled = !snapshot.connected;
@@ -1915,17 +1801,21 @@ export class EmbeddedRoomLobby
 	{
 		const waiting = Boolean(selected) && !playing;
 		this.waitingCard.hidden = !waiting;
-		clearInterval(this.countdown);
-		this.countdown = null;
+		this.waiting = null;
 
-		if(!waiting) return;
+		if(!waiting)
+		{
+			this.ticker.stop();
+
+			return;
+		}
 
 		const target = selected.target ? this.displayName(selected.target) : null;
 
 		if(selected.mine)
 		{
 			this.waitingTitle.replaceChildren(
-				node('span', {class: 'phonics-room-pulse', 'aria-hidden': 'true'})
+				node('span', {class: 'phonics-ui-pulse', 'aria-hidden': 'true'})
 				, target ? `Waiting for ${target} to accept` : 'Waiting for an opponent'
 			);
 
@@ -1933,24 +1823,23 @@ export class EmbeddedRoomLobby
 			this.linkRow.hidden = !selected.link;
 			this.cancelButton.textContent = 'Cancel table';
 
-			const tick = () => {
-				const seconds = Math.max(0, Math.round((selected.expiresAt - Date.now()) / 1000));
-				const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-				this.waitingText.textContent = (target
+			this.waiting = {
+				expiresAt: selected.expiresAt
+				, text: target
 					? 'They can accept from the lobby, or you can send them this link.'
 					: 'Anyone in the lobby can join. To invite someone directly, send them this link.'
-				) + ` Open for ${time}.`;
 			};
 
-			tick();
-			this.countdown = setInterval(tick, 1000);
+			this.ticker.sync();
 		}
 		else
 		{
 			const spectating = !selected.players.includes(this.snapshot.profile?.id);
 
+			this.ticker.stop();
+
 			this.waitingTitle.replaceChildren(
-				node('span', {class: 'phonics-room-pulse', 'aria-hidden': 'true'})
+				node('span', {class: 'phonics-ui-pulse', 'aria-hidden': 'true'})
 				, spectating ? 'Loading the game…' : `Joining ${this.displayName(selected.host)}’s table…`
 			);
 
@@ -1963,21 +1852,26 @@ export class EmbeddedRoomLobby
 		}
 	}
 
+	/** Rewrite the waiting card's countdown; returns whether it is still running. */
+	tickWaiting()
+	{
+		if(!this.waiting) return false;
+
+		this.waitingText.textContent = `${this.waiting.text} Open for ${timeLeft(this.waiting.expiresAt)}.`;
+
+		return true;
+	}
+
 	/** Build one table row with the actions this account may take on it. */
 	tableItem(table, me)
 	{
-		const item = node('li', {class: 'phonics-room-item'});
 		const {name, detail} = this.describe(table, me);
-		const who = node('div', {class: 'phonics-room-who'});
-		who.append(node('b', {}, name), node('span', {}, detail));
-		item.classList.toggle('is-for-you', Boolean(table.forMe && table.joinable));
-		item.append(avatar(table.host, this.displayName(table.host)), who);
-		const actions = node('div', {class: 'phonics-room-actions'});
+		const actions = [];
 
 		const button = (label, operation, primary = false) => {
-			const control = node('button', {type: 'button', class: primary ? 'is-primary' : ''}, label);
+			const control = node('button', {type: 'button', class: primary ? 'is-primary' : null}, label);
 			control.addEventListener('click', () => void this.run(operation));
-			actions.append(control);
+			actions.push(control);
 		};
 
 		if(table.joinable) button(table.forMe ? 'Accept' : 'Join', () => this.protocol.join(table.root), true);
@@ -1987,73 +1881,49 @@ export class EmbeddedRoomLobby
 		if(table.resumable) button('Resume', () => this.protocol.resume(table.root), true);
 		else if(table.spectatable) button('Watch', () => this.protocol.spectate(table.root));
 
-		if(actions.childElementCount) item.append(actions);
-
-		return item;
+		return personRow({
+			id: table.host
+			, name
+			, detail
+			, avatarName: this.displayName(table.host)
+			, highlight: Boolean(table.forMe && table.joinable)
+			, actions
+		});
 	}
 
 	/** Build one person row with their activity and, when idle, a challenge action. */
 	peerItem(peer, me, snapshot)
 	{
-		const item = node('li', {class: 'phonics-room-item'});
 		const name = this.displayName(peer.id);
-		const who = node('div', {class: 'phonics-room-who'});
-
-		who.append(
-			node('b', {}, peer.id === me ? `${name} (you)` : name)
-			, node('span', {}, activityLabel(peer.activity))
-		);
-
-		item.append(avatar(peer.id, name), who);
+		const actions = [];
 
 		if(snapshot.connected && peer.id !== me && !snapshot.selected && !peer.activity)
 		{
 			const challenge = node('button', {type: 'button'}, 'Challenge');
 			challenge.addEventListener('click', () => void this.run(() => this.protocol.create({target: peer.id})));
-			item.append(challenge);
+			actions.push(challenge);
 		}
 
-		return item;
+		return personRow({
+			id: peer.id
+			, name: peer.id === me ? `${name} (you)` : name
+			, avatarName: name
+			, detail: activityLabel(peer.activity)
+			, actions
+			, compact: true
+		});
 	}
 
 	/** Append one interoperable Matrix text message to the room log. */
-	addChat({from, text, sentAt})
+	addChat(message)
 	{
-		const me = this.snapshot.profile?.id;
-		const message = node('div', {class: 'phonics-room-message'});
-		message.classList.toggle('is-own', from === me);
-		const time = Number.isFinite(sentAt)
-			? node('time', {datetime: new Date(sentAt).toISOString()}, clock.format(sentAt))
-			: node('time');
-
-		message.append(
-			node('b', {'data-sender': from}, from === me ? 'You' : this.displayName(from))
-			, time
-			, node('p', {}, text)
-		);
-
-		this.appendLog(message);
+		this.chat.add(message);
 	}
 
 	/** Append a lobby event, such as a declined challenge, in the room log's quieter style. */
 	addSystem(text)
 	{
-		this.appendLog(node('div', {class: 'phonics-room-message is-system'}, text));
-	}
-
-	/** Append a log entry, trim old history, and keep the newest line in view. */
-	appendLog(entry)
-	{
-		this.chatEmpty.remove();
-
-		if(this.chatLog.childElementCount >= 200) this.chatLog.firstElementChild.remove();
-
-		this.chatLog.append(entry);
-
-		this.chatFrame ??= requestAnimationFrame(() => {
-			this.chatFrame = null;
-			this.chatLog.scrollTop = this.chatLog.scrollHeight;
-		});
+		this.chat.system(text);
 	}
 
 	/** Detach the shell, restore the canvas, and release shared theme state once. */
@@ -2062,10 +1932,8 @@ export class EmbeddedRoomLobby
 		if(this.disposed) return;
 
 		this.disposed = true;
-
-		if(this.chatFrame !== null) cancelAnimationFrame(this.chatFrame);
-
-		clearInterval(this.countdown);
+		this.chat.dispose();
+		this.ticker.stop();
 		clearTimeout(this.confirmTimer);
 		this.stageResize.disconnect();
 		this.root.removeEventListener('keydown', this.keydown);
@@ -2077,6 +1945,7 @@ export class EmbeddedRoomLobby
 		this.restoreCanvasSizing();
 		this.host.append(this.canvas);
 		this.root.remove();
+		this.releaseRoomStyle();
 		this.releaseTheme();
 	}
 }
