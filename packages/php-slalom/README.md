@@ -21,4 +21,4 @@ phonics.start = slalom.tmj
 
 The two craft strips and impact sample were derived from the supplied Jet Slalom archive for this preservation port. The original JAR is not distributed by this package. The port deliberately defines a new replay format; it does not attempt compatibility with recordings from the Java build.
 
-See `docs/` for gameplay, replay, architecture, and engine-integration details.
+See the [game documentation in phonics-examples](https://github.com/seanmorris/phonics-examples/tree/main/games/php-slalom/docs) for gameplay, replay, architecture, and engine-integration details.

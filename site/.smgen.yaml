@@ -462,6 +462,42 @@ MENUS:
         parent: game-doom-phonics-api
         weight: 120
         expanded: false
+      - id: game-php-billiards-api
+        group: true
+        title: PHP API
+        parent: game-php-billiards
+        weight: 100
+        expanded: false
+      - id: game-php-billiards-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-billiards-api
+        weight: 10
+        expanded: false
+      - id: game-php-billiards-api-geometry
+        group: true
+        title: Geometry
+        parent: game-php-billiards-api
+        weight: 20
+        expanded: false
+      - id: game-php-billiards-api-physics
+        group: true
+        title: Physics
+        parent: game-php-billiards-api
+        weight: 30
+        expanded: false
+      - id: game-php-billiards-api-render
+        group: true
+        title: Rendering
+        parent: game-php-billiards-api
+        weight: 50
+        expanded: false
+      - id: game-php-billiards-api-online
+        group: true
+        title: Online play
+        parent: game-php-billiards-api
+        weight: 40
+        expanded: false
       - id: maintain
         group: true
         title: Release & contribute

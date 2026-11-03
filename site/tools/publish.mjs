@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {loadExamples} from './examples.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rendered = path.resolve(site, process.env.OUTPUT_DIR ?? '.cache/rendered');
@@ -106,5 +107,19 @@ for(const directory of ['sane-phonics', 'php-noid', 'php-tris', 'php-slalom', 'p
 	await fs.rm(path.join(destination, directory), {recursive: true, force: true});
 
 await fs.cp(rendered, destination, {recursive: true});
+
+// Posters remain owned by the examples repository. Import their canonical files
+// after rendering so documentation embeds and the examples catalog share one image.
+const examples = await loadExamples();
+
+for(const game of examples.games)
+{
+	const extension = path.extname(game.poster);
+	const target = path.join(destination, 'images/games', game.slug + extension);
+
+	await fs.mkdir(path.dirname(target), {recursive: true});
+	await fs.copyFile(path.join(game.directory, game.poster), target);
+}
+
 await publishDirectoryUrls();
 console.log(`Wrote static documentation to ${destination}.`);

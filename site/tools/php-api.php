@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__, 2);
 $argument = $argv[1] ?? '.';
-$packageRoot = realpath($root . '/' . $argument);
+$packageRoot = realpath(str_starts_with($argument, '/') ? $argument : $root . '/' . $argument);
 
 if($packageRoot === false || !is_file($packageRoot . '/phonics.json'))
 {
@@ -234,8 +234,7 @@ $files = array_values(array_filter(
 	, static fn(string $file): bool => str_starts_with($file, 'src/') && str_ends_with($file, '.php')
 ));
 $classes = [];
-$relativeRoot = str_replace('\\', '/', substr($packageRoot, strlen($root)));
-$relativeRoot = trim($relativeRoot, '/');
+$relativeRoot = $argv[2] ?? trim(str_replace('\\', '/', substr($packageRoot, strlen($root))), '/');
 
 foreach($files as $file)
 {

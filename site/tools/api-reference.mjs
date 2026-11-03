@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {loadExamples} from './examples.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(site, '..');
@@ -13,42 +14,17 @@ const drafts = path.join(site, '.cache/api-drafts');
 const generic = ['Completes the operation', 'value used by this operation', 'Result of this operation'];
 const phpTypes = new Map();
 
-const gamePackages = [
-	{
-		directory: 'packages/sane-phonics'
-		, slug: 'sane-phonics'
-		, title: 'Sane-Phonics'
-		, rootNamespace: 'SanePhonics'
-		, description: 'Platformer gameplay, physics, rendering, and effects used by Sane-Phonics.'
-	}
-	, {
-		directory: 'packages/php-noid', slug: 'php-noid', title: 'PHP-Noid'
-		, rootNamespace: 'PhpNoid'
-		, description: 'Brick-breaker components, systems, rendering, and campaign state.'
-	}
-	, {
-		directory: 'packages/php-tris', slug: 'php-tris', title: 'PHPTris'
-		, rootNamespace: 'PhpTris'
-		, description: 'Falling-block game state, challenges, systems, and rendering.'
-	}
-	, {
-		directory: 'packages/php-slalom', slug: 'php-slalom', title: 'PHP Slalom'
-		, rootNamespace: 'PhpSlalom'
-		, description: 'Deterministic slalom simulation, replay codec, input settings, and rendering.'
-	}
-	, {
-		directory: 'packages/php-buster', slug: 'php-buster', title: 'PHP Buster'
-		, rootNamespace: 'PhpBuster'
-		, description: 'Blockade waves, actors, scoring, input settings, and interpolated rendering.'
-	}
-	, {
-		directory: 'packages/doom-phonics'
-		, slug: 'doom-phonics'
-		, title: 'Doom-Phonics'
-		, rootNamespace: 'DoomPhonics'
-		, description: 'WAD adapters, Doom gameplay, input, networking, and direct GLES rendering.'
-	}
-];
+const examples = await loadExamples();
+const gamePackages = examples.games.filter(game => game.documentation?.api).map(game => ({
+	directory: game.directory
+	, sourcePrefix: `games/${game.slug}`
+	, sourceRepository: examples.repository
+	, sourceRef: examples.ref
+	, slug: game.slug
+	, title: game.title
+	, rootNamespace: game.documentation.api.namespace
+	, description: game.documentation.api.description
+}));
 
 const namespaceInfo = {
 	Phonics: ['Core runtime', 'Frame scheduling, fixed-step simulation, lifecycle, and browser restoration.']
@@ -86,11 +62,11 @@ const namespaceExamples = {
 	, 'Phonics\\World': `$lease = $context->runtime->activate('episode', 'E1M1');\n// Use the active source scope.\n$lease->release();`
 };
 
-function phpApi(directory = '.')
+function phpApi(directory = '.', sourcePrefix = '')
 {
 	return new Promise((resolve, reject) => {
 		const args = [path.join(site, 'tools/php-api.php')];
-		if(directory !== '.') args.push(directory);
+		if(directory !== '.') args.push(directory, sourcePrefix);
 		const child = spawn('php', args, {cwd: root});
 		const output = [], errors = [];
 		child.stdout.on('data', chunk => output.push(chunk));
@@ -215,10 +191,16 @@ function tableTypeMarkup(value, namespace = '', currentSlug = 'api')
 	return typeMarkup(value, namespace, currentSlug).replaceAll(' | ', ' \\| ');
 }
 
-function validateGamePhp(data)
+function validateGamePhp(data, config)
 {
 	const failures = data.classes.filter(item => !item.doc.summary)
 		.map(item => `${item.file}:${item.line} ${item.name}: missing class PHPDoc`);
+
+	if(!data.classes.length) failures.push(`${config.slug}: package declares no public PHP types`);
+
+	for(const item of data.classes)
+	if(item.namespace !== config.rootNamespace && !item.namespace.startsWith(config.rootNamespace + '\\'))
+		failures.push(`${item.file}:${item.line} ${item.name}: outside ${config.rootNamespace}`);
 
 	if(failures.length) throw new Error(`Incomplete game type documentation:\n${failures.join('\n')}`);
 }
@@ -324,7 +306,7 @@ function declaration(item)
 function phpClassPage(item, aliases, config = null)
 {
 	const slug = config ? gameClassSlug(item, config) : slugClass(item.name);
-	const source = `https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${item.file}#L${item.line}`;
+	const source = `${config?.sourceRepository ?? 'https://github.com/seanmorris/php-wasm-engine'}/blob/${config?.sourceRef ?? 'HEAD'}/${item.file}#L${item.line}`;
 	const namespaceSlug = config ? gameNamespaceSlug(item.namespace, config)
 		: `api-${item.namespace === 'Phonics' ? 'core' : item.namespace.slice(8).replaceAll('\\', '-').toLowerCase()}`;
 	const namespaceTitle = config ? (item.namespace === config.rootNamespace ? config.title : item.namespace) : namespaceInfo[item.namespace][0];
@@ -507,9 +489,11 @@ async function write(page)
 }
 
 const data = await phpApi();
-const gameData = await Promise.all(gamePackages.map(async config => ({config, data: await phpApi(config.directory)})));
+const gameData = await Promise.all(gamePackages.map(async config => ({
+	config, data: await phpApi(config.directory, config.sourcePrefix)
+})));
 validatePhp(data);
-for(const game of gameData) validateGamePhp(game.data);
+for(const game of gameData) validateGamePhp(game.data, game.config);
 
 for(const item of data.classes) phpTypes.set(item.name, {...item, slug: slugClass(item.name)});
 

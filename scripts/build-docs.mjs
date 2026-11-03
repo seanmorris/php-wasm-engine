@@ -4,9 +4,11 @@ import path from 'node:path';
 import {pack} from '../cli/pack.mjs';
 import {root} from './files.mjs';
 import {runtimeDirectory} from './runtime.mjs';
-const games = ['sane-phonics','php-noid','php-tris','php-slalom','php-buster','doom-phonics'];
+import {loadExamples} from '../site/tools/examples.mjs';
+const examples = await loadExamples();
+const games = examples.games.filter(game => game.documentation?.embed?.kind === 'local');
 
-for(const game of games) await pack(path.join(root, 'packages', game));
+for(const game of games) await pack(game.directory);
 
 // Only the browser host and its imports run outside the application archives.
 const browserFiles = ['browser/Phonics.mjs'
@@ -33,25 +35,33 @@ const demoFiles = ['DOOM1.WAD'
 	, 'SHAREWARE-LICENSE.txt'
 ];
 
+const doom = games.find(game => game.slug === 'doom-phonics');
+
 const files = [
-	...browserFiles
-	, ...games.flatMap(game => ['phar','phar.integrity'].map(extension => `packages/${game}/dist/game.${extension}`))
-	, ...demoFiles.map(name => 'packages/doom-phonics/demo/' + name)
-	, 'packages/doom-phonics/DOOM1_OGG.wad'
+	...browserFiles.map(name => ({source: path.join(root, name), destination: name}))
+	, ...games.flatMap(game => ['phar','phar.integrity'].map(extension => ({
+		source: path.join(game.directory, `dist/game.${extension}`)
+		, destination: `packages/${game.slug}/dist/game.${extension}`
+	})))
+	, ...demoFiles.map(name => ({
+		source: path.join(doom.directory, 'demo', name)
+		, destination: `packages/doom-phonics/demo/${name}`
+	}))
+	, {source: path.join(doom.directory, 'DOOM1_OGG.wad'), destination: 'packages/doom-phonics/DOOM1_OGG.wad'}
 ];
 
 // Rebuild this generated tree so incremental builds also remove retired loose packages.
 const engine = path.join(root, 'docs/dist/engine');
 
-for(const name of files) await fs.access(path.join(root, name));
+for(const file of files) await fs.access(file.source);
 
 await fs.rm(engine, {recursive: true, force: true});
 
-for(const name of files)
+for(const file of files)
 {
-	const destination = path.join(engine, name);
+	const destination = path.join(engine, file.destination);
 	await fs.mkdir(path.dirname(destination), {recursive: true});
-	await fs.copyFile(path.join(root, name), destination);
+	await fs.copyFile(file.source, destination);
 }
 
 const runtime = await runtimeDirectory();

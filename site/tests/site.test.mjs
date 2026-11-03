@@ -6,10 +6,12 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
+import {loadExamples} from '../tools/examples.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const output = path.resolve(root, process.env.SITE_OUTPUT ?? 'docs/dist');
 const base = new URL((process.env.BASE_URL ?? '') + '/', 'http://phonics.test');
+const examples = await loadExamples();
 
 const publicPath = target => new URL(target.replace(/^\/+/, ''), base).pathname;
 
@@ -133,7 +135,12 @@ test('all planned pages have navigation, contents for sections, and a drafting o
 			sources.push(fs.access(path.join(root, '.smgen-jsdoc.yaml')));
 
 		if(packageDoc)
-		sources.push(fs.access(path.join(root, 'packages', packageDoc[1], 'docs', packageDoc[2] + '.md')));
+		{
+			const game = examples.games.find(game => game.slug === packageDoc[1]);
+			const chapter = game?.documentation?.chapters.find(chapter => chapter.slug === packageDoc[2]);
+
+			if(chapter) sources.push(fs.access(path.join(game.directory, chapter.path)));
+		}
 
 		await Promise.any(sources);
 	}
@@ -282,18 +289,17 @@ test('the generated JavaScript reference exposes browser modules and exports', a
 });
 
 test('every public game type has a nested package reference page', async() => {
-	const packages = [
-		['sane-phonics', 'SanePhonics']
-		, ['php-noid', 'PhpNoid']
-		, ['php-tris', 'PhpTris']
-		, ['php-slalom', 'PhpSlalom']
-		, ['php-buster', 'PhpBuster']
-		, ['doom-phonics', 'DoomPhonics']
-	];
+	const packages = examples.games.filter(game => game.documentation?.api);
 
-	for(const [slug, rootNamespace] of packages)
+	for(const game of packages)
 	{
-		const {stdout} = await promisify(execFile)('php', ['site/tools/php-api.php', `packages/${slug}`], {cwd: root});
+		const slug = game.slug;
+		const rootNamespace = game.documentation.api.namespace;
+
+		const {stdout} = await promisify(execFile)('php', [
+			'site/tools/php-api.php', game.directory, `games/${slug}`
+		], {cwd: root});
+
 		const api = JSON.parse(stdout), index = await read(`games/${slug}/api/index.html`);
 		const overview = await read(`games/${slug}/index.html`);
 		assert.ok(overview.includes(`href="${publicPath(`games/${slug}/api/`)}"`), slug);

@@ -1,6 +1,6 @@
 # Phonics
 
-Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The [documentation site](https://seanmorris.github.io/php-wasm-engine/) has the quickstart, the guides, every bundled game, and the generated PHP and JavaScript references.
+Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The [documentation site](https://seanmorris.github.io/php-wasm-engine/) has the quickstart, the guides, every example game, and the generated PHP and JavaScript references.
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
@@ -17,18 +17,19 @@ The browser executes the PHAR stub. Its authored PHP bootstrap chooses the game 
 
 The runtime requires PHP 8.4 SDL plus the pinned `php-wasm-phar` extension. Packaging requires native PHP with Phar; gameplay remains browser-only. See [the architecture](docs/architecture.md) for the application bootstrap and resource lifecycle.
 
-## Bundled games
+## Example games
 
 | Game | What it demonstrates |
 | --- | --- |
-| [Sane-Phonics](packages/sane-phonics/README.md) | A streamed platformer with loops, vehicles, water, enemies, and three movement profiles. |
-| [PHP-Noid](packages/php-noid/README.md) | A 25-stage brick-breaker with stackable powers, enemy ships, and an arcade HUD. |
-| [PHPTris](packages/php-tris/README.md) | Three solo modes and five progressive falling-block challenge tracks. |
-| [PHP Slalom](packages/php-slalom/README.md) | A deterministic port of the rare Jet Slalom game with saved bindings and compact replays. |
-| [PHP Buster](packages/php-buster/README.md) | A deterministic port of Blockade Buster with original waves, editable input, and local scores. |
-| [Doom-Phonics](packages/doom-phonics/README.md) | A WAD adapter, DECORATE actor runtime, multiplayer simulation, and direct GLES renderer. |
+| [Sane-Phonics](https://github.com/seanmorris/phonics-examples/tree/main/games/sane-phonics) | A streamed platformer with loops, vehicles, water, enemies, and three movement profiles. |
+| [PHP-Noid](https://github.com/seanmorris/phonics-examples/tree/main/games/php-noid) | A 25-stage brick-breaker with stackable powers, enemy ships, and an arcade HUD. |
+| [PHPTris](https://github.com/seanmorris/phonics-examples/tree/main/games/php-tris) | Three solo modes and five progressive falling-block challenge tracks. |
+| [PHP Slalom](https://github.com/seanmorris/phonics-examples/tree/main/games/php-slalom) | A deterministic port of the rare Jet Slalom game with saved bindings and compact replays. |
+| [PHP Buster](https://github.com/seanmorris/phonics-examples/tree/main/games/php-buster) | A deterministic port of Blockade Buster with original waves, editable input, and local scores. |
+| [Doom-Phonics](https://github.com/seanmorris/phonics-examples/tree/main/games/doom-phonics) | A WAD adapter, DECORATE actor runtime, multiplayer simulation, and direct GLES renderer. |
+| [PHP Billiards](https://github.com/seanmorris/phonics-examples/tree/main/games/php-billiards) | A photorealistic 3D pool practice table with deterministic PHP physics. |
 
-Each game is an independent package under `packages/` with its own namespace, assets, and tests, and each is playable from its overview on the [documentation site](https://seanmorris.github.io/php-wasm-engine/games/). The [Tiled integration](packages/tiled-phonics/README.md) ships beside them.
+Each game is maintained in the [phonics-examples repository](https://github.com/seanmorris/phonics-examples) with its own namespace, assets, tests, full-page route, and embed route. The documentation build imports their manuals and packages the six established local embeds at their existing URLs; PHP Billiards uses the examples site's embed. Release compatibility mirrors remain under `packages/` while the framework's package pipeline is separated. The [Tiled integration](packages/tiled-phonics/README.md) remains part of this repository.
 
 ## Get started
 

@@ -5,6 +5,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {parse, stringify} from 'yaml';
 import {addBreadcrumbs} from './breadcrumbs.mjs';
+import {examplesSourceUrl, loadExamples} from './examples.mjs';
 import {addStructuredData} from './structured-data.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,95 +18,24 @@ const references = [
 	, ['performance', 'ECS performance', 'docs/ecs-performance.md']
 ];
 
-const games = [
-	{
-		slug: 'sane-phonics'
-		, title: 'Sane-Phonics'
-		, description: 'A streamed platformer with loops, vehicles, water, enemies, and three movement profiles.'
-		, world: 'sane-phonics/worlds/demo.world'
-		, canvas: [960, 540]
-		, canvasLabel: 'Sane-Phonics game canvas'
-		, chapters: [['index', 'Sane-Phonics']
-			, ['gameplay', 'Gameplay systems']
-			, ['loops', 'Loops and collision layers']
-			, [
-				'menus', 'Menus and browser controls'
-			]
-			, ['startup', 'Startup flow']
-		]
-	}
-	, {
-		slug: 'php-noid'
-		, title: 'PHP-Noid'
-		, description: 'A 25-stage brick-breaker with stackable powers, enemy ships, and an arcade HUD.'
-		, world: 'php-noid/worlds/campaign.world'
-		, canvas: [960, 540]
-		, canvasLabel: 'PHP-Noid game canvas'
-		, chapters: [['index', 'PHP-Noid']
-			, ['campaign', 'Campaign authoring']
-			, [
-				'architecture', 'Architecture and performance'
-			]
-		]
-	}
-	, {
-		slug: 'php-tris'
-		, title: 'PHPTris'
-		, description: 'Three solo modes and five progressive falling-block challenge tracks.'
-		, world: 'php-tris/worlds/arcade.world'
-		, canvas: [960, 540]
-		, canvasLabel: 'PHPTris game canvas'
-		, chapters: [['index', 'PHPTris']
-			, ['challenges', 'Challenge tracks']
-			, [
-				'world-authoring', 'World authoring'
-			]
-			, ['architecture', 'Architecture']
-		]
-	}
-	, {
-		slug: 'php-slalom'
-		, title: 'PHP Slalom'
-		, description: 'A deterministic PHP port of the rare Jet Slalom game with saved bindings and compact replays.'
-		, world: 'php-slalom/worlds/slalom.world'
-		, canvas: [960, 600]
-		, canvasLabel: 'PHP Slalom game canvas'
-		, aspectClass: 'game-aspect-8-5'
-		, chapters: [['index', 'PHP Slalom']
-			, ['architecture', 'Architecture']
-		]
-	}
-	, {
-		slug: 'php-buster'
-		, title: 'PHP Buster'
-		, description:
-			'A deterministic PHP port of Blockade Buster with original waves, editable input, and local scores.'
-		, world: 'php-buster/worlds/buster.world'
-		, canvas: [800, 720]
-		, canvasLabel: 'PHP Buster game canvas'
-		, aspectClass: 'game-aspect-2-3'
-		, chapters: [['index', 'PHP Buster']
-			, ['architecture', 'Architecture']
-		]
-	}
-	, {
-		slug: 'doom-phonics'
-		, title: 'Doom-Phonics'
-		, description: 'A WAD adapter, DECORATE actor runtime, multiplayer simulation, and direct GLES renderer.'
-		, world: 'doom-phonics/demo/episode-one-online.phonics-world.json'
-		, canvas: [960, 540]
-		, canvasLabel: 'Doom-Phonics game canvas'
-		, dataOrigins: ['*']
-		, chapters: [['index', 'Doom-Phonics']
-			, ['launcher', 'WAD stacks and launcher']
-			, ['wad-and-decorate', 'WAD and DECORATE']
-			, ['multiplayer', 'Multiplayer and replication']
-			, ['rendering', 'Rendering and performance']
-			, ['seeded-levels', 'Seeded layered levels']
-			, ['procedural-structures', 'Parametric room structures']
-		]
-	}
-];
+const examples = await loadExamples();
+
+const exampleFiles = new Set(
+	(await fs.readdir(path.join(examples.root, 'games'), {recursive: true}))
+		.map(file => path.posix.join('games', file.split(path.sep).join('/')))
+);
+
+const games = examples.games.filter(game => game.documentation?.chapters?.length).map(game => ({
+	...game
+	, canvas: [game.canvas.width, game.canvas.height]
+	, canvasLabel: `${game.title} game canvas`
+	, aspectClass: game.aspectRatio === '8/5'
+		? 'game-aspect-8-5'
+		: game.aspectRatio === '2/3' ? 'game-aspect-2-3' : undefined
+	, dataOrigins: game.documentation.dataOrigins
+	, posterExtension: path.extname(game.poster)
+	, chapters: game.documentation.chapters.map(chapter => [chapter.slug, chapter.title, chapter.path])
+}));
 
 // Authored site pages, keyed by repository path, so imported chapters can link to them on the site.
 const authoredPages = new Set(
@@ -126,7 +56,7 @@ function sitePage(resolved)
 
 	if(reference) return `${reference[0]}.html`;
 
-	const chapter = /^packages\/([^/]+)\/docs\/([^/]+)\.md$/.exec(resolved);
+	const chapter = /^games\/([^/]+)\/docs\/([^/]+)\.md$/.exec(resolved);
 	const game = chapter && games.find(value => value.slug === chapter[1]);
 
 	if(game?.chapters.some(([slug]) => slug === chapter[2]))
@@ -209,10 +139,10 @@ for(const game of games)
 
 	await fs.mkdir(targetDirectory, {recursive: true});
 
-	for(const [weight, [slug, title]] of game.chapters.entries())
+	for(const [weight, [slug, title, chapterPath]] of game.chapters.entries())
 	{
-		const source = `packages/${game.slug}/docs/${slug}.md`;
-		let body = await fs.readFile(path.join(root, source), 'utf8');
+		const source = `games/${game.slug}/${chapterPath}`;
+		let body = await fs.readFile(path.join(examples.root, source), 'utf8');
 		body = body.replace(/^# .+\r?\n/, '');
 
 		body = body.replace(
@@ -236,7 +166,7 @@ for(const game of games)
 			let resolved;
 
 			if(/^(?:docs|examples|browser|src|assets)\//.test(clean))
-				resolved = path.posix.join(`packages/${game.slug}`, clean);
+				resolved = path.posix.join(`games/${game.slug}`, clean);
 			else resolved = path.posix.normalize(path.posix.join(path.posix.dirname(source), clean));
 
 			// Chapters, reference docs, and authored pages resolve by repository path, not basename.
@@ -244,7 +174,12 @@ for(const game of games)
 
 			if(page) return `${start}${relativeSiteLink(`games/${game.slug}`, page)}${fragment}${end}`;
 
-			return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${resolved}${fragment}${end}`;
+			if(exampleFiles.has(resolved))
+			return `${start}${examplesSourceUrl(examples, resolved)}${fragment}${end}`;
+
+			const engineSource = resolved.replace(/^games\/phonics-matrix\//, 'packages/phonics-matrix/');
+
+			return `${start}https://github.com/seanmorris/php-wasm-engine/blob/HEAD/${engineSource}${fragment}${end}`;
 		});
 
 		const overviewTitle = slug === 'index' ? '    title: Overview\n' : '';
@@ -261,9 +196,12 @@ for(const game of games)
 			? ` data-data-origins="${game.dataOrigins.join(',')}"`
 			: '';
 
-		const embed = slug === 'index'
-			? `\n<div class="game-embed${embedClass}" data-game-embed data-application="../../engine/packages/${game.slug}/dist/game.phar" data-host="../../preview/host.mjs" data-title="${game.title}"${dataOrigins}>\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}.webp" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime" data-game-runtime data-game-embed="true" hidden>\n<div id="game-frame"><canvas width="${game.canvas[0]}" height="${game.canvas[1]}" tabindex="0" aria-label="${game.canvasLabel}"></canvas></div>\n<p id="fullscreen-error" role="alert"></p>\n<div class="game-embed-controls"><p id="status" role="status">Preparing ${game.title}…</p><button id="stop" type="button">Stop</button></div>\n</div>\n</div>\n\n`
-			: '';
+		let embed = '';
+
+		if(slug === 'index' && game.documentation.embed.kind === 'external')
+		embed = `\n<div class="game-embed external-game-embed" data-external-game-embed data-title="${game.title}" data-frame="${game.documentation.embed.frame}">\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}${game.posterExtension}" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime external-game-runtime" data-external-game-runtime hidden>\n<div class="game-embed-controls"><p role="status">Preparing ${game.title}…</p><button type="button">Stop</button></div>\n</div>\n</div>\n\n`;
+		else if(slug === 'index')
+		embed = `\n<div class="game-embed${embedClass}" data-game-embed data-application="../../engine/packages/${game.slug}/dist/game.phar" data-host="../../preview/host.mjs" data-title="${game.title}"${dataOrigins}>\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}.webp" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime" data-game-runtime data-game-embed="true" hidden>\n<div id="game-frame"><canvas width="${game.canvas[0]}" height="${game.canvas[1]}" tabindex="0" aria-label="${game.canvasLabel}"></canvas></div>\n<p id="fullscreen-error" role="alert"></p>\n<div class="game-embed-controls"><p id="status" role="status">Preparing ${game.title}…</p><button id="stop" type="button">Stop</button></div>\n</div>\n</div>\n\n`;
 
 		await fs.writeFile(path.join(targetDirectory, `${slug}.md`), header + embed + body);
 	}

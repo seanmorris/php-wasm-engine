@@ -81,7 +81,7 @@ Gameplay code is ordinary PHP. It runs natively under your tests and in WebAssem
 ## Where to start
 
 - **New here?** The [quickstart](quickstart.html) takes you from an empty package to a world you can edit in Tiled and in PHP.
-- **Want to see it first?** [Play six finished games](games/), from a platformer to Doom. Each is an independent package.
+- **Want to see it first?** [Play seven finished games](games/), from a platformer to billiards and Doom. Each is an independent package.
 - **Authoring content?** [Import packages in Tiled](tiled.html), place entities, and preview the saved world.
 - **Building a package?** The [CLI](cli.html) scaffolds, previews, validates, and builds it.
 - **Extending a game?** [Write a module](modules.html) that adds PHP systems and factories to the shared session.
