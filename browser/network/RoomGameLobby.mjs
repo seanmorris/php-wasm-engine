@@ -6,9 +6,23 @@ const GAME_EVENT = 'org.seanmorris.phonics.game.v1';
 const CHAT_EVENT = 'org.seanmorris.phonics.chat.v1';
 const ROOM_MESSAGE = 'm.room.message';
 const RELATION = 'org.seanmorris.phonics.game.v1';
+// The Matrix event family stays stable; the envelope version gates incompatible seed commitments.
+const PROTOCOL_VERSION = 2;
 const UNKNOWN_ROOT_RETRY = 60_000;
 const UNKNOWN_ROOT_LIMIT = 1024;
 const encoder = new TextEncoder;
+
+// Public, versioned templates. Both fixed-width operands stay literal: never evaluate their sum.
+const SEED_PHRASES = Object.freeze([
+	'that would be {n}+{m}'
+	, 'pair {n} with {m}'
+	, 'take {n}, then {m}'
+	, 'between {n} and {m}'
+	, 'first {n}; second {m}'
+	, 'join {n} to {m}'
+	, 'keep {n} beside {m}'
+	, 'combine {n} with {m}'
+]);
 
 const event = (type, detail) => new CustomEvent(type, {detail});
 
@@ -24,6 +38,14 @@ const from64 = value => Uint8Array.from(
 	atob(String(value).replaceAll('-', '+').replaceAll('_', '/'))
 	, character => character.charCodeAt(0)
 );
+
+const validSeedValue = value => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value)
+	&& bytes64(from64(value)) === value;
+
+const validSeedMaterial = value => value && validSeedValue(value.contribution) && validSeedValue(value.nonce)
+	&& Number.isInteger(value.phrase) && value.phrase >= 0 && value.phrase < SEED_PHRASES.length;
+
+const seedStorageKey = (session, player) => `phonics.game.seed:v2:${session.root}:${player}`;
 
 const hex = bytes => [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 
@@ -98,7 +120,7 @@ const validAction = action => {
 	return false;
 };
 
-const validOffer = (content, game) => content?.v === 1 && content.kind === 'offer'
+const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content.kind === 'offer'
 	&& typeof content.session_id === 'string' && typeof content.game === 'object'
 	&& content.game.id === game.id && content.game.protocol === game.protocol
 	&& content.game.rules === game.rules && content.game.application === game.application
@@ -194,6 +216,9 @@ export class RoomGameProtocol extends EventTarget
 			await this.replay(this.pendingGameEvents.splice(0));
 
 			this.loadingHistory = false;
+
+			for(const session of this.sessions.values()) await this.resumeSeedExchange(session);
+
 			await this.acceptLinkedSession();
 			this.dispatchEvent(event('change', this.snapshot()));
 
@@ -260,7 +285,7 @@ export class RoomGameProtocol extends EventTarget
 
 		const sessionId = crypto.randomUUID();
 		const content = {
-			v: 1
+			v: PROTOCOL_VERSION
 			, kind: 'offer'
 			, session_id: sessionId
 			, host: this.profile().id
@@ -625,6 +650,8 @@ export class RoomGameProtocol extends EventTarget
 		for(const item of await this.provider.relations(root))
 		await this.consume(item, {replay: true, loadUnknown: false});
 
+		if(!this.loadingHistory) await this.resumeSeedExchange(session);
+
 		return session;
 	}
 
@@ -632,7 +659,7 @@ export class RoomGameProtocol extends EventTarget
 	async child(session, kind, body, transaction)
 	{
 		const content = {
-			v: 1
+			v: PROTOCOL_VERSION
 			, kind
 			, session_id: session.offer.session_id
 			, ...body
@@ -669,6 +696,7 @@ export class RoomGameProtocol extends EventTarget
 				, hash: null
 				, commits: new Map
 				, reveals: new Map
+				, openings: new Map
 				, ready: new Map
 				, settles: new Map
 				, earlySettles: new Map
@@ -696,7 +724,9 @@ export class RoomGameProtocol extends EventTarget
 
 		if(!session) return;
 
-		if(session.events.has(item.event_id) || content.session_id !== session.offer.session_id || content.v !== 1)
+		if(session.events.has(item.event_id) || content.session_id !== session.offer.session_id
+			|| content.v !== PROTOCOL_VERSION
+		)
 		return;
 
 		session.events.add(item.event_id);
@@ -734,42 +764,43 @@ export class RoomGameProtocol extends EventTarget
 				session.commitDeadline = content.commit_deadline;
 				session.status = 'committing';
 
-				if(session.seats.includes(me)) await this.commit(session);
+				if(!replay && session.seats.includes(me)) await this.commit(session);
 
 				break;
 
 			case 'commit':
-				if(!session.seats?.includes(item.sender) || content.player !== item.sender
+				if(session.status !== 'committing' || !session.seats?.includes(item.sender)
+					|| content.player !== item.sender
 					|| !/^[a-f0-9]{64}$/.test(content.commit) || session.commits.has(item.sender)
 				) break;
 
 				session.commits.set(item.sender, content.commit);
 
-				if(session.commits.size === 2 && session.seats.includes(me)) await this.reveal(session);
+				if(!replay && session.commits.size === 2 && session.seats.includes(me)) await this.reveal(session);
 
 				break;
 
 			case 'reveal':
-				if(!session.seats?.includes(item.sender) || content.player !== item.sender
+				if(session.status !== 'committing' || !session.seats?.includes(item.sender)
+					|| content.player !== item.sender
 					|| session.reveals.has(item.sender)
 				) break;
 
 				try
 				{
-					const contribution = from64(content.contribution);
+					if(!validSeedMaterial(content)) return this.freeze(session, 'Invalid seed reveal');
 
-					if(contribution.length !== 32) break;
-
-					const expected = await this.commitDigest(session, item.sender, content.contribution);
+					const expected = await this.commitDigest(session, item.sender, content);
 
 					if(expected !== session.commits.get(item.sender))
 					return this.freeze(session, 'Invalid seed reveal');
 
 					session.reveals.set(item.sender, content.contribution);
+					session.openings.set(item.sender, {nonce: content.nonce, phrase: content.phrase});
 				}
 				catch
 				{
-					break;
+					return this.freeze(session, 'Invalid seed reveal');
 				}
 
 				if(session.reveals.size === 2) await this.seed(session);
@@ -924,22 +955,64 @@ export class RoomGameProtocol extends EventTarget
 		if(!replay) this.dispatchEvent(event('change', this.snapshot()));
 	}
 
-	/** Create, retain, and publish this player's hidden seed commitment. */
+	/** Resume only after history has restored existing commitments and reveals. */
+	async resumeSeedExchange(session)
+	{
+		if(!this.connected || session.status !== 'committing' || !session.seats?.includes(this.profile().id)) return;
+
+		if(!session.commits.has(this.profile().id)) await this.commit(session);
+
+		if(session.status !== 'committing') return;
+
+		if(session.commits.size === 2) await this.reveal(session);
+
+		if(session.status === 'committing') this.armRevealDeadline(session);
+	}
+
+	/** Read the complete private opening, retaining it in memory when browser storage is unavailable. */
+	localSeedMaterial(session)
+	{
+		if(session.localSeedMaterial) return session.localSeedMaterial;
+
+		let stored;
+
+		try { stored = this.storage?.getItem(seedStorageKey(session, this.profile().id)); } catch { }
+
+		if(stored == null) return null;
+
+		let material;
+
+		try { material = JSON.parse(stored); } catch { }
+
+		if(!validSeedMaterial(material)) throw new Error('Stored seed commitment opening is invalid');
+
+		return session.localSeedMaterial = material;
+	}
+
+	/** Create, retain, and publish a commitment to a contribution, independent nonce, and random phrase. */
 	async commit(session)
 	{
 		const me = this.profile().id;
-		const key = `phonics.game.seed:${session.root}:${me}`;
-		let contribution = this.storage?.getItem(key);
+		let material;
 
-		if(!contribution)
+		try { material = this.localSeedMaterial(session); } catch(error) { return this.freeze(session, error.message); }
+
+		if(!material)
 		{
-			const bytes = new Uint8Array(32);
+			if(session.commits.has(me)) return this.freeze(session, 'Seed commitment opening was lost before reveal');
+
+			// Disjoint CSPRNG bytes supply two independent 256-bit values and an unbiased choice among eight phrases.
+			const bytes = new Uint8Array(65);
 			crypto.getRandomValues(bytes);
-			contribution = bytes64(bytes);
+			material = {
+				contribution: bytes64(bytes.subarray(0, 32))
+				, nonce: bytes64(bytes.subarray(32, 64))
+				, phrase: bytes[64] & 7
+			};
 
 			try
 			{
-				this.storage?.setItem(key, contribution);
+				this.storage?.setItem(seedStorageKey(session, me), JSON.stringify(material));
 			}
 			catch
 			{
@@ -947,21 +1020,28 @@ export class RoomGameProtocol extends EventTarget
 			}
 		}
 
-		session.localContribution = contribution;
-		const value = await this.commitDigest(session, me, contribution);
+		session.localSeedMaterial = material;
+		const value = await this.commitDigest(session, me, material);
 		await this.child(session, 'commit', {player: me, commit: value}, `commit:${me}`);
-		this.armRevealDeadline(session);
+
+		if(session.status === 'committing') this.armRevealDeadline(session);
 	}
 
-	/** Hash one length-framed, domain-separated seed commitment. */
-	commitDigest(session, player, contribution)
+	/** Bind both literal operands and the phrase choice to this player and table. */
+	commitDigest(session, player, material)
 	{
+		if(!validSeedMaterial(material)) throw new Error('Invalid seed commitment opening');
+
+		const phrase = SEED_PHRASES[material.phrase]
+			.replace('{n}', material.contribution).replace('{m}', material.nonce);
+
 		return digest(
-			'Phonics deterministic game seed commitment v1'
+			'Phonics deterministic game seed commitment v2'
 			, session.root
 			, session.offer.session_id
 			, player
-			, contribution
+			, material.phrase
+			, phrase
 		);
 	}
 
@@ -970,14 +1050,15 @@ export class RoomGameProtocol extends EventTarget
 	{
 		const me = this.profile().id;
 
-		if(session.reveals.has(me)) return;
+		if(session.commits.size !== 2 || session.reveals.has(me) || session.status !== 'committing') return;
 
-		const contribution = session.localContribution
-			?? this.storage?.getItem(`phonics.game.seed:${session.root}:${me}`);
+		let material;
 
-		if(!contribution) return this.freeze(session, 'Seed contribution was lost before reveal');
+		try { material = this.localSeedMaterial(session); } catch(error) { return this.freeze(session, error.message); }
 
-		await this.child(session, 'reveal', {player: me, contribution}, `reveal:${me}`);
+		if(!material) return this.freeze(session, 'Seed commitment opening was lost before reveal');
+
+		await this.child(session, 'reveal', {player: me, ...material}, `reveal:${me}`);
 	}
 
 	/** Schedule deterministic forfeiture when a seated player withholds its reveal. */
@@ -1020,8 +1101,10 @@ export class RoomGameProtocol extends EventTarget
 
 		session.seedHandshake = {
 			session: session.root
+			, commitmentVersion: PROTOCOL_VERSION
 			, hashPromises: Object.fromEntries(promises)
 			, contributions: Object.fromEntries(pairs)
+			, commitmentOpenings: Object.fromEntries(pairs.map(([player]) => [player, session.openings.get(player)]))
 			, commutativeProduct: bytes64(product)
 			, seed: session.seed
 		};
@@ -1033,7 +1116,9 @@ export class RoomGameProtocol extends EventTarget
 		session.status = 'ready';
 		clearTimeout(session.deadlineTimer);
 
-		try { this.storage?.removeItem(`phonics.game.seed:${session.root}:${this.profile().id}`); } catch { }
+		delete session.localSeedMaterial;
+
+		try { this.storage?.removeItem(seedStorageKey(session, this.profile().id)); } catch { }
 
 		await this.startIfPossible(session);
 	}

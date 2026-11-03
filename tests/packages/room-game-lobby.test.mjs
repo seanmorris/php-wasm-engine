@@ -32,6 +32,64 @@ const until = async condition => {
 	throw new Error('Timed out waiting for room game protocol');
 };
 
+const seedValue = number => {
+	const bytes = Buffer.alloc(32);
+	bytes.writeUInt32BE(number, 28);
+
+	return bytes.toString('base64url');
+};
+
+const opening = (number = 1, nonce = 4, phrase = 0) => ({
+	contribution: seedValue(number)
+	, nonce: seedValue(nonce)
+	, phrase
+});
+
+const seedFixture = async (t, version = 2) => {
+	const provider = new EventTarget;
+
+	provider.profile = () => ({id: 'observer'});
+	const protocol = new RoomGameProtocol({provider, game, session: {}, storage: storage()});
+	t.after(() => protocol.close());
+	const root = '$seed-fixture', sessionId = 'session-fixture';
+	let sequence = 0;
+
+	const consume = (kind, player, body = {}) => protocol.consume({
+		event_id: `$fixture-${++sequence}`
+		, type: 'org.seanmorris.phonics.game.v1'
+		, sender: player
+		, content: {
+			v: version
+			, kind
+			, session_id: sessionId
+			, player
+			, ...body
+			, 'm.relates_to': {rel_type: 'org.seanmorris.phonics.game.v1', event_id: root}
+		}
+	}, {replay: true});
+
+	await protocol.consume({
+		event_id: root
+		, type: 'org.seanmorris.phonics.game.v1'
+		, sender: 'host'
+		, content: {
+			v: version
+			, kind: 'offer'
+			, session_id: sessionId
+			, host: 'host'
+			, game
+			, created_at: Date.now()
+			, expires_at: Date.now() + 60_000
+		}
+	});
+
+	const session = protocol.sessions.get(root);
+
+	if(session) await consume('seat', 'host', {players: ['host', 'guest'], commit_deadline: Date.now() + 60_000});
+
+	return {protocol, session, consume};
+};
+
 test('room games commit and reveal a shared seed before acknowledged deterministic actions', async () => {
 	const hub = new InMemoryLobbyHub;
 	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
@@ -44,8 +102,9 @@ test('room games commit and reveal a shared seed before acknowledged determinist
 		provider.setActivity = activity => activity?.state === 'active' ? new Promise(() => {}) : setActivity(activity);
 	}
 
-	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: storage()});
-	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: storage()});
+	const hostStorage = storage(), guestStorage = storage();
+	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: hostStorage});
+	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: guestStorage});
 	const starts = new Map, actions = [], confirmations = [];
 	let hostPort, guestPort;
 
@@ -70,6 +129,7 @@ test('room games commit and reveal a shared seed before acknowledged determinist
 	assert.equal(offerEvent.content.msgtype, 'm.text');
 	assert.match(offerEvent.content.body, /https:\/\/localhost\/#phonics-game=/);
 	assert.equal(offerEvent.content['org.seanmorris.phonics.game.v1'].kind, 'offer');
+	assert.equal(offerEvent.content['org.seanmorris.phonics.game.v1'].v, 2);
 	await guest.join(root);
 
 	await until(
@@ -84,6 +144,40 @@ test('room games commit and reveal a shared seed before acknowledged determinist
 	assert.equal(Object.keys(starts.get('host').handshake.contributions).length, 2);
 	assert.match(starts.get('host').handshake.commutativeProduct, /^[A-Za-z0-9_-]{43}$/);
 	assert.match(starts.get('host').seed, /^[a-f0-9]{64}$/);
+	assert.equal(starts.get('host').handshake.commitmentVersion, 2);
+	const transcript = hub.history(hostProvider.room).map(item => item.content);
+	const firstReveal = transcript.findIndex(item => item.kind === 'reveal');
+	assert.equal(transcript.slice(0, firstReveal).filter(item => item.kind === 'commit').length, 2);
+
+	for(const item of transcript.filter(item => item.kind === 'commit'))
+	{
+		assert.equal(item.contribution, undefined);
+		assert.equal(item.nonce, undefined);
+		assert.equal(item.phrase, undefined);
+	}
+
+	for(const item of transcript.filter(item => item.kind === 'reveal'))
+	{
+		assert.match(item.nonce, /^[A-Za-z0-9_-]{43}$/);
+		assert.ok(Number.isInteger(item.phrase) && item.phrase >= 0 && item.phrase < 8);
+
+		assert.equal(
+			await host.commitDigest(host.sessions.get(root), item.player, item)
+			, starts.get('host').handshake.hashPromises[item.player]
+		);
+
+		assert.deepEqual(
+			starts.get('host').handshake.commitmentOpenings[item.player]
+			, {nonce: item.nonce, phrase: item.phrase}
+		);
+	}
+
+	for(const [peer, protocol, retained] of [['host', host, hostStorage], ['guest', guest, guestStorage]])
+	{
+		assert.equal(retained.getItem(`phonics.game.seed:v2:${root}:${peer}`), null);
+		assert.equal(protocol.sessions.get(root).localSeedMaterial, undefined);
+	}
+
 	assert.equal(confirmations.filter(value => value.detail.sequence === 0).length, 2);
 	const actor = host.snapshot().tables[0].turn;
 	const port = actor === 'host' ? hostPort : guestPort;
@@ -116,6 +210,224 @@ test('room games commit and reveal a shared seed before acknowledged determinist
 	guest.close();
 	hostProvider.close();
 	guestProvider.close();
+});
+
+test('seed commitments bind the nonce, each phrase, both operands and the table context', async t => {
+	const {protocol, session} = await seedFixture(t);
+	const material = opening();
+	const original = await protocol.commitDigest(session, 'host', material);
+	assert.equal(original, '883fb4907b2a9ffedc67a4499fba851d23b335adfbb47a646aa495055fcf8bbb');
+
+	const phrases = await Promise.all(
+		Array.from({length: 8}, (_, phrase) => protocol.commitDigest(session, 'host', {...material, phrase}))
+	);
+
+	assert.equal(new Set(phrases).size, 8);
+
+	for(const variant of [opening(1, 5), opening(2, 4), opening(2, 3)])
+	assert.notEqual(
+		await protocol.commitDigest(session, 'host', variant)
+		, original
+		, 'Equal arithmetic sums must not substitute for the committed operands'
+	);
+	assert.notEqual(await protocol.commitDigest(session, 'guest', material), original);
+	assert.notEqual(await protocol.commitDigest({...session, root: '$another-table'}, 'host', material), original);
+
+	assert.notEqual(
+		await protocol.commitDigest({...session, offer: {session_id: 'another-session'}}, 'host', material)
+		, original
+	);
+});
+
+test('nonces and phrase choices change commitments but never the combined seed or breaker', async t => {
+
+	const run = async (host, guest, reverse = false) => {
+		const fixture = await seedFixture(t);
+		const {protocol, session, consume} = fixture;
+		const players = [['host', host], ['guest', guest]];
+
+		if(reverse) players.reverse();
+
+		for(const [player, material] of players)
+		await consume('commit', player, {commit: await protocol.commitDigest(session, player, material)});
+
+		for(const [player, material] of players) await consume('reveal', player, material);
+		assert.equal(session.status, 'ready');
+
+		return session;
+	};
+
+	const first = await run(opening(1, 4, 0), opening(2, 5, 1));
+	const second = await run(opening(1, 6, 7), opening(2, 7, 6), true);
+	assert.notDeepEqual(first.seedHandshake.hashPromises, second.seedHandshake.hashPromises);
+	assert.equal(first.seed, second.seed);
+	assert.equal(first.turn, second.turn);
+	assert.equal(first.seedHandshake.commutativeProduct, second.seedHandshake.commutativeProduct);
+	assert.notEqual((await run(opening(3, 4, 0), opening(2, 5, 1))).seed, first.seed);
+});
+
+test('tampered or malformed commitment openings cannot produce a seed', async t => {
+	const valid = opening();
+	const variants = [
+		opening(1, 5), opening(2, 4), opening(1, 4, 1), {...valid, nonce: undefined}
+		, {...valid, nonce: null}
+		, {...valid, nonce: 'a'.repeat(42)}
+		, {...valid, nonce: valid.nonce + '='}
+		, {...valid, nonce: 'A'.repeat(42) + 'B'}, {...valid, contribution: 'invalid'}
+		, {...valid, phrase: undefined}, {...valid, phrase: -1}, {...valid, phrase: 8}
+		, {...valid, phrase: 0.5}, {...valid, phrase: '0'}
+	];
+
+	for(const material of variants)
+	{
+		const {protocol, session, consume} = await seedFixture(t);
+		await consume('commit', 'host', {commit: await protocol.commitDigest(session, 'host', valid)});
+		await consume('commit', 'guest', {commit: await protocol.commitDigest(session, 'guest', opening(2, 5))});
+		await consume('reveal', 'host', material);
+		assert.equal(session.status, 'frozen', JSON.stringify(material));
+		assert.equal(session.reveals.size, 0);
+		await consume('reveal', 'host', valid);
+		await consume('reveal', 'guest', opening(2, 5));
+		assert.equal(session.seed, undefined);
+	}
+});
+
+test('room seed version rejects legacy and unknown commitment exchanges', async t => {
+	for(const version of [1, 3]) assert.equal((await seedFixture(t, version)).session, undefined);
+	assert.ok((await seedFixture(t, 2)).session);
+});
+
+test('CSPRNG bytes independently choose the contribution, nonce and all eight phrases without bias', async t => {
+	const {protocol, session} = await seedFixture(t);
+	const published = [];
+
+	protocol.child = async (_, kind, content) => published.push({kind, ...content});
+
+	protocol.armRevealDeadline = () => {};
+
+	const counts = Array(8).fill(0);
+	let byte = 0;
+
+	t.mock.method(crypto, 'getRandomValues', bytes => {
+		assert.equal(bytes.length, 65);
+		bytes.set(Buffer.from(seedValue(1), 'base64url'));
+		bytes.set(Buffer.from(seedValue(4), 'base64url'), 32);
+		bytes[64] = byte++;
+
+		return bytes;
+	});
+
+	for(let index = 0; index < 256; index++)
+	{
+		const next = {...session, root: `$random-${index}`};
+		await protocol.commit(next);
+		const material = next.localSeedMaterial;
+		assert.equal(material.contribution, seedValue(1));
+		assert.equal(material.nonce, seedValue(4));
+		counts[material.phrase]++;
+	}
+
+	assert.deepEqual(counts, Array(8).fill(32));
+	assert.ok(published.every(item => item.kind === 'commit' && item.nonce === undefined && item.phrase === undefined));
+});
+
+test('reload restores the same private opening, and completed history needs no new secrets', async t => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest'});
+	const retained = storage();
+	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: storage()});
+	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: retained});
+	const protocols = [host, guest];
+
+	t.after(() => {
+		for(const protocol of protocols) protocol.close();
+		hostProvider.close();
+		guestProvider.close();
+	});
+
+	guest.reveal = async () => {};
+
+	await host.connect();
+	await guest.connect();
+	const root = await host.create();
+	await guest.join(root);
+	await until(() => host.sessions.get(root).reveals.size === 1);
+	const original = JSON.parse(retained.getItem(`phonics.game.seed:v2:${root}:guest`));
+	guest.close();
+	const resumed = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: retained});
+	protocols.push(resumed);
+	await resumed.connect();
+	await until(() => resumed.sessions.get(root)?.seed && host.sessions.get(root)?.seed);
+	assert.equal(resumed.sessions.get(root).seed, host.sessions.get(root).seed);
+
+	assert.deepEqual(
+		resumed.sessions.get(root).openings.get('guest')
+		, {nonce: original.nonce, phrase: original.phrase}
+	);
+
+	const transcript = hub.history(guestProvider.room);
+	assert.equal(transcript.filter(item => item.sender === 'guest' && item.content.kind === 'commit').length, 1);
+	assert.equal(transcript.filter(item => item.sender === 'guest' && item.content.kind === 'reveal').length, 1);
+	assert.equal(retained.getItem(`phonics.game.seed:v2:${root}:guest`), null);
+	resumed.close();
+	t.mock.method(crypto, 'getRandomValues', () => { throw new Error('History must not generate a new opening'); });
+
+	const replay = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: retained});
+	protocols.push(replay);
+	await replay.connect();
+	assert.deepEqual(replay.sessions.get(root).seedHandshake, host.sessions.get(root).seedHandshake);
+	assert.equal(hub.history(guestProvider.room).length, transcript.length);
+});
+
+test('a live seed exchange works when session storage is unavailable', async t => {
+	const hub = new InMemoryLobbyHub;
+
+	const blocked = () => { throw new Error('Storage denied'); };
+
+	const peers = ['host', 'guest'].map(peerId => {
+		const provider = new InMemoryLobbyProvider({hub, peerId});
+
+		const protocol = new RoomGameProtocol({
+			provider
+			, game
+			, session: {}
+			, storage: {getItem: blocked, setItem: blocked, removeItem: blocked}
+		});
+
+		t.after(() => { protocol.close(); provider.close(); });
+
+		return protocol;
+	});
+
+	for(const peer of peers) await peer.connect();
+	const root = await peers[0].create();
+	await peers[1].join(root);
+	await until(() => peers.every(peer => peer.sessions.get(root)?.seed));
+	assert.equal(peers[0].sessions.get(root).seed, peers[1].sessions.get(root).seed);
+});
+
+test('a lost or corrupt private opening freezes instead of replacing a published commitment', async t => {
+	t.mock.method(crypto, 'getRandomValues', () => { throw new Error('Do not regenerate a committed opening'); });
+
+	for(const stored of [null, '{invalid', JSON.stringify({...opening(), nonce: null})])
+	{
+		const {protocol, session} = await seedFixture(t);
+
+		protocol.provider.profile = () => ({id: 'host'});
+		const published = [];
+
+		protocol.child = async (...args) => published.push(args);
+		session.commits.set('host', await protocol.commitDigest(session, 'host', opening()));
+		session.commits.set('guest', await protocol.commitDigest(session, 'guest', opening(2, 5)));
+
+		if(stored !== null) protocol.storage.setItem('phonics.game.seed:v2:$seed-fixture:host', stored);
+
+		await protocol.reveal(session);
+		assert.equal(session.status, 'frozen');
+		assert.equal(session.seed, undefined);
+		assert.equal(published.length, 0);
+	}
 });
 
 test('linked challenges use readable Matrix messages and join the intended account', async () => {
@@ -199,7 +511,7 @@ test('lobby startup performs one filtered replay without old-event fan-out', asy
 		msgtype: 'm.text'
 		, body: `Expired table ${index}`
 		, 'org.seanmorris.phonics.game.v1': {
-			v: 1
+			v: 2
 			, kind: 'offer'
 			, session_id: `expired-${index}`
 			, host: 'writer'
