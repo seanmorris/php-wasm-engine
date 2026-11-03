@@ -262,7 +262,7 @@
     "browser/network/InMemoryLobbyProvider.mjs": "sha256-ePt1WBCa2Bn3eGMUiWrTW2pApMq2FdbXwJWeuJWL/Wk=",
     "browser/network/InviteLink.mjs": "sha256-EU6NbOWcvuy+YXeb3VLkJiU+RzymW1zi2lacm4gDQpE=",
     "browser/network/LobbyController.mjs": "sha256-NkEpmN95tvNrsZR/Ovnq5Md28W21ke9/MXjs46ynBI8=",
-    "browser/network/LobbyOverlay.mjs": "sha256-9EEcyRsOI3jO2KiR7ClJ3QFMESoFClm0UyUMUt6InC0=",
+    "browser/network/LobbyOverlay.mjs": "sha256-zflDZKreZNMyb+H8Q2YEL4aKB9swbpv7NLIVn+bqldE=",
     "browser/network/NetworkBridge.mjs": "sha256-Z2jtT3WpBzxrdBacac4GpNnvZrKv1zmzcln4S7SeZrg=",
     "browser/network/NetworkSession.mjs": "sha256-CY+FkIh5CLxomagZ0/OMnDIh1/kuEgHB/abonTu4kmg=",
     "browser/network/OAuthPopup.mjs": "sha256-Q2MWBa4N9GoXu3AXB2AopbOv8q5apZAZvD521Cb5oX8=",

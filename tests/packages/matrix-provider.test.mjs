@@ -178,6 +178,53 @@ test('Matrix provider filters events by authenticated sender, recipient, and exp
 	provider.close();
 });
 
+test('Matrix signals share one rate-limited event per batch and unpack in order', async () => {
+	const sends = [];
+
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, accessToken: 'token'
+		, userId: '@host:matrix.example'
+		, signalBatch: 20
+		, fetch: async (url, options) => {
+			sends.push({path: new URL(url).pathname, body: JSON.parse(options.body)});
+
+			// Synapse refuses the first attempt, as rc_message does once a burst is spent.
+			return sends.length === 1
+				? response({errcode: 'M_LIMIT_EXCEEDED', error: 'Too Many Requests', retry_after_ms: 10}, 429)
+				: response({event_id: '$signals'});
+		}
+	});
+
+	Object.assign(provider, {connected: true, roomId: '!room:matrix.example'});
+	const statuses = [];
+	provider.addEventListener('signalingstatus', ({detail}) => statuses.push(detail));
+	const candidates = Array.from({length: 5}, (_, index) => ({sessionId: 's', payload: {candidate: {index}}}));
+	await Promise.all(candidates.map(value => provider.signalPeer('@guest:matrix.example', value)));
+
+	assert.equal(sends.length, 2);
+	assert.equal(sends[0].path, sends[1].path, 'the retry reuses the transaction');
+	assert.match(sends[0].path, /\/send\/org\.seanmorris\.phonics\.signal\.v1\//);
+	assert.deepEqual(sends[1].body.payloads, candidates);
+	assert.equal(sends[1].body.to, '@guest:matrix.example');
+	assert.equal(statuses[0].code, 'M_LIMIT_EXCEEDED');
+
+	const received = [];
+	const guest = new MatrixLobbyProvider({homeserver: 'https://matrix.example', userId: '@guest:matrix.example'});
+	guest.addEventListener('signal', ({detail}) => received.push(detail));
+
+	guest.consume({
+		type: 'org.seanmorris.phonics.signal.v1'
+		, sender: '@host:matrix.example'
+		, content: sends[1].body
+	});
+
+	assert.deepEqual(received.map(value => value.payload), candidates);
+	assert.ok(received.every(value => value.from === '@host:matrix.example'));
+	provider.close();
+	guest.close();
+});
+
 test('Matrix sync scopes events and backs off when a homeserver returns without long polling', async () => {
 	const syncs = [];
 

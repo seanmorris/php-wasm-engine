@@ -47,7 +47,11 @@ const STATUS = {
 
 /** Short status for provider progress events that matter to people; null keeps the state's own status. */
 const progressText = (type, detail) => ({
-	signalingstatus: detail.state === 'retrying' ? 'Connection interrupted. Retrying…' : null
+	signalingstatus: detail.state !== 'retrying'
+		? null
+		: detail.code === 'M_LIMIT_EXCEEDED'
+			? 'Matrix is rate-limiting messages. Retrying…'
+			: 'Connection interrupted. Retrying…'
 	, invitestatus: {
 		admitted: 'Your friend opened the link. Connecting…'
 		, closed: detail.reason ?? 'Invitation closed'
