@@ -259,7 +259,7 @@
     "browser/WorldDefinition.mjs": "sha256-zK6unGbX4oe7U8n5FKrBj0rDAfW5P40biC5VbA+YE+s=",
     "browser/launcher/GameLauncher.mjs": "sha256-dEMnSmTx6e+cvmhyiEz4BXCxzBw5UOCm/dF2WKgoX7Q=",
     "browser/network/Errors.mjs": "sha256-DC0Qk5xBy6drbPuicKe2FK+GCVOt4HedopCTOlIWyMQ=",
-    "browser/network/InMemoryLobbyProvider.mjs": "sha256-ePt1WBCa2Bn3eGMUiWrTW2pApMq2FdbXwJWeuJWL/Wk=",
+    "browser/network/InMemoryLobbyProvider.mjs": "sha256-WvSzHByK4aEuB3OHLuYnG0e7JqiG3AsP3xltimpOU60=",
     "browser/network/InviteLink.mjs": "sha256-EU6NbOWcvuy+YXeb3VLkJiU+RzymW1zi2lacm4gDQpE=",
     "browser/network/LobbyController.mjs": "sha256-NkEpmN95tvNrsZR/Ovnq5Md28W21ke9/MXjs46ynBI8=",
     "browser/network/LobbyOverlay.mjs": "sha256-zflDZKreZNMyb+H8Q2YEL4aKB9swbpv7NLIVn+bqldE=",

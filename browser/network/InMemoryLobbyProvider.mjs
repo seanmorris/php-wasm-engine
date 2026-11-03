@@ -179,10 +179,10 @@ export class InMemoryLobbyProvider extends EventTarget
 	 * @param {string} options.peerId Validated peer ID.
 	 * @param {string} [options.displayName] Display name; defaults to the peer ID.
 	 * @param {string} [options.room] Room name; defaults to phonics.
-	 * @param {number} [options.invitationTtl] Invitation lifetime in milliseconds; defaults to 30,000.
+	 * @param {number} [options.invitationTtl] Invitation lifetime in milliseconds; defaults to 90,000.
 	 * @param {AbortSignal} [options.signal] Closes the provider when aborted after connecting.
 	 */
-	constructor({hub, peerId, displayName = peerId, room = 'phonics', invitationTtl = 30_000, signal} = {})
+	constructor({hub, peerId, displayName = peerId, room = 'phonics', invitationTtl = 90_000, signal} = {})
 	{
 		super();
 
