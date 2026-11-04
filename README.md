@@ -128,6 +128,10 @@ Browser games receive `context.services.QuickControls`, the shared mute/fullscre
 
 ## Development and verification
 
+Pure local/public random streams and finite ordered/random card piles are documented in
+[Deterministic random streams and finite piles](docs/random-cards.md). PHP and browser samplers share golden vectors;
+private online dealing and network acceptance remain separate protocol responsibilities.
+
 ```sh
 npm test
 npm run test:browser

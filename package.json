@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "start": "npm run build:site && webpack serve --mode development",
-    "test": "php tests/run.php && php tests/phpdoc.php && npm run test:packages",
+    "test": "php tests/run.php && php tests/phpdoc.php && php tests/cards-random.php && npm run test:packages",
     "bench:ecs": "php benchmarks/ecs.php",
     "bench:ecs:browser": "node scripts/bench-ecs-browser.mjs",
     "bench:php-noid": "php packages/php-noid/benchmarks/collisions.php",
@@ -77,7 +77,8 @@
     "./audio-samples": "./browser/SamplePlayer.mjs",
     "./launcher": "./browser/launcher/GameLauncher.mjs",
     "./networking": "./browser/Networking.mjs",
-    "./phonics.json": "./phonics.json"
+    "./phonics.json": "./phonics.json",
+    "./random": "./browser/random/RandomStream.mjs"
   },
   "files": [
     "src/",

@@ -19,6 +19,7 @@
     "test": [
       "php tests/run.php",
       "php tests/phpdoc.php",
+      "php tests/cards-random.php",
 			"php tests/core-phonics.php",
 			"php tests/world-runtime.php",
 			"php tests/network.php",
