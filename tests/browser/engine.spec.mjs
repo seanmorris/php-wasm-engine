@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {RandomStream} from '../../browser/random/RandomStream.mjs';
 
 async function boot(page, zlib = false)
 {
@@ -45,6 +46,27 @@ test.afterEach(async({page}) => {await page.evaluate(() => window.enginePhp?.ref
 test('pure PHP regressions also pass inside the 32-bit WASM runtime', async({page}) => {
 	await boot(page, true);
 	expect(await run(page, 'require "/engine/tests/run.php";')).toContain('0 failures');
+});
+
+test('card piles and unsigned random sampling agree inside the 32-bit WASM runtime', async({page}) => {
+	await boot(page);
+	const r = new RandomStream('golden-seed', 'poker/vector');
+	const bytes = Buffer.from(await r.nextBytes(35)).toString('hex'),integers = [];
+
+	for(const bound of [2,3,5,6,7,8,52,1073741825,2147483647]) integers.push(await r.boundedInt(bound));
+	const cards = await r.shuffle(Array.from({length: 52}, (_, i) => i));
+	const expected = {bytes,integers,cards,state: r.snapshot()};
+
+	const actual = JSON.parse(await run(page, String.raw`
+$r=new Phonics\Random\RandomStream('golden-seed','poker/vector');
+$bytes=bin2hex($r->nextBytes(35)); $integers=[];
+foreach([2,3,5,6,7,8,52,1073741825,2147483647] as $bound) $integers[]=$r->boundedInt($bound);
+echo json_encode(['bytes'=>$bytes,'integers'=>$integers,'cards'=>$r->shuffle(range(0,51)),'state'=>$r->snapshot()]);
+`
+	));
+
+	expect(actual).toEqual(expected);
+	expect(await run(page, 'require "/engine/tests/cards-random.php";')).toContain('0 failures');
 });
 
 test('real GPU renders all flip flags, instances layers, edits tile slices, and releases resources', async({page}) => {

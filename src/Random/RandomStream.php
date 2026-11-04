@@ -56,9 +56,15 @@ final class RandomStream
 	public function boundedInt(int $bound): int
 	{
 		if($bound < 1 || $bound > 2147483647) throw new \InvalidArgumentException('Invalid random bound');
-		$limit = intdiv(4294967296, $bound) * $bound;
-		do { $value = unpack('N', $this->nextBytes(4))[1]; } while($value >= $limit);
-		return $value % $bound;
+		// WASM PHP has signed 32-bit integers. Doubles represent every uint32 exactly,
+		// including the 2^32 rejection limit, without signed unpack/cast overflow.
+		$limit = floor(4294967296.0 / $bound) * $bound;
+		do
+		{
+			$bytes = $this->nextBytes(4);
+			$value = ord($bytes[0]) * 16777216.0 + ord($bytes[1]) * 65536 + ord($bytes[2]) * 256 + ord($bytes[3]);
+		} while($value >= $limit);
+		return (int)fmod($value, (float)$bound);
 	}
 
 	/**

@@ -16,6 +16,7 @@ const references = [
 	, ['input', 'Input & sequences', 'docs/input.md']
 	, ['ui', 'UI, menus & cards', 'docs/ui.md']
 	, ['performance', 'ECS performance', 'docs/ecs-performance.md']
+	, ['random-cards', 'Random streams and card piles', 'docs/random-cards.md']
 ];
 
 const examples = await loadExamples();

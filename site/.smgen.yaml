@@ -97,6 +97,12 @@ MENUS:
         parent: api
         weight: 30
         expanded: false
+      - id: api-cards
+        group: true
+        title: Card piles
+        parent: api
+        weight: 25
+        expanded: false
       - id: api-effects
         group: true
         title: Effects
@@ -138,6 +144,12 @@ MENUS:
         title: Rendering
         parent: api
         weight: 90
+        expanded: false
+      - id: api-random
+        group: true
+        title: Deterministic random
+        parent: api
+        weight: 85
         expanded: false
       - id: api-spatial
         group: true

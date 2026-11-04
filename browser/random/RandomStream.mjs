@@ -8,6 +8,11 @@ export class RandomStream
 	#cachedIndex = -1;
 	#cachedBlock;
 
+	/**
+	 * Create an independent deterministic stream from explicit seed bytes.
+	 * @param {string|Uint8Array} seed UTF-8 text or raw bytes supplied by the caller.
+	 * @param {string} domain UTF-8 purpose used to separate independent streams.
+	 */
 	constructor(seed, domain = 'default')
 	{
 		if(typeof seed !== 'string' && !(seed instanceof Uint8Array)) throw new TypeError('Invalid stream seed');
@@ -34,6 +39,11 @@ export class RandomStream
 		this.#prefix.set(purpose, header.length + 8 + this.#seed.length);
 	}
 
+	/**
+	 * Reserve and read deterministic bytes, advancing the saved position.
+	 * @param {number} length Byte count from zero through one MiB.
+	 * @returns {Promise<Uint8Array>} Bytes from the reserved interval.
+	 */
 	async nextBytes(length)
 	{
 		if(!Number.isSafeInteger(length) || length < 0 || length > 1048576 || this.#position > 2147483647-length)
@@ -69,6 +79,11 @@ export class RandomStream
 		return output;
 	}
 
+	/**
+	 * Sample an unbiased integer with rejection of the incomplete residue range.
+	 * @param {number} bound Exclusive upper bound, from one through 2^31-1.
+	 * @returns {Promise<number>} Integer in the half-open range [0, bound).
+	 */
 	async boundedInt(bound)
 	{
 		if(!Number.isInteger(bound) || bound < 1 || bound > 2147483647) throw new RangeError('Invalid random bound');
@@ -85,8 +100,18 @@ export class RandomStream
 		return value%bound;
 	}
 
+	/**
+	 * Roll a die with equally likely faces.
+	 * @param {number} sides Positive face count.
+	 * @returns {Promise<number>} One-based face number.
+	 */
 	async dice(sides = 6) { return await this.boundedInt(sides) + 1; }
 
+	/**
+	 * Shuffle a copy of a canonically ordered collection with Fisher-Yates.
+	 * @param {Array<unknown>} values Ordered input instances.
+	 * @returns {Promise<Array<unknown>>} A permutation preserving every input instance.
+	 */
 	async shuffle(values)
 	{
 		const result = [...values];
@@ -100,6 +125,12 @@ export class RandomStream
 		return result;
 	}
 
+	/**
+	 * Sample distinct positions without replacing an input instance.
+	 * @param {Array<unknown>} values Ordered finite population; equal faces may be distinct instances.
+	 * @param {number} count Number of instances to select.
+	 * @returns {Promise<Array<unknown>>} The selected sample.
+	 */
 	async sampleWithoutReplacement(values, count)
 	{
 		if(!Number.isInteger(count) || count < 0 || count > values.length) throw new RangeError('Invalid sample size');
@@ -107,6 +138,10 @@ export class RandomStream
 		return (await this.shuffle(values)).slice(0, count);
 	}
 
+	/**
+	 * Serialize the exact stream position without consuming bytes.
+	 * @returns {object} Version, base64 seed, domain and absolute byte position.
+	 */
 	snapshot()
 	{
 		return {
@@ -117,6 +152,11 @@ export class RandomStream
 		};
 	}
 
+	/**
+	 * Restore a stream from a validated versioned snapshot.
+	 * @param {object} state Serialized stream identity and byte position.
+	 * @returns {RandomStream} An independent stream at the saved position.
+	 */
 	static restore(state)
 	{
 		if(state?.version !== 1 || typeof state.seed !== 'string' || typeof state.domain !== 'string'

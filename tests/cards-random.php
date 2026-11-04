@@ -23,9 +23,9 @@ $test('bounded rejection consumes rejected values and stays inside each bound',s
 	for($seed=0;$seed<50;$seed++)
 	{
 		$a=new RandomStream((string)$seed); $b=new RandomStream((string)$seed); $bound=1073741825;
-		$limit=intdiv(4294967296,$bound)*$bound; $draws=0;
-		do { $v=unpack('N',$a->nextBytes(4))[1]; $draws++; } while($v>=$limit);
-		$expect($b->boundedInt($bound)===$v%$bound);
+		$limit=4294967296.0-fmod(4294967296.0,$bound); $draws=0;
+		do { $v=hexdec(bin2hex($a->nextBytes(4))); $draws++; } while($v>=$limit);
+		$expect($b->boundedInt($bound)===(int)fmod($v,$bound));
 		$expect($b->snapshot()['position']===$draws*4);
 		$found=$found||$draws>1;
 	}
@@ -34,8 +34,8 @@ $test('bounded rejection consumes rejected values and stays inside each bound',s
 	{
 		$r=new RandomStream('bounds');
 		for($i=0;$i<100;$i++) { $value=$r->boundedInt($bound); $expect($value>=0&&$value<$bound); }
-		$limit=intdiv(4294967296,$bound)*$bound;
-		$expect($limit%$bound===0,'Every residue has exactly limit/bound accepted preimages');
+		$limit=4294967296.0-fmod(4294967296.0,$bound);
+		$expect(fmod($limit,$bound)===0.0,'Every residue has exactly limit/bound accepted preimages');
 	}
 });
 $test('sampling and invalid input preserve finite populations',static function() use ($expect,$reject): void {
