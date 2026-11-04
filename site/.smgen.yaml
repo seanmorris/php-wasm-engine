@@ -396,6 +396,12 @@ MENUS:
         parent: games
         weight: 60
         expanded: false
+      - id: game-php-poker
+        group: true
+        title: PHP Poker
+        parent: games
+        weight: 70
+        expanded: false
       - id: game-doom-phonics-api
         group: true
         title: PHP API
@@ -515,6 +521,30 @@ MENUS:
         title: Online play
         parent: game-php-billiards-api
         weight: 40
+        expanded: false
+      - id: game-php-poker-api
+        group: true
+        title: PHP API
+        parent: game-php-poker
+        weight: 100
+        expanded: false
+      - id: game-php-poker-api-root
+        group: true
+        title: Root namespace
+        parent: game-php-poker-api
+        weight: 10
+        expanded: false
+      - id: game-php-poker-api-render
+        group: true
+        title: Rendering
+        parent: game-php-poker-api
+        weight: 20
+        expanded: false
+      - id: game-php-poker-api-ui
+        group: true
+        title: Table interface
+        parent: game-php-poker-api
+        weight: 30
         expanded: false
       - id: maintain
         group: true
