@@ -30,11 +30,18 @@ $test('bounded rejection consumes rejected values and stays inside each bound',s
 		$found=$found||$draws>1;
 	}
 	$expect($found,'Fixture must exercise rejection');
-	foreach([1,2,3,4,5,6,7,8,52,2147483647] as $bound)
+	foreach([1,2,3,4,5,6,7,8,52,32768,32769,65535,65536,65537,1073741825,2147483647] as $bound)
 	{
-		$r=new RandomStream('bounds');
-		for($i=0;$i<100;$i++) { $value=$r->boundedInt($bound); $expect($value>=0&&$value<$bound); }
+		$r=new RandomStream('bounds'); $oracle=new RandomStream('bounds');
 		$limit=4294967296.0-fmod(4294967296.0,$bound);
+		for($i=0;$i<100;$i++)
+		{
+			$value=$r->boundedInt($bound); $expect($value>=0&&$value<$bound);
+			// Independent exactly representable double oracle for the integer-limb implementation.
+			do { $word=hexdec(bin2hex($oracle->nextBytes(4))); } while($word >= $limit);
+			$expect($value===(int)fmod($word,$bound));
+			$expect($r->snapshot()['position']===$oracle->snapshot()['position']);
+		}
 		$expect(fmod($limit,$bound)===0.0,'Every residue has exactly limit/bound accepted preimages');
 	}
 });

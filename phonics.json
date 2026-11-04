@@ -364,7 +364,7 @@
     "src/Physics/MapTerrain.php": "sha256-pYHUxb3VC/Pk+aliMwKYOzQWqXB7Vgg7HNOqg9qYf+I=",
     "src/Physics/Pose.php": "sha256-WPToJQDlCtY/T2cKwyeClihXzraPXIihPQCWavug89U=",
     "src/Physics/Terrain.php": "sha256-Y+o1+2Z6eqKUJWAPybY5c/3Oam1KTFE8xyqvD80VTLY=",
-    "src/Random/RandomStream.php": "sha256-xe5OWX9Q81QGYhRP757PIYzkaLKtx1Xfc/o0dtiFZQg=",
+    "src/Random/RandomStream.php": "sha256-aGeHtWwULByNLIV3CvDEsYKu7WjlmNXStB+GDnN/NKA=",
     "src/Render/Atlas.php": "sha256-xHgfVY2JneQeZRlSvdddg+8ME4pjDRCor0N4RH7h4r4=",
     "src/Render/BackdropTwistRenderer.php": "sha256-YgXFpznZWz1VcpEkGjtc0ehVybzmXbmuxFzzEns3GAQ=",
     "src/Render/BitmapFont.php": "sha256-ab3AGk+hom9zrJumLG52o3Rai5SISICng8Ot73Pl0L8=",

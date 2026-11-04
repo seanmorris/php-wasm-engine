@@ -56,15 +56,37 @@ final class RandomStream
 	public function boundedInt(int $bound): int
 	{
 		if($bound < 1 || $bound > 2147483647) throw new \InvalidArgumentException('Invalid random bound');
-		// WASM PHP has signed 32-bit integers. Doubles represent every uint32 exactly,
-		// including the 2^32 rejection limit, without signed unpack/cast overflow.
-		$limit = floor(4294967296.0 / $bound) * $bound;
+		// Work in unsigned 16-bit limbs so WASM never overflows a signed 32-bit PHP
+		// integer. tail is 2^32 mod bound; subtract it from 2^32 to form the limit.
+		$tail = (self::remainder32(65535,65535,$bound) + 1) % $bound;
+		$limitHigh = $tail ? 65535 - intdiv($tail - 1,65536) : 65536;
+		$limitLow = $tail ? 65535 - (($tail - 1) % 65536) : 0;
 		do
 		{
-			$bytes = $this->nextBytes(4);
-			$value = ord($bytes[0]) * 16777216.0 + ord($bytes[1]) * 65536 + ord($bytes[2]) * 256 + ord($bytes[3]);
-		} while($value >= $limit);
-		return (int)fmod($value, (float)$bound);
+			[$high,$low] = array_values(unpack('n2',$this->nextBytes(4)));
+		} while($high > $limitHigh || ($high === $limitHigh && $low >= $limitLow));
+		return self::remainder32($high,$low,$bound);
+	}
+
+	/**
+	 * Divide unsigned limbs without overflowing a signed 32-bit intermediate.
+	 * @param int $high Most significant 16 bits.
+	 * @param int $low Least significant 16 bits.
+	 * @param int $bound Positive divisor no larger than 2^31-1.
+	 * @return int Exact nonnegative remainder using only integer arithmetic.
+	 */
+	private static function remainder32(int $high,int $low,int $bound): int
+	{
+		$remainder = $high % $bound;
+		// Dice, card shuffles and the bot policy use this constant-time small-bound path.
+		if($bound <= 32768) return ($remainder * 65536 + $low) % $bound;
+		for($bit = 15; $bit >= 0; $bit--)
+		{
+			$gap = $bound - $remainder;
+			$remainder = $remainder >= $gap ? $remainder - $gap : $remainder + $remainder;
+			if(($low >> $bit) & 1) $remainder = $remainder === $bound - 1 ? 0 : $remainder + 1;
+		}
+		return $remainder;
 	}
 
 	/**
