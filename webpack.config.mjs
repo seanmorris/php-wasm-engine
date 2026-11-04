@@ -113,9 +113,11 @@ export default async (_env, argv) => {
 					try {res.json(await engineFiles());} catch(error) {next(error);}
 				});
 
-				server.app.get('/engine/phonics.json', (_req, res) => res.sendFile(path.join(root, 'phonics.json')));
-				server.app.get('/engine/legacy.php', (_req, res) => res.sendFile(path.join(root, 'legacy.php')));
-				server.app.get('/engine/autoload.php', (_req, res) => res.sendFile(path.join(root, 'autoload.php')));
+				// Resolve only these named files within root; an ancestor such as .worktrees
+				// must not make Express classify the requested file itself as a dotfile.
+				server.app.get('/engine/phonics.json', (_req, res) => res.sendFile('phonics.json', {root}));
+				server.app.get('/engine/legacy.php', (_req, res) => res.sendFile('legacy.php', {root}));
+				server.app.get('/engine/autoload.php', (_req, res) => res.sendFile('autoload.php', {root}));
 				server.app.get('/docs/index.html', (_req, res) => res.redirect('/sane-phonics/'));
 
 				return middlewares;
