@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {InMemoryLobbyHub, InMemoryLobbyProvider} from '../../browser/network/InMemoryLobbyProvider.mjs';
-import {RoomGameProtocol} from '../../browser/network/RoomGameLobby.mjs';
+import {
+	RoomGameProtocol
+	, gameAspectRatio
+	, gameCanvasSize
+} from '../../browser/network/RoomGameLobby.mjs';
 
 const game = Object.freeze({
 	id: 'org.example.pool'
@@ -43,6 +47,18 @@ const opening = (number = 1, nonce = 4, phrase = 0) => ({
 	contribution: seedValue(number)
 	, nonce: seedValue(nonce)
 	, phrase
+});
+
+test('room canvas sizing supports responsive games without changing fixed-ratio games', () => {
+	assert.equal(gameAspectRatio('auto'), null);
+	assert.equal(gameAspectRatio(' AUTO '), null);
+	assert.equal(gameAspectRatio('16/9'), 16 / 9);
+	assert.equal(gameAspectRatio(4 / 3), 4 / 3);
+	assert.equal(gameAspectRatio('invalid'), 16 / 9);
+	assert.deepEqual(gameCanvasSize(390, 500, null), {width: 390, height: 500});
+	assert.deepEqual(gameCanvasSize(1000, 500, null), {width: 1000, height: 500});
+	assert.deepEqual(gameCanvasSize(1000, 700, 16 / 9), {width: 1000, height: 562.5});
+	assert.deepEqual(gameCanvasSize(700, 500, 16 / 9), {width: 700, height: 393.75});
 });
 
 const seedFixture = async (t, version = 2, seat = {}) => {

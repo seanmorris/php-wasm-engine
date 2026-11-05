@@ -1542,13 +1542,25 @@ export class RoomGameProtocol extends EventTarget
 	}
 }
 
-const gameAspectRatio = value => {
+/** Normalize a room game's canvas ratio; `auto` lets responsive games fill the available stage. */
+export const gameAspectRatio = value => {
+	if(String(value ?? '').trim().toLowerCase() === 'auto') return null;
+
 	if(Number.isFinite(value) && value > 0) return Number(value);
 
 	const match = String(value ?? '').match(/^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/);
 	const ratio = match ? Number(match[1]) / Number(match[2]) : 16 / 9;
 
 	return Number.isFinite(ratio) && ratio > 0 ? ratio : 16 / 9;
+};
+
+/** Fit a game canvas to its room stage, or use the whole stage for a responsive game. */
+export const gameCanvasSize = (width, height, aspectRatio) => {
+	if(aspectRatio === null) return {width, height};
+
+	const fittedWidth = Math.min(width, height * aspectRatio);
+
+	return {width: fittedWidth, height: fittedWidth / aspectRatio};
 };
 
 /* Room layout only: the panel over the running game, its people rail, and the stage that takes the canvas
@@ -1576,6 +1588,7 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-game.has-game{grid-template:"stage side" minmax(0,1fr)/minmax(0,1fr) clamp(16rem,24vw,21rem);padding:0;background:#000;-webkit-backdrop-filter:none;backdrop-filter:none}
 .phonics-room-game.has-game .phonics-room-stage{display:flex}
 .phonics-room-game.has-game .phonics-room-stage>canvas{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;aspect-ratio:16/9;object-fit:contain}
+.phonics-room-game.has-game.has-responsive-game .phonics-room-stage>canvas{aspect-ratio:auto}
 .phonics-room-game.has-game .phonics-room-panel{grid-area:side;width:auto;max-height:none;border-width:0 0 0 1px;border-radius:0;box-shadow:none}
 .phonics-room-game.has-game .phonics-room-body{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
 .phonics-room-game.has-game .phonics-room-rail{border-left:0;border-top:1px solid var(--ui-line);max-height:11rem}
@@ -1631,6 +1644,7 @@ export class EmbeddedRoomLobby
 		this.canvasSizing = null;
 
 		this.root = node('section', {class: 'phonics-room-game phonics-ui', 'aria-label': title});
+		this.root.classList.toggle('has-responsive-game', this.aspectRatio === null);
 		this.stage = node('div', {class: 'phonics-room-stage'});
 		this.stageResize = new ResizeObserver(() => this.sizeStage());
 		this.stageResize.observe(this.stage);
@@ -1843,8 +1857,7 @@ export class EmbeddedRoomLobby
 			, this.canvas.style.getPropertyPriority(name)
 		]);
 
-		const fittedWidth = Math.min(width, height * this.aspectRatio);
-		const fittedHeight = fittedWidth / this.aspectRatio;
+		const {width: fittedWidth, height: fittedHeight} = gameCanvasSize(width, height, this.aspectRatio);
 		this.canvas.style.setProperty('width', `${fittedWidth}px`, 'important');
 		this.canvas.style.setProperty('height', `${fittedHeight}px`, 'important');
 	}
