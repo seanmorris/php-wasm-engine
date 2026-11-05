@@ -1,5 +1,6 @@
 import {defineConfig} from '@playwright/test';
 import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
 
 const port = Number(process.env.PORT || 9130);
 const baseURL = `http://127.0.0.1:${port}`;
@@ -7,6 +8,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 export default defineConfig({
 	testDir: '.'
 	, testMatch: ['tests/browser/**/*.spec.mjs', 'packages/*/tests/browser/**/*.spec.mjs']
+	, testIgnore: ['site/.cache/**', '.worktrees/**'].map(path => fileURLToPath(new URL(path, import.meta.url)))
 	, timeout: 90000
 	, workers: 1
 	, reporter: process.env.CI ? [['line'], ['github']] : 'list'
