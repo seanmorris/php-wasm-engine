@@ -13,6 +13,7 @@ use Phonics\Random\RandomStream;
  */
 final class PileSet
 {
+
 	/**
 	 * Validate an inventory and all of its initial locations.
 	 * @param array $inventory Instance ID to definition mapping; duplicate faces are allowed.
@@ -31,7 +32,12 @@ final class PileSet
 	 */
 	public function snapshot(): array
 	{
-		return ['version' => 1, 'inventory' => $this->inventory, 'piles' => $this->piles, 'random' => $this->random->snapshot()];
+		return [
+			'version' => 1
+			, 'inventory' => $this->inventory
+			, 'piles' => $this->piles
+			, 'random' => $this->random->snapshot()
+		];
 	}
 
 	/**
@@ -42,8 +48,10 @@ final class PileSet
 	public static function restore(array $state): self
 	{
 		if(($state['version'] ?? null) !== 1 || !is_array($state['inventory'] ?? null)
-			|| !is_array($state['piles'] ?? null) || !is_array($state['random'] ?? null))
-			throw new \InvalidArgumentException('Invalid pile snapshot');
+			|| !is_array($state['piles'] ?? null) || !is_array($state['random'] ?? null)
+		)
+		throw new \InvalidArgumentException('Invalid pile snapshot');
+
 		return new self($state['inventory'], $state['piles'], RandomStream::restore($state['random']));
 	}
 
@@ -56,7 +64,9 @@ final class PileSet
 	{
 		$this->requirePile($pile);
 		$count = 0;
+
 		foreach($this->piles[$pile] as $segment) $count += count($segment['cards']);
+
 		return $count;
 	}
 
@@ -69,14 +79,19 @@ final class PileSet
 	public function peek(string $pile, int $count = 1): array
 	{
 		if($count < 0 || $count > $this->count($pile)) throw new \InvalidArgumentException('Pile underflow');
+
 		$result = [];
+
 		foreach($this->piles[$pile] as &$segment)
 		{
 			if(count($result) >= $count) break;
+
 			$this->fix($segment);
 			$result = array_merge($result, array_slice($segment['cards'], 0, $count - count($result)));
 		}
+
 		unset($segment);
+
 		return $result;
 	}
 
@@ -91,17 +106,23 @@ final class PileSet
 	public function move(string $from, string $to, int $count = 1, bool $top = false): array
 	{
 		$this->requirePile($to);
+
 		if($from === $to) throw new \InvalidArgumentException('Move needs distinct piles');
+
 		$cards = $this->peek($from, $count);
 		$remaining = $count;
+
 		while($remaining > 0)
 		{
 			$take = min($remaining, count($this->piles[$from][0]['cards']));
 			array_splice($this->piles[$from][0]['cards'], 0, $take);
 			$remaining -= $take;
+
 			if(!$this->piles[$from][0]['cards']) array_shift($this->piles[$from]);
 		}
+
 		$this->insert($to, $cards, $top);
+
 		return $cards;
 	}
 
@@ -118,16 +139,28 @@ final class PileSet
 		$this->requirePile($from);
 		$this->requirePile($to);
 		$flat = array_merge([], ...array_column($this->piles[$from], 'cards'));
+
 		if($from === $to || count(array_unique($cards, SORT_REGULAR)) !== count($cards))
-			throw new \InvalidArgumentException('Invalid chosen-card move');
-		foreach($cards as $id) if(!in_array($id, $flat, true)) throw new \InvalidArgumentException('Card outside source');
+		throw new \InvalidArgumentException('Invalid chosen-card move');
+
+		foreach($cards as $id)
+		if(!in_array($id, $flat, true))
+		throw new \InvalidArgumentException('Card outside source');
 		$segments = [];
+
 		foreach($this->piles[$from] as $segment)
 		{
 			$remaining = [];
+
 			foreach($segment['cards'] as $id) if(!in_array($id, $cards, true)) $remaining[] = $id;
-			if($remaining) { $segment['cards'] = $remaining; $segments[] = $segment; }
+
+			if($remaining)
+			{
+				$segment['cards'] = $remaining;
+				$segments[] = $segment;
+			}
 		}
+
 		$this->piles[$from] = $segments;
 		$this->insert($to, array_values($cards), $top);
 	}
@@ -142,8 +175,10 @@ final class PileSet
 	public function cut(string $from, string $to, int $count): void
 	{
 		if($from === $to || $this->count($to) !== 0 || $count < 0 || $count > $this->count($from))
-			throw new \InvalidArgumentException('Invalid cut');
+		throw new \InvalidArgumentException('Invalid cut');
+
 		$this->peek($from, $count);
+
 		while($count > 0)
 		{
 			$segment = $this->piles[$from][0];
@@ -151,6 +186,7 @@ final class PileSet
 			$segment['cards'] = array_splice($this->piles[$from][0]['cards'], 0, $take);
 			$this->piles[$to][] = $segment;
 			$count -= $take;
+
 			if(!$this->piles[$from][0]['cards']) array_shift($this->piles[$from]);
 		}
 	}
@@ -166,13 +202,19 @@ final class PileSet
 	{
 		$total = $this->count($pile);
 		$count ??= $total - $start;
-		if($start < 0 || $count < 0 || $start + $count > $total) throw new \InvalidArgumentException('Invalid shuffle range');
+
+		if($start < 0 || $count < 0 || $start + $count > $total)
+		throw new \InvalidArgumentException('Invalid shuffle range');
+
 		if($count === 0) return;
+
 		$before = $after = $cards = [];
 		$offset = 0;
+
 		foreach($this->piles[$pile] as $segment)
 		{
 			$end = $offset + count($segment['cards']);
+
 			if($end <= $start) $before[] = $segment;
 			elseif($offset >= $start + $count) $after[] = $segment;
 			else
@@ -180,13 +222,28 @@ final class PileSet
 				$this->fix($segment);
 				$a = max(0, $start - $offset);
 				$b = min(count($segment['cards']), $start + $count - $offset);
+
 				if($a) $before[] = array_replace($segment, ['cards' => array_slice($segment['cards'], 0, $a)]);
+
 				$cards = array_merge($cards, array_slice($segment['cards'], $a, $b - $a));
-				if($b < count($segment['cards'])) $after[] = array_replace($segment, ['cards' => array_slice($segment['cards'], $b)]);
+
+				if($b < count($segment['cards']))
+				$after[] = array_replace($segment, [
+					'cards' => array_slice($segment['cards'], $b)
+				]);
 			}
+
 			$offset = $end;
 		}
-		$this->piles[$pile] = array_merge($before, [['kind' => 'random', 'cards' => $this->random->shuffle($cards), 'fixed' => true]], $after);
+
+		$this->piles[$pile] = array_merge($before, [
+			[
+				'kind' => 'random'
+				, 'cards' => $this->random->shuffle($cards)
+				, 'fixed' => true
+			]
+		], $after
+		);
 	}
 
 	/**
@@ -195,26 +252,38 @@ final class PileSet
 	 */
 	public function validate(): void
 	{
-		if(count($this->inventory) > 100000 || count($this->piles) > 1024) throw new \InvalidArgumentException('Inventory too large');
+		if(count($this->inventory) > 100000 || count($this->piles) > 1024)
+		throw new \InvalidArgumentException('Inventory too large');
+
 		$seen = [];
+
 		foreach($this->piles as $name => $segments)
 		{
 			if(!is_string($name) || $name === '' || !is_array($segments) || array_values($segments) !== $segments)
-				throw new \InvalidArgumentException('Invalid pile');
+			throw new \InvalidArgumentException('Invalid pile');
+
 			foreach($segments as $segment)
 			{
 				if(!is_array($segment) || !in_array($segment['kind'] ?? null, ['ordered','random'], true)
-					|| !is_array($segment['cards'] ?? null) || !$segment['cards'] || array_values($segment['cards']) !== $segment['cards']
-					|| (isset($segment['fixed']) && !is_bool($segment['fixed'])))
-					throw new \InvalidArgumentException('Invalid pile segment');
+					|| !is_array($segment['cards'] ?? null) || !$segment['cards'] || array_values($segment[
+						'cards'
+					]) !== $segment['cards']
+					|| (isset($segment['fixed']) && !is_bool($segment['fixed']))
+				)
+				throw new \InvalidArgumentException('Invalid pile segment');
+
 				foreach($segment['cards'] as $id)
 				{
-					if((!is_int($id) && !is_string($id)) || !array_key_exists($id, $this->inventory) || isset($seen[$id]))
-						throw new \InvalidArgumentException('Inventory instance missing or repeated');
+					if((!is_int($id) && !is_string($id)) || !array_key_exists($id, $this->inventory) || isset($seen[
+						$id
+					]))
+					throw new \InvalidArgumentException('Inventory instance missing or repeated');
+
 					$seen[$id] = true;
 				}
 			}
 		}
+
 		if(count($seen) !== count($this->inventory)) throw new \InvalidArgumentException('Inventory is not conserved');
 	}
 
@@ -252,7 +321,10 @@ final class PileSet
 	private function insert(string $pile, array $cards, bool $top): void
 	{
 		if(!$cards) return;
+
 		$segment = ['kind' => 'ordered', 'cards' => $cards];
-		if($top) array_unshift($this->piles[$pile], $segment); else $this->piles[$pile][] = $segment;
+
+		if($top) array_unshift($this->piles[$pile], $segment);
+		else $this->piles[$pile][] = $segment;
 	}
 }
