@@ -112,8 +112,47 @@ const acceptedSession = location => {
 	}
 };
 
-const validAction = action => {
+const jsonAction = (value, budget, depth = 0) => {
+	if(depth > 16 || budget.nodes++ > 8192) return false;
+
+	if(value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+
+	if(typeof value === 'number') return Number.isSafeInteger(value);
+
+	if(Array.isArray(value)) return value.length <= 4096 && value.every(item => jsonAction(item, budget, depth + 1));
+
+	if(!value || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) return false;
+
+	for(const [key, item] of Object.entries(value))
+	{
+		if(!key || key.length > 128 || ['__proto__','prototype','constructor'].includes(key)
+			|| !jsonAction(item, budget, depth + 1)
+		) return false;
+	}
+
+	return true;
+};
+
+const validActionConfiguration = game => Array.isArray(game.actionTypes) && game.actionTypes.length > 0
+	&& game.actionTypes.length <= 64
+	&& new Set(game.actionTypes).size === game.actionTypes.length
+	&& game.actionTypes.every(type => typeof type === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(type))
+	&& Number.isSafeInteger(game.maximumActionBytes ?? 8192)
+	&& (game.maximumActionBytes ?? 8192) >= 256 && (game.maximumActionBytes ?? 8192) <= 49152;
+
+const checkpointMode = game => game.checkpointMode ?? 'actor';
+
+const validAction = (action, game) => {
 	if(!action || typeof action !== 'object') return false;
+	const types = game.actionTypes;
+
+	if(types !== undefined)
+	{
+		const maximum = game.maximumActionBytes ?? 8192;
+
+		return validActionConfiguration(game) && types.includes(action.type)
+			&& jsonAction(action, {nodes: 0}) && encoder.encode(stable(action)).length <= maximum;
+	}
 
 	if(action.type === 'shot')
 	return Number.isInteger(action.aim_udeg)
@@ -134,6 +173,9 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
 	&& content.game.id === game.id && content.game.protocol === game.protocol
 	&& content.game.rules === game.rules && content.game.application === game.application
 	&& content.game.runtime === game.runtime && seedTimeoutMs(content.game) === game.seedTimeoutMs
+	&& stable(content.game.actionTypes ?? null) === stable(game.actionTypes ?? null)
+	&& (content.game.maximumActionBytes ?? null) === (game.maximumActionBytes ?? null)
+	&& checkpointMode(content.game) === checkpointMode(game)
 	&& Number.isSafeInteger(content.expires_at);
 
 /**
@@ -163,8 +205,17 @@ export class RoomGameProtocol extends EventTarget
 		if(!Number.isSafeInteger(timeout) || timeout < 1 || timeout > MAX_TIMER_DELAY_MS)
 		throw new RangeError(`game.seedTimeoutMs must be an integer from 1 to ${MAX_TIMER_DELAY_MS} milliseconds`);
 
+		if(game.actionTypes !== undefined && !validActionConfiguration(game))
+		throw new RangeError('game.actionTypes requires 1 to 64 unique action names and a 256 to 49152 byte limit');
+
+		if(game.actionTypes === undefined && game.maximumActionBytes !== undefined)
+		throw new RangeError('game.maximumActionBytes requires game.actionTypes');
+
+		if(!['actor','history'].includes(checkpointMode(game)))
+		throw new RangeError("game.checkpointMode must be 'actor' or 'history'");
+
 		this.provider = provider;
-		this.game = Object.freeze({...game, seedTimeoutMs: timeout});
+		this.game = Object.freeze({...game, seedTimeoutMs: timeout, checkpointMode: checkpointMode(game)});
 		this.session = session;
 		this.storage = storage;
 		this.signal = signal;
@@ -523,7 +574,7 @@ export class RoomGameProtocol extends EventTarget
 		const session = this.currentPlayer();
 		const me = this.profile().id;
 
-		if(!validAction(action)) throw new Error('The game supplied an invalid quantized action');
+		if(!validAction(action, this.game)) throw new Error('The game supplied an invalid quantized action');
 
 		// The application bridge can observe the durable action before it receives the
 		// acknowledgement for its local outbox entry. Treat that exact retry as success.
@@ -562,7 +613,7 @@ export class RoomGameProtocol extends EventTarget
 		);
 	}
 
-	/** Acknowledge one settled action and supply the actor's resumable checkpoint. */
+	/** Acknowledge one settled action and, in actor mode, supply the actor's resumable checkpoint. */
 	async reportSettled({sequence, hash, nextActor, outcome = null, checkpoint = null})
 	{
 		const session = this.currentPlayer();
@@ -578,7 +629,7 @@ export class RoomGameProtocol extends EventTarget
 			, outcome: outcome === null ? null : structuredClone(outcome)
 		};
 
-		if(session.pending.actor === me)
+		if(this.game.checkpointMode === 'actor' && session.pending.actor === me)
 		{
 			if(typeof checkpoint !== 'string' || !checkpoint)
 			throw new Error('Acting player must include a checkpoint');
@@ -880,7 +931,7 @@ export class RoomGameProtocol extends EventTarget
 				if(!session.seats?.includes(item.sender) || content.actor !== item.sender
 					|| !Number.isSafeInteger(content.sequence) || content.sequence !== session.sequence + 1
 					|| content.actor !== session.turn || content.pre_hash !== session.hash
-						|| !validAction(content.action)
+						|| !validAction(content.action, this.game)
 				) break;
 
 				session.actions.set(content.sequence, structuredClone(content));
@@ -891,7 +942,9 @@ export class RoomGameProtocol extends EventTarget
 
 				for(const early of session.earlySettles.get(content.sequence)?.values() ?? [])
 				{
-					if(early.player === content.actor && (typeof early.checkpoint !== 'string' || !early.checkpoint))
+					if(this.game.checkpointMode === 'actor' && early.player === content.actor
+						&& (typeof early.checkpoint !== 'string' || !early.checkpoint)
+					)
 					return this.freeze(session, 'Acting player omitted its checkpoint');
 
 					await this.settle(session, early.player, early);
@@ -923,7 +976,7 @@ export class RoomGameProtocol extends EventTarget
 					break;
 				}
 
-				if(item.sender === session.pending.actor && (typeof content.checkpoint !== 'string'
+				if(this.game.checkpointMode === 'actor' && item.sender === session.pending.actor && (typeof content.checkpoint !== 'string'
 					|| !content.checkpoint || content.checkpoint.length > 1024 * 1024
 				))
 				break;
@@ -1246,6 +1299,13 @@ export class RoomGameProtocol extends EventTarget
 		if(confirmed)
 		checkpoint = [...confirmed[1].values()].find(value => typeof value.checkpoint === 'string')?.checkpoint ?? null;
 
+		const actionHistory = this.game.checkpointMode === 'history'
+			? [...session.actions.values()]
+				.filter(value => value.sequence <= session.sequence)
+				.sort((left, right) => left.sequence - right.sequence)
+				.map(value => structuredClone(value))
+			: null;
+
 		this.adapter.start?.({
 			root: session.root
 			, sessionId: session.offer.session_id
@@ -1257,6 +1317,7 @@ export class RoomGameProtocol extends EventTarget
 			, sequence: session.sequence
 			, hash: session.hash
 			, checkpoint
+			, history: actionHistory
 			, rules: this.game.rules
 			, handshake: structuredClone(session.seedHandshake ?? null)
 		});

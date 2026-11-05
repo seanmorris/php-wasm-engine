@@ -147,6 +147,80 @@ test('seedTimeoutMs validates its units and defaults to a two-minute exchange', 
 	assert.throws(() => make(value), {name: 'RangeError', message: /game\.seedTimeoutMs.*milliseconds/});
 });
 
+test('games may declare bounded opaque actions while legacy billiards actions stay strict', async t => {
+	const provider = new EventTarget;
+	provider.profile = () => ({id: 'host'});
+	const configured = {
+		...game
+		, actionTypes: ['shuffle-proof-commitments','draw','fold']
+		, maximumActionBytes: 4096
+	};
+	const protocol = new RoomGameProtocol({provider, game: configured, session: {}});
+	t.after(() => protocol.close());
+	protocol.connected = true;
+	protocol.selected = '$table';
+	protocol.sessions.set('$table', {
+		root: '$table', localRole: 'player', seats: ['host','guest'], status: 'active', turn: 'host'
+		, hash: 'state-0', pending: null, sequence: 0
+	});
+	const published = [];
+	protocol.child = async (session, kind, body) => { published.push({kind, body}); session.pending = body; };
+	const action = {type: 'shuffle-proof-commitments', offset: 0, items: [['opaque-card']]};
+	await protocol.submitAction(action, 'state-0');
+	assert.deepEqual(published, [{kind: 'action',body:{sequence:1,actor:'host',pre_hash:'state-0',action}}]);
+	protocol.sessions.get('$table').pending = null;
+	for(const invalid of [
+		{type:'shot',aim_udeg:0,power_bp:7500,top_bp:0,side_bp:0}
+		, {type:'draw',amount:1.5}
+		, {type:'draw',constructor:'pollution'}
+		, {type:'draw',payload:'x'.repeat(5000)}
+	]) await assert.rejects(protocol.submitAction(invalid,'state-0'),/invalid quantized action/);
+	for(const bad of [
+		{actionTypes:[]},{actionTypes:['Bad']},{actionTypes:['draw','draw']}
+		, {actionTypes:['draw'],maximumActionBytes:255},{actionTypes:['draw'],maximumActionBytes:49153}
+		, {maximumActionBytes:4096}
+		, {checkpointMode:'sometimes'}
+	]) assert.throws(()=>new RoomGameProtocol({provider,game:{...game,...bad},session:{}}),/game\./);
+
+	const billiards = new RoomGameProtocol({provider,game,session:{}});
+	t.after(()=>billiards.close());
+	billiards.connected=true;billiards.selected='$pool';
+	billiards.sessions.set('$pool',{root:'$pool',localRole:'player',seats:['host','guest'],status:'active',turn:'host',hash:'pool-0',pending:null,sequence:0});
+	billiards.child=async()=>{};
+	await billiards.submitAction({type:'shot',aim_udeg:0,power_bp:7500,top_bp:0,side_bp:0},'pool-0');
+	await assert.rejects(billiards.submitAction({type:'draw'},'pool-0'),/invalid quantized action/);
+});
+
+test('history checkpoint mode settles without snapshots and restores confirmed actions in order', async t => {
+	const provider = new EventTarget;
+	provider.profile = () => ({id: 'host'});
+	const protocol = new RoomGameProtocol({
+		provider
+		, game: {...game,actionTypes:['deck-shuffle'],maximumActionBytes:4096,checkpointMode:'history'}
+		, session: {}
+	});
+	t.after(()=>protocol.close());
+	const action1={sequence:1,actor:'host',pre_hash:'initial',action:{type:'deck-shuffle',deck:['a']}};
+	const action2={sequence:2,actor:'guest',pre_hash:'one',action:{type:'deck-shuffle',deck:['b']}};
+	const table={
+		root:'$cards',offer:{session_id:'cards-session'},localRole:'player',seats:['host','guest']
+		, status:'active',seed:'joint-seed',started:false,turn:'host',sequence:2,hash:'two',pending:null
+		, actions:new Map([[2,action2],[1,action1]]),settles:new Map,seedHandshake:null
+	};
+	protocol.connected=true;protocol.selected=table.root;protocol.sessions.set(table.root,table);
+	let started;
+	protocol.adapter={start:detail=>{started=detail;}};
+	await protocol.startIfPossible(table);
+	assert.deepEqual(started.history,[action1,action2]);
+	assert.equal(started.checkpoint,null);
+
+	table.pending=action2;
+	let published;
+	protocol.child=async(session,kind,body)=>{published={kind,body};};
+	await protocol.reportSettled({sequence:2,hash:'two',nextActor:'host'});
+	assert.deepEqual(published,{kind:'settled',body:{player:'host',sequence:2,hash:'two',next_actor:'host',outcome:null}});
+});
+
 test('custom seed timeouts share one absolute deadline and expire without a winner', async t => {
 	for(const seedTimeoutMs of [15_000, 45_000, 120_000, 300_000, 7_200_000, 2_147_483_647])
 	await t.test(`${seedTimeoutMs} ms`, async t => {
