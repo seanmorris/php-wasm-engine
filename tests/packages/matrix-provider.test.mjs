@@ -225,6 +225,57 @@ test('Matrix signals share one rate-limited event per batch and unpack in order'
 	guest.close();
 });
 
+test('Matrix durable game writes share an ordered rate-aware queue', async () => {
+	const sends = [], accepted = [], started = Date.now();
+	let refused = false;
+	const provider = new MatrixLobbyProvider({
+		homeserver: 'https://matrix.example'
+		, accessToken: 'token'
+		, userId: '@host:matrix.example'
+		, sendInterval: 15
+		, fetch: async (url, options) => {
+			const call = {
+				path: new URL(url).pathname
+				, body: JSON.parse(options.body)
+				, at: Date.now() - started
+			};
+			sends.push(call);
+
+			if(!refused)
+			{
+				refused = true;
+
+				return response({errcode: 'M_LIMIT_EXCEEDED', error: 'Too Many Requests', retry_after_ms: 10}, 429);
+			}
+
+			accepted.push(call);
+
+			return response({event_id: `$game-${accepted.length}`});
+		}
+	});
+
+	Object.assign(provider, {connected: true, roomId: '!room:matrix.example'});
+	const echoes = [], statuses = [];
+	provider.addEventListener('gameevent', ({detail}) => echoes.push(detail.event));
+	provider.addEventListener('gameeventstatus', ({detail}) => statuses.push(detail));
+
+	const first = provider.gameEvent({kind: 'action', sequence: 1}, 'game-one');
+	const second = provider.gameOffer({msgtype: 'm.text', body: 'table'}, 'game-two');
+	await Promise.all([first, second]);
+
+	assert.equal(sends.length, 3);
+	assert.equal(sends[0].path, sends[1].path, 'a retry preserves its Matrix transaction');
+	assert.match(sends[0].path, /\/send\/org\.seanmorris\.phonics\.game\.v1\/game-one$/);
+	assert.match(sends[2].path, /\/send\/m\.room\.message\/game-two$/);
+	assert.ok(accepted[1].at - accepted[0].at >= 10, 'accepted events retain queue pacing');
+	assert.deepEqual(echoes.map(item => item.content), [
+		{kind: 'action', sequence: 1}
+		, {msgtype: 'm.text', body: 'table'}
+	]);
+	assert.deepEqual(statuses, [{state: 'retrying', code: 'M_LIMIT_EXCEEDED'}]);
+	provider.close();
+});
+
 test('Matrix sync scopes events and backs off when a homeserver returns without long polling', async () => {
 	const syncs = [];
 
