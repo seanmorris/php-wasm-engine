@@ -398,7 +398,7 @@
     "browser/network/OAuthPopup.mjs": "sha256-Q2MWBa4N9GoXu3AXB2AopbOv8q5apZAZvD521Cb5oX8=",
     "browser/network/Protocol.mjs": "sha256-RpeodneVY06CWxvmgB/yc/YiZyFf1S2mfMiCP11Ko8w=",
     "browser/network/ResourceNegotiator.mjs": "sha256-t7cSIsOUbuY5/dI+YlsZQ4bl+Khr5BgNaJh2cZgQpZM=",
-    "browser/network/RoomGameLobby.mjs": "sha256-s0gFVV4BXCWS43ZKYcZ8XCU5PgTiIij+JpwAKGdcfoM=",
+    "browser/network/RoomGameLobby.mjs": "sha256-L8LLFzUUSRaRfL4SFlSBx5t1kMwRw/uiSZadGN1aMkI=",
     "browser/network/ServiceRegistry.mjs": "sha256-QevUP40sjwFbofNZbp/fB2zOSFtncde+vvdWly5RaXs=",
     "browser/network/Values.mjs": "sha256-zvnjOaKivpcUDNZK+eDGgtE1C78cjjb6PgOpaNK8tCQ=",
     "browser/network/WebRtcTransport.mjs": "sha256-LHBs8orUyFF9LaNssvcf71aSGsOWjVZVKfp6yrWa5tg=",
