@@ -14,6 +14,7 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const LEGACY_REVEAL_GRACE_MS = 60_000;
 const UNKNOWN_ROOT_RETRY = 60_000;
 const UNKNOWN_ROOT_LIMIT = 1024;
+const MAX_ACTION_BATCH = 256;
 const encoder = new TextEncoder;
 
 // Public, versioned templates. Both fixed-width operands stay literal: never evaluate their sum.
@@ -141,6 +142,7 @@ const validActionConfiguration = game => Array.isArray(game.actionTypes) && game
 	&& (game.maximumActionBytes ?? 8192) >= 256 && (game.maximumActionBytes ?? 8192) <= 49152;
 
 const checkpointMode = game => game.checkpointMode ?? 'actor';
+const actionBatches = game => game.actionBatches ?? false;
 
 const validAction = (action, game) => {
 	if(!action || typeof action !== 'object') return false;
@@ -176,6 +178,7 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
 	&& stable(content.game.actionTypes ?? null) === stable(game.actionTypes ?? null)
 	&& (content.game.maximumActionBytes ?? null) === (game.maximumActionBytes ?? null)
 	&& checkpointMode(content.game) === checkpointMode(game)
+	&& actionBatches(content.game) === actionBatches(game)
 	&& Number.isSafeInteger(content.expires_at);
 
 /**
@@ -214,8 +217,16 @@ export class RoomGameProtocol extends EventTarget
 		if(!['actor','history'].includes(checkpointMode(game)))
 		throw new RangeError("game.checkpointMode must be 'actor' or 'history'");
 
+		if(typeof actionBatches(game) !== 'boolean')
+		throw new RangeError('game.actionBatches must be boolean');
+
 		this.provider = provider;
-		this.game = Object.freeze({...game, seedTimeoutMs: timeout, checkpointMode: checkpointMode(game)});
+		this.game = Object.freeze({
+			...game
+			, seedTimeoutMs: timeout
+			, checkpointMode: checkpointMode(game)
+			, actionBatches: actionBatches(game)
+		});
 		this.session = session;
 		this.storage = storage;
 		this.signal = signal;
@@ -559,7 +570,7 @@ export class RoomGameProtocol extends EventTarget
 		if(selected) void this.startIfPossible(selected);
 
 		return Object.freeze({
-			submitAction: (action, preHash) => this.submitAction(action, preHash)
+			submitAction: (action, preHash, options) => this.submitAction(action, preHash, options)
 			, reportReady: hash => this.reportReady(hash)
 			, reportSettled: result => this.reportSettled(result)
 			, resign: reason => this.resign(reason)
@@ -568,34 +579,44 @@ export class RoomGameProtocol extends EventTarget
 		});
 	}
 
-	/** Publish the next quantized action from the current actor. */
-	async submitAction(action, preHash)
+	/** Publish the next quantized action and optionally mark the end of its aggregate settlement batch. */
+	async submitAction(action, preHash, {settle = true} = {})
 	{
 		const session = this.currentPlayer();
 		const me = this.profile().id;
+		const batched = this.game.actionBatches;
+		const previous = session.batch?.actions.at(-1) ?? session.pending;
 
 		if(!validAction(action, this.game)) throw new Error('The game supplied an invalid quantized action');
+		if(typeof settle !== 'boolean' || (!settle && !batched))
+		throw new Error('The game supplied an invalid action settlement boundary');
 
 		// The application bridge can observe the durable action before it receives the
 		// acknowledgement for its local outbox entry. Treat that exact retry as success.
-		if(session.pending?.actor === me && session.pending.pre_hash === preHash
-			&& stable(session.pending.action) === stable(action)
+		if(previous?.actor === me && previous.pre_hash === preHash
+			&& stable(previous.action) === stable(action)
+			&& (!batched || previous.batch_end === settle)
 		) return;
 
-		if(session.status !== 'active' || session.turn !== me || session.pending)
+		if(session.status !== 'active' || session.pending || session.batch?.actions.length >= MAX_ACTION_BATCH
+			|| (!session.batch && session.turn !== me)
+		)
 		throw new Error('It is not your turn');
 
-		if(preHash !== session.hash) throw new Error('Local state differs from the confirmed turn state');
+		if(typeof preHash !== 'string' || (!session.batch && preHash !== session.hash))
+		throw new Error('Local state differs from the confirmed turn state');
 
-		const sequence = session.sequence + 1;
-
-		await this.child(session, 'action', {
+		const sequence = session.batch ? session.batch.actions.at(-1).sequence + 1 : session.sequence + 1;
+		const body = {
 			sequence
 			, actor: me
 			, pre_hash: preHash
 			, action: structuredClone(action)
-		}, `action:${sequence}:${me}`
-		);
+		};
+
+		if(batched) body.batch_end = settle;
+
+		await this.child(session, 'action', body, `action:${sequence}:${me}`);
 	}
 
 	/** Publish this player's initial state hash after seeded setup. */
@@ -613,11 +634,23 @@ export class RoomGameProtocol extends EventTarget
 		);
 	}
 
-	/** Acknowledge one settled action and, in actor mode, supply the actor's resumable checkpoint. */
+	/** Validate a batch fragment locally or publish this player's report for the completed batch. */
 	async reportSettled({sequence, hash, nextActor, outcome = null, checkpoint = null})
 	{
 		const session = this.currentPlayer();
 		const me = this.profile().id;
+		const action = session.actions.get(sequence);
+
+		if(this.game.actionBatches && action?.batch_end === false)
+		{
+			if(!session.batch?.actions.some(value => value.sequence === sequence)
+				|| typeof hash !== 'string' || !session.seats.includes(String(nextActor)) || outcome !== null
+			) throw new Error('No matching batched action is advancing');
+
+			// Both applications execute and hash every fragment. Only the final fragment publishes
+			// the two durable reports that compare the complete transcript state.
+			return false;
+		}
 
 		if(!session.pending || sequence !== session.pending.sequence) throw new Error('No matching action is settling');
 
@@ -638,6 +671,8 @@ export class RoomGameProtocol extends EventTarget
 		}
 
 		await this.child(session, 'settled', body, `settled:${sequence}:${me}`);
+
+		return true;
 	}
 
 	/** End this player's active match with a durable resignation reason. */
@@ -928,20 +963,34 @@ export class RoomGameProtocol extends EventTarget
 					break;
 				}
 
-				if(!session.seats?.includes(item.sender) || content.actor !== item.sender
-					|| !Number.isSafeInteger(content.sequence) || content.sequence !== session.sequence + 1
-					|| content.actor !== session.turn || content.pre_hash !== session.hash
+				if(!session.seats?.includes(item.sender) || content.actor !== item.sender || session.pending
+					|| session.batch?.actions.length >= MAX_ACTION_BATCH
+					|| !Number.isSafeInteger(content.sequence)
+					|| content.sequence !== (session.batch ? session.batch.actions.at(-1).sequence + 1 : session.sequence + 1)
+					|| (!session.batch && (content.actor !== session.turn || content.pre_hash !== session.hash))
+					|| (session.batch && typeof content.pre_hash !== 'string')
+					|| (this.game.actionBatches
+						? typeof content.batch_end !== 'boolean'
+						: content.batch_end !== undefined)
 						|| !validAction(content.action, this.game)
 				) break;
 
 				session.actions.set(content.sequence, structuredClone(content));
-				session.pending = structuredClone(content);
-				session.settles.set(content.sequence, new Map);
+				session.batch ??= {actions: []};
+				session.batch.actions.push(structuredClone(content));
+
+				if(!this.game.actionBatches || content.batch_end)
+				{
+					session.pending = structuredClone(content);
+					session.settles.set(content.sequence, new Map);
+				}
 
 				if(this.selected === root) this.adapter?.action?.(structuredClone(content));
 
 				for(const early of session.earlySettles.get(content.sequence)?.values() ?? [])
 				{
+					if(!session.pending) break;
+
 					if(this.game.checkpointMode === 'actor' && early.player === content.actor
 						&& (typeof early.checkpoint !== 'string' || !early.checkpoint)
 					)
@@ -964,7 +1013,7 @@ export class RoomGameProtocol extends EventTarget
 
 				if(!session.pending || content.sequence !== session.pending.sequence)
 				{
-					if(content.sequence === session.sequence + 1)
+					if(content.sequence > session.sequence && content.sequence <= session.sequence + 4096)
 					{
 						const early = session.earlySettles.get(content.sequence) ?? new Map;
 
@@ -1322,7 +1371,8 @@ export class RoomGameProtocol extends EventTarget
 			, handshake: structuredClone(session.seedHandshake ?? null)
 		});
 
-		if(session.pending) this.adapter.action?.(structuredClone(session.pending));
+		if(session.batch)
+		for(const action of session.batch.actions) this.adapter.action?.(structuredClone(action));
 		else if(session.status === 'active') this.confirmAdapter(session);
 	}
 
@@ -1404,6 +1454,7 @@ export class RoomGameProtocol extends EventTarget
 		session.hash = content.hash;
 		session.turn = content.next_actor;
 		session.pending = null;
+		session.batch = null;
 		session.outcome = structuredClone(content.outcome);
 
 		this.confirmAdapter(session);

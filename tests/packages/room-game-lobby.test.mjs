@@ -180,6 +180,7 @@ test('games may declare bounded opaque actions while legacy billiards actions st
 		, {actionTypes:['draw'],maximumActionBytes:255},{actionTypes:['draw'],maximumActionBytes:49153}
 		, {maximumActionBytes:4096}
 		, {checkpointMode:'sometimes'}
+		, {actionBatches:'yes'}
 	]) assert.throws(()=>new RoomGameProtocol({provider,game:{...game,...bad},session:{}}),/game\./);
 
 	const billiards = new RoomGameProtocol({provider,game,session:{}});
@@ -189,6 +190,103 @@ test('games may declare bounded opaque actions while legacy billiards actions st
 	billiards.child=async()=>{};
 	await billiards.submitAction({type:'shot',aim_udeg:0,power_bp:7500,top_bp:0,side_bp:0},'pool-0');
 	await assert.rejects(billiards.submitAction({type:'draw'},'pool-0'),/invalid quantized action/);
+});
+
+test('action batches cross actors and publish settlement only at their explicit boundary', async t => {
+	const provider = new EventTarget;
+	let player = 'host', eventNumber = 0;
+	provider.profile = () => ({id: player});
+	const configured = {
+		...game
+		, actionTypes: ['fragment','finish']
+		, maximumActionBytes: 4096
+		, checkpointMode: 'history'
+		, actionBatches: true
+	};
+	const protocol = new RoomGameProtocol({provider, game: configured, session: {}});
+	t.after(() => protocol.close());
+	const root = '$batch', published = [], applied = [];
+	const table = {
+		root
+		, offer: {session_id: 'batch-session'}
+		, localRole: 'player'
+		, seats: ['host','guest']
+		, status: 'active'
+		, turn: 'host'
+		, sequence: 0
+		, hash: 'zero'
+		, pending: null
+		, actions: new Map
+		, settles: new Map
+		, earlySettles: new Map
+		, events: new Set
+	};
+	protocol.connected = true;
+	protocol.selected = root;
+	protocol.sessions.set(root, table);
+	protocol.adapter = {action: detail => applied.push(detail)};
+	protocol.child = async (session, kind, body) => {
+		published.push({kind, body: structuredClone(body)});
+		await protocol.consume({
+			event_id: `$batch-${++eventNumber}`
+			, type: 'org.seanmorris.phonics.game.v1'
+			, sender: player
+			, content: {
+				v: 2, kind, session_id: session.offer.session_id, ...structuredClone(body)
+				, 'm.relates_to': {rel_type: 'org.seanmorris.phonics.game.v1', event_id: root}
+			}
+		});
+	};
+
+	await protocol.submitAction({type:'fragment',part:1}, 'zero', {settle:false});
+	assert.equal(await protocol.reportSettled({sequence:1,hash:'one',nextActor:'guest'}), false);
+	assert.deepEqual(published.map(value => value.kind), ['action']);
+	assert.equal(table.sequence, 0);
+	assert.equal(table.batch.actions.length, 1);
+
+	player = 'guest';
+	await protocol.submitAction({type:'finish',part:2}, 'one', {settle:true});
+	assert.equal(await protocol.reportSettled({sequence:2,hash:'two',nextActor:'host'}), true);
+	assert.deepEqual(published.map(value => value.kind), ['action','action','settled']);
+	assert.equal(table.sequence, 0);
+
+	player = 'host';
+	assert.equal(await protocol.reportSettled({sequence:2,hash:'two',nextActor:'host'}), true);
+	assert.deepEqual(published.map(value => value.kind), ['action','action','settled','settled']);
+	assert.equal(table.sequence, 2);
+	assert.equal(table.hash, 'two');
+	assert.equal(table.turn, 'host');
+	assert.equal(table.pending, null);
+	assert.equal(table.batch, null);
+	assert.deepEqual(applied.map(value => value.sequence), [1,2]);
+});
+
+test('reload starts from the confirmed boundary and reapplies every incomplete batch action', async t => {
+	const provider = new EventTarget;
+	provider.profile = () => ({id:'host'});
+	const protocol = new RoomGameProtocol({
+		provider
+		, game: {
+			...game, actionTypes:['fragment'], maximumActionBytes:4096, checkpointMode:'history', actionBatches:true
+		}
+		, session: {}
+	});
+	t.after(() => protocol.close());
+	const action1={sequence:1,actor:'host',pre_hash:'zero',batch_end:false,action:{type:'fragment',part:1}};
+	const action2={sequence:2,actor:'guest',pre_hash:'one',batch_end:false,action:{type:'fragment',part:2}};
+	const table={
+		root:'$resume-batch',offer:{session_id:'resume-session'},localRole:'player',seats:['host','guest']
+		,status:'active',seed:'joint-seed',started:false,turn:'host',sequence:0,hash:'zero',pending:null
+		,actions:new Map([[1,action1],[2,action2]]),settles:new Map,seedHandshake:null,batch:{actions:[action1,action2]}
+	};
+	protocol.connected=true;protocol.selected=table.root;protocol.sessions.set(table.root,table);
+	let started;const applied=[];
+	protocol.adapter={start:detail=>{started=detail;},action:detail=>applied.push(detail)};
+	await protocol.startIfPossible(table);
+	assert.equal(started.sequence,0);
+	assert.equal(started.hash,'zero');
+	assert.deepEqual(started.history,[]);
+	assert.deepEqual(applied,[action1,action2]);
 });
 
 test('history checkpoint mode settles without snapshots and restores confirmed actions in order', async t => {
