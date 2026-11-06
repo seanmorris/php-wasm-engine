@@ -573,6 +573,7 @@ export class RoomGameProtocol extends EventTarget
 			submitAction: (action, preHash, options) => this.submitAction(action, preHash, options)
 			, reportReady: hash => this.reportReady(hash)
 			, reportSettled: result => this.reportSettled(result)
+			, dispute: reason => this.dispute(reason)
 			, resign: reason => this.resign(reason)
 			, leave: () => this.leave()
 			, snapshot: () => this.snapshot()
@@ -673,6 +674,16 @@ export class RoomGameProtocol extends EventTarget
 		await this.child(session, 'settled', body, `settled:${sequence}:${me}`);
 
 		return true;
+	}
+
+	/** Freeze the local view of a match whose application rejected the durable transcript. */
+	dispute(reason = 'The game transcript could not be verified')
+	{
+		const session = this.currentPlayer();
+
+		if(['complete','frozen','expired'].includes(session.status)) return;
+
+		this.freeze(session, String(reason));
 	}
 
 	/** End this player's active match with a durable resignation reason. */

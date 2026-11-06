@@ -782,6 +782,35 @@ test('room games commit and reveal a shared seed before acknowledged determinist
 	guestProvider.close();
 });
 
+test('an application dispute freezes locally without awarding the peer a resignation win', async () => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest', displayName: 'Guest'});
+	const protocols = [
+		new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: storage()})
+		, new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: storage()})
+	];
+	const stops = [];
+	const ports = protocols.map((protocol, index) => protocol.attachGame({
+		start: detail => void ports[index].reportReady('initial-hash')
+		, stop: detail => stops.push(detail)
+	}));
+	await Promise.all(protocols.map(protocol => protocol.connect()));
+	const root = await protocols[0].create();
+	await protocols[1].join(root);
+	await until(() => protocols.every(protocol => protocol.snapshot().tables[0]?.status === 'active'));
+
+	ports[0].dispute('Shuffle proof did not verify');
+	assert.equal(protocols[0].snapshot().tables[0].status, 'frozen');
+	assert.equal(protocols[0].sessions.get(root).outcome, undefined);
+	assert.deepEqual(stops, [{reason: 'Shuffle proof did not verify', frozen: true}]);
+	assert.equal(hub.history(hostProvider.room).filter(item => item.content.kind === 'resign').length, 0);
+
+	for(const protocol of protocols) protocol.close();
+	hostProvider.close();
+	guestProvider.close();
+});
+
 test('seed commitments bind the nonce, each phrase, both operands and the table context', async t => {
 	const {protocol, session} = await seedFixture(t);
 	const material = opening();
