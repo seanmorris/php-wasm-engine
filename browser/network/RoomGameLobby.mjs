@@ -1953,6 +1953,7 @@ export class RoomGameProtocol extends EventTarget
 		console.log('Phonics deterministic seed handshake', session.seedHandshake);
 
 		session.turn = session.seats[parseInt(breakerDigest.slice(0, 2), 16) % session.seats.length];
+		session.breaker = session.turn;
 		session.status = 'ready';
 		this.forgetSeedMaterial(session);
 
@@ -2022,7 +2023,8 @@ export class RoomGameProtocol extends EventTarget
 			, seat: session.localRole === 'player' ? this.profile().id : null
 			, standby
 			, seed: session.seed
-			, breaker: session.turn
+			// Games rebuild their opening from the breaker, so a restart after the turn moved still names the original.
+			, breaker: session.breaker ?? session.turn
 			, settings: structuredClone(session.offer.settings ?? null)
 			, sequence: session.sequence
 			, hash: session.hash

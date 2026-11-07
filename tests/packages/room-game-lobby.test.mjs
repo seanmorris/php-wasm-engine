@@ -2158,3 +2158,39 @@ test('without Web Locks every tab plays its seat as before', async t => {
 	assert.equal(protocol.snapshot().standby, false);
 	assert.equal(await protocol.sessions.get(root).seatClaim, true);
 });
+
+test('a game started again after the turn moved still starts from the original breaker', async t => {
+	const {open, lastStart, ports} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const root = await host.create();
+	await first.join(root);
+
+	await waitFor(
+		() => [host, first].every(protocol => protocol.sessions.get(root)?.status === 'active')
+		, 'an active table'
+	);
+
+	const breaker = lastStart('first').breaker;
+	const other = breaker === 'host' ? 'guest' : 'host';
+	const tab = {host: 'host', guest: 'first'};
+	await ports.get(tab[breaker]).submitAction(shot, 'h0');
+	await waitFor(() => [host, first].every(protocol => protocol.sessions.get(root).pending), 'the pending shot');
+
+	for(const player of ['host','guest'])
+	{
+		const checkpoint = player === breaker ? 'checkpoint-v1' : null;
+		await ports.get(tab[player]).reportSettled({sequence: 1, hash: 'h1', nextActor: other, checkpoint});
+	}
+
+	await waitFor(() => first.sessions.get(root).sequence === 1, 'the settled shot');
+	assert.equal(first.sessions.get(root).turn, other);
+
+	await second.resume(root);
+	await waitFor(() => lastStart('second'), 'the standby start');
+	assert.equal(lastStart('second').breaker, breaker);
+	await second.takeOverSeat();
+	await waitFor(() => lastStart('second').role === 'player', 'the takeover start');
+	assert.equal(lastStart('second').breaker, breaker);
+});
