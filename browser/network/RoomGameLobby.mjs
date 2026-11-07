@@ -2272,6 +2272,7 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-rail{min-width:0;min-height:0;padding:1rem;border-left:1px solid var(--ui-line);overflow:auto}
 .phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
 .phonics-room-match{display:none}
+.phonics-room-seat{border-color:rgba(217,164,65,.55)}
 .phonics-room-rules{margin:0;color:var(--ui-muted);font-size:.85rem}.phonics-room-rules[hidden]{display:none}
 .phonics-room-clock{margin:0;font-variant-numeric:tabular-nums;color:var(--ui-muted);font-size:.9rem}
 .phonics-room-clock.is-urgent{color:var(--ui-danger-text);font-weight:700}.phonics-room-clock[hidden]{display:none}
@@ -2380,7 +2381,7 @@ export class EmbeddedRoomLobby
 		this.matchCard.append(this.matchTitle, this.matchRules, this.clockText, matchRow);
 
 		// A second tab on the same seat stands by: it can send the player back to the tab that plays, or take over.
-		this.seatCard = node('div', {class: 'phonics-ui-card is-waiting phonics-room-seat', 'aria-live': 'polite'});
+		this.seatCard = node('div', {class: 'phonics-ui-card phonics-room-seat', 'aria-live': 'polite'});
 		this.seatCard.hidden = true;
 		this.seatText = node('p', {}, SEAT_TEXT);
 		this.takeOverButton = node('button', {type: 'button', class: 'is-primary'}, 'Play here instead');
