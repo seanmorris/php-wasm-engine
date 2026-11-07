@@ -1279,3 +1279,159 @@ test('leaving an unseated table cancels it and a challenged player can decline',
 	hostProvider.close();
 	guestProvider.close();
 });
+
+const settingsAdapter = (starts, id, overrides = {}) => ({
+	start: detail => starts.set(id, detail)
+	, action: () => {}
+	, confirmed: () => {}
+	, validSettings: settings => Number.isSafeInteger(settings?.ante) && settings.ante >= 1 && settings.ante <= 5
+		? true
+		: 'Ante must be 1 to 5'
+	, describeSettings: settings => `Ante ${settings.ante}`
+	, ...overrides
+});
+
+test('table settings travel in the offer, label the readable message, and reach both starts', async () => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest', displayName: 'Guest'});
+
+	const host = new RoomGameProtocol(
+		{provider: hostProvider, game: {...game, title: 'Poker'}, session: {}, storage: storage()}
+	);
+
+	const guest = new RoomGameProtocol(
+		{provider: guestProvider, game: {...game, title: 'Poker'}, session: {}, storage: storage()}
+	);
+
+	const starts = new Map;
+	host.attachGame(settingsAdapter(starts, 'host'));
+	guest.attachGame(settingsAdapter(starts, 'guest'));
+	await host.connect();
+	await guest.connect();
+
+	const root = await host.create({settings: {ante: 2}});
+	const message = await hostProvider.roomEvent(root);
+	assert.match(message.content.body, /^Host opened a Poker table \(Ante 2\)\. Join: https:/);
+	assert.match(message.content.formatted_body, /Poker \(Ante 2\)\. <a href=/);
+	assert.deepEqual(message.content['org.seanmorris.phonics.game.v1'].settings, {ante: 2});
+
+	await until(() => guest.snapshot().tables.length === 1);
+	const listed = guest.snapshot().tables[0];
+	assert.deepEqual(listed.settings, {ante: 2});
+	assert.equal(listed.settingsLabel, 'Ante 2');
+	assert.equal(listed.settingsProblem, null);
+	assert.equal(listed.supported, true);
+	assert.equal(listed.joinable, true);
+
+	await guest.join(root);
+	await until(() => starts.size === 2);
+	assert.deepEqual(starts.get('host').settings, {ante: 2});
+	assert.deepEqual(starts.get('guest').settings, {ante: 2});
+	host.close();
+	guest.close();
+	hostProvider.close();
+	guestProvider.close();
+});
+
+test('tables whose settings this build cannot play are listed but cannot be joined', async () => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest', displayName: 'Guest'});
+	const plainProvider = new InMemoryLobbyProvider({hub, peerId: 'plain', displayName: 'Plain'});
+	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: storage()});
+	const guest = new RoomGameProtocol({provider: guestProvider, game, session: {}, storage: storage()});
+	const plain = new RoomGameProtocol({provider: plainProvider, game, session: {}, storage: storage()});
+	const starts = new Map;
+	// A newer host build allows a larger ante than this guest's build can play.
+	host.attachGame(settingsAdapter(starts, 'host', {validSettings: () => true}));
+	guest.attachGame(settingsAdapter(starts, 'guest'));
+	plain.attachGame({start: () => {}, action: () => {}, confirmed: () => {}});
+	await host.connect();
+	await guest.connect();
+	await plain.connect();
+
+	const root = await host.create({settings: {ante: 9}});
+	await until(() => guest.snapshot().tables.length === 1 && plain.snapshot().tables.length === 1);
+	const listed = guest.snapshot().tables[0];
+	assert.equal(listed.supported, false);
+	assert.equal(listed.joinable, false);
+	assert.equal(listed.settingsProblem, 'Ante must be 1 to 5');
+	await assert.rejects(guest.join(root), /Ante must be 1 to 5/);
+	assert.equal(guest.selected, null);
+
+	// A game without settings hooks lists a configured table but refuses it, and still joins plain tables.
+	assert.equal(plain.snapshot().tables[0].joinable, false);
+	assert.equal(plain.snapshot().tables[0].settingsProblem, 'This game does not use table settings');
+	await assert.rejects(plain.join(root), /does not use table settings/);
+	assert.equal(hub.history(hostProvider.room).filter(item => item.content?.kind === 'join').length, 0);
+
+	await host.leave();
+	const second = await host.create();
+	await until(() => plain.snapshot().tables.some(table => table.root === second));
+	const open = plain.snapshot().tables.find(table => table.root === second);
+	assert.equal(open.settings, null);
+	assert.equal(open.settingsLabel, '');
+	assert.equal(open.joinable, true);
+
+	for(const item of [host, guest, plain, hostProvider, guestProvider, plainProvider]) item.close();
+});
+
+test('malformed or oversized table settings are refused when opening and ignored in offers', async t => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host', displayName: 'Host'});
+	const host = new RoomGameProtocol({provider: hostProvider, game, session: {}, storage: storage()});
+	t.after(() => { host.close(); hostProvider.close(); });
+
+	host.attachGame(settingsAdapter(new Map, 'host', {validSettings: () => true}));
+	await host.connect();
+
+	for(const settings of [[1], {ante: 1.5}, 'ante', {big: 'x'.repeat(5000)}, Object.create({ante: 1})])
+		await assert.rejects(host.create({settings}), /plain JSON object of at most 4 KB/);
+
+	const strictProvider = new InMemoryLobbyProvider({hub, peerId: 'strict', displayName: 'Strict'});
+	const strict = new RoomGameProtocol({provider: strictProvider, game, session: {}, storage: storage()});
+	t.after(() => { strict.close(); strictProvider.close(); });
+
+	strict.attachGame(settingsAdapter(new Map, 'strict'));
+	await strict.connect();
+
+	await assert.rejects(
+		strict.create({settings: {ante: 0}})
+		, /Ante must be 1 to 5/
+		, 'a host cannot open a table its own build cannot play'
+	);
+
+	assert.equal(hub.history(hostProvider.room).length, 0);
+
+	const observer = new EventTarget;
+
+	observer.profile = () => ({id: 'observer'});
+
+	observer.setActivity = async () => {};
+
+	const protocol = new RoomGameProtocol({provider: observer, game, session: {}, storage: storage()});
+	t.after(() => protocol.close());
+
+	const offer = (root, settings) => protocol.consume({
+		event_id: root
+		, type: 'org.seanmorris.phonics.game.v1'
+		, sender: 'host'
+		, content: {
+			v: 2
+			, kind: 'offer'
+			, session_id: `session-${root}`
+			, host: 'host'
+			, game
+			, created_at: Date.now()
+			, expires_at: Date.now() + 60_000
+			, settings
+		}
+	});
+
+	await offer('$oversized', {big: 'x'.repeat(5000)});
+	await offer('$array', [1, 2]);
+	await offer('$fraction', {ante: 0.5});
+	await offer('$plain', {ante: 3});
+	assert.deepEqual([...protocol.sessions.keys()], ['$plain']);
+});

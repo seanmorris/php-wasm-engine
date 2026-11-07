@@ -1,5 +1,6 @@
 import {useOverlayTheme, useStyle} from '../OverlayTheme.mjs';
 import {ChatLog, DisplayNames, StatusLine, Ticker, copyText, node, personRow, timeLeft} from '../ui/LobbyKit.mjs';
+import {chooseMatchSettings} from '../launcher/MatchSettingsDialog.mjs';
 import {authorizeWithPopup} from './OAuthPopup.mjs';
 
 const GAME_EVENT = 'org.seanmorris.phonics.game.v1';
@@ -170,7 +171,17 @@ const validAction = (action, game) => {
 	return false;
 };
 
+/** Largest serialized table-settings object a host may attach to an offer. */
+const MAXIMUM_SETTINGS_BYTES = 4096;
+
+/** Table settings are an optional plain JSON object chosen by the host; the game interprets them. */
+const validSettings = settings => settings === undefined || settings === null
+	|| (typeof settings === 'object' && !Array.isArray(settings) && jsonAction(settings, {nodes: 0})
+		&& encoder.encode(stable(settings)).length <= MAXIMUM_SETTINGS_BYTES
+	);
+
 const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content.kind === 'offer'
+	&& validSettings(content.settings)
 	&& typeof content.session_id === 'string' && typeof content.game === 'object'
 	&& content.game.id === game.id && content.game.protocol === game.protocol
 	&& content.game.rules === game.rules && content.game.application === game.application
@@ -354,11 +365,17 @@ export class RoomGameProtocol extends EventTarget
 	}
 
 	/** Publish and locally select an open table or direct challenge. */
-	async create({target = null} = {})
+	async create({target = null, settings = null} = {})
 	{
 		this.requireConnected();
 
 		if(this.selected) throw new Error('Leave the current table before opening another');
+
+		if(!validSettings(settings)) throw new Error('Table settings must be a plain JSON object of at most 4 KB');
+
+		const settingsProblem = settings === null ? null : this.settingsProblem(settings);
+
+		if(settingsProblem) throw new Error(settingsProblem);
 
 		const sessionId = crypto.randomUUID();
 		const content = {
@@ -370,15 +387,19 @@ export class RoomGameProtocol extends EventTarget
 			, created_at: Date.now()
 			, expires_at: Date.now() + 15 * 60_000
 			, game: {...this.game}
+			, ...(settings === null ? {} : {settings: structuredClone(settings)})
 		};
 
 		const url = acceptUrl(this.location, sessionId);
 		const displayName = this.profile().displayName ?? this.profile().id;
 		const verb = target ? `challenged ${target} to` : 'opened';
 		const callToAction = target ? 'Accept challenge' : 'Join table';
+		// Matrix clients without Phonics still see the house rules in the readable message.
+		const label = settings === null ? '' : this.settingsLabel(settings);
+		const rules = label ? ` (${label})` : '';
 		const body = target
-			? `${displayName} challenged ${target} to ${this.game.title ?? this.game.id}. Accept: ${url}`
-			: `${displayName} opened a ${this.game.title ?? this.game.id} table. Join: ${url}`;
+			? `${displayName} challenged ${target} to ${this.game.title ?? this.game.id}${rules}. Accept: ${url}`
+			: `${displayName} opened a ${this.game.title ?? this.game.id} table${rules}. Join: ${url}`;
 
 		const message = {
 			msgtype: 'm.text'
@@ -390,7 +411,7 @@ export class RoomGameProtocol extends EventTarget
 				verb
 			)} ${escapeHtml(
 				this.game.title ?? this.game.id
-			)}. <a href="${escapeHtml(
+			)}${escapeHtml(rules)}. <a href="${escapeHtml(
 				url
 			)}">${callToAction}</a>`
 			, [GAME_EVENT]: content
@@ -463,6 +484,10 @@ export class RoomGameProtocol extends EventTarget
 		if(session.seats) throw new Error('This table already has two players');
 
 		if(session.status !== 'open') throw new Error('This table is no longer open');
+
+		const settingsProblem = this.settingsProblem(session.offer.settings ?? null);
+
+		if(settingsProblem) throw new Error(settingsProblem);
 
 		this.select(root, 'player');
 		await this.child(session, 'join', {player: me}, `join:${me}`);
@@ -557,6 +582,50 @@ export class RoomGameProtocol extends EventTarget
 		await this.provider.setActivity(null);
 		this.dispatchEvent(event('selected', null));
 		this.dispatchEvent(event('change', this.snapshot()));
+	}
+
+	/**
+	 * Explain why this build cannot play a table's settings, or return null when it can. Games without settings
+	 * accept only tables without them; games that declare validSettings decide. An unsupported table is listed but
+	 * cannot be joined.
+	 */
+	settingsProblem(settings)
+	{
+		const check = this.adapter?.validSettings;
+
+		if(typeof check !== 'function') return settings === null ? null : 'This game does not use table settings';
+
+		try
+		{
+			const verdict = check(settings);
+
+			if(verdict === true) return null;
+
+			return typeof verdict === 'string' && verdict
+				? verdict
+				: 'This table uses settings this version cannot play';
+		}
+		catch(error)
+		{
+			return error instanceof Error && error.message
+				? error.message
+				: 'This table uses settings this version cannot play';
+		}
+	}
+
+	/** One readable line for a table's settings, supplied by the game; empty when it has none. */
+	settingsLabel(settings)
+	{
+		if(settings === null || typeof this.adapter?.describeSettings !== 'function') return '';
+
+		try
+		{
+			return String(this.adapter.describeSettings(settings) ?? '').slice(0, 200);
+		}
+		catch
+		{
+			return '';
+		}
 	}
 
 	/** Attach the application adapter that executes confirmed deterministic actions. */
@@ -1374,6 +1443,7 @@ export class RoomGameProtocol extends EventTarget
 			, localPlayer: session.localRole === 'player' ? this.profile().id : null
 			, seed: session.seed
 			, breaker: session.turn
+			, settings: structuredClone(session.offer.settings ?? null)
 			, sequence: session.sequence
 			, hash: session.hash
 			, checkpoint
@@ -1519,11 +1589,16 @@ export class RoomGameProtocol extends EventTarget
 				, open: session.status === 'open' && !session.seats
 				, joinable: session.status === 'open' && !session.seats && session.offer.host !== me
 					&& (!session.offer.target || session.offer.target === me)
+					&& this.settingsProblem(session.offer.settings ?? null) === null
 				, mine: Boolean(me) && session.offer.host === me
 				, forMe: Boolean(me) && session.offer.target === me
 				, declinable: session.status === 'open' && !session.seats && Boolean(me) && session.offer.target === me
 				, link: me && session.offer.host === me ? acceptUrl(this.location, session.offer.session_id) : null
 				, expiresAt: session.offer.expires_at
+				, settings: structuredClone(session.offer.settings ?? null)
+				, settingsLabel: this.settingsLabel(session.offer.settings ?? null)
+				, settingsProblem: this.settingsProblem(session.offer.settings ?? null)
+				, supported: this.settingsProblem(session.offer.settings ?? null) === null
 				, resumable: Boolean(session.seats?.includes(me)) && !['complete','expired'].includes(session.status)
 				, spectatable: Boolean(session.seats) && !['expired'].includes(session.status)
 				, sequence: session.sequence
@@ -1593,6 +1668,7 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-rail{min-width:0;min-height:0;padding:1rem;border-left:1px solid var(--ui-line);overflow:auto}
 .phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
 .phonics-room-match{display:none}
+.phonics-room-rules{margin:0;color:var(--ui-muted);font-size:.85rem}.phonics-room-rules[hidden]{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-needs-connection{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-body{grid-template-columns:minmax(0,1fr)}
 .phonics-room-game:not(.is-connected) .phonics-room-panel{width:min(34rem,100%);align-self:center}
@@ -1683,7 +1759,8 @@ export class EmbeddedRoomLobby
 		this.leaveButton = node('button', {type: 'button'}, 'Leave table');
 		const matchRow = node('div', {class: 'phonics-ui-row'});
 		matchRow.append(this.leaveButton);
-		this.matchCard.append(this.matchTitle, matchRow);
+		this.matchRules = node('p', {class: 'phonics-room-rules'});
+		this.matchCard.append(this.matchTitle, this.matchRules, matchRow);
 
 		this.connectingCard = node('div', {class: 'phonics-ui-card phonics-room-lobby-only'});
 
@@ -1723,7 +1800,8 @@ export class EmbeddedRoomLobby
 		this.cancelButton = node('button', {type: 'button'}, 'Cancel table');
 		const waitingRow = node('div', {class: 'phonics-ui-row'});
 		waitingRow.append(this.cancelButton);
-		this.waitingCard.append(this.waitingTitle, this.waitingText, this.linkRow, waitingRow);
+		this.waitingRules = node('p', {class: 'phonics-room-rules'});
+		this.waitingCard.append(this.waitingTitle, this.waitingText, this.waitingRules, this.linkRow, waitingRow);
 
 		const tables = node(
 			'section'
@@ -1775,7 +1853,7 @@ export class EmbeddedRoomLobby
 		parent.style.position ||= 'relative';
 		parent.append(this.root);
 
-		this.openButton.addEventListener('click', () => void this.run(() => protocol.create()));
+		this.openButton.addEventListener('click', () => void this.run(() => this.openTable()));
 		this.cancelButton.addEventListener('click', () => void this.run(() => protocol.leave()));
 		this.leaveButton.addEventListener('click', () => void this.requestLeave());
 		this.closeButton.addEventListener('click', () => void this.requestLeave({close: true}));
@@ -1794,6 +1872,9 @@ export class EmbeddedRoomLobby
 
 		this.keydown = input => {
 			if(input.key !== 'Escape' || this.root.classList.contains('has-game')) return;
+
+			// A modal inside the lobby, such as the house-rules dialog, owns its own Escape.
+			if(input.target instanceof Element && input.target.closest('dialog')) return;
 
 			if(input.target === this.chatInput && this.chatInput.value)
 			{
@@ -2011,6 +2092,58 @@ export class EmbeddedRoomLobby
 		this.protocol.dispatchEvent(event('closed', {}));
 	}
 
+	/**
+	 * Open a table, or challenge one person, after the host picks its house rules. Games that publish a settings
+	 * form get a launcher-style dialog; cancelling it posts nothing. Games without one open with no settings.
+	 */
+	async openTable(target = null)
+	{
+		if(this.choosingSettings) return;
+
+		const adapter = this.protocol.adapter;
+		let settings = null;
+
+		this.choosingSettings = true;
+		this.openButton.disabled = true;
+
+		try
+		{
+			const form = typeof adapter?.settingsForm === 'function' ? await adapter.settingsForm({target}) : null;
+
+			if(form)
+			{
+				settings = await chooseMatchSettings({
+					parent: this.root
+					, form
+					, problem: value => this.protocol.settingsProblem(value)
+					, describe: value => this.protocol.settingsLabel(value)
+					, submitLabel: target ? 'Send challenge' : 'Open table'
+					, signal: this.signal
+				});
+
+				if(settings === null || this.disposed) return;
+			}
+		}
+		finally
+		{
+			this.choosingSettings = false;
+
+			if(!this.disposed) this.render(this.protocol.snapshot());
+		}
+
+		await this.protocol.create({target, settings});
+
+		// Remembering the choice is a convenience; a failure there must not undo the table.
+		try
+		{
+			adapter?.settingsChosen?.(structuredClone(settings));
+		}
+		catch
+		{
+			// The table is already open.
+		}
+	}
+
 	/** Run a UI operation while presenting its failure in the live status region. */
 	async run(operation)
 	{
@@ -2032,8 +2165,19 @@ export class EmbeddedRoomLobby
 		setTimeout(() => { this.copyButton.textContent = 'Copy link'; }, 2000);
 	}
 
-	/** Describe one table from the local player's point of view. */
+	/** Describe one table from the local player's point of view, with its house rules when it has any. */
 	describe(table, me)
+	{
+		const {name, detail} = this.describeSeats(table, me);
+
+		if(table.players.length < 2 && table.settingsProblem && table.status === 'open')
+			return {name, detail: `Can’t join: ${table.settingsProblem}`};
+
+		return {name, detail: table.settingsLabel ? `${detail} · ${table.settingsLabel}` : detail};
+	}
+
+	/** Name a table and its state from the local player's point of view. */
+	describeSeats(table, me)
 	{
 		const host = this.displayName(table.host);
 		const players = table.players.map(player => player === me ? 'You' : this.displayName(player));
@@ -2106,7 +2250,7 @@ export class EmbeddedRoomLobby
 		const selected = snapshot.tables.find(table => table.root === snapshot.selected) ?? null;
 		this.renderMatch(selected, me, playing);
 		this.renderWaiting(selected, playing);
-		this.openButton.disabled = Boolean(snapshot.selected) || !snapshot.connected;
+		this.openButton.disabled = Boolean(snapshot.selected) || !snapshot.connected || Boolean(this.choosingSettings);
 
 		const listed = snapshot.tables.filter(table => table.root !== snapshot.selected);
 		this.tableList.replaceChildren(...listed.map(table => this.tableItem(table, me)));
@@ -2126,6 +2270,7 @@ export class EmbeddedRoomLobby
 		const spectating = !selected.players.includes(me);
 		const [first, second] = selected.players.map(player => player === me ? 'You' : this.displayName(player));
 		this.matchTitle.textContent = spectating ? `Watching ${first} vs ${second}` : `${first} vs ${second}`;
+		this.setRules(this.matchRules, selected);
 
 		if(!this.confirmingLeave) this.leaveButton.textContent = spectating ? 'Stop watching' : 'Leave table';
 	}
@@ -2136,6 +2281,7 @@ export class EmbeddedRoomLobby
 		const waiting = Boolean(selected) && !playing;
 		this.waitingCard.hidden = !waiting;
 		this.waiting = null;
+		this.setRules(this.waitingRules, waiting ? selected : null);
 
 		if(!waiting)
 		{
@@ -2197,6 +2343,13 @@ export class EmbeddedRoomLobby
 		}
 	}
 
+	/** Show a table's house rules in a card, or hide the line when it has none. */
+	setRules(element, table)
+	{
+		element.hidden = !table?.settingsLabel;
+		element.textContent = table?.settingsLabel ? `House rules: ${table.settingsLabel}` : '';
+	}
+
 	/** Rewrite the waiting card's countdown; returns whether it is still running. */
 	tickWaiting()
 	{
@@ -2245,7 +2398,7 @@ export class EmbeddedRoomLobby
 		if(snapshot.connected && peer.id !== me && !snapshot.selected && !peer.activity)
 		{
 			const challenge = node('button', {type: 'button'}, 'Challenge');
-			challenge.addEventListener('click', () => void this.run(() => this.protocol.create({target: peer.id})));
+			challenge.addEventListener('click', () => void this.run(() => this.openTable(peer.id)));
 			actions.push(challenge);
 		}
 
