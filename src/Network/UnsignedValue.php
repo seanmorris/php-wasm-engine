@@ -23,8 +23,7 @@ abstract class UnsignedValue implements \JsonSerializable
 		/** Unsigned integer represented by the concrete protocol counter. */
 		private int $value
 		, ?int $maximum = null
-	)
-	{
+	){
 		$maximum ??= self::representableMaximum();
 
 		if($value < 0 || $value > $maximum)

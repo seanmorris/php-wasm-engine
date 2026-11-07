@@ -29,8 +29,7 @@ final class Program
 		private string $vertex
 		, /** Complete fragment-shader source. */
 		private string $fragment
-	)
-	{
+	){
 		$this->create();
 	}
 

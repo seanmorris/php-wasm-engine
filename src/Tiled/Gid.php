@@ -23,7 +23,8 @@ final class Gid
 		public int $id
 		, /** Upper-nibble flags: 8 horizontal, 4 vertical, and 2 diagonal. */
 		public int $flags = 0
-	) {}
+	){
+	}
 
 	/**
 	 * Decode an unsigned Tiled GID without overflowing 32-bit PHP integers.

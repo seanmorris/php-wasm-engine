@@ -89,8 +89,7 @@ final class Engine
 	public function __construct(
 		/** SDL graphics device owned and closed by this engine. */
 		public Device $device
-	)
-	{
+	){
 		$this->entities = new Registry;
 		$this->systems = new Scheduler($this->entities);
 		$this->controls = new Controls;

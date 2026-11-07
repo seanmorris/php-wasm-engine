@@ -2,8 +2,14 @@
 declare(strict_types=1);
 namespace DoomPhonics\Tools;
 
-use DoomPhonics\Component\{Body,PlayerCommand,PlayerStart,Transform,Velocity};
-use DoomPhonics\Game\{Collision,Level,LineSpecials,PlayerState};
+use DoomPhonics\Component\
+{
+	Body,PlayerCommand,PlayerStart,Transform,Velocity
+};
+use DoomPhonics\Game\
+{
+	Collision,Level,LineSpecials,PlayerState
+};
 use DoomPhonics\System\PlayerMovementSystem;
 use Phonics\Ecs\Registry;
 use Phonics\Input\Controls;
@@ -38,12 +44,21 @@ class PlayerWalk
 		$this->registry = new Registry;
 		$this->pose = new Transform(...$start);
 		$this->command = new PlayerCommand;
-		$this->body = new Body(16,56);
+		$this->body = new Body(16, 56);
 		$this->velocity = new Velocity;
 		$this->player = new PlayerState;
-		$this->registry->create(new PlayerStart,$this->pose,$this->command,$this->body,$this->velocity,$this->player);
-		$this->specials = new LineSpecials($level,$this->registry);
-		$this->movement = new PlayerMovementSystem(new Collision($level),$this->specials,new Controls);
+
+		$this->registry->create(
+			new PlayerStart
+			, $this->pose
+			, $this->command
+			, $this->body
+			, $this->velocity
+			, $this->player
+		);
+
+		$this->specials = new LineSpecials($level, $this->registry);
+		$this->movement = new PlayerMovementSystem(new Collision($level), $this->specials, new Controls);
 	}
 
 	/** Advance commands, collision, gravity and movers at the real 35 Hz tick rate. */
@@ -52,7 +67,7 @@ class PlayerWalk
 		for($i = 0; $i < $count; $i++)
 		{
 			$this->pose->beginStep();
-			$this->movement->update($this->registry,1 / 35);
+			$this->movement->update($this->registry, 1 / 35);
 			$this->specials->update(1 / 35);
 		}
 	}
@@ -61,37 +76,48 @@ class PlayerWalk
 	public function walkTo(float $x, float $y, float $pitch = 0): void
 	{
 		$this->command->pitch = $pitch;
+
 		for($tick = 0; $tick < 1200; $tick++)
 		{
-			$distance = hypot($x - $this->pose->x,$y - $this->pose->y);
+			$distance = hypot($x - $this->pose->x, $y - $this->pose->y);
+
 			if($distance < 6) return;
-			$this->pose->angle = atan2($y - $this->pose->y,$x - $this->pose->x);
-			$this->command->forward = min($this->travelStrength,$distance / 100);
+
+			$this->pose->angle = atan2($y - $this->pose->y, $x - $this->pose->x);
+			$this->command->forward = min($this->travelStrength, $distance / 100);
 			$this->tick();
 		}
+
 		throw new \RuntimeException("Walk stalled toward $x,$y at " . json_encode($this->position()));
 	}
 
 	/** Walk or swim in one direction until the expected region is reached. */
 	public function enter(int $sector, float $angle, float $pitch = 0): void
 	{
-		if($this->level->sectorAt($this->pose->x,$this->pose->y)->index === $sector) return;
+		if($this->level->sectorAt($this->pose->x, $this->pose->y)->index === $sector) return;
+
 		$this->pose->angle = $angle;
 		$this->command->forward = $this->travelStrength;
 		$this->command->pitch = $pitch;
+
 		for($tick = 0; $tick < 1200; $tick++)
 		{
 			$this->tick();
-			if($this->level->sectorAt($this->pose->x,$this->pose->y)->index === $sector) return;
+
+			if($this->level->sectorAt($this->pose->x, $this->pose->y)->index === $sector) return;
 		}
+
 		throw new \RuntimeException("Cannot enter sector $sector from " . json_encode($this->position()));
 	}
 
 	/** Return a concise position and sector for native/browser assertions. */
 	public function position(): array
 	{
-		return ['x' => $this->pose->x,'y' => $this->pose->y,'z' => $this->pose->z,
-			'sector' => $this->level->sectorAt($this->pose->x,$this->pose->y)->index];
+		return [
+			'x' => $this->pose->x
+			, 'y' => $this->pose->y
+			, 'z' => $this->pose->z
+			, 'sector' => $this->level->sectorAt($this->pose->x, $this->pose->y)->index
+		];
 	}
-
 }

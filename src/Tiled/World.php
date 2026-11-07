@@ -33,8 +33,7 @@ final class World
 		public string $path
 		, /** Decoded Tiled world data; filesystem patterns are unsupported. */
 		public array $data
-	)
-	{
+	){
 		if(!empty($data['patterns']))
 		{
 			throw new \UnexpectedValueException(

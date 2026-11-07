@@ -27,10 +27,12 @@ final class RectRenderer
 	 * @return void Allocates resources owned exclusively by this renderer.
 	 */
 	public function __construct(
-		/** Retain the program binding when this renderer owns every draw in the context. Leave false when other renderers or external GL code can change the program. */
+		/**
+		 * Retain the program binding when this renderer owns every draw in the context.
+		 * Leave false when other renderers or external GL code can change the program.
+		 */
 		private bool $exclusive = false
-	)
-	{
+	){
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/ui.frag')

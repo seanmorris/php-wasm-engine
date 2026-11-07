@@ -33,7 +33,8 @@ final class DomTextureModal
 		private object $bridge
 		, /** Optional shared bitmap renderer for themed back hints. */
 		private ?MenuRenderer $hintRenderer = null
-	) {}
+	){
+	}
 
 	/**
 	 * Open trusted HTML from an application-owned source.

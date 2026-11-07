@@ -59,8 +59,7 @@ final class TileMap
 		public string $path
 		, /** Decoded Tiled map containing tile dimensions and optional orientation/bounds. */
 		public array $data
-	)
-	{
+	){
 		$this->identity = $path;
 
 		$this->projection = new Projection(

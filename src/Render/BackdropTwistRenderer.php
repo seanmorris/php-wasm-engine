@@ -33,8 +33,7 @@ final class BackdropTwistRenderer
 		public int $width
 		, /** Positive drawing-buffer height in pixels. */
 		public int $height
-	)
-	{
+	){
 		if($width <= 0 || $height <= 0)
 		{
 			throw new \InvalidArgumentException('Backdrop twist target dimensions must be positive');

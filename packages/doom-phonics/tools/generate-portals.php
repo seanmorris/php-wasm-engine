@@ -892,7 +892,10 @@ ANIMDEFS
 $buildPool = require __DIR__ . '/generate-pool.php';
 require_once __DIR__ . '/LayeredPrototype.php';
 
-foreach([$firstMapLumps,$buildPortalRooms(),$buildCameraRoom(),$buildPool(),\DoomPhonics\Tools\LayeredPrototype::build()['lumps']] as $mapLumps)
+foreach([
+	$firstMapLumps,$buildPortalRooms(),$buildCameraRoom(),$buildPool()
+	, \DoomPhonics\Tools\LayeredPrototype::build()['lumps']
+] as $mapLumps)
 foreach($mapLumps as $name => $bytes) $lumps[] = [$name,$bytes];
 $data = $directory = '';
 
@@ -916,14 +919,17 @@ throw new RuntimeException("Cannot write $destination");
 if(realpath($destination) === realpath(dirname(__DIR__) . '/demo/PORTALS.WAD'))
 {
 	$integrity = 'sha256-' . base64_encode(hash('sha256', $wad, true));
+
 	foreach(glob(dirname(__DIR__) . '/demo/*.phonics-world.json') as $file)
 	{
 		$json = file_get_contents($file);
 		$world = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
 		foreach($world['sources'] ?? [] as $source)
 		foreach($source['resources'] ?? [] as $resource)
 		if(($resource['url'] ?? null) === './PORTALS.WAD' && isset($resource['integrity']))
 		$json = str_replace($resource['integrity'], $integrity, $json);
+
 		if($json !== file_get_contents($file)) file_put_contents($file, $json);
 	}
 }

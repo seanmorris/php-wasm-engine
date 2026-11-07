@@ -188,7 +188,7 @@ final class ReplicationSession
 				? $this->peerBaseline
 				: null;
 
-			// Acknowledge what the snapshot's state includes: an accepted command waiting for its tick is not in it yet.
+			// Acknowledge what the snapshot state includes: a command accepted for a later tick is not in it yet.
 			$acknowledged = $this->applied ? [$this->match->remoteSlot->value() => $this->applied->value()] : [];
 			$snapshot = $this->builder->capture($registry, $sequence, $tick, $baseline, $acknowledged);
 
@@ -236,9 +236,12 @@ final class ReplicationSession
 		if($connected && !$this->match->host() && $this->recoveryRequest === null)
 		{
 			$this->recoveryRequest = $this->recovery;
+
 			$this->bridge->send(MessageFamily::RESYNC, $this->outgoing([
-				'recovery' => $this->recovery, 'phase' => 'request'
-			]), $this->clock->current(), 'control');
+				'recovery' => $this->recovery
+				, 'phase' => 'request'
+			]), $this->clock->current(), 'control'
+			);
 		}
 
 		foreach($this->bridge->receive() as $packet)
@@ -256,19 +259,33 @@ final class ReplicationSession
 	private function recoverPacket(array $payload): void
 	{
 		$id = $payload['recovery'] ?? null;
+
 		if($this->recovery === null || !is_string($id) || strlen($id) > 100) return;
 
 		if($this->match->host() && ($payload['phase'] ?? null) === 'request')
 		{
 			$this->recoveryRequest = $id;
-			$snapshot = $this->builder->capture($this->world, new SnapshotSequence(++$this->snapshotSequence), $this->clock->current());
+
+			$snapshot = $this->builder->capture(
+				$this->world
+				, new SnapshotSequence(++$this->snapshotSequence)
+				, $this->clock->current()
+			);
+
 			$this->bridge->send(MessageFamily::SNAPSHOT, $this->outgoing([
-				'snapshot' => $snapshot->jsonSerialize(), 'recovery' => $id
-			]), $this->clock->current(), 'control');
+				'snapshot' => $snapshot->jsonSerialize()
+				, 'recovery' => $id
+			]), $this->clock->current(), 'control'
+			);
 		}
 		elseif($id === $this->recoveryRequest && ($payload['phase'] ?? null) === 'ack' && $this->match->host())
 		{
-			$this->bridge->send(MessageFamily::RESYNC, $this->outgoing(['recovery' => $id, 'phase' => 'resume']), $this->clock->current(), 'control');
+			$this->bridge->send(MessageFamily::RESYNC, $this->outgoing([
+				'recovery' => $id
+				, 'phase' => 'resume'
+			]), $this->clock->current(), 'control'
+			);
+
 			$this->recoveryComplete = true;
 			$this->forceFull = true;
 		}
@@ -408,7 +425,12 @@ final class ReplicationSession
 			case MessageFamily::EVENT: $this->receiveEvent($packet->payload);
 				break;
 			case MessageFamily::RESYNC:
-				if(isset($packet->payload['recovery'])) { $this->recoverPacket($packet->payload); break; }
+				if(isset($packet->payload['recovery']))
+				{
+					$this->recoverPacket($packet->payload);
+					break;
+				}
+
 				if($this->match->host()) $this->forceFull = true;
 
 				break;
@@ -466,7 +488,9 @@ final class ReplicationSession
 		$correctOwner = $this->recovery !== null && !$this->recoveryComplete
 			&& $this->recoveryRequest !== null
 			&& ($payload['recovery'] ?? null) === $this->recoveryRequest && $snapshot->baseline === null;
+
 		if($this->recovery !== null && !$this->recoveryComplete && !$correctOwner) return;
+
 		if($correctOwner) $this->clock->rebase($snapshot->tick);
 		else $this->clock->synchronize($snapshot->tick);
 
@@ -487,12 +511,17 @@ final class ReplicationSession
 			return;
 		}
 
-		finally { $this->recoveringOwner = false; }
+		finally
+		{
+			$this->recoveringOwner = false;
+		}
 
 		if($correctOwner)
 		$this->bridge->send(MessageFamily::RESYNC, $this->outgoing([
-			'recovery' => $this->recoveryRequest, 'phase' => 'ack'
-		]), $this->clock->current(), 'control');
+			'recovery' => $this->recoveryRequest
+			, 'phase' => 'ack'
+		]), $this->clock->current(), 'control'
+		);
 
 		$this->latestSnapshot = $snapshot->sequence;
 		$this->latestTick = $snapshot->tick;
@@ -534,7 +563,8 @@ final class ReplicationSession
 			$this->callbacks->apply($command);
 			unset($this->pending[$sequence]);
 
-			if(!$this->applied || $command->sequence->value() > $this->applied->value()) $this->applied = $command->sequence;
+			if(!$this->applied || $command->sequence->value() > $this->applied->value())
+			$this->applied = $command->sequence;
 		}
 	}
 

@@ -27,8 +27,7 @@ final class FixedStep
 		public float $step = 1 / 60
 		, /** Maximum updates permitted during one advance call; at least one. */
 		public int $maxSteps = 8
-	)
-	{
+	){
 		if($step <= 0 || $maxSteps < 1)
 		{
 			throw new \InvalidArgumentException('Invalid fixed-step settings');

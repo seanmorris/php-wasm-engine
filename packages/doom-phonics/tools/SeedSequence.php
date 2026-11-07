@@ -19,10 +19,17 @@ final class SeedSequence
 	public function integer(int $min, int $max): int
 	{
 		$size = $max - $min + 1;
+
 		if($size < 1 || $size > 0x10000000) throw new \InvalidArgumentException('Invalid seed range');
-		$limit = intdiv(0x10000000,$size) * $size;
-		do { $value = (int)hexdec(substr(hash('sha256',$this->seed . ':' . $this->counter++),0,7)); }
+
+		$limit = intdiv(0x10000000, $size) * $size;
+
+		do
+		{
+			$value = (int)hexdec(substr(hash('sha256', $this->seed . ':' . $this->counter++), 0, 7));
+		}
 		while($value >= $limit);
+
 		return $min + $value % $size;
 	}
 
@@ -30,11 +37,13 @@ final class SeedSequence
 	public function shuffle(array $values): array
 	{
 		$values = array_values($values);
+
 		for($i = count($values) - 1; $i > 0; $i--)
 		{
-			$j = $this->integer(0,$i);
+			$j = $this->integer(0, $i);
 			[$values[$i],$values[$j]] = [$values[$j],$values[$i]];
 		}
+
 		return $values;
 	}
 }

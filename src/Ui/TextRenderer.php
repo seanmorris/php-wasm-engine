@@ -49,8 +49,7 @@ final class TextRenderer
 		/** Bitmap font used to lay out text. */
 		private BitmapFont $font
 		, Atlas $atlas
-	)
-	{
+	){
 		$this->sprites = new SpriteRenderer($atlas);
 		$this->rects = new RectRenderer;
 	}

@@ -11,35 +11,48 @@ namespace DoomPhonics\Tools;
  */
 final class RectangularMap
 {
+
 	/** Wrap ordered named lumps in a PWAD for the normal archive/map reader. */
 	public static function archive(array $lumps): string
 	{
 		$data = $directory = '';
+
 		foreach($lumps as $name => $bytes)
 		{
-			$directory .= pack('V2a8',12 + strlen($data),strlen($bytes),$name);
+			$directory .= pack('V2a8', 12 + strlen($data), strlen($bytes), $name);
 			$data .= $bytes;
 		}
-		return 'PWAD' . pack('V2',count($lumps),12 + strlen($data)) . $data . $directory;
+
+		return 'PWAD' . pack('V2', count($lumps), 12 + strlen($data)) . $data . $directory;
 	}
 
 	/** Encode cells, boundary specials, internal controls, and [x,y,z,angle,type] things. */
-	public static function build(string $name, array $cells, array $boundaries = [], array $controls = [], array $thingRows = []): array
-	{
+	public static function build(
+		string $name
+		, array $cells
+		, array $boundaries = []
+		, array $controls = []
+		, array $thingRows = []
+	): array {
 		if(!preg_match('/^[A-Z][A-Z0-9_]{0,7}$/D', $name) || !$cells)
 		throw new \InvalidArgumentException('Invalid map name or empty map');
+
 		foreach($cells as $i => $cell)
 		{
 			if($cell['x0'] >= $cell['x1'] || $cell['y0'] >= $cell['y1'] || $cell['floor'] > $cell['ceiling'])
 			throw new \InvalidArgumentException("Invalid cell $i");
+
 			foreach(['x0','x1','y0','y1','floor','ceiling'] as $field)
 			if(!is_int($cell[$field]) || $cell[$field] < -32768 || $cell[$field] > 32767)
 			throw new \InvalidArgumentException("Cell $i exceeds classic WAD coordinate range");
+
 			foreach(array_slice($cells, 0, $i) as $other)
-			if(max($cell['x0'],$other['x0']) < min($cell['x1'],$other['x1'])
-				&& max($cell['y0'],$other['y0']) < min($cell['y1'],$other['y1']))
+			if(max($cell['x0'], $other['x0']) < min($cell['x1'], $other['x1'])
+				&& max($cell['y0'], $other['y0']) < min($cell['y1'], $other['y1'])
+			)
 			throw new \InvalidArgumentException('Packed cells overlap');
 		}
+
 		$vertexIds = $vertexRows = [];
 
 		$vertex = static function(int $x, int $y) use (&$vertexIds, &$vertexRows): int {
@@ -57,22 +70,26 @@ final class RectangularMap
 
 		$edges = $cellSegments = [];
 		$horizontal = $vertical = [];
+
 		foreach($boundaries as $boundary)
 		foreach([$boundary['from'],$boundary['to']] as [$x,$y])
 		{
-			$id = $vertex($x,$y);
+			$id = $vertex($x, $y);
 			$horizontal[$y][$x] = $id;
 			$vertical[$x][$y] = $id;
 		}
+
 		foreach($cells as $cell)
 		foreach([$cell['x0'],$cell['x1']] as $x)
 		foreach([$cell['y0'],$cell['y1']] as $y)
 		{
-			$id = $vertex($x,$y);
+			$id = $vertex($x, $y);
 			$horizontal[$y][$x] = $id;
 			$vertical[$x][$y] = $id;
 		}
+
 		foreach($horizontal as &$points) ksort($points, SORT_NUMERIC);
+
 		foreach($vertical as &$points) ksort($points, SORT_NUMERIC);
 		unset($points);
 
@@ -92,12 +109,22 @@ final class RectangularMap
 				$points = $ax === $bx ? $vertical[$ax] : $horizontal[$ay];
 				$start = $ax === $bx ? $ay : $ax;
 				$end = $ax === $bx ? $by : $bx;
+
 				// Split long edges at neighboring tread corners so T-junctions share
 				// the same two-sided linedefs instead of leaving invisible barriers.
-				$points = array_values(array_filter($points,
-					static fn(int $coordinate): bool => $coordinate >= min($start,$end) && $coordinate <= max($start,$end),
-					ARRAY_FILTER_USE_KEY));
+				$points = array_values(
+					array_filter(
+						$points
+						, static fn(int $coordinate): bool => $coordinate >= min($start, $end) && $coordinate <= max(
+							$start
+							, $end
+						)
+						, ARRAY_FILTER_USE_KEY
+					)
+				);
+
 				if($start > $end) $points = array_reverse($points);
+
 				for($part = 1; $part < count($points); $part++)
 				{
 					$a = $points[$part - 1];
@@ -134,25 +161,36 @@ final class RectangularMap
 		foreach($boundaries as $boundary)
 		{
 			$key = $edgeKey($vertex(...$boundary['from']), $vertex(...$boundary['to']));
+
 			if(!isset($edges[$key])) throw new \RuntimeException('Action boundary must match a complete split edge');
+
 			$edges[$key]['action'] = $boundary['action'];
 			$edges[$key]['args'] = $boundary['args'];
+
 			if(isset($boundary['flags'])) $edges[$key]['flags'] = $boundary['flags'];
+
 			if(isset($boundary['texture'])) $edges[$key]['switch'] = $boundary['texture'];
+
 			if(isset($boundary['lowerTexture'])) $edges[$key]['lowerTexture'] = $boundary['lowerTexture'];
+
 			if($boundary['portal'] ?? false)
 			{
-				if($edges[$key]['left'] !== null) throw new \RuntimeException('Wall portal requires an exterior boundary');
+				if($edges[$key]['left'] !== null)
+				throw new \RuntimeException('Wall portal requires an exterior boundary');
+
 				$edges[$key]['left'] = $edges[$key]['right'];
 			}
 		}
+
 		$controlLines = [];
+
 		foreach($controls as $control)
 		{
 			$control['from'] = $vertex(...$control['from']);
 			$control['to'] = $vertex(...$control['to']);
 			$controlLines[] = $control;
 		}
+
 		$vertices = '';
 
 		foreach($vertexRows as [$x,$y]) $vertices .= pack('v2', $x & 0xffff, $y & 0xffff);
@@ -165,7 +203,17 @@ final class RectangularMap
 			$lineIds[$key] = intdiv(strlen($lines), 16);
 			$twoSided = $edge['left'] !== null;
 			$right = intdiv(strlen($sides), 30);
-			$sides .= pack('v2a8a8a8v', 0, 0, 'STARTAN3', $edge['lowerTexture'] ?? 'STARTAN3', $edge['switch'] ?? ($twoSided ? '-' : 'STARTAN3'), $edge['right']);
+
+			$sides .= pack(
+				'v2a8a8a8v'
+				, 0
+				, 0
+				, 'STARTAN3'
+				, $edge['lowerTexture'] ?? 'STARTAN3'
+				, $edge['switch'] ?? ($twoSided ? '-' : 'STARTAN3')
+				, $edge['right']
+			);
+
 			$left = 0xffff;
 
 			if($twoSided)
@@ -186,8 +234,15 @@ final class RectangularMap
 			$sides .= pack('v2a8a8a8v', 0, 0, '-', '-', '-', $control['sector']);
 			$left = intdiv(strlen($sides), 30);
 			$sides .= pack('v2a8a8a8v', 0, 0, '-', '-', '-', $control['sector']);
+
 			$lines .= pack('v3C6v2', ...[
-				$control['from'],$control['to'],4,$control['action'] ?? 57,...$control['args'],$right,$left
+				$control['from']
+				, $control['to']
+				, 4
+				, $control['action'] ?? 57
+				, ...$control['args']
+				, $right
+				, $left
 			]);
 		}
 
@@ -223,8 +278,9 @@ final class RectangularMap
 		);
 
 		$things = '';
+
 		foreach($thingRows as [$x,$y,$z,$angle,$type])
-		$things .= pack('v7C6', 0,$x & 0xffff,$y & 0xffff,$z & 0xffff,$angle,$type,1799,0,0,0,0,0,0);
+		$things .= pack('v7C6', 0, $x & 0xffff, $y & 0xffff, $z & 0xffff, $angle, $type, 1799, 0, 0, 0, 0, 0, 0);
 
 		// Recursively partition whole rectangular cells. Every leaf points at the
 		// corresponding subsector; nodes are emitted post-order so the
@@ -298,7 +354,8 @@ final class RectangularMap
 				];
 			}
 
-			if(!$candidates) throw new \RuntimeException('Rectangular BSP needs a full separating cut; split the crossing cell');
+			if(!$candidates)
+			throw new \RuntimeException('Rectangular BSP needs a full separating cut; split the crossing cell');
 
 			usort($candidates, static fn(array $a, array $b): int => $a['score'] <=> $b['score']);
 			$choice = $candidates[0];
@@ -314,8 +371,11 @@ final class RectangularMap
 		};
 
 		$buildNode(array_keys($cells));
-		$bounds = [max(array_column($cells,'y1')),min(array_column($cells,'y0')),
-			min(array_column($cells,'x0')),max(array_column($cells,'x1'))];
+		$bounds = [
+			max(array_column($cells, 'y1')),min(array_column($cells, 'y0'))
+			, min(array_column($cells, 'x0')),max(array_column($cells, 'x1'))
+		];
+
 		$nodes = '';
 
 		foreach($nodeRows as [$x,$y,$dx,$dy,$right,$left])

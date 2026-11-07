@@ -11,15 +11,18 @@ namespace DoomPhonics\Tools;
  */
 final class RectangularCells
 {
+
 	/** Merge horizontal and vertical neighbors until no rectangular union remains. */
 	public static function merge(array $cells): array
 	{
 		do
 		{
 			$count = count($cells);
+
 			foreach([['x','y'],['y','x']] as [$axis,$cross])
 			{
 				$groups = [];
+
 				foreach($cells as $cell)
 				{
 					$properties = array_diff_key($cell, array_flip(['x0','y0','x1','y1']));
@@ -27,11 +30,14 @@ final class RectangularCells
 					$key = serialize([$properties,$cell[$cross . '0'],$cell[$cross . '1']]);
 					$groups[$key][] = $cell;
 				}
+
 				$cells = [];
+
 				foreach($groups as $group)
 				{
 					usort($group, static fn(array $a, array $b): int => $a[$axis . '0'] <=> $b[$axis . '0']);
 					$current = array_shift($group);
+
 					foreach($group as $cell)
 					{
 						if($current[$axis . '1'] === $cell[$axis . '0'])
@@ -42,12 +48,23 @@ final class RectangularCells
 							$current = $cell;
 						}
 					}
+
 					$cells[] = $current;
 				}
 			}
 		} while(count($cells) < $count);
-		usort($cells, static fn(array $a, array $b): int =>
-			[$a['y0'],$a['x0'],$a['y1'],$a['x1']] <=> [$b['y0'],$b['x0'],$b['y1'],$b['x1']]);
+
+		usort(
+			$cells
+			, static fn(array $a, array $b): int => [$a['y0'],$a['x0'],$a['y1'],$a['x1']] <=> [
+				$b['y0'],$b['x0']
+				, $b[
+				'y1'
+				]
+				, $b['x1']
+			]
+		);
+
 		return $cells;
 	}
 }

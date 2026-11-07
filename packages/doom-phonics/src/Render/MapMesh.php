@@ -189,29 +189,42 @@ final class MapMesh
 	}
 
 	/** Update Boom plane materials only when the view changes region or a material changes. */
-	public function syncTransfers(\DoomPhonics\Game\Level $level, \DoomPhonics\Graphics\IndexedAtlas $atlas, int $region): array
-	{
+	public function syncTransfers(
+		\DoomPhonics\Game\Level $level
+		, \DoomPhonics\Graphics\IndexedAtlas $atlas
+		, int $region
+	): array {
 		$updates = [];
+
 		foreach($level->sectors as $sector)
 		{
 			$t = $sector->heightTransfer;
+
 			if(!$t) continue;
+
 			$view = $t->view($sector, $region);
+
 			foreach(['floor','ceiling'] as $plane => $name)
 			{
 				$texture = $t->flags & 4 ? $sector->{$name . 'Texture'} : $view[$name][2];
 				$id = $texture === 'F_SKY1' ? -1 : $atlas->id('flat', $texture);
+
 				foreach($this->planeGroups[$sector->index][$plane] ?? [] as $index)
 				{
 					$span = $this->planeSpans[$index];
 					$offset = $span['first'] * self::FLOATS;
+
 					if((int)$this->vertices[$offset + 4] === $id) continue;
+
 					for($v = 0; $v < $span['count']; $v++)
-					$this->vertices[$offset + $v * self::FLOATS + 4] = $this->vertices[$offset + $v * self::FLOATS + 5] = (float)$id;
+					$this->vertices[$offset + $v * self::FLOATS + 4] = $this->vertices[
+						$offset + $v * self::FLOATS + 5
+					] = (float)$id;
 					$updates[] = $this->spanBytes($span['first'], $span['count']);
 				}
 			}
 		}
+
 		return $updates;
 	}
 }

@@ -37,8 +37,7 @@ final class CardSequence
 	public function __construct(
 		/** Cards visited in order; an empty sequence completes on start. */
 		private array $cards
-	)
-	{
+	){
 		$ids = [];
 
 		foreach($cards as $card)

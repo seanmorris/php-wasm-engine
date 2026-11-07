@@ -10,20 +10,25 @@ namespace DoomPhonics\Tools;
  */
 final class WaterFlat
 {
+
 	/** Encode one 64-by-64 indexed flat. */
 	public static function bytes(): string
 	{
 		$water = '';
+
 		$wave = static function(int $phase): int {
 			$phase &= 31;
+
 			return $phase < 16 ? $phase : 31 - $phase;
 		};
-		for($y=0;$y<64;$y++)
-		for($x=0;$x<64;$x++)
+
+		for($y = 0; $y < 64; $y++)
+		for($x = 0; $x < 64; $x++)
 		{
-			$ripple = $wave($x + intdiv($wave($y*2),2)) + $wave($y + intdiv($wave($x*2),2));
-			$water .= chr(198 + intdiv($ripple,4));
+			$ripple = $wave($x + intdiv($wave($y * 2), 2)) + $wave($y + intdiv($wave($x * 2), 2));
+			$water .= chr(198 + intdiv($ripple, 4));
 		}
+
 		return $water;
 	}
 }

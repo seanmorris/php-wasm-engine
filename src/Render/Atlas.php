@@ -52,8 +52,7 @@ final class Atlas
 	public function __construct(
 		/** Map supplying normalized tile definitions, source images, and animation frames. */
 		public TileMap $map
-	)
-	{
+	){
 		$this->create();
 	}
 

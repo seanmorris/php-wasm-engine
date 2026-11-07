@@ -28,8 +28,7 @@ final class NetworkClock
 		?SimulationTick $initial = null
 		, /** Largest local lead over a received host snapshot tolerated as transit time. */
 		public int $maximumLead = 8
-	)
-	{
+	){
 		if($maximumLead < 0) throw new \InvalidArgumentException('Network clock lead tolerance cannot be negative');
 
 		$this->current = $initial ?? new SimulationTick(0);

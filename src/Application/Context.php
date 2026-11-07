@@ -30,13 +30,18 @@ final class Context
 	 */
 	public function __construct()
 	{
-		if(!function_exists('vrzno_env')) throw new \RuntimeException('This application requires the Phonics browser host');
+		if(!function_exists('vrzno_env'))
+		throw new \RuntimeException('This application requires the Phonics browser host');
+
 		$this->host = vrzno_env('phonicsApplication');
+
 		if(!$this->host || $this->host->abi !== 1) throw new \RuntimeException('Unsupported Phonics application host');
+
 		$this->init = json_decode($this->host->init, true, flags: JSON_THROW_ON_ERROR);
 		$root = 'phar://' . \Phar::running(false) . '/';
 		$descriptor = file_get_contents($root . 'application.json');
 		$members = array_fill_keys(json_decode($descriptor, true, flags: JSON_THROW_ON_ERROR)['members'], true);
+
 		/**
 		 * Copy one declared archive member to a browser-requested mount point.
 		 *
@@ -46,10 +51,15 @@ final class Context
 		 */
 		$copy = static function(string $member, string $target) use ($root, $members): void {
 			if(!isset($members[$member])) throw new \RuntimeException('Undeclared archive member: ' . $member);
-			if(!str_starts_with($target, '/phonics/archive-read/')) throw new \RuntimeException('Invalid archive read target');
+
+			if(!str_starts_with($target, '/phonics/archive-read/'))
+			throw new \RuntimeException('Invalid archive read target');
+
 			if(!is_dir(dirname($target))) mkdir(dirname($target), 0777, true);
+
 			if(!copy($root . $member, $target)) throw new \RuntimeException('Cannot read archive member: ' . $member);
 		};
+
 		vrzno_await(($this->host->initialize)($descriptor, $copy));
 	}
 
@@ -73,12 +83,19 @@ final class Context
 	public function compose(string $world, string $entry, ?array $network = null): \Phonics\Package\Context
 	{
 		$this->runtime();
+
 		$data = json_decode(vrzno_await((vrzno_env('phonicsCompose'))(json_encode([
-			'world' => $this->init['world'] ?? $world, 'entry' => $entry, 'network' => $network
-		], JSON_THROW_ON_ERROR))), true, flags: JSON_THROW_ON_ERROR);
+			'world' => $this->init['world'] ?? $world
+			, 'entry' => $entry
+			, 'network' => $network
+		], JSON_THROW_ON_ERROR
+		))), true, flags: JSON_THROW_ON_ERROR
+		);
+
 		foreach($data['bootstraps'] as $bootstrap) require_once $bootstrap;
 		$phonics = new \Phonics\Package\Context($data['world']);
 		$phonics->factories->strictReferences = true;
+
 		/**
 		 * Remove refresh ownership and close the composed package context.
 		 *
@@ -88,27 +105,46 @@ final class Context
 			vrzno_env('onRefresh')->delete($close);
 			$phonics->close();
 		};
+
 		vrzno_env('onRefresh')->add($close);
+
 		foreach($data['entries'] as $module)
 		{
 			$register = require $module['file'];
-			match($module['type']) {
+			match($module['type'])
+			{
 				'adapter' => $phonics->runtime->adapter($module['id'], $register),
 				'system-set' => $phonics->runtime->systemSet($module['id'], $register),
 				default => $register($phonics)
 			};
 		}
+
 		if(!$data['legacy'])
 		{
 			foreach($phonics->world['sources'] as $id => $source)
-			$phonics->runtime->source(new \Phonics\World\SourceDefinition(
-				$id, $source['adapter'], $source['resources'], $source['options'] ?? [], $phonics->world['sourceUrl']
-			));
+			$phonics->runtime->source(
+				new \Phonics\World\SourceDefinition(
+					$id
+					, $source['adapter']
+					, $source['resources']
+					, $source['options'] ?? []
+					, $phonics->world['sourceUrl']
+				)
+			);
+
 			foreach($phonics->world['bindings'] as $binding)
-			$phonics->runtime->bind($binding['id'], $binding['use'], $binding['on'] ?? [], $binding['options'] ?? [], $binding['after'] ?? []);
+			$phonics->runtime->bind(
+				$binding['id']
+				, $binding['use']
+				, $binding['on'] ?? []
+				, $binding['options'] ?? []
+				, $binding['after'] ?? []
+			);
 		}
+
 		foreach($data['factories'] as $factory) $phonics->factories->alias($factory['id'], $factory['class']);
 		$this->entry = $data['entry'];
+
 		return $phonics;
 	}
 
@@ -127,10 +163,14 @@ final class Context
 		vrzno_await((vrzno_env('phonicsLobby'))(json_encode($configuration, JSON_THROW_ON_ERROR)));
 	}
 
-	/** Activate the verified browser runtime at most once for this application. */
+	/**
+	 * Activate the verified browser runtime at most once for this application.
+	 * @return void Loads the packaged runtime module on the first call; later calls do nothing.
+	 */
 	private function runtime(): void
 	{
 		if($this->runtime) return;
+
 		$this->runtime = true;
 		$this->browser('phar://' . \Phar::running(false) . '/runtime.mjs');
 	}

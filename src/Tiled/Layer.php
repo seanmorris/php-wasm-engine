@@ -84,7 +84,8 @@ final class Layer
 		public string $name
 		, /** Tiled layer kind, such as tilelayer, objectgroup, or imagelayer. */
 		public string $type
-	) {}
+	){
+	}
 
 	/**
 	 * Locate a tile coordinate among this layer's sparse chunks.

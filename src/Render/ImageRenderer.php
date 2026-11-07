@@ -32,8 +32,7 @@ final class ImageRenderer
 	public function __construct(
 		/** Map supplying image layers and their world placement. */
 		public TileMap $map
-	)
-	{
+	){
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/images.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/images.frag')

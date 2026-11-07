@@ -47,8 +47,7 @@ final class Context
 		public array $world = []
 		, ?Registry $entities = null
 		, ?Scheduler $systems = null
-	)
-	{
+	){
 		$this->entities = $entities ?? new Registry;
 		$this->systems = $systems ?? new Scheduler($this->entities);
 		$this->factories = new ObjectSpawner;

@@ -11,6 +11,7 @@ namespace Phonics\Network;
  */
 final class OwnerCorrection
 {
+
 	/**
 	 * Create a correction for one predicted entity.
 	 *

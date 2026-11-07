@@ -35,8 +35,7 @@ class Terrain
 		array $shapes = []
 		, /** Positive broadphase cell size in world pixels. */
 		private int $cellSize = 64
-	)
-	{
+	){
 		if($cellSize < 1)
 		{
 			throw new \InvalidArgumentException('Terrain cell size must be positive');

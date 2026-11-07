@@ -32,8 +32,7 @@ final class SpriteRenderer
 	public function __construct(
 		/** Shared atlas containing every sprite GID supplied to render. */
 		public Atlas $atlas
-	)
-	{
+	){
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/sprites.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/sprites.frag')

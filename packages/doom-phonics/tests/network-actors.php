@@ -49,15 +49,17 @@ use Phonics\Network\SimulationTick;
 		$slot = $side === 'host' ? 1 : 2;
 		$other = $side === 'host' ? 'guest' : 'host';
 
-		$match = new DoomMatch(new MatchContext(
-			$side
-			, new PlayerSlot($slot)
-			, new PlayerSlot(3 - $slot)
-			, new PeerId($side)
-			, new PeerId($other)
-			, 'sha256-AAAA='
-			, ['settings' => ['mode' => 'deathmatch']]
-		));
+		$match = new DoomMatch(
+			new MatchContext(
+				$side
+				, new PlayerSlot($slot)
+				, new PlayerSlot(3 - $slot)
+				, new PeerId($side)
+				, new PeerId($other)
+				, 'sha256-AAAA='
+				, ['settings' => ['mode' => 'deathmatch']]
+			)
+		);
 
 		$world = $worlds[$side] = new Registry;
 
@@ -70,7 +72,13 @@ use Phonics\Network\SimulationTick;
 			static function(int $limit) use ($side, &$queues): string {
 				return json_encode(array_splice($queues[$side], 0, $limit), JSON_THROW_ON_ERROR);
 			}
-			, static function(string $channel, int $family, int $tick, int $schema, string $json)
+			, static function(
+				string $channel
+				, int $family
+				, int $tick
+				, int $schema
+				, string $json
+			)
 			use ($side, $slot, $other, $protocol, &$queues, &$sequences): bool {
 				$packet = new Packet(
 					$channel
@@ -128,7 +136,9 @@ use Phonics\Network\SimulationTick;
 	verifyWad(
 		count($monsters) >= 5 && array_keys($hostActors) === array_keys($guestActors)
 			&& !array_filter($hostActors, static fn(int $entity): bool => $host->has($entity, RemoteActor::class))
-			&& count(array_filter($guestActors, static fn(int $entity): bool => $guest->has($entity, RemoteActor::class)))
+			&& count(
+				array_filter($guestActors, static fn(int $entity): bool => $guest->has($entity, RemoteActor::class))
+			)
 				=== count($guestActors)
 		, 'both peers bind the same map monsters and shootable things; only the guest presents them'
 	);
@@ -185,6 +195,7 @@ use Phonics\Network\SimulationTick;
 	);
 
 	// The host's hit on the guest reaches the guest; network-prediction.php covers the pushback.
+
 	$player = static function(Registry $world, int $slot): int {
 		foreach($world->query(NetworkPlayer::class) as $entity)
 		if($world->get($entity, NetworkPlayer::class)->slot->value() === $slot) return $entity;

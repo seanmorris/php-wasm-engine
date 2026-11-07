@@ -33,9 +33,11 @@ final class SectorState
 	public function supportZ(float $x, float $y, float $z, float $step = 0): float
 	{
 		$floor = $this->floorZ($x, $y);
+
 		foreach($this->volumes as $volume)
 		if($volume->solid() && ($top = $volume->top($x, $y)) <= $z + $step + .01)
 		$floor = max($floor, $top);
+
 		return $floor;
 	}
 
@@ -43,9 +45,11 @@ final class SectorState
 	public function headroomZ(float $x, float $y, float $z): float
 	{
 		$ceiling = $this->ceilingZ($x, $y);
+
 		foreach($this->volumes as $volume)
 		if($volume->solid() && $volume->top($x, $y) > $z + .01)
 		$ceiling = min($ceiling, $volume->bottom($x, $y));
+
 		return $ceiling;
 	}
 
@@ -53,13 +57,17 @@ final class SectorState
 	public function waterSurface(float $x, float $y, float $z, float $height): ?float
 	{
 		$surface = null;
+
 		foreach($this->volumes as $volume)
 		if($volume->swimmable() && $volume->overlaps($x, $y, $z, $height))
 		$surface = max($surface ?? -INF, $volume->top($x, $y));
 		$transfer = $this->heightTransfer;
+
 		if($transfer && (($transfer->flags & 8) || $this->waterZone)
-			&& $z < $transfer->model->floorZ($x, $y) && $z + $height > $this->floorZ($x, $y))
+			&& $z < $transfer->model->floorZ($x, $y) && $z + $height > $this->floorZ($x, $y)
+		)
 		$surface = max($surface ?? -INF, $transfer->model->floorZ($x, $y));
+
 		return $surface;
 	}
 
@@ -68,6 +76,7 @@ final class SectorState
 	{
 		foreach($this->volumes as $volume)
 		if($volume->blocks($sight) && $volume->overlaps($x, $y, $z, $height)) return true;
+
 		return false;
 	}
 

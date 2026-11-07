@@ -37,8 +37,7 @@ final class Device
 		, /** Drawing-buffer height in pixels. */
 		public int $height = 540
 		, string $title = 'Phonics'
-	)
-	{
+	){
 		if(!function_exists('glDrawArraysInstanced'))
 		{
 			throw new \RuntimeException('Use a php-sdl-wasm build with the GLES 3 engine bindings');

@@ -32,8 +32,7 @@ final class WorldRenderer
 		public World|WorldStream $world
 		, /** Positive target for cached map renderers; currently visible maps are never evicted to meet it. */
 		public int $residentLimit = 8
-	)
-	{
+	){
 		if($residentLimit < 1)
 		{
 			throw new \InvalidArgumentException('residentLimit must be positive');

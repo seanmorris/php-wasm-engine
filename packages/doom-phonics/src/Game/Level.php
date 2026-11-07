@@ -78,6 +78,7 @@ final class Level
 			if(!in_array($line['action'], [0,12,47,57,69,70,80,100,101,107,121,156,160,181,182,206,209,210,211], true))
 			$this->unsupportedSpecials[$line['action']] = ($this->unsupportedSpecials[$line['action']] ?? 0) + 1;
 		}
+
 		SectorVolumeSetup::apply($this);
 	}
 
@@ -91,35 +92,48 @@ final class Level
 	 * extend above its portal ceiling. Translate that live water interval into the
 	 * destination frame so thrust and buoyancy remain continuous during the exit.
 	 */
-	public function waterSurface(float $x,float $y,float $z,float $height): ?float
+	public function waterSurface(float $x, float $y, float $z, float $height): ?float
 	{
-		return $this->portalWaterSurface($x,$y,$z,$height,[]);
+		return $this->portalWaterSurface($x, $y, $z, $height, []);
 	}
 
 	/** Follow liquid intervals through passable planes with bounded reciprocal traversal. */
-	private function portalWaterSurface(float $x,float $y,float $z,float $height,array $visited): ?float
+	private function portalWaterSurface(float $x, float $y, float $z, float $height, array $visited): ?float
 	{
-		$sector=$this->sectorAt($x,$y);
-		if(isset($visited[$sector->index]) || count($visited)>=8) return null;
-		$visited[$sector->index]=true;
-		$surface=$sector->waterSurface($x,$y,$z,$height);
-		if($surface!==null) return $surface;
-		foreach([0,1] as $plane) {
-			$link=$this->cameraPortalForPlane($sector->index,$plane)?->link;
+		$sector = $this->sectorAt($x, $y);
+
+		if(isset($visited[$sector->index]) || count($visited) >= 8) return null;
+
+		$visited[$sector->index] = true;
+		$surface = $sector->waterSurface($x, $y, $z, $height);
+
+		if($surface !== null) return $surface;
+
+		foreach([0,1] as $plane)
+		{
+			$link = $this->cameraPortalForPlane($sector->index, $plane)?->link;
+
 			if(!$link?->passable() || !$link->flipsVertical()) continue;
-			$origin=$plane ? $sector->ceilingZ($x,$y) : $sector->floorZ($x,$y);
+
+			$origin = $plane ? $sector->ceilingZ($x, $y) : $sector->floorZ($x, $y);
+
 			// An upper liquid cannot touch the body before its head reaches the seam.
 			// A lower column can extend above its ceiling when the room is flooded.
-			if($plane && $z+$height<=$origin) continue;
-			if(!$plane && $sector->supportZ($x,$y,$z)>$origin+.001) continue;
-			if($plane && $sector->headroomZ($x,$y,$z)<$origin-.001) continue;
-			[$rx,$ry]=$link->point($x,$y);
-			$remote=$this->sectorAt($rx,$ry);
-			$destination=$plane ? $remote->floorZ($rx,$ry) : $remote->ceilingZ($rx,$ry);
-			$offset=$destination-$origin;
-			$water=$this->portalWaterSurface($rx,$ry,$z+$offset,$height,$visited);
-			if($water!==null) $surface=max($surface ?? -INF,$water-$offset);
+			if($plane && $z + $height <= $origin) continue;
+
+			if(!$plane && $sector->supportZ($x, $y, $z) > $origin + .001) continue;
+
+			if($plane && $sector->headroomZ($x, $y, $z) < $origin - .001) continue;
+
+			[$rx,$ry] = $link->point($x, $y);
+			$remote = $this->sectorAt($rx, $ry);
+			$destination = $plane ? $remote->floorZ($rx, $ry) : $remote->ceilingZ($rx, $ry);
+			$offset = $destination - $origin;
+			$water = $this->portalWaterSurface($rx, $ry, $z + $offset, $height, $visited);
+
+			if($water !== null) $surface = max($surface ?? -INF, $water - $offset);
 		}
+
 		return $surface;
 	}
 

@@ -416,7 +416,8 @@ $portalDemoMap = new DoomPhonics\Map\MapData('PORTALS', $portalDemoArchive->mapL
 $portalDemoLevel = new Level($portalDemoMap);
 
 verifyWad(
-	$portalDemoArchive->maps() === ['PORTALS','PORTAL2','CAMERAS','POOL3D','LAYERS'] && $portalDemoMap->format === 'HEXEN'
+	$portalDemoArchive->maps() === ['PORTALS','PORTAL2','CAMERAS','POOL3D','LAYERS'] && $portalDemoMap
+		->format === 'HEXEN'
 	&& array_map(static fn(array $point): int => $portalDemoMap->sectorAt(...$point), [
 		[128,128]
 		, [640,128]

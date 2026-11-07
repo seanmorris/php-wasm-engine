@@ -593,6 +593,7 @@ final class ProjectileTracer
 		}
 
 		if($fraction === null || $fraction < $from - 1e-7 || $fraction > $to + 1e-7) return $volumeHit;
+
 		if($volumeHit && $volumeHit->fraction < $fraction) return $volumeHit;
 
 		$fraction = min($to, max($from, $fraction));
@@ -617,13 +618,21 @@ final class ProjectileTracer
 
 	/** Clip a swept body against each blocking slab, including vertical rays and sloped models. */
 	private function volumePlane(
-		Transform $pose, Body $body, float $dx, float $dy, float $dz,
-		SectorState $sector, float $from, float $to
+		Transform $pose
+		, Body $body
+		, float $dx
+		, float $dy
+		, float $dz
+		, SectorState $sector
+		, float $from
+		, float $to
 	): ?ProjectileImpact {
 		$nearest = null;
+
 		foreach($sector->volumes as $volume)
 		{
 			if(!$volume->blocks($this->sight)) continue;
+
 			$enter = $from;
 			$exit = $to;
 			$surface = ProjectileImpact::WALL;
@@ -631,24 +640,46 @@ final class ProjectileTracer
 			$bottom = $volume->bottom($pose->x, $pose->y);
 			// Both inequalities must be positive inside the expanded volume.
 			$planes = [
-				[$top - $pose->z, $volume->top($pose->x + $dx, $pose->y + $dy) - $top - $dz, ProjectileImpact::FLOOR],
-				[$pose->z + $body->height - $bottom, $dz - $volume->bottom($pose->x + $dx, $pose->y + $dy) + $bottom, ProjectileImpact::CEILING]
+				[$top - $pose->z, $volume->top($pose->x + $dx, $pose->y + $dy) - $top - $dz, ProjectileImpact::FLOOR]
+				, [
+					$pose->z + $body->height - $bottom
+					, $dz - $volume->bottom($pose->x + $dx, $pose->y + $dy) + $bottom
+					, ProjectileImpact::CEILING
+				]
 			];
+
 			foreach($planes as [$distance,$rate,$kind])
 			{
 				if(abs($rate) < 1e-9)
 				{
 					if($distance < .001) continue 2;
+
 					continue;
 				}
+
 				$cross = -$distance / $rate;
-				if($rate > 0 && $cross >= $enter) { $enter = $cross; $surface = $kind; }
+
+				if($rate > 0 && $cross >= $enter)
+				{
+					$enter = $cross;
+					$surface = $kind;
+				}
 				elseif($rate < 0) $exit = min($exit, $cross);
 			}
-			if($enter > $exit + 1e-7 || $exit <= $from || $enter > $to || ($nearest && $enter >= $nearest->fraction)) continue;
-			$nearest = new ProjectileImpact($surface, $enter, $pose->x + $dx * $enter,
-				$pose->y + $dy * $enter, $pose->z + $dz * $enter, $sector->index);
+
+			if($enter > $exit + 1e-7 || $exit <= $from || $enter > $to || ($nearest && $enter >= $nearest->fraction))
+			continue;
+
+			$nearest = new ProjectileImpact(
+				$surface
+				, $enter
+				, $pose->x + $dx * $enter
+				, $pose->y + $dy * $enter
+				, $pose->z + $dz * $enter
+				, $sector->index
+			);
 		}
+
 		return $nearest;
 	}
 }

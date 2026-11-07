@@ -50,15 +50,17 @@ use Phonics\Network\SimulationTick;
 		$other = $side === 'host' ? 'guest' : 'host';
 		$level = new Level($map);
 
-		$match = new DoomMatch(new MatchContext(
-			$side
-			, new PlayerSlot($slot)
-			, new PlayerSlot(3 - $slot)
-			, new PeerId($side)
-			, new PeerId($other)
-			, 'sha256-AAAA='
-			, ['settings' => ['mode' => 'deathmatch']]
-		));
+		$match = new DoomMatch(
+			new MatchContext(
+				$side
+				, new PlayerSlot($slot)
+				, new PlayerSlot(3 - $slot)
+				, new PeerId($side)
+				, new PeerId($other)
+				, 'sha256-AAAA='
+				, ['settings' => ['mode' => 'deathmatch']]
+			)
+		);
 
 		$world = $worlds[$side] = new Registry;
 		$factory->populate($world, $map, 2, true, $match);
@@ -89,7 +91,13 @@ use Phonics\Network\SimulationTick;
 
 				return json_encode($ready, JSON_THROW_ON_ERROR);
 			}
-			, static function(string $channel, int $family, int $tick, int $schema, string $json)
+			, static function(
+				string $channel
+				, int $family
+				, int $tick
+				, int $schema
+				, string $json
+			)
 			use ($side, $slot, $other, $protocol, $latency, &$queues, &$sequences, &$time): bool {
 				$packet = new Packet(
 					$channel
@@ -130,7 +138,11 @@ use Phonics\Network\SimulationTick;
 	$hooks = ['host' => null, 'guest' => null];
 
 	// The production order: sample, exchange, death timers, respawn, begin the step, move, then publish.
-	$step = static function(int $count = 1, array $held = [])
+
+	$step = static function(
+		int $count = 1
+		, array $held = []
+	)
 	use ($sessions, $worlds, $controls, $samplers, $effects, $movement, &$hooks, &$time): void {
 		for(; $count > 0; $count--, $time++)
 		foreach(['host', 'guest'] as $side)
@@ -163,6 +175,7 @@ use Phonics\Network\SimulationTick;
 	$guest = $worlds['guest'];
 	$self = $guest->get($player($guest, 2), Transform::class);
 	$copy = $host->get($player($host, 2), Transform::class);
+
 	$apart = static fn(): float => hypot(hypot($self->x - $copy->x, $self->y - $copy->y), $self->z - $copy->z);
 	$start = [$self->x, $self->y];
 
@@ -256,7 +269,10 @@ use Phonics\Network\SimulationTick;
 				[$self->x, $self->y]
 				, array_map(
 					static fn(array $thing): array => [(float)$thing['x'], (float)$thing['y']]
-					, array_filter(ActorFactory::playerStarts($map), static fn(array $thing): bool => (int)$thing['type'] === 11)
+					, array_filter(
+						ActorFactory::playerStarts($map)
+						, static fn(array $thing): bool => (int)$thing['type'] === 11
+					)
 				)
 				, true
 			)

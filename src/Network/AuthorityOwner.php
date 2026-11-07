@@ -23,7 +23,8 @@ final class AuthorityOwner implements \JsonSerializable
 		private string $kind
 		, /** Owning peer for peer authority, or null for the host. */
 		private ?PeerId $peer = null
-	) {}
+	){
+	}
 
 	/**
 	 * Create an authority assignment owned by the host.

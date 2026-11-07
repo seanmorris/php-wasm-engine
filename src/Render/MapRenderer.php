@@ -41,8 +41,7 @@ final class MapRenderer
 	public function __construct(
 		/** Loaded map whose tile and image layers will be drawn. */
 		public TileMap $map
-	)
-	{
+	){
 		$this->atlas = new Atlas($map);
 
 		$this->program = new Program(

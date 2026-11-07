@@ -53,8 +53,7 @@ final class CardRenderer
 		/** Annotated font and themed input symbols used by the cards. */
 		public BitmapFont $font
 		, ?Atlas $atlas = null
-	)
-	{
+	){
 		$this->ownsAtlas = $atlas === null;
 		$this->atlas = $atlas ?? new Atlas($font->map);
 		$this->sprites = new SpriteRenderer($this->atlas);

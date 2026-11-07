@@ -44,8 +44,7 @@ final class Menu
 		array $items = []
 		, /** Root heading rendered above the rows. */
 		public string $title = 'Menu'
-	)
-	{
+	){
 		$this->setItems($items);
 	}
 

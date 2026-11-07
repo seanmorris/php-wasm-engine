@@ -356,6 +356,7 @@ final class Collision
 		$sides = $this->level->sides($lineId, $sector);
 
 		if($sides['back'] === null) return true;
+
 		// Self-referencing control lines do not divide physical spaces. Testing
 		// their own ceiling would push a swimmer sideways while crossing a portal.
 		if($sides['front'] === $sides['back']) return false;

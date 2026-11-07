@@ -36,8 +36,7 @@ final class TextActors
 		/** Entity registry to update. */
 		private Registry $registry
 		, TileMap $map
-	)
-	{
+	){
 		foreach($map->layers as $layer)
 		{
 			if(!$layer->visible || $layer->type !== 'objectgroup')

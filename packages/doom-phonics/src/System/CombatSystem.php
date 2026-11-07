@@ -2660,9 +2660,15 @@ final class CombatSystem
 		$distance = hypot($dx, $dy);
 
 		if($distance < .001)return true;
+
 		$hit = (new ProjectileTracer($this->level, true))->trace(
-			new Transform($a->x, $a->y, $a->z + 32), new Body(0, 0), $dx, $dy, $b->z - $a->z
+			new Transform($a->x, $a->y, $a->z + 32)
+			, new Body(0, 0)
+			, $dx
+			, $dy
+			, $b->z - $a->z
 		);
+
 		if($hit && $hit->fraction < 1 - .5 / $distance) return false;
 
 		return $this->blockingDistance(

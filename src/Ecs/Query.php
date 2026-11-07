@@ -23,7 +23,8 @@ final class Query
 		public string $operation
 		, /** Component types or nested predicates to combine. */
 		public array $terms
-	) {}
+	){
+	}
 
 	/**
 	 * Build a predicate requiring every supplied term to match.

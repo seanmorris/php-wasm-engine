@@ -29,87 +29,159 @@ final class ConformingRooms
 	 * larger chambers from several convex regions. An optional invading polygon subtracts space before reserving walls.
 	 * Invalid custom dimensions are rejected; callers must also check room size.
 	 */
-	public static function radial(array $outline,array $center,int $radius=360,int $wall=128,?array $footprint=null,array $groups=[],?array $intrusion=null): array
-	{
-		if($radius<12 || $radius%12 || $wall<1 || count($center)!==2)
+	public static function radial(
+		array $outline
+		, array $center
+		, int $radius = 360
+		, int $wall = 128
+		, ?array $footprint = null
+		, array $groups = []
+		, ?array $intrusion = null
+	): array {
+		if($radius < 12 || $radius % 12 || $wall < 1 || count($center) !== 2)
 		throw new \InvalidArgumentException('Radial rooms need a positive wall and a radius divisible by 12');
-		[$x,$y]=$center;
-		foreach($center as $v) if($v!== (int)$v) throw new \InvalidArgumentException('Room center must use integer coordinates');
-		foreach($outline as $p) foreach([0,1] as $axis)
-		if(abs(($p[$axis]-$center[$axis])/6-round(($p[$axis]-$center[$axis])/6))>1e-6)
+
+		[$x,$y] = $center;
+
+		foreach($center as $v)
+		if($v !== (int)$v)
+		throw new \InvalidArgumentException('Room center must use integer coordinates');
+
+		foreach($outline as $p)
+		foreach([0,1] as $axis)
+		if(abs(($p[$axis] - $center[$axis]) / 6 - round(($p[$axis] - $center[$axis]) / 6)) > 1e-6)
 		throw new \InvalidArgumentException('Radial footprint must use the six-unit grid relative to its center');
-		$half=intdiv($radius,2);
-		$vertices=[[-$half,-$radius],[-$radius,-$half],[-$radius,$half],[-$half,$radius],
-			[$half,$radius],[$radius,$half],[$radius,-$half],[$half,-$radius]];
-		$core=$outline; $faces=[];
-		foreach($vertices as $i=>$a) {
-			$b=$vertices[($i+1)%8]; $nx=-($b[1]-$a[1])/$half; $ny=($b[0]-$a[0])/$half;
-			$d=$nx*($x+$a[0])+$ny*($y+$a[1]); $faces[]=[$nx,$ny,$d];
-			$core=PolygonGeometry::clip($core,$nx,$ny,$d);
+		$half = intdiv($radius, 2);
+		$vertices = [
+			[-$half,-$radius]
+			, [-$radius,-$half]
+			, [-$radius,$half]
+			, [-$half,$radius]
+			, [$half,$radius],[$radius,$half],[$radius,-$half],[$half,-$radius]
+		];
+
+		$core = $outline;
+		$faces = [];
+
+		foreach($vertices as $i => $a)
+		{
+			$b = $vertices[($i + 1) % 8];
+			$nx = -($b[1] - $a[1]) / $half;
+			$ny = ($b[0] - $a[0]) / $half;
+			$d = $nx * ($x + $a[0]) + $ny * ($y + $a[1]);
+			$faces[] = [$nx,$ny,$d];
+			$core = PolygonGeometry::clip($core, $nx, $ny, $d);
 		}
-		$partitions=[$core];
-		foreach($vertices as $i=>$a) {
-			$b=$vertices[($i+1)%8]; [$nx,$ny,$d]=$faces[$i];
-			$p=PolygonGeometry::clip($outline,-$nx,-$ny,-$d);
-			foreach([[-$a[1],$a[0]],[$b[1],-$b[0]]] as [$nx,$ny]) {
-				$nx/=$half; $ny/=$half;
-				$p=PolygonGeometry::clip($p,$nx,$ny,$nx*$x+$ny*$y);
+
+		$partitions = [$core];
+
+		foreach($vertices as $i => $a)
+		{
+			$b = $vertices[($i + 1) % 8];
+			[$nx,$ny,$d] = $faces[$i];
+			$p = PolygonGeometry::clip($outline, -$nx, -$ny, -$d);
+
+			foreach([[-$a[1],$a[0]],[$b[1],-$b[0]]] as [$nx,$ny])
+			{
+				$nx /= $half;
+				$ny /= $half;
+				$p = PolygonGeometry::clip($p, $nx, $ny, $nx * $x + $ny * $y);
 			}
-			$partitions[]=$p;
+
+			$partitions[] = $p;
 		}
-		if($footprint!==null) foreach($partitions as &$partition) {
-			$pieces=[];
-			foreach($footprint as $piece) {
-				$intersection=PolygonGeometry::intersect($partition,$piece);
-				if($intersection) $pieces[]=$intersection;
+
+		if($footprint !== null)
+		foreach($partitions as &$partition)
+		{
+			$pieces = [];
+
+			foreach($footprint as $piece)
+			{
+				$intersection = PolygonGeometry::intersect($partition, $piece);
+
+				if($intersection) $pieces[] = $intersection;
 			}
-			$pieces=PolygonGeometry::mergeConvex($pieces);
-			if(count($pieces)!==1) throw new \LogicException('Outline partition must remain a connected convex room');
-			$partition=$pieces[0];
+
+			$pieces = PolygonGeometry::mergeConvex($pieces);
+
+			if(count($pieces) !== 1) throw new \LogicException('Outline partition must remain a connected convex room');
+
+			$partition = $pieces[0];
 		}
+
 		unset($partition);
 
-		$owners=$groups ?: array_keys($partitions);
-		if($intrusion!==null) {
-			$cut=RoomIntrusion::partition($partitions,$owners,$intrusion,$footprint);
-			$partitions=$cut['partitions']; $owners=$cut['owners'];
+		$owners = $groups ?: array_keys($partitions);
+
+		if($intrusion !== null)
+		{
+			$cut = RoomIntrusion::partition($partitions, $owners, $intrusion, $footprint);
+			$partitions = $cut['partitions'];
+			$owners = $cut['owners'];
 		}
-		return self::offset($partitions,$owners,$wall,$intrusion!==null);
+
+		return self::offset($partitions, $owners, $wall, $intrusion !== null);
 	}
 
 	/** Offset shared room boundaries while keeping convex decomposition seams open. */
-	public static function offset(array $partitions,array $owners,int $wall,bool $allowEmpty=false): array
+	public static function offset(array $partitions, array $owners, int $wall, bool $allowEmpty = false): array
 	{
-		$byOwner=[];
-		foreach($partitions as $i=>$p) $byOwner[$owners[$i]][]=$p;
-		$partitions=$owners=[];
-		foreach($byOwner as $owner=>$pieces)
-		foreach(PolygonGeometry::mergeConvex($pieces) as $p) { $partitions[]=$p; $owners[]=$owner; }
+		$byOwner = [];
 
-		$rooms=$planes=[];
-		foreach($partitions as $i=>$p) {
-			$planes[$i]=[];
-			foreach($partitions as $j=>$q) {
-				if($i===$j || ($owners[$i]===$owners[$j]) || !($edge=PolygonGeometry::shared($p,$q))) continue;
-				[$a,$b]=$edge; $nx=(int)round(-($b[1]-$a[1])); $ny=(int)round($b[0]-$a[0]);
-				$g=self::gcd(abs($nx),abs($ny)); $nx=intdiv($nx,$g); $ny=intdiv($ny,$g);
-				$n2=$nx*$nx+$ny*$ny; $grid=intdiv(6*$n2,self::gcd(6,$n2));
-				$inset=ceil($wall/2*hypot($nx,$ny)/$grid)*$grid;
-				$planes[$i][$j]=[$nx,$ny,$nx*$a[0]+$ny*$a[1],$inset];
-			}
-			$room=$p;
-			foreach($planes[$i] as [$nx,$ny,$d,$inset]) $room=PolygonGeometry::clip($room,$nx,$ny,$d-$inset);
-			if(!$room && !$allowEmpty) throw new \InvalidArgumentException('Wall offsets consume a room');
-			foreach($room as $v) foreach($v as $coordinate)
-			if(abs($coordinate-round($coordinate))>1e-6) throw new \LogicException('Radial wall intersection left the integer grid');
-			$rooms[]=$room;
+		foreach($partitions as $i => $p) $byOwner[$owners[$i]][] = $p;
+		$partitions = $owners = [];
+
+		foreach($byOwner as $owner => $pieces)
+		foreach(PolygonGeometry::mergeConvex($pieces) as $p)
+		{
+			$partitions[] = $p;
+			$owners[] = $owner;
 		}
-		return compact('rooms','partitions','planes','owners');
+
+		$rooms = $planes = [];
+
+		foreach($partitions as $i => $p)
+		{
+			$planes[$i] = [];
+
+			foreach($partitions as $j => $q)
+			{
+				if($i === $j || ($owners[$i] === $owners[$j]) || !($edge = PolygonGeometry::shared($p, $q))) continue;
+
+				[$a,$b] = $edge;
+				$nx = (int)round(-($b[1] - $a[1]));
+				$ny = (int)round($b[0] - $a[0]);
+				$g = self::gcd(abs($nx), abs($ny));
+				$nx = intdiv($nx, $g);
+				$ny = intdiv($ny, $g);
+				$n2 = $nx * $nx + $ny * $ny;
+				$grid = intdiv(6 * $n2, self::gcd(6, $n2));
+				$inset = ceil($wall / 2 * hypot($nx, $ny) / $grid) * $grid;
+				$planes[$i][$j] = [$nx,$ny,$nx * $a[0] + $ny * $a[1],$inset];
+			}
+
+			$room = $p;
+
+			foreach($planes[$i] as [$nx,$ny,$d,$inset]) $room = PolygonGeometry::clip($room, $nx, $ny, $d - $inset);
+
+			if(!$room && !$allowEmpty) throw new \InvalidArgumentException('Wall offsets consume a room');
+
+			foreach($room as $v)
+			foreach($v as $coordinate)
+			if(abs($coordinate - round($coordinate)) > 1e-6)
+			throw new \LogicException('Radial wall intersection left the integer grid');
+			$rooms[] = $room;
+		}
+
+		return compact('rooms', 'partitions', 'planes', 'owners');
 	}
 
 	/** Reduce grid directions and compute common offset increments exactly. */
-	private static function gcd(int $a,int $b): int
+	private static function gcd(int $a, int $b): int
 	{
-		while($b) [$a,$b]=[$b,$a%$b]; return max(1,$a);
+		while($b) [$a,$b] = [$b,$a % $b];
+
+		return max(1, $a);
 	}
 }

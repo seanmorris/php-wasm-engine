@@ -40,8 +40,7 @@ final class PauseMenu
 		, /** Application-defined root page and bindings. */
 		public Menu $menu
 		, BitmapFont $font
-	)
-	{
+	){
 		$this->renderer = new MenuRenderer($font);
 
 		$this->controls = new MenuInput(

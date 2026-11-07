@@ -28,7 +28,8 @@ final class FramePipeline
 	public function __construct(
 		/** Device exposing ready(), begin(), present(), and generation. */
 		public object $device
-	) {}
+	){
+	}
 
 	/**
 	 * Add a uniquely named pass.

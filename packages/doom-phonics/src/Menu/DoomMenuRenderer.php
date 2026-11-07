@@ -426,7 +426,18 @@ final class DoomMenuRenderer
 		{
 			$y = 42 + $index * 14;
 			$this->text($renderer, $patches, $action, self::COMPACT_ROW_TEXT_X, $y + 3, .75);
-			$this->buttonHint($renderer, $hints, $keyboard, 'keyboard', 108, $y, self::READ_THIS_KEYBOARD_RIGHT - 108, 15, .53);
+
+			$this->buttonHint(
+				$renderer
+				, $hints
+				, $keyboard
+				, 'keyboard'
+				, 108
+				, $y
+				, self::READ_THIS_KEYBOARD_RIGHT - 108
+				, 15
+				, .53
+			);
 
 			$this->buttonHint(
 				$renderer

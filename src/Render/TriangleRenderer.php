@@ -28,8 +28,7 @@ final class TriangleRenderer
 	public function __construct(
 		/** Keep the shader bound between draws when this renderer owns the pass. */
 		private bool $exclusive = false
-	)
-	{
+	){
 		$this->program = new Program(
 			file_get_contents(dirname(__DIR__, 2) . '/shaders/triangles.vert')
 			, file_get_contents(dirname(__DIR__, 2) . '/shaders/triangles.frag')

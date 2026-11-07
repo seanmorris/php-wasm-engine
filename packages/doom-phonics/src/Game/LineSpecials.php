@@ -197,8 +197,13 @@ final class LineSpecials
 	 * @param bool $portalsOnly Only pass through wall portals, as a replayed step does: its triggers already fired.
 	 * @return int Number of lines crossed or triggered.
 	 */
-	public function cross(float $fromX, float $fromY, Transform $actor, PlayerState $player, bool $portalsOnly = false): int
-	{
+	public function cross(
+		float $fromX
+		, float $fromY
+		, Transform $actor
+		, PlayerState $player
+		, bool $portalsOnly = false
+	): int {
 		$hits = [];
 
 		foreach($this->level->spatial->near(
@@ -387,6 +392,7 @@ final class LineSpecials
 			foreach($this->level->tags[$tag] ?? [] as $sectorId)
 			{
 				if($speed <= 0 || $this->level->sectors[$sectorId]->ceiling === (float)$target) continue;
+
 				$activated = $this->startMover(SectorMover::ceiling($sectorId, $target, $speed * 35 / 8)) || $activated;
 			}
 		}

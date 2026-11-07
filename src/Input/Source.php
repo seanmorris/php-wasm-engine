@@ -64,8 +64,7 @@ final class Source implements \JsonSerializable
 		public readonly int $code
 		, /** Axis direction, or one for buttons. */
 		public readonly int $sign = 1
-	)
-	{
+	){
 		$valid = match($kind)
 		{
 			self::KEY => $code > 0 && $code <= 0x7FFFFFFF,

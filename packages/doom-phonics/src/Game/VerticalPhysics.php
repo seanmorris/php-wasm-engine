@@ -32,6 +32,7 @@ final class VerticalPhysics
 		$floor = $sector->supportZ($pose->x, $pose->y, $pose->z, $body->grounded ? $this->maxStep : 0);
 		$ceiling = $sector->headroomZ($pose->x, $pose->y, max($floor, $pose->z));
 		$water = $this->level->waterSurface($pose->x, $pose->y, $pose->z, $body->height);
+
 		if($water !== null)
 		{
 			// Buoyancy and drag replace the dry initial-fall impulse. Movement supplies
@@ -39,6 +40,7 @@ final class VerticalPhysics
 			$gravityScale *= .08;
 			$velocity->z *= pow(.8, max(0, $dt) * 35);
 		}
+
 		$floorPortal = $this->level->cameraPortalForPlane($sector->index, 0)?->link;
 		$ceilingPortal = $this->level->cameraPortalForPlane($sector->index, 1)?->link;
 		// A portal replaces only the sector's own plane. A solid 3D floor may

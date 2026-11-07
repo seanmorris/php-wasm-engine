@@ -78,8 +78,7 @@ final class MenuRenderer
 	public function __construct(
 		/** Annotated font and themed symbol metadata. */
 		public BitmapFont $font
-	)
-	{
+	){
 		$this->atlas = new Atlas($font->map);
 		$this->sprites = new SpriteRenderer($this->atlas);
 		$this->rects = new RectRenderer;

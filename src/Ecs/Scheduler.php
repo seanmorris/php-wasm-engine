@@ -26,7 +26,8 @@ final class Scheduler
 	public function __construct(
 		/** Registry passed to systems and flushed after each update. */
 		public Registry $registry
-	) {}
+	){
+	}
 
 	/**
 	 * Register or replace a named system and invalidate the dependency order.

@@ -178,6 +178,7 @@ final class EpisodeSystems implements SystemSet
 		$playerEffects = new PlayerEffectSystem;
 		$statusFaces = new StatusFaceSystem($this->controls($scope));
 		$commands = new PlayerCommandSystem($this->controls($scope));
+
 		// A guest replays its own unacknowledged movement over each host result, so host pushes and blocks reach it.
 		$network = $match
 			? new EpisodeNetworkSystem(

@@ -344,6 +344,7 @@ final class GlesMapRenderer
 
 		glBindTexture(GL_TEXTURE_2D, $this->textures[3]);
 		$this->sectorBytes = $this->sectorData();
+
 		glTexImage2D(
 			GL_TEXTURE_2D
 			, 0
@@ -927,14 +928,19 @@ final class GlesMapRenderer
 		$viewSector = $this->level->sectors[$cameraSector];
 		$region = $viewSector->heightTransfer?->region($x, $y, $z + 41, $alpha) ?? 0;
 		$blend = $viewBlend ?? $this->viewBlend($x, $y, $z + 41, $cameraSector, $alpha);
+
 		foreach([$this->program,$this->spriteProgram,$this->skyProgram,$this->beamProgram] as $program)
 		{
 			$program->use();
 			glUniform4f($program->location('viewBlend'), ...$blend);
 		}
+
 		$this->volumeView = [$x,$y,$z + 41,$alpha];
-		$meshUpdates = [...$this->mesh->sync($this->level, $this->atlas),
-			...$this->mesh->syncTransfers($this->level, $this->atlas, $region)];
+		$meshUpdates = [
+			...$this->mesh->sync($this->level, $this->atlas)
+			, ...$this->mesh->syncTransfers($this->level, $this->atlas, $region)
+		];
+
 		$materials = hrtime(true);
 
 		if($meshUpdates)
@@ -1002,9 +1008,10 @@ final class GlesMapRenderer
 	private function viewBlend(float $x, float $y, float $eye, int $sector, float $alpha): array
 	{
 		$transfer = $this->level->sectors[$sector]->heightTransfer;
+
 		if($transfer) return $transfer->blend($transfer->region($x, $y, $eye, $alpha));
-		return $this->level->waterSurface($x, $y, $eye, .01) !== null
-			? [0.0,.31,.65,.35] : [0.0,0.0,0.0,0.0];
+
+		return $this->level->waterSurface($x, $y, $eye, .01) !== null ? [0.0,.31,.65,.35] : [0.0,0.0,0.0,0.0];
 	}
 
 	/** Render visible portal cameras, including bounded views through another portal. */
@@ -1035,8 +1042,15 @@ final class GlesMapRenderer
 
 		$width = $this->viewport->sceneWidth;
 		$height = $this->viewport->sceneHeight;
-		$blend = $this->viewBlend($x, $y, $z + PlayerState::VIEW_HEIGHT,
-			$cameraSector ?? $this->level->map->sectorAt($x, $y), $alpha);
+
+		$blend = $this->viewBlend(
+			$x
+			, $y
+			, $z + PlayerState::VIEW_HEIGHT
+			, $cameraSector ?? $this->level->map->sectorAt($x, $y)
+			, $alpha
+		);
+
 		$this->renderDomTextureViews();
 		$this->renderCameraTextureViews($registry, $viewEntity, $extraLight, $alpha);
 		$this->renderMirrorViews($registry, $x, $y, $z, $angle, $pitch, $extraLight, $alpha, $blend);
@@ -1273,6 +1287,7 @@ final class GlesMapRenderer
 					, $pitch
 					, $alpha
 				);
+
 				$this->renderTranslucentVolumes();
 			}
 			finally
@@ -1456,6 +1471,7 @@ final class GlesMapRenderer
 				, $alpha
 				, $nearPlane
 			);
+
 			$this->renderTranslucentVolumes();
 		}
 		finally
@@ -2164,6 +2180,7 @@ final class GlesMapRenderer
 	{
 		$values = $floors = $ceilings = [];
 		$alpha = max(0, min(1, $alpha));
+
 		foreach($this->level->sectors as $sector)
 		{
 			$view = $sector->heightTransfer?->view($sector, $region);
@@ -2178,13 +2195,17 @@ final class GlesMapRenderer
 			array_push($ceilings, ...$ceiling[0]->{$ceiling[1] ? 'ceilingSlope' : 'floorSlope'});
 			$ceilings[] = (float)($sector->ceilingLightSource ?? $sector->index);
 		}
-		return $values ? pack('f*', ...$values,...$floors,...$ceilings) : pack('f*', 0,128,255,0,0,0,0,0,0,0,0,0);
+
+		return $values
+			? pack('f*', ...$values, ...$floors, ...$ceilings)
+			: pack('f*', 0, 128, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 	}
 
 	/** Composite translucent water after world actors, in the currently configured view. */
 	public function renderTranslucentVolumes(): void
 	{
 		if($this->closed || !$this->mesh->volumeSpans) return;
+
 		$this->bindTextures();
 		$this->program->use();
 		glEnable(GL_DEPTH_TEST);
@@ -2198,20 +2219,26 @@ final class GlesMapRenderer
 	private function drawVolumes(bool $transparent): void
 	{
 		$batches = VolumeDrawList::build($this->mesh, $this->level, $this->volumeView, $transparent);
+
 		if(!$batches) return;
+
 		$indices = [];
+
 		foreach($batches as $batch) array_push($indices, ...$batch['indices']);
 		$bytes = pack('V*', ...$indices);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, $this->buffers[$transparent ? 9 : 8]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STREAM_DRAW);
+
 		if($transparent)
 		{
 			glEnable(GL_BLEND);
 			glDepthMask(false);
 		}
+
 		$offset = 0;
 		// A projected liquid exactly on an open plane owns that seam's surface.
 		glDepthFunc(GL_LEQUAL);
+
 		foreach($batches as $batch)
 		{
 			glUniform1f($this->program->location('surfaceAlpha'), $batch['opacity']);
@@ -2219,11 +2246,14 @@ final class GlesMapRenderer
 			glUniform1i($this->program->location('clipSectorBounds'), (int)$batch['clipBounds']);
 			glUniform1i($this->program->location('volumeProjected'), (int)$batch['projected']);
 			glUniform1f($this->program->location('volumeHeightOffset'), $batch['heightOffset']);
+
 			if($transparent) glBlendFunc(GL_SRC_ALPHA, $batch['additive'] ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA);
+
 			$count = count($batch['indices']);
 			glDrawElements(GL_TRIANGLES, $count, GL_UNSIGNED_INT, $offset);
 			$offset += $count * 4;
 		}
+
 		glUniform1f($this->program->location('surfaceAlpha'), 1);
 		glUniform1i($this->program->location('surfaceLight'), -1);
 		glUniform1i($this->program->location('clipSectorBounds'), 0);

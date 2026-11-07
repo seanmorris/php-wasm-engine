@@ -22,7 +22,9 @@ final class Bindings implements \JsonSerializable
 	public function __construct(
 		/** Actions, signed directions and physical alternatives. */
 		private array $defaults
-	) { $this->bindings = $defaults; }
+	){
+		$this->bindings = $defaults;
+	}
 
 	/**
 	 * Read the sources for one direction and optionally one device group.

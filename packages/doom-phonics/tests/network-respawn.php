@@ -63,7 +63,13 @@ use Phonics\Network\SimulationTick;
 			static function(int $limit) use ($side, &$queues): string {
 				return json_encode(array_splice($queues[$side], 0, $limit), JSON_THROW_ON_ERROR);
 			}
-			, static function(string $channel, int $family, int $tick, int $schema, string $json)
+			, static function(
+				string $channel
+				, int $family
+				, int $tick
+				, int $schema
+				, string $json
+			)
 			use ($side, $slot, $other, $protocol, &$queues, &$sequences): bool {
 				$packet = new Packet(
 					$channel
@@ -91,14 +97,21 @@ use Phonics\Network\SimulationTick;
 	// Each peer runs the production order: sample its own devices, exchange packets, advance death timers, respawn,
 	// then release dead players' commands as CombatSystem does, and send.
 	$controls = ['host' => new Controls, 'guest' => new Controls];
-	$samplers = ['host' => new PlayerCommandSystem($controls['host']), 'guest' => new PlayerCommandSystem($controls['guest'])];
+	$samplers = [
+		'host' => new PlayerCommandSystem($controls['host'])
+		, 'guest' => new PlayerCommandSystem($controls['guest'])
+	];
+
 	$effects = new PlayerEffectSystem;
 
 	foreach($worlds as $world)
 	foreach($world->query(NetworkPlayer::class) as $entity)
 	if(!$world->has($entity, ViewInput::class)) $world->add($entity, new ViewInput);
 
-	$step = static function(int $count = 1, array $held = []) use ($sessions, $worlds, $controls, $samplers, $effects): void {
+	$step = static function(
+		int $count = 1
+		, array $held = []
+	) use ($sessions, $worlds, $controls, $samplers, $effects): void {
 		for(; $count > 0; $count--)
 		foreach(['host', 'guest'] as $side)
 		{
@@ -157,7 +170,13 @@ use Phonics\Network\SimulationTick;
 	$step(2, $fire);
 
 	verifyWad(
-		$guest->get($self, HitPoints::class)->current === 0 && $guest->get($self, PlayerState::class)->deathTime !== null
+		$guest->get(
+			$self
+			, HitPoints::class
+		)->current === 0 && $guest->get(
+			$self
+			, PlayerState::class
+		)->deathTime !== null
 		, 'the guest learns of its death from the host-owned health and player state'
 	);
 
@@ -168,8 +187,12 @@ use Phonics\Network\SimulationTick;
 
 	// Fire held from before the death, through the delay, is not a respawn press.
 	$step(40, $fire);
+
 	verifyWad(
-		$host->get($hostCopy, PlayerState::class)->canRestart() && $host->get($hostCopy, HitPoints::class)->current === 0
+		$host->get(
+			$hostCopy
+			, PlayerState::class
+		)->canRestart() && $host->get($hostCopy, HitPoints::class)->current === 0
 		, 'Fire held through the death and an earlier Use do not respawn'
 	);
 

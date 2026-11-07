@@ -148,16 +148,22 @@ final class SectorEffectSystem
 			$special = $this->special($sector->special);
 
 			$onFloor = abs($pose->z - $sector->floorZ($pose->x, $pose->y)) <= .1;
+
 			if(!$onFloor) $special = 0;
+
 			$height = $registry->has($entity, Body::class) ? $registry->get($entity, Body::class)->height : 56;
+
 			foreach($sector->volumes as $volume)
 			{
 				$touches = $volume->solid()
 					? abs($pose->z - $volume->top($pose->x, $pose->y)) <= .1
 					: $volume->overlaps($pose->x, $pose->y, $pose->z, $height);
+
 				$modelSpecial = $this->special($volume->model->special);
+
 				if($touches && in_array($modelSpecial, [5,7,16], true)) $special = $modelSpecial;
 			}
+
 			if(!$onFloor && !$special) continue;
 
 			if($special === 9)

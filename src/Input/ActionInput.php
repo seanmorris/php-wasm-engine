@@ -24,7 +24,8 @@ final class ActionInput
 	public function __construct(
 		/** Editable action bindings. */
 		public Bindings $bindings
-	) {}
+	){
+	}
 
 	/**
 	 * Clear transient capture candidates at the start of an event poll.

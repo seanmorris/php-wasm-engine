@@ -31,7 +31,8 @@ final class ActorStateSystem
 		foreach($registry->query(ActorState::class) as $entity)
 		{
 			// Replicas must not dispatch explosion damage, AI, or attacks, or advance beyond the host's state.
-			if($registry->has($entity, RemoteProjectile::class) || $registry->has($entity, RemoteActor::class)) continue;
+			if($registry->has($entity, RemoteProjectile::class) || $registry->has($entity, RemoteActor::class))
+			continue;
 
 			$seen[$entity] = true;
 			$state = $this->cache[$entity] ??= $registry->get($entity, ActorState::class);

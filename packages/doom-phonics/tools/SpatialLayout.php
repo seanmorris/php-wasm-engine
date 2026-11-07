@@ -17,37 +17,55 @@ final class SpatialLayout
 	{
 		if(!isset($layers[$root]) || count($origin) !== 3)
 		throw new \InvalidArgumentException('A layout needs a known root and a three-coordinate origin');
+
 		$positions = [$root => $origin];
+
 		foreach($pins as [$from,$fromAnchor,$to,$toAnchor])
 		{
 			$a = $layers[$from]['anchors'][$fromAnchor] ?? null;
 			$b = $layers[$to]['anchors'][$toAnchor] ?? null;
+
 			if(!$a || !$b || $a['size'] !== $b['size']
-				|| $a['normal'] !== array_map(static fn($n) => -$n, $b['normal']))
+				|| $a['normal'] !== array_map(static fn($n) => -$n, $b['normal'])
+			)
 			throw new \InvalidArgumentException("Incompatible entrance frames: $from/$fromAnchor -> $to/$toAnchor");
 		}
+
 		do
 		{
 			$changed = false;
+
 			foreach($pins as [$from,$fromAnchor,$to,$toAnchor])
 			{
 				if(!isset($positions[$from]) && isset($positions[$to]))
-				{ [$from,$fromAnchor,$to,$toAnchor] = [$to,$toAnchor,$from,$fromAnchor]; }
+				{
+					[$from,$fromAnchor,$to,$toAnchor] = [$to,$toAnchor,$from,$fromAnchor];
+				}
+
 				if(!isset($positions[$from])) continue;
+
 				$a = $layers[$from]['anchors'][$fromAnchor]['point'];
 				$b = $layers[$to]['anchors'][$toAnchor]['point'];
 				$expected = [];
+
 				for($axis = 0; $axis < 3; $axis++)
 				$expected[] = $positions[$from][$axis] + $a[$axis] - $b[$axis];
+
 				if(isset($positions[$to]))
 				{
 					if($positions[$to] !== $expected)
 					throw new \RuntimeException("Inconsistent spatial pin cycle at $to/$toAnchor");
 				}
-				else { $positions[$to] = $expected; $changed = true; }
+				else
+				{
+					$positions[$to] = $expected;
+					$changed = true;
+				}
 			}
 		} while($changed);
+
 		if(count($positions) !== count($layers)) throw new \RuntimeException('Unpinned layer in spatial layout');
+
 		return $positions;
 	}
 

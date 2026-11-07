@@ -25,5 +25,6 @@ final class SpriteLayers
 		public array $behind = []
 		, /** Planes painted in front of the optional anchor. */
 		public array $front = []
-	) {}
+	){
+	}
 }

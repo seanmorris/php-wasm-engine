@@ -57,7 +57,9 @@ final class PlayerRespawn
 	public static function spot(Level $level, MultiplayerMode $mode, PlayerSlot $slot, array $occupied): array
 	{
 		$starts = ActorFactory::playerStarts($level->map);
+
 		$type = static fn(array $thing): int => (int)($thing['type'] ?? 0);
+
 		$of = static fn(callable $test): array => array_values(array_filter($starts, $test));
 		$deathmatch = $of(static fn(array $thing): bool => $type($thing) === 11);
 		$teams = $of(static fn(array $thing): bool => in_array($type($thing), [5080,5081,5082], true));
@@ -65,18 +67,22 @@ final class PlayerRespawn
 		$candidates = $mode->cooperative()
 			? [
 				...$of(static fn(array $thing): bool => $type($thing) === $slot->value())
-				, ...$of(static fn(array $thing): bool => $type($thing) >= 1 && $type($thing) <= 4
-					&& $type($thing) !== $slot->value())
+				, ...$of(
+					static fn(array $thing): bool => $type($thing) >= 1 && $type($thing) <= 4 && $type($thing) !== $slot
+						->value()
+				)
 				, ...$deathmatch
 			]
 			: ($deathmatch ?: ($teams ?: $starts));
 
 		if(!$candidates) throw new \UnexpectedValueException("Map {$level->map->name} has no start to respawn at");
 
-		$clear = array_values(array_filter(
-			$candidates
-			, static fn(array $thing): bool => self::distance($thing, $occupied) >= self::CLEARANCE
-		));
+		$clear = array_values(
+			array_filter(
+				$candidates
+				, static fn(array $thing): bool => self::distance($thing, $occupied) >= self::CLEARANCE
+			)
+		);
 
 		if($mode->cooperative()) $thing = $clear[0] ?? $candidates[0];
 		elseif($clear) $thing = $clear[random_int(0, count($clear) - 1)];
@@ -153,7 +159,8 @@ final class PlayerRespawn
 	{
 		$nearest = INF;
 
-		foreach($occupied as [$x, $y]) $nearest = min($nearest, hypot((float)$thing['x'] - $x, (float)$thing['y'] - $y));
+		foreach($occupied as [$x, $y])
+		$nearest = min($nearest, hypot((float)$thing['x'] - $x, (float)$thing['y'] - $y));
 
 		return $nearest;
 	}

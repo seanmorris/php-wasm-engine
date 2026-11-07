@@ -217,18 +217,21 @@ final class EpisodeNetworkSystem
 			$health->current = $health->maximum;
 			$registry->add($entity, PlayerRespawn::reborn($registry->get($entity, PlayerState::class)));
 
-			$this->session->emit(new ReliableEvent(
-				'respawn:' . $slot->value() . ':' . ++$this->respawns
-				, $this->session->tick()
-				, 'doom.respawn'
-				, ['slot' => $slot->value()] + $spot
-			));
+			$this->session->emit(
+				new ReliableEvent(
+					'respawn:' . $slot->value() . ':' . ++$this->respawns
+					, $this->session->tick()
+					, 'doom.respawn'
+					, ['slot' => $slot->value()] + $spot
+				)
+			);
 		}
 	}
 
 	public function close(): void
 	{
 		if($this->match->replication === $this) $this->match->replication = null;
+
 		$this->session->clear();
 	}
 
@@ -236,15 +239,21 @@ final class EpisodeNetworkSystem
 	public function recover(string $id, bool $connected): bool
 	{
 		$this->session->beginRecovery($id);
+
 		foreach($this->world->query(PlayerCommand::class) as $entity)
 		{
 			$command = $this->world->get($entity, PlayerCommand::class);
 			$command->apply(['pitch' => $command->pitch]);
+
 			if($this->world->has($entity, ViewInput::class)) $this->world->get($entity, ViewInput::class)->release();
 		}
+
 		$complete = $this->session->recover($connected);
+
 		if($complete)
-		foreach($this->world->query(Transform::class) as $entity) $this->world->get($entity, Transform::class)->beginStep();
+		foreach($this->world->query(Transform::class) as $entity)
+		$this->world->get($entity, Transform::class)->beginStep();
+
 		return $complete;
 	}
 
@@ -569,8 +578,9 @@ final class EpisodeNetworkSystem
 		$entity = $this->player($this->match->network->localSlot);
 		$correction = $this->session->correction($entity);
 
-		if($correction && $this->replay && $this->alive($registry, $entity) && $this->confirmed($correction->acknowledged->value()))
-		{
+		if($correction && $this->replay && $this->alive($registry, $entity) && $this->confirmed(
+			$correction->acknowledged->value()
+		)){
 			$authority = $correction->component(Transform::class);
 			$motion = $correction->component(Velocity::class);
 			$steps = [];
@@ -591,7 +601,8 @@ final class EpisodeNetworkSystem
 				$steps[] = ['actions' => $command->actions(), 'angle' => $this->headings[$sequence]];
 			}
 
-			if($authority && $motion && $steps !== null) $this->correct($registry, $entity, $authority, $motion, $steps, $dt);
+			if($authority && $motion && $steps !== null)
+			$this->correct($registry, $entity, $authority, $motion, $steps, $dt);
 		}
 
 		$pose = $registry->get($entity, Transform::class);
@@ -623,7 +634,11 @@ final class EpisodeNetworkSystem
 		($this->replay)($registry, $entity, $steps, $dt);
 		$corrected = [$pose->x, $pose->y, $pose->z];
 		[$pose->x, $pose->y, $pose->z] = $predicted;
-		$error = hypot(hypot($corrected[0] - $predicted[0], $corrected[1] - $predicted[1]), $corrected[2] - $predicted[2]);
+
+		$error = hypot(
+			hypot($corrected[0] - $predicted[0], $corrected[1] - $predicted[1])
+			, $corrected[2] - $predicted[2]
+		);
 
 		if($error < 1 / 64) return;
 
@@ -687,7 +702,11 @@ final class EpisodeNetworkSystem
 		{
 			if(!$registry->has($entity, Body::class) || !$registry->has($entity, ActorState::class)) continue;
 
-			$alive = !$registry->has($entity, HitPoints::class) || $registry->get($entity, HitPoints::class)->current > 0;
+			$alive = !$registry->has(
+				$entity
+				, HitPoints::class
+			) || $registry->get($entity, HitPoints::class)->current > 0;
+
 			$definition = $registry->get($entity, ActorState::class)->definition;
 			$body = $registry->get($entity, Body::class);
 			$body->solid = $alive && $definition->hasFlag('SOLID');
@@ -706,7 +725,8 @@ final class EpisodeNetworkSystem
 
 		$damage = $before - $health->current;
 
-		if($registry->has($entity, ViewEffects::class)) $registry->get($entity, ViewEffects::class)->recordDamage($damage);
+		if($registry->has($entity, ViewEffects::class))
+		$registry->get($entity, ViewEffects::class)->recordDamage($damage);
 
 		if($registry->has($entity, StatusFace::class))
 		$registry->get($entity, StatusFace::class)->recordDamage($damage, FaceDirection::front());

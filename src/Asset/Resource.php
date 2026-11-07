@@ -66,14 +66,19 @@ final class Resource
 	public static function native(string $source): string
 	{
 		$local = self::local($source);
+
 		if(!str_starts_with($local, 'phar://')) return $local;
+
 		$resolve = function_exists('vrzno_env') ? vrzno_env('resourceNativePath') : null;
 		$target = is_callable($resolve) ? $resolve($source) : sys_get_temp_dir() . '/phonics-' . hash('sha256', $local);
+
 		if(!is_file($target))
 		{
 			if(!is_dir(dirname($target))) mkdir(dirname($target), 0777, true);
+
 			if(!copy($local, $target)) throw new \RuntimeException("Cannot materialize $source");
 		}
+
 		return $target;
 	}
 
@@ -112,8 +117,11 @@ final class Resource
 
 		// parse_url rejects hostless phar:/// paths. A temporary authority preserves RFC resolution.
 		$archive = str_starts_with($base, 'phar:///');
+
 		if($archive) $base = 'phar://phonics.local/' . substr($base, 8);
+
 		if(str_starts_with($reference, 'phar:///')) return $reference;
+
 		$b = parse_url($base);
 		$r = parse_url($reference);
 
