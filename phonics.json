@@ -405,7 +405,7 @@
     "browser/network/Values.mjs": "sha256-zvnjOaKivpcUDNZK+eDGgtE1C78cjjb6PgOpaNK8tCQ=",
     "browser/network/WebRtcTransport.mjs": "sha256-LHBs8orUyFF9LaNssvcf71aSGsOWjVZVKfp6yrWa5tg=",
     "browser/random/RandomStream.mjs": "sha256-QaXCVcDDpXwzs0JWtvPynBHk5nH9QsBnSEY7PyGbdQo=",
-    "browser/ui/LobbyKit.mjs": "sha256-++t7bby2e1SoKxyxOjazSwt6YjE3kv4TgrSdWFj02Vk=",
+    "browser/ui/LobbyKit.mjs": "sha256-B0KdkQJT/Usl79ufGgTWiFRp6It0s6Uz46oi8xZXWcI=",
     "shaders/backdrop-twist.frag": "sha256-Vu3sFYRbz/HP1S9m88CkDtjKFrSZuSxwFvLaciJAjO8=",
     "shaders/backdrop-twist.vert": "sha256-cm9xHMcXaQN1nWTnBmR8CNxRhX2AMWbNORb8FBMiKtQ=",
     "shaders/images.frag": "sha256-OvD2JRwrQLNE7Ryu7tKaEMpj9xwqAdyzMiCmg9SgowE=",

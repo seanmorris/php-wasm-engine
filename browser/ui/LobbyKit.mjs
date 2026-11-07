@@ -43,11 +43,6 @@ export const button = (label, {variant = null, onClick = null, signal, attribute
 	return result;
 };
 
-/**
- * Readable fallback for a Matrix user identifier before presence supplies a display name.
- * @param {string} id Matrix user identifier such as `@alice:matrix.org`.
- * @returns {string} The localpart, or the identifier itself when it has none.
- */
 /** Pointer, mouse and touch events that game runtimes watch on the whole document. */
 const POINTER_INPUT = [
 	'pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup'
@@ -68,6 +63,11 @@ export const ownPointerInput = (element, signal) => {
 	for(const type of POINTER_INPUT) element.addEventListener(type, event => event.stopPropagation(), {signal});
 };
 
+/**
+ * Readable fallback for a Matrix user identifier before presence supplies a display name.
+ * @param {string} id Matrix user identifier such as `@alice:matrix.org`.
+ * @returns {string} The localpart, or the identifier itself when it has none.
+ */
 export const localpart = id => String(id ?? '').replace(/^@/, '').split(':')[0] || String(id ?? '');
 
 /**
