@@ -209,3 +209,28 @@ test('a challenge uses the same dialog, starts from the last rules, and resets t
 	expect(await page.evaluate(() => forms)).toEqual(['guest']);
 	expect(await page.evaluate(() => guest.snapshot().tables[0].forMe)).toBe(true);
 });
+
+test('a game that cancels mouseup on the document cannot leave a House rules spinner repeating', async({page}) => {
+	const room = await openRoom(page);
+
+	// Emscripten SDL cancels every mouseup over its canvas area, which lies behind the lobby and its dialogs.
+	await page.evaluate(() => document.addEventListener('mouseup', event => event.preventDefault()));
+	await room.getByRole('button', {name: 'Open a table'}).click();
+	const dialog = page.locator('dialog.phonics-match-settings');
+	await dialog.locator('summary', {hasText: 'Opening'}).click();
+	const ante = dialog.getByRole('spinbutton', {name: 'Ante'});
+	await ante.click();
+	const box = await ante.boundingBox();
+	const padding = await ante.evaluate(element => parseFloat(getComputedStyle(element).paddingRight));
+	const spinner = {x: box.x + box.width - padding - 6, y: box.y + box.height * 0.3};
+	await page.mouse.move(spinner.x, spinner.y);
+	await page.mouse.down();
+	await page.mouse.up();
+	await expect(ante).toHaveValue('2');
+
+	// Hovering the spinner again after the click must not keep stepping it.
+	await page.mouse.move(spinner.x, spinner.y + 200);
+	await page.mouse.move(spinner.x, spinner.y);
+	await page.waitForTimeout(1500);
+	await expect(ante).toHaveValue('2');
+});

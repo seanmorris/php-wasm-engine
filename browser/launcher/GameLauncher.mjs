@@ -1,5 +1,5 @@
 import {useOverlayTheme} from '../OverlayTheme.mjs';
-import {node as element} from '../ui/LobbyKit.mjs';
+import {node as element, ownPointerInput} from '../ui/LobbyKit.mjs';
 
 const selectionId = () => crypto.randomUUID();
 
@@ -190,6 +190,7 @@ export class GameLauncher
 		const abortSignal = signal ? AbortSignal.any([signal, this.signal]) : this.signal;
 
 		const abort = () => pending.reject(abortSignal.reason ?? new Error('Invitation cancelled'));
+		ownPointerInput(dialog);
 		input.addEventListener('change', () => { choose.disabled = !input.files?.length; });
 
 		choose.addEventListener('click', () => { if(input.files?.[0]) pending.resolve(input.files[0]); });
@@ -401,6 +402,8 @@ export class GameLauncher
 
 	#install()
 	{
+		ownPointerInput(this.dialog, this.signal);
+
 		for(const button of [this.closeButton, this.cancelButton])
 		button.addEventListener('click', () => this.close(), {signal: this.signal});
 

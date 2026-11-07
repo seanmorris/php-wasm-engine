@@ -1,5 +1,5 @@
 import {useOverlayTheme, useStyle} from '../OverlayTheme.mjs';
-import {node} from '../ui/LobbyKit.mjs';
+import {node, ownPointerInput} from '../ui/LobbyKit.mjs';
 
 const STYLE = `
 .phonics-match-settings{width:min(44rem,calc(100% - 2rem))}
@@ -265,6 +265,7 @@ export function chooseMatchSettings({parent, form, problem, describe = () => '',
 
 	const abort = () => finish(null);
 
+	ownPointerInput(dialog);
 	dialog.addEventListener('input', refresh);
 	dialog.addEventListener('change', refresh);
 

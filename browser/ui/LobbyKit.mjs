@@ -48,6 +48,26 @@ export const button = (label, {variant = null, onClick = null, signal, attribute
  * @param {string} id Matrix user identifier such as `@alice:matrix.org`.
  * @returns {string} The localpart, or the identifier itself when it has none.
  */
+/** Pointer, mouse and touch events that game runtimes watch on the whole document. */
+const POINTER_INPUT = [
+	'pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup'
+	, 'click', 'dblclick', 'auxclick', 'contextmenu', 'wheel'
+	, 'touchstart', 'touchmove', 'touchend', 'touchcancel'
+];
+
+/**
+ * Keep a modal's pointer input away from game handlers on the document. Emscripten SDL watches mouseup on the whole
+ * document to catch releases outside its canvas, and cancels any release over the canvas area. Behind a modal that
+ * cancels the modal's own releases, so a number spinner never sees its button come up and keeps stepping whenever
+ * the pointer returns to it. The modal owns its pointer input, as it already owns its keys.
+ * @param {HTMLElement} element Modal root.
+ * @param {AbortSignal} [signal] Removes the listeners.
+ * @returns {void}
+ */
+export const ownPointerInput = (element, signal) => {
+	for(const type of POINTER_INPUT) element.addEventListener(type, event => event.stopPropagation(), {signal});
+};
+
 export const localpart = id => String(id ?? '').replace(/^@/, '').split(':')[0] || String(id ?? '');
 
 /**

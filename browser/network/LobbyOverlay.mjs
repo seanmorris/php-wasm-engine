@@ -7,6 +7,7 @@ import {
 	, button
 	, copyText
 	, node
+	, ownPointerInput
 	, personRow
 	, timeLeft
 } from '../ui/LobbyKit.mjs';
@@ -346,6 +347,8 @@ export class LobbyOverlay
 			, 'aria-labelledby': 'phonics-lobby-title'
 			, 'data-view': 'gate'
 		});
+
+		ownPointerInput(this.dialog, this.signal);
 
 		const header = node('header');
 
