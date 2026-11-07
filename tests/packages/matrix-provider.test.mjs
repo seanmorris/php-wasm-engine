@@ -228,6 +228,7 @@ test('Matrix signals share one rate-limited event per batch and unpack in order'
 test('Matrix durable game writes share an ordered rate-aware queue', async () => {
 	const sends = [], accepted = [], started = Date.now();
 	let refused = false;
+
 	const provider = new MatrixLobbyProvider({
 		homeserver: 'https://matrix.example'
 		, accessToken: 'token'
@@ -239,6 +240,7 @@ test('Matrix durable game writes share an ordered rate-aware queue', async () =>
 				, body: JSON.parse(options.body)
 				, at: Date.now() - started
 			};
+
 			sends.push(call);
 
 			if(!refused)
@@ -268,10 +270,12 @@ test('Matrix durable game writes share an ordered rate-aware queue', async () =>
 	assert.match(sends[0].path, /\/send\/org\.seanmorris\.phonics\.game\.v1\/game-one$/);
 	assert.match(sends[2].path, /\/send\/m\.room\.message\/game-two$/);
 	assert.ok(accepted[1].at - accepted[0].at >= 10, 'accepted events retain queue pacing');
+
 	assert.deepEqual(echoes.map(item => item.content), [
 		{kind: 'action', sequence: 1}
 		, {msgtype: 'm.text', body: 'table'}
 	]);
+
 	assert.deepEqual(statuses, [{state: 'retrying', code: 'M_LIMIT_EXCEEDED'}]);
 	provider.close();
 });

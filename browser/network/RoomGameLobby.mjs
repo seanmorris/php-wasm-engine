@@ -171,10 +171,12 @@ const validActionConfiguration = game => Array.isArray(game.actionTypes) && game
 	&& (game.maximumActionBytes ?? 8192) >= 256 && (game.maximumActionBytes ?? 8192) <= 49152;
 
 const checkpointMode = game => game.checkpointMode ?? 'actor';
+
 const actionBatches = game => game.actionBatches ?? false;
 
 const validAction = (action, game) => {
 	if(!action || typeof action !== 'object') return false;
+
 	const types = game.actionTypes;
 
 	if(types !== undefined)
@@ -268,6 +270,7 @@ export class RoomGameProtocol extends EventTarget
 		throw new RangeError(`game.actionTimeoutMs must be an integer from 1 to ${MAX_TIMER_DELAY_MS} milliseconds`);
 
 		this.provider = provider;
+
 		this.game = Object.freeze({
 			...game
 			, seedTimeoutMs: timeout
@@ -275,6 +278,7 @@ export class RoomGameProtocol extends EventTarget
 			, actionBatches: actionBatches(game)
 			, actionTimeoutMs: stepTimeout
 		});
+
 		this.session = session;
 		this.storage = storage;
 		this.signal = signal;
@@ -699,6 +703,7 @@ export class RoomGameProtocol extends EventTarget
 		const previous = session.batch?.actions.at(-1) ?? session.pending;
 
 		if(!validAction(action, this.game)) throw new Error('The game supplied an invalid quantized action');
+
 		if(typeof settle !== 'boolean' || (!settle && !batched))
 		throw new Error('The game supplied an invalid action settlement boundary');
 
@@ -1104,12 +1109,14 @@ export class RoomGameProtocol extends EventTarget
 				if(!session.seats?.includes(item.sender) || content.actor !== item.sender || session.pending
 					|| session.batch?.actions.length >= MAX_ACTION_BATCH
 					|| !Number.isSafeInteger(content.sequence)
-					|| content.sequence !== (session.batch ? session.batch.actions.at(-1).sequence + 1 : session.sequence + 1)
+					|| content.sequence
+						!== (session.batch ? session.batch.actions.at(-1).sequence + 1 : session.sequence + 1)
 					|| (!session.batch && (content.actor !== session.turn || content.pre_hash !== session.hash))
 					|| (session.batch && typeof content.pre_hash !== 'string')
 					|| (this.game.actionBatches
 						? typeof content.batch_end !== 'boolean'
-						: content.batch_end !== undefined)
+						: content.batch_end !== undefined
+					)
 						|| !validAction(content.action, this.game)
 						|| stepLate(session, this.game, item)
 				) break;
@@ -1175,9 +1182,11 @@ export class RoomGameProtocol extends EventTarget
 					break;
 				}
 
-				if(this.game.checkpointMode === 'actor' && item.sender === session.pending.actor && (typeof content.checkpoint !== 'string'
+				if(this.game.checkpointMode === 'actor' && item.sender === session.pending.actor
+					&& (typeof content.checkpoint !== 'string'
 					|| !content.checkpoint || content.checkpoint.length > 1024 * 1024
-				))
+					)
+				)
 				break;
 
 				if(stepLate(session, this.game, item)) break;
@@ -1909,6 +1918,7 @@ export class RoomGameProtocol extends EventTarget
 			clearTimeout(session.deadlineTimer);
 			clearTimeout(session.actionTimer);
 		}
+
 		this.provider.removeEventListener('gameevent', this.onGame);
 		this.provider.removeEventListener('presence', this.onPresence);
 		this.provider.removeEventListener('chat', this.onChat);

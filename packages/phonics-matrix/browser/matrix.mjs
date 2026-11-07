@@ -1818,6 +1818,7 @@ export class MatrixLobbyProvider extends EventTarget
 					const result = await this.writeRoomEvent(item.type, item.content, item.transaction);
 
 					if(this.sendQueue[0] === item) this.sendQueue.shift();
+
 					this.sendAfter = Date.now() + this.sendInterval;
 					item.sent.resolve(result);
 				}
@@ -1826,6 +1827,7 @@ export class MatrixLobbyProvider extends EventTarget
 					if(this.closed || this.signal.aborted || Date.now() >= item.deadline || !this.recoverable(error))
 					{
 						if(this.sendQueue[0] === item) this.sendQueue.shift();
+
 						item.sent.reject(error);
 						continue;
 					}
