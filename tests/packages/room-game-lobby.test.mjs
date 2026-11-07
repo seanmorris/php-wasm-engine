@@ -1435,3 +1435,318 @@ test('malformed or oversized table settings are refused when opening and ignored
 	await offer('$plain', {ante: 3});
 	assert.deepEqual([...protocol.sessions.keys()], ['$plain']);
 });
+
+// Step deadlines run on mocked time: protocol timers and hub server timestamps share the mocked clock, and the
+// helpers wait on setImmediate, which stays real.
+
+const flush = async (rounds = 30) => {
+	for(let index = 0; index < rounds; index++) await new Promise(resolve => setImmediate(resolve));
+};
+
+const waitFor = async (condition, label) => {
+	for(let index = 0; index < 2000; index++)
+	{
+		if(condition()) return;
+
+		await new Promise(resolve => setImmediate(resolve));
+	}
+
+	throw new Error(`Timed out waiting for ${label}`);
+};
+
+const shot = {type: 'shot', aim_udeg: 0, power_bp: 7500, top_bp: 0, side_bp: 0};
+
+const clockTable = async (t, {timeoutMs = 60_000, configure = {}, ready = {host: true, guest: true}} = {}) => {
+	t.mock.timers.enable({apis: ['setTimeout', 'Date'], now: 1_800_000_000_000});
+	const hub = new InMemoryLobbyHub;
+	const configured = {...game, ...(timeoutMs === null ? {} : {actionTimeoutMs: timeoutMs}), ...configure};
+	const providers = {}, protocols = {}, ports = {}, stops = {host: [], guest: []}, actions = {host: [], guest: []};
+
+	for(const id of ['host','guest'])
+	{
+		providers[id] = new InMemoryLobbyProvider({hub, peerId: id, displayName: id});
+
+		protocols[id] = new RoomGameProtocol(
+			{provider: providers[id], game: configured, session: {}, storage: storage()}
+		);
+
+		ports[id] = protocols[id].attachGame({
+			start: () => { if(ready[id]) void ports[id].reportReady('h0'); }
+			, action: detail => actions[id].push(detail)
+			, confirmed: () => {}
+			, stop: detail => stops[id].push(detail)
+		});
+	}
+
+	t.after(() => {
+		for(const id of ['host','guest'])
+		{
+			protocols[id].close();
+			providers[id].close();
+		}
+	});
+
+	await protocols.host.connect();
+	await protocols.guest.connect();
+	const root = await protocols.host.create();
+	await protocols.guest.join(root);
+
+	const table = id => protocols[id].sessions.get(root);
+	await waitFor(() => table('host')?.seed && table('guest')?.seed, 'the shared seed');
+
+	const claims = () => hub.history(providers.host.room).filter(item => item.content?.kind === 'timeout');
+
+	return {hub, configured, providers, protocols, ports, stops, actions, root, table, claims};
+};
+
+const activeClockTable = async (t, options) => {
+	const fixture = await clockTable(t, options);
+	const {table} = fixture;
+	await waitFor(() => table('host').status === 'active' && table('guest').status === 'active', 'an active table');
+	const actor = table('host').turn;
+
+	return {...fixture, actor, waiting: actor === 'host' ? 'guest' : 'host'};
+};
+
+test('a player who stalls past the step deadline forfeits, and a late move cannot rescue the match', async t => {
+	const {protocols, ports, stops, actions, root, table, claims, actor, waiting} = await activeClockTable(t);
+	const since = table('host').clockSince;
+	const clock = protocols.host.snapshot().tables.find(item => item.root === root).clock;
+	assert.deepEqual(clock, {deadline: since + 60_000, stage: 'action', owed: [actor]});
+
+	t.mock.timers.tick(59_000);
+	await flush();
+	assert.equal(claims().length, 0, 'nobody claims before the deadline');
+
+	// Half a second after the deadline the waiting player has not claimed yet, and the move is already too late.
+	t.mock.timers.tick(1_500);
+	await ports[actor].submitAction(shot, 'h0');
+	await flush();
+
+	for(const id of ['host','guest'])
+	{
+		assert.equal(table(id).pending ?? null, null, `${id} ignores the late move`);
+		assert.equal(actions[id].length, 0);
+	}
+
+	// The claim goes out five seconds after the deadline, 65 s after the clock started.
+	t.mock.timers.tick(4_499);
+	await flush();
+	assert.equal(claims().length, 0);
+	t.mock.timers.tick(1);
+	await waitFor(() => table('host').status === 'complete' && table('guest').status === 'complete', 'the claim');
+	const outcome = {winner: waiting, loser: actor, reason: 'timeout', timeout: true};
+
+	for(const id of ['host','guest'])
+	{
+		assert.deepEqual(table(id).outcome, outcome);
+		assert.deepEqual(stops[id].at(-1), outcome);
+	}
+
+	assert.equal(claims().length, 1);
+	assert.equal(claims()[0].sender, waiting);
+
+	assert.deepEqual(
+		{...claims()[0].content, 'm.relates_to': undefined, session_id: undefined, v: undefined}
+		, {
+			kind: 'timeout'
+			, player: waiting
+			, against: actor
+			, stage: 'action'
+			, sequence: 0
+			, 'm.relates_to': undefined
+			, session_id: undefined
+			, v: undefined
+		}
+	);
+
+	assert.ok(claims()[0].origin_server_ts >= since + 60_000);
+	assert.equal(protocols[waiting].snapshot().tables.find(item => item.root === root).clock, null);
+});
+
+test('every accepted step restarts the clock, and a missing settlement report forfeits', async t => {
+	const {ports, table, claims, actor, waiting} = await activeClockTable(t);
+	t.mock.timers.tick(30_000);
+	await ports[actor].submitAction(shot, 'h0');
+	await waitFor(() => table('host').pending && table('guest').pending, 'the action');
+	t.mock.timers.tick(1_000);
+	await ports[actor].reportSettled({sequence: 1, hash: 'h1', nextActor: waiting, checkpoint: 'checkpoint-v1'});
+	await flush();
+	const settledAt = table('host').clockSince;
+	assert.deepEqual(table('host').clockSince, table('guest').clockSince);
+	assert.equal(settledAt, 1_800_000_000_000 + 31_000, 'the actor report restarted the clock');
+
+	// The original deadline passes without a claim, because the match moved on.
+	t.mock.timers.tick(40_000);
+	await flush();
+	assert.equal(claims().length, 0);
+	assert.deepEqual(table('host').status, 'active');
+
+	t.mock.timers.tick(25_000);
+	await waitFor(() => table('host').status === 'complete' && table('guest').status === 'complete', 'the claim');
+	assert.equal(claims()[0].sender, actor);
+	assert.deepEqual(claims()[0].content.stage, 'settle');
+	assert.deepEqual(table('guest').outcome, {winner: actor, loser: waiting, reason: 'timeout', timeout: true});
+});
+
+test('a missing ready report forfeits, and a table where both players stall expires without a winner', async t => {
+	await t.test('one stalled ready report', async t => {
+		const {table, claims, stops} = await clockTable(t, {ready: {host: true, guest: false}});
+		await waitFor(() => table('host').ready.size === 1 && table('guest').ready.size === 1, 'the host report');
+		t.mock.timers.tick(65_000);
+		await waitFor(() => table('host').status === 'complete' && table('guest').status === 'complete', 'the claim');
+		assert.equal(claims()[0].sender, 'host');
+		assert.equal(claims()[0].content.stage, 'ready');
+		assert.deepEqual(stops.guest.at(-1), {winner: 'host', loser: 'guest', reason: 'timeout', timeout: true});
+	});
+
+	await t.test('both ready reports missing', async t => {
+		const {table, claims, stops} = await clockTable(t, {ready: {host: false, guest: false}});
+		await waitFor(() => table('host').status === 'ready' && table('guest').status === 'ready', 'the seed');
+		t.mock.timers.tick(65_000);
+		await waitFor(() => table('host').status === 'expired' && table('guest').status === 'expired', 'expiry');
+		assert.equal(claims().length, 0, 'nobody claims a win while also owing a step');
+		assert.equal(table('host').outcome, undefined);
+		assert.match(table('guest').error, /Both players missed the time limit/);
+		assert.equal(stops.host.at(-1).expired, true);
+	});
+});
+
+test('inside an action batch the local game names who owes the next step', async t => {
+	const configure = {
+		actionTypes: ['fragment','finish']
+		, maximumActionBytes: 4096
+		, checkpointMode: 'history'
+		, actionBatches: true
+	};
+
+	const {protocols, ports, table, claims, root, actor, waiting} = await activeClockTable(t, {configure});
+	await ports[actor].submitAction({type: 'fragment', part: 1}, 'h0', {settle: false});
+	await waitFor(() => table('host').batch && table('guest').batch, 'the fragment');
+
+	const clock = () => protocols[waiting].snapshot().tables.find(item => item.root === root).clock;
+	assert.equal(clock().owed, null, 'the protocol cannot know the batch order by itself');
+
+	// Only the actor's game has reported the fragment so far.
+	assert.equal(await ports[actor].reportSettled({sequence: 1, hash: 'f1', nextActor: waiting}), false);
+	t.mock.timers.tick(65_000);
+	await waitFor(() => claims().length === 1, 'the claim');
+	await flush();
+	assert.equal(table(actor).status, 'complete');
+	assert.equal(table(waiting).status, 'active', 'the stalled browser waits for its own game before judging');
+	assert.equal(table(waiting).claims.length, 1);
+
+	assert.equal(await ports[waiting].reportSettled({sequence: 1, hash: 'f1', nextActor: waiting}), false);
+	await flush();
+	assert.equal(table(waiting).status, 'complete');
+	assert.deepEqual(table(waiting).outcome, {winner: actor, loser: waiting, reason: 'timeout', timeout: true});
+	assert.deepEqual(clock(), null);
+});
+
+test('claims from the player who owes the step, early claims and claims about an old step change nothing', async t => {
+	const {protocols, table, claims, actor, waiting} = await activeClockTable(t);
+
+	const claim = async (player, against, body = {}) => protocols[player].child(
+		table(player)
+		, 'timeout'
+		, {player, against, stage: 'action', sequence: 0, ...body}
+		, `forged:${Math.random()}`
+	);
+
+	await claim(waiting, actor);
+	await flush();
+	assert.equal(table('host').status, 'active', 'a claim before the deadline is rejected');
+
+	t.mock.timers.tick(61_000);
+	await claim(actor, waiting);
+	await claim(waiting, actor, {sequence: 4});
+	await claim(waiting, actor, {stage: 'settle'});
+	await claim(waiting, waiting);
+	await flush();
+
+	for(const id of ['host','guest']) assert.equal(table(id).status, 'active');
+
+	assert.equal(claims().length, 5);
+	t.mock.timers.tick(4_000);
+	await waitFor(() => table('host').status === 'complete' && table('guest').status === 'complete', 'the real claim');
+	assert.deepEqual(table('host').outcome.winner, waiting);
+});
+
+test('a reloaded reader replays the same timeout result and ignores the late move', async t => {
+	const {hub, configured, ports, table, root, actor, waiting} = await activeClockTable(t);
+	t.mock.timers.tick(61_000);
+	await ports[actor].submitAction(shot, 'h0');
+	t.mock.timers.tick(4_000);
+	await waitFor(() => table('host').status === 'complete', 'the claim');
+
+	const provider = new InMemoryLobbyProvider({hub, peerId: 'reader', displayName: 'Reader'});
+	const reader = new RoomGameProtocol({provider, game: configured, session: {}, storage: storage()});
+	t.after(() => { reader.close(); provider.close(); });
+
+	await reader.connect();
+	const replayed = reader.sessions.get(root);
+	assert.equal(replayed.status, 'complete');
+	assert.equal(replayed.sequence, 0);
+	assert.equal(replayed.actions.size, 0, 'the late move stays out of the replayed transcript');
+	assert.deepEqual(replayed.outcome, {winner: waiting, loser: actor, reason: 'timeout', timeout: true});
+});
+
+test('step deadlines are validated, part of table compatibility, and absent unless a game sets one', async t => {
+	for(const actionTimeoutMs of [0, 1.5, '60000', 2_147_483_648])
+		assert.throws(
+			() => new RoomGameProtocol({provider: new EventTarget, game: {...game, actionTimeoutMs}, session: {}})
+			, /actionTimeoutMs must be an integer/
+		);
+
+	const provider = new EventTarget;
+
+	provider.profile = () => ({id: 'observer'});
+
+	const timed = new RoomGameProtocol(
+		{provider, game: {...game, actionTimeoutMs: 60_000}, session: {}, storage: storage()}
+	);
+
+	const plain = new RoomGameProtocol({provider, game, session: {}, storage: storage()});
+	t.after(() => { timed.close(); plain.close(); });
+
+	const offer = (protocol, root, actionTimeoutMs) => protocol.consume({
+		event_id: root
+		, type: 'org.seanmorris.phonics.game.v1'
+		, sender: 'host'
+		, content: {
+			v: 2
+			, kind: 'offer'
+			, session_id: `session-${root}`
+			, host: 'host'
+			, game: {...game, ...(actionTimeoutMs === undefined ? {} : {actionTimeoutMs})}
+			, created_at: Date.now()
+			, expires_at: Date.now() + 60_000
+		}
+	});
+
+	for(const protocol of [timed, plain])
+	{
+		await offer(protocol, '$none', undefined);
+		await offer(protocol, '$minute', 60_000);
+		await offer(protocol, '$two-minutes', 120_000);
+	}
+
+	assert.deepEqual([...timed.sessions.keys()], ['$minute']);
+	assert.deepEqual([...plain.sessions.keys()], ['$none']);
+});
+
+test('games without a step deadline publish no clock and ignore timeout claims', async t => {
+	const {protocols, table, root, actor, waiting} = await activeClockTable(t, {timeoutMs: null});
+	assert.equal(protocols.host.snapshot().tables.find(item => item.root === root).clock, null);
+	t.mock.timers.tick(3_600_000);
+
+	await protocols[waiting].child(
+		table(waiting)
+		, 'timeout'
+		, {player: waiting, against: actor, stage: 'action', sequence: 0}
+		, 'forged'
+	);
+
+	await flush();
+	assert.equal(table('host').status, 'active');
+});

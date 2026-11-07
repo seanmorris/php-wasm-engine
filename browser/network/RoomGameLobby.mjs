@@ -16,6 +16,12 @@ const LEGACY_REVEAL_GRACE_MS = 60_000;
 const UNKNOWN_ROOT_RETRY = 60_000;
 const UNKNOWN_ROOT_LIMIT = 1024;
 const MAX_ACTION_BATCH = 256;
+// A waiting player claims a timeout this long after the deadline, so a step already in flight lands first.
+const CLAIM_GRACE_MS = 5_000;
+// When a claim has not ended the match (clock skew, a lost publish), look again after this long.
+const CLAIM_RETRY_MS = 15_000;
+// The in-game sidebar shows the step countdown only in its last minute, so quick automatic steps never flash a clock.
+const CLOCK_WARNING_MS = 60_000;
 const encoder = new TextEncoder;
 
 // Public, versioned templates. Both fixed-width operands stay literal: never evaluate their sum.
@@ -54,6 +60,28 @@ const validSeedMaterial = value => value && validSeedValue(value.contribution) &
 const seedStorageKey = (session, player) => `phonics.game.seed:v2:${session.root}:${player}`;
 
 const seedTimeoutMs = game => game.seedTimeoutMs === undefined ? DEFAULT_SEED_TIMEOUT_MS : game.seedTimeoutMs;
+
+/** Per-step deadline in milliseconds, or null when the game lets players take as long as they like. */
+const actionTimeoutMs = game => game.actionTimeoutMs ?? null;
+
+/**
+ * Whether a state step arrived after the owed player's deadline. The deadline runs from the server timestamp of
+ * the last step that moved the match forward, so every reader judges the same event the same way.
+ */
+const stepLate = (session, game, item) => {
+	const timeout = actionTimeoutMs(game);
+
+	if(timeout === null || !Number.isSafeInteger(session.clockSince)) return false;
+
+	return !Number.isSafeInteger(item.origin_server_ts) || item.origin_server_ts >= session.clockSince + timeout;
+};
+
+/** Restart the step deadline from an accepted step's server timestamp; clocks never run backwards. */
+const advanceClock = (session, item) => {
+	if(!Number.isSafeInteger(item.origin_server_ts)) return;
+
+	session.clockSince = Math.max(session.clockSince ?? item.origin_server_ts, item.origin_server_ts);
+};
 
 const seedEventInTime = (session, item) => Number.isSafeInteger(item.origin_server_ts)
 	&& item.origin_server_ts < session.seedDeadline;
@@ -190,6 +218,7 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
 	&& (content.game.maximumActionBytes ?? null) === (game.maximumActionBytes ?? null)
 	&& checkpointMode(content.game) === checkpointMode(game)
 	&& actionBatches(content.game) === actionBatches(game)
+	&& actionTimeoutMs(content.game) === actionTimeoutMs(game)
 	&& Number.isSafeInteger(content.expires_at);
 
 /**
@@ -231,12 +260,20 @@ export class RoomGameProtocol extends EventTarget
 		if(typeof actionBatches(game) !== 'boolean')
 		throw new RangeError('game.actionBatches must be boolean');
 
+		const stepTimeout = actionTimeoutMs(game);
+
+		if(stepTimeout !== null
+			&& (!Number.isSafeInteger(stepTimeout) || stepTimeout < 1 || stepTimeout > MAX_TIMER_DELAY_MS)
+		)
+		throw new RangeError(`game.actionTimeoutMs must be an integer from 1 to ${MAX_TIMER_DELAY_MS} milliseconds`);
+
 		this.provider = provider;
 		this.game = Object.freeze({
 			...game
 			, seedTimeoutMs: timeout
 			, checkpointMode: checkpointMode(game)
 			, actionBatches: actionBatches(game)
+			, actionTimeoutMs: stepTimeout
 		});
 		this.session = session;
 		this.storage = storage;
@@ -305,7 +342,11 @@ export class RoomGameProtocol extends EventTarget
 
 			this.loadingHistory = false;
 
-			for(const session of this.sessions.values()) await this.resumeSeedExchange(session);
+			for(const session of this.sessions.values())
+			{
+				await this.resumeSeedExchange(session);
+				this.armActionDeadline(session);
+			}
 
 			await this.acceptLinkedSession();
 			this.dispatchEvent(event('change', this.snapshot()));
@@ -718,7 +759,13 @@ export class RoomGameProtocol extends EventTarget
 			) throw new Error('No matching batched action is advancing');
 
 			// Both applications execute and hash every fragment. Only the final fragment publishes
-			// the two durable reports that compare the complete transcript state.
+			// the two durable reports that compare the complete transcript state. The fragment's next actor stays
+			// local: it names who owes the next batch step for the step deadline.
+			(session.fragmentActors ??= new Map).set(sequence, String(nextActor));
+			this.reviewClaims(session);
+			this.armActionDeadline(session);
+			this.dispatchEvent(event('change', this.snapshot()));
+
 			return false;
 		}
 
@@ -835,7 +882,11 @@ export class RoomGameProtocol extends EventTarget
 		for(const item of await this.provider.relations(root))
 		await this.consume(item, {replay: true, loadUnknown: false});
 
-		if(!this.loadingHistory) await this.resumeSeedExchange(session);
+		if(!this.loadingHistory)
+		{
+			await this.resumeSeedExchange(session);
+			this.armActionDeadline(session);
+		}
 
 		return session;
 	}
@@ -886,6 +937,8 @@ export class RoomGameProtocol extends EventTarget
 				, settles: new Map
 				, earlySettles: new Map
 				, actions: new Map
+				, fragmentActors: new Map
+				, claims: []
 				, events: new Set([item.event_id])
 			});
 
@@ -1011,6 +1064,9 @@ export class RoomGameProtocol extends EventTarget
 
 					session.reveals.set(item.sender, content.contribution);
 					session.openings.set(item.sender, {nonce: content.nonce, phrase: content.phrase});
+
+					// Both players owe their ready report from the moment the seed is complete.
+					if(session.reveals.size === 2) advanceClock(session, item);
 				}
 				catch
 				{
@@ -1027,9 +1083,11 @@ export class RoomGameProtocol extends EventTarget
 				if(!['committing','ready'].includes(session.status)
 					|| !session.seats?.includes(item.sender) || content.player !== item.sender
 					|| typeof content.hash !== 'string'
+					|| stepLate(session, this.game, item)
 				) break;
 
 				session.ready.set(item.sender, content.hash);
+				advanceClock(session, item);
 				this.confirmReady(session);
 
 				break;
@@ -1053,9 +1111,11 @@ export class RoomGameProtocol extends EventTarget
 						? typeof content.batch_end !== 'boolean'
 						: content.batch_end !== undefined)
 						|| !validAction(content.action, this.game)
+						|| stepLate(session, this.game, item)
 				) break;
 
 				session.actions.set(content.sequence, structuredClone(content));
+				advanceClock(session, item);
 				session.batch ??= {actions: []};
 				session.batch.actions.push(structuredClone(content));
 
@@ -1067,15 +1127,21 @@ export class RoomGameProtocol extends EventTarget
 
 				if(this.selected === root) this.adapter?.action?.(structuredClone(content));
 
-				for(const early of session.earlySettles.get(content.sequence)?.values() ?? [])
+				const raced = session.earlySettles.get(content.sequence)?.values() ?? [];
+
+				for(const {content: early, item: earlyItem} of raced)
 				{
 					if(!session.pending) break;
+
+					// A report that raced ahead of its action is judged against the action's deadline.
+					if(stepLate(session, this.game, earlyItem)) continue;
 
 					if(this.game.checkpointMode === 'actor' && early.player === content.actor
 						&& (typeof early.checkpoint !== 'string' || !early.checkpoint)
 					)
 					return this.freeze(session, 'Acting player omitted its checkpoint');
 
+					advanceClock(session, earlyItem);
 					await this.settle(session, early.player, early);
 				}
 
@@ -1097,7 +1163,11 @@ export class RoomGameProtocol extends EventTarget
 					{
 						const early = session.earlySettles.get(content.sequence) ?? new Map;
 
-						if(!early.has(item.sender)) early.set(item.sender, structuredClone(content));
+						if(!early.has(item.sender))
+						early.set(item.sender, {
+							content: structuredClone(content)
+							, item: {origin_server_ts: item.origin_server_ts}
+						});
 
 						session.earlySettles.set(content.sequence, early);
 					}
@@ -1110,6 +1180,9 @@ export class RoomGameProtocol extends EventTarget
 				))
 				break;
 
+				if(stepLate(session, this.game, item)) break;
+
+				advanceClock(session, item);
 				await this.settle(session, item.sender, content);
 				break;
 
@@ -1159,6 +1232,7 @@ export class RoomGameProtocol extends EventTarget
 
 				session.status = 'complete';
 				clearTimeout(session.deadlineTimer);
+				clearTimeout(session.actionTimer);
 				session.outcome = {
 					winner: session.seats.find(player => player !== item.sender)
 					, reason: content.reason
@@ -1167,7 +1241,32 @@ export class RoomGameProtocol extends EventTarget
 				if(this.selected === root) this.adapter?.stop?.(structuredClone(session.outcome));
 
 				break;
+
+			case 'timeout':
+				// A waiting player claims the match after the other player missed a step deadline.
+				if(actionTimeoutMs(this.game) === null || !['ready','active'].includes(session.status)
+					|| content.player !== item.sender || !session.seats?.includes(item.sender)
+					|| !session.seats.includes(content.against) || content.against === item.sender
+					|| !['ready','action','settle'].includes(content.stage) || !Number.isSafeInteger(content.sequence)
+					|| !Number.isSafeInteger(session.clockSince) || !Number.isSafeInteger(item.origin_server_ts)
+					|| !stepLate(session, this.game, item)
+				) break;
+
+				session.claims ??= [];
+
+				session.claims.push({
+					player: content.player
+					, against: content.against
+					, stage: content.stage
+					, sequence: content.sequence
+				});
+
+				this.reviewClaims(session);
+
+				break;
 		}
+
+		if(!replay && ['ready','active'].includes(session.status)) this.armActionDeadline(session);
 
 		if(!replay) this.dispatchEvent(event('change', this.snapshot()));
 	}
@@ -1325,6 +1424,185 @@ export class RoomGameProtocol extends EventTarget
 		}
 
 		this.dispatchEvent(event('change', this.snapshot()));
+	}
+
+	/**
+	 * Name the step the match waits for and who owes it: each missing ready report, each missing settlement report
+	 * for a finished action, the turn holder's next action, or inside a batch the actor the local game computed.
+	 * owed is null when only the game could know and this browser has not run that step.
+	 */
+	obligation(session)
+	{
+		if(session.status === 'ready' && session.seats)
+		return {
+			stage: 'ready'
+			, sequence: session.sequence
+			, owed: session.seats.filter(player => !session.ready.has(player))
+		};
+
+		if(session.status !== 'active') return null;
+
+		if(session.pending)
+		{
+			const settled = session.settles.get(session.pending.sequence) ?? new Map;
+
+			return {
+				stage: 'settle'
+				, sequence: session.pending.sequence
+				, owed: session.seats.filter(player => !settled.has(player))
+			};
+		}
+
+		if(session.batch)
+		{
+			const sequence = session.batch.actions.at(-1).sequence;
+			const actor = session.fragmentActors?.get(sequence);
+
+			return {stage: 'action', sequence, owed: actor ? [actor] : null};
+		}
+
+		return {stage: 'action', sequence: session.sequence, owed: session.turn ? [session.turn] : null};
+	}
+
+	/** The selected step deadline for presentation: when it ends and who owes the step, if known. */
+	clock(session)
+	{
+		const timeout = actionTimeoutMs(this.game);
+
+		if(timeout === null || !['ready','active'].includes(session.status)
+			|| !Number.isSafeInteger(session.clockSince)
+		) return null;
+
+		const due = this.obligation(session);
+
+		return {
+			deadline: session.clockSince + timeout
+			, stage: due?.stage ?? null
+			, owed: due?.owed ? [...due.owed] : null
+		};
+	}
+
+	/**
+	 * Decide received timeout claims against the step the match still waits for. A claim names that step, the
+	 * player who owes it, and a claimant who does not. Stale claims are dropped. Inside a batch only the game knows
+	 * who owes, so a seated player waits for its own game's report; a spectator, which cannot check, accepts.
+	 */
+	reviewClaims(session)
+	{
+		if(!['ready','active'].includes(session.status))
+		{
+			session.claims = [];
+
+			return;
+		}
+
+		const due = this.obligation(session);
+		const me = this.connected ? this.profile().id : null;
+		const playing = this.selected === session.root && session.localRole === 'player' && Boolean(this.adapter)
+			&& session.seats.includes(me);
+
+		const waiting = [];
+
+		for(const claim of session.claims ?? [])
+		{
+			if(!due || claim.stage !== due.stage || claim.sequence !== due.sequence) continue;
+
+			if(due.owed === null)
+			{
+				if(playing)
+				{
+					waiting.push(claim);
+					continue;
+				}
+			}
+			else if(!due.owed.includes(claim.against) || due.owed.includes(claim.player)) continue;
+
+			this.timeoutWin(session, claim);
+
+			return;
+		}
+
+		session.claims = waiting;
+	}
+
+	/** End a match for the claimant whose opponent missed a step deadline. */
+	timeoutWin(session, claim)
+	{
+		clearTimeout(session.actionTimer);
+		delete session.actionTimer;
+		session.claims = [];
+		session.status = 'complete';
+		session.outcome = {winner: claim.player, loser: claim.against, reason: 'timeout', timeout: true};
+
+		if(this.selected === session.root) this.adapter?.stop?.(structuredClone(session.outcome));
+	}
+
+	/**
+	 * Watch the current step deadline. Once it passes, the waiting player's browser claims the match. A table where
+	 * both players owe a step expires without a winner. The player who owes the step, and spectators, only wait.
+	 */
+	armActionDeadline(session)
+	{
+		clearTimeout(session.actionTimer);
+		delete session.actionTimer;
+
+		const timeout = actionTimeoutMs(this.game);
+
+		if(this.closed || timeout === null || !['ready','active'].includes(session.status)
+			|| !Number.isSafeInteger(session.clockSince)
+		) return;
+
+		const due = this.obligation(session);
+
+		const delay = Math.max(
+			session.clockSince + timeout + CLAIM_GRACE_MS - Date.now()
+			, (session.lastClaimAt ?? -Infinity) + CLAIM_RETRY_MS - Date.now()
+		);
+
+		if(delay > 0)
+		{
+			const wait = Math.min(delay, MAX_TIMER_DELAY_MS);
+			session.actionTimer = setTimeout(() => this.armActionDeadline(session), wait);
+
+			return;
+		}
+
+		if(!due?.owed?.length) return;
+
+		if(due.owed.length === session.seats.length)
+		{
+			session.status = 'expired';
+			session.error = 'Both players missed the time limit. No winner was declared. '
+				+ 'Leave this table to start a new game.';
+
+			if(this.selected === session.root)
+			{
+				this.adapter?.stop?.({reason: session.error, expired: true});
+
+				if(this.connected) void this.provider.setActivity(null).catch(error => this.fail(error));
+			}
+
+			this.dispatchEvent(event('change', this.snapshot()));
+
+			return;
+		}
+
+		const me = this.connected ? this.profile().id : null;
+
+		if(!me || this.selected !== session.root || session.localRole !== 'player' || !session.seats.includes(me)
+			|| due.owed.includes(me)
+		) return;
+
+		// Claims are published at most once per retry period; a claim that lands too early is simply rejected.
+		session.lastClaimAt = Date.now();
+		session.actionTimer = setTimeout(() => this.armActionDeadline(session), CLAIM_RETRY_MS);
+
+		void this.child(
+			session
+			, 'timeout'
+			, {player: me, against: due.owed[0], stage: due.stage, sequence: due.sequence}
+			, `timeout:${due.stage}:${due.sequence}:${session.lastClaimAt}`
+		).catch(error => this.fail(error));
 	}
 
 	/** Discard the locally retained opening after success or expiry. */
@@ -1536,6 +1814,7 @@ export class RoomGameProtocol extends EventTarget
 		session.turn = content.next_actor;
 		session.pending = null;
 		session.batch = null;
+		session.fragmentActors?.clear();
 		session.outcome = structuredClone(content.outcome);
 
 		this.confirmAdapter(session);
@@ -1543,6 +1822,7 @@ export class RoomGameProtocol extends EventTarget
 		if(session.outcome)
 		{
 			session.status = 'complete';
+			clearTimeout(session.actionTimer);
 
 			if(this.selected === session.root) this.adapter?.stop?.(structuredClone(session.outcome));
 		}
@@ -1552,6 +1832,7 @@ export class RoomGameProtocol extends EventTarget
 	freeze(session, reason)
 	{
 		clearTimeout(session.deadlineTimer);
+		clearTimeout(session.actionTimer);
 		session.status = 'frozen';
 		session.error = String(reason);
 
@@ -1603,6 +1884,8 @@ export class RoomGameProtocol extends EventTarget
 				, spectatable: Boolean(session.seats) && !['expired'].includes(session.status)
 				, sequence: session.sequence
 				, turn: session.turn ?? null
+				, clock: this.clock(session)
+				, outcome: structuredClone(session.outcome ?? null)
 				, error: session.error ?? null
 			}))
 		});
@@ -1621,7 +1904,11 @@ export class RoomGameProtocol extends EventTarget
 
 		this.closed = true;
 
-		for(const session of this.sessions.values()) clearTimeout(session.deadlineTimer);
+		for(const session of this.sessions.values())
+		{
+			clearTimeout(session.deadlineTimer);
+			clearTimeout(session.actionTimer);
+		}
 		this.provider.removeEventListener('gameevent', this.onGame);
 		this.provider.removeEventListener('presence', this.onPresence);
 		this.provider.removeEventListener('chat', this.onChat);
@@ -1669,6 +1956,8 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
 .phonics-room-match{display:none}
 .phonics-room-rules{margin:0;color:var(--ui-muted);font-size:.85rem}.phonics-room-rules[hidden]{display:none}
+.phonics-room-clock{margin:0;font-variant-numeric:tabular-nums;color:var(--ui-muted);font-size:.9rem}
+.phonics-room-clock.is-urgent{color:var(--ui-danger-text);font-weight:700}.phonics-room-clock[hidden]{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-needs-connection{display:none}
 .phonics-room-game:not(.is-connected) .phonics-room-body{grid-template-columns:minmax(0,1fr)}
 .phonics-room-game:not(.is-connected) .phonics-room-panel{width:min(34rem,100%);align-self:center}
@@ -1725,6 +2014,8 @@ export class EmbeddedRoomLobby
 		this.confirmingLeave = false;
 		this.waiting = null;
 		this.ticker = new Ticker(() => this.tickWaiting());
+		this.matchClock = null;
+		this.clockTicker = new Ticker(() => this.tickClock());
 		this.releaseTheme = useOverlayTheme();
 		this.releaseRoomStyle = useStyle('room-game', ROOM_STYLE);
 		this.aspectRatio = gameAspectRatio(protocol.game.aspectRatio);
@@ -1760,7 +2051,9 @@ export class EmbeddedRoomLobby
 		const matchRow = node('div', {class: 'phonics-ui-row'});
 		matchRow.append(this.leaveButton);
 		this.matchRules = node('p', {class: 'phonics-room-rules'});
-		this.matchCard.append(this.matchTitle, this.matchRules, matchRow);
+		this.clockText = node('p', {class: 'phonics-room-clock', role: 'timer'});
+		this.clockText.hidden = true;
+		this.matchCard.append(this.matchTitle, this.matchRules, this.clockText, matchRow);
 
 		this.connectingCard = node('div', {class: 'phonics-ui-card phonics-room-lobby-only'});
 
@@ -2265,6 +2558,9 @@ export class EmbeddedRoomLobby
 	/** Name the players, or the watched pairing, in the in-game sidebar. */
 	renderMatch(selected, me, playing)
 	{
+		this.matchClock = playing && selected?.clock ? {...selected.clock, me, players: [...selected.players]} : null;
+		this.clockTicker.sync();
+
 		if(!playing || !selected) return;
 
 		const spectating = !selected.players.includes(me);
@@ -2350,6 +2646,49 @@ export class EmbeddedRoomLobby
 		element.textContent = table?.settingsLabel ? `House rules: ${table.settingsLabel}` : '';
 	}
 
+	/**
+	 * Show the step countdown in its last minute: whose step it is and how long remains, then who ran out of time
+	 * while the waiting player's claim lands. Returns whether a step clock is still running.
+	 */
+	tickClock()
+	{
+		const clock = this.matchClock;
+
+		if(!clock)
+		{
+			this.clockText.hidden = true;
+
+			return false;
+		}
+
+		const remaining = clock.deadline - Date.now();
+		const owed = clock.owed;
+		const others = owed?.filter(player => player !== clock.me) ?? [];
+		const mine = Boolean(owed?.includes(clock.me));
+		const both = Boolean(owed) && owed.length === clock.players.length;
+		const who = both ? 'both players' : others.length ? this.displayName(others[0]) : null;
+
+		this.clockText.hidden = remaining > CLOCK_WARNING_MS;
+		this.clockText.classList.toggle('is-urgent', mine && !both);
+
+		if(remaining > 0)
+		{
+			const time = timeLeft(clock.deadline);
+
+			this.clockText.textContent = mine && !both
+				? `Your move · ${time} left`
+				: who ? `Waiting for ${who} · ${time} left` : `Waiting · ${time} left`;
+		}
+		else
+		{
+			this.clockText.textContent = both
+				? 'Both players are out of time.'
+				: mine ? 'You ran out of time.' : who ? `${who} ran out of time.` : 'Time is up.';
+		}
+
+		return true;
+	}
+
 	/** Rewrite the waiting card's countdown; returns whether it is still running. */
 	tickWaiting()
 	{
@@ -2432,6 +2771,7 @@ export class EmbeddedRoomLobby
 		this.disposed = true;
 		this.chat.dispose();
 		this.ticker.stop();
+		this.clockTicker.stop();
 		clearTimeout(this.confirmTimer);
 		this.stageResize.disconnect();
 		this.root.removeEventListener('keydown', this.keydown);
