@@ -18,7 +18,7 @@ $phonics = $app->compose(__DIR__ . '/worlds/game.world', __DIR__ . '/phonics.jso
 require $app->entry();
 ```
 
-`compose()` is an optional engine service. It resolves and verifies the content's imported packages, prepares `Phonics\Package\Context`, and returns the explicitly selected game entry through `entry()`. The bootstrap requires that entry in its own PHP scope. The world cannot replace it. An application can instead execute arbitrary PHP, activate a packaged browser module with `$app->browser($path)`, and call `$app->ready()` without loading a world.
+`compose()` is an optional engine service. It resolves and verifies the content's imported packages, prepares `Phonics\Package\Context`, and returns the explicitly selected game entry through `entry()`. The bootstrap requires that entry in its own PHP scope. The world cannot replace it. An application can instead execute arbitrary PHP, activate a packaged browser module with `$app->browser($path)`, and call `$app->ready()` without loading a world. That module's `activate(host)` receives the session, module, canvas, abort signal, and `services.QuickControls` and `services.SafeStorage`, the same corner mute/fullscreen controls and guarded storage that composed applications get.
 
 `options.init` supplies JSON data through `$app->init`; `compose()` merges it over the world's `init`. The default bootstraps accept `init.world` to select external content. Doom also accepts `startMap` and `cheats`. Application-owned network configuration is supplied as the third argument to `compose()`. These choices belong to PHP application code, not the browser host.
 

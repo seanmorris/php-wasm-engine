@@ -380,7 +380,7 @@
     "browser/Networking.mjs": "sha256-D9eXw1c9XGx06rfddV9dPq3dpJlwdFXg9wf6uIJnjZg=",
     "browser/OverlayTheme.mjs": "sha256-tXn+XzM2NnGjk93ifLSoBs3uZkItFN56eepYCQR2cUg=",
     "browser/PackageGraph.mjs": "sha256-xRn43lmY7c7vJRoL4IzQ4KKxclXz56tFBLD6Kr2GqOY=",
-    "browser/Phonics.mjs": "sha256-O4vto48he6vMNx5PG9kTJA5EU3DwSeYAlkV5zYon3mE=",
+    "browser/Phonics.mjs": "sha256-qr7KCtwaFzzACGk+towOdg10U7mjScLtj5m9R3iAK/E=",
     "browser/QuickControls.mjs": "sha256-+WCQVG1ncUM4QUekx/+aNoRhhkx/RUZ2MaTVGCf9BcE=",
     "browser/ResourceStore.mjs": "sha256-eKxbaHHONwWV8cAxHwwO/+tm89DxHxK+Gsx6rJgS3dc=",
     "browser/SafeStorage.mjs": "sha256-chu9MExHBJSr0FdId8W7aPOSAmSzc3pppdkmHYhldGM=",
