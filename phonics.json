@@ -389,7 +389,7 @@
     "browser/SessionAssets.mjs": "sha256-LnbJYBcSeRtnW7GMny9QBA2s/cIzKFWc/Bg4Ndk3828=",
     "browser/WorldDefinition.mjs": "sha256-zK6unGbX4oe7U8n5FKrBj0rDAfW5P40biC5VbA+YE+s=",
     "browser/launcher/GameLauncher.mjs": "sha256-dEMnSmTx6e+cvmhyiEz4BXCxzBw5UOCm/dF2WKgoX7Q=",
-    "browser/launcher/MatchSettingsDialog.mjs": "sha256-Z0/OJd/Dabyf9PJvHxPm4fwGA8xi+7/xCEiAmnhZQjU=",
+    "browser/launcher/MatchSettingsDialog.mjs": "sha256-SxijtlRTdECP6gjX2PBkNCN2MY2wdDLl5mONLCCraQw=",
     "browser/network/Errors.mjs": "sha256-DC0Qk5xBy6drbPuicKe2FK+GCVOt4HedopCTOlIWyMQ=",
     "browser/network/InMemoryLobbyProvider.mjs": "sha256-WvSzHByK4aEuB3OHLuYnG0e7JqiG3AsP3xltimpOU60=",
     "browser/network/InviteLink.mjs": "sha256-EU6NbOWcvuy+YXeb3VLkJiU+RzymW1zi2lacm4gDQpE=",

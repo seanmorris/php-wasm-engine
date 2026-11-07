@@ -20,6 +20,25 @@ border:1px solid var(--ui-line);border-radius:10px;font-size:.92rem}
 letter-spacing:.06em}
 .phonics-match-settings>.phonics-modal-actions>.phonics-match-settings-reset{margin-right:auto}
 @media(max-width:42rem){.phonics-match-settings>.phonics-modal-actions>.phonics-match-settings-reset{flex-basis:100%}}
+.phonics-match-settings .phonics-launcher-body{gap:.6rem}
+.phonics-match-settings-section{border:1px solid var(--ui-line);border-radius:10px}
+.phonics-match-settings-row{display:flex;align-items:baseline;gap:.75rem;min-height:2.75rem;box-sizing:border-box;
+padding:.65rem .85rem .65rem 2.05rem}
+.phonics-match-settings-caption{margin-top:-.2rem;color:var(--ui-muted);font-size:.78rem;font-weight:400}
+.phonics-match-settings-section>summary{display:flex;align-items:baseline;gap:.75rem;min-height:2.75rem;box-sizing:border-box;
+padding:.65rem .85rem;cursor:pointer;list-style:none;border-radius:10px}
+.phonics-match-settings-section>summary::-webkit-details-marker{display:none}
+.phonics-match-settings-section>summary::before{content:'';flex:none;align-self:center;width:.45rem;height:.45rem;
+border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(-45deg);transition:transform .15s;opacity:.7}
+.phonics-match-settings-section[open]>summary::before{transform:rotate(45deg)}
+.phonics-match-settings-section>summary:hover{background:rgba(255,255,255,.04)}
+.phonics-match-settings-section>summary:focus-visible{outline:2px solid var(--ui-accent);outline-offset:-2px}
+.phonics-match-settings-section[open]>summary{border-bottom:1px solid var(--ui-line);border-radius:10px 10px 0 0}
+.phonics-match-settings-section-title{flex:none;font-weight:700}
+.phonics-match-settings-section-value{min-width:0;margin-left:auto;overflow:hidden;color:var(--ui-muted);font-size:.9rem;
+text-align:right;text-overflow:ellipsis;white-space:nowrap}
+.phonics-match-settings-section>fieldset{padding:.85rem}
+@media(prefers-reduced-motion:reduce){.phonics-match-settings-section>summary::before{transition:none}}
 `;
 
 const scalar = value => value === null || ['string', 'number', 'boolean'].includes(typeof value);
@@ -60,7 +79,9 @@ const fieldVisible = (field, values) => {
  * @param {object} options Dialog options.
  * @param {HTMLElement} options.parent Element that receives the dialog while it is open.
  * @param {object} options.form Game form:
- *     `{title, intro, submitLabel, values, defaults, groups: [{legend, help, fields}]}`.
+ *     `{title, intro, submitLabel, values, defaults, groups: [{legend, help, open, summary, fields}]}`. Each group is a
+ *     folded section, closed unless `open`; its header shows `summary(values)` or the field values. A group with no
+ *     fields is a fixed row showing only its summary. A number field's `help` is a caption under its label.
  * @param {function(object): (string|null)} options.problem Returns why the settings cannot be used, or null.
  * @param {function(object): string} [options.describe] One readable line for valid settings.
  * @param {string} [options.submitLabel] Primary button text when the form does not name one.
@@ -100,13 +121,36 @@ export function chooseMatchSettings({parent, form, problem, describe = () => '',
 
 	if(form.intro) body.append(node('p', {class: 'phonics-match-settings-intro'}, form.intro));
 
+	// Each group folds into a section whose header shows its current values, so the whole rule set reads at a glance.
+	const sections = [];
+
 	for(const group of form.groups)
 	{
+		// A group without fields is a fixed row, such as a player count the game does not let the host change.
+		if(!group.fields.length)
+		{
+			const row = node('div', {class: 'phonics-match-settings-section is-fixed'});
+			const header = node('div', {class: 'phonics-match-settings-row'});
+			const value = node('span', {class: 'phonics-match-settings-section-value'});
+			header.append(node('span', {class: 'phonics-match-settings-section-title'}, group.legend ?? ''), value);
+			row.append(header);
+			body.append(row);
+			sections.push({group, value, controls: []});
+			continue;
+		}
+
+		const section = node('details', {class: 'phonics-match-settings-section'});
+		section.open = Boolean(group.open);
+		const header = node('summary');
+		const value = node('span', {class: 'phonics-match-settings-section-value'});
+		header.append(node('span', {class: 'phonics-match-settings-section-title'}, group.legend ?? ''), value);
+
 		const fieldset = node('fieldset');
 
-		if(group.legend) fieldset.append(node('legend', {}, group.legend));
+		if(group.legend) fieldset.append(node('legend', {class: 'phonics-visually-hidden'}, group.legend));
 
 		const fields = node('div', {class: 'phonics-launcher-fields'});
+		const first = controls.length;
 
 		for(const field of group.fields) fields.append(buildField(field, controls));
 
@@ -114,7 +158,9 @@ export function chooseMatchSettings({parent, form, problem, describe = () => '',
 
 		if(group.help) fieldset.append(node('p', {class: 'phonics-match-settings-help'}, group.help));
 
-		body.append(fieldset);
+		section.append(header, fieldset);
+		body.append(section);
+		sections.push({group, value, controls: controls.slice(first)});
 	}
 
 	const summary = node('div', {class: 'phonics-match-settings-summary', 'aria-live': 'polite'});
@@ -182,6 +228,8 @@ export function chooseMatchSettings({parent, form, problem, describe = () => '',
 
 		summary.hidden = !label;
 		summaryText.textContent = label;
+
+		for(const section of sections) section.value.textContent = sectionSummary(section, current);
 	};
 
 	const write = values => {
@@ -251,6 +299,38 @@ export function chooseMatchSettings({parent, form, problem, describe = () => '',
 	return pending.promise;
 }
 
+/**
+ * One line for a folded section: the game's own `summary(values)` when it supplies one, otherwise each visible
+ * field's value in order (a list's chosen label, a number with its label, checked boxes or None).
+ */
+function sectionSummary({group, controls}, values)
+{
+	if(typeof group.summary === 'function')
+	{
+		try
+		{
+			return String(group.summary(structuredClone(values)) ?? '');
+		}
+		catch
+		{
+			// A summary that cannot read half-edited values falls back to the field values.
+		}
+	}
+
+	return controls.filter(control => !control.element.hidden).map(({field}) => {
+		const value = values[field.name];
+
+		if(field.type === 'select')
+		return field.options.find(option => option.value === value)?.label ?? String(value ?? '');
+
+		if(field.type === 'number') return `${field.label ?? field.name} ${value ?? '–'}`;
+
+		const checked = field.options.filter(option => Array.isArray(value) && value.includes(option.value));
+
+		return checked.length ? checked.map(option => option.label ?? String(option.value)).join(', ') : 'None';
+	}).join(' · ');
+}
+
 /** Build one field, registering how to read, restore and default it. */
 function buildField(field, controls)
 {
@@ -260,7 +340,9 @@ function buildField(field, controls)
 
 		if(field.columns) element.style.setProperty('--choice-width', `${Number(field.columns)}rem`);
 
-		element.append(node('legend', {}, field.label ?? field.name));
+		// An empty label leaves the boxes under their section's own title.
+		if(field.label !== '') element.append(node('legend', {}, field.label ?? field.name));
+		else element.setAttribute('aria-label', field.name);
 
 		let group = null;
 
@@ -345,9 +427,10 @@ function buildField(field, controls)
 		, inputmode: 'numeric'
 	});
 
-	element.append(input);
+	// A caption sits between the label and its box, like the game's own setup captions.
+	if(field.help) element.append(node('span', {class: 'phonics-match-settings-caption'}, field.help));
 
-	if(field.help) element.append(node('span', {class: 'phonics-match-settings-help'}, field.help));
+	element.append(input);
 
 	controls.push({
 		field

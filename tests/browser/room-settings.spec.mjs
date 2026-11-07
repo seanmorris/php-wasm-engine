@@ -52,7 +52,8 @@ const openRoom = async page => {
 					, values: chosen.at(-1) ?? defaults
 					, defaults
 					, groups: [
-						{
+						{legend: 'Players', fields: [], summary: () => 'Two, always'}
+						, {
 							legend: 'Opening'
 							, fields: [
 								{
@@ -118,6 +119,19 @@ test('opening a table asks for house rules in a launcher-style dialog and labels
 	await expect(dialog.getByRole('button', {name: 'Open table'})).toBeEnabled();
 	await expect(dialog.locator('.phonics-match-settings-summary')).toContainText('Ante 1');
 
+	// Every section starts folded, and its header shows the values inside.
+
+	const section = name => dialog.locator('details', {has: page.locator('summary', {hasText: name})});
+	await expect(dialog.locator('details[open]')).toHaveCount(0);
+	await expect(dialog.locator('details')).toHaveCount(2);
+	await expect(dialog.locator('.is-fixed')).toHaveText('PlayersTwo, always');
+	await expect(dialog.getByRole('spinbutton', {name: 'Ante'})).toBeHidden();
+	await expect(section('Opening').locator('summary')).toHaveText('OpeningAnything Opens · Ante 1');
+	await expect(section('Wild cards').locator('summary')).toHaveText('Wild cardsNone');
+	await section('Opening').locator('summary').click();
+	await section('Wild cards').locator('summary').click();
+	await expect(dialog.locator('details[open]')).toHaveCount(2);
+
 	expect(
 		await dialog.getByRole('option', {name: 'Jackpots (offline only)'}).evaluate(option => option.disabled)
 	).toBe(true);
@@ -137,10 +151,16 @@ test('opening a table asks for house rules in a launcher-style dialog and labels
 	expect(await page.evaluate(() => host.snapshot().tables.length)).toBe(0);
 
 	await room.getByRole('button', {name: 'Open a table'}).click();
+	await section('Opening').locator('summary').click();
+	await section('Wild cards').locator('summary').click();
 	await dialog.getByRole('spinbutton', {name: 'Ante'}).fill('3');
 	await dialog.getByRole('checkbox', {name: 'Custom'}).check();
 	await dialog.getByRole('checkbox', {name: 'K♥'}).check();
 	await expect(dialog.locator('.phonics-match-settings-summary')).toContainText('Ante 3 · custom wild (KH)');
+
+	const value = name => section(name).locator('.phonics-match-settings-section-value');
+	await expect(value('Opening')).toHaveText('Anything Opens · Ante 3');
+	await expect(value('Wild cards')).toHaveText('Custom · K♥');
 
 	// Hiding the custom list clears it from the settings, and the choice comes back when Custom is checked again.
 	await dialog.getByRole('checkbox', {name: 'Custom'}).uncheck();
@@ -173,6 +193,9 @@ test('a challenge uses the same dialog, starts from the last rules, and resets t
 
 	await room.getByRole('button', {name: 'Challenge'}).click();
 	const dialog = page.locator('dialog.phonics-match-settings');
+	await expect(dialog.locator('summary', {hasText: 'Opening'})).toHaveText('OpeningAnything Opens · Ante 4');
+
+	for(const header of await dialog.locator('summary').all()) await header.click();
 	await expect(dialog.getByRole('spinbutton', {name: 'Ante'})).toHaveValue('4');
 	await expect(dialog.getByRole('checkbox', {name: 'Deuces'})).toBeChecked();
 	await dialog.getByRole('button', {name: 'Defaults'}).click();
