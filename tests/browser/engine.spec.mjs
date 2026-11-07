@@ -257,38 +257,47 @@ test('the live water scene applies buoyancy and draws the visible liquid pass', 
 	await expect.poll(async() => (await body()).underwater).toBe(true);
 	expect((await water()).depth).toBeGreaterThan(.5);
 	expect((await water()).features).toBeNull();
-	await expect.poll(async() => (await water()).draws, {timeout: 10000}).toBe(2);
 
-	// A splash lives 0.32 simulated seconds, so read its count in the same step rather than from a later frame.
+	// The body floats, so splash while it is still under the surface: on a slow runner it can reach the surface
+	// during the liquid-pass wait below, leaving $body->water null. Entering the water made its own splash, which
+	// lives 0.32 simulated seconds, so count the added splash within one step instead of reading a total.
 	const splash = `<?php
 		$particles = $game->level->waterParticles;
+		$before = $particles->snapshot();
 		$particles->splash($body->x, $body->water->y);
-		echo json_encode($particles->snapshot()), "\n";
+		echo json_encode(['before' => $before, 'after' => $particles->snapshot()]), "\n";
 	`;
 
-	const output = await page.evaluate(async source => {
-		let output = '';
+	const {output, stderr} = await page.evaluate(async source => {
+		const result = {output: '', stderr: ''};
 
-		const listener = event => output += event.detail.join('');
+		const listener = event => result.output += event.detail.join('');
+
+		const failure = event => result.stderr += event.detail.join('');
 
 		enginePhp.addEventListener('output', listener);
+		enginePhp.addEventListener('error', failure);
 
 		try
 		{
 			await enginePhp.run(source);
 
-			return output;
+			return result;
 		}
 		finally
 		{
 			enginePhp.removeEventListener('output', listener);
+			enginePhp.removeEventListener('error', failure);
 		}
 	}, splash
 	);
 
-	expect(JSON.parse(output).splashes).toBe(1);
+	expect(output, stderr).not.toBe('');
+	const {before, after} = JSON.parse(output);
+	expect(after.splashes - before.splashes).toBe(1);
 	const initial = await body();
 	await expect.poll(async() => (await body()).y).toBeLessThan(initial.y - 3);
+	await expect.poll(async() => (await water()).draws, {timeout: 10000}).toBe(2);
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.stopEngine());
 });
