@@ -194,15 +194,30 @@ test('PHP-Noid keeps its background and primitive shader bindings bounded across
 	await loadGame(page);
 
 	const frames = () => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpNoid).frames);
+
+	const sample = () => page.evaluate(() => ({
+		frames: JSON.parse(document.querySelector('canvas').dataset.phpNoid).frames
+		, binds: noidProgramBinds
+	}));
+
+	/**
+	 * Program binds per rendered frame over at least 20 frames. On a slow runner the poll can overshoot the window
+	 * by dozens of frames, so judge the rate from frame and bind counts read together, not a fixed total.
+	 */
+	const bindRate = async () => {
+		const start = await sample();
+		await expect.poll(async () => (await sample()).frames).toBeGreaterThan(start.frames + 20);
+		const end = await sample();
+
+		return {start, end, rate: (end.binds - start.binds) / (end.frames - start.frames)};
+	};
+
 	await expect.poll(frames).toBeGreaterThan(10);
-	const bindings = await page.evaluate(() => noidProgramBinds);
-	const before = await frames();
-	await expect.poll(frames).toBeGreaterThan(before + 20);
-	const steadyBindings = await page.evaluate(() => noidProgramBinds);
-	expect(bindings).toBeGreaterThan(0);
+	const steady = await bindRate();
+	expect(steady.start.binds).toBeGreaterThan(0);
 	// One image program and one rectangle program are required for each rendered frame.
-	expect(steadyBindings).toBeGreaterThan(bindings + 20);
-	expect(steadyBindings).toBeLessThan(bindings + 120);
+	expect(steady.rate).toBeGreaterThan(1);
+	expect(steady.rate).toBeLessThan(6);
 
 	await page.evaluate(() => {
 		window.noidLoss = document.querySelector('canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
@@ -216,12 +231,10 @@ test('PHP-Noid keeps its background and primitive shader bindings bounded across
 	await page.evaluate(() => noidLoss.restoreContext());
 	await expect.poll(frames).toBeGreaterThan(stopped + 20);
 	const restoredBindings = await page.evaluate(() => noidProgramBinds);
-	expect(restoredBindings).toBeGreaterThan(steadyBindings);
-	const restored = await frames();
-	await expect.poll(frames).toBeGreaterThan(restored + 20);
-	const rebound = await page.evaluate(() => noidProgramBinds);
-	expect(rebound).toBeGreaterThan(restoredBindings + 20);
-	expect(rebound).toBeLessThan(restoredBindings + 120);
+	expect(restoredBindings).toBeGreaterThan(steady.end.binds);
+	const rebound = await bindRate();
+	expect(rebound.rate).toBeGreaterThan(1);
+	expect(rebound.rate).toBeLessThan(6);
 
 	// Read immediately after a draw; WebGL's default framebuffer need not survive compositing.
 	await page.evaluate(async () => {
