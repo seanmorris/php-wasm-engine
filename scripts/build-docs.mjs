@@ -16,6 +16,8 @@ const browserFiles = ['browser/Phonics.mjs'
 	, 'browser/PackageGraph.mjs'
 	, 'browser/ArchiveResources.mjs'
 	, 'browser/LoadProgress.mjs'
+	, 'browser/QuickControls.mjs'
+	, 'browser/SafeStorage.mjs'
 	, 'browser/network/OAuthPopup.mjs'
 	, 'browser/network/InviteLink.mjs'
 ];
