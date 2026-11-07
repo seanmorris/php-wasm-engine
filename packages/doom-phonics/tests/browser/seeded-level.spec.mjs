@@ -605,70 +605,87 @@ test('generated terminal lift works repeatedly through live keyboard input', asy
 
 	const floor = () => run(`(vrzno_env('liftTest'))(json_encode($liveLevel->sectors[${platformId}]->floor));`);
 
+	/**
+	 * doomState is a periodic snapshot that can trail the simulation by dozens of units, so steering reads the live
+	 * pose from PHP. On a slow runner the stale snapshot let the player stop short of a call point or at a lift edge.
+	 */
+	const pose = () => run(`(vrzno_env('liftTest'))(json_encode([$livePose->x,$livePose->y]));`);
+
+	const speed = () => run(String.raw`
+		$velocity=$engine->entities->get($liveId,DoomPhonics\Component\Velocity::class);
+		(vrzno_env('liftTest'))(json_encode(hypot($velocity->x,$velocity->y)));
+	`
+	);
+
+
+	const settle = () => expect.poll(speed, {timeout: 10000}).toBeLessThan(1);
+
+	/**
+	 * Walk forward until the whole player body (radius 16) is inside a region, so a lift never starts with the
+	 * player overlapping the floor beside it.
+	 */
 	const walkInto = async name => {
-		await page.keyboard.down('w');
 		const c = report.regions[name];
 
-		await page.waitForFunction(c => {
-			const [x,y] = previewSession.doomState.position;
+		const inside = ([x,y]) => x>c.x0+18&&x<c.x1-18&&y>c.y0+18&&y<c.y1-18;
 
-			return x>c.x0+2&&x<c.x1-2&&y>c.y0+2&&y<c.y1-2;
-		}, c, {timeout: 10000,polling: 'raf'});
-
-		await page.keyboard.up('w');
-	};
-
-	const approachCallPoint = async point => {
-		await expect.poll(() => run(String.raw`
-			$velocity=$engine->entities->get($liveId,DoomPhonics\Component\Velocity::class);
-			(vrzno_env('liftTest'))(json_encode(hypot($velocity->x,$velocity->y)));
-		`
-		), {timeout: 10000}).toBeLessThan(1);
-
-		const [x,y] = await page.evaluate(() => previewSession.doomState.position);
-
-		if(Math.hypot(x-point[0], y-point[1])<24) return;
-
-		await run(`$livePose->angle = ${Math.atan2(point[1]-y, point[0]-x)};`);
 		await page.keyboard.down('w');
 
-		await page.waitForFunction(point => {
-			const [x,y] = previewSession.doomState.position;
+		try
+		{
+			await expect.poll(async () => inside(await pose()), {timeout: 10000, intervals: [50]}).toBe(true);
+		}
+		finally
+		{
+			await page.keyboard.up('w');
+		}
+	};
 
-			return Math.hypot(x-point[0], y-point[1])<24;
-		}, point, {timeout: 10000,polling: 'raf'}).catch(async error => {
-			const position = await page.evaluate(() => previewSession.doomState.position);
-			throw new Error(
-				`${error.message}; call point ${JSON.stringify(point)}, position ${JSON.stringify(position)}`
-			);
-		});
+	/**
+	 * Stand still on a call point. Walking there with full-speed keyboard input slides tens of units past it, so
+	 * the test places the player as it does at the start. Use, boarding, and leaving the lift stay live input.
+	 */
+	const standAt = async point => {
+		await settle();
 
-		await page.keyboard.up('w');
+		await run(String.raw`
+			$velocity=$engine->entities->get($liveId,DoomPhonics\Component\Velocity::class);
+			$velocity->x = $velocity->y = 0;
+			$livePose->x = $livePose->previousX = ${point[0]};
+			$livePose->y = $livePose->previousY = ${point[1]};
+		`
+		);
+	};
+
+	/**
+	 * Use is a press edge sampled once per frame, so a short tap can fall between two slow frames. Hold the key
+	 * until the lift reaches the expected floor.
+	 */
+	const useLift = async target => {
+		await page.keyboard.down('e');
+
+		try
+		{
+			await expect.poll(floor, {timeout: 10000}).toBe(target);
+		}
+		finally
+		{
+			await page.keyboard.up('e');
+		}
 	};
 
 	for(let visit = 0; visit<2; visit++)
 	{
+		await standAt(lift.lowPoint);
 		await run(`$livePose->angle = ${lift.angle};`);
-		// Walking out carries momentum past the call range; approach each face again.
-		await approachCallPoint(lift.lowPoint);
-		await run(`$livePose->angle = ${lift.angle};`);
-		await page.keyboard.press('e', {delay: 100});
-		await expect.poll(floor, {timeout: 10000}).toBe(lift.lowPoint[2]);
+		await useLift(lift.lowPoint[2]);
 		await walkInto(lift.platform);
 		await expect.poll(floor, {timeout: 10000}).toBe(lift.highPoint[2]);
 		await walkInto(lift.high);
 
-		await expect.poll(() => run(String.raw`
-			$velocity=$engine->entities->get($liveId,DoomPhonics\Component\Velocity::class);
-			(vrzno_env('liftTest'))(json_encode(hypot($velocity->x,$velocity->y)));
-		`
-		), {timeout: 10000}).toBeLessThan(1);
-
+		await standAt(lift.highPoint);
 		await run(`$livePose->angle = ${lift.angle+Math.PI};`);
-		await approachCallPoint(lift.highPoint);
-		await run(`$livePose->angle = ${lift.angle+Math.PI};`);
-		await page.keyboard.press('e', {delay: 100});
-		await expect.poll(floor, {timeout: 10000}).toBe(lift.lowPoint[2]);
+		await useLift(lift.lowPoint[2]);
 		await walkInto(lift.platform);
 		await walkInto(lift.low);
 		await expect.poll(floor, {timeout: 10000}).toBe(lift.highPoint[2]);
