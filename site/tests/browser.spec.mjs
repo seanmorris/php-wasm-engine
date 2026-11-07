@@ -1384,7 +1384,13 @@ test('PHPTris retains its board and drawing across context loss and GPU process 
 		}, kind
 		);
 
-		await expect.poll(() => page.evaluate(() => trisRecovery.losses.length)).toBe(cycle);
+		// A crashed GPU process reports the lost context late on hosted runners (about 7 s in one CI trace), so that
+		// cycle waits longer than the scripted losses, which arrive at once.
+		await expect.poll(
+			() => page.evaluate(() => trisRecovery.losses.length)
+			, {timeout: kind === 'GPU process reset' ? 30_000 : 5_000}
+		).toBe(cycle);
+
 		expect(errors, kind).toEqual([]);
 		expect(await page.evaluate(() => trisRecovery.losses.at(-1)), kind).toBe(true);
 

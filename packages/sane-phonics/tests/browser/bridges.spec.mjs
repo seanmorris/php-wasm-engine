@@ -68,7 +68,13 @@ test('live bendable spans add body loads and expose a deforming grinding rail', 
 		return spans[0].riders.length;
 	}).toBe(2);
 
-	expect(Math.max(...spans[0].offsets)).toBeGreaterThan(5);
+	// The span eases toward its loaded shape over several frames after both riders land.
+	await expect.poll(async() => {
+		spans = JSON.parse(await page.locator('canvas').getAttribute('data-bridges'));
+
+		return Math.max(...spans[0].offsets);
+	}, {timeout: 15_000}).toBeGreaterThan(5);
+
 	expect(spans[0].offsets[0]).toBe(0);
 	expect(spans[0].offsets.at(-1)).toBe(0);
 
