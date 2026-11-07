@@ -97,19 +97,30 @@ test('a second tab on the same seat stands by, takes the seat over, and hands it
 	await active(page);
 
 	const seat = name => tab(name).locator('.phonics-room-seat');
+
+	const dialog = name => tab(name).getByRole('dialog', {name: 'This game is open in another tab'});
 	await expect(seat('first')).toBeHidden();
 
-	// The second tab resumes the same seat from its table list and stands by instead of playing.
+	// The second tab resumes the same seat from its table list. It stands by and asks what to do in a dialog.
 	await tab('second').getByRole('button', {name: 'Resume'}).click();
-	await expect(seat('second')).toBeVisible();
-	await expect(seat('second').locator('strong')).toHaveText('This game is open in another tab');
+	await expect(dialog('second')).toBeVisible();
+	await expect(dialog('second')).toContainText('Play continues in that tab');
+	await expect(dialog('second').getByRole('button', {name: 'Play here instead'})).toBeFocused();
+	await expect(dialog('first')).toHaveCount(0);
 	await expect(seat('first')).toBeHidden();
-	await expect(tab('second').locator('.phonics-room-match button')).toHaveText('Back to lobby');
-	await expect(tab('first').locator('.phonics-room-match button')).toHaveText('Leave table');
 	expect(await page.evaluate(() => window.starts.second.at(-1)?.standby)).toBe(true);
 
-	// Playing here sends the other tab to the same card.
+	// Just watching closes the dialog; the sidebar card keeps the same choice.
+	await dialog('second').getByRole('button', {name: 'Just watch'}).click();
+	await expect(dialog('second')).toHaveCount(0);
+	await expect(seat('second')).toBeVisible();
+	await expect(seat('second').locator('strong')).toHaveText('This game is open in another tab');
+	await expect(tab('second').locator('.phonics-room-match button')).toHaveText('Back to lobby');
+	await expect(tab('first').locator('.phonics-room-match button')).toHaveText('Leave table');
+
+	// Playing here sends the other tab to the same dialog.
 	await seat('second').getByRole('button', {name: 'Play here instead'}).click();
+	await expect(dialog('first')).toBeVisible();
 	await expect(seat('first')).toBeVisible();
 	await expect(seat('second')).toBeHidden();
 	await expect(tab('first').locator('.phonics-room-match button')).toHaveText('Back to lobby');
@@ -118,12 +129,17 @@ test('a second tab on the same seat stands by, takes the seat over, and hands it
 
 	// Going to the other tab asks it forward; it flashes its title because browsers rarely let it raise itself.
 	const title = await page.title();
-	await seat('first').getByRole('button', {name: 'Go to that tab'}).click();
+	await dialog('first').getByRole('button', {name: 'Go to that tab'}).click();
+	await expect(dialog('first')).toContainText('title is flashing');
 	await expect(seat('first').locator('p')).toContainText('title is flashing');
 	await expect(page).toHaveTitle('● Your game is here');
 
-	// The card restores its text when it appears again, and the first tab can take the seat back.
-	await seat('first').getByRole('button', {name: 'Play here instead'}).click();
+	// Taking the seat back from the dialog swaps the tabs again; Escape dismisses the other tab's dialog.
+	await dialog('first').getByRole('button', {name: 'Play here instead'}).click();
+	await expect(dialog('first')).toHaveCount(0);
+	await expect(dialog('second')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(dialog('second')).toHaveCount(0);
 	await expect(seat('second')).toBeVisible();
 	await expect(seat('second').locator('p')).toContainText('Play continues in that tab');
 	await expect(seat('first')).toBeHidden();

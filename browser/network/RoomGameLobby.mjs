@@ -1,5 +1,7 @@
 import {useOverlayTheme, useStyle} from '../OverlayTheme.mjs';
-import {ChatLog, DisplayNames, StatusLine, Ticker, copyText, node, personRow, timeLeft} from '../ui/LobbyKit.mjs';
+import {
+	ChatLog, DisplayNames, StatusLine, Ticker, copyText, node, ownPointerInput, personRow, timeLeft
+} from '../ui/LobbyKit.mjs';
 import {chooseMatchSettings} from '../launcher/MatchSettingsDialog.mjs';
 import {authorizeWithPopup} from './OAuthPopup.mjs';
 
@@ -2273,6 +2275,8 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-main>.phonics-room-chat-section{flex:1 1 auto;min-height:14rem}
 .phonics-room-match{display:none}
 .phonics-room-seat{border-color:rgba(217,164,65,.55)}
+.phonics-room-seat-dialog{width:min(36rem,calc(100% - 2rem))}
+.phonics-room-seat-dialog>p{margin:0;padding:1rem 1.1rem;color:var(--ui-muted);line-height:1.45}
 .phonics-room-rules{margin:0;color:var(--ui-muted);font-size:.85rem}.phonics-room-rules[hidden]{display:none}
 .phonics-room-clock{margin:0;font-variant-numeric:tabular-nums;color:var(--ui-muted);font-size:.9rem}
 .phonics-room-clock.is-urgent{color:var(--ui-danger-text);font-weight:700}.phonics-room-clock[hidden]{display:none}
@@ -2302,11 +2306,15 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-game.has-game{grid-template:"stage" minmax(0,1.3fr) "side" minmax(0,1fr)/minmax(0,1fr)}
 .phonics-room-game.has-game .phonics-room-panel{border-width:1px 0 0}
 .phonics-room-game.has-game .phonics-room-body{overflow:hidden}.phonics-room-game.has-game .phonics-room-main{overflow:auto}
-.phonics-room-game.has-game .phonics-room-rail{display:none}}
+.phonics-room-game.has-game .phonics-room-rail{display:none}
+.phonics-modal.phonics-room-seat-dialog{width:calc(100% - 2rem);height:fit-content;max-height:calc(100% - 2rem);border-width:1px;
+border-radius:16px}}
 `;
 
-const SEAT_TEXT = 'Play continues in that tab. Go back to it, or play here instead; that tab then waits with this same '
-	+ 'choice.';
+let seatDialogs = 0;
+
+const SEAT_TEXT = 'Play continues in that tab. Go back to it, play here instead (that tab then shows this same '
+	+ 'choice), or just watch from here.';
 
 const SEAT_FOCUS_TEXT
 	= 'That tab’s title is flashing “Your game is here”. If it did not come forward, pick it from the '
@@ -2496,11 +2504,8 @@ export class EmbeddedRoomLobby
 		this.closeButton.addEventListener('click', () => void this.requestLeave({close: true}));
 		this.loginButton.addEventListener('click', () => void this.login());
 		this.copyButton.addEventListener('click', () => void this.copyLink());
-		this.takeOverButton.addEventListener('click', () => void this.run(() => protocol.takeOverSeat()));
-
-		this.focusButton.addEventListener('click', () => {
-			if(protocol.focusSeat()) this.seatText.textContent = SEAT_FOCUS_TEXT;
-		});
+		this.takeOverButton.addEventListener('click', () => void this.takeOverSeat());
+		this.focusButton.addEventListener('click', () => this.goToSeatTab());
 
 		this.chatForm.addEventListener('submit', input => {
 			input.preventDefault();
@@ -2917,6 +2922,98 @@ export class EmbeddedRoomLobby
 
 		this.seatCard.hidden = !standby;
 		this.focusButton.hidden = !this.protocol.tabs;
+
+		if(!standby)
+		{
+			this.seatOffered = false;
+			this.closeSeatDialog();
+
+			return;
+		}
+
+		// The choice opens as a dialog each time this tab starts standing by. Once dismissed, the card keeps it.
+		if(this.seatOffered) return;
+
+		this.seatOffered = true;
+		this.openSeatDialog();
+	}
+
+	/** Offer the standby choice in a modal over the game: play here instead, go to the other tab, or just watch. */
+	openSeatDialog()
+	{
+		if(this.seatDialog || this.disposed) return;
+
+		const id = `phonics-room-seat-${++seatDialogs}`;
+
+		const dialog = node(
+			'dialog'
+			, {
+				class: 'phonics-modal phonics-ui phonics-room-seat-dialog'
+				, 'aria-labelledby': `${id}-title`
+				, 'aria-describedby': `${id}-text`
+			}
+		);
+
+		const header = node('header');
+		header.append(node('h2', {id: `${id}-title`, tabindex: '-1'}, 'This game is open in another tab'));
+		const text = node('p', {id: `${id}-text`, 'aria-live': 'polite'}, SEAT_TEXT);
+		const footer = node('footer', {class: 'phonics-modal-actions'});
+		const watch = node('button', {type: 'button', class: 'is-quiet'}, 'Just watch');
+		const focus = node('button', {type: 'button'}, 'Go to that tab');
+		const play = node('button', {type: 'button', class: 'phonics-modal-primary'}, 'Play here instead');
+		focus.hidden = !this.protocol.tabs;
+		footer.append(watch, focus, play);
+		dialog.append(header, text, footer);
+
+		// The modal owns pointer and keyboard input, so nothing reaches the game canvas behind it.
+		ownPointerInput(dialog);
+		dialog.addEventListener('keydown', input => input.stopPropagation());
+
+		dialog.addEventListener('cancel', input => {
+			input.preventDefault();
+			this.closeSeatDialog();
+		});
+
+		watch.addEventListener('click', () => this.closeSeatDialog());
+		focus.addEventListener('click', () => this.goToSeatTab());
+		play.addEventListener('click', () => void this.takeOverSeat());
+
+		this.seatDialog = {dialog, text, previousFocus: this.host.ownerDocument.activeElement};
+		this.root.append(dialog);
+		dialog.showModal();
+		play.focus({preventScroll: true});
+	}
+
+	/** Close the standby dialog and return focus to where it was, or to the game. */
+	closeSeatDialog()
+	{
+		const seat = this.seatDialog;
+
+		if(!seat) return;
+
+		this.seatDialog = null;
+
+		if(seat.dialog.open) seat.dialog.close();
+
+		seat.dialog.remove();
+		const target = seat.previousFocus?.isConnected ? seat.previousFocus : this.canvas;
+		target?.focus?.({preventScroll: true});
+	}
+
+	/** Ask the tab that plays this seat to come forward, and say how to find it if the browser keeps it back. */
+	goToSeatTab()
+	{
+		if(!this.protocol.focusSeat()) return;
+
+		this.seatText.textContent = SEAT_FOCUS_TEXT;
+
+		if(this.seatDialog) this.seatDialog.text.textContent = SEAT_FOCUS_TEXT;
+	}
+
+	/** Play this tab's seat here; the tab that played it falls back to the same choice. */
+	takeOverSeat()
+	{
+		return this.run(() => this.protocol.takeOverSeat());
 	}
 
 	/**
@@ -3196,6 +3293,7 @@ export class EmbeddedRoomLobby
 		this.protocol.removeEventListener('notice', this.notice);
 		this.protocol.removeEventListener('focusrequest', this.focusRequest);
 		this.titleFlash?.stop();
+		this.closeSeatDialog();
 		this.restoreCanvasSizing();
 		this.host.append(this.canvas);
 		this.root.remove();
