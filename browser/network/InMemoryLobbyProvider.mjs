@@ -35,16 +35,16 @@ export class InMemoryLobbyHub
 	 * Add a provider to its room and announce presence to every member.
 	 * @param {InMemoryLobbyProvider} provider Provider whose room and peer ID are joined.
 	 * @returns {void}
-	 * @throws {NetworkError} lobby_identity when the peer ID is already in the room.
+	 * @throws {NetworkError} lobby_identity when the peer ID, or the same tab of it, is already in the room.
 	 */
 	join(provider)
 	{
 		const room = this.rooms.get(provider.room) ?? new Map;
 
-		if(room.has(provider.peerId))
+		if(room.has(provider.member))
 		throw new NetworkError('lobby_identity', `Peer already joined: ${provider.peerId}`);
 
-		room.set(provider.peerId, provider);
+		room.set(provider.member, provider);
 		this.rooms.set(provider.room, room);
 		this.presence(provider.room);
 	}
@@ -58,7 +58,7 @@ export class InMemoryLobbyHub
 	{
 		const room = this.rooms.get(provider.room);
 
-		room?.delete(provider.peerId);
+		room?.delete(provider.member);
 
 		if(!room?.size) this.rooms.delete(provider.room);
 		else this.presence(provider.room);
@@ -72,13 +72,13 @@ export class InMemoryLobbyHub
 	presence(roomId)
 	{
 		const room = this.rooms.get(roomId) ?? new Map;
-		const peers = [...room.values()].map(provider => provider.profile());
+		const peers = [...new Map([...room.values()].map(provider => [provider.peerId, provider.profile()])).values()];
 
 		for(const provider of room.values()) provider.dispatchEvent(event('presence', {peers}));
 	}
 
 	/**
-	 * Dispatch one event to a peer in the sender's room.
+	 * Dispatch one event to a peer in the sender's room, in every tab where that peer is connected.
 	 * @param {InMemoryLobbyProvider} sender Sending provider; its peer ID is added as detail.from.
 	 * @param {string} target Receiving peer ID.
 	 * @param {string} type Event type to dispatch.
@@ -88,11 +88,11 @@ export class InMemoryLobbyHub
 	 */
 	deliver(sender, target, type, detail)
 	{
-		const provider = this.rooms.get(sender.room)?.get(target);
+		const providers = [...this.rooms.get(sender.room)?.values() ?? []].filter(value => value.peerId === target);
 
-		if(!provider) throw new NetworkError('lobby_peer', `Peer is unavailable: ${target}`);
+		if(!providers.length) throw new NetworkError('lobby_peer', `Peer is unavailable: ${target}`);
 
-		provider.dispatchEvent(event(type, {...detail, from: sender.peerId}));
+		for(const provider of providers) provider.dispatchEvent(event(type, {...detail, from: sender.peerId}));
 	}
 
 	/**
@@ -150,6 +150,12 @@ export class InMemoryLobbyProvider extends EventTarget
 	/** Validated identifier of the connected lobby peer. */
 	peerId;
 
+	/** Browser tab name, or null for a peer joined once. */
+	tab;
+
+	/** Room membership key: the peer ID, plus the tab when one is named. */
+	member;
+
 	/** Display name advertised to other lobby peers. */
 	displayName;
 
@@ -181,15 +187,19 @@ export class InMemoryLobbyProvider extends EventTarget
 	 * @param {string} [options.room] Room name; defaults to phonics.
 	 * @param {number} [options.invitationTtl] Invitation lifetime in milliseconds; defaults to 90,000.
 	 * @param {AbortSignal} [options.signal] Closes the provider when aborted after connecting.
+	 * @param {string} [options.tab] Names one browser tab, so several tabs of one peer ID can join the same room.
 	 */
-	constructor({hub, peerId, displayName = peerId, room = 'phonics', invitationTtl = 90_000, signal} = {})
-	{
+	constructor(
+		{hub, peerId, displayName = peerId, room = 'phonics', invitationTtl = 90_000, signal, tab = null} = {}
+	){
 		super();
 
 		if(!(hub instanceof InMemoryLobbyHub)) throw new TypeError('InMemoryLobbyProvider requires a hub');
 
 		this.hub = hub;
 		this.peerId = new PeerId(peerId).value;
+		this.tab = tab === null ? null : String(tab);
+		this.member = this.tab === null ? this.peerId : `${this.peerId}\u0000${this.tab}`;
 		this.displayName = String(displayName);
 		this.room = String(room);
 		this.invitationTtl = invitationTtl;

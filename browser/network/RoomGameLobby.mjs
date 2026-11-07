@@ -59,6 +59,9 @@ const validSeedMaterial = value => value && validSeedValue(value.contribution) &
 
 const seedStorageKey = (session, player) => `phonics.game.seed:v2:${session.root}:${player}`;
 
+/** Web Lock for one account's seat at one table. Other tables, and other accounts, never contend for it. */
+const seatLockName = (game, root, player) => `phonics-room-seat:${game.id}:${root}:${player}`;
+
 const seedTimeoutMs = game => game.seedTimeoutMs === undefined ? DEFAULT_SEED_TIMEOUT_MS : game.seedTimeoutMs;
 
 /** Per-step deadline in milliseconds, or null when the game lets players take as long as they like. */
@@ -238,10 +241,13 @@ export class RoomGameProtocol extends EventTarget
 			provider
 			, game
 			, session
-			, storage = globalThis.sessionStorage
+			, storage = globalThis.localStorage
+			, legacyStorage = globalThis.sessionStorage
 			, signal
 			, location = globalThis.location
 			, history = globalThis.history
+			, locks = globalThis.navigator?.locks
+			, tabs = name => typeof BroadcastChannel === 'function' ? new BroadcastChannel(name) : null
 		}
 	){
 		super();
@@ -280,7 +286,24 @@ export class RoomGameProtocol extends EventTarget
 		});
 
 		this.session = session;
+		// Seed openings live in storage shared by this account's tabs, so a tab that takes a seat over mid-exchange can
+		// still reveal. Per-seat Web Locks keep the other tabs from publishing for the same seat.
 		this.storage = storage;
+		this.legacyStorage = legacyStorage;
+		this.locks = typeof locks?.request === 'function' ? locks : null;
+		this.seatLocks = new Map;
+		this.openTabs = tabs;
+		this.tabs = null;
+
+		// A standby tab asks the tab that plays the seat to come forward.
+
+		this.onTab = ({data}) => {
+			const seat = this.seatLocks.get(data?.name);
+
+			if(data?.type === 'focus' && seat?.release && this.selected === seat.root)
+			this.dispatchEvent(event('focusrequest', {root: seat.root}));
+		};
+
 		this.signal = signal;
 		this.location = location;
 		this.history = history;
@@ -591,8 +614,238 @@ export class RoomGameProtocol extends EventTarget
 		this.selected = root;
 		const session = this.sessions.get(root);
 		session.localRole = role;
+		session.standby = false;
+		session.seatClaim = role === 'player' ? this.claimSeat(session) : null;
 		this.dispatchEvent(event('selected', {root, role}));
 		this.dispatchEvent(event('change', this.snapshot()));
+	}
+
+	/** Return this tab's record of the local player's seat lock at one table. */
+	seatLock(session)
+	{
+		const name = seatLockName(this.game, session.root, this.profile().id);
+
+		if(!this.seatLocks.has(name))
+		this.seatLocks.set(name, {name, root: session.root, release: null, waiting: null});
+
+		return this.seatLocks.get(name);
+	}
+
+	/** Whether this tab may publish for the local player's seat: it holds the seat, or the browser has no locks. */
+	holdsSeat(session)
+	{
+		if(!this.locks) return true;
+
+		const seat = this.seatLocks.get(seatLockName(this.game, session.root, this.profile().id));
+
+		return Boolean(seat?.release || seat?.publishing);
+	}
+
+	/**
+	 * Hold the local player's seat at the selected table in this tab, and resolve whether this tab plays it. A seat
+	 * that another tab of this browser already plays leaves this tab on standby: it watches, offers to take the seat
+	 * over, and takes it by itself once that tab leaves the table or closes. Games at different tables never contend.
+	 */
+	async claimSeat(session)
+	{
+		if(!this.locks || !this.connected) return true;
+
+		this.tabChannel();
+		const seat = this.seatLock(session);
+
+		if(seat.release || await this.requestSeat(session, seat, {ifAvailable: true}) || !this.locks) return true;
+
+		session.standby = true;
+		this.awaitSeat(session, seat);
+		this.dispatchEvent(event('seat', {root: session.root, standby: true}));
+		this.dispatchEvent(event('change', this.snapshot()));
+
+		return false;
+	}
+
+	/**
+	 * Request one seat lock and resolve whether it was granted. A granted seat stays held until this tab releases it
+	 * or another tab takes it over; then this tab stands by. A browser whose locks fail plays without them.
+	 */
+	requestSeat(session, seat, options)
+	{
+		return new Promise(answer => {
+			let release = null;
+
+			const granted = lock => {
+				// A waiting request can be granted after this tab left the table or closed; let it go at once.
+				if(!lock || this.closed || this.selected !== session.root)
+				{
+					answer(false);
+
+					return undefined;
+				}
+
+				return new Promise(done => {
+					release = seat.release = done;
+					answer(true);
+				});
+			};
+
+			this.locks.request(seat.name, options, granted).then(
+				() => { if(release && seat.release === release) seat.release = null; }
+				, error => {
+					if(!release)
+					{
+						if(error?.name !== 'AbortError') this.locks = null;
+
+						answer(!this.locks);
+
+						return;
+					}
+
+					if(seat.release !== release) return;
+
+					seat.release = null;
+					this.seatTaken(session, seat);
+				}
+			);
+		});
+	}
+
+	/** Stand by for a seat that another tab plays, and take it once that tab lets it go. */
+	awaitSeat(session, seat)
+	{
+		seat.waiting?.abort();
+		const waiting = seat.waiting = new AbortController;
+
+		void this.requestSeat(session, seat, {signal: waiting.signal}).then(granted => {
+			if(seat.waiting === waiting) seat.waiting = null;
+
+			if(granted) return this.seatResumed(session);
+		}).catch(error => this.fail(error));
+	}
+
+	/** Take the selected seat over from the tab that plays it. That tab stands by and offers to take it back. */
+	async takeOverSeat()
+	{
+		const session = this.sessions.get(this.selected);
+
+		if(!session?.standby || !this.locks) return;
+
+		const seat = this.seatLock(session);
+		seat.waiting?.abort();
+		seat.waiting = null;
+
+		if(await this.requestSeat(session, seat, {steal: true})) await this.seatResumed(session);
+	}
+
+	/**
+	 * Ask the tab that plays the selected seat to come forward. Browsers rarely let a background tab raise itself,
+	 * so that tab also marks its title. Resolves false when this browser cannot reach its other tabs.
+	 */
+	focusSeat()
+	{
+		const session = this.sessions.get(this.selected);
+
+		if(!session?.standby || !this.tabChannel()) return false;
+
+		this.tabs.postMessage({type: 'focus', name: seatLockName(this.game, session.root, this.profile().id)});
+
+		return true;
+	}
+
+	/** Open the channel this browser's tabs use to call each other forward, once a seat is first claimed. */
+	tabChannel()
+	{
+		if(this.tabs || this.closed || typeof this.openTabs !== 'function') return this.tabs;
+
+		this.tabs = this.openTabs('phonics-room-seats') ?? null;
+		this.tabs?.addEventListener?.('message', this.onTab);
+
+		return this.tabs;
+	}
+
+	/** Play a seat in this tab after standing by: restart the game as the player and publish what the seat owes. */
+	async seatResumed(session)
+	{
+		if(!session.standby || this.selected !== session.root) return;
+
+		session.standby = false;
+		this.restartGame(session);
+		this.dispatchEvent(event('seat', {root: session.root, standby: false}));
+		this.dispatchEvent(event('change', this.snapshot()));
+		await this.resumeSeedExchange(session);
+		this.armActionDeadline(session);
+	}
+
+	/** Stand by after another tab took this tab's seat over: watch the game here and wait to play it again. */
+	seatTaken(session, seat)
+	{
+		if(this.closed || this.selected !== session.root || session.localRole !== 'player') return;
+
+		session.standby = true;
+		this.restartGame(session);
+		this.awaitSeat(session, seat);
+		this.dispatchEvent(event('seat', {root: session.root, standby: true}));
+		this.dispatchEvent(event('change', this.snapshot()));
+	}
+
+	/** Restart the attached game for the selected table after this tab's part in it changes. */
+	restartGame(session)
+	{
+		if(this.selected !== session.root || !session.started) return;
+
+		session.started = false;
+		delete session.adapterConfirmation;
+		void this.startIfPossible(session).catch(error => this.fail(error));
+	}
+
+	/** Let go of, or stop waiting for, the local player's seat at one table. */
+	releaseSeat(session)
+	{
+		const seat = this.connected
+			? this.seatLocks.get(seatLockName(this.game, session.root, this.profile().id))
+			: null;
+
+		if(seat)
+		{
+			const release = seat.release;
+			seat.waiting?.abort();
+			seat.waiting = null;
+			seat.release = null;
+			release?.();
+			this.seatLocks.delete(seat.name);
+		}
+
+		session.standby = false;
+		session.seatClaim = null;
+	}
+
+	/**
+	 * Publish part of the seed exchange for the local player's seat only from the tab that plays it. A tab that has
+	 * not opened the table publishes only while no tab plays the seat, holding the seat just for that publication.
+	 */
+	async withSeat(session, task)
+	{
+		await session.seatClaim;
+
+		if(this.holdsSeat(session)) return task();
+
+		if(this.selected === session.root && session.localRole === 'player') return undefined;
+
+		const seat = this.seatLock(session);
+
+		return this.locks.request(seat.name, {ifAvailable: true}, async lock => {
+			if(!lock) return undefined;
+
+			// Mark the seat held so events this publication triggers in this tab can answer for it too.
+			seat.publishing = true;
+
+			try
+			{
+				return await task();
+			}
+			finally
+			{
+				seat.publishing = false;
+			}
+		});
 	}
 
 	/**
@@ -606,11 +859,13 @@ export class RoomGameProtocol extends EventTarget
 		const session = this.sessions.get(this.selected);
 		const me = this.connected ? this.profile().id : null;
 
-		if(session?.localRole === 'player' && session.seats?.includes(me)
-			&& !['complete','frozen','expired'].includes(session.status)
-		)
+		// A standby tab only stops watching: the tab that plays the seat keeps playing it, and keeps its activity.
+		const standby = Boolean(session?.standby);
+		const seated = session?.localRole === 'player' && !standby;
+
+		if(seated && session.seats?.includes(me) && !['complete','frozen','expired'].includes(session.status))
 		await this.child(session, 'resign', {player: me, reason: 'left'}, `resign:${me}`);
-		else if(me && session?.localRole === 'player' && !session.seats && session.status === 'open')
+		else if(me && seated && !session.seats && session.status === 'open')
 		{
 			await this.child(session, 'cancel', {player: me, reason: 'left'}, `cancel:${me}`);
 
@@ -622,9 +877,13 @@ export class RoomGameProtocol extends EventTarget
 			else session.joiners = (session.joiners ?? []).filter(player => player !== me);
 		}
 
+		if(session) this.releaseSeat(session);
+
 		this.adapter?.stop?.({reason: 'left'});
 		this.selected = null;
-		await this.provider.setActivity(null);
+
+		if(!standby) await this.provider.setActivity(null);
+
 		this.dispatchEvent(event('selected', null));
 		this.dispatchEvent(event('change', this.snapshot()));
 	}
@@ -827,7 +1086,7 @@ export class RoomGameProtocol extends EventTarget
 	{
 		const session = this.sessions.get(this.selected);
 
-		if(!session || session.localRole !== 'player' || !session.seats?.includes(this.profile().id))
+		if(!session || session.localRole !== 'player' || session.standby || !session.seats?.includes(this.profile().id))
 		throw new Error('This browser is not seated at a table');
 
 		return session;
@@ -992,16 +1251,20 @@ export class RoomGameProtocol extends EventTarget
 
 				if(me === session.offer.host && session.joiners.length === 1)
 				{
-					const timeout = seedTimeoutMs(session.offer.game);
-					const deadline = Date.now() + timeout;
+					const joiner = item.sender;
 
-					await this.child(session, 'seat', {
-						players: [session.offer.host, item.sender]
-						, seed_timeout_ms: timeout
-						, seed_deadline: deadline
-						, commit_deadline: deadline - LEGACY_REVEAL_GRACE_MS
-					}, `seat:${item.sender}`
-					);
+					await this.withSeat(session, () => {
+						const timeout = seedTimeoutMs(session.offer.game);
+						const deadline = Date.now() + timeout;
+
+						return this.child(session, 'seat', {
+							players: [session.offer.host, joiner]
+							, seed_timeout_ms: timeout
+							, seed_deadline: deadline
+							, commit_deadline: deadline - LEGACY_REVEAL_GRACE_MS
+						}, `seat:${joiner}`
+						);
+					});
 				}
 
 				break;
@@ -1030,7 +1293,7 @@ export class RoomGameProtocol extends EventTarget
 				{
 					this.armRevealDeadline(session);
 
-					if(session.seats.includes(me)) await this.commit(session);
+					if(session.seats.includes(me)) await this.withSeat(session, () => this.commit(session));
 				}
 
 				break;
@@ -1044,7 +1307,8 @@ export class RoomGameProtocol extends EventTarget
 
 				session.commits.set(item.sender, content.commit);
 
-				if(!replay && session.commits.size === 2 && session.seats.includes(me)) await this.reveal(session);
+				if(!replay && session.commits.size === 2 && session.seats.includes(me))
+				await this.withSeat(session, () => this.reveal(session));
 
 				break;
 
@@ -1290,11 +1554,14 @@ export class RoomGameProtocol extends EventTarget
 
 		if(!this.connected || session.status !== 'committing' || !session.seats?.includes(this.profile().id)) return;
 
-		if(!session.commits.has(this.profile().id)) await this.commit(session);
+		// Only the tab that plays this seat publishes for it; the shared opening lets a new holder reveal.
+		await this.withSeat(session, async () => {
+			if(!session.commits.has(this.profile().id)) await this.commit(session);
 
-		if(session.status !== 'committing') return;
+			if(session.status !== 'committing') return;
 
-		if(session.commits.size === 2) await this.reveal(session);
+			if(session.commits.size === 2) await this.reveal(session);
+		});
 
 		if(session.status === 'committing') this.armRevealDeadline(session);
 	}
@@ -1306,7 +1573,16 @@ export class RoomGameProtocol extends EventTarget
 
 		let stored;
 
-		try { stored = this.storage?.getItem(seedStorageKey(session, this.profile().id)); } catch { }
+		try
+		{
+			// Openings written before they moved to shared storage stay readable in their own tab.
+			stored = this.storage?.getItem(seedStorageKey(session, this.profile().id))
+				?? this.legacyStorage?.getItem(seedStorageKey(session, this.profile().id));
+		}
+		catch
+		{
+			/* Blocked storage leaves only the opening this tab holds in memory. */
+		}
 
 		if(stored == null) return null;
 
@@ -1599,7 +1875,7 @@ export class RoomGameProtocol extends EventTarget
 		const me = this.connected ? this.profile().id : null;
 
 		if(!me || this.selected !== session.root || session.localRole !== 'player' || !session.seats.includes(me)
-			|| due.owed.includes(me)
+			|| due.owed.includes(me) || session.standby || !this.holdsSeat(session)
 		) return;
 
 		// Claims are published at most once per retry period; a claim that lands too early is simply rejected.
@@ -1619,7 +1895,15 @@ export class RoomGameProtocol extends EventTarget
 	{
 		delete session.localSeedMaterial;
 
-		try { this.storage?.removeItem(seedStorageKey(session, this.profile().id)); } catch { }
+		try
+		{
+			this.storage?.removeItem(seedStorageKey(session, this.profile().id));
+			this.legacyStorage?.removeItem(seedStorageKey(session, this.profile().id));
+		}
+		catch
+		{
+			/* Blocked storage holds nothing to forget. */
+		}
 	}
 
 	/** Derive the shared seed and breaker from verified contributions. */
@@ -1704,6 +1988,9 @@ export class RoomGameProtocol extends EventTarget
 	/** Start or restore the attached application when table state is sufficient. */
 	async startIfPossible(session)
 	{
+		// A player's tab learns whether it plays the seat or stands by before the game starts.
+		await session.seatClaim;
+
 		if(this.closed || !['ready','active','complete'].includes(session.status)) return;
 
 		if(this.selected !== session.root || !session.seed || session.started || !this.adapter) return;
@@ -1722,12 +2009,18 @@ export class RoomGameProtocol extends EventTarget
 				.map(value => structuredClone(value))
 			: null;
 
+		// A standby tab starts the game as a spectator of its own seat; `seat` names that seat.
+		const standby = session.localRole === 'player' && Boolean(session.standby);
+		const role = standby ? 'spectator' : session.localRole;
+
 		this.adapter.start?.({
 			root: session.root
 			, sessionId: session.offer.session_id
-			, role: session.localRole
+			, role
 			, players: [...session.seats]
-			, localPlayer: session.localRole === 'player' ? this.profile().id : null
+			, localPlayer: role === 'player' ? this.profile().id : null
+			, seat: session.localRole === 'player' ? this.profile().id : null
+			, standby
 			, seed: session.seed
 			, breaker: session.turn
 			, settings: structuredClone(session.offer.settings ?? null)
@@ -1865,6 +2158,7 @@ export class RoomGameProtocol extends EventTarget
 			, profile: this.connected ? this.profile() : null
 			, peers: structuredClone(this.peers)
 			, selected: this.selected
+			, standby: Boolean(selected?.standby)
 			, playing: Boolean(selected?.seed && selected?.seats)
 			, tables: [...this.sessions.values()].filter(
 				session => session.root === this.selected || (!['complete','expired'].includes(session.status)
@@ -1919,6 +2213,17 @@ export class RoomGameProtocol extends EventTarget
 			clearTimeout(session.actionTimer);
 		}
 
+		for(const seat of this.seatLocks.values())
+		{
+			const release = seat.release;
+			seat.waiting?.abort();
+			seat.release = null;
+			release?.();
+		}
+
+		this.seatLocks.clear();
+		this.tabs?.removeEventListener?.('message', this.onTab);
+		this.tabs?.close?.();
 		this.provider.removeEventListener('gameevent', this.onGame);
 		this.provider.removeEventListener('presence', this.onPresence);
 		this.provider.removeEventListener('chat', this.onChat);
@@ -1997,6 +2302,13 @@ box-shadow:0 24px 64px rgba(0,0,0,.45);overflow:hidden}
 .phonics-room-game.has-game .phonics-room-rail{display:none}}
 `;
 
+const SEAT_TEXT = 'Play continues in that tab. Go back to it, or play here instead; that tab then waits with this same '
+	+ 'choice.';
+
+const SEAT_FOCUS_TEXT
+	= 'That tab’s title is flashing “Your game is here”. If it did not come forward, pick it from the '
+	+ 'tab bar.';
+
 const activityLabel = activity => ({
 	waiting: 'Waiting at a table'
 	, active: 'Playing'
@@ -2064,6 +2376,16 @@ export class EmbeddedRoomLobby
 		this.clockText = node('p', {class: 'phonics-room-clock', role: 'timer'});
 		this.clockText.hidden = true;
 		this.matchCard.append(this.matchTitle, this.matchRules, this.clockText, matchRow);
+
+		// A second tab on the same seat stands by: it can send the player back to the tab that plays, or take over.
+		this.seatCard = node('div', {class: 'phonics-ui-card is-waiting phonics-room-seat', 'aria-live': 'polite'});
+		this.seatCard.hidden = true;
+		this.seatText = node('p', {}, SEAT_TEXT);
+		this.takeOverButton = node('button', {type: 'button', class: 'is-primary'}, 'Play here instead');
+		this.focusButton = node('button', {type: 'button'}, 'Go to that tab');
+		const seatRow = node('div', {class: 'phonics-ui-row'});
+		seatRow.append(this.takeOverButton, this.focusButton);
+		this.seatCard.append(node('strong', {}, 'This game is open in another tab'), this.seatText, seatRow);
 
 		this.connectingCard = node('div', {class: 'phonics-ui-card phonics-room-lobby-only'});
 
@@ -2148,7 +2470,16 @@ export class EmbeddedRoomLobby
 		this.rail.append(node('div', {class: 'phonics-ui-section-head'}), this.peerList, this.peersEmpty);
 		this.rail.firstChild.append(this.peerHeading);
 
-		this.content.append(this.matchCard, this.connectingCard, this.signinCard, this.waitingCard, tables, chat);
+		this.content.append(
+			this.seatCard
+			, this.matchCard
+			, this.connectingCard
+			, this.signinCard
+			, this.waitingCard
+			, tables
+			, chat
+		);
+
 		body.append(this.content, this.rail);
 		this.panel.append(header, body);
 		this.root.append(this.stage, this.panel);
@@ -2162,6 +2493,11 @@ export class EmbeddedRoomLobby
 		this.closeButton.addEventListener('click', () => void this.requestLeave({close: true}));
 		this.loginButton.addEventListener('click', () => void this.login());
 		this.copyButton.addEventListener('click', () => void this.copyLink());
+		this.takeOverButton.addEventListener('click', () => void this.run(() => protocol.takeOverSeat()));
+
+		this.focusButton.addEventListener('click', () => {
+			if(protocol.focusSeat()) this.seatText.textContent = SEAT_FOCUS_TEXT;
+		});
 
 		this.chatForm.addEventListener('submit', input => {
 			input.preventDefault();
@@ -2209,6 +2545,9 @@ export class EmbeddedRoomLobby
 		protocol.addEventListener('chat', this.message);
 		protocol.addEventListener('error', this.error);
 		protocol.addEventListener('notice', this.notice);
+
+		this.focusRequest = () => this.callForward();
+		protocol.addEventListener('focusrequest', this.focusRequest);
 		signal?.addEventListener('abort', () => this.dispose(), {once: true});
 		this.render(this.snapshot);
 	}
@@ -2352,7 +2691,8 @@ export class EmbeddedRoomLobby
 	async requestLeave({close = false} = {})
 	{
 		const selected = this.snapshot.tables.find(table => table.root === this.snapshot.selected);
-		const forfeits = Boolean(selected?.resumable && ['committing','ready','active'].includes(selected.status));
+		const forfeits = Boolean(selected?.resumable && ['committing','ready','active'].includes(selected.status))
+			&& !this.snapshot.standby;
 
 		if(forfeits && !this.confirmingLeave)
 		{
@@ -2551,8 +2891,10 @@ export class EmbeddedRoomLobby
 		}
 
 		const selected = snapshot.tables.find(table => table.root === snapshot.selected) ?? null;
+		this.renderSeat(Boolean(snapshot.standby));
 		this.renderMatch(selected, me, playing);
-		this.renderWaiting(selected, playing);
+		// A standby tab shows its seat card in place of the waiting card, which offers to cancel the table.
+		this.renderWaiting(snapshot.standby ? null : selected, playing);
 		this.openButton.disabled = Boolean(snapshot.selected) || !snapshot.connected || Boolean(this.choosingSettings);
 
 		const listed = snapshot.tables.filter(table => table.root !== snapshot.selected);
@@ -2563,6 +2905,62 @@ export class EmbeddedRoomLobby
 		this.peerHeading.textContent = snapshot.peers.length ? `People · ${snapshot.peers.length} online` : 'People';
 		this.peerList.replaceChildren(...snapshot.peers.map(peer => this.peerItem(peer, me, snapshot)));
 		this.peersEmpty.hidden = others.length > 0;
+	}
+
+	/** Show the seat card while another tab plays this tab's seat, restoring its text whenever it reappears. */
+	renderSeat(standby)
+	{
+		if(standby && this.seatCard.hidden) this.seatText.textContent = SEAT_TEXT;
+
+		this.seatCard.hidden = !standby;
+		this.focusButton.hidden = !this.protocol.tabs;
+	}
+
+	/**
+	 * Answer a standby tab that asked for this one: try to come forward, and flash the title until this tab is
+	 * seen, because browsers rarely let a background tab raise itself.
+	 */
+	callForward()
+	{
+		const document = this.host.ownerDocument;
+		const view = document.defaultView;
+
+		try
+		{
+			view?.focus();
+		}
+		catch
+		{
+			// Focusing is best effort; the title still flashes.
+		}
+
+		this.titleFlash?.stop();
+
+		const title = document.title;
+		let ticks = 0;
+
+		const tick = () => {
+			ticks++;
+
+			if(ticks > 20 || (ticks > 2 && document.visibilityState === 'visible' && document.hasFocus?.()))
+			{
+				stop();
+
+				return;
+			}
+
+			document.title = ticks % 2 ? '● Your game is here' : title;
+		};
+
+		const timer = setInterval(tick, 750);
+
+		const stop = () => {
+			clearInterval(timer);
+			document.title = title;
+			this.titleFlash = null;
+		};
+
+		this.titleFlash = {stop};
 	}
 
 	/** Name the players, or the watched pairing, in the in-game sidebar. */
@@ -2578,7 +2976,10 @@ export class EmbeddedRoomLobby
 		this.matchTitle.textContent = spectating ? `Watching ${first} vs ${second}` : `${first} vs ${second}`;
 		this.setRules(this.matchRules, selected);
 
-		if(!this.confirmingLeave) this.leaveButton.textContent = spectating ? 'Stop watching' : 'Leave table';
+		if(!this.confirmingLeave)
+		this.leaveButton.textContent = this.snapshot.standby
+			? 'Back to lobby'
+			: spectating ? 'Stop watching' : 'Leave table';
 	}
 
 	/** Show the waiting card with its invite link and countdown while a table is not yet seated. */
@@ -2790,6 +3191,8 @@ export class EmbeddedRoomLobby
 		this.protocol.removeEventListener('chat', this.message);
 		this.protocol.removeEventListener('error', this.error);
 		this.protocol.removeEventListener('notice', this.notice);
+		this.protocol.removeEventListener('focusrequest', this.focusRequest);
+		this.titleFlash?.stop();
 		this.restoreCanvasSizing();
 		this.host.append(this.canvas);
 		this.root.remove();

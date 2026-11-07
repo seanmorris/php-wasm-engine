@@ -1838,3 +1838,323 @@ test('games without a step deadline publish no clock and ignore timeout claims',
 	await flush();
 	assert.equal(table('host').status, 'active');
 });
+
+/** Web Locks for one fake browser: exclusive locks with ifAvailable, steal, and abortable waiting requests. */
+class FakeLocks
+{
+	held = new Map;
+
+	queues = new Map;
+
+	request(name, options, callback)
+	{
+		return new Promise((resolve, reject) => {
+			const entry = {callback, resolve, reject};
+			const holder = this.held.get(name);
+			const queue = this.queues.get(name) ?? [];
+
+			if(options.steal)
+			{
+				this.held.delete(name);
+				holder?.reject(new DOMException('The lock was stolen', 'AbortError'));
+				this.grant(name, entry);
+
+				return;
+			}
+
+			if(!holder && !queue.length)
+			{
+				this.grant(name, entry);
+
+				return;
+			}
+
+			if(options.ifAvailable)
+			{
+				this.run(entry, null);
+
+				return;
+			}
+
+			queue.push(entry);
+			this.queues.set(name, queue);
+
+			options.signal?.addEventListener('abort', () => {
+				if(!queue.includes(entry)) return;
+
+				queue.splice(queue.indexOf(entry), 1);
+				reject(options.signal.reason);
+			}, {once: true});
+		});
+	}
+
+	grant(name, entry)
+	{
+		this.held.set(name, entry);
+
+		void this.run(entry, {name}).finally(() => {
+			if(this.held.get(name) !== entry) return;
+
+			this.held.delete(name);
+			const next = this.queues.get(name)?.shift();
+
+			if(next) this.grant(name, next);
+		});
+	}
+
+	run(entry, lock)
+	{
+		return Promise.resolve().then(() => entry.callback(lock)).then(entry.resolve, entry.reject);
+	}
+}
+
+/** BroadcastChannel stand-in shared by one fake browser's tabs. */
+const tabBus = () => {
+	const channels = new Set;
+
+	return () => {
+		const channel = new EventTarget;
+
+		channel.postMessage = data => {
+			for(const other of channels)
+			if(other !== channel)
+			setImmediate(() => other.dispatchEvent(Object.assign(new Event('message'), {data: structuredClone(data)})));
+		};
+
+		channel.close = () => channels.delete(channel);
+		channels.add(channel);
+
+		return channel;
+	};
+};
+
+/**
+ * A host and a guest whose browser opens tables in several tabs. Each tab is its own protocol and provider, and the
+ * guest's tabs share locks, storage, and a tab channel like tabs of one browser.
+ */
+const browserTabs = async t => {
+	const hub = new InMemoryLobbyHub;
+	const locks = new FakeLocks, tabs = tabBus(), shared = storage();
+	const starts = new Map, providers = [], protocols = new Map, ports = new Map;
+
+	const open = async (name, peerId, browser = peerId === 'guest') => {
+		const provider = new InMemoryLobbyProvider({hub, peerId, displayName: peerId, tab: name});
+
+		const protocol = new RoomGameProtocol({
+			provider
+			, game
+			, session: {}
+			, storage: browser ? shared : storage()
+			, locks: browser ? locks : new FakeLocks
+			, tabs: browser ? tabs : tabBus()
+		});
+
+		starts.set(name, []);
+
+		ports.set(name, protocol.attachGame({
+			start: detail => {
+				starts.get(name).push(detail);
+
+				if(detail.role === 'player') void ports.get(name).reportReady('h0').catch(() => {});
+			}
+			, action: () => {}
+			, confirmed: () => {}
+			, stop: () => {}
+		}));
+
+		providers.push(provider);
+		protocols.set(name, protocol);
+		await protocol.connect();
+
+		return protocol;
+	};
+
+	t.after(() => {
+		for(const protocol of protocols.values()) protocol.close();
+
+		for(const provider of providers) provider.close();
+	});
+
+	const transcript = kind => hub.history('phonics').filter(item => item.content?.kind === kind);
+
+	const lastStart = name => starts.get(name).at(-1);
+
+	return {hub, open, starts, lastStart, transcript, ports};
+};
+
+test('a second tab on the same seat stands by and watches, and only the playing tab publishes', async t => {
+	const {open, lastStart, transcript} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const root = await host.create();
+	await first.join(root);
+	await waitFor(() => first.sessions.get(root)?.status === 'active', 'the first tab to play');
+
+	await second.resume(root);
+	await waitFor(() => lastStart('second'), 'the standby start');
+
+	assert.equal(second.snapshot().standby, true);
+	assert.equal(first.snapshot().standby, false);
+
+	const {role, localPlayer, seat, standby} = lastStart('second');
+	assert.deepEqual([role, localPlayer, seat, standby], ['spectator', null, 'guest', true]);
+
+	assert.deepEqual(
+		[lastStart('first').role, lastStart('first').localPlayer, lastStart('first').standby]
+		, ['player', 'guest', false]
+	);
+
+	assert.throws(() => second.currentPlayer(), /not seated/);
+	await assert.rejects(second.resign(), /not seated/);
+
+	// The second tab was connected before the seat: it published nothing for the guest's seat.
+	for(const kind of ['commit','reveal','ready'])
+	assert.equal(transcript(kind).filter(item => item.sender === 'guest').length, 1, kind);
+
+	// Leaving a standby tab only stops watching there.
+	await second.leave();
+	assert.equal(transcript('resign').length, 0);
+	assert.equal(first.sessions.get(root).status, 'active');
+	assert.equal(first.snapshot().standby, false);
+	assert.equal(first.currentPlayer().root, root);
+});
+
+test('taking a seat over swaps the tabs, and the other tab shows the same standby choice', async t => {
+	const {open, lastStart, transcript} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const seats = [];
+	first.addEventListener('seat', ({detail}) => seats.push(detail));
+
+	const root = await host.create();
+	await first.join(root);
+	await waitFor(() => first.sessions.get(root)?.status === 'active', 'the first tab to play');
+	await second.resume(root);
+	await waitFor(() => second.snapshot().standby, 'the second tab to stand by');
+
+	await second.takeOverSeat();
+
+	await waitFor(
+		() => first.snapshot().standby && lastStart('first').standby && lastStart('second')?.role === 'player'
+		, 'the tabs to swap'
+	);
+
+	assert.equal(second.snapshot().standby, false);
+	assert.deepEqual([lastStart('second').role, lastStart('second').localPlayer], ['player', 'guest']);
+	assert.deepEqual([lastStart('first').role, lastStart('first').seat], ['spectator', 'guest']);
+	assert.deepEqual(seats, [{root, standby: true}]);
+	assert.equal(second.currentPlayer().root, root);
+	assert.throws(() => first.currentPlayer(), /not seated/);
+
+	// Taking it back works the same way in the other direction.
+	await first.takeOverSeat();
+
+	await waitFor(
+		() => second.snapshot().standby && lastStart('second').standby && lastStart('first').role === 'player'
+		, 'the tabs to swap back'
+	);
+
+	assert.equal(first.snapshot().standby, false);
+	assert.equal(lastStart('first').role, 'player');
+	assert.equal(lastStart('second').standby, true);
+	assert.equal(transcript('resign').length, 0);
+	assert.equal(host.sessions.get(root).status, 'active');
+});
+
+test('a standby tab takes the seat by itself once the playing tab closes', async t => {
+	const {open, lastStart} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const root = await host.create();
+	await first.join(root);
+	await waitFor(() => first.sessions.get(root)?.status === 'active', 'the first tab to play');
+	await second.resume(root);
+	await waitFor(() => second.snapshot().standby, 'the second tab to stand by');
+
+	first.close();
+	await waitFor(() => !second.snapshot().standby && lastStart('second').role === 'player', 'the second tab to play');
+	assert.equal(second.currentPlayer().root, root);
+});
+
+test('different tables in two tabs both play', async t => {
+	const {open, lastStart} = await browserTabs(t);
+	const hosts = [await open('host', 'host'), await open('rival', 'rival')];
+	const tabs = [await open('first', 'guest'), await open('second', 'guest')];
+	const roots = [await hosts[0].create(), await hosts[1].create()];
+	await tabs[0].join(roots[0]);
+	await tabs[1].join(roots[1]);
+
+	await waitFor(
+		() => tabs.every((tab, index) => tab.sessions.get(roots[index])?.status === 'active')
+		, 'both tables to play'
+	);
+
+	for(const [index, name] of ['first','second'].entries())
+	{
+		assert.equal(tabs[index].snapshot().standby, false);
+		assert.deepEqual([lastStart(name).root, lastStart(name).role], [roots[index], 'player']);
+	}
+});
+
+test('a tab that takes a seat over during the seed exchange reveals the shared opening', async t => {
+	const {open, transcript} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const commit = host.commit.bind(host);
+	let releaseHost;
+	const hostHeld = new Promise(resolve => { releaseHost = resolve; });
+
+	host.commit = session => hostHeld.then(() => commit(session));
+
+	const root = await host.create();
+	await first.join(root);
+	await waitFor(() => transcript('commit').some(item => item.sender === 'guest'), 'the guest commitment');
+	await second.resume(root);
+	await waitFor(() => second.snapshot().standby, 'the second tab to stand by');
+	await second.takeOverSeat();
+	await waitFor(() => first.snapshot().standby, 'the first tab to stand by');
+
+	releaseHost();
+	await waitFor(() => host.sessions.get(root)?.seed && second.sessions.get(root)?.seed, 'the shared seed');
+
+	assert.equal(host.sessions.get(root).seed, second.sessions.get(root).seed);
+	assert.equal(transcript('commit').filter(item => item.sender === 'guest').length, 1);
+	assert.equal(transcript('reveal').filter(item => item.sender === 'guest').length, 1);
+	await waitFor(() => host.sessions.get(root).status === 'active', 'an active table');
+});
+
+test('Go to that tab asks the playing tab to come forward', async t => {
+	const {open} = await browserTabs(t);
+	const host = await open('host', 'host');
+	const first = await open('first', 'guest');
+	const second = await open('second', 'guest');
+	const requests = [];
+	first.addEventListener('focusrequest', ({detail}) => requests.push(detail));
+	const root = await host.create();
+	await first.join(root);
+	await waitFor(() => first.sessions.get(root)?.status === 'active', 'the first tab to play');
+
+	assert.equal(first.focusSeat(), false);
+	await second.resume(root);
+	await waitFor(() => second.snapshot().standby, 'the second tab to stand by');
+	assert.equal(second.focusSeat(), true);
+	await waitFor(() => requests.length, 'the focus request');
+	assert.deepEqual(requests, [{root}]);
+});
+
+test('without Web Locks every tab plays its seat as before', async t => {
+	const hub = new InMemoryLobbyHub;
+	const provider = new InMemoryLobbyProvider({hub, peerId: 'host'});
+	const protocol = new RoomGameProtocol({provider, game, session: {}, storage: storage(), locks: null, tabs: null});
+	t.after(() => { protocol.close(); provider.close(); });
+
+	await protocol.connect();
+	const root = await protocol.create();
+
+	assert.equal(protocol.snapshot().standby, false);
+	assert.equal(await protocol.sessions.get(root).seatClaim, true);
+});
