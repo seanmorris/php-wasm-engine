@@ -832,7 +832,12 @@ export class LobbyController extends EventTarget
 		});
 
 		transport.addEventListener('error', ({detail}) => {
-			if(this.transport === transport && !this.closed) this.fail(detail);
+			if(this.transport !== transport || this.closed) return;
+
+			// A data channel closing under a match means the peer went away, as a failed send does in NetworkSession:
+			// end the match and keep the lobby available, so the player can start another game.
+			if(detail?.code === 'channel_closed') this.closeMatch(detail.message ?? 'peer disconnected');
+			else this.fail(detail);
 		});
 
 		transport.addEventListener('close', ({detail}) => {

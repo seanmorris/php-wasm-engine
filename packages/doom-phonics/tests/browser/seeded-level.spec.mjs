@@ -5,6 +5,9 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 
 test('generation records timings separately while retaining reproducible output', async() => {
+	// The generator runs twice to prove reproducible output. Validation alone takes about 8 s on a desktop and
+	// several times that on hosted runners, so the default 90 s test budget does not cover two runs.
+	test.setTimeout(300_000);
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-seeded-timing-'));
 
 	try

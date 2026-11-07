@@ -393,7 +393,7 @@
     "browser/network/Errors.mjs": "sha256-DC0Qk5xBy6drbPuicKe2FK+GCVOt4HedopCTOlIWyMQ=",
     "browser/network/InMemoryLobbyProvider.mjs": "sha256-WvSzHByK4aEuB3OHLuYnG0e7JqiG3AsP3xltimpOU60=",
     "browser/network/InviteLink.mjs": "sha256-EU6NbOWcvuy+YXeb3VLkJiU+RzymW1zi2lacm4gDQpE=",
-    "browser/network/LobbyController.mjs": "sha256-NkEpmN95tvNrsZR/Ovnq5Md28W21ke9/MXjs46ynBI8=",
+    "browser/network/LobbyController.mjs": "sha256-VzscSv02bdCNEiSv23mEFqFXTlp8lJFqOeQUIgmsQ4c=",
     "browser/network/LobbyOverlay.mjs": "sha256-AOuoUCJ51eoGIjPJOpHnQO5FlM2idFwPhevk8zh5Z74=",
     "browser/network/NetworkBridge.mjs": "sha256-Z2jtT3WpBzxrdBacac4GpNnvZrKv1zmzcln4S7SeZrg=",
     "browser/network/NetworkSession.mjs": "sha256-CY+FkIh5CLxomagZ0/OMnDIh1/kuEgHB/abonTu4kmg=",

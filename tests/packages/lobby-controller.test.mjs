@@ -72,6 +72,64 @@ test('lobby controller carries invitations into role-aware peer transports', asy
 	guest.close();
 });
 
+test('a peer channel that closes mid-match ends the match and keeps the lobby available', async () => {
+	const hub = new InMemoryLobbyHub;
+	const hostProvider = new InMemoryLobbyProvider({hub, peerId: 'host'});
+	const guestProvider = new InMemoryLobbyProvider({hub, peerId: 'guest'});
+	const transports = [];
+
+	const factory = options => {
+		const transport = new FakeTransport(options);
+		transports.push(transport);
+
+		return transport;
+	};
+
+	const host = new LobbyController({provider: hostProvider, transportFactory: factory});
+	const guest = new LobbyController({provider: guestProvider, transportFactory: factory});
+	await host.connect();
+	await guest.connect();
+
+	const connect = async () => {
+		const invited = waitState(guest, 'invited');
+		await host.invite('guest', {mode: 'deathmatch'});
+		const invitation = (await invited).invitations[0];
+		const connected = [waitState(host, 'connected'), waitState(guest, 'connected')];
+		await guest.accept(invitation);
+		await Promise.all(connected);
+	};
+
+	await connect();
+	const ended = [], errors = [];
+	guest.addEventListener('matchend', ({detail}) => ended.push(detail.reason));
+	guest.addEventListener('error', ({detail}) => errors.push(detail));
+
+	// WebRtcTransport reports a data channel the peer closed as channel_closed.
+	const closed = new Error('control channel closed');
+	closed.code = 'channel_closed';
+	transports.find(value => !value.initiator).dispatchEvent(new CustomEvent('error', {detail: closed}));
+
+	assert.equal(guest.state, 'available', 'the lobby stays usable');
+	assert.deepEqual(ended, ['control channel closed']);
+	assert.deepEqual(errors, []);
+	assert.equal(guest.transport, null);
+
+	// The same controllers can start another match.
+	host.closeMatch('peer disconnected');
+	await waitState(host, 'available');
+	await connect();
+	assert.equal(guest.state, 'connected');
+
+	// Any other transport failure still fails the lobby.
+	const broken = new Error('signaling broke');
+	broken.code = 'webrtc_signal';
+	const guestTransport = transports.filter(value => !value.initiator).at(-1);
+	guestTransport.dispatchEvent(new CustomEvent('error', {detail: broken}));
+	assert.equal(guest.state, 'failed');
+	host.close();
+	guest.close();
+});
+
 test('unanswered and withdrawn invitations release both lobbies', async () => {
 	const hub = new InMemoryLobbyHub;
 
