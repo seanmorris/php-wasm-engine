@@ -1018,6 +1018,22 @@ export class RoomGameProtocol extends EventTarget
 		const me = this.profile().id;
 		const action = session.actions.get(sequence);
 
+		// A seat that moved to this tab replays the batch it inherited, and the room may already have confirmed it
+		// with the reports the previous tab sent. Repeating such a step changes nothing: the confirmation is on its
+		// way to the game, so it waits for it. A different final state for a confirmed step is still an error.
+		const settling = session.pending?.sequence === sequence
+			|| Boolean(session.batch?.actions.some(value => value.sequence === sequence));
+
+		if(action && !settling && Number.isSafeInteger(sequence) && sequence <= session.sequence)
+		{
+			const reported = session.settles.get(sequence)?.get(me);
+			const fragment = this.game.actionBatches && action.batch_end === false;
+
+			if(fragment || (reported?.hash === String(hash) && reported?.next_actor === String(nextActor))) return true;
+
+			throw new Error('Local state differs from the confirmed turn state');
+		}
+
 		if(this.game.actionBatches && action?.batch_end === false)
 		{
 			if(!session.batch?.actions.some(value => value.sequence === sequence)

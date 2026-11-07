@@ -314,6 +314,13 @@ test('action batches cross actors and publish settlement only at their explicit 
 	assert.equal(table.pending, null);
 	assert.equal(table.batch, null);
 	assert.deepEqual(applied.map(value => value.sequence), [1,2]);
+
+	// A tab that took the seat over replays the confirmed batch: the same reports wait for the confirmation already
+	// sent and publish nothing, but a different final state is still refused.
+	assert.equal(await protocol.reportSettled({sequence: 1,hash: 'one',nextActor: 'guest'}), true);
+	assert.equal(await protocol.reportSettled({sequence: 2,hash: 'two',nextActor: 'host'}), true);
+	assert.equal(published.length, 4);
+	await assert.rejects(protocol.reportSettled({sequence: 2,hash: 'other',nextActor: 'host'}), /Local state differs/);
 });
 
 test('reload starts from the confirmed boundary and reapplies every incomplete batch action', async t => {
