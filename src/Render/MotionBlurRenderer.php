@@ -12,10 +12,10 @@ final class MotionBlurRenderer
 {
 	/** Restorable shader program owned by this renderer. */
 	private Program $program;
-	/** Restorable fullscreen vertex array, framebuffer, and depth buffer. */
-	private array $vao = [], $framebuffer = [], $depthBuffer = [];
-	/** Captured scene texture and caller framebuffer used by the blur pass. */
-	private int $sceneTexture = 0, $targetFramebuffer = 0;
+	/** Restorable fullscreen vertex array. */
+	private array $vao = [];
+	/** Offscreen scene target the terrain is captured into, sampled linearly by the blur. */
+	private RenderTarget $target;
 	/** Whether the pass is closed and whether it is currently capturing a scene. */
 	private bool $closed = false, $capturing = false;
 	/** Composite draw calls submitted by the latest capture. */
@@ -48,7 +48,14 @@ final class MotionBlurRenderer
 	}
 
 	/**
-	 * Allocate the framebuffer, linearly sampled scene texture, depth buffer, and geometry.
+	 * The offscreen scene target the blur samples from.
+	 *
+	 * @return RenderTarget Linearly filtered colour with a depth buffer, sized to the drawing buffer.
+	 */
+	public function target(): RenderTarget { return $this->target; }
+
+	/**
+	 * Allocate the geometry and the linearly sampled scene target.
 	 *
 	 * @return void Creates context-local resources or releases partial allocation on failure.
 	 */
@@ -57,30 +64,10 @@ final class MotionBlurRenderer
 		try
 		{
 			glGenVertexArrays(1, $this->vao);
-			$this->sceneTexture = Atlas::texture(GL_TEXTURE_2D);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, $this->width, $this->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, null);
-
-			glGenFramebuffers(1, $this->framebuffer);
-			glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, $this->sceneTexture, 0);
-			glGenRenderbuffers(1, $this->depthBuffer);
-			glBindRenderbuffer(GL_RENDERBUFFER, $this->depthBuffer[0]);
-			glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, $this->width, $this->height);
-			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, $this->depthBuffer[0]);
-
-			if(glCheckFramebufferStatus(GL_FRAMEBUFFER) !== GL_FRAMEBUFFER_COMPLETE)
-			{
-				throw new \RuntimeException('Motion blur framebuffer is incomplete');
-			}
-
-			glBindRenderbuffer(GL_RENDERBUFFER, 0);
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			$this->target = new RenderTarget($this->width, $this->height, GL_LINEAR, true, 'Motion blur');
 		}
 		catch(\Throwable $error)
 		{
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			$this->release();
 
 			throw $error;
@@ -101,15 +88,9 @@ final class MotionBlurRenderer
 			throw new \LogicException('Motion blur renderer cannot begin this capture');
 		}
 
-		$this->targetFramebuffer = glGetIntegerv(GL_FRAMEBUFFER_BINDING);
 		$this->capturing = true;
 		$this->draws = 0;
-		glBindFramebuffer(GL_FRAMEBUFFER, $this->framebuffer[0]);
-		glViewport(0, 0, $this->width, $this->height);
-		glClearColor(...$color);
-		glClearDepth(1);
-		glDepthMask(true);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		$this->target->bind($color);
 	}
 
 	/**
@@ -148,13 +129,12 @@ final class MotionBlurRenderer
 		}
 
 		$this->capturing = false;
-		glBindFramebuffer(GL_FRAMEBUFFER, $this->targetFramebuffer);
-		glViewport(0, 0, $this->width, $this->height);
+		$this->target->unbind($this->width, $this->height);
 		$p = $this->program;
 		$p->use();
 		glBindVertexArray($this->vao[0]);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, $this->sceneTexture);
+		glBindTexture(GL_TEXTURE_2D, $this->target->texture());
 		glUniform1i($p->location('scene'), 0);
 		glUniform2f($p->location('viewport'), $this->width, $this->height);
 		glUniform1f($p->location('sigma'), $sigma);
@@ -177,7 +157,6 @@ final class MotionBlurRenderer
 		}
 
 		$this->capturing = false;
-		$this->targetFramebuffer = 0;
 		$this->release();
 		$this->program->restore();
 		$this->create();
@@ -197,39 +176,24 @@ final class MotionBlurRenderer
 
 		$this->closed = true;
 		$this->capturing = false;
-		$this->targetFramebuffer = 0;
 		$this->release();
 		$this->program->close();
 	}
 
 	/**
-	 * Delete live texture, depth, framebuffer, and geometry objects while retaining dimensions.
+	 * Delete the scene target and geometry while retaining dimensions.
 	 *
 	 * @return void Clears every owned GL handle except the separately managed program wrapper.
 	 */
 	private function release(): void
 	{
-		if($this->sceneTexture)
-		{
-			glDeleteTextures(1, [$this->sceneTexture]);
-		}
-
-		if($this->framebuffer)
-		{
-			glDeleteFramebuffers(1, $this->framebuffer);
-		}
-
-		if($this->depthBuffer)
-		{
-			glDeleteRenderbuffers(1, $this->depthBuffer);
-		}
+		if(isset($this->target)) $this->target->close();
 
 		if($this->vao)
 		{
 			glDeleteVertexArrays(1, $this->vao);
 		}
 
-		$this->sceneTexture = 0;
-		$this->framebuffer = $this->depthBuffer = $this->vao = [];
+		$this->vao = [];
 	}
 }

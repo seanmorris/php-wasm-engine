@@ -126,9 +126,9 @@ glBindFramebuffer(GL_FRAMEBUFFER, 0);
 $renderer->restore();
 $restored = $render(7, 1, 0);
 $restoredExact = $restored['pixels'] === $horizontal['pixels'];
-$sceneTexture = (new ReflectionProperty($renderer, 'sceneTexture'))->getValue($renderer);
-$sceneFramebuffer = (new ReflectionProperty($renderer, 'framebuffer'))->getValue($renderer)[0];
-$depthBuffer = (new ReflectionProperty($renderer, 'depthBuffer'))->getValue($renderer)[0];
+$sceneTexture = $renderer->target()->texture();
+$sceneFramebuffer = $renderer->target()->framebuffer();
+$depthBuffer = $renderer->target()->depthRenderbuffer();
 $live = [glIsTexture($sceneTexture), glIsFramebuffer($sceneFramebuffer), glIsRenderbuffer($depthBuffer)];
 $checks = [
 	'zero sigma copies terrain in one draw' => $plain['draws'] === 1

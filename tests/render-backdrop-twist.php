@@ -135,9 +135,9 @@ $renderer->restore();
 $restored = $render(256);
 $restoredExact = $restored['pixels'] === $positive['pixels'];
 
-$sceneTexture = (new ReflectionProperty($renderer, 'sceneTexture'))->getValue($renderer);
-$sceneFramebuffer = (new ReflectionProperty($renderer, 'framebuffer'))->getValue($renderer)[0];
-$depthBuffer = (new ReflectionProperty($renderer, 'depthBuffer'))->getValue($renderer)[0];
+$sceneTexture = $renderer->target()->texture();
+$sceneFramebuffer = $renderer->target()->framebuffer();
+$depthBuffer = $renderer->target()->depthRenderbuffer();
 $live = [glIsTexture($sceneTexture), glIsFramebuffer($sceneFramebuffer), glIsRenderbuffer($depthBuffer)];
 
 $checks = [

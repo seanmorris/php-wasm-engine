@@ -106,6 +106,8 @@ Core physics uses `Pose`, bounds, masks, surface metadata, and generic geometry.
 
 Collision hits report the first contact time, point, normal, source metadata, and optional removable-shape handle. Adding or removing a shape updates only affected index buckets. Casts are read-only, and geometry changes belong between simulation steps or in a caller-controlled impact callback.
 
+`RenderTarget` owns one offscreen colour texture, an optional depth renderbuffer and their framebuffer: binding saves the caller's framebuffer and sets the viewport, unbinding returns to it, and the objects rebuild after context restoration; post-process renderers and offscreen scene targets compose it instead of allocating the three GL objects themselves.
+
 `MapTerrain::compile()` fills a given `Terrain`, or a game's subclass, with hooks at the three places games differ: the surface metadata read for a shape, objects left to other systems, and objects a game routes itself with the same projection the default uses; the walk over layers, tiles and objects is unchanged by them, so shape handles keep their order. `build()` is `compile()` with none.
 
 `Sweep::box()` is the shared slab test for a point moving against an expanded axis-aligned box, as bodies test one another's grown bounds; callers choose the stillness epsilon and whether a still axis on the edge counts as inside, and read the raw entry and exit fractions and the entered face's normal, so each game keeps its own acceptance window.
@@ -118,7 +120,7 @@ Tiled global IDs retain their unsigned flag bits and map to dense atlas indexes.
 
 `SpriteRenderer` batches sprites that share an atlas. Each sprite carries position, origin, scale, rotation, flips, tint, opacity, animation time, crop, filtering, and outline state. `SpriteGroup` and `SpriteLayers` preserve entity-level painter order for composite artwork.
 
-`WorldRenderer` combines resident map renderers in manifest order. Cameras define world viewports and projections. Generic post-process renderers own their framebuffer and texture resources and can nest when callers preserve the surrounding framebuffer.
+`WorldRenderer` combines resident map renderers in manifest order. Cameras define world viewports and projections. Generic post-process renderers each own an offscreen `RenderTarget` and can nest, since binding a target remembers the surrounding framebuffer and unbinding returns to it.
 
 ## Input and UI
 

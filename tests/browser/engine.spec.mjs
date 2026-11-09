@@ -95,6 +95,14 @@ test('isometric chunk seams match a CPU reference and sparse negative chunks sta
 	expect(result.error).toBe(0);
 });
 
+test('render targets bind over the caller\'s framebuffer, resize, restore and release', async({page}) => {
+	await boot(page);
+	const result = JSON.parse(await run(page, 'require "/engine/tests/render-target.php";'));
+	const failed = Object.entries(result.checks).filter(([, ok]) => !ok).map(([name]) => name);
+	expect(failed).toEqual([]);
+	expect(result.error).toBe(0);
+});
+
 test('background strips repeat, anchor, blend in map order and share textures', async({page}) => {
 	await boot(page);
 	const result = JSON.parse(await run(page, 'require "/engine/tests/render-parallax.php";'));
