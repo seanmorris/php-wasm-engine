@@ -18,6 +18,12 @@ final class SpriteRenderer
 	private array $vao = [],$buffers = [];
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Instance records of the last keyed static batch, reused while its key repeats. */
+	private string $packed = '';
+	/** Key of the kept records, and key of the records the GPU buffer currently holds. */
+	private ?string $packedKey = null, $uploadedKey = null;
+	/** GPU instance and sprite counts of the kept records. */
+	private int $packedInstances = 0, $packedSprites = 0;
 	/** Instanced draw calls submitted by the latest render operation. */
 	public int $draws = 0;
 	/** Sprite instances submitted by the latest render operation. */
@@ -71,9 +77,12 @@ final class SpriteRenderer
 	 * @param Camera $camera Viewport and world-to-screen transform.
 	 * @param float $milliseconds Simulation time in milliseconds, added to each sprite's playback
 	 * offset.
+	 * @param string|null $key Identity of a static batch, such as laid-out text: while the same key
+	 * repeats, the packed records and their GPU upload are reused instead of rebuilt, so the key must
+	 * change whenever any sprite in the list does.
 	 * @return void Submits one instanced batch, or no draw for an empty sprite list.
 	 */
-	public function render(array $sprites, Camera $camera, float $milliseconds = 0): void
+	public function render(array $sprites, Camera $camera, float $milliseconds = 0, ?string $key = null): void
 	{
 		$groups = [];
 
@@ -82,7 +91,7 @@ final class SpriteRenderer
 			$groups[] = [$sprite];
 		}
 
-		$this->renderGroups($groups, $camera, $milliseconds);
+		$this->renderGroups($groups, $camera, $milliseconds, $key);
 	}
 
 	/**
@@ -96,9 +105,10 @@ final class SpriteRenderer
 	 * @param list<list<Sprite>> $groups Entity sprite groups in painter order.
 	 * @param Camera $camera Viewport and world-to-screen transform.
 	 * @param float $milliseconds Simulation time used to select animation frames.
+	 * @param string|null $key Identity of a static batch whose packed records may be reused.
 	 * @return void Submits one instanced batch, or no draw when every group is empty.
 	 */
-	private function renderGroups(array $groups, Camera $camera, float $milliseconds): void
+	private function renderGroups(array $groups, Camera $camera, float $milliseconds, ?string $key = null): void
 	{
 		$this->draws = 0;
 		$this->instances = 0;
@@ -109,7 +119,60 @@ final class SpriteRenderer
 			return;
 		}
 
+		if($key !== null && $key === $this->packedKey)
+		{
+			$bytes = $this->packed;
+			$gpuInstances = $this->packedInstances;
+			$this->instances = $this->packedSprites;
+		}
+		else
+		{
+			[$bytes, $gpuInstances] = $this->pack($groups, $milliseconds, $key);
+		}
+
+		$p = $this->program;
+		$p->use();
+		glBindVertexArray($this->vao[0]);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, $this->atlas->texture);
+		glUniform1i($p->location('atlas'), 0);
+		glUniform2f($p->location('camera'), $camera->x, $camera->y);
+		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
+		glUniform1f($p->location('zoom'), $camera->zoom);
+
+		if($this->packedKey === null || $this->packedKey !== $this->uploadedKey)
+		{
+			glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
+			glBufferData(GL_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STREAM_DRAW);
+		}
+
+		$this->uploadedKey = $this->packedKey;
+		glClearDepth(1);
+		glDepthMask(true);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, $gpuInstances);
+		glDisable(GL_DEPTH_TEST);
+		glBindVertexArray(0);
+		$this->draws = 1;
+	}
+
+	/**
+	 * Pack every group into instance records, keeping them when the batch is static and keyed.
+	 *
+	 * Animated sprites pick their frame from the clock, so a batch containing one is packed again on
+	 * every call even when its key repeats.
+	 *
+	 * @param list<list<Sprite>> $groups Non-empty entity sprite groups in painter order.
+	 * @param float $milliseconds Simulation time used to select animation frames.
+	 * @param string|null $key Caller's identity for a static batch, or null to pack without keeping.
+	 * @return array{string,int} Packed instance bytes and the number of GPU instances.
+	 */
+	private function pack(array $groups, float $milliseconds, ?string $key): array
+	{
 		$slots = count($groups);
+		$static = $key !== null;
 
 		foreach($groups as $group)
 		{
@@ -133,6 +196,7 @@ final class SpriteRenderer
 					?? throw new \OutOfBoundsException("Sprite GID $gid is missing");
 
 				$records[] = [$sprite, $sprite->rectangle($rect)];
+				$static = $static && !$sprite->animated;
 			}
 
 			foreach($records as [$sprite, $rect])
@@ -153,26 +217,12 @@ final class SpriteRenderer
 			}
 		}
 
-		$p = $this->program;
-		$p->use();
-		glBindVertexArray($this->vao[0]);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, $this->atlas->texture);
-		glUniform1i($p->location('atlas'), 0);
-		glUniform2f($p->location('camera'), $camera->x, $camera->y);
-		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
-		glUniform1f($p->location('zoom'), $camera->zoom);
-		glBindBuffer(GL_ARRAY_BUFFER, $this->buffers[0]);
-		glBufferData(GL_ARRAY_BUFFER, strlen($bytes), $bytes, GL_STREAM_DRAW);
-		glClearDepth(1);
-		glDepthMask(true);
-		glClear(GL_DEPTH_BUFFER_BIT);
-		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_LESS);
-		glDrawArraysInstanced(GL_TRIANGLES, 0, 6, $gpuInstances);
-		glDisable(GL_DEPTH_TEST);
-		glBindVertexArray(0);
-		$this->draws = 1;
+		$this->packedKey = $static ? $key : null;
+		$this->packed = $static ? $bytes : '';
+		$this->packedInstances = $static ? $gpuInstances : 0;
+		$this->packedSprites = $static ? $this->instances : 0;
+
+		return [$bytes, $gpuInstances];
 	}
 
 	/**
@@ -255,6 +305,8 @@ final class SpriteRenderer
 		$this->release();
 		$this->program->restore();
 		$this->create();
+		$this->packedKey = null;
+		$this->packed = '';
 	}
 
 	/**
@@ -292,5 +344,6 @@ final class SpriteRenderer
 		}
 
 		$this->buffers = $this->vao = [];
+		$this->uploadedKey = null;
 	}
 }

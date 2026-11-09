@@ -118,7 +118,7 @@ Rules such as rail interpretation, directional layer switching, character adhesi
 
 Tiled global IDs retain their unsigned flag bits and map to dense atlas indexes. `Atlas` packs source images and animation metadata once: the tile shader picks each animated tile's frame from that metadata by a time uniform, so animating a map rewrites no GPU texture per frame. Tile layers use bounded texture arrays and instanced placement; changed layer revisions upload only their affected slices. `ImageRenderer` draws ordinary and repeating image layers in map order.
 
-`SpriteRenderer` batches sprites that share an atlas. Each sprite carries position, origin, scale, rotation, flips, tint, opacity, animation time, crop, filtering, and outline state. `SpriteGroup` and `SpriteLayers` preserve entity-level painter order for composite artwork.
+`SpriteRenderer` batches sprites that share an atlas. Each sprite carries position, origin, scale, rotation, flips, tint, opacity, animation time, crop, filtering, and outline state. `SpriteGroup` and `SpriteLayers` preserve entity-level painter order for composite artwork. A caller that draws the same static batch every frame, such as laid-out text, passes a key with it; while the key repeats the renderer reuses the packed records and their GPU upload instead of rebuilding them, which is what the menu and HUD renderers do.
 
 `WorldRenderer` combines resident map renderers in manifest order. Cameras define world viewports and projections. Generic post-process renderers each own an offscreen `RenderTarget` and can nest, since binding a target remembers the surrounding framebuffer and unbinding returns to it.
 

@@ -56,6 +56,7 @@ final class MenuRenderer
 	private RectRenderer $rects;
 	/** Current draw batch, row boxes, and current and next layout caches. */
 	private array $batch = [], $boxes = [], $cache = [], $nextCache = [];
+	private string $batchKey = '';
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** Horizontal scroll offset of the active text editor. */
@@ -209,6 +210,7 @@ final class MenuRenderer
 		}
 
 		$this->nextCache[$key] = $cached;
+		$this->batchKey .= $key;
 		array_push($this->batch, ...$cached[1]);
 
 		return $cached[0];
@@ -226,6 +228,7 @@ final class MenuRenderer
 	public function render(Menu $menu, int $width, int $height, float $seconds = 0): void
 	{
 		$this->regions = $this->batch = $this->boxes = $this->nextCache = [];
+		$this->batchKey = '';
 		$this->editorRect = null;
 
 		if(!$menu->isOpen || $this->closed)
@@ -317,7 +320,7 @@ final class MenuRenderer
 		}
 
 		$this->rects->render($this->boxes, $width, $height);
-		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height));
+		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height), key: $this->batchKey);
 		$this->cache = $this->nextCache;
 	}
 
@@ -359,6 +362,7 @@ final class MenuRenderer
 	public function renderHints(array $hints, int $width, int $height, array $color = [1, 1, 1, 1]): void
 	{
 		$this->regions = $this->batch = $this->boxes = $this->nextCache = [];
+		$this->batchKey = '';
 		$this->editorRect = null;
 
 		if($this->closed) return;
@@ -388,7 +392,7 @@ final class MenuRenderer
 
 		$this->font->theme = $theme;
 
-		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height));
+		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height), key: $this->batchKey);
 		$this->cache = $this->nextCache;
 	}
 
