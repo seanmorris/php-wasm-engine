@@ -367,7 +367,7 @@
     "src/Physics/WaterRegion.php": "sha256-+0rp2gAu6NpVyWrDbnFUPYxAEYMeAWDqgPEgDeJHL/U=",
     "src/Physics/WaterRegions.php": "sha256-EoaMs6xKJlJe44hJDaMCUi/Qpy7efPj/+9rMHVy0F1k=",
     "src/Render/WaterRenderer.php": "sha256-SjdMGDgh7nKvbMXo5e2Jiz07V3b7FyWA24rdffizcV4=",
-    "browser/game.mjs": "sha256-tMwD+XMk6ecJtsHwISArSR6sIAZjYyTZPLtGfnfwFBk=",
+    "browser/game.mjs": "sha256-b2dMkUcYoZ9g70J0C57ENa3vpeOEPfgrepfgawmo3Xs=",
     "shaders/water.frag": "sha256-4qDK993Cm8YGBkFRwdFROD6kroZMDvG6xM/3lXoiPek=",
     "shaders/water.vert": "sha256-cm9xHMcXaQN1nWTnBmR8CNxRhX2AMWbNORb8FBMiKtQ=",
     "modules/platformer.php": "sha256-1nmC0w/xZIVRxDtqCwnQcwT4d4RqLJOdXqe5NHoLZco=",
