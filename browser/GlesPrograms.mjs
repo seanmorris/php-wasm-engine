@@ -11,6 +11,8 @@ const optimizedContexts = new WeakSet();
  *
  * @param {WebGL2RenderingContext} gl Context used by the SDL GLES bridge.
  * @param {HTMLCanvasElement|EventTarget} canvas Context-loss event source.
+ * The replaced methods stay writable, so a host or a spec can still hook them by assignment.
+ *
  * @returns {WebGL2RenderingContext} The same context, optimized at most once.
  */
 export function cacheProgramValidation(gl, canvas)
@@ -28,6 +30,7 @@ export function cacheProgramValidation(gl, canvas)
 	Object.defineProperties(gl, {
 		createProgram: {
 			configurable: true
+			, writable: true
 
 			, value() {
 				const program = createProgram();
@@ -39,6 +42,7 @@ export function cacheProgramValidation(gl, canvas)
 		}
 		, deleteProgram: {
 			configurable: true
+			, writable: true
 
 			, value(program) {
 				if(program) programs.delete(program);
@@ -48,6 +52,7 @@ export function cacheProgramValidation(gl, canvas)
 		}
 		, isProgram: {
 			configurable: true
+			, writable: true
 
 			, value(program) {
 				if(programs.has(program)) return true;

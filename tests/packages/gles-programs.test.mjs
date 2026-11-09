@@ -47,3 +47,23 @@ test('caches existing handles and invalidates the cache after context loss', () 
 	assert.equal(gl.isProgram(program), true);
 	assert.equal(calls.query, 2);
 });
+
+test('the cached methods stay assignable so hosts and specs can hook them', () => {
+	const {gl, calls, canvas} = fixture();
+	cacheProgramValidation(gl, canvas);
+	const program = gl.createProgram();
+	const cached = gl.isProgram;
+	let hooked = 0;
+
+	gl.isProgram = handle => {
+		hooked++;
+		gl.isProgram = cached;
+
+		return handle === program ? false : cached(handle);
+	};
+
+	assert.equal(gl.isProgram(program), false);
+	assert.equal(hooked, 1);
+	assert.equal(gl.isProgram(program), true);
+	assert.equal(calls.query, 0);
+});
