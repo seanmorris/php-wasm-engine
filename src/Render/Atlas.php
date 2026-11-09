@@ -235,7 +235,14 @@ final class Atlas
 					}
 
 					$end += $frame['duration'];
-					$frameBytes = substr_replace($frameBytes, pack('f*', $this->indices[$frameGid], $end, 0, 0), $slot * 16, 16);
+
+					$frameBytes = substr_replace(
+						$frameBytes
+						, pack('f*', $this->indices[$frameGid], $end, 0, 0)
+						, $slot * 16
+						, 16
+					);
+
 					$slot++;
 				}
 

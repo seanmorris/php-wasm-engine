@@ -14,6 +14,7 @@ namespace Phonics\Physics;
  */
 final class Sweep
 {
+
 	/**
 	 * The interval of the motion during which the point is inside the box, or null when there is none.
 	 *
@@ -61,7 +62,8 @@ final class Sweep
 
 		if(abs($dy) < $epsilon)
 		{
-			if($closed ? abs($y - $cy) > $halfHeight : ($y <= $cy - $halfHeight || $y >= $cy + $halfHeight)) return null;
+			if($closed ? abs($y - $cy) > $halfHeight : ($y <= $cy - $halfHeight || $y >= $cy + $halfHeight))
+			return null;
 		}
 		else
 		{

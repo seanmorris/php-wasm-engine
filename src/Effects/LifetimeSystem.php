@@ -13,6 +13,7 @@ use Phonics\Render\Sprite;
  */
 final class LifetimeSystem
 {
+
 	/**
 	 * Advance lifetimes and schedule expired entities for destruction.
 	 *

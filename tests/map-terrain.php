@@ -46,7 +46,13 @@ function mapTerrainFixtureMap()
 		, 'objects' => [
 			['id' => 1, 'x' => 10, 'y' => 20, 'width' => 8, 'height' => 4, 'properties' => $solid]
 			, ['id' => 2, 'x' => 0, 'y' => 0, 'class' => 'loader', 'properties' => $solid]
-			, ['id' => 3, 'x' => 1, 'y' => 2, 'polyline' => [['x' => 0, 'y' => 0], ['x' => 6, 'y' => 0]], 'properties' => $solid]
+			, [
+				'id' => 3
+				, 'x' => 1
+				, 'y' => 2
+				, 'polyline' => [['x' => 0, 'y' => 0], ['x' => 6, 'y' => 0]]
+				, 'properties' => $solid
+			]
 			, ['id' => 4, 'x' => 30, 'y' => 40, 'width' => 2, 'height' => 2, 'class' => 'rail']
 		]
 	];
@@ -64,11 +70,14 @@ test('MapTerrain::compile treats null hooks as no hooks and reaches every shape 
 	MapTerrain::compile($compiled, ['surface' => null, 'skip' => null, 'object' => null], $map);
 	check($built->calls !== [] && $built->calls === $compiled->calls, 'null hooks change nothing');
 	$kinds = array_map(fn(array $c): string => $c[0], $built->calls);
+
 	check(
 		in_array('path', $kinds, true) && count($kinds) >= 4
 		, 'tiles, rectangles and the polyline all reach the terrain'
 	);
+
 	$last = end($built->calls);
+
 	check(
 		$last[3] === 3 && $last[4] === ['stone']
 		, 'objects take the layer\'s collision plane and surface metadata by default'
@@ -82,6 +91,7 @@ test('MapTerrain::compile hooks replace the surface lookup, skip objects, and ro
 	$seen = [];
 	$hooked = new RecordingTerrain;
 	$routed = [];
+
 	MapTerrain::compile($hooked, [
 		'surface' => function(array $props, array $tileProps, array $layerProps) use (&$seen): bool {
 			$seen[] = [$props, $tileProps, $layerProps];
@@ -102,27 +112,35 @@ test('MapTerrain::compile hooks replace the surface lookup, skip objects, and ro
 
 			return true;
 		}
-	], $map);
+	], $map
+	);
+
 	// The skipped loader object sits at the layer origin with no size, so its default points are four copies of
 	// the layer offset; everything else must appear unchanged and in order.
 	$skippedPoints = array_fill(0, 4, [5.0, 7.0]);
+
 	$shape = fn(array $c): array => [$c[0], $c[1], $c[2], $c[3]];
 	$expected = array_values(array_filter($plain->calls, fn(array $c): bool => $c[1] !== $skippedPoints));
 	check(count($hooked->calls) === count($plain->calls) - 1, 'the skipped object is the only entry missing');
+
 	check(
 		array_map($shape, $hooked->calls) === array_map($shape, $expected)
 		, 'every other shape keeps its points, one-way flag and plane, in order'
 	);
+
 	check(
 		array_unique(array_map(fn(array $c) => $c[4], $hooked->calls)) === [false]
 		, 'the surface hook\'s value is what the terrain receives'
 	);
+
 	check(
 		$seen !== [] && $seen[0][2] === $map->layers[0]->properties
 		, 'the surface hook sees shape, tile and layer properties'
 	);
+
 	$routedPoints = [[35.0, 47.0], [37.0, 47.0], [37.0, 49.0], [35.0, 49.0]];
 	check($routed === [[3, $routedPoints]], 'a routed object is consumed and its points carry the layer offset');
+
 	check(
 		!in_array($routedPoints, array_map(fn(array $c) => $c[1], $hooked->calls), true)
 		, 'the default branch did not also add the routed object'

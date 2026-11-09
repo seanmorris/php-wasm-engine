@@ -550,26 +550,40 @@ test('ECS OwnedEntities destroys the owned survivors once, in either order', fun
 	$b = $owned->own($r->create(new EcsBase));
 	$c = $owned->own($r->create(new EcsBase));
 	$owned->own($b);
+
 	check(
 		$owned->ids() === [$a, $b, $c] && $owned->count() === 3 && $owned->owns($b)
 		, 'owning keeps insertion order and ignores repeats'
 	);
+
 	rejects(fn() => $owned->own(9999));
 	$owned->disown($c);
 	check(!$owned->owns($c) && $owned->ids() === [$a, $b], 'disowning releases an entity without destroying it');
 	$r->destroy($b);
 	$order = [];
-	$owned->close(function(int $id) use ($r, &$order): void { $order[] = $id; $r->destroy($id); });
+
+	$owned->close(function(int $id) use ($r, &$order): void {
+		$order[] = $id;
+		$r->destroy($id);
+	});
+
 	check(
 		$order === [$a] && !$r->alive($a) && $r->alive($c)
 		, 'close retires only the live owned entities and leaves disowned ones alone'
 	);
+
 	$owned->close();
 	check($owned->count() === 0, 'a second close finds nothing');
 	$reversed = new \Phonics\Ecs\OwnedEntities($r);
 	$first = $reversed->own($r->create(new EcsBase));
 	$second = $reversed->own($r->create(new EcsBase));
 	$seen = [];
-	$reversed->close(function(int $id) use ($r, &$seen): void { $seen[] = $id; $r->destroy($id); }, reverse: true);
+
+	$reversed->close(function(int $id) use ($r, &$seen): void {
+		$seen[] = $id;
+		$r->destroy($id);
+	}, reverse: true
+	);
+
 	check($seen === [$second, $first], 'reverse close takes the newest entity down first');
 });

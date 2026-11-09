@@ -43,8 +43,7 @@ function sweepReferenceDoom(
 	, float $centerX
 	, float $centerY
 	, float $extent
-): ?array
-{
+): ?array {
 	$entryX = -INF;
 	$exitX = INF;
 	$entryY = -INF;
@@ -113,8 +112,10 @@ test('Sweep::box agrees with the clamped slab loop on a grid of relative motions
 	}
 
 	check($compared === count($values) ** 2 * count($motions) ** 2, 'every grid case was compared');
+
 	$box = static fn(float $x, float $y, float $dx, float $dy): bool
 		=> Sweep::overlaps(Sweep::box($x, $y, $dx, $dy, 0.0, 0.0, 16.0, 12.0));
+
 	check($box(0.0, 0.0, 0.0, 0.0), 'a still point inside the box overlaps');
 	check($box(16.0, 0.0, 0.0, 0.0), 'a still point on the edge counts as inside when closed');
 	check(!$box(40.0, 0.0, 0.0, 0.0), 'a still point outside does not');
@@ -151,15 +152,19 @@ test('Sweep::box agrees with Doom\'s expanded-box test, acceptance window and no
 		, "off-origin case ($cx, $cy) agrees"
 	);
 	$tie = Sweep::box(-20.0, -20.0, 10.0, 10.0, 0.0, 0.0, 10.0, 10.0);
+
 	check(
 		$tie !== null && $tie->axis === 1 && $tie->normalX === 0 && $tie->normalY === -1
 		, 'an equal entry on both axes enters by the y face, as Doom\'s does'
 	);
+
 	check(
 		Sweep::box(52.0, 0.0, 0.0, 5.0, 0.0, 0.0, 52.0, 52.0, 1e-12, false) === null
 		, 'open containment puts a still point on the edge outside'
 	);
+
 	$inside = Sweep::box(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 52.0, 52.0, 1e-12, false);
+
 	check(
 		$inside !== null && $inside->entry === -INF && $inside->exit === INF
 		, 'two still axes inside give an unbounded interval, which Doom rejects as a pre-existing overlap'

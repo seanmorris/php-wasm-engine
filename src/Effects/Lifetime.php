@@ -28,7 +28,8 @@ class Lifetime
 	 */
 	public function __construct(public float $duration, public float $fadeStart = 0.0, public bool $clamp = true)
 	{
-		if(is_nan($duration) || $duration <= 0) throw new \InvalidArgumentException('Lifetime duration must be positive');
+		if(is_nan($duration) || $duration <= 0)
+		throw new \InvalidArgumentException('Lifetime duration must be positive');
 
 		if(!is_finite($fadeStart) || $fadeStart < 0 || $fadeStart >= $duration)
 		throw new \InvalidArgumentException('Lifetime fade start must lie within the duration');
@@ -87,7 +88,8 @@ class Lifetime
 	 */
 	public function synchronize(float $age): void
 	{
-		if($age < 0 || !is_finite($age)) throw new \InvalidArgumentException('Lifetime age must be finite and non-negative');
+		if($age < 0 || !is_finite($age))
+		throw new \InvalidArgumentException('Lifetime age must be finite and non-negative');
 
 		$this->age = min($this->duration, max($this->age, $age));
 		$this->previousAge = $this->age;

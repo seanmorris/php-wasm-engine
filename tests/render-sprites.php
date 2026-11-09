@@ -69,6 +69,7 @@ $first = $keyed([$glyph], 'glyph at 12', 0);
 $checks['a keyed static batch draws'] = $first[0] !== '000000ff' && $first[1] === '000000ff' && $renderer->draws === 1;
 $checks['a repeated key draws the same pixels'] = $keyed([$glyph], 'glyph at 12', 0) === $first
 	&& $renderer->draws === 1 && $renderer->instances === 1;
+
 $glyph->x = 28;
 $moved = $keyed([$glyph], 'glyph at 28', 0);
 $checks['a new key repacks the batch'] = $moved === [$first[1], $first[0]];

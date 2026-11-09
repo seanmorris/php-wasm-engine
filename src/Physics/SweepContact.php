@@ -11,6 +11,7 @@ namespace Phonics\Physics;
  */
 final class SweepContact
 {
+
 	/**
 	 * Describe one sweep's interval inside a box.
 	 *

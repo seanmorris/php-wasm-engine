@@ -189,6 +189,7 @@ final class MapTerrain
 					$metadata = $surfaceHook
 						? $surfaceHook($props, [], $layer->properties)
 						: (array)($props['surface'] ?? $surface);
+
 					$oneWay = (bool)($props['oneWay'] ?? $layer->properties['oneWay'] ?? false);
 
 					if(isset($object['polyline']))
