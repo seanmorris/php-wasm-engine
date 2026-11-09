@@ -316,7 +316,9 @@ test('RegionButtons mirror regions by signature and TouchPad holds ids per point
 		start.click();
 		const left = buttons.buttons.get('left');
 		left.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 1, bubbles: true}));
+		left.dispatchEvent(new PointerEvent('pointerdown', {pointerId: 2, bubbles: true}));
 		left.dispatchEvent(new PointerEvent('pointerup', {pointerId: 1, bubbles: true}));
+		left.dispatchEvent(new PointerEvent('pointerup', {pointerId: 2, bubbles: true}));
 		const changed = buttons.sync(320, 480, regions.slice(0, 1));
 		const remaining = [...buttons.buttons.keys()];
 		buttons.clear();

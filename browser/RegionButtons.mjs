@@ -23,8 +23,8 @@ export class RegionButtons
 	 * @param {object} options Behaviour.
 	 * @param {AbortSignal} options.signal Removes the listeners when it aborts.
 	 * @param {function(string): void} options.onPress Runs with a region's id when its button is activated.
-	 * @param {function(string, boolean): void} [options.onHold] Runs when a `hold` region's button is pressed
-	 * or released, with the id and whether it is now held.
+	 * @param {function(string, boolean): void} [options.onHold] Runs when a `hold` region's button is first
+	 * pressed and when its last pointer lifts, with the id and whether it is now held.
 	 * @param {function(): void} [options.focus] Returns focus to the game after a press, such as to its canvas.
 	 */
 	constructor(container, {signal, onPress, onHold = null, focus = () => {}})
@@ -114,9 +114,13 @@ export class RegionButtons
 			return button;
 		}
 
+		const pointers = new Set;
+
 		const release = event => {
 			if(button.releasePointerCapture && button.hasPointerCapture?.(event.pointerId))
 			button.releasePointerCapture(event.pointerId);
+
+			if(!pointers.delete(event.pointerId) || pointers.size) return;
 
 			onHold(id, false);
 		};
@@ -126,7 +130,9 @@ export class RegionButtons
 
 			try { button.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
 
-			onHold(id, true);
+			if(!pointers.size) onHold(id, true);
+
+			pointers.add(event.pointerId);
 			focus();
 		}, {signal});
 

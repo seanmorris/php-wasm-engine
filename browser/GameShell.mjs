@@ -303,7 +303,7 @@ export class GameShell
 	 * @param {object} [options] Where the status goes.
 	 * @param {string} [options.dataset] `canvas.dataset` key that holds the raw JSON.
 	 * @param {string} [options.session] Session key that receives `{state}` plus `extras`.
-	 * @param {object} [options.extras] Further members of the session object.
+	 * @param {object} [options.extras] Further members of the session object; getters stay live.
 	 * @param {function(object, string): void} [options.handler] Runs with each parsed state and its JSON.
 	 * @returns {{state: object|null}} A reader of the latest state.
 	 */
@@ -324,7 +324,8 @@ export class GameShell
 
 		if(session)
 		{
-			this.session[session] = Object.defineProperty({...extras}, 'state', {get: () => state, enumerable: true});
+			const published = Object.defineProperties({}, Object.getOwnPropertyDescriptors(extras));
+			this.session[session] = Object.defineProperty(published, 'state', {get: () => state, enumerable: true});
 			this.#cleanups.push(() => { delete this.session[session]; });
 		}
 

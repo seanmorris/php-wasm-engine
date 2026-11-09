@@ -5,6 +5,7 @@ use PhpWasmEngine\Render\Atlas;
 use PhpWasmEngine\Render\Device;
 use PhpWasmEngine\Render\RectRenderer;
 use Phonics\Render\RenderTarget;
+use Phonics\Render\RenderTargetPair;
 
 // RenderTarget owns the framebuffer, colour texture and depth buffer that post-process passes and offscreen scene
 // targets used to allocate themselves. It must bind over whatever framebuffer the caller has, hand it back with
@@ -113,6 +114,22 @@ $checks['close releases the objects, once'] = !glIsTexture($live[0]) && !glIsFra
 	&& !glIsRenderbuffer($live[2]) && $target->texture() === 0 && $target->framebuffer() === 0;
 $target->restore();
 $checks['restore after close does nothing'] = $target->texture() === 0;
+
+$pair = new RenderTargetPair(8, 8, GL_NEAREST, true, 'Test pair');
+$checks['a pair has two distinct live targets'] = $pair->texture(0) > 0 && $pair->texture(1) > 0
+	&& $pair->texture(0) !== $pair->texture(1) && $pair->target(1)->framebuffer() !== $pair->target(0)->framebuffer();
+$pair->target(1)->bind([0, 0, 1, 1]);
+$pair->target(1)->unbind();
+$copied = [];
+$pair->resize(6, 6, function(int $slot, int $old, RenderTarget $target) use (&$copied): void {
+	$copied[] = [$slot, $old > 0, $target->width, $target->bound()];
+});
+$checks['pair resize hands each slot its old texture and the live new target'] = $pair->width === 6
+	&& $pair->target(0)->width === 6 && $copied === [[0, true, 6, false], [1, true, 6, false]];
+$checks['pair resize to the same size does nothing'] = $pair->resize(6, 6) === false;
+$pair->close();
+$pair->close();
+$checks['closing a pair releases both slots'] = $pair->texture(0) === 0 && $pair->texture(1) === 0;
 
 try
 {

@@ -106,7 +106,7 @@ Core physics uses `Pose`, bounds, masks, surface metadata, and generic geometry.
 
 Collision hits report the first contact time, point, normal, source metadata, and optional removable-shape handle. Adding or removing a shape updates only affected index buckets. Casts are read-only, and geometry changes belong between simulation steps or in a caller-controlled impact callback.
 
-`RenderTarget` owns one offscreen colour texture, an optional depth renderbuffer and their framebuffer: binding saves the caller's framebuffer and sets the viewport, unbinding returns to it, and the objects rebuild after context restoration; post-process renderers and offscreen scene targets compose it instead of allocating the three GL objects themselves.
+`RenderTarget` owns one offscreen colour texture, an optional depth renderbuffer and their framebuffer: binding saves the caller's framebuffer and sets the viewport, unbinding returns to it, and the objects rebuild after context restoration; post-process renderers and offscreen scene targets compose it instead of allocating the three GL objects themselves; `RenderTargetPair` holds two for ping-pong passes and lets a caller redraw kept content across a resize.
 
 `MapTerrain::compile()` fills a given `Terrain`, or a game's subclass, with hooks at the three places games differ: the surface metadata read for a shape, objects left to other systems, and objects a game routes itself with the same projection the default uses; the walk over layers, tiles and objects is unchanged by them, so shape handles keep their order. `build()` is `compile()` with none.
 
