@@ -8,7 +8,9 @@ use Phonics\Tiled\Loader;
  * Compile loaded Tiled collision objects and tiles into game-neutral Terrain geometry.
  *
  * Compilation applies map and layer transforms, preserves object ownership metadata, and produces reusable
- * collision handles for later removal.
+ * collision handles for later removal. A game that reads its own surface metadata, leaves some authored objects to
+ * other systems, or routes objects into a `Terrain` subclass of its own passes hooks to `compile()`; the walk over
+ * layers, chunks, tiles and objects is the same either way, so shape handles and bucket order do not depend on them.
  */
 final class MapTerrain
 {
@@ -22,7 +24,28 @@ final class MapTerrain
 	 */
 	public static function build(TileMap ...$maps): Terrain
 	{
-		$terrain = new Terrain;
+		return self::compile(new Terrain, [], ...$maps);
+	}
+
+	/**
+	 * Compile maps into a given terrain, with hooks at the three places games differ.
+	 *
+	 * `surface(array $shapeProps, array $tileProps, array $layerProps): array|bool` replaces the default surface
+	 * metadata lookup for a tile shape or an object. `skip(array $object, Layer $layer): bool` leaves an object to
+	 * another system. `object(Terrain $terrain, array $object, Layer $layer, int $collisionLayer, callable $project):
+	 * bool` takes an object over entirely when it returns true; `$project(list $points): list` applies the map's
+	 * isometric projection and layer offset to points from `points()` exactly as the default does.
+	 *
+	 * @param Terrain $terrain Terrain, or a game's subclass, to add the geometry to.
+	 * @param array<string,callable|null> $hooks Optional `surface`, `skip` and `object` hooks described above.
+	 * @param TileMap ...$maps Loaded maps whose world placement and inherited layer offsets are applied.
+	 * @return Terrain The same terrain, filled.
+	 */
+	public static function compile(Terrain $terrain, array $hooks, TileMap ...$maps): Terrain
+	{
+		$surfaceHook = $hooks['surface'] ?? null;
+		$skipHook = $hooks['skip'] ?? null;
+		$objectHook = $hooks['object'] ?? null;
 
 		foreach($maps as $map)
 		{
@@ -94,7 +117,9 @@ final class MapTerrain
 								}
 
 								$props = Loader::properties($shape['properties'] ?? []);
-								$metadata = (array)($props['surface'] ?? $tile['properties']['surface'] ?? $surface);
+								$metadata = $surfaceHook
+									? $surfaceHook($props, $tile['properties'] ?? [], $layer->properties)
+									: (array)($props['surface'] ?? $tile['properties']['surface'] ?? $surface);
 
 								$terrain->add(
 									$transformed
@@ -109,17 +134,13 @@ final class MapTerrain
 					}
 				}
 
-				foreach($layer->objects as $object)
-				{
-					$props = Loader::properties($object['properties'] ?? []);
-
-					if(!($props['solid'] ?? $layer->properties['solid'] ?? false))
-					{
-						continue;
-					}
-
-					$points = self::points($object);
-
+				/**
+				 * Place object points on the map: project them when the map is isometric, then apply the layer offset.
+				 *
+				 * @param list<array{0:float,1:float}> $points Points from points(), in the object layer's space.
+				 * @return list<array{0:float,1:float}> World-space points in pixels.
+				 */
+				$project = static function(array $points) use ($map, $ox, $oy): array {
 					if($map->projection->orientation === 'isometric')
 					{
 						$points = array_map(
@@ -138,7 +159,7 @@ final class MapTerrain
 						);
 					}
 
-					$points = array_map(
+					return array_map(
 						/**
 						 * Translate a shape vertex by its map placement and inherited layer offset.
 						 *
@@ -148,9 +169,26 @@ final class MapTerrain
 						fn($p) => [$p[0] + $ox,$p[1] + $oy]
 						, $points
 					);
+				};
 
+				foreach($layer->objects as $object)
+				{
+					if($skipHook && $skipHook($object, $layer)) continue;
+
+					if($objectHook && $objectHook($terrain, $object, $layer, $collisionLayer, $project)) continue;
+
+					$props = Loader::properties($object['properties'] ?? []);
+
+					if(!($props['solid'] ?? $layer->properties['solid'] ?? false))
+					{
+						continue;
+					}
+
+					$points = $project(self::points($object));
 					$plane = (int)($props['collisionLayer'] ?? $collisionLayer);
-					$metadata = (array)($props['surface'] ?? $surface);
+					$metadata = $surfaceHook
+						? $surfaceHook($props, [], $layer->properties)
+						: (array)($props['surface'] ?? $surface);
 					$oneWay = (bool)($props['oneWay'] ?? $layer->properties['oneWay'] ?? false);
 
 					if(isset($object['polyline']))

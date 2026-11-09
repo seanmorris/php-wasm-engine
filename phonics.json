@@ -316,7 +316,7 @@
     "src/Network/WorldSnapshot.php": "sha256-6a5UlSVnCKrbMKuk1f+zDtNw+tsrxO0YkYacghGNNCw=",
     "src/Package/Context.php": "sha256-FzeG+2Q37LJIwcKgcta93eGmc7oT/ULg+zDLkFL9hAc=",
     "src/Physics/Hit.php": "sha256-SO3TDLp54GKrBysPyL33dQTQxfpfVaGX0GxVm/rSCE4=",
-    "src/Physics/MapTerrain.php": "sha256-pYHUxb3VC/Pk+aliMwKYOzQWqXB7Vgg7HNOqg9qYf+I=",
+    "src/Physics/MapTerrain.php": "sha256-56kFHzPojBpOiPVKSLOzZAwxxY/W29Qpykf2i7J6G+k=",
     "src/Physics/Pose.php": "sha256-WPToJQDlCtY/T2cKwyeClihXzraPXIihPQCWavug89U=",
     "src/Physics/Sweep.php": "sha256-dTAqVgDXtWcwZi1sNxAd4qqKhqqmQWFDon3yE4Gtqkc=",
     "src/Physics/SweepContact.php": "sha256-Y9lprwrxrcA+gRf7SSIO5WrVSsgqBQY7zH8lJUUEQg0=",
