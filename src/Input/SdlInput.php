@@ -139,9 +139,21 @@ final class SdlInput
 			/**
 			 * Mark the canvas unfocused and release its buffered controls.
 			 *
-			 * @return null Suspends input until a later focus event.
+			 * Focus hopping between the canvas and SDL's own IME target is not a loss: neither element
+			 * matches :focus while the blur dispatches, so judging by ownsFocus() there would discard the
+			 * editing events queued since the last frame.
+			 *
+			 * @param object $event Blur event whose relatedTarget is the element gaining focus, if any.
+			 * @return void Suspends input until a later focus event.
 			 */
-			$this->blurListener = fn() => $this->switchingText ? null : $this->focus($this->ownsFocus());
+			$this->blurListener = function(object $event): void {
+				if($this->switchingText || $this->ownsElement($event->relatedTarget ?? null))
+				{
+					return;
+				}
+
+				$this->focus($this->ownsFocus());
+			};
 
 			$this->canvas->addEventListener('focus', $this->focusListener);
 			$this->canvas->addEventListener('blur', $this->blurListener);
@@ -769,6 +781,23 @@ final class SdlInput
 	public function controllerTheme(): string
 	{
 		return self::padTheme($this->gamepads->preferredName());
+	}
+
+	/**
+	 * Tell whether a DOM node is the canvas or SDL's editing target.
+	 *
+	 * @param object|null $node Element gaining focus, or null when focus leaves the document.
+	 * @return bool True for the canvas, the captured IME textarea, or their descendants.
+	 */
+	private function ownsElement(?object $node): bool
+	{
+		if(!$node)
+		{
+			return false;
+		}
+
+		return ($this->canvas && (bool)$this->canvas->contains($node))
+			|| ($this->textTarget && (bool)$this->textTarget->contains($node));
 	}
 
 	/**
