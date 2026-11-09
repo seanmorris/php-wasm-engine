@@ -2,8 +2,11 @@ import {ResourceStore} from './ResourceStore.mjs';
 import {PackageGraph} from './PackageGraph.mjs';
 import {ArchiveResources} from './ArchiveResources.mjs';
 import {LoadProgress} from './LoadProgress.mjs';
+import {GameShell} from './GameShell.mjs';
 import {QuickControls} from './QuickControls.mjs';
+import {RegionButtons} from './RegionButtons.mjs';
 import {SafeStorage} from './SafeStorage.mjs';
+import {TouchPad} from './TouchPad.mjs';
 import {relayOAuthPopup} from './network/OAuthPopup.mjs';
 
 export {LoadProgress};
@@ -211,7 +214,7 @@ export async function run(applicationUrl, options = {})
 
 		// Direct application browser modules receive this host. Its services are the same shared corner controls and
 		// guarded storage that composed applications get, so every game can offer mute and fullscreen shortcuts.
-		const services = Object.freeze({QuickControls, SafeStorage});
+		const services = Object.freeze({QuickControls, SafeStorage, GameShell, RegionButtons, TouchPad});
 		const host = {session, module, canvas, signal, cleanup, report, options, init, services};
 		let reads = 0;
 

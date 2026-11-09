@@ -3,8 +3,11 @@ import {PackageGraph, properties} from './PackageGraph.mjs';
 import {SessionAssets} from './SessionAssets.mjs';
 import {DomTexture} from './DomTexture.mjs';
 import {SdlAudio} from './SdlAudio.mjs';
+import {GameShell} from './GameShell.mjs';
 import {QuickControls} from './QuickControls.mjs';
+import {RegionButtons} from './RegionButtons.mjs';
 import {SafeStorage} from './SafeStorage.mjs';
+import {TouchPad} from './TouchPad.mjs';
 import {SamplePlayer} from './SamplePlayer.mjs';
 import {GameLauncher} from './launcher/GameLauncher.mjs';
 import {cacheProgramValidation} from './GlesPrograms.mjs';
@@ -537,6 +540,9 @@ export function activate(host)
 			SdlAudio
 			, QuickControls
 			, SafeStorage
+			, GameShell
+			, RegionButtons
+			, TouchPad
 			, SamplePlayer
 			, cacheProgramValidation
 			, cachePixelStoreQueries

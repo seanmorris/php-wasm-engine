@@ -126,7 +126,7 @@ Tiled global IDs retain their unsigned flag bits and map to dense atlas indexes.
 
 `SdlInput` maps keyboard and gamepad state into logical numbered buttons and action aliases. `Controls` preserves pressed and released edges across fixed updates. `Sequences` recognizes timed codes, chords, held modifiers, relative directions, and release steps without consuming gameplay controls.
 
-Framework UI includes bitmap fonts, editable text buffers, menu input and rendering, cards, transient messages, generic world text actors, and DOM-backed texture modals. Browser modules receive shared audio and mute/fullscreen services through their activation context. Games provide their own menu content, HUD composition, screens, and accessibility labels.
+Framework UI includes bitmap fonts, editable text buffers, menu input and rendering, cards, transient messages, generic world text actors, and DOM-backed texture modals. Browser modules receive shared audio and mute/fullscreen services through their activation context. Games provide their own menu content, HUD composition, screens, and accessibility labels. In the browser, `GameShell` packages the host chores games share: the WebGL2 context claim, frame measurement into the viewport string PHP polls, the fullscreen state machine behind `QuickControls`, a persisted mute with one-time key migration, status and action bridges, and symmetric teardown; `RegionButtons` mirrors PHP hit regions as accessible buttons and `TouchPad` gives coarse pointers held buttons.
 
 ## World runtime
 
