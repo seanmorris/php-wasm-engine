@@ -75,9 +75,9 @@ for($y = 0; $y < $height; $y++)
 	}
 }
 
-$sceneTexture = (new ReflectionProperty($renderer, 'sceneTexture'))->getValue($renderer);
+$sceneTexture = $renderer->target()->texture();
 $mapTexture = (new ReflectionProperty($renderer, 'displacementTexture'))->getValue($renderer);
-$depthBuffer = (new ReflectionProperty($renderer, 'depthBuffer'))->getValue($renderer)[0];
+$depthBuffer = $renderer->target()->depthRenderbuffer();
 $live = [glIsTexture($sceneTexture), glIsTexture($mapTexture), glIsRenderbuffer($depthBuffer)];
 $error = glGetError();
 $renderer->close();
