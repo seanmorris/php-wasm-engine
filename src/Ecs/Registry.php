@@ -567,6 +567,26 @@ final class Registry
 	public function defer(callable $command): void { $this->commands[] = $command; }
 
 	/**
+	 * Queue the destruction of an entity for the next command flush, so a system can retire entities while it
+	 * iterates them. An entity already dead by then is left alone, so two systems may both retire the same one.
+	 *
+	 * @param int $id Entity to destroy once commands flush.
+	 * @return void Appends the command without executing it immediately.
+	 */
+	public function destroyLater(int $id): void
+	{
+		/**
+		 * Destroy the entity if it is still alive when commands flush.
+		 *
+		 * @param Registry $registry This registry at flush time.
+		 * @return void Leaves a dead entity alone.
+		 */
+		$this->commands[] = static function(Registry $registry) use ($id): void {
+			if($registry->alive($id)) $registry->destroy($id);
+		};
+	}
+
+	/**
 	 * Execute deferred commands, including newly queued commands, for at most 32 rounds.
 	 *
 	 * @return void Empties the queue or throws when commands recurse beyond the round limit.

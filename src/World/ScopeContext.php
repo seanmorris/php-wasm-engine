@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Phonics\World;
 
+use Phonics\Ecs\OwnedEntities;
 use Phonics\Ecs\Registry;
 use Phonics\Ecs\Scheduler;
 use Phonics\Render\FramePipeline;
@@ -15,8 +16,10 @@ use Phonics\Render\RenderPass;
  */
 final class ScopeContext
 {
-	/** Reverse-order cleanup callbacks and entity IDs owned by this scope. */
-	private array $cleanup = [], $entities = [];
+	/** Reverse-order cleanup callbacks owned by this scope. */
+	private array $cleanup = [];
+	/** Entities owned by this scope, taken down newest first after the cleanup callbacks. */
+	private OwnedEntities $entities;
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 	/** Content object exposed by the active adapter scope. */
@@ -51,6 +54,7 @@ final class ScopeContext
 		private array $services = []
 	){
 		$this->assertSerializable($state);
+		$this->entities = new OwnedEntities($registry);
 	}
 
 	/**
@@ -167,11 +171,7 @@ final class ScopeContext
 	{
 		$this->requireOpen();
 
-		if(!$this->registry->alive($id)) throw new \OutOfBoundsException("Cannot own missing entity $id");
-
-		if(!in_array($id, $this->entities, true)) $this->entities[] = $id;
-
-		return $id;
+		return $this->entities->own($id);
 	}
 
 	/**
@@ -224,11 +224,9 @@ final class ScopeContext
 		foreach(array_reverse($this->cleanup) as $cleanup)
 		try { $cleanup(); } catch(\Throwable $failure) { $error ??= $failure; }
 
-		foreach(array_reverse($this->entities) as $id)
-		if($this->registry->alive($id)) $this->registry->destroy($id);
-
+		$this->entities->close(reverse: true);
 		$this->registry->flush();
-		$this->cleanup = $this->entities = [];
+		$this->cleanup = [];
 		$this->assertSerializable($this->state);
 
 		if($error) throw $error;

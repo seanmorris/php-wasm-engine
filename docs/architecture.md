@@ -84,6 +84,10 @@ Graphics resources retain their PHP-side configuration across WebGL context loss
 
 The registry indexes concrete classes, parents, and interfaces. Structural mutations invalidate bounded query caches; changing fields inside an attached component does not. Deferred commands allow systems to add or remove entities safely during an update. Lifecycle listeners observe component additions and removals.
 
+`Registry::destroyLater()` queues the idempotent alive-then-destroy command systems use to retire entities after iteration. `OwnedEntities` records the entities a manager created and destroys the survivors when it closes, in insertion or reverse order; `ScopeContext` builds its scope ownership on it.
+
+`Lifetime` gives a short-lived effect its age against a duration, the previous step's age for interpolation, a fade from a chosen age and a catch-up that never rewinds; games extend it with marker classes to query effects by kind. `LifetimeSystem` ages every lifetime, fades its sprite and retires the expired at the next flush, for games that need no same-step reaction to expiry.
+
 `Scheduler` runs named systems in dependency order and rejects missing dependencies and cycles. A package module receives `Phonics\Package\Context`, which owns its system and factory registrations. Modules register cleanup with `onClose()` rather than retaining global process state.
 
 `ObjectSpawner` converts recognized Tiled object classes and pallet references into components returned by registered factories. The framework does not interpret game-specific entity names or properties.
@@ -101,6 +105,10 @@ Streaming operates on complete maps. Applications own the entity and terrain sta
 Core physics uses `Pose`, bounds, masks, surface metadata, and generic geometry. `Terrain` stores indexed segments and polygons and exposes ray, circle, and continuously swept body casts. Candidate shapes come from spatial buckets; the solver tests exact geometry only for nearby candidates.
 
 Collision hits report the first contact time, point, normal, source metadata, and optional removable-shape handle. Adding or removing a shape updates only affected index buckets. Casts are read-only, and geometry changes belong between simulation steps or in a caller-controlled impact callback.
+
+`MapTerrain::compile()` fills a given `Terrain`, or a game's subclass, with hooks at the three places games differ: the surface metadata read for a shape, objects left to other systems, and objects a game routes itself with the same projection the default uses; the walk over layers, tiles and objects is unchanged by them, so shape handles keep their order. `build()` is `compile()` with none.
+
+`Sweep::box()` is the shared slab test for a point moving against an expanded axis-aligned box, as bodies test one another's grown bounds; callers choose the stillness epsilon and whether a still axis on the edge counts as inside, and read the raw entry and exit fractions and the entered face's normal, so each game keeps its own acceptance window.
 
 Rules such as rail interpretation, directional layer switching, character adhesion, damage, brick behavior, and water gameplay belong to game packages. They compose the neutral casts rather than extending core with concrete game classes.
 

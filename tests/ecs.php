@@ -523,3 +523,53 @@ test('ECS listeners can detach without retaining retired scene closures', functi
 	$registry->destroy($id);
 	check($registry->query(stdClass::class) === []);
 });
+
+test('ECS destroyLater retires an entity once at flush and ignores one already dead', function() {
+	$r = new Registry;
+	$doomed = $r->create(new EcsBase);
+	$kept = $r->create(new EcsOther);
+	$r->destroyLater($doomed);
+	$r->destroyLater($doomed);
+	check($r->alive($doomed), 'the entity stays alive until commands flush');
+	$r->flush();
+	check(!$r->alive($doomed) && $r->alive($kept), 'the flush destroys the queued entity and no other');
+	$r->destroyLater($doomed);
+	$r->flush();
+	check(!$r->alive($doomed), 'queuing a dead entity is harmless');
+	$live = $r->create(new EcsBase);
+	$r->destroyLater($live);
+	$r->destroy($live);
+	$r->flush();
+	check(!$r->alive($live), 'an entity destroyed directly before the flush does not make the flush throw');
+});
+
+test('ECS OwnedEntities destroys the owned survivors once, in either order', function() {
+	$r = new Registry;
+	$owned = new \Phonics\Ecs\OwnedEntities($r);
+	$a = $owned->own($r->create(new EcsBase));
+	$b = $owned->own($r->create(new EcsBase));
+	$c = $owned->own($r->create(new EcsBase));
+	$owned->own($b);
+	check(
+		$owned->ids() === [$a, $b, $c] && $owned->count() === 3 && $owned->owns($b)
+		, 'owning keeps insertion order and ignores repeats'
+	);
+	rejects(fn() => $owned->own(9999));
+	$owned->disown($c);
+	check(!$owned->owns($c) && $owned->ids() === [$a, $b], 'disowning releases an entity without destroying it');
+	$r->destroy($b);
+	$order = [];
+	$owned->close(function(int $id) use ($r, &$order): void { $order[] = $id; $r->destroy($id); });
+	check(
+		$order === [$a] && !$r->alive($a) && $r->alive($c)
+		, 'close retires only the live owned entities and leaves disowned ones alone'
+	);
+	$owned->close();
+	check($owned->count() === 0, 'a second close finds nothing');
+	$reversed = new \Phonics\Ecs\OwnedEntities($r);
+	$first = $reversed->own($r->create(new EcsBase));
+	$second = $reversed->own($r->create(new EcsBase));
+	$seen = [];
+	$reversed->close(function(int $id) use ($r, &$seen): void { $seen[] = $id; $r->destroy($id); }, reverse: true);
+	check($seen === [$second, $first], 'reverse close takes the newest entity down first');
+});
