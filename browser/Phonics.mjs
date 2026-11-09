@@ -3,6 +3,7 @@ import {PackageGraph} from './PackageGraph.mjs';
 import {ArchiveResources} from './ArchiveResources.mjs';
 import {LoadProgress} from './LoadProgress.mjs';
 import {GameShell} from './GameShell.mjs';
+import {optimizeCanvasContexts} from './GlesPrograms.mjs';
 import {QuickControls} from './QuickControls.mjs';
 import {RegionButtons} from './RegionButtons.mjs';
 import {SafeStorage} from './SafeStorage.mjs';
@@ -76,7 +77,7 @@ export async function run(applicationUrl, options = {})
 		}
 	};
 
-	let php, disposed = false, runtimeReady = false, timer;
+	let php, disposed = false, runtimeReady = false, timer, restoreContexts = () => {};
 
 	const stopped = new Promise((resolve, reject) => {
 
@@ -105,6 +106,7 @@ export async function run(applicationUrl, options = {})
 			disposed = true;
 			controller.abort(new Error('Application closed'));
 			clearTimeout(timer);
+			restoreContexts();
 			let failure;
 
 			try
@@ -139,6 +141,9 @@ export async function run(applicationUrl, options = {})
 		const canvas = options.canvas ?? globalThis.document?.querySelector('canvas');
 
 		if(!canvas) throw new Error('Phonics requires a canvas');
+
+		// Before PHP can create its SDL window, so the bridge caches cover every context made on this canvas.
+		restoreContexts = optimizeCanvasContexts(canvas);
 
 		report('runtime', 'Loading PHP runtime', {total: 2});
 

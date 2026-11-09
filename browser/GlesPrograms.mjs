@@ -1,3 +1,5 @@
+import {cachePixelStoreQueries} from './GlesPixelStore.mjs';
+
 const optimizedContexts = new WeakSet();
 
 /**
@@ -62,4 +64,38 @@ export function cacheProgramValidation(gl, canvas)
 	canvas?.addEventListener?.('webglcontextlost', () => { programs = new WeakSet(); });
 
 	return gl;
+}
+
+/**
+ * Apply both GLES bridge caches to every WebGL context created on a canvas from now on.
+ *
+ * php-sdl-wasm validates program handles with `isProgram()` before each shader switch and reads pixel-store
+ * state before uploads; both are synchronous queries that some browsers answer only after flushing pending
+ * draws, and a game with several passes can spend most of a frame in them. Wrapping `getContext` before PHP
+ * starts covers SDL's own context creation, so no game has to opt in.
+ *
+ * @param {HTMLCanvasElement} canvas Canvas the PHP runtime will draw to.
+ * @returns {function(): void} Restores the canvas's own `getContext`.
+ */
+export function optimizeCanvasContexts(canvas)
+{
+	const original = canvas?.getContext;
+
+	if(typeof original !== 'function') return () => {};
+
+	const getContext = function(type, ...rest) {
+		const context = original.call(this, type, ...rest);
+
+		if(context && /^(?:webgl2?|experimental-webgl)$/.test(String(type)))
+		{
+			cacheProgramValidation(context, canvas);
+			cachePixelStoreQueries(context, canvas);
+		}
+
+		return context;
+	};
+
+	canvas.getContext = getContext;
+
+	return () => { if(canvas.getContext === getContext) delete canvas.getContext; };
 }
