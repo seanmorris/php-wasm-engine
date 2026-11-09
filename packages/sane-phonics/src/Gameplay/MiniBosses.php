@@ -3,7 +3,9 @@ declare(strict_types=1);
 namespace SanePhonics\Gameplay;
 
 use Phonics\Ecs\Query;
+use Phonics\Ecs\OwnedEntities;
 use Phonics\Ecs\Registry;
+use Phonics\Physics\Sweep;
 use SanePhonics\Effects\Rumble;
 use SanePhonics\Physics\Body;
 use SanePhonics\Physics\Terrain;
@@ -19,8 +21,8 @@ final class MiniBosses
 	private array $gids;
 	/** @var array<int,int> Spawned boss entity IDs keyed by source Tiled object ID. */
 	private array $sources = [];
-	/** @var array<int,bool> Bosses, bombs, fragments, and effects owned by this manager. */
-	private array $owned = [];
+	/** Bosses, bombs, fragments, and effects owned by this manager. */
+	private OwnedEntities $owned;
 	/** @var array<int,array{float,float}> Previous player centers for continuous contacts. */
 	private array $players = [];
 	/** @var array<int,array{float,float}> Previous boss centers for relative continuous contacts. */
@@ -50,6 +52,7 @@ final class MiniBosses
 		, string $objectClass = 'MiniBoss'
 		, private bool $advanceCombat = true
 	){
+		$this->owned = new OwnedEntities($registry);
 		if($objectClass === '')
 		{
 			throw new \InvalidArgumentException('Mini-boss object class cannot be empty');
@@ -131,7 +134,7 @@ final class MiniBosses
 
 				$behavior->opacity = $layer->opacity;
 				$entity = $registry->create($boss, $behavior, $sprite);
-				$this->owned[$entity] = true;
+				$this->owned->own($entity);
 				$this->bosses[$entity] = [$boss->x, $boss->y - $boss->height / 2];
 
 				if(isset($object['id']))
@@ -436,7 +439,7 @@ final class MiniBosses
 
 		$sprite = new Sprite($this->gids['spike-bomb'], $x, $y, .5, .5);
 		$id = $this->registry->create($projectile, $sprite);
-		$this->owned[$id] = true;
+		$this->owned->own($id);
 		$behavior->bombs++;
 	}
 
@@ -522,7 +525,7 @@ final class MiniBosses
 		$y = $boss->y + $boss->height * $offsetY;
 		$sprite = new Sprite($this->gids['boss-explosion'], $x, $y, .5, .5);
 		$id = $this->registry->create(new BossExplosion, $sprite);
-		$this->owned[$id] = true;
+		$this->owned->own($id);
 		$behavior->explosions++;
 	}
 
@@ -849,7 +852,7 @@ final class MiniBosses
 
 			$sprite = new Sprite($this->gids['spike-fragment'], $bomb->x, $bomb->y, .5, .5);
 			$id = $this->registry->create($fragment, $sprite);
-			$this->owned[$id] = true;
+			$this->owned->own($id);
 		}
 	}
 
@@ -864,16 +867,16 @@ final class MiniBosses
 		foreach($this->registry->query(BossExplosion::class) as $entity)
 		{
 			$effect = $this->registry->get($entity, BossExplosion::class);
-			$effect->age = min($effect->lifetime, $effect->age + $dt);
+			$effect->advance($dt);
 
-			if($effect->age >= $effect->lifetime)
+			if($effect->expired())
 			{
 				$this->retire($entity);
 
 				continue;
 			}
 
-			$this->registry->get($entity, Sprite::class)->opacity = 1 - $effect->age / $effect->lifetime;
+			$this->registry->get($entity, Sprite::class)->opacity = $effect->opacity();
 		}
 	}
 
@@ -1014,7 +1017,8 @@ final class MiniBosses
 	 * @param array{float,float} $bTo Second center after the update.
 	 * @param float $halfWidth Positive combined horizontal half extent.
 	 * @param float $halfHeight Positive combined vertical half extent.
-	 * @return bool True when relative motion enters the rectangle during the normalized interval.
+	 * @return bool True when relative motion enters the rectangle during the normalized interval, as `Sweep::box`
+	 * decides it with the rectangle centred on the second body.
 	 */
 	private function swept(
 		array $aFrom
@@ -1030,42 +1034,7 @@ final class MiniBosses
 			, ($aTo[1] - $aFrom[1]) - ($bTo[1] - $bFrom[1])
 		];
 
-		$entry = 0.0;
-		$exit = 1.0;
-
-		foreach([[$origin[0], $movement[0], $halfWidth], [$origin[1], $movement[1], $halfHeight]] as [
-			$position
-			, $delta
-			, $extent
-		]){
-			if(abs($delta) < 1e-9)
-			{
-				if(abs($position) > $extent)
-				{
-					return false;
-				}
-
-				continue;
-			}
-
-			$near = (-$extent - $position) / $delta;
-			$far = ($extent - $position) / $delta;
-
-			if($near > $far)
-			{
-				[$near, $far] = [$far, $near];
-			}
-
-			$entry = max($entry, $near);
-			$exit = min($exit, $far);
-
-			if($entry > $exit)
-			{
-				return false;
-			}
-		}
-
-		return $exit >= 0 && $entry <= 1;
+		return Sweep::overlaps(Sweep::box($origin[0], $origin[1], $movement[0], $movement[1], 0, 0, $halfWidth, $halfHeight));
 	}
 
 	/**
@@ -1235,7 +1204,8 @@ final class MiniBosses
 			$this->registry->destroy($entity);
 		}
 
-		unset($this->owned[$entity], $this->bosses[$entity]);
+		$this->owned->disown($entity);
+		unset($this->bosses[$entity]);
 	}
 
 	/**
@@ -1252,11 +1222,7 @@ final class MiniBosses
 
 		$this->closed = true;
 
-		foreach(array_keys($this->owned) as $entity)
-		{
-			$this->retire($entity);
-		}
-
+		$this->owned->close();
 		$this->sources = $this->players = $this->bosses = [];
 	}
 }

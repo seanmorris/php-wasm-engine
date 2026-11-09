@@ -3,7 +3,9 @@ declare(strict_types=1);
 namespace SanePhonics\Gameplay;
 
 use Phonics\Ecs\Query;
+use Phonics\Ecs\OwnedEntities;
 use Phonics\Ecs\Registry;
+use Phonics\Physics\Sweep;
 use SanePhonics\Effects\Rumble;
 use SanePhonics\Physics\Body;
 use SanePhonics\Physics\Terrain;
@@ -12,8 +14,8 @@ use Phonics\Render\Sprite;
 /** Reusable badnik contacts, player damage, score rewards, projectiles, and pop cleanup. */
 final class Badniks
 {
-	/** @var array<int,bool> Entity IDs owned by this level's badnik system. */
-	private array $owned = [];
+	/** Entities owned by this level's badnik system. */
+	private OwnedEntities $owned;
 	/** @var array<int,array{float,float}> Previous player centers for continuous contact tests. */
 	private array $players = [];
 	/** @var array<int,array{float,float}> Previous badnik centers for relative continuous tests. */
@@ -33,6 +35,7 @@ final class Badniks
 		, private Terrain $terrain
 		, private ?Rings $rings = null
 	){
+		$this->owned = new OwnedEntities($registry);
 	}
 
 	/**
@@ -51,7 +54,7 @@ final class Badniks
 		}
 
 		$id = $this->registry->create($badnik, $behavior, $sprite);
-		$this->owned[$id] = true;
+		$this->owned->own($id);
 		$this->badniks[$id] = [$badnik->x, $badnik->y - $badnik->height / 2];
 
 		return $id;
@@ -74,7 +77,7 @@ final class Badniks
 		$sprite->x = $projectile->x;
 		$sprite->y = $projectile->y;
 		$id = $this->registry->create($projectile, $sprite);
-		$this->owned[$id] = true;
+		$this->owned->own($id);
 
 		return $id;
 	}
@@ -241,7 +244,7 @@ final class Badniks
 		else
 		{
 			$this->registry->destroy($entity);
-			unset($this->owned[$entity]);
+			$this->owned->disown($entity);
 		}
 
 		return true;
@@ -260,9 +263,8 @@ final class Badniks
 		{
 			$projectile = $this->registry->get($id, BadnikProjectile::class);
 			$from = [$projectile->x, $projectile->y];
-			$start = $projectile->age;
-			$projectile->age = min($projectile->lifetime, $projectile->age + $dt);
-			$active = max(0, $projectile->age - max($start, $projectile->delay));
+			$projectile->advance($dt);
+			$active = max(0, $projectile->age - max($projectile->previousAge, $projectile->delay));
 
 			if($active > 0)
 			{
@@ -318,7 +320,7 @@ final class Badniks
 				continue 2;
 			}
 
-			if($projectile->age >= $projectile->lifetime)
+			if($projectile->expired())
 			{
 				$this->retire($id);
 			}
@@ -522,16 +524,16 @@ final class Badniks
 		foreach($this->registry->query(BadnikExplosion::class) as $id)
 		{
 			$explosion = $this->registry->get($id, BadnikExplosion::class);
-			$explosion->age = min($explosion->lifetime, $explosion->age + $dt);
+			$explosion->advance($dt);
 
-			if($explosion->age >= $explosion->lifetime)
+			if($explosion->expired())
 			{
 				$this->retire($id);
 
 				continue;
 			}
 
-			$this->registry->get($id, Sprite::class)->opacity = 1 - $explosion->age / $explosion->lifetime;
+			$this->registry->get($id, Sprite::class)->opacity = $explosion->opacity();
 		}
 	}
 
@@ -611,7 +613,8 @@ final class Badniks
 	 * @param array{float,float} $bTo Second center after the update.
 	 * @param float $halfWidth Positive combined horizontal half extent.
 	 * @param float $halfHeight Positive combined vertical half extent.
-	 * @return bool True when relative motion enters the rectangle during the normalized interval.
+	 * @return bool True when relative motion enters the rectangle during the normalized interval, as `Sweep::box`
+	 * decides it with the rectangle centred on the second body.
 	 */
 	private function swept(
 		array $aFrom
@@ -627,42 +630,7 @@ final class Badniks
 			, ($aTo[1] - $aFrom[1]) - ($bTo[1] - $bFrom[1])
 		];
 
-		$entry = 0.0;
-		$exit = 1.0;
-
-		foreach([[$origin[0], $movement[0], $halfWidth], [$origin[1], $movement[1], $halfHeight]] as [
-			$position
-			, $delta
-			, $extent
-		]){
-			if(abs($delta) < 1e-9)
-			{
-				if(abs($position) > $extent)
-				{
-					return false;
-				}
-
-				continue;
-			}
-
-			$near = (-$extent - $position) / $delta;
-			$far = ($extent - $position) / $delta;
-
-			if($near > $far)
-			{
-				[$near, $far] = [$far, $near];
-			}
-
-			$entry = max($entry, $near);
-			$exit = min($exit, $far);
-
-			if($entry > $exit)
-			{
-				return false;
-			}
-		}
-
-		return true;
+		return Sweep::overlaps(Sweep::box($origin[0], $origin[1], $movement[0], $movement[1], 0, 0, $halfWidth, $halfHeight));
 	}
 
 	/**
@@ -678,7 +646,8 @@ final class Badniks
 			$this->registry->destroy($id);
 		}
 
-		unset($this->owned[$id], $this->badniks[$id]);
+		$this->owned->disown($id);
+		unset($this->badniks[$id]);
 	}
 
 	/**
@@ -695,11 +664,7 @@ final class Badniks
 
 		$this->closed = true;
 
-		foreach(array_keys($this->owned) as $id)
-		{
-			$this->retire($id);
-		}
-
+		$this->owned->close();
 		$this->players = $this->badniks = [];
 	}
 }

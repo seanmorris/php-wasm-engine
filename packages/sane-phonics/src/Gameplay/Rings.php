@@ -3,7 +3,9 @@ declare(strict_types=1);
 namespace SanePhonics\Gameplay;
 
 use Phonics\Ecs\Query;
+use Phonics\Ecs\OwnedEntities;
 use Phonics\Ecs\Registry;
+use Phonics\Physics\Sweep;
 use SanePhonics\Physics\Body;
 use SanePhonics\Physics\Terrain;
 use Phonics\Render\Sprite;
@@ -12,7 +14,9 @@ use Phonics\Tiled\TileMap;
 /** Tiled ring promotion, swept player pickup detection, and owned entity cleanup. */
 final class Rings
 {
-	private array $entities = [], $previous = [], $ringPrevious = [];
+	/** Rings this map owns, collected or not. */
+	private OwnedEntities $entities;
+	private array $previous = [], $ringPrevious = [];
 	private ?int $ringGid = null;
 	private bool $closed = false;
 	private ?\Closure $onCollect;
@@ -35,6 +39,7 @@ final class Rings
 		, private ?Terrain $terrain = null
 		, ?callable $onCollect = null
 	){
+		$this->entities = new OwnedEntities($registry);
 		$this->onCollect = $onCollect === null ? null : \Closure::fromCallable($onCollect);
 
 		if($tileClass === '')
@@ -112,7 +117,7 @@ final class Rings
 						}
 
 						$entity = $registry->create($ring, $sprite);
-						$this->entities[] = $entity;
+						$this->entities->own($entity);
 						$this->ringPrevious[$entity] = [$ring->x, $ring->y];
 						$layer->set($column, $row, 0);
 					}
@@ -255,14 +260,14 @@ final class Rings
 				$owner
 				, -$cos * 180
 				, -$sin * 180 - ($circle + 1) * 45
-				, lifetime: $lifetime
+				, duration: $lifetime
 				, collisionLayer: $body->collisionLayer
 				, collectible: $collectible
 			);
 
 			$sprite = new Sprite($this->ringGid, $x, $y, .5, .5);
 			$entity = $this->registry->create($ring, $motion, $sprite);
-			$this->entities[] = $result[] = $entity;
+			$result[] = $this->entities->own($entity);
 			$this->ringPrevious[$entity] = [$x, $y];
 		}
 
@@ -313,42 +318,8 @@ final class Rings
 		];
 
 		$origin = [$from[0] - $ringFrom[0], $from[1] - $ringFrom[1]];
-		$entry = 0.0;
-		$exit = 1.0;
 
-		foreach([[$origin[0], $delta[0], $halfWidth], [$origin[1], $delta[1], $halfHeight]] as [
-			$position
-			, $movement
-			, $extent
-		]){
-			if(abs($movement) < 1e-9)
-			{
-				if(abs($position) > $extent)
-				{
-					return false;
-				}
-
-				continue;
-			}
-
-			$near = (-$extent - $position) / $movement;
-			$far = ($extent - $position) / $movement;
-
-			if($near > $far)
-			{
-				[$near, $far] = [$far, $near];
-			}
-
-			$entry = max($entry, $near);
-			$exit = min($exit, $far);
-
-			if($entry > $exit)
-			{
-				return false;
-			}
-		}
-
-		return true;
+		return Sweep::overlaps(Sweep::box($origin[0], $origin[1], $delta[0], $delta[1], 0, 0, $halfWidth, $halfHeight));
 	}
 
 	/**
@@ -363,9 +334,8 @@ final class Rings
 		{
 			$ring = $this->registry->get($entity, Ring::class);
 			$motion = $this->registry->get($entity, ScatteredRing::class);
-			$start = $motion->age;
-			$motion->age = min($motion->lifetime, $motion->age + $dt);
-			$active = max(0, $motion->age - max($start, $motion->launchDelay));
+			$motion->advance($dt);
+			$active = max(0, $motion->age - max($motion->previousAge, $motion->launchDelay));
 			$this->ringPrevious[$entity] = [$ring->x, $ring->y];
 
 			if($active > 0)
@@ -373,7 +343,7 @@ final class Rings
 				$this->moveScatteredRing($ring, $motion, $active);
 			}
 
-			if($motion->age >= $motion->lifetime)
+			if($motion->expired())
 			{
 				$this->registry->destroy($entity);
 				unset($this->ringPrevious[$entity]);
@@ -458,14 +428,7 @@ final class Rings
 		$this->closed = true;
 		$this->onCollect = null;
 
-		foreach($this->entities as $entity)
-		{
-			if($this->registry->alive($entity))
-			{
-				$this->registry->destroy($entity);
-			}
-		}
-
-		$this->entities = $this->previous = $this->ringPrevious = [];
+		$this->entities->close();
+		$this->previous = $this->ringPrevious = [];
 	}
 }
