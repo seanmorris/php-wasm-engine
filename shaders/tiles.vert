@@ -16,6 +16,7 @@ uniform vec2 parallaxOrigin;
 uniform float zoom;
 uniform float isoOrigin;
 uniform int isometric;
+uniform float time;
 out vec2 uv;
 out vec4 color;
 flat out vec4 rect;
@@ -25,7 +26,19 @@ void main() {
     uint index=bytes.r+(bytes.g<<8u)+(bytes.b<<16u);
     uint flags=bytes.a>>4u;
     emptyTile=index==0u?1:0;
-    rect=texelFetch(metadata,ivec2(int(index),0),0);
+    // Row 2 heads an animated tile's frame list in row 3; the frame whose end time passes `time` supplies the rect.
+    int rectIndex=int(index);
+    vec4 animation=texelFetch(metadata,ivec2(int(index),2),0);
+    if(animation.x>.5){
+        float cycle=mod(max(time,0.),animation.z);
+        int first=int(animation.y),count=int(animation.x);
+        for(int i=0;i<64;i++){
+            if(i>=count) break;
+            vec4 frame=texelFetch(metadata,ivec2(first+i,3),0);
+            if(cycle<frame.y){ rectIndex=int(frame.x); break; }
+        }
+    }
+    rect=texelFetch(metadata,ivec2(rectIndex,0),0);
     vec2 offset=texelFetch(metadata,ivec2(int(index),1),0).xy;
     vec2 cell=plane.xy+cellCorner.xy;
     vec2 anchor=isometric==1?vec2((cell.x-cell.y)*tileSize.x*.5+isoOrigin,(cell.x+cell.y)*tileSize.y*.5):cell*tileSize;

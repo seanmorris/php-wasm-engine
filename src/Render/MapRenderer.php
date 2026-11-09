@@ -365,7 +365,6 @@ final class MapRenderer
 		$endLayer ??= count($this->map->layers);
 		$this->stats = ['draws' => 0,'instances' => 0,'uploads' => 0];
 		$this->sync();
-		$this->atlas->animate($milliseconds);
 		$start = $startLayer;
 		$prepared = false;
 
@@ -394,7 +393,7 @@ final class MapRenderer
 				$prepared = true;
 			}
 
-			$this->renderTiles($camera, $start, $order);
+			$this->renderTiles($camera, $start, $order, $milliseconds);
 
 			if($this->images->renderLayer($layer, $camera, $milliseconds))
 			{
@@ -404,7 +403,7 @@ final class MapRenderer
 			$start = $order + 1;
 		}
 
-		$this->renderTiles($camera, $start, $endLayer);
+		$this->renderTiles($camera, $start, $endLayer, $milliseconds);
 	}
 
 	/**
@@ -413,9 +412,10 @@ final class MapRenderer
 	 * @param Camera $camera Current viewport, zoom, and world position.
 	 * @param int $start Inclusive flattened layer index.
 	 * @param int $end Exclusive flattened layer index.
+	 * @param float $milliseconds Animation time the shader selects tile frames with.
 	 * @return void Submits batches only for eligible tile layers in the requested interval.
 	 */
-	private function renderTiles(Camera $camera, int $start, int $end): void
+	private function renderTiles(Camera $camera, int $start, int $end, float $milliseconds): void
 	{
 		if($start >= $end || !$this->pages)
 		{
@@ -438,6 +438,7 @@ final class MapRenderer
 		glUniform2f($p->location('camera'), $camera->x, $camera->y);
 		glUniform2f($p->location('viewport'), $camera->width, $camera->height);
 		glUniform1f($p->location('zoom'), $camera->zoom);
+		glUniform1f($p->location('time'), $milliseconds);
 
 		glUniform2f(
 			$p->location('parallaxOrigin')

@@ -38,7 +38,6 @@ final class Atlas
  */
 	public array $tiles = [];
 	/** Animation frame sequences indexed by semantic animation name. */
-	private array $frames = [];
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
@@ -188,8 +187,17 @@ final class Atlas
 			}
 
 			$count = count($this->indices) + 1;
-			$rectBytes = str_repeat("\0", $count * 16);
-			$offsetBytes = $rectBytes;
+			$slots = 0;
+
+			foreach($this->tiles as $tile)
+			{
+				$slots += count($tile['animation'] ?? []);
+			}
+
+			$columns = max($count, $slots);
+			$rectBytes = str_repeat("\0", $columns * 16);
+			$offsetBytes = $animationBytes = $frameBytes = $rectBytes;
+			$slot = 0;
 
 			foreach($this->tiles as $gid => $tile)
 			{
@@ -205,11 +213,53 @@ final class Atlas
 					, $index * 16
 					, 16
 				);
+
+				if(empty($tile['animation']))
+				{
+					continue;
+				}
+
+				// Row 2 heads the tile's frame list in row 3: frame count, first slot and cycle length in milliseconds.
+				// Each slot holds the frame tile's dense index and the time at which that frame ends, so the shader
+				// picks the frame for its `time` uniform and no metadata is rewritten while the map animates.
+				$end = 0;
+				$first = $slot;
+
+				foreach($tile['animation'] as $frame)
+				{
+					$frameGid = $tile['firstgid'] + $frame['tileid'];
+
+					if(!isset($this->indices[$frameGid]))
+					{
+						throw new \UnexpectedValueException('Animation refers to missing tile');
+					}
+
+					$end += $frame['duration'];
+					$frameBytes = substr_replace($frameBytes, pack('f*', $this->indices[$frameGid], $end, 0, 0), $slot * 16, 16);
+					$slot++;
+				}
+
+				$animationBytes = substr_replace(
+					$animationBytes
+					, pack('f*', count($tile['animation']), $first, $end, 0)
+					, $index * 16
+					, 16
+				);
 			}
 
 			$this->metadata = self::texture(GL_TEXTURE_2D);
 
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, $count, 2, 0, GL_RGBA, GL_FLOAT, $rectBytes . $offsetBytes);
+			glTexImage2D(
+				GL_TEXTURE_2D
+				, 0
+				, GL_RGBA32F
+				, $columns
+				, 4
+				, 0
+				, GL_RGBA
+				, GL_FLOAT
+				, $rectBytes . $offsetBytes . $animationBytes . $frameBytes
+			);
 		}
 		catch(\Throwable $error)
 		{
@@ -238,7 +288,7 @@ final class Atlas
 		}
 
 		$this->release();
-		$this->indices = $this->rects = $this->tiles = $this->frames = [];
+		$this->indices = $this->rects = $this->tiles = [];
 		$this->create();
 	}
 
@@ -258,53 +308,6 @@ final class Atlas
 		glTexParameteri($target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 		return $ids[0];
-	}
-
-	/**
-	 * Update only metadata entries whose Tiled animation frame has changed.
-	 *
-	 * @param float $milliseconds Simulation or renderer time in milliseconds.
-	 * @return int Number of tile rectangle entries uploaded during this call.
-	 */
-	public function animate(float $milliseconds): int
-	{
-		$updates = 0;
-		glBindTexture(GL_TEXTURE_2D, $this->metadata);
-
-		foreach($this->tiles as $gid => $tile)
-		{
-			if(!empty($tile['animation']))
-			{
-				$frame = $this->map->animatedGid($gid, $milliseconds);
-
-				if(($this->frames[$gid] ?? null) === $frame)
-				{
-					continue;
-				}
-
-				if(!isset($this->rects[$frame]))
-				{
-					throw new \UnexpectedValueException('Animation refers to missing tile');
-				}
-
-				glTexSubImage2D(
-					GL_TEXTURE_2D
-					, 0
-					, $this->indices[$gid]
-					, 0
-					, 1
-					, 1
-					, GL_RGBA
-					, GL_FLOAT
-					, pack('f*', ...$this->rects[$frame])
-				);
-
-				$this->frames[$gid] = $frame;
-				$updates++;
-			}
-		}
-
-		return $updates;
 	}
 
 	/**
