@@ -652,8 +652,8 @@ test('game selector uses gameplay captures and mounts a game only on activation'
 	await page.goto('/games/');
 	await expect(page).toHaveURL(/\/games\/$/);
 	await expect(page.locator('h1')).toHaveText('Games');
-	await expect(page.locator('.game-selector li')).toHaveCount(7);
-	await expect(page.locator('.game-selector img')).toHaveCount(7);
+	await expect(page.locator('.game-selector li')).toHaveCount(8);
+	await expect(page.locator('.game-selector img')).toHaveCount(8);
 	await expect(page.locator('.game-selector img').first()).toHaveCSS('color', 'rgb(244, 247, 251)');
 	expect(wasm).toEqual([]);
 
