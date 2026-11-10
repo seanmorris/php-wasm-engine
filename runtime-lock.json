@@ -2,12 +2,12 @@
   "schema": 1,
   "package": "php-sdl-wasm",
   "phpVersion": "8.4",
-  "url": "https://github.com/seanmorris/php-wasm-engine/releases/download/sdl-preview-8.4-20261011/php-engine-runtime.tgz",
-  "sha256": "38ca7876b20ec321cf45e97929bd14d4e2910e1585ff7bec0f553036503e8a95",
+  "url": "https://github.com/seanmorris/php-wasm-engine/releases/download/sdl-preview-8.4-20261110-rumble/php-engine-runtime-rumble.tgz",
+  "sha256": "4e2573c079fbcda0a7f00f9ee1888dd34513e842a1bac424fdb6cfb4cc9177f8",
   "sourceRepository": "https://github.com/seanmorris/php-wasm",
-  "hostSourceCommit": "7b80019e1bd6df2b28c7811f176e148e59c477f1",
-  "nativeWasmSha256": "a35bf60c1a7c40e9f677692f4c5f60dc41283853664dbbbd8247c75f9e226a1e",
-  "note": "Existing SDL native build, with current host package files and optional PHP zlib. No native rebuild or npm publication.",
+  "hostSourceCommit": "232548765490ecfa2c9c516c77a4251b525fdce4",
+  "nativeWasmSha256": "ac20d5be89811ff9ef7c7784e432ae594db37d5dc7bf5b56009f82c3f2051899",
+  "note": "SDL runtime with exact-controller browser dual-motor and trigger rumble; includes optional PHP zlib.",
   "extensions": {
     "phar": {
       "package": "php-wasm-phar",
