@@ -57,7 +57,7 @@ async function readArchive(archive, member)
 test('production keeps package manifests and bundled game files inside executable archives', async() => {
 	const engine = path.join(output, 'engine');
 	const deployed = await files(engine);
-	const games = ['sane-phonics', 'php-noid', 'php-tris', 'php-slalom', 'php-buster', 'doom-phonics'];
+	const games = ['sane-phonics', 'php-noid', 'php-tris', 'php-slalom', 'php-buster', 'doom-phonics', 'phlappy-phant'];
 
 	assert.deepEqual(
 		deployed.filter(name => /(?:\.php|\.json|\.world|\.tmj|\.tsj)$/.test(name))
@@ -205,6 +205,7 @@ test('games mount inside their documentation pages', async() => {
 		, ['php-slalom', 'PHP Slalom']
 		, ['php-buster', 'PHP Buster']
 		, ['doom-phonics', 'Doom-Phonics']
+		, ['phlappy-phant', 'Phlappy Phant']
 	]);
 
 	await fs.access(path.join(output, 'games', 'index.html'));
@@ -228,6 +229,31 @@ test('games mount inside their documentation pages', async() => {
 	const preview = await read('preview/');
 	assert.match(preview, /<span class="?brand-label"?>docs<\/span>/);
 	assert.match(preview, /data-theme-toggle/);
+});
+
+test('chapter figures and each embed poster are published from the examples checkout', async() => {
+	for(const game of examples.games.filter(game => game.documentation?.chapters?.length))
+	{
+		const overview = await read(`games/${game.slug}/index.html`);
+		const poster = `images/games/${game.slug}${path.extname(game.poster)}`;
+
+		assert.ok(overview.includes(poster), `${game.slug} poster`);
+		await fs.access(path.join(output, poster));
+
+		for(const chapter of game.documentation.chapters)
+		{
+			const source = await fs.readFile(path.join(game.directory, chapter.path), 'utf8');
+			const page = await read(`games/${game.slug}/${chapter.slug === 'index' ? 'index' : chapter.slug}.html`);
+
+			for(const [, target] of source.matchAll(/!\[[^\]]*\]\(([^\s)]+)\)/g))
+			{
+				const figure = `images/games/${game.slug}/${path.basename(target)}`;
+
+				assert.ok(page.includes(figure), `${game.slug}/${chapter.slug} embeds ${target}`);
+				await fs.access(path.join(output, figure));
+			}
+		}
+	}
 });
 
 test('the generated PHP reference exposes every public class and member', async() => {

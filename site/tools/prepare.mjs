@@ -5,7 +5,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {parse, stringify} from 'yaml';
 import {addBreadcrumbs} from './breadcrumbs.mjs';
-import {examplesSourceUrl, loadExamples} from './examples.mjs';
+import {chapterFigures, examplesSourceUrl, loadExamples} from './examples.mjs';
 import {addStructuredData} from './structured-data.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -137,6 +137,7 @@ for(const [index, [slug, title, source]] of references.entries())
 for(const game of games)
 {
 	const targetDirectory = path.join(destination, 'games', game.slug);
+	const figures = new Set(await chapterFigures(game));
 
 	await fs.mkdir(targetDirectory, {recursive: true});
 
@@ -159,10 +160,14 @@ for(const game of games)
 			if(clean === 'api/index.html')
 			return `${start}api/${fragment}${end}`;
 
-			if(clean.endsWith('loop-layout.svg'))
-			return `${start}../../images/games/sane-loop-layout.svg${fragment}${end}`;
-
 			if(clean === './' || clean === '') return match;
+
+			// Figures beside a chapter are published with the game's poster by publish.mjs.
+			const figure = path.posix.basename(clean);
+			const beside = path.posix.normalize(path.posix.join(path.posix.dirname(chapterPath), clean));
+
+			if(match.startsWith('!') && figures.has(figure) && beside === `docs/${figure}`)
+			return `${start}../../images/games/${game.slug}/${figure}${fragment}${end}`;
 
 			let resolved;
 
@@ -202,7 +207,7 @@ for(const game of games)
 		if(slug === 'index' && game.documentation.embed.kind === 'external')
 		embed = `\n<div class="game-embed external-game-embed" data-external-game-embed data-title="${game.title}" data-frame="${game.documentation.embed.frame}">\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}${game.posterExtension}" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime external-game-runtime" data-external-game-runtime hidden>\n<div class="game-embed-controls"><p role="status">Preparing ${game.title}…</p><button type="button">Stop</button></div>\n</div>\n</div>\n\n`;
 		else if(slug === 'index')
-		embed = `\n<div class="game-embed${embedClass}" data-game-embed data-application="../../engine/packages/${game.slug}/dist/game.phar" data-host="../../preview/host.mjs" data-title="${game.title}"${dataOrigins}>\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}.webp" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime" data-game-runtime data-game-embed="true" hidden>\n<div id="game-frame"><canvas width="${game.canvas[0]}" height="${game.canvas[1]}" tabindex="0" aria-label="${game.canvasLabel}"></canvas></div>\n<p id="fullscreen-error" role="alert"></p>\n<div class="game-embed-controls"><p id="status" role="status">Preparing ${game.title}…</p><button id="stop" type="button">Stop</button></div>\n</div>\n</div>\n\n`;
+		embed = `\n<div class="game-embed${embedClass}" data-game-embed data-application="../../engine/packages/${game.slug}/dist/game.phar" data-host="../../preview/host.mjs" data-title="${game.title}"${dataOrigins}>\n<button type="button" class="game-embed-poster" aria-label="Load and play ${game.title}">\n<img src="../../images/games/${game.slug}${game.posterExtension}" width="1280" height="720" fetchpriority="high" alt="${game.title} gameplay">\n<span>Play ${game.title}</span>\n</button>\n<div class="game-embed-runtime" data-game-runtime data-game-embed="true" hidden>\n<div id="game-frame"><canvas width="${game.canvas[0]}" height="${game.canvas[1]}" tabindex="0" aria-label="${game.canvasLabel}"></canvas></div>\n<p id="fullscreen-error" role="alert"></p>\n<div class="game-embed-controls"><p id="status" role="status">Preparing ${game.title}…</p><button id="stop" type="button">Stop</button></div>\n</div>\n</div>\n\n`;
 
 		await fs.writeFile(path.join(targetDirectory, `${slug}.md`), header + embed + body);
 	}

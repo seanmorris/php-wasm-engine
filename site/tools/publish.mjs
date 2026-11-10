@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {loadExamples} from './examples.mjs';
+import {chapterFigures, loadExamples} from './examples.mjs';
 
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rendered = path.resolve(site, process.env.OUTPUT_DIR ?? '.cache/rendered');
@@ -119,6 +119,15 @@ for(const game of examples.games)
 
 	await fs.mkdir(path.dirname(target), {recursive: true});
 	await fs.copyFile(path.join(game.directory, game.poster), target);
+
+	// Figures a chapter embeds from its docs directory travel the same way.
+	for(const figure of await chapterFigures(game))
+	{
+		const directory = path.join(destination, 'images/games', game.slug);
+
+		await fs.mkdir(directory, {recursive: true});
+		await fs.copyFile(path.join(game.directory, 'docs', figure), path.join(directory, figure));
+	}
 }
 
 await publishDirectoryUrls();

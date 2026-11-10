@@ -28,6 +28,7 @@ The runtime requires PHP 8.4 SDL plus the pinned `php-wasm-phar` extension. Pack
 | [PHP Buster](https://github.com/seanmorris/phonics-examples/tree/main/games/php-buster) | A deterministic port of Blockade Buster with original waves, editable input, and local scores. |
 | [Doom-Phonics](https://github.com/seanmorris/phonics-examples/tree/main/games/doom-phonics) | A WAD adapter, DECORATE actor runtime, multiplayer simulation, and direct GLES renderer. |
 | [PHP Billiards](https://github.com/seanmorris/phonics-examples/tree/main/games/php-billiards) | A photorealistic 3D pool practice table with deterministic PHP physics. |
+| [Phlappy Phant](https://github.com/seanmorris/phonics-examples/tree/main/games/phlappy-phant) | A flap-and-dodge homage that fills any frame, with a hand-painted day cycle and a built-in player that checks the course is fair. |
 
 Each game is maintained in the [phonics-examples repository](https://github.com/seanmorris/phonics-examples) with its own namespace, assets, tests, full-page route, and embed route. The documentation build imports their manuals and packages the six established local embeds at their existing URLs; PHP Billiards uses the examples site's embed. Release compatibility mirrors remain under `packages/` while the framework's package pipeline is separated. The [Tiled integration](packages/tiled-phonics/README.md) remains part of this repository.
 

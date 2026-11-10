@@ -402,6 +402,12 @@ MENUS:
         parent: games
         weight: 70
         expanded: false
+      - id: game-phlappy-phant
+        group: true
+        title: Phlappy Phant
+        parent: games
+        weight: 80
+        expanded: false
       - id: game-doom-phonics-api
         group: true
         title: PHP API
@@ -544,6 +550,30 @@ MENUS:
         group: true
         title: Table interface
         parent: game-php-poker-api
+        weight: 30
+        expanded: false
+      - id: game-phlappy-phant-api
+        group: true
+        title: PHP API
+        parent: game-phlappy-phant
+        weight: 100
+        expanded: false
+      - id: game-phlappy-phant-api-root
+        group: true
+        title: Root namespace
+        parent: game-phlappy-phant-api
+        weight: 10
+        expanded: false
+      - id: game-phlappy-phant-api-input
+        group: true
+        title: Input
+        parent: game-phlappy-phant-api
+        weight: 20
+        expanded: false
+      - id: game-phlappy-phant-api-render
+        group: true
+        title: Rendering
+        parent: game-phlappy-phant-api
         weight: 30
         expanded: false
       - id: maintain

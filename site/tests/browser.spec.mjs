@@ -671,6 +671,41 @@ test('game selector uses gameplay captures and mounts a game only on activation'
 	expect(wasm.length).toBeGreaterThan(0);
 });
 
+test('Phlappy Phant starts, flaps, pauses, and cleans up in its documentation page', async({page}) => {
+	test.setTimeout(120000);
+	const errors = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/games/phlappy-phant/');
+	await expect(page.locator('h1')).toHaveText('Phlappy Phant');
+	await expect(page.locator('[data-game-runtime]')).toBeHidden();
+	await page.getByRole('button', {name: 'Load and play Phlappy Phant'}).click();
+	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
+
+	const state = () => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpPhant));
+
+	await expect.poll(async() => (await state()).page).toBe('title');
+	await page.locator('.phlappy-phant-targets').getByRole('button', {name: 'Play', exact: true}).click();
+	await expect.poll(async() => (await state()).phase).toBe('ready');
+
+	// One drawing-buffer pixel per world unit: the canvas is enlarged by CSS, never by the renderer.
+	const frame = await state();
+	expect(frame.viewport[2]).toBe(1);
+	expect(frame.height).toBeGreaterThanOrEqual(320);
+	expect(frame.height).toBeLessThan(640);
+
+	await page.locator('canvas').focus();
+	await page.keyboard.press('Space');
+	await expect.poll(async() => (await state()).phase).toBe('playing');
+	await expect.poll(async() => (await state()).counts.flap).toBeGreaterThan(0);
+
+	await page.keyboard.press('Escape');
+	await expect.poll(async() => (await state()).page).toBe('pause');
+	await page.locator('#stop').click();
+	await expect(page.locator('#status')).toHaveText('Stopped');
+	await expect(page.locator('.phlappy-phant-ui')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
 test('PHP Buster starts, moves, fires, pauses, and cleans up in its documentation page', async({page}) => {
 	test.setTimeout(120000);
 	const errors = [];

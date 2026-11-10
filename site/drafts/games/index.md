@@ -11,6 +11,7 @@ II. Select a game
     E. PHP Buster: Blockade waves, weapon upgrades, and local scores
     F. Doom-Phonics: WAD maps, DECORATE actors, and multiplayer
     G. PHP Billiards: a direct 3D practice table with deterministic PHP physics
+    H. Phlappy Phant: a flap-and-dodge homage with a painted day cycle and a hidden perfect player
 III. Use the games as references
     A. Working examples of the package contract
     B. The generic preview for examples that compose worlds

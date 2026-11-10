@@ -18,6 +18,7 @@ Each game owns its maps, assets, factories, systems, rendering choices, and life
 <li><a href="php-buster/"><img src="../images/games/php-buster-768.webp" width="768" height="432" loading="lazy" decoding="async" alt="PHP Buster gameplay"><strong>PHP Buster</strong><span>Blockade waves, weapon upgrades, and local scores.</span></a></li>
 <li><a href="doom-phonics/"><img src="../images/games/doom-phonics-768.webp" width="768" height="432" loading="lazy" decoding="async" alt="Doom-Phonics gameplay"><strong>Doom-Phonics</strong><span>WAD maps, DECORATE actors, and multiplayer.</span></a></li>
 <li><a href="php-billiards/"><img src="../images/games/php-billiards.png" width="1280" height="720" loading="lazy" decoding="async" alt="PHP Billiards gameplay"><strong>PHP Billiards</strong><span>A direct 3D practice table with deterministic PHP physics.</span></a></li>
+<li><a href="phlappy-phant/"><img src="../images/games/phlappy-phant.png" width="1280" height="720" loading="lazy" decoding="async" alt="Phlappy Phant gameplay"><strong>Phlappy Phant</strong><span>A flap-and-dodge homage with a painted day cycle and a hidden perfect player.</span></a></li>
 </ul>
 
 Use these builds as working examples of the [package contract](../packages.html). Examples that compose a world can also be opened through the [generic preview](../preview/).

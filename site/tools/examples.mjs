@@ -96,6 +96,41 @@ export async function loadExamples()
 	return loaded;
 }
 
+/**
+ * List the figures a game's chapters embed from its own docs directory.
+ *
+ * The site publishes them beside the game's poster, so a chapter's relative image link renders the same on GitHub
+ * and in the documentation.
+ *
+ * @param {{directory: string, documentation?: {chapters?: {path: string}[]}}} game Example metadata from
+ * loadExamples().
+ * @returns {Promise<string[]>} File names inside the game's docs directory, without duplicates.
+ */
+export async function chapterFigures(game)
+{
+	const names = new Set;
+
+	for(const chapter of game.documentation?.chapters ?? [])
+	{
+		const source = await fs.readFile(path.join(game.directory, chapter.path), 'utf8');
+
+		for(const [, target] of source.matchAll(/!\[[^\]]*\]\(([^\s)]+)\)/g))
+		{
+			if(/^(?:[a-z]+:|\/\/|#)/i.test(target)) continue;
+
+			const relative = path.posix.join(path.posix.dirname(chapter.path), target.split('#')[0]);
+			const resolved = path.posix.normalize(relative);
+
+			if(path.posix.dirname(resolved) !== 'docs') continue;
+
+			await fs.access(path.join(game.directory, resolved));
+			names.add(path.posix.basename(resolved));
+		}
+	}
+
+	return [...names];
+}
+
 export function examplesSourceUrl(examples, relative)
 {
 	return `${examples.repository}/blob/${examples.ref}/${relative.split(path.sep).join('/')}`;
