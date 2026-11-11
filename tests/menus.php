@@ -660,7 +660,7 @@ test('font annotations own the character map independently of tile positions', f
 	check(array_map(fn($s) => $s->gid, $layout['sprites']) === [27, 35, 15, 18, 16, 16]);
 	near($layout['width'], 51);
 	check($layout['sprites'][2]->crop === [4, 0, 3, 14]);
-	near($layout['sprites'][2]->y, 2);
+	near($layout['sprites'][2]->y, 1);
 	check(!$layout['sprites'][0]->outline);
 	$wrapped = $font->layout("AA\nI", 2);
 	near($wrapped['width'], 32);

@@ -416,7 +416,7 @@
         {
           "name": "glyph.offsetY",
           "type": "int",
-          "value": 2
+          "value": 1
         }
       ]
     },
