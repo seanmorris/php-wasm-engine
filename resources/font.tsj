@@ -401,7 +401,12 @@
         {
           "name": "glyph.height",
           "type": "int",
-          "value": 12
+          "value": 14
+        },
+        {
+          "name": "glyph.cropX",
+          "type": "int",
+          "value": 4
         },
         {
           "name": "glyph.advance",
