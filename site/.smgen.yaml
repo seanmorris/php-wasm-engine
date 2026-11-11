@@ -444,6 +444,12 @@ MENUS:
         parent: game-doom-phonics-api
         weight: 50
         expanded: false
+      - id: game-doom-phonics-api-effects
+        group: true
+        title: Effects
+        parent: game-doom-phonics-api
+        weight: 45
+        expanded: false
       - id: game-doom-phonics-api-game
         group: true
         title: Game
