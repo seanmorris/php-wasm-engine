@@ -13,11 +13,30 @@ try
 	{
 		const project = JSON.parse(await fs.readFile(args[0], 'utf8'));
 		const records = [];
+		let files = [], previousBindings = {};
 
-		for(const file of await fs.readdir(args[1]))
+		try
+		{
+			files = await fs.readdir(args[1]);
+		}
+		catch(error)
+		{
+			if(error.code !== 'ENOENT') throw error;
+		}
+
+		try
+		{
+			previousBindings = JSON.parse(await fs.readFile(args[2], 'utf8')).bindings ?? {};
+		}
+		catch(error)
+		{
+			if(error.code !== 'ENOENT') throw error;
+		}
+
+		for(const file of files)
 		if(file.endsWith('.manifest.json'))
 		records.push(JSON.parse(await fs.readFile(path.join(args[1], file), 'utf8')));
-		const catalog = classCatalog(project.propertyTypes ?? [], records);
+		const catalog = classCatalog(project.propertyTypes ?? [], records, previousBindings);
 		await fs.writeFile(args[2] + '.tmp', JSON.stringify(catalog, null, 2) + '\n');
 		await fs.rename(args[2] + '.tmp', args[2]);
 	}

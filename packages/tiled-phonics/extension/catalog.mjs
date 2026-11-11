@@ -1,5 +1,5 @@
 /** Portable Tiled project classes. This module is shared by the editor and packaging CLI. */
-export function classCatalog(definitions, records = [])
+export function classCatalog(definitions, records = [], previousBindings = {})
 {
 	const classes = definitions.filter(value => !value.type || value.type === 'class').map(value => Object.assign({
 		name: value.name
@@ -49,6 +49,17 @@ export function classCatalog(definitions, records = [])
 		throw new Error(`Conflicting component ${entry.class}`);
 
 		bindings[entry.class] = reference;
+	}
+
+	// Local projects can ship explicit bindings without an imported-package cache.
+	// Keep those bindings when saving defaults; cached exports supersede older references.
+	for(const [name, reference] of Object.entries(previousBindings))
+	{
+		if(!byName.has(name) || bindings[name]) continue;
+
+		if(typeof reference !== 'string' || !reference) throw new Error(`Invalid component binding ${name}`);
+
+		bindings[name] = reference;
 	}
 
 	return {schemaVersion: 1, classes, bindings};

@@ -16,4 +16,6 @@ The helper CLI exposes `tiled-phonics import MANIFEST_URL CACHE_DIRECTORY`, `til
 
 Component composition exports project class defaults to `phonics.classes.json` and records it as the world's `phonics.classes` file property. Save the `.tiled-project` before previewing: Tiled omits unchanged defaults from map files. Keep the generated catalog in the game's declared assets and refresh package integrity after changes. The CLI `tiled-phonics catalog PROJECT CACHE OUTPUT` can regenerate it for packaging. The validator rejects invalid classes, cycles, component references, and missing default file resources.
 
+Local projects such as Noid's campaign ship explicit component bindings in that catalog. Saving defaults in the editor or regenerating the catalog retains those bindings even without a package cache. Cached package exports take precedence when available; bindings for deleted classes are removed.
+
 `phonics.systems` stores a JSON list of export references or binding records (`id`, `use`, `options`, `after`). The dialog preserves existing binding options; advanced ordering remains editable in Tiled's custom properties. `phonics.lifecycle` selects scope state handling. Existing factory-authored worlds remain supported without a component catalog.

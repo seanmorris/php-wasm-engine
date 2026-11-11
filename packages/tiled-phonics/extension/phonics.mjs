@@ -108,8 +108,24 @@ export function exportClasses(world)
 
 	try { data = JSON.parse(project.readAll()); } finally { project.close(); }
 
-	const catalog = classCatalog(data.propertyTypes || [], records());
 	const target = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json');
+	let previousBindings = {};
+
+	if(File.exists(target))
+	{
+		const previous = new TextFile(target, TextFile.ReadOnly);
+
+		try
+		{
+			previousBindings = JSON.parse(previous.readAll()).bindings || {};
+		}
+		finally
+		{
+			previous.close();
+		}
+	}
+
+	const catalog = classCatalog(data.propertyTypes || [], records(), previousBindings);
 	const file = new TextFile(target, TextFile.WriteOnly);
 	file.write(JSON.stringify(catalog, null, 2) + '\n');
 	file.commit();

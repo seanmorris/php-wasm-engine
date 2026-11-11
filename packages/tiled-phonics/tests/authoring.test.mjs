@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {spawn} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {classCatalog} from '../extension/catalog.mjs';
 import {importPackage, validateWorld} from '../lib/authoring.mjs';
@@ -114,7 +114,11 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 	await fs.cp(original, directory, {recursive: true});
 	const world = path.join(directory, worldName);
 	const project = path.join(directory, 'test.tiled-project');
-	await fs.writeFile(project, JSON.stringify({folders: ['.'],propertyTypes: []}));
+	const projectData = packageName === 'php-noid'
+		? JSON.parse(await fs.readFile(path.join(original, 'campaign.tiled-project')))
+		: {folders: ['.'], propertyTypes: []};
+
+	await fs.writeFile(project, JSON.stringify(projectData));
 	const extensions = path.join(directory, 'config/tiled/extensions');
 	await fs.mkdir(extensions, {recursive: true});
 	await fs.cp(new URL('../extension/', import.meta.url), extensions, {recursive: true});
@@ -139,19 +143,30 @@ const check=() => {
  tested=true;
  try {
   const world=tiled.worlds[0];
+  if('${packageName}' === 'php-noid') {
+   const map=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'stage-01.tmj'));
+   const brickType=tiled.project.findTypeByName('PhpNoid.Brick');
+   if(!brickType || brickType.members.hits !== 1 || brickType.members.unbreakable !== false) throw new Error('Brick defaults missing from the active project');
+   if(map.layerAt(1).objects[1].property('Brick').typeName !== 'PhpNoid.Brick') throw new Error('Nested Brick property did not resolve in Tiled');
+   if(${pass} === 1) {
+    map.layerAt(1).objects[1].setProperty('Brick', tiled.propertyValue('PhpNoid.Brick', {hits:4,unbreakable:true}));
+    if(!map.save()) throw new Error('Component map save failed');
+   }
+  }
   if(${pass} === 1) {
    if(!world.property('phonics.start')) throw new Error('Lost initial world property');
    const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]},{name:'Fixture.Preset',members:[{name:'actor',type:'class',propertyType:'Fixture.Actor',value:{speed:7.5}}]}];
    applyClasses(classes); applyClasses(classes);
    configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'${nextMap}',['@fixture/module']);
    const cache = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '.phonics-cache');
-   File.makePath(cache);
+   if('${packageName}' !== 'php-noid') File.makePath(cache);
    world.setProperty('phonics.classes', tiled.filePath(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json')));
    if(!world.save()) throw new Error('World save failed');
    exportClasses(world);
    const catalogFile = new TextFile(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json'), TextFile.ReadOnly);
    const catalog = JSON.parse(catalogFile.readAll()); catalogFile.close();
    if(!catalog.classes.some(c => c.name === 'Fixture.Preset')) throw new Error('Missing nested project class');
+   if('${packageName}' === 'php-noid' && catalog.bindings['PhpNoid.Brick'] !== '@php-noid/brick-component') throw new Error('Lost local component binding without a package cache');
   } else {
    if(world.property('phonics.start') !== '${nextMap}') throw new Error('Lost start after reopening');
    if(world.property('phonics.import.fixture') !== 'https://cdn.test/pkg@1.0.0/phonics.json') throw new Error('Lost import');
@@ -206,6 +221,17 @@ Qt.callLater(check);`
 		assert.equal(saved.maps.length, JSON.parse(await fs.readFile(path.join(original, worldName))).maps.length);
 		const types = JSON.parse(await fs.readFile(project)).propertyTypes;
 		assert.equal(types.find(type => type.name==='Fixture.Actor').members.find(p => p.name==='speed').type, 'float');
+
+		if(packageName === 'php-noid')
+		{
+			const catalog = JSON.parse(await fs.readFile(path.join(directory, 'phonics.classes.json')));
+			const originalCatalog = JSON.parse(await fs.readFile(path.join(original, 'phonics.classes.json')));
+			assert.deepEqual(catalog.bindings, originalCatalog.bindings);
+			const map = JSON.parse(await fs.readFile(path.join(directory, 'stage-01.tmj')));
+			const brick = map.layers[1].objects[1].properties.find(property => property.name === 'Brick');
+			assert.equal(brick.propertytype, 'PhpNoid.Brick');
+			assert.deepEqual(brick.value, {hits: 4, unbreakable: true});
+		}
 	}
 	finally
 	{
@@ -261,4 +287,45 @@ test('runtime catalogs preserve nested presets and reject cycles and duplicate b
 		)
 		, /Conflicting/
 	);
+});
+
+test('local catalog bindings survive missing caches and follow authoritative cached exports', () => {
+	const definitions = [{name: 'Brick', members: [{name: 'hits', type: 'int', value: 2}]}];
+	const previous = {Brick: '@noid/brick', Removed: '@noid/removed'};
+	const catalog = classCatalog(definitions, [], previous);
+	assert.deepEqual(catalog.bindings, {Brick: '@noid/brick'});
+	assert.equal(catalog.classes[0].members[0].value, 2);
+	assert.deepEqual(previous, {Brick: '@noid/brick', Removed: '@noid/removed'});
+	const records = [{
+		source: 'https://game.test/phonics.json'
+		, manifest: {exports: {brick: {type: 'component', class: 'Brick'}}}
+	}];
+
+	assert.equal(classCatalog(definitions, records, previous).bindings.Brick, 'https://game.test/phonics.json#brick');
+	assert.throws(() => classCatalog(definitions, [], {Brick: 42}), /Invalid component binding/);
+});
+
+test('catalog CLI retains local bindings without a cache and leaves invalid exports untouched', async () => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-local-catalog-'));
+	const project = path.join(directory, 'game.tiled-project');
+	const output = path.join(directory, 'phonics.classes.json');
+	const cli = fileURLToPath(new URL('../bin/tiled-phonics.mjs', import.meta.url));
+
+	try
+	{
+		await fs.writeFile(project, JSON.stringify({propertyTypes: [{name: 'Brick', members: []}]}));
+		await fs.writeFile(output, JSON.stringify({bindings: {Brick: '@noid/brick'}}));
+		const args = [cli, 'catalog', project, path.join(directory, 'missing-cache'), output];
+		const result = spawnSync(process.execPath, args, {encoding: 'utf8'});
+		assert.equal(result.status, 0, result.stderr);
+		const saved = await fs.readFile(output, 'utf8');
+		assert.deepEqual(JSON.parse(saved).bindings, {Brick: '@noid/brick'});
+		await fs.writeFile(project, '{invalid json');
+		assert.notEqual(spawnSync(process.execPath, args).status, 0);
+		assert.equal(await fs.readFile(output, 'utf8'), saved);
+	}
+	finally
+	{
+		await fs.rm(directory, {recursive: true, force: true});
+	}
 });
