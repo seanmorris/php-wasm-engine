@@ -126,6 +126,18 @@ foreach(['panel', 'dimmer', 'highlight'] as $key)
 }
 
 $renderer->showHints = false;
+$menu = new Menu(['caption' => ['label' => '', 'subtext' => 'A']], '');
+$menu->open();
+$device->begin([0, 0, 0, 1]);
+$renderer->render($menu, 320, 180);
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+[$captionX, $captionY, , $captionHeight] = $renderer->regions[0]['rect'];
+$checks['compact text keeps native bitmap pixels at one-times menu scale'] = menuPixel(
+	$pixels
+	, (int)$captionX + 6
+	, (int)($captionY + $captionHeight) + 10
+) === 'ff0000ff';
+
 $menu = new Menu(['name' => ['label' => '', 'input' => 'string', 'value' => 'AAA']], '');
 $menu->open();
 $menu->activate();

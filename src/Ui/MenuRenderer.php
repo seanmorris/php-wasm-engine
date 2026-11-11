@@ -290,12 +290,15 @@ final class MenuRenderer
 			'subtext'
 			] ?? ''
 			));
+		// Bitmap captions may be smaller than their rows, but fractional enlargement resamples the atlas before the
+		// host scales the game canvas. Keep every available source pixel whole; only a sub-native viewport may shrink.
+		$compactScale = $s < 1 ? $s : max(1, round($s * .75));
 
 		$this->text(
 			$message
 			, $inner[0]
 			, $line
-			, $s * .75
+			, $compactScale
 			, $color
 			, [$inner[0], $line, $inner[2], 16 * $s]
 			, $inner[2]
@@ -312,7 +315,7 @@ final class MenuRenderer
 				$hints
 				, $inner[0]
 				, $line + 18 * $s
-				, $s * .75
+				, $compactScale
 				, $color
 				, $inner
 				, align: $this->style['hintAlign'] ?? $this->style['align']
