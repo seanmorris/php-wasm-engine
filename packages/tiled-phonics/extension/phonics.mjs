@@ -57,6 +57,37 @@ function action(name, text, callback)
 	registered.text = text;
 }
 
+/** Normalize Tiled's Qt list wrapper as well as legacy serialized declarations. */
+export function listProperty(target, name)
+{
+	const value = target.property(name);
+	let list = typeof value === 'string' ? JSON.parse(value) : (value || []);
+
+	// Reopened QVariantList values are array-like, but Array.isArray returns false.
+	if(typeof value !== 'string' && !Array.isArray(list) && typeof list.length === 'number')
+	list = Array.from(list);
+
+	if(!Array.isArray(list)) throw new Error(name + ' must be a list');
+
+	return list;
+}
+
+function systemReference(binding)
+{
+	return typeof binding === 'string' ? binding : (binding.value || binding).use;
+}
+
+/** Save references as native lists; retain legacy structured bindings without losing options. */
+export function configureSystems(target, systems, policy)
+{
+	const legacy = systems.some(binding => typeof binding !== 'string' && !binding.typeName);
+
+	target.macro('Configure scope systems', () => {
+		target.setProperty('phonics.systems', legacy ? JSON.stringify(systems) : systems);
+		target.setProperty('phonics.lifecycle', policy);
+	});
+}
+
 export function applyClasses(definitions)
 {
 	const created = [];
@@ -143,7 +174,7 @@ export function configureWorld(world, imports, start, modules = [])
 	world.macro('Configure Phonics world', () => {
 		for(const alias of Object.keys(imports)) world.setProperty('phonics.import.' + alias, imports[alias]);
 		world.setProperty('phonics.start', start);
-		world.setProperty('phonics.modules', JSON.stringify(modules));
+		world.setProperty('phonics.modules', modules);
 	});
 }
 
@@ -197,7 +228,7 @@ action('PhonicsWorldSettings', 'Phonics World Settings…', () => {
 	const dialog = new Dialog('Phonics World Settings');
 	const maps = world.maps.map(map => FileInfo.relativePath(FileInfo.path(world.fileName), map.fileName));
 	const start = dialog.addComboBox('Starting map', maps, Math.max(0, maps.indexOf(world.property('phonics.start'))));
-	const selected = JSON.parse(world.property('phonics.modules') || '[]');
+	const selected = listProperty(world, 'phonics.modules');
 	const checks = modules.map(reference => dialog.addCheckBox(reference, selected.includes(reference)));
 	dialog.addLabel('Available pallet exports:\n' + pallets.join('\n'));
 	dialog.addButton('Save').clicked.connect(() => dialog.accept());
@@ -333,12 +364,10 @@ action('PhonicsScopeSystems', 'Phonics Scope Systems…', () => {
 	let existing = [];
 
 	const refresh = () => {
-		existing = JSON.parse(targets[target.currentIndex].property('phonics.systems') || '[]');
+		existing = listProperty(targets[target.currentIndex], 'phonics.systems');
 
 		for(const choice of choices)
-		choice.checkbox.checked = existing.some(
-			binding => (typeof binding === 'string' ? binding : binding.use) === choice.reference
-		);
+		choice.checkbox.checked = existing.some(binding => systemReference(binding) === choice.reference);
 
 		lifecycle.currentIndex = policies.indexOf(
 			targets[target.currentIndex].property('phonics.lifecycle') || 'reset'
@@ -354,7 +383,7 @@ action('PhonicsScopeSystems', 'Phonics Scope Systems…', () => {
 	if(dialog.exec() !== Dialog.Accepted) return;
 
 	const systems = existing.filter(binding => {
-		const reference = typeof binding === 'string' ? binding : binding.use;
+		const reference = systemReference(binding);
 		const choice = choices.find(item => item.reference === reference);
 
 		return !choice || choice.checkbox.checked;
@@ -362,28 +391,25 @@ action('PhonicsScopeSystems', 'Phonics Scope Systems…', () => {
 
 	for(const choice of choices)
 	if(choice.checkbox.checked
-		&& !systems.some(binding => (typeof binding === 'string' ? binding : binding.use) === choice.reference)
+		&& !systems.some(binding => systemReference(binding) === choice.reference)
 	)
 	systems.push(choice.reference);
 	const policy = policies[lifecycle.currentIndex];
 
-	targets[target.currentIndex].macro('Configure scope systems', () => {
-		targets[target.currentIndex].setProperty('phonics.systems', JSON.stringify(systems));
-		targets[target.currentIndex].setProperty('phonics.lifecycle', policy);
-	});
+	configureSystems(targets[target.currentIndex], systems, policy);
 
-	const modules = JSON.parse(world.property('phonics.modules') || '[]');
+	const modules = listProperty(world, 'phonics.modules');
 
 	for(const binding of systems)
 	{
-		const reference = typeof binding === 'string' ? binding : binding.use;
+		const reference = systemReference(binding);
 
 		if(!modules.includes(reference)) modules.push(reference);
 	}
 
 	if(!['retain', 'snapshot', 'reset'].includes(policy) && !modules.includes(policy)) modules.push(policy);
 
-	world.setProperty('phonics.modules', JSON.stringify(modules));
+	world.setProperty('phonics.modules', modules);
 });
 
 action('PhonicsTileEntities', 'Phonics Tile Entities…', () => {

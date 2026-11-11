@@ -359,10 +359,11 @@ test('PhpNoid treats repeated map sources as separate campaign placements', asyn
 	await page.evaluate(() => composed.dispose());
 });
 
+for(const encoding of ['list', 'string'])
 test(
-	'optional Tiled adapter loads nested project defaults and registrations before activating world gameplay'
+	`optional Tiled adapter loads project defaults and ${encoding} registrations before activating world gameplay`
 	, async ({page}) => {
-		const target = path.join(directory, 'neutral');
+		const target = path.join(directory, 'neutral-' + encoding);
 		await fs.mkdir(target);
 		const files = {
 			'application.php': `<?php
@@ -436,7 +437,16 @@ return new class implements \\Phonics\\World\\SystemSet {
 				, properties: [
 					{name: 'phonics.import.fixture', type: 'string', value: './phonics.json'}
 					, {name: 'phonics.classes', type: 'file', value: 'classes.json'}
-					, {name: 'phonics.systems', type: 'string', value: '["@fixture/tick"]'}
+					, {
+						name: 'phonics.systems'
+						, type: encoding
+						, value: encoding === 'list' ? [{type: 'string', value: '@fixture/tick'}] : '["@fixture/tick"]'
+					}
+					, {
+						name: 'phonics.modules'
+						, type: encoding
+						, value: encoding === 'list' ? [{type: 'string', value: '@fixture/tick'}] : '["@fixture/tick"]'
+					}
 					, {name: 'phonics.lifecycle', type: 'string', value: 'reset'}
 				]
 			}
@@ -464,12 +474,12 @@ return new class implements \\Phonics\\World\\SystemSet {
 		await pack(target);
 		await page.goto('/preview/');
 
-		await page.evaluate(async origin => {
-			window.composed = await Phonics.run(origin + '/neutral/dist/game.phar', {
+		await page.evaluate(async ({origin, encoding}) => {
+			window.composed = await Phonics.run(origin + '/neutral-' + encoding + '/dist/game.phar', {
 				canvas: document.querySelector('canvas')
 				, policy: {codeOrigins: [location.origin, origin]}
 			});
-		}, origin
+		}, {origin, encoding}
 		);
 
 		const result = await page.locator('canvas').evaluate(c => JSON.parse(c.dataset.tiledComposition));

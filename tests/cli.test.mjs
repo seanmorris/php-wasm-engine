@@ -92,6 +92,8 @@ test('packed CLI creates, validates, builds and previews an independent game out
 	const bin = path.join(consumer, 'node_modules/.bin/phonics');
 	const installed = path.join(consumer, 'node_modules/@seanmorris/phonics');
 	assert.equal((await fs.lstat(installed)).isSymbolicLink(), false);
+	await fs.access(path.join(installed, 'packages/tiled-phonics/extension/phonics.mjs'));
+	await fs.access(path.join(installed, 'packages/tiled-phonics/extension/catalog.mjs'));
 	assert.match(execute(bin, ['--help']), /writing your own game packages/);
 	assert.match(execute(bin, ['preview', '--help']), /--runtime/);
 	assert.throws(() => execute(bin, ['unknown']), /Unknown command/);

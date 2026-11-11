@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
-import {satisfies, packagePath, properties} from '@seanmorris/phonics/package-graph';
+import {satisfies, packagePath, properties, propertyList} from '@seanmorris/phonics/package-graph';
 import {verify} from '@seanmorris/phonics/resources';
 
 const key = url => createHash('sha256').update(url).digest('hex');
@@ -246,7 +246,7 @@ export function validateWorld(world, records)
 	if(config['phonics.start'].startsWith('@') && resolve(config['phonics.start']).type !== 'asset')
 		throw new Error('phonics.start must select a map asset');
 
-	for(const reference of JSON.parse(config['phonics.modules'] ?? '[]'))
+	for(const reference of propertyList(config['phonics.modules'], 'phonics.modules'))
 		if(!['module', 'system-set', 'scope-policy', 'component'].includes(resolve(reference).type))
 		throw new Error(`Expected registration export: ${reference}`);
 

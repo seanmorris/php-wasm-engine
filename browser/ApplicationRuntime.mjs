@@ -1,6 +1,6 @@
 import {tiledCatalog} from './TiledCatalog.mjs';
 import {readInviteLink} from './network/InviteLink.mjs';
-import {PackageGraph, properties} from './PackageGraph.mjs';
+import {PackageGraph, properties, propertyList} from './PackageGraph.mjs';
 import {SessionAssets} from './SessionAssets.mjs';
 import {DomTexture} from './DomTexture.mjs';
 import {SdlAudio} from './SdlAudio.mjs';
@@ -206,7 +206,9 @@ export function activate(host)
 
 		await graph.activateGraph(game);
 
-		const modules = launch.legacy ? JSON.parse(config['phonics.modules'] ?? '[]') : (world.modules ?? []);
+		const modules = launch.legacy
+			? propertyList(config['phonics.modules'], 'phonics.modules')
+			: (world.modules ?? []);
 
 		for(const reference of modules) await graph.activateGraph(await graph.resolve(reference, declaring));
 		const catalogResources = new Set();
@@ -216,7 +218,7 @@ export function activate(host)
 
 			if(!launch.legacy || owner !== declaring) await graph.imports(data, owner);
 
-			for(const reference of JSON.parse(props['phonics.modules'] ?? '[]'))
+			for(const reference of propertyList(props['phonics.modules'], 'phonics.modules'))
 			await graph.activateGraph(await graph.resolve(reference, owner));
 
 			const classFile = classes ?? props['phonics.classes'];
@@ -241,7 +243,7 @@ export function activate(host)
 				for(const file of validated.files) catalogResources.add(file);
 			}
 
-			for(const binding of JSON.parse(props['phonics.systems'] ?? '[]'))
+			for(const binding of propertyList(props['phonics.systems'], 'phonics.systems'))
 			{
 				const entry = await graph.resolve(typeof binding === 'string' ? binding : binding.use, owner);
 

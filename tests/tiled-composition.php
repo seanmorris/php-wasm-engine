@@ -177,6 +177,33 @@ $reader = function($path) use (&$files, &$reads): string {
 };
 
 $loader = new Loader(new Assets($reader));
+
+$lists = Loader::properties([
+	propTiled('systems', [['type' => 'string', 'value' => '@game/tick']], 'list')
+	, propTiled('empty', [], 'list')
+	, propTiled('nested', [['type' => 'list', 'value' => [['type' => 'bool', 'value' => false]]]], 'list')
+]);
+
+checkTiled($lists === [
+	'systems' => ['@game/tick']
+	, 'empty' => []
+	, 'nested' => [[false]]
+], 'decode Tiled native typed lists'
+);
+
+foreach([['bad'], ['type' => 'string', 'value' => 'bad']] as $invalidList)
+{
+	try
+	{
+		Loader::propertyValue(['type' => 'list', 'value' => $invalidList]);
+		throw new RuntimeException('Accepted malformed Tiled list');
+	}
+	catch(UnexpectedValueException)
+	{
+		checkTiled(true, 'reject malformed Tiled list');
+	}
+}
+
 $map = $loader->map('/game/map.json');
 checkTiled(count($map->layers) === 4 && count($map->allLayers) === 5, 'retain groups separately from rendering leaves');
 $copy = clone $map;

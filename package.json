@@ -94,7 +94,8 @@
     "bin/",
     "cli/",
     "runtime-lock.json",
-    "adapters/"
+    "adapters/",
+    "packages/tiled-phonics/extension/"
   ],
   "bin": {
     "phonics": "./bin/phonics.mjs"

@@ -559,7 +559,35 @@ final class Loader
 
 		foreach($properties as $p)
 		{
-			$result[$p['name']] = $p['value'];
+			$result[$p['name']] = self::propertyValue($p);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Decode the typed items stored inside a Tiled 1.12 list property.
+	 *
+	 * @param array<string,mixed> $property A property record or unnamed list item.
+	 * @return mixed The decoded value, with nested lists unwrapped recursively.
+	 */
+	public static function propertyValue(array $property): mixed
+	{
+		if(($property['type'] ?? '') !== 'list') return $property['value'];
+
+		$value = $property['value'];
+
+		if(!is_array($value) || !array_is_list($value))
+		throw new \UnexpectedValueException('Tiled list value must be an array');
+
+		$result = [];
+
+		foreach($value as $item)
+		{
+			if(!is_array($item) || !is_string($item['type'] ?? null) || !array_key_exists('value', $item))
+			throw new \UnexpectedValueException('Invalid Tiled list item');
+
+			$result[] = self::propertyValue($item);
 		}
 
 		return $result;

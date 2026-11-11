@@ -6,7 +6,32 @@ export const VERSION = '0.1.0';
  * @param {Array<{name: string, value: *}>} [value] Tiled property records.
  * @returns {Record<string, *>} Last value for each property name.
  */
-export const properties = value => Object.fromEntries((value ?? []).map(p => [p.name, p.value]));
+export const properties = value => Object.fromEntries((value ?? []).map(p => [p.name, propertyValue(p)]));
+
+/** Decode the typed items stored inside a Tiled 1.12 list property. */
+export function propertyValue(property)
+{
+	if(property.type !== 'list') return property.value;
+
+	if(!Array.isArray(property.value)) throw new Error('Tiled list value must be an array');
+
+	return property.value.map(item => {
+		if(!item || typeof item.type !== 'string' || !Object.hasOwn(item, 'value'))
+		throw new Error('Invalid Tiled list item');
+
+		return propertyValue(item);
+	});
+}
+
+/** Read a decoded list declaration, including the older JSON-string encoding. */
+export function propertyList(value, name)
+{
+	const list = typeof value === 'string' ? JSON.parse(value) : (value ?? []);
+
+	if(!Array.isArray(list)) throw new Error(`${name} must be a list`);
+
+	return list;
+}
 
 /**
  * Test an exact, caret, or minimum version requirement.

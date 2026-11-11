@@ -124,6 +124,7 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 	await fs.cp(new URL('../extension/', import.meta.url), extensions, {recursive: true});
 	const resultFile = path.join(directory, 'result.txt');
 	const resultLiteral = JSON.stringify(resultFile);
+	const extensionLiteral = JSON.stringify(path.join(extensions, 'phonics.mjs'));
 
 	try
 	{
@@ -133,9 +134,8 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 
 			await fs.writeFile(
 				path.join(extensions, 'check.mjs')
-				, `import {configureWorld,applyClasses,exportClasses} from ${JSON.stringify(
-					path.join(extensions, 'phonics.mjs')
-				)};
+				, `import * as phonics from ${extensionLiteral};
+const {configureWorld,configureSystems,listProperty,applyClasses,exportClasses}=phonics;
 let tested=false;
 const check=() => {
  if(tested) return;
@@ -148,7 +148,9 @@ const check=() => {
    const brickType=tiled.project.findTypeByName('PhpNoid.Brick');
    if(!brickType || brickType.members.hits !== 1 || brickType.members.unbreakable !== false) throw new Error('Brick defaults missing from the active project');
    if(map.layerAt(1).objects[1].property('Brick').typeName !== 'PhpNoid.Brick') throw new Error('Nested Brick property did not resolve in Tiled');
+   if(JSON.stringify(listProperty(map, 'phonics.systems')) !== '["@php-noid/stage"]') throw new Error('Lost map systems');
    if(${pass} === 1) {
+    configureSystems(map, ['@php-noid/stage'], 'reset');
     map.layerAt(1).objects[1].setProperty('Brick', tiled.propertyValue('PhpNoid.Brick', {hits:4,unbreakable:true}));
     if(!map.save()) throw new Error('Component map save failed');
    }
@@ -170,7 +172,7 @@ const check=() => {
   } else {
    if(world.property('phonics.start') !== '${nextMap}') throw new Error('Lost start after reopening');
    if(world.property('phonics.import.fixture') !== 'https://cdn.test/pkg@1.0.0/phonics.json') throw new Error('Lost import');
-   if(world.property('phonics.modules') !== '["@fixture/module"]') throw new Error('Lost module selection');
+   if(JSON.stringify(listProperty(world, 'phonics.modules')) !== '["@fixture/module"]') throw new Error('Lost module selection');
    if(!tiled.project.findTypeByName('Fixture.Actor')) throw new Error('Lost typed class');
   }
   const file=new TextFile(${resultLiteral},TextFile.WriteOnly);file.write('passed');file.commit();
@@ -218,6 +220,13 @@ Qt.callLater(check);`
 		}
 
 		const saved = JSON.parse(await fs.readFile(world));
+
+		assert.deepEqual(saved.properties.find(property => property.name === 'phonics.modules'), {
+			name: 'phonics.modules'
+			, type: 'list'
+			, value: [{type: 'string', value: '@fixture/module'}]
+		});
+
 		assert.equal(saved.maps.length, JSON.parse(await fs.readFile(path.join(original, worldName))).maps.length);
 		const types = JSON.parse(await fs.readFile(project)).propertyTypes;
 		assert.equal(types.find(type => type.name==='Fixture.Actor').members.find(p => p.name==='speed').type, 'float');
@@ -228,6 +237,13 @@ Qt.callLater(check);`
 			const originalCatalog = JSON.parse(await fs.readFile(path.join(original, 'phonics.classes.json')));
 			assert.deepEqual(catalog.bindings, originalCatalog.bindings);
 			const map = JSON.parse(await fs.readFile(path.join(directory, 'stage-01.tmj')));
+
+			assert.deepEqual(map.properties.find(property => property.name === 'phonics.systems'), {
+				name: 'phonics.systems'
+				, type: 'list'
+				, value: [{type: 'string', value: '@php-noid/stage'}]
+			});
+
 			const brick = map.layers[1].objects[1].properties.find(property => property.name === 'Brick');
 			assert.equal(brick.propertytype, 'PhpNoid.Brick');
 			assert.deepEqual(brick.value, {hits: 4, unbreakable: true});
@@ -323,6 +339,51 @@ test('catalog CLI retains local bindings without a cache and leaves invalid expo
 		await fs.writeFile(project, '{invalid json');
 		assert.notEqual(spawnSync(process.execPath, args).status, 0);
 		assert.equal(await fs.readFile(output, 'utf8'), saved);
+	}
+	finally
+	{
+		await fs.rm(directory, {recursive: true, force: true});
+	}
+});
+
+
+test('Noid project resolves and loads the packaged editor extension without a global install', async () => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-project-extension-'));
+
+	try
+	{
+		const original = fileURLToPath(new URL('../../php-noid/worlds/campaign.tiled-project', import.meta.url));
+		const data = JSON.parse(await fs.readFile(original));
+		const extension = path.resolve(path.dirname(original), data.extensionsPath);
+		await fs.access(path.join(extension, 'phonics.mjs'));
+		const project = path.join(directory, 'test.tiled-project');
+		data.extensionsPath = path.relative(directory, extension);
+		await fs.writeFile(project, JSON.stringify(data));
+		const config = path.join(directory, 'config');
+		await fs.mkdir(path.join(config, 'mapeditor.org'), {recursive: true});
+
+		await fs.writeFile(
+			path.join(config, 'mapeditor.org/tiled.conf')
+			, '[Scripting]\nEnabledProjects=' + project + '\n'
+		);
+
+		const result = path.join(directory, 'result.txt');
+		const script = path.join(directory, 'check.js');
+
+		await fs.writeFile(script, `
+if(Array.from(tiled.actions).indexOf('PhonicsScopeSystems') < 0) throw new Error('Project extension was not loaded');
+const output=new TextFile(${JSON.stringify(result)},TextFile.WriteOnly);output.write('passed');output.commit();
+`
+		);
+
+		const child = spawnSync(process.env.TILED_BIN, ['--project', project, '--evaluate', script], {
+			env: {...process.env, XDG_CONFIG_HOME: config, QT_QPA_PLATFORM: 'xcb'}
+			, encoding: 'utf8'
+			, timeout: 10000
+		});
+
+		assert.equal(child.status, 0, child.stderr + child.stdout);
+		assert.equal(await fs.readFile(result, 'utf8'), 'passed');
 	}
 	finally
 	{

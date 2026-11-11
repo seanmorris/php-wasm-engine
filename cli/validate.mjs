@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {serve} from './server.mjs';
 import {manifest} from './manifest.mjs';
 import {ResourceStore} from '../browser/ResourceStore.mjs';
-import {PackageGraph, properties} from '../browser/PackageGraph.mjs';
+import {PackageGraph, properties, propertyList} from '../browser/PackageGraph.mjs';
 
 /** Validate metadata and bytes with the runtime graph, without executing package code. */
 export async function validate(directory, {world, origins = []} = {})
@@ -31,7 +31,7 @@ export async function validate(directory, {world, origins = []} = {})
 			const props = properties(value.properties);
 			const declaring = props['phonics.source'] ?? url;
 
-			for(const binding of JSON.parse(props['phonics.systems'] ?? '[]'))
+			for(const binding of propertyList(props['phonics.systems'], 'phonics.systems'))
 			{
 				const entry = await graph.resolve(typeof binding === 'string' ? binding : binding.use, declaring);
 
@@ -122,7 +122,7 @@ export async function validate(directory, {world, origins = []} = {})
 
 			await graph.imports(data, worldUrl);
 
-			for(const reference of JSON.parse(config['phonics.modules'] ?? '[]'))
+			for(const reference of propertyList(config['phonics.modules'], 'phonics.modules'))
 				await graph.activateGraph(await graph.resolve(reference, worldUrl));
 
 			await document(worldUrl);

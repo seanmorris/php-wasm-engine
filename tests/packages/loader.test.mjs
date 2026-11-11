@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {ResourceStore} from '../../browser/ResourceStore.mjs';
 import {SessionAssets} from '../../browser/SessionAssets.mjs';
-import {PackageGraph} from '../../browser/PackageGraph.mjs';
+import {PackageGraph, properties, propertyList} from '../../browser/PackageGraph.mjs';
 import {LoadProgress} from '../../browser/Phonics.mjs';
 const origin = 'https://cdn.test';
 
@@ -396,4 +396,27 @@ test('nested content may repeat an identical import but cannot replace an existi
 	);
 
 	scope.close();
+});
+
+
+test('Tiled native lists decode typed items and retain legacy system declarations', () => {
+	const values = properties([
+		{name: 'phonics.systems', type: 'list', value: [{type: 'string', value: '@game/tick'}]}
+		, {name: 'empty', type: 'list', value: []}
+		, {name: 'nested', type: 'list', value: [{type: 'list', value: [{type: 'bool', value: false}]}]}
+	]);
+
+	assert.deepEqual(propertyList(values['phonics.systems'], 'phonics.systems'), ['@game/tick']);
+	assert.deepEqual(propertyList('["@game/tick"]', 'phonics.systems'), ['@game/tick']);
+
+	assert.deepEqual(
+		propertyList('[{"id":"tick","use":"@game/tick","options":{"speed":2}}]', 'phonics.systems')
+		, [{id: 'tick', use: '@game/tick', options: {speed: 2}}]
+	);
+
+	assert.deepEqual(values.empty, []);
+	assert.deepEqual(values.nested, [[false]]);
+	assert.throws(() => propertyList('{}', 'phonics.systems'), /must be a list/);
+	assert.throws(() => properties([{name: 'bad', type: 'list', value: {}}]), /must be an array/);
+	assert.throws(() => properties([{name: 'bad', type: 'list', value: ['@game/tick']}]), /Invalid Tiled list item/);
 });

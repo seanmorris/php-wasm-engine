@@ -29,7 +29,7 @@
   "integrity": {
     "bin/tiled-phonics.mjs": "sha256-HJlyBWLRptAJDCNvD4nl8pGIwBhi8fgLo8aKqJmhXH8=",
     "extension/catalog.mjs": "sha256-b81ESlgONLobI+52P9gBSmZ+Yq0RTtkUp2l/6bk16EA=",
-    "extension/phonics.mjs": "sha256-AAegBlK1shjzLijXsI1PAZQXc/RbwEju6CViCmLEYwY=",
-    "lib/authoring.mjs": "sha256-Pzkq2Kbd9v3NUXM59TifkL2RLxP1Hs75kJgaYnLCn6g="
+    "extension/phonics.mjs": "sha256-MXGMn0LUcRZNrKo42gYH4pJOezKM/LbgdbhWL35gTxQ=",
+    "lib/authoring.mjs": "sha256-jrd7pTGFGDBrrkyVh3wB3fNXa25r0GbCeBrG52bfrcA="
   }
 }
