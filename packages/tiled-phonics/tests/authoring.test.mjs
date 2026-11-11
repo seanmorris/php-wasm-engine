@@ -124,6 +124,37 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 	if(packageName === 'sane-phonics')
 	await fs.cp(path.join(original, '../examples/assets'), path.join(temporary, 'examples/assets'), {recursive: true});
 
+	if(packageName === 'sane-phonics')
+	{
+		await fs.cp(path.join(original, '../templates'), path.join(temporary, 'templates'), {recursive: true});
+		const files = (await fs.readdir(path.join(temporary, 'templates'))).filter(file => file.endsWith('.tj'));
+		const sets = (await fs.readdir(path.join(temporary, 'examples/assets'))).filter(file => file.endsWith('.tsj'));
+
+		await fs.writeFile(
+			path.join(directory, 'templates.tmj')
+			, JSON.stringify({
+				type: 'map'
+				, orientation: 'orthogonal'
+				, width: 32
+				, height: 24
+				, tilewidth: 32
+				, tileheight: 32
+				, tilesets: sets.map((file, index) => ({firstgid: 1+index*10000, source: '../examples/assets/' + file}))
+				, layers: [{
+					id: 1
+					, type: 'objectgroup'
+					, name: 'Templates'
+					, objects: files.map((file, index) => ({
+						id: index+1
+						, template: '../templates/' + file
+						, x: 100
+						, y: 200
+					}))
+				}]
+			})
+		);
+	}
+
 	await fs.writeFile(project, JSON.stringify(projectData));
 	const extensions = path.join(directory, 'config/tiled/extensions');
 	await fs.mkdir(extensions, {recursive: true});
@@ -172,6 +203,16 @@ const check=() => {
   if('${packageName}' === 'sane-phonics') {
    const map=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '../examples/assets/platformer.tmj'));
    if(!tiled.project.findTypeByName('SanePhonics.SpawnPoint')) throw new Error('SpawnPoint component missing');
+   const monitorType=tiled.project.findTypeByName('SanePhonics.Monitor');
+   if(!monitorType || monitorType.members.points !== 10) throw new Error('Monitor defaults missing');
+   const instances=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'templates.tmj'));
+   if(instances.layerAt(0).objects.length !== 34) throw new Error('Concrete templates missing');
+   for(const object of instances.layerAt(0).objects) {
+    const values=object.resolvedProperties();
+    if(!Object.keys(values).some(key => values[key] && String(values[key].typeName).startsWith('SanePhonics.'))) throw new Error('Template settings missing for object '+object.id+' name='+object.name+' tile='+!!object.tile+' values='+JSON.stringify(values));
+   }
+   if(${pass} === 1 && !instances.save()) throw new Error('Template map save failed');
+
    if(JSON.stringify(listProperty(map, 'phonics.systems')) !== '["@sane/demo-map"]') throw new Error('Lost course systems');
    if(${pass} === 1 && !map.save()) throw new Error('Course map save failed');
   }

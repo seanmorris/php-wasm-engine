@@ -578,6 +578,7 @@ require __DIR__ . '/menus.php';
 require __DIR__ . '/cards.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/debug-overlay.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/rings.php';
+require dirname(__DIR__) . '/packages/sane-phonics/tests/authoring.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/light-dash.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/grapples.php';
 require dirname(__DIR__) . '/packages/sane-phonics/tests/vehicles.php';

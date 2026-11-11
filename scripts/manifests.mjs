@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {root} from './files.mjs';
+import {classes as saneClasses, templates as saneTemplates} from '../packages/sane-phonics/authoring.mjs';
 import {classes as trisClasses, componentNames as trisComponents} from '../packages/php-tris/authoring.mjs';
 
 async function walk(directory, prefix = '')
@@ -59,21 +60,7 @@ const definitions = [
 				, player: {type: 'factory', class: 'SanePhonics.Player', module: '#platformer'}
 				, demo: {type: 'asset', path: 'worlds/demo.world'}
 			}
-			, tiled: {
-				templates: ['templates/player.tx', 'templates/spawn.tx']
-				, classes: [{
-					name: 'SanePhonics.SpawnPoint'
-					, members: []
-				}
-				, {
-					name: 'SanePhonics.Player'
-					, members: [{
-						name: 'profile'
-						, type: 'string'
-						, value: 'runner'
-					}]
-				}]
-			}
+			, tiled: {templates: saneTemplates, classes: saneClasses}
 			, preload: ['worlds/phonics.classes.json']
 			, directories: ['src', 'browser', 'shaders', 'modules', 'examples', 'worlds', 'templates']
 			, files: ['autoload.php'
