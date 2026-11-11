@@ -22,7 +22,7 @@ const properties = value => Object.fromEntries(
 
 const sourcePath = (file, relative) => resolve(dirname(file), relative);
 
-function roundTrip(file, kind, check)
+function roundTrip(file, kind, check, project = null)
 {
 	const directory = mkdtempSync(join(tmpdir(), 'php-engine-tiled-'));
 	const exported = join(directory, basename(file));
@@ -30,7 +30,8 @@ function roundTrip(file, kind, check)
 	try
 	{
 		const result = spawnSync(process.env.TILED_BIN??'tiled', [
-			'--export-' + kind,'json',file,exported
+			...(project ? ['--project', project] : [])
+			, '--export-' + kind,'json',file,exported
 		], {
 			encoding: 'utf8'
 			, timeout: 30000
@@ -79,6 +80,15 @@ function objects(before, after)
 		assert.equal(imported.visible, object.visible??true);
 		assert.equal(imported.type??imported.class??'', object.type??object.class??'');
 		assert.deepEqual(properties(imported.properties), properties(object.properties));
+
+		for(const property of object.properties ?? [])
+		{
+			if(property.type !== 'class') continue;
+
+			const saved = imported.properties.find(value => value.name === property.name);
+			assert.equal(saved.type, 'class');
+			assert.equal(saved.propertytype, property.propertytype);
+		}
 
 		for(const key of ['id','name','gid','x','y','width','height','rotation','polygon','polyline','point'])
 		{
@@ -201,7 +211,7 @@ const campaign = fileURLToPath(new URL('../packages/php-noid/worlds/', import.me
 
 for(const name of readdirSync(campaign).filter(name => name.endsWith('.tmj')))
 {
-	test('Tiled preserves PhpNoid ' + name + ' entity factories and typed configuration', () => {
+	test('Tiled preserves PhpNoid ' + name + ' nested components and instance overrides', () => {
 		roundTrip(join(campaign, name), 'map', (before, after) => {
 			assert.deepEqual(properties(after.properties), properties(before.properties));
 			assert.equal(after.layers.length, before.layers.length);
@@ -210,7 +220,7 @@ for(const name of readdirSync(campaign).filter(name => name.endsWith('.tmj')))
 				if(layer.type === 'objectgroup') objects(layer.objects, after.layers[i].objects);
 				else if(layer.type === 'tilelayer') assert.deepEqual(cells(after.layers[i]), cells(layer));
 			});
-		});
+		}, join(campaign, 'campaign.tiled-project'));
 	});
 }
 

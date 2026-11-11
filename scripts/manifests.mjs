@@ -108,11 +108,7 @@ const definitions = [
 							, {name: 'unbreakable', type: 'bool', value: false}
 							, {name: 'material', type: 'string', value: 'normal'}
 							, {name: 'capsule', type: 'string', value: ''}
-							, {name: 'score', type: 'int', value: 100}, {
-								name: 'phonics.entity'
-								, type: 'string'
-								, value: '@php-noid/brick'
-							}
+							, {name: 'score', type: 'int', value: 100}
 						]
 					}
 					, {name: 'PhpNoid.Paddle', color: '#ffbbddff', members: []}
