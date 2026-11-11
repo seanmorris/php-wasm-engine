@@ -16,6 +16,8 @@ final class TileMap
  * @var list<Layer> Flattened display and object layers in painter order.
  */
 	public array $layers = [];
+	/** Every authored layer including groups, keyed by Tiled ID; leaf objects match layers. */
+	public array $allLayers = [];
 	/**
  * Resolved tileset definitions in first-global-ID order.
  *
@@ -38,12 +40,18 @@ final class TileMap
 	 */
 	public function __clone()
 	{
-		foreach($this->layers as $index => $layer)
-		{
-			$this->layers[$index] = clone $layer;
+		$copies = [];
 
-			foreach($layer->chunks as $key => $chunk) $this->layers[$index]->chunks[$key] = clone $chunk;
+		foreach($this->allLayers ?: $this->layers as $layer)
+		{
+			$copy = clone $layer;
+
+			foreach($layer->chunks as $key => $chunk) $copy->chunks[$key] = clone $chunk;
+			$copies[$layer->key] = $copy;
 		}
+
+		foreach($this->layers as $index => $layer) $this->layers[$index] = $copies[$layer->key];
+		$this->allLayers = $copies;
 	}
 
 	/**

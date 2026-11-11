@@ -1,3 +1,4 @@
+import {tiledCatalog} from './TiledCatalog.mjs';
 import {readInviteLink} from './network/InviteLink.mjs';
 import {PackageGraph, properties} from './PackageGraph.mjs';
 import {SessionAssets} from './SessionAssets.mjs';
@@ -208,6 +209,63 @@ export function activate(host)
 		const modules = launch.legacy ? JSON.parse(config['phonics.modules'] ?? '[]') : (world.modules ?? []);
 
 		for(const reference of modules) await graph.activateGraph(await graph.resolve(reference, declaring));
+		const catalogResources = new Set();
+
+		const tiledConfig = async (data, owner, classes) => {
+			const props = properties(data.properties);
+
+			if(!launch.legacy || owner !== declaring) await graph.imports(data, owner);
+
+			for(const reference of JSON.parse(props['phonics.modules'] ?? '[]'))
+			await graph.activateGraph(await graph.resolve(reference, owner));
+
+			const classFile = classes ?? props['phonics.classes'];
+
+			if(classFile)
+			{
+				const resource = new URL(classFile, owner).href;
+				const validated = tiledCatalog(decode(await scope.read(resource)), resource);
+
+				for(const reference of validated.bindings)
+				{
+					const entry = await graph.resolve(reference, resource);
+
+					if(entry.type !== 'component')
+					throw new Error(`${resource}: expected component export ${reference}`);
+
+					await graph.activateGraph(entry);
+				}
+
+				catalogResources.add(resource);
+
+				for(const file of validated.files) catalogResources.add(file);
+			}
+
+			for(const binding of JSON.parse(props['phonics.systems'] ?? '[]'))
+			{
+				const entry = await graph.resolve(typeof binding === 'string' ? binding : binding.use, owner);
+
+				if(entry.type !== 'system-set') throw new Error(`${owner}: expected system-set export`);
+
+				await graph.activateGraph(entry);
+			}
+
+			const policy = props['phonics.lifecycle'];
+
+			if(policy && !['retain', 'snapshot', 'reset'].includes(policy))
+			{
+				const entry = await graph.resolve(policy, owner);
+
+				if(entry.type !== 'scope-policy') throw new Error(`${owner}: expected scope-policy export`);
+
+				await graph.activateGraph(entry);
+			}
+		};
+
+		if(launch.legacy) await tiledConfig(world, declaring);
+
+		const tiledAdapters = new Set();
+
 		let lobbyEntry = null, transportEntry = null;
 
 		if(!launch.legacy && world.network)
@@ -259,6 +317,9 @@ export function activate(host)
 				await graph.activateGraph(entry);
 				source.adapterReference = source.adapter;
 				source.adapter = entry.id;
+
+				if(entry.record.data.name === '@seanmorris/phonics' && entry.name === 'tiled')
+				tiledAdapters.add(entry.id);
 			}
 
 			for(const slot of Object.values(world.resourceSlots ?? {}))
@@ -315,6 +376,19 @@ export function activate(host)
 					, defaultBinding: true
 				}];
 			});
+
+		// Optional Tiled sources contribute their initial code registrations and portable defaults.
+		// Map bytes stay lazy; the world declares code used by later maps in phonics.modules.
+		if(!launch.legacy)
+		for(const source of Object.values(runtimeWorld.sources))
+		if(tiledAdapters.has(source.adapter))
+		for(const resource of source.resources)
+		if(resource.url)
+		{
+			const target = await graph.asset(resource.url, resource.declaringUrl ?? declaring);
+			const data = decode(await scope.read(target, resource.integrity ? {integrity: resource.integrity} : {}));
+			await tiledConfig(data, target, source.options?.classes);
+		}
 
 		const visited = new Set();
 
@@ -479,7 +553,7 @@ export function activate(host)
 		);
 
 		const assetTotal = 1 + Number(declaring !== url) + Number(preloadStart)
-			+ sourceResourceCount + packagePreloads.length;
+			+ sourceResourceCount + packagePreloads.length + catalogResources.size;
 
 		let assetCompleted = 0;
 
@@ -494,6 +568,9 @@ export function activate(host)
 
 		if(declaring !== url)
 		await loadAsset('Mounting world definition', declaring, () => owned.load(declaring));
+
+		for(const resource of catalogResources)
+		await loadAsset('Loading Tiled classes', resource, () => owned.load(resource));
 
 		if(preloadStart) await loadAsset('Loading starting map', start, () => loadData(start));
 
@@ -853,12 +930,27 @@ export function activate(host)
 				record => (record.data.php?.bootstrap ?? []).map(file => record.mount + file)
 			)
 			, entries: graph.active.filter(entry => entry.type !== 'game' && entry.php)
-				.map(entry => ({id: entry.id, type: entry.type, file: entry.record.mount + entry.php}))
-			, factories: [...factoryExports.values()].flatMap(entry => [
+				.map(entry => ({
+					id: entry.id
+					, type: entry.type
+					, file: entry.record.mount + entry.php
+					, aliases: [...graph.aliases].filter(([, record]) => record === entry.record)
+						.map(([alias]) => '@' + alias + '/' + entry.name)
+				}))
+			, factories: [...factoryExports.values()].filter(entry => entry.type === 'factory').flatMap(entry => [
 				{id: entry.id, class: entry.class}
 				, ...[...graph.aliases].filter(([, record]) => record === entry.record)
 					.map(([alias]) => ({id: '@' + alias + '/' + entry.name, class: entry.class}))
 			])
+			, components: [...factoryExports.values()].filter(
+				entry => entry.type === 'component' && !entry.php
+			).flatMap(
+				entry => [
+					{id: entry.id, class: entry.class}
+					, ...[...graph.aliases].filter(([, record]) => record === entry.record)
+					.map(([alias]) => ({id: '@' + alias + '/' + entry.name, class: entry.class}))
+				]
+			)
 			, entry: game.record.mount + game.php
 		});
 	};

@@ -357,3 +357,43 @@ test('streaming retries refresh parsed resources and failed refreshes release mo
 	assert.equal(mounted.size, 0, 'failed reloads still release previously mounted bytes');
 	assert.equal(store.entries.size, 0);
 });
+
+test('games preload component, adapter, lifecycle and system registrations without activating scopes', async () => {
+	const exports = {
+		game: {type: 'game', php: 'module.php', modules: ['#components', '#maps', '#policy', '#tiled']}
+		, components: {type: 'component', class: 'Fixture.Motion', php: 'module.php'}
+		, maps: {type: 'system-set', php: 'module.php'}
+		, policy: {type: 'scope-policy', php: 'module.php'}
+		, tiled: {type: 'adapter', php: 'module.php'}
+	};
+
+	const {graph, scope} = setup({[origin + '/phonics.json']: manifest('Fixture', {exports})});
+	await graph.activateGraph(await graph.resolve('#game', origin + '/phonics.json'));
+
+	assert.deepEqual(
+		graph.active.map(entry => entry.type)
+		, ['component', 'system-set', 'scope-policy', 'adapter', 'game']
+	);
+
+	scope.close();
+});
+
+test('nested content may repeat an identical import but cannot replace an existing alias', async () => {
+	const {graph, scope} = setup({[origin + '/phonics.json']: manifest('Fixture')});
+	await graph.imports({type: 'phonics-world', imports: {game: './phonics.json'}}, origin + '/world.json');
+
+	await graph.imports(
+		{properties: [{name: 'phonics.import.game', value: '../phonics.json'}]}
+		, origin + '/maps/game.world'
+	);
+
+	await assert.rejects(
+		graph.imports(
+			{properties: [{name: 'phonics.import.game', value: '../other.json'}]}
+			, origin + '/maps/game.world'
+		)
+		, /conflicting import/
+	);
+
+	scope.close();
+});

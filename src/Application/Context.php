@@ -111,12 +111,17 @@ final class Context
 		foreach($data['entries'] as $module)
 		{
 			$register = require $module['file'];
+
+			if(in_array($module['type'], ['adapter', 'system-set', 'scope-policy', 'component'], true))
+			foreach([$module['id'], ...($module['aliases'] ?? [])] as $id)
 			match($module['type'])
 			{
-				'adapter' => $phonics->runtime->adapter($module['id'], $register),
-				'system-set' => $phonics->runtime->systemSet($module['id'], $register),
-				default => $register($phonics)
+				'adapter' => $phonics->runtime->adapter($id, $register),
+				'system-set' => $phonics->runtime->systemSet($id, $register),
+				'scope-policy' => $phonics->runtime->lifecycle($id, $register),
+				'component' => $phonics->components->register($id, $register)
 			};
+			else $register($phonics);
 		}
 
 		if(!$data['legacy'])
@@ -143,6 +148,9 @@ final class Context
 		}
 
 		foreach($data['factories'] as $factory) $phonics->factories->alias($factory['id'], $factory['class']);
+
+		foreach($data['components'] ?? [] as $component)
+		$phonics->components->alias($component['id'], $component['class']);
 		$this->entry = $data['entry'];
 
 		return $phonics;

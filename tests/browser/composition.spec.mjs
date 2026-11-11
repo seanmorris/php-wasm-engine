@@ -358,3 +358,123 @@ test('PhpNoid treats repeated map sources as separate campaign placements', asyn
 	await expect.poll(async () => (await state()).phase).toBe('playing');
 	await page.evaluate(() => composed.dispose());
 });
+
+test(
+	'optional Tiled adapter loads nested project defaults and registrations before activating world gameplay'
+	, async ({page}) => {
+		const target = path.join(directory, 'neutral');
+		await fs.mkdir(target);
+		const files = {
+			'application.php': `<?php
+require_once 'phar://' . Phar::running(false) . '/core/autoload.php';
+$app = new \\Phonics\\Application\\Context;
+$phonics = $app->compose(__DIR__ . '/world.json', __DIR__ . '/phonics.json#game');
+$source = $phonics->runtime->load('level');
+$empty = count($phonics->entities->query(\\Phonics\\Ecs\\Query::all())) === 0;
+$lease = $phonics->runtime->activate('level', 'world');
+$phonics->systems->update(.1);
+$entity = $lease->context->entities()[0];
+$x = $phonics->entities->get($entity, \\Phonics\\Physics\\Pose::class)->x;
+$lease->release();
+vrzno_env('canvas')->dataset->tiledComposition = json_encode([$empty, $x, count($phonics->entities->query(\\Phonics\\Ecs\\Query::all()))]);
+(vrzno_env('sceneReady'))(null);
+`
+			, 'game.php': '<?php'
+			, 'motion.php': `<?php
+return static fn(array $values) => new \\Phonics\\Physics\\Pose(x: $values['speed'] + strlen(file_get_contents(\\Phonics\\Asset\\Resource::local($values['file']))));
+`
+			, 'tick.php': `<?php
+return new class implements \\Phonics\\World\\SystemSet {
+ public function activate(\\Phonics\\World\\ScopeContext $scope, array $options = []): void {
+  $scope->system('tick', static function() use ($scope): void {
+   foreach($scope->query(\\Phonics\\Physics\\Pose::class) as $id) $scope->registry->get($id, \\Phonics\\Physics\\Pose::class)->x++;
+  });
+ }
+};`
+			, 'marker.bin': 'abc'
+		};
+
+		for(const [name, data] of Object.entries(files)) await fs.writeFile(path.join(target, name), data);
+		const data = {
+			'phonics.json': {
+				schemaVersion: 1
+				, name: '@fixture/tiled-composition'
+				, version: '1.0.0'
+				, requires: {phonics: '^0.1.0'}
+				, application: {entry: 'application.php'}
+				, php: {
+					files: ['application.php', 'game.php', 'motion.php'
+						, 'tick.php'
+					]
+				}
+				, assets: ['world.json', 'content.world', 'classes.json', 'marker.bin']
+				, exports: {
+					game: {type: 'game', php: 'game.php'}
+					, motion: {
+						type: 'component'
+						, class: 'Motion'
+						, php: 'motion.php'
+					}
+					, tick: {type: 'system-set', php: 'tick.php'}
+				}
+			}
+			, 'world.json': {
+				type: 'phonics-world'
+				, schemaVersion: 1
+				, sources: {
+					level: {
+						adapter: '@phonics/tiled'
+						, resources: ['content.world']
+					}
+				}
+				, start: {source: 'level', scope: 'world'}
+			}
+			, 'content.world': {
+				type: 'world'
+				, class: 'Actor'
+				, maps: []
+				, properties: [
+					{name: 'phonics.import.fixture', type: 'string', value: './phonics.json'}
+					, {name: 'phonics.classes', type: 'file', value: 'classes.json'}
+					, {name: 'phonics.systems', type: 'string', value: '["@fixture/tick"]'}
+					, {name: 'phonics.lifecycle', type: 'string', value: 'reset'}
+				]
+			}
+			, 'classes.json': {
+				schemaVersion: 1
+				, bindings: {Motion: '@fixture/motion'}
+				, classes: [
+					{
+						name: 'Motion'
+						, members: [{name: 'speed', type: 'float', value: 2}
+							, {
+								name: 'file'
+								, type: 'file'
+								, value: 'marker.bin'
+							}
+						]
+					}
+					, {name: 'Actor', members: [{name: 'motion', type: 'class', propertyType: 'Motion', value: {}}]}
+				]
+			}
+		};
+
+		for(const [name, value] of Object.entries(data))
+		await fs.writeFile(path.join(target, name), JSON.stringify(value));
+		await pack(target);
+		await page.goto('/preview/');
+
+		await page.evaluate(async origin => {
+			window.composed = await Phonics.run(origin + '/neutral/dist/game.phar', {
+				canvas: document.querySelector('canvas')
+				, policy: {codeOrigins: [location.origin, origin]}
+			});
+		}, origin
+		);
+
+		const result = await page.locator('canvas').evaluate(c => JSON.parse(c.dataset.tiledComposition));
+		expect(result).toEqual([true, 6, 0]);
+
+		await page.evaluate(() => composed.dispose());
+	}
+);

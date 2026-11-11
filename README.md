@@ -1,6 +1,6 @@
 # Phonics
 
-Phonics is a game-neutral PHP ECS runtime for Tiled worlds, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The [documentation site](https://seanmorris.github.io/php-wasm-engine/) has the quickstart, the guides, every example game, and the generated PHP and JavaScript references.
+Phonics is a game-neutral PHP ECS runtime with optional content adapters, running natively for simulation and in a PHP/SDL/WebGL 2 browser runtime for play. Games, entity factories, modules, and assets are independently packaged. The [documentation site](https://seanmorris.github.io/php-wasm-engine/) has the quickstart, the guides, every example game, and the generated PHP and JavaScript references.
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
@@ -58,9 +58,9 @@ npm start
 
 ## Author a world
 
-1. Install Tiled **1.12.2** and the editor extension: install the packed core and `tiled-phonics` artifacts together, for example `npm install -g /path/to/seanmorris-phonics-0.1.0.tgz /path/to/seanmorris-tiled-phonics-0.1.0.tgz`, copy `extension/phonics.mjs` into Tiled's extensions directory, and restart Tiled. The [editor guide](packages/tiled-phonics/README.md) has the details.
+1. Install Tiled **1.12.2** and the editor extension: install the packed core and `tiled-phonics` artifacts together, for example `npm install -g /path/to/seanmorris-phonics-0.1.0.tgz /path/to/seanmorris-tiled-phonics-0.1.0.tgz`, copy both `extension/*.mjs` files into Tiled's extensions directory, and restart Tiled. The [editor guide](packages/tiled-phonics/README.md) has the details.
 2. Open a project and a world. Choose **File → Add Package URL**, enter the package's exact-version `phonics.json` URL, and assign a pallet alias.
-3. Use **Phonics World Settings** to select a start map and additional modules. On an object layer, **Place Phonics Entity** selects an exported factory. Move and configure the resulting object with Tiled's normal tools. Cached templates and tilesets are also available in the project's `.phonics-cache` directory.
+3. Use **Phonics World Settings** to select a start map and additional modules. **Attach Phonics Components** adds nested component classes or presets to selected objects, layers, maps, worlds, or tiles. **Phonics Scope Systems** selects world/map systems and lifecycle; **Phonics Tile Entities** opts into collection, per-placement, or connected-region entities. On an object layer, **Place Phonics Entity** selects an exported factory. Move and configure the resulting object with Tiled's normal tools. Cached templates and tilesets are also available in the project's `.phonics-cache` directory.
 4. Save. **Validate and Preview** checks imports and properties and opens the Phonics host with an application PHAR URL and the served world URL. Your static server must serve the world and maps and allow CORS for cross-origin assets.
 
 Package URLs and `@alias/export` references are string properties; use Tiled file properties for actual local files. Cached authoring resources record their canonical sources in `phonics.source*` properties, and references keep the declaring document's identity, including inherited template and tile properties, so relocating a project does not change what it depends on. Maps placed in different worlds have separate mutable state while sharing one canonical resource. Query strings distinguish versions; fragments select manifest exports. See [resource identity](site/pages/resources.md).

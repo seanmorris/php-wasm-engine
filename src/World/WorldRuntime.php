@@ -20,6 +20,9 @@ final class WorldRuntime
 	private array $catalogs = [], $bindings = [], $active = [], $state = [];
 	/** Shared runtime services exposed to content adapters. */
 	private array $services = [];
+	/** Registered lifecycle factories and unique scope generations for stale-lease protection. */
+	private array $policies = [];
+	private int $generation = 0;
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
 
@@ -48,6 +51,68 @@ final class WorldRuntime
 	public Registry $registry;
 	/** Shared ordered scheduler used by every active source. */
 	public Scheduler $scheduler;
+
+	/**
+	 * Create an independent content session using the same already loaded code and engine services.
+	 *
+	 * @return self Independent content session sharing the already loaded code and engine services.
+	 */
+	public function fork(): self
+	{
+		$this->requireOpen();
+		$runtime = new self($this->adaptersContext, $this->registry, $this->scheduler, $this->pipeline);
+		$runtime->adapters = $this->adapters;
+		$runtime->systemSets = $this->systemSets;
+		$runtime->policies = $this->policies;
+		$runtime->services = $this->services;
+
+		return $runtime;
+	}
+
+	/**
+	 * Register an application lifecycle under a stable export identity.
+	 *
+	 * @param string $reference Verified package export reference.
+	 * @param ScopeLifecycle|callable $factory Already loaded constructor or policy factory.
+	 * @return void Registers the application-defined lifecycle policy.
+	 */
+	public function lifecycle(string $reference, ScopeLifecycle|callable $factory): void
+	{
+		$this->requireOpen();
+
+		if(isset($this->policies[$reference]) || in_array($reference, ['retain', 'snapshot', 'reset'], true))
+		throw new \LogicException("Conflicting lifecycle $reference");
+
+		$this->policies[$reference] = $factory;
+	}
+
+	/**
+	 * Open an inspectable asset without preparing or activating gameplay.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @return ContentSource Prepares content without enabling simulation.
+	 */
+	public function load(string $sourceId): ContentSource { return $this->open($sourceId); }
+
+	/**
+	 * Commit scope transitions outside a running system iteration.
+	 *
+	 * @param callable $change Transition to run after the current system iteration.
+	 * @return void Commits the change outside the current system iteration.
+	 */
+	public function transition(callable $change): void { $this->scheduler->defer($change); }
+
+	/**
+	 * Retrieve a prepared scope; an inactive context remains inspectable.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @param string $scopeId Stable scope identity within the source.
+	 * @return ?ScopeContext Prepared context, or null when it has not been prepared.
+	 */
+	public function context(string $sourceId, string $scopeId): ?ScopeContext
+	{
+		return $this->active[$sourceId . ':' . $scopeId]['context'] ?? null;
+	}
 
 	/**
 	 * Register a host service for subsequently activated system sets.
@@ -205,11 +270,15 @@ final class WorldRuntime
 	 *
 	 * @param string $sourceId Registered source ID.
 	 * @param string $scopeId Stable source-local scope ID.
-	 * @return ScopeLease Reference-counted active-scope handle.
+	 * @return ScopeContext Prepared inactive ownership context, or the existing context.
 	 */
-	public function activate(string $sourceId, string $scopeId): ScopeLease
+	public function prepare(string $sourceId, string $scopeId): ScopeContext
 	{
 		$this->requireOpen();
+
+		if($this->scheduler->updating())
+		throw new \LogicException('Prepare scopes at a scheduler boundary using transition()');
+
 		$source = $this->open($sourceId);
 		$key = $sourceId . ':' . $scopeId;
 
@@ -233,7 +302,15 @@ final class WorldRuntime
 				, $this->scheduler
 				, $this->pipeline
 				, $this->state[$key] ?? []
-				, $this->services
+				, ['worldRuntime' => $this] + $this->services
+			);
+
+			$context->setActive(false);
+
+			$context->descendants(/** Find prepared descendant ownership contexts.
+ * @return array Prepared descendants in ancestry order.
+ */
+				fn() => $this->descendants($sourceId, $scopeId)
 			);
 
 			try
@@ -244,6 +321,12 @@ final class WorldRuntime
 				throw new \LogicException("Adapter activated the wrong scope for $key");
 
 				$context->setContent($active->content());
+				$policyName = $descriptor->metadata['lifecycle']
+					?? $this->definitions[$sourceId]->options['lifecycle'] ?? 'snapshot';
+
+				$policy = in_array($policyName, ['retain', 'snapshot', 'reset'], true)
+					? new Lifecycle($policyName)
+					: $this->instantiate($this->policies, $policyName, ScopeLifecycle::class);
 
 				foreach($this->orderedBindings($sourceId, $descriptor) as $binding)
 				{
@@ -251,10 +334,15 @@ final class WorldRuntime
 					$set->activate($context, $binding['options']);
 				}
 
-				$this->active[$key] = compact('active', 'context') + ['references' => 0];
+				$policy->load($context);
+				$this->scheduler->validate();
+				$this->active[$key] = compact('active', 'context', 'policy')
+					+ ['references' => 0, 'generation' => ++$this->generation];
 			}
 			catch(\Throwable $error)
 			{
+				if(isset($policy)) try { $policy->unload($context); } catch(\Throwable $cleanup) {}
+
 				try { $context->close(); } catch(\Throwable $cleanup) {}
 
 				if(isset($active)) try { $active->close(); } catch(\Throwable $cleanup) {}
@@ -263,17 +351,218 @@ final class WorldRuntime
 			}
 		}
 
+		return $this->active[$key]['context'];
+	}
+
+	/**
+	 * Activate a prepared scope, or prepare it first, retaining independent leases.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @param string $scopeId Stable scope identity within the source.
+	 * @return ScopeLease Reference-counted handle or content scope for this activation.
+	 */
+	public function activate(string $sourceId, string $scopeId): ScopeLease
+	{
+		$context = $this->prepare($sourceId, $scopeId);
+		$key = $sourceId . ':' . $scopeId;
+
+		if(($context->descriptor->metadata['requireParent'] ?? false)
+			&& $context->descriptor->parent !== null
+			&& !$this->context($sourceId, $context->descriptor->parent)?->active()
+		)
+		throw new \LogicException("Activate parent {$context->descriptor->parent} before $scopeId");
+
+		if(!$context->active())
+		{
+			try
+			{
+				$this->active[$key]['policy']->activate($context);
+				$this->scheduler->validate();
+				$context->setActive(true);
+			}
+			catch(\Throwable $error)
+			{
+				try { $this->retire($key, true); } catch(\Throwable $cleanup) {}
+
+				throw $error;
+			}
+		}
+
 		$this->active[$key]['references']++;
-		$context = $this->active[$key]['context'];
+		$generation = $this->active[$key]['generation'];
 
 		/**
 		 * Release this lease's reference to the active scope.
 		 *
 		 * @return void Deactivates the scope when no other lease remains.
 		 */
-		$releaseLease = fn() => $this->release($key);
+		$releaseLease = fn() => $this->transition(/** Release the matching lease generation at a scheduler boundary.
+ * @return void Completes the scope operation.
+ */
+			fn() => $this->release($key, $generation)
+		);
 
 		return new ScopeLease($sourceId, $scopeId, $context, $releaseLease);
+	}
+
+	/**
+	 * Deactivate children before their parent, applying each scope's selected policy.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @param string $scopeId Stable scope identity within the source.
+	 * @return void Selected state disposition or completed deactivation.
+	 */
+	public function deactivate(string $sourceId, string $scopeId): void
+	{
+		$this->transition(/** Deactivate the selected hierarchy after the current simulation step.
+ * @return void Completes the scope operation.
+ */
+			function() use ($sourceId, $scopeId): void {
+				$keys = array_map(
+					/** Read a prepared scope ownership key.
+ * @param ScopeContext $scope Prepared descendant.
+ * @return string Fully qualified scope key.
+ */
+					fn($scope) => $scope->key()
+					, array_reverse($this->descendants($sourceId, $scopeId))
+				);
+
+				$keys[] = $sourceId . ':' . $scopeId;
+				$error = null;
+
+				foreach($keys as $key)
+				try { $this->retire($key); } catch(\Throwable $failure) { $error ??= $failure; }
+
+				if($error) throw $error;
+			}
+		);
+	}
+
+	/**
+	 * Evict a scope and its children, optionally forgetting captured state for a restart.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @param string $scopeId Stable scope identity within the source.
+	 * @param bool $reset Forget captured state for this scope and its descendants.
+	 * @return void Evicts this scope and its descendants.
+	 */
+	public function unloadScope(string $sourceId, string $scopeId, bool $reset = false): void
+	{
+		$this->transition(/** Evict the selected hierarchy after the current simulation step.
+ * @return void Completes the scope operation.
+ */
+			function() use ($sourceId, $scopeId, $reset): void {
+				$keys = array_map(
+					/** Read a prepared scope ownership key.
+ * @param ScopeContext $scope Prepared descendant.
+ * @return string Fully qualified scope key.
+ */
+					fn($scope) => $scope->key()
+					, array_reverse($this->descendants($sourceId, $scopeId))
+				);
+
+				$keys[] = $sourceId . ':' . $scopeId;
+				$error = null;
+
+				foreach($keys as $key)
+				{
+					try { $this->retire($key, true); } catch(\Throwable $failure) { $error ??= $failure; }
+
+					if($reset) unset($this->state[$key]);
+				}
+
+				if($error) throw $error;
+			}
+		);
+	}
+
+	/**
+	 * Unload one asset and all its instances without closing the session or other sources.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @return void Releases prepared instances and source resources.
+	 */
+	public function unload(string $sourceId): void
+	{
+		$this->transition(/** Unload every instance of the selected source.
+ * @return void Completes the scope operation.
+ */
+			function() use ($sourceId): void {
+				$error = null;
+
+				foreach($this->retirementOrder() as $key)
+				if($this->active[$key]['context']->sourceId === $sourceId)
+				try { $this->retire($key, true); } catch(\Throwable $failure) { $error ??= $failure; }
+
+				try
+				{
+					($this->sources[$sourceId] ?? null)?->close();
+				} catch(\Throwable $failure)
+				{
+					$error ??= $failure;
+				}
+
+				unset($this->sources[$sourceId], $this->catalogs[$sourceId]);
+
+				foreach(array_keys($this->state) as $key)
+				if(str_starts_with($key, $sourceId . ':')) unset($this->state[$key]);
+
+				if($error) throw $error;
+			}
+		);
+	}
+
+	/**
+	 * Loaded descendants in parent-before-child order, including retained inactive scopes.
+	 *
+	 * @param string $sourceId Registered content source identity.
+	 * @param string $scopeId Stable scope identity within the source.
+	 * @return array Prepared descendants in parent-before-child order.
+	 */
+	private function descendants(string $sourceId, string $scopeId): array
+	{
+		$result = [];
+
+		foreach($this->active as $record)
+		{
+			$scope = $record['context'];
+
+			if($scope->sourceId !== $sourceId || $scope->descriptor->parent !== $scopeId) continue;
+
+			$result[] = $scope;
+			array_push($result, ...$this->descendants($sourceId, $scope->descriptor->id));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Order prepared instances by ancestry even when a child was prepared first.
+	 * @return list<string> Scope keys with every child preceding its parent.
+	 */
+	private function retirementOrder(): array
+	{
+		$depths = [];
+
+		foreach($this->active as $key => $record)
+		{
+			$scope = $record['context'];
+			$catalog = [];
+
+			foreach($this->catalogs[$scope->sourceId] as $descriptor) $catalog[$descriptor->id] = $descriptor;
+			$parent = $scope->descriptor->parent;
+			$depths[$key] = 0;
+
+			while($parent !== null)
+			{
+				$depths[$key]++;
+				$parent = $catalog[$parent]->parent;
+			}
+		}
+
+		arsort($depths, SORT_NUMERIC);
+
+		return array_keys($depths);
 	}
 
 	/**
@@ -285,11 +574,22 @@ final class WorldRuntime
 	{
 		if($this->closed) return;
 
+		if($this->scheduler->updating())
+		{
+			$this->transition(/** Close this runtime at the simulation boundary.
+ * @return void Completes the scope operation.
+ */
+				fn() => $this->close()
+			);
+
+			return;
+		}
+
 		$this->closed = true;
 		$error = null;
 
-		foreach(array_reverse(array_keys($this->active)) as $key)
-		try { $this->deactivate($key); } catch(\Throwable $failure) { $error ??= $failure; }
+		foreach($this->retirementOrder() as $key)
+		try { $this->retire($key, true); } catch(\Throwable $failure) { $error ??= $failure; }
 
 		foreach(array_reverse($this->sources) as $source)
 		try { $source->close(); } catch(\Throwable $failure) { $error ??= $failure; }
@@ -321,15 +621,40 @@ final class WorldRuntime
 		$source = $adapter->open($definition, $this->adaptersContext);
 		$catalog = [];
 
-		foreach($source->catalog() as $descriptor)
+		try
 		{
-			if(!$descriptor instanceof ScopeDescriptor)
-			throw new \LogicException("Adapter {$definition->adapter} returned an invalid scope descriptor");
+			foreach($source->catalog() as $descriptor)
+			{
+				if(!$descriptor instanceof ScopeDescriptor)
+				throw new \LogicException("Adapter {$definition->adapter} returned an invalid scope descriptor");
 
-			if(isset($catalog[$descriptor->id]))
-			throw new \LogicException("Duplicate scope {$descriptor->id} in source $sourceId");
+				if(isset($catalog[$descriptor->id]))
+				throw new \LogicException("Duplicate scope {$descriptor->id} in source $sourceId");
 
-			$catalog[$descriptor->id] = $descriptor;
+				$catalog[$descriptor->id] = $descriptor;
+			}
+
+			foreach($catalog as $descriptor)
+			{
+				$seen = [$descriptor->id => true];
+				$parent = $descriptor->parent;
+
+				while($parent !== null)
+				{
+					if(isset($seen[$parent])) throw new \LogicException("Scope parent cycle at $parent");
+
+					if(!isset($catalog[$parent])) throw new \LogicException("Unknown scope parent $parent");
+
+					$seen[$parent] = true;
+					$parent = $catalog[$parent]->parent;
+				}
+			}
+		}
+		catch(\Throwable $error)
+		{
+			try { $source->close(); } catch(\Throwable $cleanup) {}
+
+			throw $error;
 		}
 
 		$this->sources[$sourceId] = $source;
@@ -389,6 +714,16 @@ final class WorldRuntime
 
 		$matching = array_filter($this->bindings, $selectsScope);
 
+		foreach($scope->metadata['systems'] ?? [] as $binding)
+		{
+			if(!is_array($binding) || !is_string($binding['id'] ?? null) || !is_string($binding['use'] ?? null))
+			throw new \InvalidArgumentException("Invalid authored system binding in {$scope->id}");
+
+			if(isset($matching[$binding['id']])) throw new \LogicException("Conflicting binding {$binding['id']}");
+
+			$matching[$binding['id']] = $binding + ['options' => [], 'after' => []];
+		}
+
 		$result = [];
 		$active = [];
 		$done = [];
@@ -424,42 +759,71 @@ final class WorldRuntime
 	 * Drop one lease reference to an active scope.
 	 *
 	 * @param string $key Active scope key.
+	 * @param int $generation Activation generation captured by the releasing lease.
 	 * @return void Decrements and deactivates the last reference.
 	 */
-	private function release(string $key): void
+	private function release(string $key, int $generation): void
 	{
-		if(!isset($this->active[$key]) || --$this->active[$key]['references'] > 0) return;
+		if(!isset($this->active[$key]) || $this->active[$key]['generation'] !== $generation
+			|| --$this->active[$key]['references'] > 0
+		) return;
 
-		$this->deactivate($key);
+		$scope = $this->active[$key]['context'];
+		$this->deactivate($scope->sourceId, $scope->descriptor->id);
 	}
 
 	/**
 	 * Snapshot an active scope's state, then close the adapter scope and its context.
 	 *
 	 * @param string $key Active scope key.
+	 * @param bool $unload Release retained instances as well as active instances.
 	 * @return void Snapshots and releases the scope, retaining its state and rethrowing the first failure.
 	 */
-	private function deactivate(string $key): void
+	private function retire(string $key, bool $unload = false): void
 	{
 		if(!isset($this->active[$key])) return;
 
 		$record = $this->active[$key];
-		unset($this->active[$key]);
 		$error = null;
+		$behavior = 'reset';
+		$wasActive = $record['context']->active();
+		$record['context']->setActive(false);
+		$this->active[$key]['references'] = 0;
+		$this->active[$key]['generation'] = ++$this->generation;
 
 		try
 		{
-			$state = $record['active']->snapshot();
-			$record['context']->replaceState($state + $record['context']->state());
+			$behavior = $wasActive
+				? $record['policy']->deactivate($record['context'])
+				: ($record['behavior'] ?? 'reset');
+
+			if(!in_array($behavior, ['retain', 'snapshot', 'reset'], true))
+			throw new \LogicException("Invalid lifecycle disposition $behavior");
+
+			$this->active[$key]['behavior'] = $behavior;
+
+			if($behavior === 'retain' && !$unload) return;
+
+			if($behavior === 'snapshot')
+			{
+				$state = $record['active']->snapshot();
+				$record['context']->replaceState($state + $record['context']->snapshot());
+			}
 		}
 		catch(\Throwable $failure)
 		{
 			$error = $failure;
 		}
 
-		try { $record['active']->close(); } catch(\Throwable $failure) { $error ??= $failure; }
+		unset($this->active[$key]);
+
+		try { $record['policy']->unload($record['context']); } catch(\Throwable $failure) { $error ??= $failure; }
 
 		try { $this->state[$key] = $record['context']->close(); } catch(\Throwable $failure) { $error ??= $failure; }
+
+		try { $record['active']->close(); } catch(\Throwable $failure) { $error ??= $failure; }
+
+		if($behavior !== 'snapshot') unset($this->state[$key]);
 
 		if($error) throw $error;
 	}

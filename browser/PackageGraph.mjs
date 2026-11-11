@@ -196,6 +196,7 @@ export class PackageGraph
 					, 'asset'
 					, 'adapter'
 					, 'system-set'
+					, 'scope-policy'
 					, 'lobby-provider'
 					, 'transport'
 					, 'resource-inspector'
@@ -260,10 +261,12 @@ export class PackageGraph
 
 			const alias = name.slice(15);
 
-			if(!/^[\w-]+$/.test(alias) || this.aliases.has(alias))
+			const target = new URL(value, url).href;
+
+			if(!/^[\w-]+$/.test(alias) || (this.aliases.has(alias) && this.aliases.get(alias).url !== target))
 			throw new Error(`Invalid or conflicting import ${name}`);
 
-			this.aliases.set(alias, await this.manifest(new URL(value, url)));
+			if(!this.aliases.has(alias)) this.aliases.set(alias, await this.manifest(target));
 		}
 	}
 
@@ -370,7 +373,8 @@ export class PackageGraph
 		{
 			const dependency = await this.resolve(reference, entry.record.url, entry.record);
 
-			if(dependency.type !== 'module') throw new Error(`Expected module: ${dependency.id}`);
+			if(!['module', 'adapter', 'system-set', 'scope-policy', 'component'].includes(dependency.type))
+			throw new Error(`Expected module or gameplay registration: ${dependency.id}`);
 
 			await this.activateGraph(dependency, [...chain, entry.id], done);
 		}

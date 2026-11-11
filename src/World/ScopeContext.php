@@ -24,6 +24,14 @@ final class ScopeContext
 	private bool $closed = false;
 	/** Content object exposed by the active adapter scope. */
 	private $content = null;
+	/** Activation is separate from resource ownership. */
+	private bool $enabled = true;
+	/** Optional active descendant lookup supplied by WorldRuntime. */
+	private $descendants = null;
+	/** Explicit snapshot callbacks owned by systems. */
+	private array $snapshots = [];
+	/** Registered system names, retained while a scope is suspended. */
+	private array $systemNames = [];
 
 	/**
 	 * Bind a scope to shared ECS and render services.
@@ -83,6 +91,121 @@ final class ScopeContext
 	public function state(): array { return $this->state; }
 
 	/**
+	 * Whether this scope may currently simulate or render.
+	 *
+	 * @return bool True only while this scope is enabled and open.
+	 */
+	public function active(): bool { return $this->enabled && !$this->closed; }
+
+	/**
+	 * Enable or suspend registrations without destroying their owned state.
+	 *
+	 * @param bool $active Whether simulation and rendering are enabled.
+	 * @return void Enables or suspends this scope’s registrations.
+	 */
+	public function setActive(bool $active): void
+	{
+		$this->enabled = $active && !$this->closed;
+
+		foreach($this->systemNames as $name)
+		if($this->scheduler->has($name)) $this->scheduler->enable($name, $this->enabled);
+	}
+
+	/**
+	 * Supply an ownership lookup without introducing content-format rules.
+	 *
+	 * @param callable $lookup Callback returning prepared descendant scopes.
+	 * @return void Prepared descendants in parent-before-child order.
+	 */
+	public function descendants(callable $lookup): void { $this->descendants = $lookup; }
+
+	/**
+	 * Query only live entities owned by this active scope and, optionally, its active children.
+	 *
+	 * @param array|string|\Phonics\Ecs\Query $components Required component types or an explicit ECS query.
+	 * @param bool $descendants Include active descendants when true.
+	 * @return iterable Live entity IDs owned by the requested active scopes.
+	 */
+	public function query(array|string|\Phonics\Ecs\Query $components = [], bool $descendants = false): iterable
+	{
+		if(!$this->active()) return;
+
+		foreach($this->registry->query(
+			is_array($components) ? \Phonics\Ecs\Query::all(...$components) : $components
+		) as $id
+		)
+		if($this->entities->owns($id)) yield $id;
+
+		if($descendants && $this->descendants)
+		foreach(($this->descendants)() as $child)
+		foreach($child->query($components) as $id) yield $id;
+	}
+
+	/**
+	 * Transfer cleanup responsibility while preserving an entity's identity.
+	 *
+	 * @param int $id Stable entity or source-local target identity.
+	 * @param self $destination New ownership scope sharing the same registry.
+	 * @return void Moves cleanup responsibility without changing entity identity.
+	 */
+	public function transfer(int $id, self $destination): void
+	{
+		$this->requireOpen();
+
+		if($destination->registry !== $this->registry || !$this->entities->owns($id))
+		throw new \LogicException('Entity transfer requires its owner and a shared registry');
+
+		$destination->own($id);
+		$this->entities->disown($id);
+	}
+
+	/**
+	 * List owned entity IDs for construction and inspection, including while inactive.
+	 *
+	 * @return array Owned live entity IDs, including while inactive.
+	 */
+	public function entities(): array { return $this->entities->ids(); }
+
+	/**
+	 * Stop owning an entity that a system retired independently.
+	 *
+	 * @param int $id Stable entity or source-local target identity.
+	 * @return void Removes cleanup responsibility for the given entity.
+	 */
+	public function disown(int $id): void { $this->entities->disown($id); }
+
+	/**
+	 * Register JSON-safe state capture; the returned values are restored through state().
+	 *
+	 * @param string $name Stable registration or member name.
+	 * @param callable $capture Callback returning JSON-safe state for the next activation.
+	 * @return void Registers one named state capture callback.
+	 */
+	public function onSnapshot(string $name, callable $capture): void
+	{
+		$this->requireOpen();
+
+		if(isset($this->snapshots[$name])) throw new \LogicException("Duplicate snapshot $name");
+
+		$this->snapshots[$name] = $capture;
+	}
+
+	/**
+	 * Capture explicitly registered state without serializing arbitrary PHP objects.
+	 *
+	 * @return array Explicit JSON-safe state for later restoration.
+	 */
+	public function snapshot(): array
+	{
+		$state = $this->state;
+
+		foreach($this->snapshots as $name => $capture) $state[$name] = $capture();
+		$this->assertSerializable($state);
+
+		return $this->state = $state;
+	}
+
+	/**
 	 * Look up a session host service supplied by the game entry point.
 	 * @param string $name Stable service name.
 	 * @param mixed $default Value returned when the service is absent.
@@ -125,15 +248,17 @@ final class ScopeContext
 		 * @param string $dependency Local or absolute system name.
 		 * @return string Scheduler system name.
 		 */
-		$qualify = static fn(string $dependency): string => str_contains($dependency, ':')
-			? $dependency
-			: $prefix . $dependency;
+		$qualify = static fn(string $dependency): string => str_starts_with($dependency, '@')
+			? substr($dependency, 1)
+			: (str_contains($dependency, ':') ? $dependency : $prefix . $dependency);
 
 		$dependencies = array_map($qualify, $after);
 
 		if($this->scheduler->has($id)) throw new \LogicException("Conflicting scoped system $id");
 
 		$this->scheduler->add($id, $system, $dependencies);
+		$this->systemNames[] = $id;
+		$this->scheduler->enable($id, $this->active());
 
 		/**
 		 * Unregister the scoped system when the scope closes.
@@ -186,7 +311,7 @@ final class ScopeContext
 
 		if(!$this->pipeline) throw new \LogicException('No render pipeline is available');
 
-		$this->pipeline->add($pass);
+		$this->pipeline->add(new ScopedPass($this, $pass));
 
 		/**
 		 * Detach the owned render pass when the scope closes.
@@ -219,6 +344,7 @@ final class ScopeContext
 		if($this->closed) return $this->state;
 
 		$this->closed = true;
+		$this->setActive(false);
 		$error = null;
 
 		foreach(array_reverse($this->cleanup) as $cleanup)

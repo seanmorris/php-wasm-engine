@@ -14,6 +14,11 @@ final class Scheduler
 	private array $systems = [];
 	/** Cached dependency-ordered system callback list. */
 	private ?array $ordered = null;
+	/** Disabled registrations retain their dependency identities but do not execute. */
+	private array $enabled = [];
+	/** Work committed after the current system iteration and registry flush. */
+	private array $pending = [];
+	private bool $updating = false;
 	/** CPU milliseconds used by each system during the latest update. */
 	public array $timings = [];
 
@@ -40,6 +45,7 @@ final class Scheduler
 	public function add(string $name, callable $system, array $after = []): void
 	{
 		$this->systems[$name] = [$system,$after];
+		$this->enabled[$name] = true;
 		$this->ordered = null;
 	}
 
@@ -58,7 +64,7 @@ final class Scheduler
 	 */
 	public function remove(string $name): void
 	{
-		unset($this->systems[$name]);
+		unset($this->systems[$name], $this->enabled[$name], $this->timings[$name]);
 		$this->ordered = null;
 	}
 
@@ -70,6 +76,50 @@ final class Scheduler
 	 * LogicException.
 	 */
 	public function update(float $dt): void
+	{
+		if($this->updating) throw new \LogicException('Scheduler updates cannot nest');
+
+		$this->validate();
+		$this->updating = true;
+		$error = null;
+
+		try
+		{
+			foreach($this->ordered as $name)
+			{
+				if(!($this->enabled[$name] ?? false)) continue;
+
+				$started = hrtime(true);
+				($this->systems[$name][0])($this->registry, $dt);
+				$this->timings[$name] = (hrtime(true) - $started) / 1e6;
+			}
+		}
+		catch(\Throwable $failure)
+		{
+			$error = $failure;
+		}
+		finally
+		{
+			$this->updating = false;
+
+			try { $this->registry->flush(); } catch(\Throwable $failure) { $error ??= $failure; }
+
+			$pending = $this->pending;
+			$this->pending = [];
+
+			foreach($pending as $commit)
+			try { $commit(); } catch(\Throwable $failure) { $error ??= $failure; }
+		}
+
+		if($error) throw $error;
+	}
+
+	/**
+	 * Check dependencies without executing a system, allowing transactional preparation.
+	 *
+	 * @return void Rejects invalid dependencies or configuration.
+	 */
+	public function validate(): void
 	{
 		if($this->ordered === null)
 		{
@@ -118,14 +168,40 @@ final class Scheduler
 
 			$this->ordered = $result;
 		}
+	}
 
-		foreach($this->ordered as $name)
-		{
-			$started = hrtime(true);
-			($this->systems[$name][0])($this->registry, $dt);
-			$this->timings[$name] = (hrtime(true) - $started) / 1e6;
-		}
+	/**
+	 * Toggle execution while retaining dependencies and instances.
+	 *
+	 * @param string $name Stable registration or member name.
+	 * @param bool $enabled Enabled supplied by the caller.
+	 * @return void Updates whether the registered system executes.
+	 */
+	public function enable(string $name, bool $enabled): void
+	{
+		if(!isset($this->systems[$name])) throw new \OutOfBoundsException("Unknown system $name");
 
-		$this->registry->flush();
+		$this->enabled[$name] = $enabled;
+
+		if(!$enabled) unset($this->timings[$name]);
+	}
+
+	/**
+	 * Whether a system iteration is in progress.
+	 *
+	 * @return bool True while the scheduler is iterating systems.
+	 */
+	public function updating(): bool { return $this->updating; }
+
+	/**
+	 * Commit a lifecycle change now, or after the current system iteration.
+	 *
+	 * @param callable $commit Commit supplied by the caller.
+	 * @return void Runs immediately when idle or queues the transition for the boundary.
+	 */
+	public function defer(callable $commit): void
+	{
+		if($this->updating) $this->pending[] = $commit;
+		else $commit();
 	}
 }

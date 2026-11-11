@@ -25,6 +25,8 @@ final class Context
 	public Scheduler $systems;
 	/** Tiled object factory registry, including resolved pallet aliases. */
 	public ObjectSpawner $factories;
+	/** Data-authored component constructors, independent of any content format. */
+	public \Phonics\Ecs\ComponentFactories $components;
 	/** Tiled JSON loader using the session's canonical resource mappings. */
 	public Loader $loader;
 	/** Source-format-neutral adapter, scope, state, and system-set runtime. */
@@ -51,6 +53,7 @@ final class Context
 		$this->entities = $entities ?? new Registry;
 		$this->systems = $systems ?? new Scheduler($this->entities);
 		$this->factories = new ObjectSpawner;
+		$this->components = new \Phonics\Ecs\ComponentFactories;
 		$this->loader = new Loader;
 
 		/**
@@ -84,6 +87,9 @@ final class Context
 			, $this->entities
 			, $this->systems
 		);
+
+		$this->runtime->service('components', $this->components);
+		$this->runtime->service('tiled.factories', $this->factories);
 
 		/**
 		 * Close the world runtime with the other session cleanup.
@@ -130,6 +136,20 @@ final class Context
 		if($this->closed) throw new \LogicException('Context is closed');
 
 		$this->factories->register($name, $factory);
+	}
+
+	/**
+	 * Register a component constructor without depending on a content adapter.
+	 *
+	 * @param string $name Stable registration or member name.
+	 * @param callable $factory Already loaded constructor or policy factory.
+	 * @return void Registers the component constructor in this package context.
+	 */
+	public function component(string $name, callable $factory): void
+	{
+		if($this->closed) throw new \LogicException('Context is closed');
+
+		$this->components->register($name, $factory);
 	}
 
 	/**

@@ -3,11 +3,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {importPackage, validateWorld, validateValue} from '../lib/authoring.mjs';
+import {classCatalog} from '../extension/catalog.mjs';
 const [command, ...args] = process.argv.slice(2);
 
 try
 {
 	if(command === 'import') console.log(JSON.stringify(await importPackage(args[0], args[1])));
+	else if(command === 'catalog')
+	{
+		const project = JSON.parse(await fs.readFile(args[0], 'utf8'));
+		const records = [];
+
+		for(const file of await fs.readdir(args[1]))
+		if(file.endsWith('.manifest.json'))
+		records.push(JSON.parse(await fs.readFile(path.join(args[1], file), 'utf8')));
+		const catalog = classCatalog(project.propertyTypes ?? [], records);
+		await fs.writeFile(args[2] + '.tmp', JSON.stringify(catalog, null, 2) + '\n');
+		await fs.rename(args[2] + '.tmp', args[2]);
+	}
 	else if(command === 'validate')
 	{
 		const world = JSON.parse(await fs.readFile(args[0], 'utf8'));
@@ -67,7 +80,10 @@ try
 		const child = spawn(executable, [url.href], {stdio: 'ignore', detached: true});
 		child.unref();
 	}
-	else throw new Error('Usage: tiled-phonics import URL CACHE | validate WORLD CACHE | open PREVIEW_URL');
+	else
+	throw new Error(
+		'Usage: tiled-phonics import URL CACHE | validate WORLD CACHE | catalog PROJECT CACHE OUTPUT | open PREVIEW_URL'
+	);
 }
 catch(error)
 {

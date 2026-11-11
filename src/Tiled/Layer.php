@@ -10,6 +10,12 @@ namespace Phonics\Tiled;
  */
 final class Layer
 {
+	/** Authored layer record, excluding inherited group properties. */
+	public array $data = [];
+	/** Parent group identity, or null for a top-level layer. */
+	public ?int $parent = null;
+	/** Unique map-local runtime key, even for legacy data with missing or duplicate IDs. */
+	public int $key;
 	/**
  * Infinite-map tile chunks keyed by chunk coordinates.
  *
@@ -85,6 +91,7 @@ final class Layer
 		, /** Tiled layer kind, such as tilelayer, objectgroup, or imagelayer. */
 		public string $type
 	){
+		$this->key = $id;
 	}
 
 	/**

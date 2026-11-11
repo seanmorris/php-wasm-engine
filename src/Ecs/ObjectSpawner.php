@@ -55,9 +55,10 @@ final class ObjectSpawner
 	 *
 	 * @param TileMap $map Map containing object layers and their world placement.
 	 * @param Registry $registry Registry receiving the factory-created component objects.
+	 * @param ?callable $own Optional callback adopting each entity immediately after creation.
 	 * @return array<int,int> Mapping from Tiled object IDs to newly allocated entity IDs.
 	 */
-	public function spawn(TileMap $map, Registry $registry): array
+	public function spawn(TileMap $map, Registry $registry, ?callable $own = null): array
 	{
 		$entities = [];
 
@@ -86,6 +87,8 @@ final class ObjectSpawner
 				$object['properties'] = Loader::properties($object['properties'] ?? []);
 
 				$entities[$object['id']] = $registry->create(...($this->factories[$class])($object, $map));
+
+				if($own) $own($entities[$object['id']]);
 			}
 		}
 

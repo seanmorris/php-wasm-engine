@@ -1,4 +1,5 @@
 /* Tiled 1.12.2 extension. The helper imports declarative metadata; it never runs game code. */
+import {classCatalog} from './catalog.mjs';
 
 function run(args)
 {
@@ -58,10 +59,12 @@ function action(name, text, callback)
 
 export function applyClasses(definitions)
 {
+	const created = [];
+
+	// Register names first so a preset may refer to a component declared later.
 	for(const definition of definitions)
 	{
 		const existing = tiled.project.findTypeByName(definition.name);
-
 		const source = JSON.stringify(definition);
 
 		if(existing)
@@ -76,17 +79,47 @@ export function applyClasses(definitions)
 
 		if(definition.color) type.color = tiled.color(definition.color);
 
-		for(const member of definition.members || [])
-		{
-			let value = member.value;
-
-			if(member.type === 'file' && !/^https?:|^@/.test(value)) value = tiled.filePath(value);
-
-			if(member.type === 'color') value = tiled.color(value);
-
-			type.setMember(member.name, value);
-		}
+		created.push({type, definition});
 	}
+
+	for(const {type, definition} of created)
+	for(const member of definition.members || [])
+	{
+		let value = member.value;
+
+		if(member.type === 'class')
+		value = tiled.propertyValue(member.propertyType || member.propertytype, value || {});
+
+		if(member.type === 'file') value = tiled.filePath(value);
+
+		if(member.type === 'color') value = tiled.color(value);
+
+		type.setMember(member.name, value);
+	}
+}
+
+/** Publish project defaults as portable runtime data, next to the project file. */
+export function exportClasses(world)
+{
+	if(!world.property('phonics.classes')) return;
+
+	const project = new TextFile(tiled.projectFilePath, TextFile.ReadOnly);
+	let data;
+
+	try { data = JSON.parse(project.readAll()); } finally { project.close(); }
+
+	const catalog = classCatalog(data.propertyTypes || [], records());
+	const target = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json');
+	const file = new TextFile(target, TextFile.WriteOnly);
+	file.write(JSON.stringify(catalog, null, 2) + '\n');
+	file.commit();
+}
+
+function enableComposition(world)
+{
+	const path = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json');
+	world.setProperty('phonics.classes', tiled.filePath(path));
+	exportClasses(world);
 }
 
 export function configureWorld(world, imports, start, modules = [])
@@ -213,11 +246,189 @@ action('PhonicsPlaceEntity', 'Place Phonics Entity…', () => {
 	});
 });
 
+action('PhonicsAttachComponents', 'Attach Phonics Components…', () => {
+	const asset = tiled.activeAsset, world = currentWorld();
+	const targets = [{label: 'World', values: [world], owner: world}];
+
+	if(asset && asset.isTileMap)
+	{
+		targets.push({label: 'Map', values: [asset], owner: asset});
+
+		if(asset.currentLayer) targets.push({label: 'Current layer', values: [asset.currentLayer], owner: asset});
+
+		if(asset.selectedObjects.length)
+		targets.push({label: 'Selected objects', values: asset.selectedObjects, owner: asset});
+	}
+
+	if(asset && asset.isTileset && asset.selectedTiles.length)
+	targets.push({label: 'Selected tiles', values: asset.selectedTiles, owner: asset});
+
+	const classes = tiled.project.propertyTypes.filter(type => type.isClass).map(type => type.name);
+
+	if(!classes.length) throw new Error('Define or import component classes first.');
+
+	const dialog = new Dialog('Attach component or preset');
+	const target = dialog.addComboBox('Target', targets.map(target => target.label));
+	const choice = dialog.addComboBox('Class', classes);
+	dialog.addButton('Attach').clicked.connect(() => dialog.accept());
+	dialog.addButton('Cancel').clicked.connect(() => dialog.reject());
+
+	if(dialog.exec() !== Dialog.Accepted) return;
+
+	const selected = targets[target.currentIndex], name = classes[choice.currentIndex];
+
+	selected.owner.macro('Attach Phonics components', () => {
+		for(const item of selected.values) item.setProperty(name, tiled.propertyValue(name, {}));
+	});
+
+	enableComposition(world);
+});
+
+action('PhonicsScopeSystems', 'Phonics Scope Systems…', () => {
+	const asset = tiled.activeAsset, world = currentWorld();
+	const targets = [world];
+
+	if(asset && asset.isTileMap) targets.push(asset);
+
+	const available = type => records().flatMap(record => {
+		const entries = Object.entries(record.manifest.exports || {}).filter(([, entry]) => entry.type === type);
+
+		return entries.map(([name]) => record.source + '#' + name);
+	});
+
+	const dialog = new Dialog('Scope systems and lifecycle');
+	const target = dialog.addComboBox('Scope', targets.map(item => item === world ? 'World' : 'Map'));
+
+	const choices = available('system-set').map(reference => ({
+		reference
+		, checkbox: dialog.addCheckBox(reference, false)
+	}));
+
+	const policies = ['retain', 'snapshot', 'reset'].concat(available('scope-policy'));
+
+	for(const item of targets)
+	{
+		const policy = item.property('phonics.lifecycle');
+
+		if(policy && !policies.includes(policy)) policies.push(policy);
+	}
+
+	const lifecycle = dialog.addComboBox('Lifecycle', policies);
+	let existing = [];
+
+	const refresh = () => {
+		existing = JSON.parse(targets[target.currentIndex].property('phonics.systems') || '[]');
+
+		for(const choice of choices)
+		choice.checkbox.checked = existing.some(
+			binding => (typeof binding === 'string' ? binding : binding.use) === choice.reference
+		);
+
+		lifecycle.currentIndex = policies.indexOf(
+			targets[target.currentIndex].property('phonics.lifecycle') || 'reset'
+		);
+	};
+
+	target.currentIndexChanged.connect(refresh);
+	refresh();
+	dialog.addLabel('Dependencies determine execution order. Existing binding options are preserved.');
+	dialog.addButton('Save').clicked.connect(() => dialog.accept());
+	dialog.addButton('Cancel').clicked.connect(() => dialog.reject());
+
+	if(dialog.exec() !== Dialog.Accepted) return;
+
+	const systems = existing.filter(binding => {
+		const reference = typeof binding === 'string' ? binding : binding.use;
+		const choice = choices.find(item => item.reference === reference);
+
+		return !choice || choice.checkbox.checked;
+	});
+
+	for(const choice of choices)
+	if(choice.checkbox.checked
+		&& !systems.some(binding => (typeof binding === 'string' ? binding : binding.use) === choice.reference)
+	)
+	systems.push(choice.reference);
+	const policy = policies[lifecycle.currentIndex];
+
+	targets[target.currentIndex].macro('Configure scope systems', () => {
+		targets[target.currentIndex].setProperty('phonics.systems', JSON.stringify(systems));
+		targets[target.currentIndex].setProperty('phonics.lifecycle', policy);
+	});
+
+	const modules = JSON.parse(world.property('phonics.modules') || '[]');
+
+	for(const binding of systems)
+	{
+		const reference = typeof binding === 'string' ? binding : binding.use;
+
+		if(!modules.includes(reference)) modules.push(reference);
+	}
+
+	if(!['retain', 'snapshot', 'reset'].includes(policy) && !modules.includes(policy)) modules.push(policy);
+
+	world.setProperty('phonics.modules', JSON.stringify(modules));
+});
+
+action('PhonicsTileEntities', 'Phonics Tile Entities…', () => {
+	const asset = tiled.activeAsset;
+
+	if(!asset) throw new Error('Select a map or tileset.');
+
+	const targets = asset.isTileMap ? [asset] : asset.isTileset ? asset.selectedTiles : [];
+
+	if(!targets.length) throw new Error('Select a map or tiles in the tileset editor.');
+
+	const dialog = new Dialog('Tile entities');
+	const modes = ['disabled', 'collection', 'placement', 'region'];
+
+	const mode = dialog.addComboBox(
+		'Spawn mode'
+		, modes
+		, Math.max(0, modes.indexOf(targets[0].property('phonics.tiles')))
+	);
+
+	const corners = dialog.addCheckBox(
+		'Connect diagonal corners'
+		, targets[0].property('phonics.connectivity') === 'corners'
+	);
+
+	dialog.addLabel('Map defaults can be overridden on individual tiles. Geometry retains each occupied cell.');
+	dialog.addButton('Save').clicked.connect(() => dialog.accept());
+	dialog.addButton('Cancel').clicked.connect(() => dialog.reject());
+
+	if(dialog.exec() !== Dialog.Accepted) return;
+
+	asset.macro('Configure tile entities', () => {
+		for(const item of targets)
+		{
+			item.setProperty('phonics.tiles', modes[mode.currentIndex]);
+			item.setProperty('phonics.connectivity', corners.checked ? 'corners' : 'edges');
+		}
+	});
+});
+
+tiled.assetSaved.connect(() => {
+	if(!tiled.projectFilePath) return;
+
+	Qt.callLater(() => {
+		try
+		{
+			for(const world of tiled.worlds) exportClasses(world);
+		}
+		catch(error)
+		{
+			tiled.error('Phonics class export: ' + error.message);
+		}
+	});
+});
+
 action('PhonicsPreview', 'Validate and Preview Phonics World…', () => {
 	const world = currentWorld();
 
 	for(const asset of tiled.openAssets) if(asset.modified) asset.save();
 	world.save();
+	exportClasses(world);
 	run(['validate', world.fileName, cacheDirectory()]);
 	const dialog = new Dialog('Phonics preview');
 
@@ -266,6 +477,9 @@ tiled.extendMenu(
 		, {
 			action: 'PhonicsPlaceEntity'
 		}
+		, {action: 'PhonicsAttachComponents'}
+		, {action: 'PhonicsScopeSystems'}
+		, {action: 'PhonicsTileEntities'}
 		, {action: 'PhonicsPreview'}
 	]
 );

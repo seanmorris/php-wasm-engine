@@ -164,7 +164,11 @@ export function validateValue(member, value, source)
 			? typeof value === 'number' && Number.isFinite(value)
 			: member.type === 'bool'
 				? typeof value === 'boolean'
-				: ['string', 'file', 'color'].includes(member.type) ? typeof value === 'string' : false;
+				: ['string', 'file', 'color'].includes(member.type)
+					? typeof value === 'string'
+					: member.type === 'class'
+						? !!value && typeof value === 'object' && !Array.isArray(value)
+						: member.type === 'object' ? Number.isInteger(value) : false;
 
 	if(!valid) throw new Error(`${source}: Invalid ${member.type} property ${member.name}`);
 }
@@ -243,7 +247,8 @@ export function validateWorld(world, records)
 		throw new Error('phonics.start must select a map asset');
 
 	for(const reference of JSON.parse(config['phonics.modules'] ?? '[]'))
-		if(resolve(reference).type !== 'module') throw new Error(`Expected module: ${reference}`);
+		if(!['module', 'system-set', 'scope-policy', 'component'].includes(resolve(reference).type))
+		throw new Error(`Expected registration export: ${reference}`);
 
 	return {resolve, config};
 }

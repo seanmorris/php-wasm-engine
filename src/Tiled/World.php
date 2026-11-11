@@ -184,7 +184,10 @@ final class World
 	{
 		$source = Assets::relative($this->path, $entry['fileName']);
 		$key = $source . ':' . $entry['x'] . ':' . $entry['y'];
-		$map = $this->placements[$key] ??= clone $this->loader->map($source);
+
+		if(isset($this->placements[$key])) return $this->placements[$key];
+
+		$map = $this->placements[$key] = clone $this->loader->map($source);
 		$map->identity = $this->identity($entry);
 		$map->x = (float)$entry['x'];
 		$map->y = (float)$entry['y'];

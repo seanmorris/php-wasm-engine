@@ -17,7 +17,7 @@ Use **Tiled 1.12.2**. Install the core and Tiled helper packages together and ex
 npm install -g /path/to/seanmorris-phonics-0.1.0.tgz /path/to/seanmorris-tiled-phonics-0.1.0.tgz
 ```
 
-Copy `extension/phonics.mjs` from the installed Tiled-Phonics package into the extensions directory opened through **Edit → Preferences → Plugins → Open**, then restart Tiled. Open a saved project and a world.
+Copy both `extension/*.mjs` files from the installed Tiled-Phonics package into the extensions directory opened through **Edit → Preferences → Plugins → Open**, then restart Tiled. Open a saved project and a world.
 
 ## Compose the world
 
@@ -32,6 +32,16 @@ Use **File → Phonics World Settings…** to choose a starting map and addition
 ### Place entities
 
 Select an object layer and choose **File → Place Phonics Entity…**. Choose an exported factory, then move and configure the resulting object using Tiled's normal tools. Cached templates and tilesets provide package previews.
+
+### Components, presets, and scope systems
+
+**Attach Phonics Components** adds a class-valued property to a world, map, layer, selected object, or selected tile. Image and group layers are included. Classes bound to component exports construct ordinary ECS components; a preset class can contain several nested component classes. Their fields remain separate: `Movement.speed` and `Animation.speed` have independent defaults and overrides.
+
+**Phonics Scope Systems** selects systems and lifecycle for a world or map. The game chooses when maps become active: Sane selects nearby maps, while Noid selects a campaign stage by identity. `retain` suspends instances, `snapshot` saves explicitly captured state and releases instances, and `reset` starts fresh next time. Custom package policies can provide their own hooks. Worlds are inspectable assets that can load and unload during play using already loaded code.
+
+**Phonics Tile Entities** is optional. `collection` groups a tile definition's placements across a map, `placement` creates one entity per cell, and `region` joins touching matching cells within each layer. Edges connect by default; diagonal corners are optional. Per-tile properties override map defaults. Exact cells and holes are preserved, and the game decides how to render, move, or collide with them.
+
+The extension exports saved project class definitions to `phonics.classes.json`, referenced by the world's `phonics.classes` file property. Package that file with the world: unchanged Tiled defaults live in the project rather than the map. Save the project before previewing. Validation checks nested defaults and component references before gameplay runs.
 
 ## Validate and preview
 

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {classCatalog} from '../extension/catalog.mjs';
 import {importPackage, validateWorld} from '../lib/authoring.mjs';
 
 const integrity = value => 'sha256-' + createHash('sha256').update(value).digest('base64');
@@ -109,7 +110,6 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 	if(!process.env.TILED_BIN) throw new Error('TILED_BIN must point to Tiled 1.12.2 for editor tests');
 
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-tiled-'));
-	const extension = fileURLToPath(new URL('../extension/phonics.mjs', import.meta.url));
 	const original = fileURLToPath(new URL(`../../${packageName}/worlds/`, import.meta.url));
 	await fs.cp(original, directory, {recursive: true});
 	const world = path.join(directory, worldName);
@@ -117,6 +117,7 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 	await fs.writeFile(project, JSON.stringify({folders: ['.'],propertyTypes: []}));
 	const extensions = path.join(directory, 'config/tiled/extensions');
 	await fs.mkdir(extensions, {recursive: true});
+	await fs.cp(new URL('../extension/', import.meta.url), extensions, {recursive: true});
 	const resultFile = path.join(directory, 'result.txt');
 	const resultLiteral = JSON.stringify(resultFile);
 
@@ -128,7 +129,9 @@ test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, a
 
 			await fs.writeFile(
 				path.join(extensions, 'check.mjs')
-				, `import {configureWorld,applyClasses} from ${JSON.stringify(extension)};
+				, `import {configureWorld,applyClasses,exportClasses} from ${JSON.stringify(
+					path.join(extensions, 'phonics.mjs')
+				)};
 let tested=false;
 const check=() => {
  if(tested) return;
@@ -138,10 +141,17 @@ const check=() => {
   const world=tiled.worlds[0];
   if(${pass} === 1) {
    if(!world.property('phonics.start')) throw new Error('Lost initial world property');
-   const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]}];
+   const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]},{name:'Fixture.Preset',members:[{name:'actor',type:'class',propertyType:'Fixture.Actor',value:{speed:7.5}}]}];
    applyClasses(classes); applyClasses(classes);
    configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'${nextMap}',['@fixture/module']);
+   const cache = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '.phonics-cache');
+   File.makePath(cache);
+   world.setProperty('phonics.classes', tiled.filePath(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json')));
    if(!world.save()) throw new Error('World save failed');
+   exportClasses(world);
+   const catalogFile = new TextFile(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json'), TextFile.ReadOnly);
+   const catalog = JSON.parse(catalogFile.readAll()); catalogFile.close();
+   if(!catalog.classes.some(c => c.name === 'Fixture.Preset')) throw new Error('Missing nested project class');
   } else {
    if(world.property('phonics.start') !== '${nextMap}') throw new Error('Lost start after reopening');
    if(world.property('phonics.import.fixture') !== 'https://cdn.test/pkg@1.0.0/phonics.json') throw new Error('Lost import');
@@ -201,4 +211,54 @@ Qt.callLater(check);`
 	{
 		await fs.rm(directory, {recursive: true,force: true});
 	}
+});
+
+
+test('runtime catalogs preserve nested presets and reject cycles and duplicate bindings', () => {
+	const definitions = [
+		{name: 'Motion', type: 'class', members: [{name: 'speed', type: 'float', value: 3.5}]}
+		, {
+			name: 'Title'
+			, type: 'class'
+			, members: [{
+				name: 'motion'
+				, type: 'class'
+				, propertyType: 'Motion'
+				, value: {
+					speed: 7
+				}
+			}]
+		}
+	];
+
+	const records = [{
+		source: 'https://game.test/phonics.json'
+		, manifest: {
+			exports: {
+				motion: {
+					type: 'component'
+					, class: 'Motion'
+				}
+			}
+		}
+	}];
+
+	const catalog = classCatalog(definitions, records);
+	assert.equal(catalog.bindings.Motion, 'https://game.test/phonics.json#motion');
+	assert.equal(catalog.classes[1].members[0].value.speed, 7);
+
+	assert.throws(
+		() => classCatalog([{name: 'Loop', members: [{name: 'loop', type: 'class', propertyType: 'Loop'}]}])
+		, /cycle/
+	);
+
+	assert.throws(() => classCatalog([...definitions, definitions[0]]), /Duplicate/);
+
+	assert.throws(
+		() => classCatalog(
+			definitions
+			, [...records, {source: 'https://other.test/phonics.json', manifest: records[0].manifest}]
+		)
+		, /Conflicting/
+	);
 });

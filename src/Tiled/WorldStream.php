@@ -35,6 +35,8 @@ final class WorldStream
 	private $request, $release;
 	/** Whether this instance has released its owned resources. */
 	private bool $closed = false;
+	/** Optional component defaults used for discovering otherwise omitted file dependencies. */
+	public ?ClassCatalog $classes = null;
 
 	/**
 	 * Configure proximity loading and retention through optional host transfer callbacks.
@@ -97,6 +99,23 @@ final class WorldStream
 
 		$near = $this->world->entries($x, $y, $width, $height, $this->loadMargin);
 		$keep = $this->world->entries($x, $y, $width, $height, $this->retainMargin);
+		$this->select($near, $keep);
+	}
+
+	/**
+	 * Load explicit manifest entries, independent of their positions in the editor.
+	 *
+	 * @param array $near World entries selected for loading by game policy.
+	 * @param ?array $keep Optional wider set of entries to retain; defaults to near.
+	 * @return void Applies the game-selected load and retention sets.
+	 */
+	public function select(array $near, ?array $keep = null): void
+	{
+		if($this->closed) return;
+
+		$keep ??= $near;
+		// A requested entry must stay retained while its dependencies finish loading.
+		$keep = array_merge($keep, $near);
 		$this->entered = $this->exited = [];
 
 		foreach($near as $order => $entry)
@@ -265,6 +284,9 @@ final class WorldStream
 	{
 		$ready = true;
 		$properties = Loader::properties($data['properties'] ?? []);
+
+		foreach($this->classes?->files($data, $source) ?? [] as $dependency)
+		$ready = $this->available($state, $dependency) && $ready;
 
 		foreach($data['properties'] ?? [] as $property)
 		{

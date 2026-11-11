@@ -22,7 +22,7 @@
     "build:docs": "webpack --mode production && node scripts/build-docs.mjs && npm run build:site",
     "setup:runtime": "node scripts/runtime.mjs",
     "build:manifests": "node scripts/manifests.mjs",
-    "test:packages": "node --test tests/packages/*.test.mjs && php packages/php-noid/tests/run.php && php tests/core-phonics.php && php tests/world-runtime.php && php tests/network.php && php tests/network-timing.php && php packages/php-tris/tests/run.php && php packages/php-slalom/tests/run.php && php packages/php-buster/tests/run.php && php packages/doom-phonics/tests/run.php",
+    "test:packages": "node --test tests/packages/*.test.mjs && php packages/php-noid/tests/run.php && php tests/core-phonics.php && php tests/world-runtime.php && php tests/tiled-composition.php && php tests/scope-lifecycle.php && php tests/network.php && php tests/network-timing.php && php packages/php-tris/tests/run.php && php packages/php-slalom/tests/run.php && php packages/php-buster/tests/run.php && php packages/doom-phonics/tests/run.php",
     "test:artifacts": "node scripts/check-artifacts.mjs",
     "test:editor": "node --test packages/tiled-phonics/tests/*.test.mjs",
     "generate": "php packages/sane-phonics/examples/generate-assets.php && node packages/php-noid/generate-stages.mjs && node packages/php-tris/generate.mjs && npm run build:manifests",
@@ -57,7 +57,7 @@
     "webpack-dev-server": "^6.0.0",
     "yaml": "^2.9.1"
   },
-  "description": "Game-neutral PHP and browser ECS runtime for Tiled worlds",
+  "description": "Game-neutral PHP and browser ECS runtime with optional content adapters",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/sane-phonics",
@@ -93,7 +93,8 @@
     "LICENSE",
     "bin/",
     "cli/",
-    "runtime-lock.json"
+    "runtime-lock.json",
+    "adapters/"
   ],
   "bin": {
     "phonics": "./bin/phonics.mjs"

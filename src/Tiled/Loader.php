@@ -50,6 +50,7 @@ final class Loader
 			$set = isset($entry['source'])?$this->assets->json($source):$entry;
 			$set['sourceUrl'] = self::properties($set['properties'] ?? [])['phonics.source'] ?? $source;
 			$set['firstgid'] = (int)$entry['firstgid'];
+			$set['identity'] = $set['sourceUrl'] . (isset($entry['source']) ? '' : '#tileset-' . $set['firstgid']);
 			$set['definitions'] = $this->definitions($set, $set['sourceUrl']);
 			$map->tilesets[] = $set;
 		}
@@ -173,6 +174,7 @@ final class Loader
 			);
 
 			$definitions[$id]['sourceUrl'] = $path;
+			$definitions[$id]['identity'] = ($set['identity'] ?? $path) . '#' . $id;
 			$definitions[$id]['propertyRecords'] = self::propertyRecords($tile['properties'] ?? [], $path);
 			$definitions[$id]['properties'] = self::properties($definitions[$id]['propertyRecords']);
 		}
@@ -199,6 +201,12 @@ final class Loader
 			}
 
 			$layer = new Layer((int)($data['id'] ?? 0), $data['name'] ?? '', $data['type']);
+			$layer->data = $data;
+			$layer->data['properties'] = self::propertyRecords($data['properties'] ?? [], $map->path);
+			$layer->parent = $parent?->key;
+
+			while(isset($map->allLayers[$layer->key])) $layer->key = min(-1, $layer->key - 1);
+			$map->allLayers[$layer->key] = $layer;
 			$layer->visible = ($parent?->visible ?? true) && ($data['visible'] ?? true);
 			$layer->offsetX = ($parent?->offsetX ?? 0) + ($data['offsetx'] ?? 0);
 			$layer->offsetY = ($parent?->offsetY ?? 0) + ($data['offsety'] ?? 0);
@@ -434,7 +442,19 @@ final class Loader
 			, ...($defaults['properties'] ?? [])
 			, ...$object['properties']
 		] as $p)
-		$properties[$p['name']] = $p;
+		{
+			$previous = $properties[$p['name']] ?? null;
+
+			if($previous && ($previous['type'] ?? '') === 'class' && ($p['type'] ?? '') === 'class'
+				&& ($previous['propertytype'] ?? '') === ($p['propertytype'] ?? '')
+			){
+				$p['layers'] = [...($previous['layers'] ?? [$previous]), ...($p['layers'] ?? [$p])];
+				$p['value'] = array_replace_recursive($previous['value'] ?? [], $p['value'] ?? []);
+			}
+
+			$properties[$p['name']] = $p;
+		}
+
 		$result = $object + $defaults;
 		$result['properties'] = array_values($properties);
 		$result['sourceUrl'] = $source;

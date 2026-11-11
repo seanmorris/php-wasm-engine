@@ -5,8 +5,8 @@ namespace Phonics\World;
 /**
  * Reference-counted handle that keeps one stable source scope active.
  *
- * Cloning or retaining a lease increments ownership, and idempotent release deactivates the scope only after
- * the final holder lets go.
+ * Each activate() call acquires independent ownership. Idempotent release deactivates the scope only after
+ * the final holder lets go; leases cannot be cloned.
  */
 final class ScopeLease
 {
@@ -33,6 +33,13 @@ final class ScopeLease
 		private $release
 	){
 	}
+
+	/**
+	 * Prevent uncounted ownership copies; acquire another lease through WorldRuntime.
+	 *
+	 * @return void Prevents cloning a reference-counted lease.
+	 */
+	private function __clone() {}
 
 	/**
 	 * Release one active-scope reference.

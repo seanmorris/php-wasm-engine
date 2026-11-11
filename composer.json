@@ -22,6 +22,8 @@
       "php tests/cards-random.php",
 			"php tests/core-phonics.php",
 			"php tests/world-runtime.php",
+      "php tests/tiled-composition.php",
+      "php tests/scope-lifecycle.php",
 			"php tests/network.php",
 			"php tests/network-timing.php",
       "php packages/php-noid/tests/run.php",

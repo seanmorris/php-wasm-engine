@@ -1,3 +1,4 @@
+import {tiledCatalog} from '../browser/TiledCatalog.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -29,6 +30,42 @@ export async function validate(directory, {world, origins = []} = {})
 
 			const props = properties(value.properties);
 			const declaring = props['phonics.source'] ?? url;
+
+			for(const binding of JSON.parse(props['phonics.systems'] ?? '[]'))
+			{
+				const entry = await graph.resolve(typeof binding === 'string' ? binding : binding.use, declaring);
+
+				if(entry.type !== 'system-set') throw Error(`${url}: expected system-set export`);
+
+				await graph.activateGraph(entry);
+			}
+
+			if(props['phonics.lifecycle'] && !['retain', 'snapshot', 'reset'].includes(props['phonics.lifecycle']))
+			{
+				const entry = await graph.resolve(props['phonics.lifecycle'], declaring);
+
+				if(entry.type !== 'scope-policy') throw Error(`${url}: expected scope-policy export`);
+
+				await graph.activateGraph(entry);
+			}
+
+			if(props['phonics.classes'])
+			{
+				const source = new URL(props['phonics.classes'], declaring).href;
+				const catalog = tiledCatalog(JSON.parse(new TextDecoder().decode(await scope.read(source))), source);
+
+				for(const reference of catalog.bindings)
+				{
+					const entry = await graph.resolve(reference, source);
+
+					if(entry.type !== 'component') throw Error(`${source}: expected component export`);
+
+					await graph.activateGraph(entry);
+				}
+
+				for(const file of catalog.files) await scope.read(file);
+			}
+
 
 			if(props['phonics.entity'])
 			{
@@ -87,6 +124,8 @@ export async function validate(directory, {world, origins = []} = {})
 
 			for(const reference of JSON.parse(config['phonics.modules'] ?? '[]'))
 				await graph.activateGraph(await graph.resolve(reference, worldUrl));
+
+			await document(worldUrl);
 
 			for(const map of data.maps ?? []) await document(new URL(map.fileName, worldUrl).href);
 

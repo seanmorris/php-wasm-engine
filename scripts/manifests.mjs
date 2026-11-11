@@ -25,6 +25,7 @@ const definitions = [
 			, php: {autoload: {'Phonics\\': 'src/'}, bootstrap: ['autoload.php']}
 			, exports: {
 				font: {type: 'asset', path: 'resources/font.tsj'}
+				, tiled: {type: 'adapter', php: 'adapters/tiled.php'}
 				, buttons: {
 					type: 'asset'
 					, path: 'resources/buttons.tsj'
@@ -33,7 +34,7 @@ const definitions = [
 				, 'memory-lobby': {type: 'lobby-provider'}
 			}
 			, preload: ['resources/font.tsj', 'resources/font.png', 'resources/buttons.tsj', 'resources/buttons.png']
-			, directories: ['src', 'browser', 'shaders', 'resources']
+			, directories: ['src', 'adapters', 'browser', 'shaders', 'resources']
 			, files: ['autoload.php', 'legacy.php']
 		}
 	]
@@ -42,14 +43,28 @@ const definitions = [
 			name: '@seanmorris/sane-phonics'
 			, php: {autoload: {'SanePhonics\\': 'src/'}, bootstrap: ['autoload.php']}
 			, exports: {
-				game: {type: 'game', php: 'examples/game.php', browser: 'browser/game.mjs', preloadStart: false}
-				, platformer: {type: 'module', php: 'modules/platformer.php', preloadStart: true}
+				game: {
+					type: 'game'
+					, php: 'examples/game.php'
+					, browser: 'browser/game.mjs'
+					, preloadStart: false
+					, modules: ['#demo-map', '#spawn', '#spatial-maps']
+				}
+				, platformer: {type: 'module', php: 'modules/platformer.php', preloadStart: false}
+				, 'demo-map': {type: 'system-set', php: 'modules/demo-map.php'}
+				, 'spatial-maps': {type: 'system-set', php: 'modules/spatial-maps.php'}
+				, movement: {type: 'system-set', php: 'modules/movement.php'}
+				, spawn: {type: 'component', class: 'SanePhonics.SpawnPoint', php: 'modules/spawn.php'}
 				, player: {type: 'factory', class: 'SanePhonics.Player', module: '#platformer'}
 				, demo: {type: 'asset', path: 'worlds/demo.world'}
 			}
 			, tiled: {
 				templates: ['templates/player.tx']
 				, classes: [{
+					name: 'SanePhonics.SpawnPoint'
+					, members: []
+				}
+				, {
 					name: 'SanePhonics.Player'
 					, members: [{
 						name: 'profile'
@@ -58,7 +73,7 @@ const definitions = [
 					}]
 				}]
 			}
-			, preload: []
+			, preload: ['worlds/phonics.classes.json']
 			, directories: ['src', 'browser', 'shaders', 'modules', 'examples', 'worlds', 'templates']
 			, files: ['autoload.php'
 				, 'legacy.php'
@@ -70,8 +85,12 @@ const definitions = [
 			name: '@seanmorris/php-noid'
 			, php: {autoload: {'PhpNoid\\': 'src/'}, bootstrap: ['autoload.php']}
 			, exports: {
-				game: {type: 'game', php: 'game.php', browser: 'browser/game.mjs', modules: ['#factories']}
+				game: {type: 'game', php: 'game.php', browser: 'browser/game.mjs', modules: ['#factories', '#stage']}
 				, factories: {type: 'module', php: 'modules/factories.php'}
+				, stage: {type: 'system-set', php: 'modules/stage.php'}
+				, 'brick-component': {type: 'component', class: 'PhpNoid.Brick', module: '#factories'}
+				, 'paddle-component': {type: 'component', class: 'PhpNoid.Paddle', module: '#factories'}
+				, 'enemy-component': {type: 'component', class: 'PhpNoid.Enemy', module: '#factories'}
 				, brick: {type: 'factory', class: 'PhpNoid.Brick', module: '#factories'}
 				, paddle: {type: 'factory', class: 'PhpNoid.Paddle', module: '#factories'}
 				, enemy: {type: 'factory', class: 'PhpNoid.Enemy', module: '#factories'}
@@ -111,6 +130,7 @@ const definitions = [
 			}
 			, preload: [
 				'assets/capsules.json'
+				, 'worlds/phonics.classes.json'
 				, 'assets/font.json'
 				, 'assets/font.png'
 				, 'assets/font-sdl.png'

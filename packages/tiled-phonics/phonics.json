@@ -15,6 +15,7 @@
     "files": []
   },
   "assets": [
+    "extension/catalog.mjs",
     "extension/phonics.mjs",
     "lib/authoring.mjs",
     "bin/tiled-phonics.mjs"
@@ -26,8 +27,9 @@
     }
   },
   "integrity": {
-    "extension/phonics.mjs": "sha256-MbsbtQgT8A9M3YzZKWzifUot+Gu+Dush2lzAbLiH/BY=",
-    "lib/authoring.mjs": "sha256-Z25EHRpNTAhmpj433omUKAOq4YUqtf/++d2deBVaKEo=",
-    "bin/tiled-phonics.mjs": "sha256-B0GiVPKKCUHmfTWODvGzybWK2xiWjv2WJHXV+2a4vkQ="
+    "extension/catalog.mjs": "sha256-PTdfoTAk87k5Yx2wwKIL8BOfSvKc8YdA4pcZck5NuhA=",
+    "extension/phonics.mjs": "sha256-U2vssHy3Gw3gdpVRtrtEWzqOl4UECTf9oA6EZ5nZzyg=",
+    "lib/authoring.mjs": "sha256-Pzkq2Kbd9v3NUXM59TifkL2RLxP1Hs75kJgaYnLCn6g=",
+    "bin/tiled-phonics.mjs": "sha256-EXBDo9Mlt/QTblYKgSmRhj1uJ/kBty/m9qK1eiBpwLs="
   }
 }
