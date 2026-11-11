@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {root} from './files.mjs';
+import {classes as trisClasses, componentNames as trisComponents} from '../packages/php-tris/authoring.mjs';
 
 async function walk(directory, prefix = '')
 {
@@ -59,7 +60,7 @@ const definitions = [
 				, demo: {type: 'asset', path: 'worlds/demo.world'}
 			}
 			, tiled: {
-				templates: ['templates/player.tx']
+				templates: ['templates/player.tx', 'templates/spawn.tx']
 				, classes: [{
 					name: 'SanePhonics.SpawnPoint'
 					, members: []
@@ -157,25 +158,24 @@ definitions.push(
 					"type": "game"
 					, "php": "game.php"
 					, "browser": "browser/game.mjs"
-					, "modules": ["#rules"]
+					, "modules": ["#components", "#stage"]
 				}
 				, "rules": {"type": "module", "php": "modules/rules.php"}
+				, "components": {"type": "module", "php": "modules/components.php"}
+				, "stage": {"type": "system-set", "php": "modules/stage.php"}
+				, ...Object.fromEntries(trisComponents.map(name => [
+					`${name.toLowerCase()}-component`
+					, {type: 'component', class: `PhpTris.${name}`, module: '#components'}
+				]))
 				, "board": {"type": "factory", "class": "PhpTris.Board", "module": "#rules"}
 				, "arcade": {"type": "asset", "path": "worlds/arcade.world"}
 			}
 			, "tiled": {
 				"templates": ["templates/board.tx"]
 				, "previews": ["assets/blocks.png"]
-				, "classes": [{
-					"name": "PhpTris.Board"
-					, "members": [
-						{"name": "mode", "type": "string", "value": "endless"}
-						, {"name": "seed", "type": "int", "value": 1}
-						, {"name": "phonics.entity", "type": "string", "value": "@php-tris/board"}
-					]
-				}]
+				, "classes": trisClasses
 			}
-			, "preload": []
+			, "preload": ['worlds/phonics.classes.json']
 			, "directories": ["src", "browser", "modules", "worlds", "assets", "templates"]
 			, "files": ["autoload.php", "game.php"]
 		}

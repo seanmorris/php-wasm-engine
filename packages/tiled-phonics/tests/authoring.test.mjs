@@ -105,18 +105,24 @@ test(
 for(const [packageName, worldName, nextMap] of [
 	['php-noid', 'campaign.world', 'stage-02.tmj']
 	, ['php-tris', 'arcade.world', 'reactor-02.tmj']
+	, ['sane-phonics', 'demo.world', '../examples/assets/gravity.tmj']
 ])
 test(`Tiled 1.12.2 saves and reopens ${packageName} worlds and typed classes`, async () => {
 	if(!process.env.TILED_BIN) throw new Error('TILED_BIN must point to Tiled 1.12.2 for editor tests');
 
-	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-tiled-'));
+	const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-tiled-'));
+	const directory = path.join(temporary, 'worlds');
 	const original = fileURLToPath(new URL(`../../${packageName}/worlds/`, import.meta.url));
 	await fs.cp(original, directory, {recursive: true});
 	const world = path.join(directory, worldName);
 	const project = path.join(directory, 'test.tiled-project');
-	const projectData = packageName === 'php-noid'
-		? JSON.parse(await fs.readFile(path.join(original, 'campaign.tiled-project')))
-		: {folders: ['.'], propertyTypes: []};
+
+	const projectData = JSON.parse(
+		await fs.readFile(path.join(original, worldName.replace('.world', '.tiled-project')))
+	);
+
+	if(packageName === 'sane-phonics')
+	await fs.cp(path.join(original, '../examples/assets'), path.join(temporary, 'examples/assets'), {recursive: true});
 
 	await fs.writeFile(project, JSON.stringify(projectData));
 	const extensions = path.join(directory, 'config/tiled/extensions');
@@ -155,13 +161,27 @@ const check=() => {
     if(!map.save()) throw new Error('Component map save failed');
    }
   }
+  if('${packageName}' === 'php-tris') {
+   const map=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'endless-01.tmj'));
+   const preset=map.layerAt(1).objects[0].property('Components');
+   if(preset.typeName !== 'PhpTris.Match') throw new Error('Board preset did not resolve');
+   if(!tiled.project.findTypeByName('PhpTris.Queue')) throw new Error('Queue component missing');
+   if(JSON.stringify(listProperty(map, 'phonics.systems')) !== '["@php-tris/stage"]') throw new Error('Lost board systems');
+   if(${pass} === 1 && !map.save()) throw new Error('Board map save failed');
+  }
+  if('${packageName}' === 'sane-phonics') {
+   const map=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '../examples/assets/platformer.tmj'));
+   if(!tiled.project.findTypeByName('SanePhonics.SpawnPoint')) throw new Error('SpawnPoint component missing');
+   if(JSON.stringify(listProperty(map, 'phonics.systems')) !== '["@sane/demo-map"]') throw new Error('Lost course systems');
+   if(${pass} === 1 && !map.save()) throw new Error('Course map save failed');
+  }
   if(${pass} === 1) {
    if(!world.property('phonics.start')) throw new Error('Lost initial world property');
    const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]},{name:'Fixture.Preset',members:[{name:'actor',type:'class',propertyType:'Fixture.Actor',value:{speed:7.5}}]}];
    applyClasses(classes); applyClasses(classes);
    configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'${nextMap}',['@fixture/module']);
    const cache = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '.phonics-cache');
-   if('${packageName}' !== 'php-noid') File.makePath(cache);
+
    world.setProperty('phonics.classes', tiled.filePath(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'phonics.classes.json')));
    if(!world.save()) throw new Error('World save failed');
    exportClasses(world);
@@ -231,11 +251,14 @@ Qt.callLater(check);`
 		const types = JSON.parse(await fs.readFile(project)).propertyTypes;
 		assert.equal(types.find(type => type.name==='Fixture.Actor').members.find(p => p.name==='speed').type, 'float');
 
-		if(packageName === 'php-noid')
 		{
 			const catalog = JSON.parse(await fs.readFile(path.join(directory, 'phonics.classes.json')));
 			const originalCatalog = JSON.parse(await fs.readFile(path.join(original, 'phonics.classes.json')));
 			assert.deepEqual(catalog.bindings, originalCatalog.bindings);
+	}
+
+		if(packageName === 'php-noid')
+		{
 			const map = JSON.parse(await fs.readFile(path.join(directory, 'stage-01.tmj')));
 
 			assert.deepEqual(map.properties.find(property => property.name === 'phonics.systems'), {
@@ -251,7 +274,7 @@ Qt.callLater(check);`
 	}
 	finally
 	{
-		await fs.rm(directory, {recursive: true,force: true});
+		await fs.rm(temporary, {recursive: true,force: true});
 	}
 });
 
@@ -347,12 +370,13 @@ test('catalog CLI retains local bindings without a cache and leaves invalid expo
 });
 
 
-test('Noid project resolves and loads the packaged editor extension without a global install', async () => {
+for(const [game, projectName] of [['php-noid', 'campaign'], ['php-tris', 'arcade'], ['sane-phonics', 'demo']])
+test(`${game} project loads the packaged editor extension without a global install`, async () => {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'phonics-project-extension-'));
 
 	try
 	{
-		const original = fileURLToPath(new URL('../../php-noid/worlds/campaign.tiled-project', import.meta.url));
+		const original = fileURLToPath(new URL(`../../${game}/worlds/${projectName}.tiled-project`, import.meta.url));
 		const data = JSON.parse(await fs.readFile(original));
 		const extension = path.resolve(path.dirname(original), data.extensionsPath);
 		await fs.access(path.join(extension, 'phonics.mjs'));

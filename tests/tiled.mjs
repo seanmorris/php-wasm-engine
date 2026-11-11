@@ -160,7 +160,7 @@ for(const name of readdirSync(assets).filter(name => name.endsWith('.tmj')))
 				assert.equal(after.tilesets[index].firstgid, set.firstgid);
 				assert.equal(sourcePath(exported, after.tilesets[index].source), sourcePath(file, set.source));
 			});
-		});
+		}, resolve('packages/sane-phonics/worlds/demo.tiled-project'));
 	});
 }
 
@@ -278,18 +278,14 @@ test('Tiled saves template references and provenance on supported object propert
 });
 
 test('PHPTris challenge grids and typed properties survive Tiled export', () => {
-	for(const mode of ['endless','race','time','squares','cascade','targets','bonds','reactor'])
+	for(const name of readdirSync(resolve('packages/php-tris/worlds')).filter(name => name.endsWith('.tmj')))
 	{
-		const file = resolve('packages/php-tris/worlds', mode + '-01.tmj');
+		const file = resolve('packages/php-tris/worlds', name);
 
 		roundTrip(file, 'map', (before, after) => {
 			assert.deepEqual(properties(after.properties), properties(before.properties));
 			assert.deepEqual(after.layers[0].data, before.layers[0].data);
-
-			assert.deepEqual(
-				properties(after.layers[1].objects[0].properties)
-				, properties(before.layers[1].objects[0].properties)
-			);
-		});
+			objects(before.layers[1].objects, after.layers[1].objects);
+		}, resolve('packages/php-tris/worlds/arcade.tiled-project'));
 	}
 });

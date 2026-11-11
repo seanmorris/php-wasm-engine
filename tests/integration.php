@@ -16,8 +16,16 @@ test('sprite sheets expose Tiled classes as named animations', function() {
 });
 
 test('object factories produce PHP components at world positions', function() {
-	$loader = new Loader;
-	$map = $loader->map(dirname(__DIR__) . '/examples/assets/platformer.tmj');
+	$loader = fixture([
+		'legacy.tmj' => mapData([
+			[
+				'type' => 'objectgroup'
+				, 'objects' => [['id' => 1, 'type' => 'Player', 'x' => 80, 'y' => 100]]
+			]
+		], ['tilesets' => []])
+	]);
+
+	$map = $loader->map('legacy.tmj');
 	$map->x = -100;
 	$spawner = new ObjectSpawner;
 	$spawner->register('Player', fn($object) => [new Body($object['x'], $object['y'])]);
