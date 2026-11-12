@@ -33,7 +33,10 @@ function jsonAsset(string $name, array $data): void
 
 	file_put_contents(
 		__DIR__ . '/assets/' . $name
-		, json_encode(\SanePhonics\Examples\authoredMap($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n"
+		, json_encode(
+			\SanePhonics\Examples\authoredMap($data)
+			, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+		) . "\n"
 	);
 }
 

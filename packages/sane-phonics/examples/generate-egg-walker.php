@@ -346,5 +346,8 @@ $map = [
 
 foreach(['egg-walker.tsj' => $tileset, 'egg-walker.tmj' => $map] as $name => $data)
 {
-	file_put_contents($assets . $name, json_encode(\SanePhonics\Examples\authoredMap($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+	file_put_contents(
+		$assets . $name
+		, json_encode(\SanePhonics\Examples\authoredMap($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+	);
 }

@@ -64,5 +64,8 @@ $dashMap['layers'][] = [
 
 file_put_contents(
 	__DIR__ . '/assets/light-dash.tmj'
-	, json_encode(\SanePhonics\Examples\authoredMap($dashMap), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n"
+	, json_encode(
+		\SanePhonics\Examples\authoredMap($dashMap)
+		, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+	) . "\n"
 );

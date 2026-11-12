@@ -115,13 +115,25 @@ $context->factory('Fixture.Entity', static fn(array $object): array => [new \Pho
 $authored = (new Loader)->map(dirname(__DIR__) . '/worlds/stage-01.tmj');
 $authored->layer('Entities')->objects = [
 	['id' => 9999, 'type' => 'Fixture.Entity']
-	, ['id' => 10000, 'type' => 'PhpNoid.Brick', 'x' => 100, 'y' => 100, 'properties' => [
-		['name' => 'hits', 'type' => 'int', 'value' => 3]
-	]]
+	, [
+		'id' => 10000
+		, 'type' => 'PhpNoid.Brick'
+		, 'x' => 100
+		, 'y' => 100
+		, 'properties' => [
+			['name' => 'hits', 'type' => 'int', 'value' => 3]
+		]
+	]
 ];
+
 $field->stage($authored, 0);
 expect(count($registry->query(\Phonics\Physics\Pose::class)) === 1, 'imported factories share the stage registry');
-expect($registry->get($registry->query(Brick::class)[0], Brick::class)->hits === 3, 'legacy flat properties remain supported');
+
+expect(
+	$registry->get($registry->query(Brick::class)[0], Brick::class)->hits === 3
+	, 'legacy flat properties remain supported'
+);
+
 $authored->layer('Entities')->objects = [];
 $field->stage($authored, 1);
 expect($registry->query(\Phonics\Physics\Pose::class) === [], 'legacy stage transitions retire imported entities');

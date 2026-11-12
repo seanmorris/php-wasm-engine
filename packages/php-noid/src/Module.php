@@ -79,10 +79,27 @@ final class Module
 		);
 	}
 
-	/** Register independently composable Tiled components alongside legacy factories. */
+	/**
+	 * Register independently composable Tiled components alongside legacy factories.
+	 *
+	 * Each constructor receives the component's resolved properties, the content scope that owns the entity, and the
+	 * placed Tiled object, whose position is offset by its layer.
+	 *
+	 * @param Context $context Package context receiving the component constructors.
+	 * @return void Registers the brick, paddle, and enemy components.
+	 */
 	public static function components(Context $context): void
 	{
-		$context->component('PhpNoid.Brick', static function(array $p, $scope, $target): Brick {
+
+		/**
+		 * Build a brick from its object's rectangle and its component properties.
+		 *
+		 * @param array<string,mixed> $p Resolved PhpNoid.Brick properties.
+		 * @param \Phonics\World\ScopeContext $scope Content scope that owns the brick.
+		 * @param \Phonics\Tiled\Target $target Placed Tiled object and its layer.
+		 * @return Brick The brick component.
+		 */
+		$brick = static function(array $p, $scope, $target): Brick {
 			$o = $target->value;
 
 			return new Brick(
@@ -96,16 +113,32 @@ final class Module
 				, (int)$p['score']
 				, (string)$p['material']
 			);
-		});
+		};
 
-		$context->component('PhpNoid.Paddle', static function(array $p, $scope, $target): Paddle {
+		/**
+		 * Build a paddle at its object's position.
+		 *
+		 * @param array<string,mixed> $p Resolved PhpNoid.Paddle properties.
+		 * @param \Phonics\World\ScopeContext $scope Content scope that owns the paddle.
+		 * @param \Phonics\Tiled\Target $target Placed Tiled object and its layer.
+		 * @return Paddle The paddle component.
+		 */
+		$paddle = static function(array $p, $scope, $target): Paddle {
 			return new Paddle(
 				(float)($target->value['x'] ?? 0) + ($target->layer?->offsetX ?? 0)
 				, (float)($target->value['y'] ?? 0) + ($target->layer?->offsetY ?? 0)
 			);
-		});
+		};
 
-		$context->component('PhpNoid.Enemy', static function(array $p, $scope, $target): Enemy {
+		/**
+		 * Build an enemy at its object's position from its component properties.
+		 *
+		 * @param array<string,mixed> $p Resolved PhpNoid.Enemy properties.
+		 * @param \Phonics\World\ScopeContext $scope Content scope that owns the enemy.
+		 * @param \Phonics\Tiled\Target $target Placed Tiled object and its layer.
+		 * @return Enemy The enemy component.
+		 */
+		$enemy = static function(array $p, $scope, $target): Enemy {
 			return new Enemy(
 				(float)($target->value['x'] ?? 0) + ($target->layer?->offsetX ?? 0)
 				, (float)($target->value['y'] ?? 0) + ($target->layer?->offsetY ?? 0)
@@ -115,13 +148,18 @@ final class Module
 				, (int)$p['hits']
 				, $p['capsule']
 			);
-		});
+		};
+
+		$context->component('PhpNoid.Brick', $brick);
+		$context->component('PhpNoid.Paddle', $paddle);
+		$context->component('PhpNoid.Enemy', $enemy);
 	}
 
 	/**
 	 * Register independently ordered gameplay systems.
 	 *
 	 * @param Playfield $field Playfield state shared by this system.
+	 * @param \Phonics\World\ScopeContext|null $scope Scope that owns the systems, or null for the playfield's context.
 	 * @return void Completes the operation.
 	 */
 	public static function systems(Playfield $field, ?\Phonics\World\ScopeContext $scope = null): void

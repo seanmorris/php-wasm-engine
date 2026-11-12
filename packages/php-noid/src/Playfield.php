@@ -55,13 +55,23 @@ final class Playfield
 	 */
 	public function registry(): Registry { return $this->context->entities; }
 
-	/** Create a transient entity under the active stage's ownership. */
+	/**
+	 * Create a transient entity under the active stage's ownership.
+	 *
+	 * @param object ...$components Components of the new entity.
+	 * @return int The entity, owned by the active stage's scope when there is one.
+	 */
 	public function entity(object ...$components): int
 	{
 		return $this->scope ? $this->scope->entity(...$components) : $this->registry()->create(...$components);
 	}
 
-	/** Query this stage, excluding other prepared or retained maps. */
+	/**
+	 * Query this stage, excluding other prepared or retained maps.
+	 *
+	 * @param string $type Component class to query.
+	 * @return list<int> Entities with that component in the active stage.
+	 */
 	public function query(string $type): array
 	{
 		$ids = $this->registry()->query($type);
@@ -74,6 +84,8 @@ final class Playfield
 	 *
 	 * @param TileMap $map Loaded Tiled map defining this stage.
 	 * @param int $index Zero-based stage index.
+	 * @param \Phonics\World\ScopeContext|null $scope Scope that owns the stage's entities, or null to replace them
+	 * in the shared registry.
 	 * @return void Completes the operation.
 	 */
 	public function stage(TileMap $map, int $index, ?\Phonics\World\ScopeContext $scope = null): void
