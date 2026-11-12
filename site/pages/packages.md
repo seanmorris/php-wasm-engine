@@ -32,7 +32,7 @@ Each export declares one of these types:
 | `game` | Game entry selected explicitly by the PHP application bootstrap |
 | `module` | Registers systems, factories, and cleanup against the shared session context |
 | `factory` | Tiled entity factory; names its registered `class` and `module` |
-| `component` | Tiled entity class that objects reference in the same way as a factory |
+| `component` | Registered component constructor bound to a Tiled class through the portable catalog |
 | `asset` | Declared file `path`, such as a map, tileset, or font |
 | `adapter` | PHP content adapter selected by a world source's `adapter` |
 | `system-set` | PHP systems bound to matching adapter scopes by a world's `bindings[].use` |

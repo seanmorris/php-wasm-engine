@@ -1,5 +1,7 @@
 # Tiled-Phonics
 
+In an examples checkout, run `npm install` at the repository root and open the game's `.tiled-project` before its maps. Projects such as Sane's ship their custom classes and a relative extension directory; enable it when prompted. Sane also provides 34 concrete placement templates with nested settings. Its [course authoring guide](https://github.com/seanmorris/phonics-examples/blob/main/games/sane-phonics/docs/authoring.md) explains placement, local object links, and schema regeneration.
+
 Tiled **1.12.2** integration for Phonics package URLs and world configuration. Install the packed/published `@seanmorris/phonics` and `@seanmorris/tiled-phonics` packages together, exposing the `tiled-phonics` command on Tiled's PATH (for example with a global npm install). Copy both `extension/*.mjs` files into Tiled's extensions directory, available through **Edit → Preferences → Plugins → Open**. Restart Tiled. Open a saved project and a world.
 
 - **File → Add Package URL** imports a versioned `phonics.json`, verifies preview integrity, caches dependency metadata, templates and tilesets in `.phonics-cache`, registers classes and defaults, and saves `phonics.import.<alias>` on the world.

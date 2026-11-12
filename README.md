@@ -58,6 +58,8 @@ npm start
 
 ## Author a world
 
+For a bundled example, install the examples repository dependencies and open its `.tiled-project` first. Sane's project supplies the custom types, relative extension path, and 34 entity templates; its [authoring guide](https://github.com/seanmorris/phonics-examples/blob/main/games/sane-phonics/docs/authoring.md) covers nested settings and object links. The steps below configure a standalone project.
+
 1. Install Tiled **1.12.2** and the editor extension: install the packed core and `tiled-phonics` artifacts together, for example `npm install -g /path/to/seanmorris-phonics-0.1.0.tgz /path/to/seanmorris-tiled-phonics-0.1.0.tgz`, copy both `extension/*.mjs` files into Tiled's extensions directory, and restart Tiled. The [editor guide](packages/tiled-phonics/README.md) has the details.
 2. Open a project and a world. Choose **File → Add Package URL**, enter the package's exact-version `phonics.json` URL, and assign a pallet alias.
 3. Use **Phonics World Settings** to select a start map and additional modules. **Attach Phonics Components** adds nested component classes or presets to selected objects, layers, maps, worlds, or tiles. **Phonics Scope Systems** selects world/map systems and lifecycle; **Phonics Tile Entities** opts into collection, per-placement, or connected-region entities. On an object layer, **Place Phonics Entity** selects an exported factory. Move and configure the resulting object with Tiled's normal tools. Cached templates and tilesets are also available in the project's `.phonics-cache` directory.
@@ -76,7 +78,7 @@ Export types:
 | `game` | Game entry selected explicitly by the PHP application bootstrap |
 | `module` | Registers systems, factories, and cleanup against the shared session context |
 | `factory` | Tiled entity factory; names its registered `class` and `module` |
-| `component` | Tiled entity class that objects reference in the same way as a factory |
+| `component` | Registered component constructor bound to a Tiled class through the portable catalog |
 | `asset` | Declared file `path`, such as a map, tileset, or font |
 | `adapter` | PHP content adapter selected by a world source's `adapter` |
 | `system-set` | PHP systems bound to matching adapter scopes by a world's `bindings[].use` |

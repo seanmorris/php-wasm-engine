@@ -252,6 +252,12 @@ MENUS:
         parent: game-sane-phonics-api
         weight: 40
         expanded: false
+      - id: game-sane-phonics-api-tiled
+        group: true
+        title: Tiled
+        parent: game-sane-phonics-api
+        weight: 50
+        expanded: false
       - id: game-php-noid
         group: true
         title: PHP-Noid

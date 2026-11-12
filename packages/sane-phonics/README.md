@@ -1,5 +1,7 @@
 # Sane-Phonics
 
+The [course authoring guide](https://github.com/seanmorris/phonics-examples/blob/main/games/sane-phonics/docs/authoring.md) covers the complete template catalog, nested settings, object links, and save/validate/build workflow.
+
 The extracted platformer demo and reusable gameplay systems for [Phonics](../../README.md). Install `@seanmorris/sane-phonics` alongside `@seanmorris/phonics`, or `seanmorris/sane-phonics` through Composer. The PHP namespace is `SanePhonics\`; this package supplies the old gameplay `PhpWasmEngine\` aliases until Phonics 1.0.
 
 `phonics.json#game` plays the complete demo. `worlds/demo.world` includes the startup cards, title and menus. Other package-owned worlds select every existing course. The world properties `sane.scene`, `sane.profile`, and `sane.intro` configure this game. Browser scene/profile controls and legacy `bootEngine` calls remain supported by the demo host. Menus, level changes, vehicles, platformer tuning, rumble, text/dialog, phpinfo, camera behavior, outlines and streaming retain their existing behavior.
