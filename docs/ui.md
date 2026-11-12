@@ -74,7 +74,7 @@ $menu = new Menu([
 ], 'Paused');
 ```
 
-IDs are stable string keys, independent of labels. IDs beginning with `@` are reserved for the generated Back and Retry rows. Labels default to their IDs. `input` is one of `string`, `number`, `select`, `boolean`, or `output`; rows without an input are actions or submenus. `subtext` describes the selected row. `hidden` and `disabled` accept booleans or callbacks receiving the menu. Disabled rows remain readable but cannot activate, adjust, or reset. `align` and `valueAlign` accept `left`, `center`, or `right`, and a submenu's `orientation` is `Menu::VERTICAL` or `Menu::HORIZONTAL`.
+IDs are stable string keys, independent of labels. IDs beginning with `@` are reserved for the generated Back and Retry rows. Labels default to their IDs. `input` is one of `string`, `number`, `select`, `boolean`, or `output`; rows without an input are actions, submenus, or [text pages](#text-pages). `subtext` describes the selected row. `hidden` and `disabled` accept booleans or callbacks receiving the menu. Disabled rows remain readable but cannot activate, adjust, or reset. `align` and `valueAlign` accept `left`, `center`, or `right`, and a submenu's `orientation` is `Menu::VERTICAL` or `Menu::HORIZONTAL`.
 
 `get()` supplies a live value. `set($value)` runs once per accepted change, never merely because a page redraws. `value` stores local state when there is no getter. Numbers snap to `step` relative to `min` (zero without a minimum) and clamp to `min` and `max`. Empty selection lists are disabled. Use `default` for per-item reset, or a `revert(Menu $menu)` callback for application-specific reset behavior. Persistence belongs in application callbacks.
 
@@ -82,7 +82,34 @@ IDs are stable string keys, independent of labels. IDs beginning with `@` are re
 
 Text fields edit a single-line `TextBuffer`. Cursor and selection offsets are Unicode codepoints, as in SDL text events, and IME composition stays separate from committed text. Leaving a field keeps valid live changes; leaving an incomplete number retains its last valid value.
 
-`open()`, `close()`, `select($id)`, `move($distance, $wrap)`, `activate()`, `adjust($direction)`, `back()`, `revert()`, `setValue($id, $value)`, `rows()`, and `refresh()` work without SDL, so tests and scripts can drive a menu directly.
+`open()`, `close()`, `select($id)`, `move($distance, $wrap)`, `activate()`, `adjust($direction)`, `back()`, `revert()`, `setValue($id, $value)`, `rows()`, and `refresh()` work without SDL, so tests and scripts can drive a menu directly. `press($id)` runs a control by its region ID, as an accessible button does: it selects and activates a visible row, or scrolls a text page for `@text-up` and `@text-down`.
+
+## Text pages
+
+A row with `text` opens a page of text to read, such as how to play, credits, or licences, instead of a page of rows:
+
+```php
+$menu = new Menu([
+	'help' => [
+		'label' => 'How to play',
+		'text' => [
+			['heading' => 'Fly'],
+			'Tap, click, or press Space to flap.',
+			['heading' => 'Credits'],
+			['name' => 'Music', 'value' => 'Funktify by Mr. Spastic'],
+			['name' => 'Code', 'value' => 'Apache-2.0']
+		]
+	]
+], 'Title');
+```
+
+A block is a heading, a paragraph (a string or `['text' => ...]`, keeping explicit line breaks), a note (`['note' => ...]`, secondary text such as a licence), or a name and value pair, which may carry a `note` set under its value, or a name and a note alone, set where the value would stand. `TextPage` sets the blocks in one column for the font and width it is drawn at: words wrap, a word wider than the column is cut after a hyphen or slash where it can be, a blank line separates blocks except after a heading or between pairs, and the pairs form a table: every pair on the page shares one column of names, so tables under different headings line up, and when that column would take more than 45% of the width each value hangs under its name instead. A `text` row cannot also have `input` or `children`; a `TextPage` instance may be given instead of the blocks.
+
+While a text page is open, `$menu->text` is its `TextPage` and its only row is the generated Back. `TextPage::$first` is the first line in view; `scroll($lines)`, `page($direction)`, and `scrollTo($line)` move it by whole lines and clamp it, and opening the page again starts from the top. `MenuInput` reads the page with the vertical keys: arrows, D-pad and stick move one line, Page Up/Down and shoulders a page, Home/End to either end, and each wheel event one line. Confirm and Back both return to the parent page.
+
+`MenuRenderer` draws the page in the menu panel, up to the height the frame allows, with the Back row beneath. A page whose lines do not all fit gives up a column to a text-mode scrollbar: pixel arrows at each end, a track in the `highlight` color, and a thumb in the `foreground` color, never shorter than the bar is wide. Headings use the optional `heading` style color, names the optional `name` color, and notes the optional `note` color, falling back to `selected`, `disabled`, and three quarters of `foreground`. The renderer publishes `@text-up` and `@text-down` arrow regions, and `@text` (the lines) and `@text-track` regions marked `drag`: dragging the lines moves them with the pointer, a press on the track pages towards it, and the thumb drags in proportion. `RegionButtons` gives `drag` regions buttons that let the pointer through, so keyboards and screen readers keep them while drags reach the canvas.
+
+A game that draws its own menu art can draw a text page itself: call `layout($font, $width, $visible, $gutter)` with the column width in font pixels at scale one and the width its scrollbar would take (the page is set narrower by that much only when its lines do not all fit, and `last()` is then above zero), draw `shown()` (lines of spans with a `kind` of `TextPage::HEADING`, `TEXT`, `NAME`, `VALUE` or `NOTE`, and an `x` in font pixels), place a thumb with `thumb($trackLength, $minimum)`, and publish regions of the same shape for `MenuInput`. `plain()` returns the page as plain text for screen readers.
 
 ## Attach a menu to the engine
 
@@ -105,7 +132,7 @@ $pauseMenu->close();
 
 Use one `PauseMenu` per engine. The input handler runs before pause handling and fixed simulation; while it returns true, the frame is captured and gameplay does not update. Opening or closing a capturing menu resets gameplay input, as described in [Logical input and sequences](input.md#timing-and-recovery). `$pauseMenu->theme` defaults to `auto`, which follows the latest keyboard, pointer, or controller activity; set it to a theme name to fix the hint artwork. Themes change hints, not SDL's button mapping.
 
-Custom integrations combine the parts directly. `MenuInput::update($menu, $buttons, $dt, $events, $regions)` routes one UI frame from `SdlInput::uiFrame()` buttons and events plus the hit regions from the latest render. `MenuRenderer` draws a menu without pausing anything, and `renderHint()` and `renderHints()` draw control hints over other surfaces.
+Custom integrations combine the parts directly. `MenuInput::update($menu, $buttons, $dt, $events, $regions)` routes one UI frame from `SdlInput::uiFrame()` buttons and events plus the hit regions from the latest render. Rows that edit text or numbers, sliders included, publish regions marked `drag`: a game that mirrors regions as DOM buttons must let the pointer through those (as `RegionButtons` does) so presses and drags reach the canvas and `MenuInput`. `MenuRenderer` draws a menu without pausing anything, and `renderHint()` and `renderHints()` draw control hints over other surfaces.
 
 | Input | Command |
 | --- | --- |
@@ -116,8 +143,8 @@ Custom integrations combine the parts directly. `MenuInput::update($menu, $butto
 | Page Up/Down, shoulders | Move seven rows, clamping at the ends |
 | Home/End | First or last row |
 | Hold Z or pad Y for 500 ms | Reset the selected row outside text editing |
-| Mouse | Select rows and drag sliders or text selections; middle-click resets a row |
-| Wheel | Move one row per event along the page axis |
+| Mouse | Select rows, press or drag a slider's track, and place the caret or drag a selection in a field (a slider row's value text is a field); middle-click resets a row |
+| Wheel | Move one row per event along the page axis, or one line of a text page |
 
 Keyboard shortcuts are suspended while a text field is editing, so typed characters reach the field. Navigation repeats after 500 ms, every 250 ms at first, then every 50 ms after 1.5 seconds.
 

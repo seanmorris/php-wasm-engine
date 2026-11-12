@@ -28,6 +28,8 @@ final class Menu
 	public bool $loading = false;
 	/** User-facing asynchronous action failure, cleared by later navigation or activation. */
 	public ?string $error = null;
+	/** Text page in view, or null on a page of rows; a text page's only row is the generated Back. */
+	public ?TextPage $text = null;
 	/** Current menu rows and parent-page navigation stack. */
 	private array $items = [], $stack = [];
 	/** Optional callback that lazily populates the current menu page. */
@@ -76,6 +78,25 @@ final class Menu
 				if(isset($item[$key]) && !in_array($item[$key], ['left', 'center', 'right'], true))
 				{
 					throw new \InvalidArgumentException('Alignment must be left, center, or right');
+				}
+			}
+
+			if(isset($item['text']))
+			{
+				if(isset($item['children']) || $type !== '')
+				{
+					throw new \InvalidArgumentException('A text page row cannot also edit a value or hold a submenu');
+				}
+
+				if(is_array($item['text']))
+				{
+					$item['text'] = new TextPage($item['text']);
+					$items[$id]['text'] = $item['text'];
+				}
+
+				if(!$item['text'] instanceof TextPage)
+				{
+					throw new \InvalidArgumentException('Menu text must be a list of text blocks or a TextPage');
 				}
 			}
 
@@ -346,25 +367,25 @@ final class Menu
 			return;
 		}
 
+		if(isset($item['text']))
+		{
+			$this->push();
+			$this->title = $item['label'];
+			$this->text = $item['text'];
+			$this->text->first = 0;
+			$this->setItems([]);
+
+			return;
+		}
+
 		if(isset($item['children']))
 		{
-			$this->stack[] = [
-				'items' => $this->items
-				, 'selected' => $this->selected
-				, 'title' => $this->title
-				, 'scroll' => $this->scroll
-				, 'orientation' => $this->orientation
-				, 'loader' => $this->loader
-			];
-
+			$this->push();
 			$this->title = $item['label'];
-			$this->selected = null;
-			$this->scroll = 0;
 			$this->orientation = $item['orientation'] ?? self::VERTICAL;
 			$this->items = [];
 			$this->loader = is_callable($item['children']) ? $item['children'] : null;
 			$this->loading = $this->loader !== null;
-			$this->error = null;
 
 			if($this->loading)
 			{
@@ -382,6 +403,58 @@ final class Menu
 		{
 			($item['callback'])($this, $this->selected);
 		}
+	}
+
+	/**
+	 * Run a control by its region ID, as an accessible button or a scripted press does.
+	 *
+	 * @param string $id A visible row's ID, or `@text-up` or `@text-down` for a text page's scroll arrows.
+	 * @return bool Whether the ID named a control on the current page; a disabled row is selected but does nothing.
+	 */
+	public function press(string $id): bool
+	{
+		if($this->text !== null && ($id === '@text-up' || $id === '@text-down'))
+		{
+			$this->text->scroll($id === '@text-up' ? -1 : 1);
+
+			return true;
+		}
+
+		if(!isset($this->rows()[$id]))
+		{
+			return false;
+		}
+
+		$this->select($id);
+		$this->activate();
+
+		return true;
+	}
+
+	/**
+	 * Save the current page on the stack before entering a submenu or a text page.
+	 *
+	 * @return void Leaves the current page's state in place for the caller to replace.
+	 */
+	private function push(): void
+	{
+		$this->stack[] = [
+			'items' => $this->items
+			, 'selected' => $this->selected
+			, 'title' => $this->title
+			, 'scroll' => $this->scroll
+			, 'orientation' => $this->orientation
+			, 'loader' => $this->loader
+			, 'text' => $this->text
+		];
+
+		$this->selected = null;
+		$this->scroll = 0;
+		$this->orientation = self::VERTICAL;
+		$this->loader = null;
+		$this->loading = false;
+		$this->error = null;
+		$this->text = null;
 	}
 
 	/**
@@ -407,7 +480,7 @@ final class Menu
 
 		$parent = array_pop($this->stack);
 
-		if(is_array($parent['items'][$parent['selected']]['children']))
+		if(is_array($parent['items'][$parent['selected']]['children'] ?? null))
 		{
 			$parent['items'][$parent['selected']]['children'] = $this->items;
 		}
@@ -418,6 +491,8 @@ final class Menu
 		$this->scroll = $parent['scroll'];
 		$this->orientation = $parent['orientation'];
 		$this->loader = $parent['loader'];
+		$this->text = $parent['text'];
+
 		$this->loading = false;
 		$this->error = null;
 		$this->refresh();

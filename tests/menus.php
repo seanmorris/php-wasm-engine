@@ -3,6 +3,7 @@ use PhpWasmEngine\Ui\Menu;
 use PhpWasmEngine\Ui\MenuInput;
 use PhpWasmEngine\Ui\TextBuffer;
 use PhpWasmEngine\Ui\Easing;
+use Phonics\Ui\TextPage;
 use PhpWasmEngine\Render\BitmapFont;
 use PhpWasmEngine\Tiled\Loader;
 
@@ -315,6 +316,32 @@ test('slider dragging clamps outside its track instead of entering text editing'
 
 	$input->update($menu, [], 0, [['type' => 'pointer', 'action' => 'move', 'x' => 200, 'y' => 10]], $regions);
 	check($menu->value('slider') == 10 && $menu->editor === null);
+});
+
+test('a slider row\'s value text is a field: a press there places the caret instead of moving the knob', function() {
+	$level = ['input' => 'number', 'subType' => 'range', 'min' => 0, 'max' => 10, 'step' => .5, 'value' => 5];
+	$menu = new Menu(['level' => $level]);
+	$menu->open();
+	$input = new MenuInput;
+	$event = ['type' => 'pointer', 'button' => 1, 'y' => 10];
+
+	$press = static fn(float $x): array => [$event + ['action' => 'down', 'x' => $x]];
+	$release = [$event + ['action' => 'up', 'x' => 0]];
+	$idle = [['id' => 'level', 'rect' => [0, 0, 200, 30], 'slider' => [50, 100], 'carets' => [160, 168]]];
+
+	$input->update($menu, [], 0, $press(75), $idle);
+	$input->update($menu, [], 0, $release, $idle);
+	check($menu->value('level') == 2.5 && $menu->editor === null, 'the track sets the value');
+
+	$input->update($menu, [], 0, $press(167), $idle);
+	$input->update($menu, [], 0, $release, $idle);
+	$opened = $menu->editor !== null && $menu->editor->caret === 1;
+	check($menu->value('level') == 2.5 && $opened, 'the text opens a field');
+
+	// While the field is open the row has no track, and a press moves the caret within the text.
+	$editing = [['id' => 'level', 'rect' => [0, 0, 200, 30], 'carets' => [100, 108, 116, 124]]];
+	$input->update($menu, [], 0, $press(101), $editing);
+	check($menu->editor !== null && $menu->editor->caret === 0 && $menu->value('level') == 2.5);
 });
 
 test('one pointer press cannot activate two nested menu levels through its confirm alias', function() {
@@ -684,4 +711,268 @@ test('font annotations own the character map independently of tile positions', f
 	$font = new BitmapFont(fixture(['reordered.tsj' => $data]), 'reordered.tsj');
 	check($font->layout('A')['sprites'][0]->gid === 78);
 	near($font->measure('II L')['width'], 26);
+});
+
+/**
+ * Texts of each laid-out line, with a span's kind ahead of its text and its x after it when it is indented.
+ *
+ * @param TextPage $page Laid-out page.
+ * @return list<string> One summary per line; a blank line is empty.
+ */
+function textPageLines(TextPage $page): array
+{
+	$summaries = [];
+
+	foreach($page->lines() as $spans)
+	{
+		$parts = [];
+
+		foreach($spans as $span)
+		{
+			$parts[] = $span['kind'] . ':' . $span['text'] . ($span['x'] > 0 ? '@' . $span['x'] : '');
+		}
+
+		$summaries[] = implode(' | ', $parts);
+	}
+
+	return $summaries;
+}
+
+test('text pages wrap words to the column and cut only a word wider than it', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+	$page = new TextPage(['ONE  TWO THREE', "A\nB", 'ABCDEFGH-MNOPQRS']);
+
+	check($page->layout($font, 72, 10) === 8);
+
+	check(textPageLines($page) === [
+		'text:ONE TWO'
+		, 'text:THREE'
+		, ''
+		, 'text:A'
+		, 'text:B'
+		, ''
+		, 'text:ABCDEFGH-'
+		, 'text:MNOPQRS'
+	], implode(',', textPageLines($page)));
+
+	// A glyph wider than the column still makes progress, one character to a line.
+	$narrow = new TextPage(['AB']);
+	$narrow->layout($font, 4, 1);
+	check(textPageLines($narrow) === ['text:A', 'text:B']);
+
+	$invalid = [[['heading' => 1]], [['name' => 'ART']], [['text' => 'A', 'heading' => 'B']], [5], [[]], ["\xff"]];
+
+	foreach($invalid as $blocks)
+	{
+		rejects(fn() => new TextPage($blocks));
+	}
+
+	rejects(fn() => $page->layout($font, 0, 1));
+	rejects(fn() => $page->layout($font, 10, 0));
+});
+
+test('text pages separate blocks, keep headings with their text, and line every pair up in one table', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+
+	$page = new TextPage([
+		['heading' => 'CREDITS']
+		, 'BUILT WITH PHONICS'
+		, ['name' => 'ART', 'value' => 'VINCENT PONTIER']
+		, ['name' => 'MUSIC', 'value' => 'MR SPASTIC']
+		, ['heading' => 'LICENCE']
+		, ['name' => 'CODE', 'value' => 'APACHE']
+	]);
+
+	$page->layout($font, 240, 20);
+
+	check(textPageLines($page) === [
+		'heading:CREDITS'
+		, 'text:BUILT WITH PHONICS'
+		, ''
+		, 'name:ART | value:VINCENT PONTIER@54'
+		, 'name:MUSIC | value:MR SPASTIC@54'
+		, ''
+		, 'heading:LICENCE'
+		, 'name:CODE | value:APACHE@54'
+	], implode(',', textPageLines($page)));
+
+	// Where the column of names would take too much of the width, each value stands indented under its name.
+	$page->layout($font, 112, 20);
+
+	check(array_slice(textPageLines($page), 4, 5) === [
+		'name:ART'
+		, 'value:VINCENT@8'
+		, 'value:PONTIER@8'
+		, 'name:MUSIC'
+		, 'value:MR SPASTIC@8'
+	], implode(',', textPageLines($page)));
+
+	$plain = "CREDITS\n\nBUILT WITH PHONICS\n\nART: VINCENT PONTIER\nMUSIC: MR SPASTIC\n\nLICENCE\n\nCODE: APACHE";
+	check($page->plain() === $plain);
+});
+
+test('text page notes stand under a pair\'s value or alone, as their own kind of span', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+	$credit = ['name' => 'ART', 'value' => 'ME', 'note' => 'CC0'];
+	$licence = ['name' => 'CODE', 'note' => 'MIT'];
+	$page = new TextPage([$credit, ['name' => 'TUNE', 'value' => 'YOU'], $licence, ['note' => 'MIT']]);
+
+	$page->layout($font, 240, 20);
+	$lines = textPageLines($page);
+	$expected = ['name:ART | value:ME@48', 'note:CC0@48', 'name:TUNE | value:YOU@48', 'name:CODE | note:MIT@48'];
+	$expected = [...$expected, '', 'note:MIT'];
+	check($lines === $expected, implode(',', $lines));
+	check($page->plain() === "ART: ME (CC0)\nTUNE: YOU\nCODE: MIT\n\nMIT");
+	rejects(fn() => new TextPage([['name' => 'ART', 'heading' => 'CC0']]));
+});
+
+test('text pages scroll by whole lines and place the thumb in proportion', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+	$page = new TextPage([implode("\n", range(1, 20))]);
+
+	check($page->layout($font, 100, 5) === 20 && $page->last() === 15 && $page->visible() === 5);
+
+	foreach([[-1, 0], [3, 3]] as [$lines, $first])
+	{
+		$page->scroll($lines);
+		check($page->first === $first);
+	}
+
+	$page->page(1);
+	check($page->first === 8 && count($page->shown()) === 5 && $page->shown()[0][0]['text'] === '9');
+	$page->page(-7);
+	check($page->first === 3);
+	$page->scrollTo(100);
+	check($page->first === 15);
+	check($page->thumb(100, 10) === [75.0, 25.0]);
+
+	check(
+		$page->dragged(30, 100, 10) === 6 && $page->dragged(-5, 100, 10) === 0 && $page->dragged(900, 100, 10) === 15
+	);
+
+	$page->scrollTo(-4);
+	check($page->first === 0 && $page->thumb(100, 10) === [0.0, 25.0] && $page->thumb(100, 40) === [0.0, 40.0]);
+
+	// A taller view keeps the first line in range and drops the thumb once everything fits.
+	$page->scrollTo(15);
+	$page->layout($font, 100, 30);
+	check($page->first === 0 && $page->last() === 0 && $page->thumb(100, 10) === null);
+});
+
+test('a text page that needs a scrollbar gives up its gutter without losing its place', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+	$page = new TextPage(array_fill(0, 12, 'AAAA AAAA'));
+
+	// Twelve one-line paragraphs and their eleven gaps fit 80 pixels; 60 pixels wrap each paragraph in two.
+	check($page->layout($font, 80, 30, 20) === 23 && $page->last() === 0);
+	check($page->layout($font, 80, 10, 20) === 35 && $page->last() === 25);
+
+	// The last line stays in view from one frame to the next: a trial at the full width never pulls it back.
+	$page->scrollTo(99);
+	$page->layout($font, 80, 10, 20);
+	check($page->first === 25);
+	rejects(fn() => $page->layout($font, 80, 10, -1));
+});
+
+test('menu text pages scroll from keys, wheel, arrows, track, thumb and drags, then return with Back', function() {
+	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
+	$items = [
+		'play' => ['label' => 'PLAY']
+		, 'help' => ['label' => 'HELP', 'text' => [implode("\n", range(1, 20))]]
+	];
+
+	$menu = new Menu($items, 'TITLE');
+
+	$menu->open();
+	$menu->select('help');
+	$menu->activate();
+	$page = $menu->text;
+	check($page instanceof TextPage && $menu->title === 'HELP' && $menu->depth() === 1);
+	check(array_keys($menu->rows()) === ['@back'] && $menu->selected === '@back');
+	$page->layout($font, 100, 5);
+	$input = new MenuInput;
+
+	$press = static function(string $button) use ($input, $menu): void {
+		$input->update($menu, [$button => 1], 0);
+		$input->update($menu, [], 0);
+	};
+
+	$steps = [['down', 1], ['down', 2], ['up', 1], ['pageDown', 6], ['end', 15], ['pageUp', 10], ['home', 0]];
+
+	foreach($steps as [$key, $first])
+	{
+		$press($key);
+		check($page->first === $first, "$key should start the view on line $first, not {$page->first}");
+	}
+
+	// Held, a line key repeats as menu navigation does.
+	$input->update($menu, ['down' => 1], 0);
+	$input->update($menu, ['down' => 1], .5);
+	check($page->first === 2 && $menu->text === $page);
+	$input->update($menu, [], 0);
+
+	$input->update($menu, [], 0, [['type' => 'wheel', 'y' => -120], ['type' => 'wheel', 'y' => -.25]]);
+	check($page->first === 4);
+	$input->update($menu, [], 0, [['type' => 'wheel', 'y' => 3]]);
+	check($page->first === 3);
+
+	$regions = static fn(): array => [
+		['id' => '@text-up', 'scroll' => 'up', 'rect' => [200, 0, 10, 10]]
+		, ['id' => '@text-down', 'scroll' => 'down', 'rect' => [200, 110, 10, 10]]
+		, ['id' => '@text', 'scroll' => 'view', 'drag' => true, 'rect' => [0, 0, 190, 80], 'pitch' => 16]
+		, ['id' => '@text-track', 'scroll' => 'track', 'rect' => [200, 10, 10, 100], 'thumb' => $page->thumb(100, 10)]
+		, ['id' => '@back', 'label' => 'Back', 'disabled' => false, 'rect' => [0, 90, 190, 20]]
+	];
+
+	$pointer = static function(string $action, float $x, float $y) use ($input, $menu, $regions): void {
+		$event = ['type' => 'pointer', 'action' => $action, 'x' => $x, 'y' => $y, 'button' => 1];
+		$input->update($menu, [], 0, [$event], $regions());
+	};
+
+	$pointer('down', 205, 115);
+	$pointer('up', 205, 115);
+	check($page->first === 4);
+	$pointer('down', 205, 5);
+	$pointer('up', 205, 5);
+	check($page->first === 3);
+
+	// Dragging the lines up two pitches shows two later lines; the drag ends with the press.
+	$pointer('down', 50, 60);
+	$pointer('move', 50, 28);
+	check($page->first === 5);
+	$pointer('up', 50, 28);
+	$pointer('move', 50, 0);
+	check($page->first === 5);
+
+	// The track pages towards the press; the thumb drags in proportion.
+	$page->scrollTo(0);
+	$pointer('down', 205, 60);
+	$pointer('up', 205, 60);
+	check($page->first === 5);
+	$pointer('down', 205, 40);
+	$pointer('move', 205, 55);
+	check($page->first === 8, 'thumb drag reached ' . $page->first);
+	$pointer('up', 205, 55);
+
+	check($menu->press('@text-down') && $page->first === 9);
+	check($menu->press('@text-up') && $page->first === 8);
+	check(!$menu->press('play'));
+
+	$press('back');
+	check($menu->text === null && $menu->depth() === 0 && $menu->selected === 'help' && $menu->title === 'TITLE');
+
+	// Opening the page again starts from its top; Confirm on its Back row returns as well.
+	$menu->activate();
+	check($menu->text === $page && $page->first === 0);
+	$press('confirm');
+	check($menu->text === null && $menu->selected === 'help');
+
+	check($menu->press('help') && $menu->text === $page);
+	$menu->close();
+	check($menu->text === null && $menu->depth() === 0 && !$menu->isOpen);
+
+	rejects(fn() => new Menu(['bad' => ['text' => ['A'], 'children' => []]]));
+	rejects(fn() => new Menu(['bad' => ['text' => ['A'], 'input' => 'boolean']]));
+	rejects(fn() => new Menu(['bad' => ['text' => 'A']]));
+	check((new Menu(['ok' => ['text' => $page]]))->rows()['ok']['text'] === $page);
 });

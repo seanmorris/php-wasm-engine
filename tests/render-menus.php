@@ -132,6 +132,7 @@ $device->begin([0, 0, 0, 1]);
 $renderer->render($menu, 320, 180);
 $pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
 [$captionX, $captionY, , $captionHeight] = $renderer->regions[0]['rect'];
+
 $checks['compact text keeps native bitmap pixels at one-times menu scale'] = menuPixel(
 	$pixels
 	, (int)$captionX + 6
@@ -140,6 +141,8 @@ $checks['compact text keeps native bitmap pixels at one-times menu scale'] = men
 
 $menu = new Menu(['name' => ['label' => '', 'input' => 'string', 'value' => 'AAA']], '');
 $menu->open();
+$renderer->render($menu, 320, 180);
+$checks['fields take the pointer on the canvas'] = ($renderer->regions[0]['drag'] ?? false) === true;
 $menu->activate();
 $menu->editor->anchor = 1;
 $menu->editor->caret = 2;
@@ -359,6 +362,51 @@ foreach(['AA⓿' => [14, 18], 'BB⓿' => [18, 20]] as $title => [$left, $right])
 		) === $expected;
 	}
 }
+
+// A text page sets its lines under the title and gives up a column to a scrollbar only when they do not all fit.
+// At scale one: eight 10-pixel lines from y 40 in a 200-pixel panel, the bar at x 242 with arrow cells of one line,
+// a track from y 50 to 110, and a 16-pixel thumb for 30 lines.
+$renderer->style['width'] = 200;
+$renderer->style['highlight'] = [0, 0, 1, 1];
+$menu = new Menu(['help' => ['label' => 'B', 'text' => [implode("\n", array_fill(0, 30, 'A'))]]], '');
+$menu->open();
+$menu->activate();
+
+$device->begin([0, 0, 0, 1]);
+$renderer->render($menu, 320, 180);
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+$ids = array_column($renderer->regions, 'id');
+$plain = ['ffffffff', '000000ff'];
+
+$checks['text page publishes its bar and Back'] = $ids === ['@text-up', '@text-down', '@text-track', '@text', '@back'];
+$checks['text page drag regions'] = $renderer->regions[2]['drag'] === true && $renderer->regions[3]['drag'] === true;
+$checks['text page first line'] = menuPixel($pixels, 72, 43) === 'ff0000ff';
+$checks['text page eighth line'] = menuPixel($pixels, 72, 113) === 'ff0000ff';
+$checks['text page clips the ninth line'] = menuPixel($pixels, 72, 123) === '000000ff';
+
+$checks['text page thumb at the top'] = menuPixel($pixels, 246, 52) === 'ffffffff';
+$checks['text page track below the thumb'] = menuPixel($pixels, 246, 80) === '0000ffff';
+$checks['text page down arrow base'] = menuPixel($pixels, 246, 113) === 'ffffffff';
+$checks['text page down arrow tip'] = menuPixel($pixels, 246, 116) === 'ffffffff';
+$checks['text page down arrow narrows'] = menuPixel($pixels, 243, 116) === '000000ff';
+$checks['text page up arrow dimmed at the top'] = !in_array(menuPixel($pixels, 246, 43), $plain, true);
+
+$menu->text->scrollTo(100);
+$device->begin([0, 0, 0, 1]);
+$renderer->render($menu, 320, 180);
+$pixels = glReadPixels(0, 0, 320, 180, GL_RGBA, GL_UNSIGNED_BYTE);
+
+$checks['text page scrolls to its last line'] = $menu->text->first === 22;
+$checks['text page thumb at the end'] = menuPixel($pixels, 246, 100) === 'ffffffff';
+$checks['text page track above the thumb'] = menuPixel($pixels, 246, 52) === '0000ffff';
+$checks['text page down arrow dimmed at the end'] = !in_array(menuPixel($pixels, 246, 113), $plain, true);
+
+$menu = new Menu(['help' => ['label' => 'B', 'text' => ['A']]], '');
+$menu->open();
+$menu->activate();
+$renderer->render($menu, 320, 180);
+$checks['short text page has no scrollbar'] = array_column($renderer->regions, 'id') === ['@back'];
+$renderer->style['highlight'] = [0, 0, 0, 0];
 
 $hintData = $data;
 $hintData['tiles'][3]['properties'][] = ['name' => 'glyph.offsetY', 'value' => -2];

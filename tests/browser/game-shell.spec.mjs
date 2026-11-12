@@ -301,11 +301,13 @@ test('RegionButtons mirror regions by signature and TouchPad holds ids per point
 			{id: 'start', label: 'Start game', rect: [10, 20, 100, 40]}
 			, {id: 7, rect: [0, 0, 50, 50], disabled: true}
 			, {id: 'left', label: 'Left', rect: [0, 60, 50, 40], hold: true}
+			, {id: '@text', label: 'Help', rect: [0, 100, 300, 200], disabled: true, drag: true}
 		];
 
 		const first = buttons.sync(320, 480, regions);
 		const again = buttons.sync(320, 480, regions);
 		const start = buttons.buttons.get('start');
+		const dragged = buttons.buttons.get('@text')?.style.pointerEvents;
 		const geometry = [start.style.left, start.style.top, start.style.width, start.style.height];
 
 		const labels = [start.getAttribute('aria-label')
@@ -351,6 +353,7 @@ test('RegionButtons mirror regions by signature and TouchPad holds ids per point
 			first
 			, again
 			, geometry
+			, dragged
 			, labels
 			, presses
 			, holds
@@ -373,6 +376,8 @@ test('RegionButtons mirror regions by signature and TouchPad holds ids per point
 	expect([left, width]).toEqual([3.125, 31.25]);
 	expect(top).toBeCloseTo(100 * 20 / 480, 4);
 	expect(height).toBeCloseTo(100 * 40 / 480, 4);
+	// A drag region keeps its button for keyboards and screen readers, but the pointer goes through to the canvas.
+	expect(result.dragged).toBe('none');
 	expect(result.labels).toEqual(['Start game', '7', true]);
 	expect(result.presses).toEqual(['start']);
 	expect(result.holds).toEqual([['left', true], ['left', false]]);

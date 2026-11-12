@@ -4,7 +4,9 @@
  * A game that draws its own menus on the canvas describes each clickable region as `{id, label, rect, disabled,
  * hold}` in design pixels. This keeps one transparent button per region, positioned in percentages of the design
  * size so it tracks any letterboxing, adds and removes buttons as the set changes, and routes clicks and held
- * presses back to the game. Keyboard users and screen readers reach the canvas's controls through these.
+ * presses back to the game. Keyboard users and screen readers reach the canvas's controls through these. Regions
+ * marked `drag`, such as sliders, text fields, and a menu text page's lines and scroll track, take presses and drags
+ * on the canvas itself, so their buttons let the pointer through to it.
  */
 export class RegionButtons
 {
@@ -37,8 +39,8 @@ export class RegionButtons
 	 * Bring the buttons in line with the regions the game reports, doing nothing when they are unchanged.
 	 * @param {number} width Design width the rects are measured in.
 	 * @param {number} height Design height the rects are measured in.
-	 * @param {Array<{id: string|number, label?: string, rect: number[], disabled?: boolean, hold?: boolean}>} regions
-	 * The regions, each with `[x, y, width, height]` in design pixels.
+	 * @param {Array<{id: string|number, label?: string, rect: number[], disabled?: boolean, hold?: boolean,
+	 * drag?: boolean}>} regions The regions, each with `[x, y, width, height]` in design pixels.
 	 * @returns {boolean} Whether anything changed.
 	 */
 	sync(width, height, regions)
@@ -72,6 +74,7 @@ export class RegionButtons
 
 			button.setAttribute('aria-label', region.label || id);
 			button.disabled = Boolean(region.disabled);
+			button.style.pointerEvents = region.drag ? 'none' : '';
 			const [x, y, w, h] = region.rect;
 
 			Object.assign(button.style, {

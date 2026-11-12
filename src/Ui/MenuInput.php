@@ -16,6 +16,8 @@ final class MenuInput
 	private array $held = [], $next = [];
 	/** Pointer drag state indexed by pointer button. */
 	private ?array $drag = null;
+	/** A drag of a text page's thumb or lines: where it started and what it moves. */
+	private ?array $textDrag = null;
 	/** Callback that writes selected menu text to the clipboard. */
 	private $copy;
 
@@ -35,7 +37,7 @@ final class MenuInput
 	public function reset(): void
 	{
 		$this->held = $this->next = [];
-		$this->drag = null;
+		$this->drag = $this->textDrag = null;
 	}
 
 	/**
@@ -78,7 +80,7 @@ final class MenuInput
 	 * revert, pageUp/pageDown, home/end states; directions activate at half strength.
 	 * @param float $dt Nonnegative elapsed UI time in seconds.
 	 * @param list<array<string,mixed>> $events Ordered key, text, composition, pointer,
-	 * and wheel events; each wheel event moves one row along the page selection axis.
+	 * and wheel events; each wheel event moves one row along the page selection axis, or one line of a text page.
 	 * @param list<array<string,mixed>> $regions Visible row hit regions from MenuRenderer.
 	 * @return bool True when this frame belongs to the menu, including its opening/closing frame.
 	 */
@@ -150,6 +152,10 @@ final class MenuInput
 			{
 				$pointerActivated = $this->pointer($menu, $event, $regions) || $pointerActivated;
 			}
+			elseif($event['type'] === 'wheel' && $menu->text !== null)
+			{
+				$menu->text->scroll(-(($event['y'] ?? 0) <=> 0));
+			}
 			elseif($event['type'] === 'wheel')
 			{
 				$delta = $menu->orientation === Menu::HORIZONTAL
@@ -175,6 +181,31 @@ final class MenuInput
 		elseif($confirm && !$pointerActivated)
 		{
 			$menu->activate();
+		}
+
+		// A text page's only row is Back, so the vertical keys read the page instead of moving between rows.
+		if($menu->text !== null && !$menu->editor)
+		{
+			$page = $menu->text;
+
+			$lines = [
+				'up' => -1
+				, 'down' => 1
+				, 'pageUp' => -$page->visible()
+				, 'pageDown' => $page->visible()
+				, 'home' => -1000000
+				, 'end' => 1000000
+			];
+
+			foreach($lines as $key => $distance)
+			{
+				for($count = $this->pulses($key, true); $count > 0; $count--)
+				{
+					$page->scroll($distance);
+				}
+			}
+
+			return true;
 		}
 
 		$horizontal = !$menu->editor && $menu->orientation === Menu::HORIZONTAL;
@@ -334,9 +365,14 @@ final class MenuInput
 	 */
 	private function pointer(Menu $menu, array $event, array $regions): bool
 	{
+		if($menu->text !== null && $this->textPointer($menu->text, $event, $regions))
+		{
+			return false;
+		}
+
 		if($event['action'] === 'up')
 		{
-			$this->drag = null;
+			$this->drag = $this->textDrag = null;
 
 			return false;
 		}
@@ -395,7 +431,11 @@ final class MenuInput
 			return false;
 		}
 
-		if(isset($hit['slider']) && ($this->drag || $event['x'] >= $hit['slider'][0]))
+		// The track takes presses from its start up to the value's text; the text itself is a field like any other.
+		$onTrack = isset($hit['slider']) && $event['x'] >= $hit['slider'][0]
+			&& $event['x'] < ($hit['carets'][0] ?? INF);
+
+		if(isset($hit['slider']) && (($this->drag && isset($this->drag['slider'])) || $onTrack))
 		{
 			[$left, $width] = $hit['slider'];
 			$fraction = max(0, min(1, ($event['x'] - $left) / max(1, $width)));
@@ -439,5 +479,85 @@ final class MenuInput
 		}
 
 		return $event['action'] === 'down';
+	}
+
+	/**
+	 * Scroll a text page from its arrows, its track, its thumb, or a drag across its lines.
+	 *
+	 * The renderer publishes these parts as regions with a `scroll` kind: `up` and `down` arrows, the `track` with the
+	 * thumb's `[offset, length]` along it and its `minimum` length, and the `view` with its line `pitch`. Dragging the
+	 * lines moves them with the pointer; dragging the thumb moves the view in proportion.
+	 *
+	 * @param TextPage $page Open text page.
+	 * @param array<string,mixed> $event Pointer action, button, and output-pixel coordinates.
+	 * @param list<array<string,mixed>> $regions Current hit regions.
+	 * @return bool True when the event belonged to the text page.
+	 */
+	private function textPointer(TextPage $page, array $event, array $regions): bool
+	{
+		$drag = $this->textDrag;
+
+		if($drag !== null && $event['action'] === 'move')
+		{
+			$moved = $event['y'] - $drag['y'];
+
+			$page->scrollTo(
+				$drag['kind'] === 'thumb'
+					? $page->dragged($drag['from'] + $moved, $drag['length'], $drag['minimum'])
+					: $drag['first'] - (int)round($moved / $drag['pitch'])
+			);
+
+			return true;
+		}
+
+		if($event['action'] !== 'down' || ($event['button'] ?? Source::PRIMARY) !== Source::PRIMARY)
+		{
+			return false;
+		}
+
+		foreach($regions as $region)
+		{
+			[$x, $y, $w, $h] = $region['rect'];
+
+			if(!isset($region['scroll'])
+				|| $event['x'] < $x || $event['x'] >= $x + $w || $event['y'] < $y || $event['y'] >= $y + $h
+			){
+				continue;
+			}
+
+			$kind = $region['scroll'];
+			$thumb = $region['thumb'] ?? null;
+
+			if($kind === 'up' || $kind === 'down')
+			{
+				$page->scroll($kind === 'up' ? -1 : 1);
+
+				return true;
+			}
+
+			if($kind === 'view')
+			{
+				$pitch = max(1e-6, (float)$region['pitch']);
+				$this->textDrag = ['kind' => 'view', 'y' => $event['y'], 'first' => $page->first, 'pitch' => $pitch];
+
+				return true;
+			}
+
+			// The track pages towards a press above or below the thumb; a press on the thumb picks it up.
+			if($thumb !== null && ($event['y'] < $y + $thumb[0] || $event['y'] >= $y + $thumb[0] + $thumb[1]))
+			{
+				$page->page($event['y'] < $y + $thumb[0] ? -1 : 1);
+			}
+			elseif($thumb !== null)
+			{
+				$minimum = (float)($region['minimum'] ?? 0);
+				$this->textDrag = ['kind' => 'thumb', 'y' => $event['y'], 'from' => $thumb[0], 'length' => $h];
+				$this->textDrag['minimum'] = $minimum;
+			}
+
+			return true;
+		}
+
+		return false;
 	}
 }

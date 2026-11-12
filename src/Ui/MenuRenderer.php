@@ -33,6 +33,9 @@ final class MenuRenderer
 	/**
  * Mutable menu dimensions, colors, typography, and panel style.
  *
+ * Text pages also read the optional `heading`, `name` and `note` colors, falling back to `selected`, `disabled`, and
+ * three quarters of `foreground`. Rows that edit text or numbers publish regions marked `drag`.
+ *
  * @var array<string,mixed> Mutable sizing, spacing, color, and panel settings.
  */
 	public array $style = [
@@ -239,6 +242,13 @@ final class MenuRenderer
 			return;
 		}
 
+		if($menu->text !== null)
+		{
+			$this->textPage($menu, $menu->text, $width, $height, $seconds);
+
+			return;
+		}
+
 		$s = max(.5, min((float)$this->style['scale'], $width / 320, $height / 180));
 		$pad = $this->style['padding'] * $s;
 		$w = max(1, min($this->style['width'], $width - 16));
@@ -290,6 +300,7 @@ final class MenuRenderer
 			'subtext'
 			] ?? ''
 			));
+
 		// Bitmap captions may be smaller than their rows, but fractional enlargement resamples the atlas before the
 		// host scales the game canvas. Keep every available source pixel whole; only a sub-native viewport may shrink.
 		$compactScale = $s < 1 ? $s : max(1, round($s * .75));
@@ -325,6 +336,182 @@ final class MenuRenderer
 		$this->rects->render($this->boxes, $width, $height);
 		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height), key: $this->batchKey);
 		$this->cache = $this->nextCache;
+	}
+
+	/**
+	 * Draw a text page in the menu panel: its lines, a scrollbar when they do not all fit, and the Back row beneath.
+	 *
+	 * The panel is the size a page of rows would be, and as tall as the lines need up to the room the frame has. The
+	 * scrollbar is a text-mode one, a column of arrows, track and thumb, and only a page that scrolls gives up the
+	 * column; it publishes `@text-up` and `@text-down` regions, and `@text` and `@text-track` regions marked `drag`.
+	 *
+	 * @param Menu $menu Open menu showing the page.
+	 * @param TextPage $page Page to lay out and draw.
+	 * @param int $width Drawing-buffer width in pixels.
+	 * @param int $height Drawing-buffer height in pixels.
+	 * @param float $seconds UI time, passed to the Back row.
+	 * @return void Updates pointer regions and submits the rectangle and glyph batches.
+	 */
+	private function textPage(Menu $menu, TextPage $page, int $width, int $height, float $seconds): void
+	{
+		$s = max(.5, min((float)$this->style['scale'], $width / 320, $height / 180));
+		$pad = $this->style['padding'] * $s;
+		$w = max(1, min($this->style['width'], $width - 16));
+		$rowHeight = 20 * $s;
+		$header = 24 * $s;
+		$footer = ($this->showHints ? 38 : 20) * $s;
+
+		// Lines are the font's own line height apart; the bar is a glyph cell wide with a little air on each side.
+		$pitch = $this->font->lineHeight * $s;
+		$bar = 10 * $s;
+		$gap = 4 * $s;
+		$room = $height - 16 - 2 * $pad - $header - $gap - $rowHeight - $footer;
+		$visible = max(1, (int)floor($room / $pitch));
+		$column = max(1, ($w - 2 * $pad - 2 * $s) / $s);
+
+		$page->layout($this->font, $column, $visible, ($bar + $gap) / $s);
+		$scrolls = $page->last() > 0;
+		$view = min($visible, max(1, count($page->lines()))) * $pitch;
+		$h = $pad * 2 + $header + $view + $gap + $rowHeight + $footer;
+		$x = floor(($width - $w) / 2);
+		$y = floor(($height - $h) / 2);
+		$inner = [$x + $pad, $y + $pad, $w - 2 * $pad, $h - 2 * $pad];
+		$top = $inner[1] + $header;
+
+		$color = $this->style['foreground'];
+		$area = [$inner[0], $top, $inner[2] - ($scrolls ? $bar + $gap : 0), $view];
+		$left = $area[0] + 2 * $s;
+
+		$colors = [
+			TextPage::HEADING => $this->style['heading'] ?? $this->style['selected']
+			, TextPage::NAME => $this->style['name'] ?? $this->style['disabled']
+			, TextPage::TEXT => $color
+			, TextPage::VALUE => $color
+			, TextPage::NOTE => $this->style['note'] ?? [.75 * $color[0], .75 * $color[1], .75 * $color[2], $color[3]]
+		];
+
+		$this->box([0, 0, $width, $height], $this->style['dimmer']);
+		$this->box([$x, $y, $w, $h], $this->style['panel']);
+
+		$this->text(
+			$menu->title
+			, $inner[0]
+			, $inner[1]
+			, $s
+			, $color
+			, [$inner[0], $inner[1], $inner[2], $header]
+			, align: $this->style['titleAlign'] ?? $this->style['align']
+		);
+
+		foreach($page->shown() as $index => $spans)
+		{
+			$line = $top + $index * $pitch;
+
+			foreach($spans as $span)
+			{
+				$this->text($span['text'], $left + $span['x'] * $s, $line, $s, $colors[$span['kind']], $area);
+			}
+		}
+
+		if($scrolls)
+		{
+			$this->scrollbar($menu, $page, [$inner[0] + $inner[2] - $bar, $top, $bar, $view], $area, $pitch, $s);
+		}
+
+		$rows = $menu->rows();
+		$back = [$inner[0], $top + $view + $gap, $inner[2], $rowHeight];
+
+		if(isset($rows['@back']))
+		{
+			$this->row($menu, '@back', $rows['@back'], $back, $back, $s, $seconds);
+		}
+
+		if($this->showHints)
+		{
+			// The hint line stands where a page of rows puts it, under the space its caption would take.
+			$hintY = $back[1] + $rowHeight + 22 * $s;
+			$hintScale = $s < 1 ? $s : max(1, round($s * .75));
+			$hintAlign = $this->style['hintAlign'] ?? $this->style['align'];
+
+			$this->text('✚ Scroll   ❶ Back', $inner[0], $hintY, $hintScale, $color, $inner, align: $hintAlign);
+		}
+
+		$this->rects->render($this->boxes, $width, $height);
+		$this->sprites->render($this->batch, new Camera(0, 0, $width, $height), key: $this->batchKey);
+		$this->cache = $this->nextCache;
+	}
+
+	/**
+	 * Draw a text page's scrollbar and publish its regions.
+	 *
+	 * Arrows are pixel triangles, so the bar needs no glyphs from the game's font; each arrow's cell is the bar's width
+	 * and one line tall, the track fills the rest, and the thumb is never shorter than the bar is wide.
+	 *
+	 * @param Menu $menu Menu whose title labels the page's region.
+	 * @param TextPage $page Laid-out page.
+	 * @param array{float,float,float,float} $column Scrollbar column in screen pixels.
+	 * @param array{float,float,float,float} $area Rectangle of the page's lines in screen pixels.
+	 * @param float $pitch Line height in screen pixels.
+	 * @param float $s Menu scale in screen pixels per font pixel.
+	 * @return void Appends the bar's rectangles and four regions.
+	 */
+	private function scrollbar(Menu $menu, TextPage $page, array $column, array $area, float $pitch, float $s): void
+	{
+		[$x, $y, $w, $h] = $column;
+		$cell = min($pitch, $h / 2);
+		$track = [$x, $y + $cell, $w, max(0, $h - 2 * $cell)];
+		$thumb = $page->thumb($track[3], $w);
+		$last = $page->last();
+
+		$this->box($track, $this->style['highlight']);
+
+		if($thumb !== null)
+		{
+			$this->box([$x, round($track[1] + $thumb[0]), $w, round($thumb[1])], $this->style['foreground']);
+		}
+
+		$ends = ['up' => [$y, $page->first > 0], 'down' => [$y + $h - $cell, $page->first < $last]];
+
+		foreach($ends as $end => [$top, $on])
+		{
+			$color = $this->style[$on ? 'foreground' : 'disabled'];
+			$middle = $top + floor(($cell - 4 * $s) / 2);
+
+			for($row = 0; $row < 4; $row++)
+			{
+				$span = 2 * ($end === 'up' ? $row + 1 : 4 - $row) * $s;
+				$this->box([$x + ($w - $span) / 2, $middle + $row * $s, $span, $s], $color);
+			}
+
+			$this->regions[] = [
+				'id' => '@text-' . $end
+				, 'label' => $end === 'up' ? 'Scroll up' : 'Scroll down'
+				, 'disabled' => !$on
+				, 'scroll' => $end
+				, 'rect' => [$x, $top, $w, $cell]
+			];
+		}
+
+		$this->regions[] = [
+			'id' => '@text-track'
+			, 'label' => 'Scroll position'
+			, 'disabled' => true
+			, 'drag' => true
+			, 'scroll' => 'track'
+			, 'rect' => $track
+			, 'thumb' => $thumb
+			, 'minimum' => $w
+		];
+
+		$this->regions[] = [
+			'id' => '@text'
+			, 'label' => $menu->title
+			, 'disabled' => true
+			, 'drag' => true
+			, 'scroll' => 'view'
+			, 'rect' => $area
+			, 'pitch' => $pitch
+		];
 	}
 
 	/**
@@ -498,6 +685,12 @@ final class MenuRenderer
 			, 'disabled' => (bool)$item['disabled']
 			, 'rect' => $visible
 		];
+
+		// Fields and sliders take presses and drags on the canvas, for the caret, the selection and the knob.
+		if(in_array($type, ['string', 'number'], true))
+		{
+			$region['drag'] = true;
+		}
 
 		if($type !== '')
 		{
