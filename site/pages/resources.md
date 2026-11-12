@@ -1,6 +1,6 @@
 ---
-title: Resource identity
-description-meta: Resolve every reference from the document that declares it.
+title: Paths and shared assets
+description-meta: Find the base for a relative path and understand when assets are shared or released.
 llms: guides
 menus:
   documentation:
@@ -8,12 +8,17 @@ menus:
     weight: 30
 ---
 
+A map can refer to a tileset, which refers to an image, while the whole game runs from a different web page. Phonics keeps track of which document supplied each path. That lets the same content work in an editor cache, a packaged application, or a served world.
 
-## Follow the declaring resource
+<span id="follow-the-declaring-resource"></span>
 
-Relative paths resolve from their declaring document, not from the host page or a filesystem cache:
+## Resolve paths from the file that contains them
 
-| Reference | Base URL |
+Suppose `/game/maps/start.tmj` refers to `../tiles/terrain.tsj`. The tileset is `/game/tiles/terrain.tsj`. If that tileset refers to `terrain.png`, the image is `/game/tiles/terrain.png`, regardless of the host page's location.
+
+The same rule applies throughout the resource chain:
+
+| Reference | Resolve it relative to |
 | --- | --- |
 | World → map | World |
 | Map → external tileset | Map |
@@ -22,53 +27,36 @@ Relative paths resolve from their declaring document, not from the host page or 
 | Manifest → module or asset | Manifest |
 | Inherited file property | Resource that declared the property |
 
-Source URLs remain available after editor caching and WASM mounting. Native PHP consumers can also load local filesystem paths. Browser resolution follows URL rules, including root-relative paths, query strings, and fragments.
+A copied or cached file retains its original source identity. Moving it into an editor cache or the WebAssembly filesystem does not silently change the meaning of its relative paths. Native PHP consumers can also use local filesystem paths. Browser resolution follows URL rules, including root-relative paths, query strings, and fragments.
 
-## Use pallets and fragments
+<span id="use-pallets-and-fragments"></span>
 
-`@arcade/game` resolves an export in the session's `arcade` pallet. A direct reference uses a manifest URL and export fragment, such as `https://example.test/arcade/phonics.json#game`. Missing exports and conflicting registrations fail instead of replacing another module silently.
+## Refer to a package export by alias
 
-Browser modules can call `context.resolve(reference, declaringUrl)`. PHP uses `Phonics\Asset\Resource::resolve` and asset scopes with the same session pallets. Request asynchronous assets before consuming their mounted files.
+An export is a named feature or asset in a package's `phonics.json`. If the world imports a package under the alias `arcade`, `@arcade/game` selects that package's `game` export. Phonics calls the alias a *pallet*.
 
-## Keep identity separate from state
+The explicit form names the manifest URL and export fragment:
 
-Canonical URLs deduplicate resource bytes. Query strings distinguish versions; equal filenames at different URLs remain distinct resources. A map placed twice has separate mutable placement and entity state.
-
-Loading supports cancellation, retries, scoped ownership, and shared-resource reference counts. Cleanup releases a scope's ownership; shared resources remain while another owner needs them. PHP classes remain loaded for their runtime's lifetime.
-
-## Declare ordered resource stacks
-
-Set a resource slot to `multiple: true` when one source placement should expand into an ordered list. Most stacks use one `requirement` for every entry. When the head has a distinct role, replace it with `stack.first` and `stack.following` requirements:
-
-```json
-{
-  "resourceSlots": {
-    "wad-stack": {
-      "type": "url",
-      "distribution": "local",
-      "authority": "host",
-      "required": true,
-      "multiple": true,
-      "accept": [".wad"],
-      "stack": {
-        "first": {
-          "id": "game-data",
-          "names": ["GAME.WAD", "freegame.wad"],
-          "inspector": "@game/archive-inspector",
-          "equivalence": "profile",
-          "criteria": {"archiveType": "IWAD"}
-        },
-        "following": {
-          "id": "game-overrides",
-          "names": ["*.wad"],
-          "inspector": "@game/archive-inspector",
-          "equivalence": "integrity",
-          "criteria": {"archiveTypes": ["IWAD", "PWAD"]}
-        }
-      }
-    }
-  }
-}
+```text
+https://example.test/arcade/phonics.json#game
 ```
 
-The launcher displays this as one list. It revalidates entries after every reorder. During multiplayer negotiation the selected `first` requirement travels with the first offer and `following` travels with every later offer. This permits a declared compatible replacement for the stack root while keeping every override byte-identical between peers.
+The alias is shorthand within the current session. Missing exports and conflicting registrations produce errors rather than silently selecting another module.
+
+Browser modules resolve references with `context.resolve(reference, declaringUrl)`. PHP uses `Phonics\Asset\Resource::resolve` and asset scopes with the same aliases. Request asynchronously loaded assets before reading their mounted files.
+
+<span id="keep-identity-separate-from-state"></span>
+
+## Share file bytes without sharing game state
+
+Phonics uses a resource's resolved, or *canonical*, URL to avoid loading the same bytes repeatedly. Two files named `terrain.png` at different URLs remain different resources. Query strings can distinguish versions of a file.
+
+That sharing does not make two placements of a map the same game state. Each placement has its own mutable state and entities, even when both use the same source file.
+
+An asset scope records which resources a part of the game owns. Releasing a scope drops those ownership references; resources stay available while another owner still needs them. Loading also supports cancellation and retries. Loaded PHP classes remain for the lifetime of that PHP runtime.
+
+<span id="declare-ordered-resource-stacks"></span>
+
+## Load a base file followed by add-ons
+
+Some applications need several data files in a specific order, such as a base archive followed by overrides. Declare those as one ordered resource slot. [Load an ordered list of data files](resource-stacks.html) covers the declaration, launcher behavior, and multiplayer matching rules.

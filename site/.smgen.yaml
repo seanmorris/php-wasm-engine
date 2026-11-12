@@ -54,12 +54,12 @@ MENUS:
         expanded: true
       - id: author
         group: true
-        title: Build a world
+        title: Content and worlds
         weight: 20
         expanded: true
       - id: extend
         group: true
-        title: Extend Phonics
+        title: Build game packages
         weight: 30
         expanded: true
       - id: reference

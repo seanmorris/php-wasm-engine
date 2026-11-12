@@ -149,7 +149,7 @@ counts.
 
 Doom-Phonics uses this hook for display-rate mouse and controller look; its
 bindings, Controls menu and look settings are described under
-[Doom-Phonics controls](../packages/doom-phonics/docs/index.md#controls).
+[Doom-Phonics controls](https://github.com/seanmorris/phonics-examples/blob/main/games/doom-phonics/docs/index.md#controls).
 
 ## Rebind legacy buttons
 
@@ -256,7 +256,9 @@ active at strength `.5`; movement still uses the full analog value.
 ## Timing and recovery
 
 `Engine` polls input every visible frame, including while simulation is paused.
-Read completions in the frame hook if they must act while paused. Registered
+Read completions in the UI callback installed with `Engine::setInputHandler()`
+if they must act while paused; `setFrameInputHandler()` runs only when gameplay
+input is allowed. Registered
 sequences keep observing menu navigation;
 opening or closing a capturing menu clears partial history through the engine's
 normal input reset. SDL text editing suppresses recognition, clears partial
