@@ -1,6 +1,6 @@
 ---
 title: Write a module
-description-meta: Register small systems against a shared session.
+description-meta: Add reusable PHP systems and browser behavior to an existing game.
 llms: guides
 menus:
   documentation:
@@ -8,10 +8,15 @@ menus:
     weight: 10
 ---
 
+A module adds behavior to a running game: movement systems, entity factories, browser controls, or other reusable features. Modules share the game's entity registry and scheduler. The game entry point remains responsible for starting the loop, choosing maps, and signaling readiness.
 
-## Register PHP behavior
+This guide starts with a PHP module, shows how to declare it in a package, then covers optional entity and browser behavior. For the full manifest format, see [packages and integrity](packages.html).
 
-A PHP module file returns a callback accepting [`Phonics\Package\Context`](api-phonics-package-context.html). The context provides the session's registry, scheduler, factories, and Tiled loader.
+<a id="register-php-behavior"></a>
+
+## Register PHP systems and their cleanup
+
+A PHP module file returns a callback that accepts [`Phonics\Package\Context`](api-phonics-package-context.html). Save the following as `module.php`:
 
 ```php
 <?php
@@ -33,18 +38,74 @@ return static function (Context $context): void {
 };
 ```
 
-System names are unique. Explicit dependencies determine scheduler order. Context teardown removes registered systems and invokes cleanup in reverse registration order.
+Each system receives the shared registry and elapsed time `$dt` in seconds. The `after` list makes `example.effects` run after `example.clock`; it is a scheduler dependency, rather than a delay.
 
-## Expose entities and browser services
+System names must be unique across the session. Use a package-specific prefix to avoid conflicts with another module. When the context closes, it removes registered systems and invokes cleanup callbacks in reverse registration order. Register cleanup for resources your module owns, such as renderers or open handles.
 
-Register namespaced factories with `context->factory(name, callback)` and describe their typed properties in the package's Tiled metadata. A factory export identifies its registered class and module. Keep components as data and implement behavior in independently registered systems.
+## Declare and load the module
 
-Browser entries are self-contained ES modules exporting `activate(context)`. Return a cleanup callback or register it with `context.onClose`. The [browser context reference](api-js/types/application-runtime/browser-module-context.html) documents every supplied value. The shared [`QuickControls`](api-js/classes/quick-controls/quick-controls.html) service supplies mute/fullscreen controls for browser games without importing Sane-Phonics.
+Add the module file to `php.files` and give it a named export in `phonics.json`. This fragment adds an export called `clock`:
 
-The repository's [composition fixtures](https://github.com/seanmorris/php-wasm-engine/tree/HEAD/tests/fixtures/composition) demonstrate independently packaged modules. Match the current checkout when inspecting source: the checked-out branch may differ from the repository default.
+```json
+{
+  "php": {
+    "files": ["module.php"]
+  },
+  "exports": {
+    "clock": {"type": "module", "php": "module.php"}
+  }
+}
+```
 
-## Coordinate game lifecycle
+Merge those entries into the existing manifest, preserving its other files and exports. Then select the module in one of two places:
 
-Modules needing the first map during registration declare `preloadStart: true`. A game can declare `preloadStart: false` to show an intro before loading a map; list its required modules explicitly on the world.
+- In a game export's `modules` array, use `"#clock"` for an export in the same package. Phonics activates that prerequisite before the game.
+- In a Tiled world's `phonics.modules` list, use `"@example/clock"` if the world imports this package as `example`. See [world module lists](worlds.html#include-modules-needed-by-later-maps).
 
-A game uses the shared registry and scheduler and calls `vrzno_env('sceneReady')()` when ready. Its entry point coordinates loading, transitions, and cleanup. It should not replace ECS systems with a single large entity class.
+After changing the file or manifest, run `npx phonics integrity` and `npx phonics validate` from the package directory.
+
+<a id="expose-entities-and-browser-services"></a>
+
+## Give Tiled objects an entity factory
+
+A factory turns a placed Tiled object into an entity's initial components. Register one inside the PHP module callback with `$context->factory(name, callback)`. For example, this factory gives an object a 16-by-16 bounds component:
+
+```php
+$context->factory('Example.Marker', static fn(array $object): array => [
+    new \Phonics\Physics\Pose((float)$object['x'], (float)$object['y'], 8, 8)
+]);
+```
+
+A `factory` export identifies that registered class and the module that installs it. Describe author-editable fields in the package's Tiled metadata so the editor can show their types and defaults. Systems supply the resulting entity's behavior.
+
+For individual components attached through Tiled's nested classes, use component exports instead. The portable class catalog maps those classes to their component constructors. [Author in Tiled](tiled.html) explains components, presets, and object templates.
+
+## Add browser behavior when needed
+
+A browser entry is a self-contained ES module that exports `activate(context)`. It can use the game's canvas, loaded assets, and shared services. This small example focuses the canvas on a pointer press and removes the listener when the session closes:
+
+```js
+export function activate(context)
+{
+  const focusCanvas = () => context.canvas.focus();
+  context.canvas.addEventListener('pointerdown', focusCanvas);
+
+  return () => context.canvas.removeEventListener('pointerdown', focusCanvas);
+}
+```
+
+The canvas must be focusable, for example with `tabindex="0"`. Declare the file in the package's `browser.files` list and set the module export's `browser` field to its path.
+
+Return a cleanup callback as above, or register it with `context.onClose`. Choose one route for each resource so it is released once. Bundle any JavaScript dependencies into the browser entry before packaging; runtime exports must be self-contained.
+
+The [browser context reference](api-js/types/application-runtime/browser-module-context.html) lists all supplied values. For shared mute and fullscreen controls, use [`QuickControls`](api-js/classes/quick-controls/quick-controls.html) from `context.services`.
+
+<a id="coordinate-game-lifecycle"></a>
+
+## Let the game control map loading and readiness
+
+For a Tiled world, the starting map is normally preloaded. A game export can set `preloadStart: false` to show an intro before loading that map. A module that needs the starting map during registration can declare `preloadStart: true`, which requires that preload even when the game has deferred it.
+
+List the modules needed by later maps explicitly on the world. The game's entry point then chooses when to load maps and run the shared scheduler. Once the game is ready, it calls `(vrzno_env('sceneReady'))(null)` to notify the host.
+
+The repository's [composition fixtures](https://github.com/seanmorris/php-wasm-engine/tree/HEAD/tests/fixtures/composition) demonstrate separately packaged modules sharing a registry, factories, and scheduler. Inspect the version matching your checkout when following the example.

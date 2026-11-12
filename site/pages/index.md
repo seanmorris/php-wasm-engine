@@ -3,7 +3,7 @@ title: Phonics
 description-meta: A PHP game engine for the browser.
 eyebrow: PHP · Tiled · SDL · WebGL 2
 hero:
-  lead: Write the game in PHP. Lay out its worlds in Tiled. Ship it as one executable archive.
+  lead: Write games in PHP. Author content in Tiled when it fits. Ship an executable game archive.
   actions:
     - label: Start the quickstart
       href: quickstart.html
@@ -49,7 +49,7 @@ jsonld:
       inLanguage: en
     - "@type": SoftwareSourceCode
       name: Phonics
-      description: A game-neutral PHP and browser ECS runtime for Tiled worlds.
+      description: A PHP game engine for browsers, with optional Tiled content authoring.
       codeRepository: https://github.com/seanmorris/php-wasm-engine
       programmingLanguage: [PHP, JavaScript, WebAssembly]
       runtimePlatform: Web browser
@@ -60,9 +60,13 @@ jsonld:
 
 <div class="flow" aria-label="One executable archive carries the game into browser PHP and SDL"><span><b>01</b>Executable PHAR<small>Your bootstrap picks the game</small></span><span><b>02</b>Worlds and modules<small>Maps, systems, and assets</small></span><span><b>03</b>Browser session<small>PHP, SDL, and WebGL 2</small></span></div>
 
-## One archive is the whole game
+<span id="one-archive-is-the-whole-game"></span>
 
-Your game is an executable PHAR. The browser fetches it, starts PHP, and runs your bootstrap, which picks the game and assembles its world from maps, modules, and assets, packaged or remote. The host page is the same for every game:
+## Package your game as an executable archive
+
+A PHAR is a PHP archive containing your application. The browser fetches it, starts the PHP/SDL runtime, and runs your PHP entry point. That code chooses the game and any content to load. Code and assets can be packaged together; worlds and large assets can also be served separately.
+
+The host page starts each application through the same API:
 
 ```js
 import {Phonics} from '@seanmorris/phonics';
@@ -82,10 +86,10 @@ Gameplay code is ordinary PHP. It runs natively under your tests and in WebAssem
 
 - **New here?** The [quickstart](quickstart.html) takes you from an empty package to a world you can edit in Tiled and in PHP.
 - **Want to see it first?** [Play eight finished games](games/), from a platformer to billiards and Doom. Each is an independent package.
-- **Authoring content?** [Import packages in Tiled](tiled.html), place entities, and preview the saved world.
+- **Authoring content in Tiled?** [Import packages](tiled.html), place entities, and preview the saved world.
 - **Building a package?** The [CLI](cli.html) scaffolds, previews, validates, and builds it.
 - **Extending a game?** [Write a module](modules.html) that adds PHP systems and factories to the shared session.
 
 ## The engine ends where your game begins
 
-Phonics owns the engine: scheduling, Tiled loading and streaming, asset lifetimes, collision queries, rendering, input, text, menus, and effects. Your package owns the game: movement, cameras, HUD, enemies, and levels. Packages are peers. Each declares its own code and assets, and none depends on another game.
+Phonics supplies scheduling, asset loading and lifetimes, collision queries, rendering, input, text, menus, and effects. Its optional Tiled adapter adds map loading and streaming. Your package owns the game: movement, cameras, HUD, enemies, and levels. Packages are peers. Each declares its own code and assets, and none depends on another game.

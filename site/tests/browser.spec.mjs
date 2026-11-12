@@ -153,9 +153,11 @@ test('mobile menus expose navigation and per-page anchors', async({page}) => {
 	await page.locator('.page-navigation > summary').click();
 
 	await page.getByRole('navigation', {name: 'On this page', exact: true})
-		.getByRole('link', {name: 'Place entities', exact: true}).click();
+		.getByRole('link', {name: 'Place objects with factories or templates', exact: true}).click();
 
-	await expect(page).toHaveURL(/#place-entities$/);
+	await expect(page).toHaveURL(/#place-objects-with-factories-or-templates$/);
+	await page.goto('/tiled.html#place-entities');
+	await expect(page.locator('#place-entities')).toHaveCount(1);
 });
 
 test('desktop navigation headings align across documentation columns', async({page}) => {

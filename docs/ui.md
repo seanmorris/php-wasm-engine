@@ -241,4 +241,4 @@ $info->close();
 
 The second constructor argument is an optional `MenuRenderer` whose font draws the themed back hint; without it the bridge shows a plain text hint. `isOpen()` and `state()` expose the panel for diagnostics and browser tests.
 
-See the [UI API](../src/Ui) for every class and member, and [Sane-Phonics menus and browser controls](../packages/sane-phonics/docs/menus.md) for a complete game menu built on these parts.
+See the [UI API](../src/Ui) for every class and member, and [Sane-Phonics menus and browser controls](https://github.com/seanmorris/phonics-examples/blob/main/games/sane-phonics/docs/menus.md) for a complete game menu built on these parts.
