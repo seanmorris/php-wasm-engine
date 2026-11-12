@@ -13,10 +13,13 @@ use Phonics\Render\BitmapFont;
  */
 final class TextPage
 {
-	/** Span kinds, which renderers colour: headings, running text, and the two sides of a name/value pair. */
+	/** Heading span, styled separately from paragraph text by the renderer. */
 	public const HEADING = 'heading';
+	/** Paragraph text span, rendered in the page's normal text style. */
 	public const TEXT = 'text';
+	/** Label span on the name side of a name/value pair. */
 	public const NAME = 'name';
+	/** Content span on the value side of a name/value pair. */
 	public const VALUE = 'value';
 	/** Secondary text, such as a licence, which renderers set a little darker than the rest. */
 	public const NOTE = 'note';
