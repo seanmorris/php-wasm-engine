@@ -595,7 +595,8 @@ test('the programming reference filters symbols without a round trip', async({pa
 	const status = page.locator('[data-api-status]');
 	await expect(status).toHaveText(/\d+ of \d+ API entries/);
 	const total = (await status.textContent()).match(/of (\d+) API entries/)?.[1];
-	await page.locator('[data-api-filter]').fill('Registry query');
+	// Qualified by namespace: ScopeContext also has a registry and a query method.
+	await page.locator('[data-api-filter]').fill('Ecs Registry query');
 	await expect(page.locator('[data-api-entry]:visible')).toHaveCount(1);
 	await expect(page.locator('[data-api-entry]:visible')).toContainText('Phonics\\Ecs\\Registry');
 	await expect(status).toHaveText(`1 of ${total} API entries`);
@@ -683,7 +684,9 @@ test('Phlappy Phant starts, flaps, pauses, and cleans up in its documentation pa
 	await page.getByRole('button', {name: 'Load and play Phlappy Phant'}).click();
 	await expect(page.locator('#status')).toHaveText('Ready', {timeout: 60000});
 
-	const state = () => page.locator('canvas').evaluate(canvas => JSON.parse(canvas.dataset.phpPhant));
+	// Phlappy draws its key hints on a second canvas, so name the game's own.
+	const canvas = page.getByLabel('Phlappy Phant game canvas');
+	const state = () => canvas.evaluate(element => JSON.parse(element.dataset.phpPhant));
 
 	await expect.poll(async() => (await state()).page).toBe('title');
 	await page.locator('.phlappy-phant-targets').getByRole('button', {name: 'Play', exact: true}).click();
@@ -695,7 +698,7 @@ test('Phlappy Phant starts, flaps, pauses, and cleans up in its documentation pa
 	expect(frame.height).toBeGreaterThanOrEqual(320);
 	expect(frame.height).toBeLessThan(640);
 
-	await page.locator('canvas').focus();
+	await canvas.focus();
 	await page.keyboard.press('Space');
 	await expect.poll(async() => (await state()).phase).toBe('playing');
 	await expect.poll(async() => (await state()).counts.flap).toBeGreaterThan(0);
