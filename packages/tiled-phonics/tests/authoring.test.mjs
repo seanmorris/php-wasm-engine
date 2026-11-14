@@ -180,6 +180,13 @@ const check=() => {
  tested=true;
  try {
   const world=tiled.worlds[0];
+  // Change class definitions before switching maps. In Tiled 1.12.2, closing a
+  // property editor queues its widget deletion, so a same-turn class change can
+  // notify a widget whose property object has already been destroyed.
+  if(${pass} === 1) {
+   const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]},{name:'Fixture.Preset',members:[{name:'actor',type:'class',propertyType:'Fixture.Actor',value:{speed:7.5}}]}];
+   applyClasses(classes); applyClasses(classes);
+  }
   if('${packageName}' === 'php-noid') {
    const map=tiled.open(FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), 'stage-01.tmj'));
    const brickType=tiled.project.findTypeByName('PhpNoid.Brick');
@@ -218,8 +225,6 @@ const check=() => {
   }
   if(${pass} === 1) {
    if(!world.property('phonics.start')) throw new Error('Lost initial world property');
-   const classes=[{name:'Fixture.Actor',members:[{name:'speed',type:'float',value:3.5},{name:'reference',type:'string',value:'@fixture/actor'}]},{name:'Fixture.Preset',members:[{name:'actor',type:'class',propertyType:'Fixture.Actor',value:{speed:7.5}}]}];
-   applyClasses(classes); applyClasses(classes);
    configureWorld(world,{fixture:'https://cdn.test/pkg@1.0.0/phonics.json'},'${nextMap}',['@fixture/module']);
    const cache = FileInfo.joinPaths(FileInfo.path(tiled.projectFilePath), '.phonics-cache');
 
@@ -239,9 +244,12 @@ const check=() => {
   const file=new TextFile(${resultLiteral},TextFile.WriteOnly);file.write('passed');file.commit();
  } catch(error) { const file=new TextFile(${resultLiteral},TextFile.WriteOnly);file.write(error.message);file.commit(); }
 };
-tiled.worldsChanged.connect(check);
-tiled.activeAssetChanged.connect(check);
-tiled.assetOpened.connect(check);
+// assetOpened can fire inside worldLoaded, before Tiled finishes opening the world.
+// Let startup finish before running the editing operations.
+const scheduleCheck=() => Qt.callLater(check);
+tiled.worldsChanged.connect(scheduleCheck);
+tiled.activeAssetChanged.connect(scheduleCheck);
+tiled.assetOpened.connect(scheduleCheck);
 Qt.callLater(check);`
 			);
 
@@ -255,7 +263,13 @@ Qt.callLater(check);`
 				}
 			);
 
-			const exited = new Promise(resolve => child.once('exit', resolve));
+			let exitStatus;
+
+			const exited = new Promise(resolve => child.once('exit', (code, signal) => {
+				exitStatus = signal || 'code ' + code;
+				resolve();
+			}));
+
 			child.stderr.on('data', data => {output += data;});
 
 			child.stdout.on('data', data => {output += data;});
@@ -266,12 +280,15 @@ Qt.callLater(check);`
 
 				for(let attempt = 0; attempt<100; attempt++)
 				{
+					if(exitStatus) break;
+
 					try {result = await fs.readFile(resultFile, 'utf8');break;} catch { /* Wait for GUI. */ }
 
 					await new Promise(resolve => setTimeout(resolve, 50));
 				}
 
-				assert.equal(result, 'passed', output);
+				const status = exitStatus ? 'Tiled exited with ' + exitStatus : 'Tiled did not report success';
+				assert.equal(result, 'passed', `${packageName} pass ${pass}: ${status}\n${output}`);
 			}
 			finally
 			{
