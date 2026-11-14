@@ -686,6 +686,7 @@ test('Phlappy Phant starts, flaps, pauses, and cleans up in its documentation pa
 
 	// Phlappy draws its key hints on a second canvas, so name the game's own.
 	const canvas = page.getByLabel('Phlappy Phant game canvas');
+
 	const state = () => canvas.evaluate(element => JSON.parse(element.dataset.phpPhant));
 
 	await expect.poll(async() => (await state()).page).toBe('title');
