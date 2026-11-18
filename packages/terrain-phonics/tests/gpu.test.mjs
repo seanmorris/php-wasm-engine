@@ -1,0 +1,690 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {existsSync, readFileSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {chromium} from '@playwright/test';
+
+// Run directly with: node --test packages/terrain-phonics/tests/gpu.test.mjs
+// Requires PHP and Chromium (CHROMIUM overrides the executable; otherwise system or Playwright Chromium).
+test('terrain WebGL2 caches and analytic water agree with their numeric references', {timeout: 60_000}, async () => {
+	const fixture = fileURLToPath(new URL('./gpu-fixture.php', import.meta.url));
+	const data = JSON.parse(execFileSync('php', [fixture], {encoding: 'utf8'}));
+
+	const names = ['atmosphere-cache.vert'
+		, 'atmosphere-cache.frag'
+		, 'atmosphere-aerial.frag'
+		, 'atmosphere.glsl'
+		, 'water-functions.glsl'
+		, 'shadows.vert'
+		, 'shadows.frag'
+
+		, 'sky.vert'
+		, 'sky.frag'
+		, 'water.vert'
+		, 'water.frag'
+		, 'terrain.vert'
+		, 'terrain.frag'
+	];
+
+	const shaders = Object.fromEntries(names.map(name => [name
+		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
+	]));
+
+	const browser = await chromium.launch({
+		executablePath: process.env.CHROMIUM ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
+		, headless: true
+		, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+	});
+
+	try
+	{
+		const page = await browser.newPage();
+
+		const result = await page.evaluate(({data, shaders}) => {
+			const canvas = document.createElement('canvas');
+			canvas.width = 256;
+			canvas.height = 128;
+			const gl = canvas.getContext('webgl2', {antialias: false, preserveDrawingBuffer: true});
+
+			if(!gl) throw new Error('WebGL2 is unavailable');
+
+			const compile = (type, source) => {
+				const shader = gl.createShader(type);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+
+				if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
+
+				return shader;
+			};
+
+			const program = (vertex, fragment, varyings = null) => {
+				const linked = gl.createProgram();
+				const stages = [compile(gl.VERTEX_SHADER, vertex), compile(gl.FRAGMENT_SHADER, fragment)];
+
+				for(const stage of stages) gl.attachShader(linked, stage);
+
+				if(varyings) gl.transformFeedbackVaryings(linked, varyings, gl.INTERLEAVED_ATTRIBS);
+
+				gl.linkProgram(linked);
+
+				for(const stage of stages) gl.deleteShader(stage);
+
+				if(!gl.getProgramParameter(linked, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(linked));
+
+				return linked;
+			};
+
+			const parameters = linked => {
+				gl.useProgram(linked);
+
+				for(const [key, value] of Object.entries(data.uniforms))
+				{
+					const location = gl.getUniformLocation(linked, `u${key[0].toUpperCase()}${key.slice(1)}`);
+
+					if(Array.isArray(value))
+					{
+						if(value.length === 3) gl.uniform3fv(location, value);
+						else if(value.length === 2) gl.uniform2fv(location, value);
+					}
+					else gl.uniform1f(location, value);
+				}
+
+				gl.uniform1i(gl.getUniformLocation(linked, 'uTransmittance'), 0);
+			};
+
+			const texture = (unit, width, height, bytes) => {
+				const created = gl.createTexture();
+				gl.activeTexture(gl.TEXTURE0 + unit);
+				gl.bindTexture(gl.TEXTURE_2D, created);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+
+				return created;
+			};
+
+			const framebuffer = gl.createFramebuffer();
+
+			const target = (unit, width, height) => {
+				const created = texture(unit, width, height, null);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, created, 0);
+
+				if(gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+				throw new Error('RGBA8 cache framebuffer is incomplete');
+
+				gl.viewport(0, 0, width, height);
+			};
+
+			const pixel = () => {
+				gl.viewport(0, 0, 1, 1);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				const bytes = new Uint8Array(4);
+				gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+
+				return Array.from(bytes).slice(0, 3);
+			};
+
+			const vertex = shaders['atmosphere-cache.vert'];
+
+			const integrate = source => source.replace('// ATMOSPHERE', shaders['atmosphere.glsl']);
+			const header = '#version 300 es\nprecision highp float;\nprecision highp int;\n';
+			gl.bindVertexArray(gl.createVertexArray());
+			texture(0, 64, 16, Uint8Array.from(atob(data.lut), c => c.charCodeAt(0)));
+			const skyCache = program(vertex, integrate(shaders['atmosphere-cache.frag']));
+
+			for(const [unit, altitude] of [[2, 100], [3, 0]])
+			{
+				target(unit, 256, 128);
+				parameters(skyCache);
+				gl.uniform2f(gl.getUniformLocation(skyCache, 'uSkyCacheSize'), 256, 128);
+				gl.uniform1f(gl.getUniformLocation(skyCache, 'uSkyCacheAltitude'), altitude);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+			}
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			const skySample = program(vertex, `${header}${data.source}
+				uniform vec3 uTestRay; uniform float uTestAltitude; out vec4 color;
+				void main() { color = vec4(terrainToneMap(skyRadiance(uTestRay, uTestAltitude)), 1.0); }`
+			);
+
+			parameters(skySample);
+			gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheEye'), 2);
+			gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheWater'), 3);
+			gl.uniform2f(gl.getUniformLocation(skySample, 'uSkyCacheSize'), 256, 128);
+			gl.uniform2f(gl.getUniformLocation(skySample, 'uSkyCacheAltitudes'), 100, 0);
+			const skyResults = [];
+
+			for(const altitude of [0, 100])
+			for(const ray of [[0, 1, 0]
+				, [1, .5, 0]
+				, [-1, .2, 1]
+				, [1, .03, 0]
+				, [-1, .01, 1]
+				, data.uniforms
+				.sunDirection
+			]){
+				const colors = [];
+
+				for(const ready of [0, 1])
+				{
+					gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheReady'), ready);
+					gl.uniform3fv(gl.getUniformLocation(skySample, 'uTestRay'), ray);
+					gl.uniform1f(gl.getUniformLocation(skySample, 'uTestAltitude'), altitude);
+					colors.push(pixel());
+				}
+
+				skyResults.push({altitude, ray, colors});
+			}
+
+			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
+
+			for(const output of [0, 1])
+			{
+				target(4 + output, 512, 16);
+				parameters(aerialCache);
+				gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
+				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
+				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), 100);
+				gl.uniform1i(gl.getUniformLocation(aerialCache, 'uAerialCacheOutput'), output);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+			}
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			const aerialSample = program(vertex, `${header}${data.source}
+				uniform vec3 uTestRay; uniform float uTestAltitude; uniform float uTestDistance; out vec4 color;
+				void main() { color = vec4(terrainToneMap(terrainAtmosphere(uTestRay, uTestAltitude,
+					uTestDistance, vec3(.15, .3, .1))), 1.0); }`
+			);
+
+			parameters(aerialSample);
+			gl.uniform1i(gl.getUniformLocation(aerialSample, 'uAerialCacheTransmittance'), 4);
+			gl.uniform1i(gl.getUniformLocation(aerialSample, 'uAerialCacheRadiance'), 5);
+			gl.uniform3f(gl.getUniformLocation(aerialSample, 'uAerialCacheGrid'), 32, 16, 16);
+			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uAerialCacheMaxDistance'), 90000);
+			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uAerialCacheAltitude'), 100);
+			const aerialResults = [];
+
+			for(const altitude of [100, 120])
+			for(const distance of [0, 1, 100, 1000, 10000, 45000, 90000, 95000])
+			for(const ray of [[1, 0, 0], [1, .02, 0], [0, -.1, 1], [-1, .3, 1]])
+			{
+				const colors = [];
+
+				for(const ready of [0, 1])
+				{
+					gl.uniform1i(gl.getUniformLocation(aerialSample, 'uAerialCacheReady'), ready);
+					gl.uniform3fv(gl.getUniformLocation(aerialSample, 'uTestRay'), ray);
+					gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestAltitude'), altitude);
+					gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestDistance'), distance);
+					colors.push(pixel());
+				}
+
+				aerialResults.push({altitude, distance, ray, colors});
+			}
+
+			// Capture shader floats directly, using core WebGL2 transform feedback rather than a float render target.
+			const waterSource = shaders['water-functions.glsl'];
+
+			const waterProgram = program(
+				`${header}${waterSource}
+				uniform vec2 uTestPosition; uniform float uTestTime;
+				out vec4 vSample; out vec3 vNormal;
+				void main() { vSample = terrainWaterSample(uTestPosition, uTestTime);
+					vNormal = terrainWaterNormal(vSample); gl_Position = vec4(0, 0, 0, 1); gl_PointSize = 1.0; }`
+				, `${header}out vec4 color; void main() { color = vec4(0); }`
+				, ['vSample', 'vNormal']
+			);
+
+			const feedback = gl.createTransformFeedback();
+			const outputBuffer = gl.createBuffer();
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, feedback);
+			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, outputBuffer);
+			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 7 * 4, gl.DYNAMIC_READ);
+			gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, outputBuffer);
+			gl.useProgram(waterProgram);
+			gl.enable(gl.RASTERIZER_DISCARD);
+			const waterResults = [];
+
+			for(const scenario of data.waterCases)
+			{
+				const values = scenario.uniforms;
+				gl.uniform1f(gl.getUniformLocation(waterProgram, 'uWaterLevel'), values.level);
+				gl.uniform1i(gl.getUniformLocation(waterProgram, 'uWaveCount'), values.waveCount);
+				gl.uniform1i(gl.getUniformLocation(waterProgram, 'uWakeCount'), values.wakeCount);
+
+				values.waveVectors.forEach(
+					(v, i) => gl.uniform4fv(gl.getUniformLocation(waterProgram, `uWaveVectors[${i}]`), v)
+				);
+
+				values.waveDynamics.forEach(
+					(v, i) => gl.uniform2fv(gl.getUniformLocation(waterProgram, `uWaveDynamics[${i}]`), v)
+				);
+
+				values.wakeVectors.forEach(
+					(v, i) => gl.uniform4fv(gl.getUniformLocation(waterProgram, `uWakeVectors[${i}]`), v)
+				);
+
+				for(const sample of scenario.samples)
+				{
+					gl.uniform2fv(gl.getUniformLocation(waterProgram, 'uTestPosition'), sample.position);
+					gl.uniform1f(gl.getUniformLocation(waterProgram, 'uTestTime'), sample.time);
+					gl.beginTransformFeedback(gl.POINTS);
+					gl.drawArrays(gl.POINTS, 0, 1);
+					gl.endTransformFeedback();
+
+					const actual = new Float32Array(7);
+					gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, actual);
+					waterResults.push({name: scenario.name, ...sample, actual: Array.from(actual)});
+				}
+			}
+
+			gl.disable(gl.RASTERIZER_DISCARD);
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+			const shadowProgram = program(shaders['shadows.vert'], shaders['shadows.frag']);
+			const heightTexture = gl.createTexture();
+			gl.activeTexture(gl.TEXTURE1);
+			gl.bindTexture(gl.TEXTURE_2D, heightTexture);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+			const shadowResults = [];
+
+			for(const [name, sun, ridge] of [['flat', [1, .001, 0], false]
+				, ['ridge', [1, .1, 0], true]
+				, ['reversed', [-1, .1, 0], true], ['night', [1, -.1, 0], false]
+			]){
+				const heights = new Float32Array(33 * 33);
+
+				if(ridge)
+				for(let z = 0; z < 33; z++) for(let x = 16; x <= 18; x++) heights[z * 33 + x] = 300;
+
+				gl.activeTexture(gl.TEXTURE1);
+				gl.bindTexture(gl.TEXTURE_2D, heightTexture);
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 33, 33, 0, gl.RED, gl.FLOAT, heights);
+				target(6, 256, 256);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+				gl.useProgram(shadowProgram);
+				gl.uniform1i(gl.getUniformLocation(shadowProgram, 'uTerrainHeights'), 1);
+				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowExtent'), 2048);
+				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowSize'), 256);
+
+				gl.uniform3fv(
+					gl.getUniformLocation(shadowProgram, 'uShadowSunDirection')
+					, sun.map(v => v / Math.hypot(...sun))
+				);
+
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				const visibility = [];
+
+				for(const x of [64, 192])
+				{
+					const bytes = new Uint8Array(4);
+					gl.readPixels(x, 128, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+					visibility.push(bytes[0]);
+				}
+
+				shadowResults.push({name, visibility});
+			}
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
+			const surfaceVertex = `${header}
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out float vGround;
+				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vGround = -3.0;
+					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
+
+			const illuminationResults = [];
+
+			for(const name of ['terrain', 'water'])
+			{
+				const surface = program(
+					surfaceVertex
+					, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
+				);
+
+				parameters(surface);
+				gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
+				const colors = [];
+
+				for(const intensity of [0, 20])
+				{
+					gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), intensity);
+					colors.push(pixel());
+				}
+
+				illuminationResults.push({name, colors});
+			}
+
+			const visualSource = shaders['water.frag'].replace('// ATMOSPHERE', data.source)
+				.replace('// WATER', waterSource).replace('void main()', 'void waterSurfaceMain()');
+
+			const visualProgram = program(surfaceVertex, `${visualSource}
+				uniform float uVisualPixelSpan, uVisualOffset;
+				void main() { vec2 position = vec2(gl_FragCoord.x * uVisualPixelSpan + uVisualOffset, 0.0);
+					vec4 filtered = waterVisualSample(position, 0.0, dFdx(position), dFdy(position));
+					vec4 original = terrainWaterSample(position, 0.0);
+					color = vec4(0.5 + 0.5 * filtered.y, 0.5 + 0.5 * original.y,
+						waterPhaseFilter(dFdx(position.x), dFdy(position.x)), 1.0); }`
+			);
+
+			gl.useProgram(visualProgram);
+			gl.uniform1i(gl.getUniformLocation(visualProgram, 'uWaveCount'), 1);
+			gl.uniform1i(gl.getUniformLocation(visualProgram, 'uWakeCount'), 0);
+			gl.uniform4f(gl.getUniformLocation(visualProgram, 'uWaveVectors[0]'), 1, 0, 1, 1);
+			gl.uniform2f(gl.getUniformLocation(visualProgram, 'uWaveDynamics[0]'), 0, 0);
+			const aliasResults = [];
+
+			for(const span of [.1,2.3,4])
+			for(const offset of [0,.37,.73])
+			{
+				target(7, 64, 8);
+				gl.uniform1f(gl.getUniformLocation(visualProgram, 'uVisualPixelSpan'), span);
+				gl.uniform1f(gl.getUniformLocation(visualProgram, 'uVisualOffset'), offset);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+				const bytes = new Uint8Array(64 * 8 * 4);
+				gl.readPixels(0, 0, 64, 8, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+				const channels = [0,1,2].map(channel => Array.from({length: 64*8}, (_, i) => bytes[i*4+channel]));
+				aliasResults.push({span,offset,channels});
+			}
+
+			const reflectionProgram = program(surfaceVertex, `${visualSource}
+				uniform float uReflectionElevation;
+				void main() { vec3 ray = normalize(vec3(1.0,uReflectionElevation,0.0));
+					vec3 reflected = waterEnvironmentReflection(ray,0.0,0.002,vec3(0.006,0.045,0.09),uSunIntensity/20.0);
+					color = vec4(terrainToneMap(reflected),1.0); }`
+			);
+
+			parameters(reflectionProgram);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			gl.uniform1i(gl.getUniformLocation(reflectionProgram, 'uSkyCacheEye'), 2);
+			gl.uniform1i(gl.getUniformLocation(reflectionProgram, 'uSkyCacheWater'), 3);
+			gl.uniform2f(gl.getUniformLocation(reflectionProgram, 'uSkyCacheSize'), 256, 128);
+			gl.uniform2f(gl.getUniformLocation(reflectionProgram, 'uSkyCacheAltitudes'), 100, 0);
+			const reflectionResults = [];
+
+			for(const cached of [0,1])
+			for(const elevation of [-.2,-.1,-.01,-.002,-.001,0,.001,.002,.01,.1])
+			{
+				gl.uniform1i(gl.getUniformLocation(reflectionProgram, 'uSkyCacheReady'), cached);
+				gl.uniform1f(gl.getUniformLocation(reflectionProgram, 'uReflectionElevation'), elevation);
+				reflectionResults.push({cached,elevation,color: pixel()});
+			}
+
+			// Evaluate darkness directly; cache invalidation on irradiance changes has its own lifecycle regression.
+			gl.uniform1i(gl.getUniformLocation(reflectionProgram, 'uSkyCacheReady'), 0);
+			gl.uniform1f(gl.getUniformLocation(reflectionProgram, 'uSunIntensity'), 0);
+			const darkReflections = [];
+
+			for(const elevation of [-.2,0,.1])
+			{
+				gl.uniform1f(gl.getUniformLocation(reflectionProgram, 'uReflectionElevation'), elevation);
+				darkReflections.push(pixel());
+			}
+
+			const facingProgram = program(surfaceVertex, `${visualSource}
+				uniform vec3 uTestNormal, uTestView;
+				void main() { vec3 normal = normalize(uTestNormal), view = normalize(uTestView);
+					vec3 facing = waterFacingNormal(normal,view);
+					color = vec4(0.5+0.5*dot(facing,view),length(facing),0.5+0.5*dot(normal,view),1.0); }`
+			);
+
+			gl.useProgram(facingProgram);
+			const facingResults = [];
+
+			for(const [normal,view] of [[[0,1,0],[1,.1,0]],[[-.95,.31,0],[1,.1,0]],[[0,1,0],[0,-1,0]]])
+			{
+				gl.uniform3fv(gl.getUniformLocation(facingProgram, 'uTestNormal'), normal);
+				gl.uniform3fv(gl.getUniformLocation(facingProgram, 'uTestView'), view);
+				facingResults.push(pixel());
+			}
+
+			const solarProgram = program(vertex, `${header}${data.source}
+				uniform float uTestSolarFootprint; out vec4 color;
+				void main() { vec2 angle = (gl_FragCoord.xy / 256.0 - 0.5) * 0.08;
+					vec3 ray = normalize(vec3(angle.x,1.0,angle.y));
+					vec3 light = terrainSolarDisk(ray,100.0,vec3(1.0),uTestSolarFootprint);
+						float radius = 2.0 * sin(0.5 * uAngularRadius);
+						color = vec4(light * TERRAIN_PI * radius * radius,1.0); }`
+			);
+
+			parameters(solarProgram);
+			gl.uniform3f(gl.getUniformLocation(solarProgram, 'uSunDirection'), 0, 1, 0);
+			gl.uniform1f(gl.getUniformLocation(solarProgram, 'uSunIntensity'), 1);
+			const solarResults = [];
+
+			for(const footprint of [0,.005,.02])
+			{
+				target(7, 256, 256);
+				gl.uniform1f(gl.getUniformLocation(solarProgram, 'uTestSolarFootprint'), footprint);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				const bytes = new Uint8Array(256 * 256 * 4);
+				gl.readPixels(0, 0, 256, 256, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+				let energy = 0, peak = 0;
+
+				for(let i = 0; i < bytes.length; i += 4)
+				{
+					energy += bytes[i];
+					peak = Math.max(peak, bytes[i]);
+				}
+
+				solarResults.push({footprint,energy,peak});
+			}
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			const materialProgram = program(
+				shaders['terrain.vert']
+				, `${header}out vec4 c;void main(){c=vec4(0);}`
+				, ['vPaint0','vPaint1']
+			);
+
+			const materialInput = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, materialInput);
+			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1,4]), gl.STATIC_DRAW);
+			gl.enableVertexAttribArray(3);
+			gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 4, 0);
+
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, feedback);
+			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, outputBuffer);
+			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 12*4, gl.DYNAMIC_READ);
+			gl.useProgram(materialProgram);
+			gl.enable(gl.RASTERIZER_DISCARD);
+			gl.beginTransformFeedback(gl.POINTS);
+			gl.drawArrays(gl.POINTS, 0, 2);
+			gl.endTransformFeedback();
+
+			const materialWeights = new Float32Array(12);
+			gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, materialWeights);
+			gl.disable(gl.RASTERIZER_DISCARD);
+			gl.disableVertexAttribArray(3);
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+			// Compile the real consuming scene programs too, so include/link compatibility is part of this regression.
+			for(const name of ['sky', 'terrain', 'water'])
+			program(
+				shaders[`${name}.vert`].replace('// WATER', waterSource)
+				, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
+			);
+			const error = gl.getError();
+
+			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
+
+			return {
+				skyResults
+				, aerialResults
+				, waterResults
+				, shadowResults
+				, illuminationResults
+
+				, aliasResults
+				, reflectionResults
+				, darkReflections
+				, facingResults
+				, solarResults
+				, materialWeights: Array.from(materialWeights)
+			};
+		}, {data, shaders});
+
+		let skyError = 0, aerialError = 0, waterError = 0;
+
+		for(const sample of result.skyResults)
+		{
+			const delta = Math.max(...sample.colors[0].map((value, i) => Math.abs(value - sample.colors[1][i])));
+			skyError = Math.max(skyError, delta);
+			assert.ok(delta <= 4, `Sky cache color deviation: ${JSON.stringify(sample)}`);
+		}
+
+		for(const sample of result.aerialResults)
+		{
+			const delta = Math.max(...sample.colors[0].map((value, i) => Math.abs(value - sample.colors[1][i])));
+			aerialError = Math.max(aerialError, delta);
+			const identity = sample.distance === 0 || sample.distance > 90000 || sample.altitude !== 100;
+			assert.ok(delta <= (identity ? 0 : 4), `Aerial cache color deviation: ${JSON.stringify(sample)}`);
+		}
+
+		for(const sample of result.waterResults)
+		{
+			const delta = Math.max(...sample.expected.map((value, i) => Math.abs(value - sample.actual[i])));
+			waterError = Math.max(waterError, delta);
+			// GLSL uses float32 phase arithmetic; world-edge coordinates need a larger bound than local samples.
+			const tolerance = Math.max(...sample.position.map(Math.abs)) > 10000 ? .003 : .0002;
+
+			assert.ok(
+				Number.isFinite(delta) && delta <= tolerance
+				, `Water CPU/GPU deviation: ${JSON.stringify(sample)}`
+			);
+		}
+
+		const visibility = Object.fromEntries(result.shadowResults.map(sample => [sample.name, sample.visibility]));
+		assert.deepEqual(visibility.flat, [255, 255], 'a flat plane remains sunlit even at low sun angles');
+		assert.deepEqual(visibility.ridge, [0, 255], 'a broad ridge blocks the down-sun side');
+		assert.deepEqual(visibility.reversed, [255, 0], 'reversing the sun reverses the ridge shadow');
+		assert.deepEqual(visibility.night, [0, 0], 'the coarse map contains no direct visibility at night');
+
+		for(const sample of result.illuminationResults)
+		{
+			assert.deepEqual(sample.colors[0], [0, 0, 0], `${sample.name} has no unlit ambient/body/foam emission`);
+			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
+		}
+
+		const variance = values => {
+			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+
+			return values.reduce((sum, value) => sum + (value-mean)**2, 0) / values.length;
+		};
+
+		for(const sample of result.aliasResults)
+		{
+			const [filtered,original,foam] = sample.channels;
+
+			if(sample.span === .1)
+			assert.deepEqual(filtered, original, 'resolved close waves keep their full shading slopes');
+
+			if(sample.span === 2.3)
+			{
+				const ratio = variance(filtered) / variance(original);
+				assert.ok(ratio > .05 && ratio < .6, 'near-Nyquist wave energy fades smoothly');
+			}
+
+			if(sample.span === 4)
+			{
+				assert.ok(variance(original)>1000, 'the unfiltered reference exhibits unresolved oscillation');
+
+				assert.ok(
+					Math.max(...filtered)-Math.min(...filtered)<=1
+					, 'unresolved normals remain stable across pixels/phases'
+				);
+
+				assert.ok(foam.every(value => value===0), 'unresolved foam modulation is removed');
+			}
+		}
+
+		for(const sample of result.reflectionResults)
+		assert.ok(Math.max(...sample.color)>40, 'daytime lower-hemisphere reflection has finite nonblack illumination');
+
+		for(const cached of [0,1])
+		{
+			const horizon = result.reflectionResults.filter(
+				sample => sample.cached===cached&&Math.abs(sample.elevation)<=.002
+			);
+
+			for(let i = 1; i<horizon.length; i++)
+			assert.ok(
+				horizon[i].color.every((value, channel) => Math.abs(value-horizon[i-1].color[channel])<=5)
+				, 'water reflection remains continuous across the horizon'
+			);
+		}
+
+		for(const color of result.darkReflections)
+		assert.deepEqual(color, [0,0,0], 'environment fallback emits no light');
+
+		for(const color of result.facingResults)
+		assert.ok(color[0]>=127&&color[1]===255, 'corrected shading normals remain unit length and face the viewer');
+
+		assert.ok(
+			Math.abs(result.facingResults[0][0]-result.facingResults[0][2])<=1
+			, 'resolved facing normals are unchanged'
+		);
+
+		const solarRadius = 2 * Math.sin(data.uniforms.angularRadius / 2);
+		const expectedSolarEnergy = 255 * Math.PI * solarRadius ** 2 / (.08 / 256) ** 2;
+
+		assert.ok(
+			Math.abs(result.solarResults[0].energy / expectedSolarEnergy - 1) < .03
+			, 'the point-sampled disk retains its physical angular area'
+		);
+
+		for(const sample of result.solarResults.slice(1))
+		{
+			assert.ok(
+				Math.abs(sample.energy / result.solarResults[0].energy - 1) < .03
+				, `solar footprint filtering preserves energy: ${JSON.stringify(result.solarResults)}`
+			);
+		}
+
+		assert.ok(
+			result.solarResults[2].peak < result.solarResults[1].peak
+			, 'larger reflection footprints lower solar peaks'
+		);
+
+		assert.deepEqual(
+			result.materialWeights
+			, [0,1,0,0,0,0,0,0,0,0,1,0]
+			, 'material endpoint weights select only grass/road'
+		);
+
+		for(const blend of [.25,.5,.75])
+		{
+			const start = result.materialWeights.slice(0, 6), end = result.materialWeights.slice(6);
+			const weights = start.map((value, i) => value * (1 - blend) + end[i] * blend);
+
+			assert.deepEqual(
+				weights
+				, [0,1-blend,0,0,blend,0]
+				, 'interpolated grass/road weights cannot invent sand or snow'
+			);
+		}
+
+		const counts = [result.skyResults.length, result.aerialResults.length, result.waterResults.length];
+		const errors = [skyError, aerialError, waterError];
+
+		console.log('GPU parity (sky/aerial/water):', {samples: counts, maximumErrors: errors});
+		console.log('Water footprint cases:', result.aliasResults.length, 'solar coverage:', result.solarResults);
+	}
+	finally
+	{
+		await browser.close();
+	}
+});

@@ -29,6 +29,7 @@ try
 		, 'packages/doom-phonics'
 		, 'packages/phonics-matrix'
 		, 'packages/tiled-phonics'
+		, 'packages/terrain-phonics'
 	]){
 		const result = JSON.parse(
 			execute(
@@ -95,6 +96,7 @@ try
 		, 'doom-phonics'
 		, 'phonics-matrix'
 		, 'tiled-phonics'
+		, 'terrain-phonics'
 	]){
 		const directory = path.join(temporary, 'node_modules/@seanmorris', name);
 
@@ -132,6 +134,7 @@ try
 			, 'seanmorris/sane-phonics': '0.1.0'
 			, 'seanmorris/doom-phonics': '0.1.0'
 			, 'seanmorris/phonics-matrix': '0.1.0'
+			, 'seanmorris/terrain-phonics': '0.1.0'
 		}
 		, repositories: [{type: 'artifact',url: destination}]
 		, config: {'allow-plugins': false}
@@ -255,6 +258,23 @@ try
 		'php'
 		, ['-r',"require 'vendor/autoload.php'; $wad=new DoomPhonics\\Archive\\Archive('PWAD'.pack('V2',0,12),'fixture.wad'); if($wad->type!=='PWAD' || class_exists('PhpNoid\\Playfield') || class_exists('SanePhonics\\Physics\\Body')) exit(2);"]
 		, doom
+	);
+
+	// Terrain remains optional, but a packed consumer must receive its PHP and shader assets.
+	const terrain = path.join(temporary, 'terrain-only');
+	await fs.mkdir(terrain);
+
+	await fs.writeFile(path.join(terrain, 'composer.json'), JSON.stringify({
+		require: {'seanmorris/terrain-phonics': '0.1.0'}
+		, repositories: [{type: 'artifact',url: destination}]
+	}));
+
+	execute('composer', ['install','--no-scripts','--no-interaction','--prefer-dist'], terrain);
+
+	execute(
+		'php'
+		, ['-r', String.raw`require 'vendor/autoload.php'; $surface=new TerrainPhonics\Landscape(['worldSize'=>64]); $sample=$surface->sample(0,0); if(!is_finite($sample['height']) || !is_file('vendor/seanmorris/terrain-phonics/shaders/terrain.vert') || class_exists('SanePhonics\Physics\Body')) exit(2);`]
+		, terrain
 	);
 
 	console.log('Packed npm and Composer consumers passed without workspace symlinks. Artifacts: ' + destination);
