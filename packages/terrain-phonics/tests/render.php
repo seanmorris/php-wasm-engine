@@ -293,8 +293,92 @@ renderCheck(
 	, 'unchanged frames reuse cached broad terrain shadows'
 );
 
+$bootstrapScene->update(.1, new Camera);
+$invisibleChanged = $bootstrapScene->update(.1, new Camera);
+
+renderCheck(
+	!$invisibleChanged && $bootstrapScene->stats()['patches'] === 3 && $bootstrapScene->stats()['visible'] === 1
+		&& $bootstrapScene->dirty()
+	, 'completed invisible siblings keep generation active without redrawing the old coverage'
+);
+
 $bootstrapScene->close();
 $bootstrapSurface->close();
+
+$loadingSurface = new Landscape;
+$loadingScene = new Scene($loadingSurface, new Water, new Atmosphere);
+$loadingScene->budgetMs = .25;
+$loadingCamera = new Camera;
+$partialUpdates = 0;
+
+for($frame = 0; $frame < 30; $frame++)
+{
+	$before = $loadingScene->stats();
+	$loadingScene->update(.1, $loadingCamera);
+	$after = $loadingScene->stats();
+
+	if($frame > 0 && $before['patches'] === 0 && $after['patches'] === 0)
+	{
+		$partialUpdates++;
+
+		renderCheck(
+			$after['selections'] === $before['selections']
+			, 'unchanged partial generation does not repeat the expensive LOD selection'
+		);
+	}
+}
+
+renderCheck($partialUpdates > 2, 'stationary generation fixture exercises multiple selection intervals');
+$before = $loadingScene->stats()['selections'];
+$loadingCamera->yaw += .4;
+$loadingScene->update(.1, $loadingCamera);
+renderCheck($loadingScene->stats()['selections'] > $before, 'turning the camera reprioritizes pending visible work');
+$loadingScene->close();
+$loadingSurface->close();
+
+// Exact sandbox canyon pose: visible walls must not wait behind unrelated whole-world refinement.
+$canyonSurface = new Landscape([
+	'preset' => 'canyon'
+	, 'heightScale' => 650
+	, 'baseFrequency' => 1 / 4000
+	, 'terraceSpacing' => 80
+	, 'terraceStrength' => .7
+]);
+
+$canyonScene = new Scene($canyonSurface, new Water, new Atmosphere);
+$canyonScene->quality = 2;
+$canyonScene->budgetMs = 1000;
+renderSet($canyonScene, 'viewportHeight', 360);
+$canyonCamera = new Camera;
+$canyonCamera->position = [-340,50,1600];
+$canyonCamera->yaw = 2.68;
+$canyonCamera->pitch = -.17;
+$wallSpacing = INF;
+
+for($frame = 0; $frame < 190 && $wallSpacing > 8; $frame++)
+{
+	$canyonScene->update(1 / 60, $canyonCamera);
+	$canyonStats = $canyonScene->stats();
+
+	renderCheck(
+		$canyonStats['reservedPatches'] <= $canyonStats['maximumPatches']
+		, 'visible-wall prioritization preserves the complete shared cache bound'
+	);
+
+	foreach($canyonStats['visibleCoverage'] as [$x,$z,$size,$spacing])
+	if(122 >= $x && 122 < $x + $size && 2000 >= $z && 2000 < $z + $size) $wallSpacing = $spacing;
+
+	if($frame % 30 === 0) renderCover(renderGet($canyonScene, 'draw'), 32768);
+}
+
+renderCheck(
+	$wallSpacing <= 8 && $canyonScene->stats()['patches'] <= 170
+	, 'camera weighting and balancing prerequisites refine the real canyon wall within170 completed patches'
+);
+
+renderCover(renderGet($canyonScene, 'draw'), 32768);
+$canyonScene->close();
+$canyonSurface->close();
 
 // A downward flight predicts future detail while the current high-altitude view needs only root.
 $predictedSurface = new Landscape(['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
