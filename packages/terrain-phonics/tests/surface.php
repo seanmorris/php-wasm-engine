@@ -634,4 +634,54 @@ $warped = new Recipe(['warpAmplitude' => 600]);
 terrainCheck($unwarped->height(731, 249) !== $warped->height(731, 249), 'domain warp changes the landform');
 terrainReject(fn() => new Recipe(['terraceStrength' => 1.1]), 'terraces reject strength beyond their smooth blend');
 
+// Exhaustive reference splits each ray at all lattice crossings, sorts the distances,
+// then solves each segment using the cell containing its midpoint.
+$exhaustive = [
+	'coast' => [181.946400631, 97.383072653, 3.978038728, 113.058136124, 2.747950511, null, 55.730226949, 59.663528949],
+	'mountain' => [3.556661567, 71.338958719, 231.08807236, 113.058165181, 12.84570181, null, null, 7.280767374],
+	'canyon' => [30.703922065, 42.54823098, 10.556674898, 113.058185298, null, null, 111.341562416, 13.43411505],
+];
+foreach(['coast','mountain','canyon'] as $preset)
+{
+	$world = new Landscape(['preset' => $preset,'worldSize' => 512,'spacing' => 1.25,'seed' => 'pick-regression',
+		'heightScale' => 130,'baseFrequency' => .006,'warpAmplitude' => 75,'terraceSpacing' => 6]);
+	$world->queue(['type' => 'raise','x' => -12,'z' => 0,'amount' => 65,'radius' => 8]);
+	$world->queue(['type' => 'lower','x' => 35,'z' => 0,'amount' => 25,'radius' => 20]);
+	$world->queue(['type' => 'flatten','x' => 2,'z' => 5,'height' => 3,'radius' => 6]);
+	$world->queue(['type' => 'crater','x' => -10,'z' => -10,'amount' => 19,'radius' => 7]);
+	$world->queue(['type' => 'road','points' => [[-68,6,-15],[0,8,2],[55,22,35]],'width' => 4,'shoulder' => 3]);
+	$world->queue(['type' => 'smooth','x' => -6,'z' => -5,'amount' => .9,'radius' => 24]);
+	$world->commit();
+	$rays = [
+		[[-220,40,-6],[1,-.15,.025]], [[210,32,9],[-1,-.18,-.035]],
+		[[-200,6,2],[1,0,0]], [[-12,120,0],[0,-1,0]],
+		[[-4,3,5],[.01,1,-.001]], [[200,200,200],[1,.1,.1]],
+		[[-300,30,0],[1,-.125,0]], [[12,21,40],[-.5,-.3,-1]]
+	];
+	foreach($rays as $i => [$origin,$direction])
+	{
+		$hit = $world->raycast($origin, $direction, 600);
+		$distance = $hit['distance'] ?? null;
+		$expected = $exhaustive[$preset][$i];
+		if($expected === null) terrainCheck($distance === null, "$preset ray $i matches exhaustive miss");
+		else
+		{
+			terrainCheck($distance !== null, "$preset ray $i finds the first intersection");
+			[$x,$y,$z] = $hit['position'];
+			terrainNear($world->height($x,$z), $y, 1e-4, "$preset ray $i actually lies on the surface");
+			terrainNear($distance, $expected, 2e-6, "$preset ray $i preserves exhaustive first-hit distance");
+		}
+	}
+	$world->close();
+}
+
+$coast = new Landscape(['preset' => 'coast']);
+$camera = new TerrainPhonics\Camera;
+$camera->position = [3600,300,1800];
+$camera->yaw = .7;
+$camera->pitch = -.35;
+$hit = $coast->raycast($camera->position, $camera->ray(.5, .5, 640/368), 6000);
+terrainCheck($hit !== null && $coast->stats()['generated'] < 200, 'cold coast pick avoids generating the approach corridor');
+$coast->close();
+
 echo "Terrain surface: $checks checks passed.\n";

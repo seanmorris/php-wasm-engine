@@ -184,16 +184,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
-			for(const output of [0, 1])
-			{
-				target(4 + output, 512, 16);
-				parameters(aerialCache);
-				gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
-				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
-				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), 100);
-				gl.uniform1i(gl.getUniformLocation(aerialCache, 'uAerialCacheOutput'), output);
-				gl.drawArrays(gl.TRIANGLES, 0, 3);
-			}
+			target(4, 512, 16);
+			const radiance = texture(5, 512, 16, null);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
+			gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+			parameters(aerialCache);
+			gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
+			gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
+			gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), 100);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
 
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 

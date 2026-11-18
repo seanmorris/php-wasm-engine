@@ -18,7 +18,7 @@ foreach([
 	, 'GL_CLAMP_TO_EDGE'
 	, 'GL_RGBA8'
 	, 'GL_RGBA'
-	, 'GL_UNSIGNED_BYTE'
+	, 'GL_UNSIGNED_BYTE','GL_UNSIGNED_SHORT'
 	, 'GL_R32F'
 	, 'GL_RED'
 	, 'GL_FLOAT'
@@ -169,6 +169,8 @@ function glEnable(...$args): void{}
 
 function glDepthMask(...$args): void{}
 
+function glDrawBuffers(...$args): void{}
+function glDrawElements(...$args): void{$GLOBALS['terrainGl']['draws']++;}
 function glDrawArrays(...$args): void{$GLOBALS['terrainGl']['draws']++;}
 
 use TerrainPhonics\Atmosphere;
@@ -267,6 +269,20 @@ renderCheck(
 	count($lod->select([0,1000,0], $curvedError)['request']) === 4
 	, 'large projected geometric error refines beyond the distance-only threshold'
 );
+
+$view = new Camera;
+$view->position = [30,24,15];
+$view->pitch = 0;
+foreach([[1920,1080],[640,900]] as [$width,$height])
+{
+	$planes = $view->clipPlanes($width,$height);
+	$front = ['x' => 27,'z' => -30,'size' => 8];
+	renderCheck(Camera::inView($planes,$view->position,$front,20,30), 'box in front of the camera survives culling');
+	$front['z'] = 40;
+	renderCheck(!Camera::inView($planes,$view->position,$front,20,30), 'box behind the camera is culled');
+	$front['z'] = 12;
+	renderCheck(Camera::inView($planes,$view->position,$front,20,30), 'box crossing the near plane remains visible');
+}
 
 $bootstrapSurface = new Landscape;
 $bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere);

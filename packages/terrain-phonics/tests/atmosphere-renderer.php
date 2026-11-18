@@ -92,6 +92,10 @@ namespace TerrainPhonics
 		SkyCalls::$uniforms[$location] = [$x,$y,$z];
 	}
 
+	function glDrawBuffers(int $count, array $buffers): void {}
+
+	function glFramebufferTexture2D(...$args): void {}
+
 	function glDrawArrays(int $mode, int $first, int $count): void
 	{
 		if(SkyCalls::$failDraw) throw new \RuntimeException('Injected cache draw failure');
@@ -116,7 +120,7 @@ namespace
 		, 'GL_BLEND'
 		, 'GL_SCISSOR_TEST'
 		, 'GL_TEXTURE0'
-		, 'GL_TEXTURE_2D','GL_TRIANGLES'
+		, 'GL_TEXTURE_2D','GL_TRIANGLES','GL_FRAMEBUFFER','GL_COLOR_ATTACHMENT0'
 	] as $index => $constant)
 	if(!defined($constant)) define($constant, $index + 1);
 
@@ -148,12 +152,12 @@ namespace
 
 	$model->transmittanceLut(8, 4, 8);
 	$expect($cache->update(10, 99), 'first update populates both maps');
-	$expect($cache->stats()['generations'] === [1,1] && SkyCalls::$draws === 4, 'one pass per sky and aerial output');
+	$expect($cache->stats()['generations'] === [1,1] && SkyCalls::$draws === 3, 'two sky passes and one joint aerial integration');
 	$expect($cache->stats()['aerialGeneration'] === 1, 'first update also builds the eye aerial atlas');
 	$expect(SkyCalls::$framebuffer === 73, 'cache update restores the caller framebuffer');
 	$cache->bind($consumer);
 	$expect($uniform('uSkyCacheReady') === 1, 'populated cache enables cached sampling');
-	$expect(!$cache->update(10, 99) && SkyCalls::$draws === 4, 'unchanged frames do no integration work');
+	$expect(!$cache->update(10, 99) && SkyCalls::$draws === 3, 'unchanged frames do no integration work');
 	$model->setExposure(3);
 	$expect(!$cache->update(10, 99), 'display exposure does not invalidate physical radiance');
 	$expect(!$cache->update(10.1, 99), 'small vertical movement reuses half-metre altitude buckets');

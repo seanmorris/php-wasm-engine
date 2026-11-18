@@ -71,8 +71,84 @@ export function cacheProgramValidation(gl, canvas)
 	return gl;
 }
 
+const indexedContexts = new WeakSet();
+
 /**
- * Apply both GLES bridge caches to every WebGL context created on a canvas from now on.
+ * Reuse driver-confirmed element bindings and buffer sizes for indexed draw validation.
+ * The element binding belongs to the VAO. Reallocation through any buffer target
+ * invalidates sizes, including when the allocation failed and the old size survived.
+ * @param {WebGL2RenderingContext} gl Context intercepted before SDL creates its objects.
+ * @param {HTMLCanvasElement} canvas Context lifecycle event source.
+ * @returns {void}
+ */
+export function cacheIndexQueries(gl, canvas)
+{
+	if (typeof gl.createVertexArray !== 'function' || indexedContexts.has(gl)) return;
+	indexedContexts.add(gl);
+	const defaultVao = {};
+	let active, known, bindings, sizes;
+	const reset = () => {
+		active = undefined;
+		known = new WeakSet();
+		bindings = new WeakMap();
+		sizes = new WeakMap();
+	};
+	reset();
+	canvas?.addEventListener?.('webglcontextlost', reset);
+	canvas?.addEventListener?.('webglcontextrestored', reset);
+	const wrap = (name, required, fn) => {
+		const original = gl[name].bind(gl);
+		gl[name] = (...args) => args.length < required ? original(...args) : fn(original, ...args);
+	};
+	wrap('createVertexArray', 0, create => {
+		const vao = create();
+		if (vao) known.add(vao);
+		return vao;
+	});
+	wrap('bindVertexArray', 1, (bind, vao) => {
+		bind(vao);
+		active = vao === null ? defaultVao : known.has(vao) ? vao : undefined;
+	});
+	wrap('deleteVertexArray', 1, (remove, vao) => {
+		remove(vao);
+		if (active === vao) active = undefined;
+		known.delete(vao);
+	});
+	wrap('bindBuffer', 2, (bind, target, buffer) => {
+		bind(target, buffer);
+		if (target !== gl.ARRAY_BUFFER) {
+			if (active) bindings.delete(active);
+			else bindings = new WeakMap();
+		}
+	});
+	wrap('deleteBuffer', 1, (remove, buffer) => {
+		remove(buffer);
+		bindings = new WeakMap();
+		sizes.delete(buffer);
+	});
+	wrap('bufferData', 2, (allocate, ...args) => {
+		sizes = new WeakMap();
+		return allocate(...args);
+	});
+	wrap('getParameter', 1, (query, parameter) => {
+		if (parameter !== gl.ELEMENT_ARRAY_BUFFER_BINDING || !active || gl.isContextLost()) return query(parameter);
+		if (bindings.has(active)) return bindings.get(active);
+		const buffer = query(parameter);
+		bindings.set(active, buffer);
+		return buffer;
+	});
+	wrap('getBufferParameter', 2, (query, target, parameter) => {
+		const buffer = target === gl.ELEMENT_ARRAY_BUFFER && parameter === gl.BUFFER_SIZE && bindings.get(active);
+		if (!buffer || gl.isContextLost()) return query(target, parameter);
+		if (sizes.has(buffer)) return sizes.get(buffer);
+		const size = query(target, parameter);
+		if (typeof size === 'number') sizes.set(buffer, size);
+		return size;
+	});
+}
+
+/**
+ * Apply the GLES bridge caches to every WebGL context created on a canvas from now on.
  *
  * php-sdl-wasm validates program handles with `isProgram()` before each shader switch and reads pixel-store
  * state before uploads; both are synchronous queries that some browsers answer only after flushing pending
@@ -95,6 +171,7 @@ export function optimizeCanvasContexts(canvas)
 		{
 			cacheProgramValidation(context, canvas);
 			cachePixelStoreQueries(context, canvas);
+			cacheIndexQueries(context, canvas);
 		}
 
 		return context;
