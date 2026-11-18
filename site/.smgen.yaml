@@ -414,6 +414,12 @@ MENUS:
         parent: games
         weight: 80
         expanded: false
+      - id: game-rpsc
+        group: true
+        title: RPSC
+        parent: games
+        weight: 90
+        expanded: false
       - id: game-doom-phonics-api
         group: true
         title: PHP API
@@ -586,6 +592,30 @@ MENUS:
         group: true
         title: Rendering
         parent: game-phlappy-phant-api
+        weight: 30
+        expanded: false
+      - id: game-rpsc-api
+        group: true
+        title: PHP API
+        parent: game-rpsc
+        weight: 100
+        expanded: false
+      - id: game-rpsc-api-root
+        group: true
+        title: Root namespace
+        parent: game-rpsc-api
+        weight: 10
+        expanded: false
+      - id: game-rpsc-api-render
+        group: true
+        title: Rendering
+        parent: game-rpsc-api
+        weight: 20
+        expanded: false
+      - id: game-rpsc-api-ui
+        group: true
+        title: Table interface
+        parent: game-rpsc-api
         weight: 30
         expanded: false
       - id: maintain
