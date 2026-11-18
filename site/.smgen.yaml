@@ -618,6 +618,24 @@ MENUS:
         parent: game-rpsc-api
         weight: 30
         expanded: false
+      - id: game-terrain-sandbox
+        group: true
+        title: Landscape Sandbox
+        parent: games
+        weight: 100
+        expanded: false
+      - id: game-terrain-sandbox-api
+        group: true
+        title: PHP API
+        parent: game-terrain-sandbox
+        weight: 100
+        expanded: false
+      - id: game-terrain-sandbox-api-root
+        group: true
+        title: Authoring session
+        parent: game-terrain-sandbox-api
+        weight: 10
+        expanded: false
       - id: maintain
         group: true
         title: Release & contribute
