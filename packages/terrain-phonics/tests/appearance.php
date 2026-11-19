@@ -212,6 +212,25 @@ $expect(
 	, 'channels are red, green, blue'
 );
 
+// linear() is public, so it checks its argument like the constructor does instead of returning a short or zero list.
+$expect(TerrainAppearance::linear('#C0FFEE') === TerrainAppearance::linear('#c0ffee'), 'linear() accepts upper case');
+
+foreach(['#abc', 'c0ffee', '#gggggg', '', "#c0ffee\n"] as $hex)
+{
+	try
+	{
+		TerrainAppearance::linear($hex);
+	}
+	catch(InvalidArgumentException $error)
+	{
+		$expect(str_contains($error->getMessage(), 'six-digit hex'), 'linear() explains ' . json_encode($hex));
+
+		continue;
+	}
+
+	$expect(false, 'linear() rejects ' . json_encode($hex));
+}
+
 // Out-of-range values clamp to the documented range.
 $clamped = [
 	['bandSpacing', 1, 5.0], ['bandSpacing', 1e9, 1000.0], ['bandContrast', -1, 0.0], ['bandContrast', 2, 1.0],

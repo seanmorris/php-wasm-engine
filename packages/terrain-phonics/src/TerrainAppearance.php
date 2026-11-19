@@ -128,10 +128,17 @@ final class TerrainAppearance
 
 	/**
 	 * Convert an sRGB hex colour to linear RGB.
+	 * @param string $hex Six-digit hex colour with a leading #. Anything else throws InvalidArgumentException.
+	 * @return array Red, green and blue from 0 to 1.
+	 */
+	public static function linear(string $hex): array { return self::decode(self::color('color', $hex)); }
+
+	/**
+	 * Convert a colour that has already been validated.
 	 * @param string $hex Six-digit hex colour with a leading #.
 	 * @return array Red, green and blue from 0 to 1.
 	 */
-	public static function linear(string $hex): array
+	private static function decode(string $hex): array
 	{
 		$rgb = [];
 
@@ -169,14 +176,14 @@ final class TerrainAppearance
 	 */
 	private static function canyonBeds(array $settings): array
 	{
-		$rust = self::linear($settings['canyonRustColor']);
-		$cap = self::linear($settings['canyonCapColor']);
+		$rust = self::decode($settings['canyonRustColor']);
+		$cap = self::decode($settings['canyonCapColor']);
 
 		return [
-			'rust' => $rust, 'shale' => self::linear($settings['canyonShaleColor']),
-			'ledge' => self::shade($cap, self::linear(self::DEFAULTS['canyonCapColor']), self::LEDGE),
-			'sandstone' => self::linear($settings['canyonSandstoneColor']),
-			'redBeds' => self::shade($rust, self::linear(self::DEFAULTS['canyonRustColor']), self::RED_BEDS),
+			'rust' => $rust, 'shale' => self::decode($settings['canyonShaleColor']),
+			'ledge' => self::shade($cap, self::decode(self::DEFAULTS['canyonCapColor']), self::LEDGE),
+			'sandstone' => self::decode($settings['canyonSandstoneColor']),
+			'redBeds' => self::shade($rust, self::decode(self::DEFAULTS['canyonRustColor']), self::RED_BEDS),
 			'cap' => $cap,
 		];
 	}
@@ -226,7 +233,7 @@ final class TerrainAppearance
 		$uniforms = [];
 
 		foreach(['grass', 'soil', 'rock', 'rockBand', 'sand', 'snow', 'road'] as $name)
-		$uniforms['u' . ucfirst($name) . 'Color'] = self::linear($settings[$name . 'Color']);
+		$uniforms['u' . ucfirst($name) . 'Color'] = self::decode($settings[$name . 'Color']);
 
 		$palette = self::canyonPalette($settings);
 		$uniforms['uCanyonColors[0]'] = array_merge(...array_values(array_diff_key($palette, ['bounce' => 0])));
