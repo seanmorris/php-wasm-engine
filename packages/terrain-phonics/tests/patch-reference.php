@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/autoload.php';
 
+use TerrainPhonics\CanyonBeds;
 use TerrainPhonics\Landscape;
 use TerrainPhonics\Lod;
 use TerrainPhonics\Noise;
@@ -27,5 +28,6 @@ foreach([[0,0,0], [1,0,0], [1,1,1], [2,2,3]] as [$level,$x,$z])
 		. $job['normals'] . $job['bytes'];
 	$patches[] = ['node' => $node, 'bytes' => base64_encode($bytes)];
 }
-echo json_encode(['recipe' => $recipe, 'permutation' => (new Noise($recipe['seed']))->permutation(), 'patches' => $patches],
+echo json_encode(['recipe' => $recipe, 'permutation' => (new Noise($recipe['seed']))->permutation(), 'patches' => $patches,
+	'beds' => CanyonBeds::CONTACTS, 'ramps' => CanyonBeds::RAMPS, 'dip' => CanyonBeds::DIP],
 	JSON_THROW_ON_ERROR);

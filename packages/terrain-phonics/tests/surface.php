@@ -4,6 +4,7 @@ require dirname(__DIR__) . '/autoload.php';
 
 use TerrainPhonics\Edits;
 use TerrainPhonics\HeightTile;
+use TerrainPhonics\CanyonBeds;
 use TerrainPhonics\Landscape;
 use TerrainPhonics\Noise;
 use TerrainPhonics\Recipe;
@@ -119,6 +120,7 @@ $canyonCases = [
 	, [
 		'recipe' => [
 			'preset' => 'canyon'
+			, 'version' => 1
 			, 'heightScale' => 650
 			, 'baseFrequency' => 1 / 4000
 			, 'terraceSpacing' => 80
@@ -252,6 +254,55 @@ foreach($canyonCases as $case)
 
 	$physicalCanyon->close();
 }
+
+// A contact is fixed by the bedding datum for every local amount of erosion.
+foreach([.18, .92, 1.0] as $strength)
+foreach([-2, 0, 2] as $cycle)
+foreach(CanyonBeds::CONTACTS as $contact)
+{
+	$h = ($contact + 10*$cycle)*80;
+	[$height,$slope] = CanyonBeds::shape($h,80,$strength);
+	terrainNear($height,$h,1e-10,'stratal shelves stay at their material contact over multiple cycles');
+	terrainNear($slope,1-$strength,1e-10,'the two beds meet with a continuous shelf slope');
+}
+
+$section = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80]);
+$cliffs = $shelves = 0;
+for($x = 80; $x <= 330; $x += 2)
+{
+	[$h,$dx,$dz] = $section->coarse($x,2000);
+	$incline = hypot($dx,$dz);
+	$bed = ($h - $x*CanyonBeds::DIP[0] - 2000*CanyonBeds::DIP[1])/80;
+	if($incline > 8) $cliffs++;
+	if($incline < .8 && $bed > -2.2 && $bed < 2.25)
+	{
+		foreach(CanyonBeds::CONTACTS as $contact)
+			if(abs($bed - $contact) < .09) $shelves++;
+	}
+	foreach([[1,0,$dx],[0,1,$dz]] as [$ax,$az,$derivative])
+	{
+		$step = .0001;
+		$finite = ($section->coarse($x+$step*$ax,2000+$step*$az)[0]
+			- $section->coarse($x-$step*$ax,2000-$step*$az)[0])/(2*$step);
+		terrainNear($derivative,$finite,2e-6,'eroded canyon differentiates the retreat, bed strength and dip');
+	}
+	[$lo,$hi] = $section->regionalBounds([$x-1,1999,$x+1,2001]);
+	foreach([[$x-1,1999],[$x,2000],[$x+1,2001]] as [$wx,$wz])
+	{
+		$actual = $section->height($wx,$wz);
+		terrainCheck($actual >= $lo && $actual <= $hi,'canyon picking bounds enclose channel and shelf relief');
+	}
+}
+terrainCheck($cliffs >= 3 && $shelves >= 3, 'the sandbox section has steep faces and traversable shelves at bed contacts');
+
+$savedCanyon = new Landscape(['preset'=>'canyon','terraceSpacing'=>80]);
+$document = json_decode($savedCanyon->save(), true, flags: JSON_THROW_ON_ERROR);
+terrainCheck($document['recipe']['version'] === 2, 'new canyon records its bedded recipe');
+$reloaded = Landscape::load(json_encode($document, JSON_THROW_ON_ERROR));
+terrainNear($savedCanyon->height(182,3000),$reloaded->height(182,3000),0,'new canyon replays exactly');
+unset($document['recipe']['version']);
+$legacy = Landscape::load(json_encode($document, JSON_THROW_ON_ERROR));
+terrainCheck($legacy->recipe()['version'] === 1, 'older documents without a recipe version reopen on the original surface');
 
 $roughWall = new Recipe(['preset' => 'canyon', 'detailOctaves' => 1, 'damping' => 0]);
 $dampedWall = new Recipe(['preset' => 'canyon', 'detailOctaves' => 1]);
@@ -648,7 +699,7 @@ $exhaustive = [
 ];
 foreach(['coast','mountain','canyon'] as $preset)
 {
-	$world = new Landscape(['preset' => $preset,'worldSize' => 512,'spacing' => 1.25,'seed' => 'pick-regression',
+	$world = new Landscape(['version' => 1,'preset' => $preset,'worldSize' => 512,'spacing' => 1.25,'seed' => 'pick-regression',
 		'heightScale' => 130,'baseFrequency' => .006,'warpAmplitude' => 75,'terraceSpacing' => 6]);
 	$world->queue(['type' => 'raise','x' => -12,'z' => 0,'amount' => 65,'radius' => 8]);
 	$world->queue(['type' => 'lower','x' => 35,'z' => 0,'amount' => 25,'radius' => 20]);

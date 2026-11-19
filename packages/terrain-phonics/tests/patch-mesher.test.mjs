@@ -9,16 +9,18 @@ const count = 33 ** 2;
 
 for(const options of [
 	{preset: 'coast'}
+	, {preset: 'canyon', version: 1, terraceSpacing: 19}
 	, {preset: 'canyon', seed: 'canyon-λ', terraceSpacing: 19, terraceStrength: .75}
+
 	, {preset: 'mountain', warpAmplitude: 0, detailOctaves: 12}
 	, {preset: 'coast', heightScale: 0, detailAmplitude: 0, worldSize: 128, spacing: .25}
 ])
 test(`worker agrees with PHP for ${JSON.stringify(options)}`, () => {
-	const {recipe, permutation, patches} = JSON.parse(
+	const {recipe, permutation, patches, beds, ramps, dip} = JSON.parse(
 		execFileSync('php', [reference, JSON.stringify(options)], {maxBuffer: 2 ** 20})
 	);
 
-	const build = patchMesher(recipe, permutation);
+	const build = patchMesher(recipe, permutation, beds, ramps, dip);
 	const parents = new Map();
 
 	for(const {node, bytes} of patches)
