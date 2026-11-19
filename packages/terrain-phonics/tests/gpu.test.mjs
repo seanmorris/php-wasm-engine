@@ -21,6 +21,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'shadows.vert'
 		, 'shadows.frag'
 
+		, 'stars.vert', 'stars.frag'
 		, 'sky.vert'
 		, 'sky.frag'
 		, 'water.vert'
@@ -379,7 +380,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					colors.push(pixel());
 				}
 
-				illuminationResults.push({name, colors});
+				gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), 0);
+				gl.uniform3fv(gl.getUniformLocation(surface, 'uNightAmbient'), data.nightAmbient);
+				illuminationResults.push({name, colors, night: pixel()});
 			}
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -622,12 +625,41 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				shaders[`${name}.vert`].replace('// WATER', waterSource)
 				, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
 			);
+			// Render the stellar catalogue through the horizon at two headings on an otherwise black target.
+			const stars = program(shaders['stars.vert'], shaders['stars.frag']);
+			target(7, 256, 128);
+			gl.useProgram(stars);
+			gl.uniform1f(gl.getUniformLocation(stars,'uPixelScale'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars,'uExposure'), 1);
+			gl.enable(gl.BLEND);
+			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
+			const starField = (visibility, yaw) => {
+				const c = Math.cos(yaw), s = Math.sin(yaw);
+				gl.uniformMatrix4fv(gl.getUniformLocation(stars,'uViewProjection'), false,
+					[c,0,s,s, 0,2,0,0, s,0,-c,-c, 0,0,-.5,0]);
+				gl.uniform1f(gl.getUniformLocation(stars,'uNightVisibility'), visibility);
+				gl.clearColor(0,0,0,1);
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				gl.drawArrays(gl.POINTS, 0, 2400);
+				const pixels = new Uint8Array(256 * 128 * 4);
+				gl.readPixels(0, 0, 256, 128, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+				return pixels.filter((v,i) => i % 4 === 2);
+			};
+			const night = starField(1, 0), dusk = starField(.5, 0), day = starField(0, 0);
+			const turned = starField(1, 1.2), returned = starField(1, 0);
+			const litPixels = night.filter(v => v > 12).length;
+			const starChecks = {
+				litPixels, belowHorizon: night.slice(0, 256*64).some(v => v > 1),
+				fade: dusk.every((v,i) => Math.abs(2*v-night[i]) <= 3),
+				dayDark: day.every(v => v === 0), turned: turned.some((v,i) => Math.abs(v-night[i]) > 30),
+				stable: returned.every((v,i) => v === night[i])
+			};
 			const error = gl.getError();
 
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, transitionError
+				skyResults, transitionError, starChecks
 				, aerialResults
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults
@@ -642,6 +674,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 		}, {data, shaders});
 
+		const stars = result.starChecks;
+		assert.ok(stars.litPixels > 80 && stars.litPixels < 2500 && !stars.belowHorizon, 'stars sparsely cover the visible sky');
+		assert.ok(stars.fade && stars.dayDark, 'stars fade through twilight and vanish by day');
+		assert.ok(stars.turned && stars.stable, 'the star field is fixed to viewing directions');
 		assert.ok(result.transitionError < 1e-5, 'waves, wakes and shoreline depths match the morphing mesh');
 
 		for(const [i, expected] of [0, 128, 255].entries())
@@ -702,6 +738,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		for(const sample of result.illuminationResults)
 		{
 			assert.deepEqual(sample.colors[0], [0, 0, 0], `${sample.name} has no unlit ambient/body/foam emission`);
+			assert.ok(sample.night[2] > sample.night[0] && sample.night[1] > sample.night[0], `${sample.name} receives cool night fill`);
 			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
 		}
 

@@ -158,6 +158,8 @@ namespace
 	$cache->bind($consumer);
 	$expect($uniform('uSkyCacheReady') === 1, 'populated cache enables cached sampling');
 	$expect(!$cache->update(10, 99) && SkyCalls::$draws === 3, 'unchanged frames do no integration work');
+	$model->setNightGlow(.9);
+	$expect(!$cache->update(10, 99), 'adjusting night glow reuses the physical caches');
 	$model->setExposure(3);
 	$expect(!$cache->update(10, 99), 'display exposure does not invalidate physical radiance');
 	$expect(!$cache->update(10.1, 99), 'small vertical movement reuses half-metre altitude buckets');
