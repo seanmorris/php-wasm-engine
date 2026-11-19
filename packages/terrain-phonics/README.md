@@ -176,7 +176,8 @@ Colours are sRGB hex strings.
 
 The red beds and ledges keep the ratio, channel by channel, that they had to the rust and the cap rock in the default
 palette. Canyon dust and debris, beds too fine to resolve at a distance, and the light the walls throw into shadow
-follow the average of the beds weighted by their thickness.
+follow the average of the beds weighted by their thickness. The red beds and the dust are lighter than the colours they
+follow, so they stop at 1 in each channel: with a white rust the red beds are white too.
 
 ### Banding
 

@@ -126,7 +126,7 @@
     "src/RayQuery.php": "sha256-IrhxcoKUi4TdXtVa3CVBQj84UMoN1kSTmLVhk1gUD4c=",
     "src/Recipe.php": "sha256-6kMd/stIQcXTHope5xtKvqO2XppSKzjaxpGCGpiDoGU=",
     "src/Scene.php": "sha256-XV59h90qEikKNLKikFhyE6DqhwCVsmSUHfneVF42VAQ=",
-    "src/TerrainAppearance.php": "sha256-lzYac8zMHUUftnq3efi7Tz081d1+IUHDtfm/9MA2lBs=",
+    "src/TerrainAppearance.php": "sha256-8AAqPX0H+c0AHKP58cCKKh9kUmqrfHsdlnWIrLM/ll4=",
     "src/TerrainShadows.php": "sha256-Govu8fN6++8aoKtgr62uBTUMA5jKKEQ0XfrdlDgoLlU=",
     "src/TerrainSurface.php": "sha256-B+n9dypuMRtdx7IwV/FuoU1y3bjJ6H7R5LhA/IArnr8=",
     "src/Water.php": "sha256-jvNCUdwtg4cRg49knGwOGBLVoiAjVMi99n+yKI7mAm4=",
