@@ -268,6 +268,7 @@ foreach(CanyonBeds::CONTACTS as $contact)
 
 $section = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80]);
 $cliffs = $shelves = 0;
+$spans = [];
 for($x = 80; $x <= 330; $x += 2)
 {
 	[$h,$dx,$dz] = $section->coarse($x,2000);
@@ -287,6 +288,7 @@ for($x = 80; $x <= 330; $x += 2)
 		terrainNear($derivative,$finite,2e-6,'eroded canyon differentiates the retreat, bed strength and dip');
 	}
 	[$lo,$hi] = $section->regionalBounds([$x-1,1999,$x+1,2001]);
+	$spans[] = $hi - $lo;
 	foreach([[$x-1,1999],[$x,2000],[$x+1,2001]] as [$wx,$wz])
 	{
 		$actual = $section->height($wx,$wz);
@@ -294,6 +296,27 @@ for($x = 80; $x <= 330; $x += 2)
 	}
 }
 terrainCheck($cliffs >= 3 && $shelves >= 3, 'the sandbox section has steep faces and traversable shelves at bed contacts');
+sort($spans);
+// Bounding erosion strength by its whole range, not by the gullies in the box, makes this median 31.9 m.
+terrainCheck($spans[63] < 26, 'canyon bounds follow the local erosion strength: median span ' . $spans[63]);
+
+// Without detail noise to hide an error, the bedded section must still enclose every height in a small box.
+$bare = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80,
+	'detailAmplitude' => 0]);
+$escaped = 0;
+for($i = 0; $i < 400; $i++)
+{
+	$x = 61.7 * $i - 12000;
+	$z = 9000 - 47.3 * $i;
+	$size = 1 + $i % 6;
+	[$lo,$hi] = $bare->regionalBounds([$x,$z,$x+$size,$z+$size]);
+	for($j = 0; $j < 16; $j++)
+	{
+		$actual = $bare->height($x + $size * ($j % 4) / 3, $z + $size * intdiv($j, 4) / 3);
+		if($actual < $lo || $actual > $hi) $escaped++;
+	}
+}
+terrainCheck($escaped === 0, "bare canyon bounds enclose the bedded section: $escaped of 6400 heights escaped");
 
 $savedCanyon = new Landscape(['preset'=>'canyon','terraceSpacing'=>80]);
 $document = json_decode($savedCanyon->save(), true, flags: JSON_THROW_ON_ERROR);
@@ -1062,6 +1085,76 @@ $camera->pitch = -.35;
 $hit = $coast->raycast($camera->position, $camera->ray(.5, .5, 640/368), 6000);
 terrainCheck($hit !== null && $coast->stats()['generated'] < 200, 'cold coast pick avoids generating the approach corridor');
 $coast->close();
+
+// A caller that follows a moving point skips exact samples while the point stays above its block.
+$sandboxWorlds = [
+	['preset' => 'coast']
+	, ['preset' => 'mountain','heightScale' => 1400,'baseFrequency' => 1/2200]
+	, ['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80,'spacing' => 1.25]
+];
+
+foreach($sandboxWorlds as $recipe)
+{
+	$world = new Landscape($recipe);
+	$spacing = $world->recipe()['spacing'];
+	$blocks = [];
+	foreach([1, 2, 16, 128] as $cells)
+	for($i = 0; $i < 5; $i++)
+	{
+		$x = 911.3 * $i - 2500.2;
+		$z = 4000.7 - 1377.9 * $i;
+		$blocks[] = [$x, $z, $cells, $world->localBounds($x, $z, $cells)];
+	}
+	terrainCheck($world->stats()['generated'] === 0, 'block bounds generate no lattice nodes');
+	$enclosed = $aligned = 0;
+	foreach($blocks as [$x, $z, $cells, $block])
+	{
+		$width = $cells * $spacing;
+		$aligned += (int)($block['minX'] <= $x && $x < $block['maxX'] && $block['minZ'] <= $z && $z < $block['maxZ']
+			&& $block['maxX'] - $block['minX'] === $width && $block['maxZ'] - $block['minZ'] === $width
+			&& fmod($block['minX'], $width) === 0.0 && fmod($block['minZ'], $width) === 0.0);
+		// The lower edges belong to the block. The upper edges belong to its neighbours.
+		foreach([[0,0],[0,.999],[.999,0],[.999,.999],[.5,.5],[.37,.81]] as [$u,$v])
+		{
+			$height = $world->height($block['minX'] + $u * $width, $block['minZ'] + $v * $width);
+			$enclosed += (int)($height >= $block['minY'] && $height <= $block['maxY']);
+		}
+		$enclosed += (int)($world->height($x, $z) <= $block['maxY']);
+	}
+	terrainCheck($aligned === 20, "block bounds name the aligned block around the point: $aligned of 20");
+	terrainCheck($enclosed === 140, "block bounds enclose the reconstructed surface: $enclosed of 140");
+	terrainCheck(
+		$blocks[0][3]['maxY'] < $world->bounds()['maxY'] - 100
+		, 'a one-cell block bounds far below the global maximum'
+	);
+	[$x, $z] = [$blocks[5][0], $blocks[5][1]];
+	$before = $world->localBounds($x, $z, 2);
+	$far = $world->localBounds($x + 500, $z, 2);
+	$world->queue(['type' => 'raise','x' => $x,'z' => $z,'radius' => 30,'amount' => 250]);
+	$world->commit();
+	$after = $world->localBounds($x, $z, 2);
+	terrainCheck($after['maxY'] >= $world->height($x, $z) && $world->height($x, $z) > $before['maxY'],
+		'block bounds rise with an edit that lifts the surface past the old bound');
+	terrainCheck($world->localBounds($x + 500, $z, 2) === $far, 'an edit leaves distant block bounds unchanged');
+	$refusals = [[$x, 0, 'an empty block'], [1e9, 4, 'a point outside the world'], [$x, 4, 'a closed landscape']];
+
+	foreach($refusals as $i => [$px, $cells, $what])
+	{
+		if($i === 2) $world->close();
+
+		try
+		{
+			$world->localBounds($px, $z, $cells);
+			$refused = false;
+		}
+		catch(InvalidArgumentException|OutOfBoundsException|LogicException)
+		{
+			$refused = true;
+		}
+
+		terrainCheck($refused, "block bounds refuse $what");
+	}
+}
 
 $world = new Landscape(['worldSize' => 1024, 'spacing' => 1]);
 terrainCheck($world->proceduralMeshPatch(0, 0, 256), 'aligned root quadrant uses the batch generator');
