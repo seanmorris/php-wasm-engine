@@ -74,13 +74,18 @@ test('element queries follow VAO bindings, storage changes and context restorati
 	const bindings = new Map();
 	const sizes = new Map();
 	let active = null, bindingReads = 0, sizeReads = 0;
+	const otherTargets = new Map();
 	const gl = {
 		ARRAY_BUFFER: 34962, ELEMENT_ARRAY_BUFFER: 34963, ELEMENT_ARRAY_BUFFER_BINDING: 34965, BUFFER_SIZE: 34660,
 		createVertexArray() { return {}; },
 		bindVertexArray(vao) { if(!arguments.length) throw new TypeError(); active = vao; },
 		deleteVertexArray(vao) { if(active === vao) active = null; bindings.delete(vao); },
-		bindBuffer(target, buffer) { if(Number(target) === 34963 && !buffer?.invalid) bindings.set(active, buffer); },
-		bufferData(target, size) { sizes.set(bindings.get(active), size); },
+		bindBuffer(target, buffer) {
+			if(buffer?.invalid) return;
+			if(Number(target) === 34963) bindings.set(active, buffer);
+			else otherTargets.set(target, buffer);
+		},
+		bufferData(target, size) { sizes.set(target === 34963 ? bindings.get(active) : otherTargets.get(target), size); },
 		deleteBuffer(buffer) { if(bindings.get(active) === buffer) bindings.delete(active); },
 		getParameter() { bindingReads++; return bindings.get(active) ?? null; },
 		getBufferParameter() { sizeReads++; return sizes.get(bindings.get(active)); },
@@ -102,15 +107,25 @@ test('element queries follow VAO bindings, storage changes and context restorati
 	gl.bindVertexArray(a);
 	assert.equal(binding(), buffer);
 	assert.deepEqual([bindingReads,sizeReads], [2,1]);
+	gl.bindBuffer(gl.ARRAY_BUFFER, {});
+	gl.bufferData(gl.ARRAY_BUFFER, 4096, 0);
+	assert.equal(size(), 16);
+	assert.equal(sizeReads, 1);
+	const copyWriteBuffer = 36663;
+	gl.bindBuffer(copyWriteBuffer, buffer);
+	gl.bufferData(copyWriteBuffer, 32, 0);
+	assert.equal(binding(), buffer);
+	assert.equal(size(), 32);
+	assert.equal(sizeReads, 2);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 48, 0);
 	assert.equal(size(), 48);
 	gl.bindBuffer('34963', {invalid:true});
 	assert.equal(binding(), buffer);
-	assert.equal(bindingReads, 3);
+	assert.equal(bindingReads, 4);
 	assert.throws(() => gl.bindVertexArray(), TypeError);
 	canvas.dispatchEvent(new Event('webglcontextrestored'));
 	assert.equal(binding(), buffer);
-	assert.equal(bindingReads, 4);
+	assert.equal(bindingReads, 5);
 	gl.deleteBuffer(buffer);
 	assert.equal(binding(), null);
 });

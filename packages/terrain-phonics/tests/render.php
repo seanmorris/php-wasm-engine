@@ -474,8 +474,11 @@ $prefetchPeak = 0;
 for($frame = 0; $frame < 120; $frame++)
 {
 	$flightCamera->position[0] += 5;
+	$previousSelections = renderGet($flightScene, 'selections');
 	$flightScene->update(1 / 60, $flightCamera);
 	$flightStats = $flightScene->stats();
+	renderCheck($flightStats['selections'] - $previousSelections <= 1,
+		'motion and newly resident siblings share one LOD selection per frame after bootstrap');
 	$prefetchPeak = max($prefetchPeak, $flightStats['prefetchJobs']);
 
 	renderCheck(

@@ -75,8 +75,8 @@ const indexedContexts = new WeakSet();
 
 /**
  * Reuse driver-confirmed element bindings and buffer sizes for indexed draw validation.
- * The element binding belongs to the VAO. Reallocation through any buffer target
- * invalidates sizes, including when the allocation failed and the old size survived.
+ * The element binding belongs to the VAO. WebGL keeps ARRAY_BUFFER storage
+ * separate from element storage. Copy targets can alias an element buffer.
  * @param {WebGL2RenderingContext} gl Context intercepted before SDL creates its objects.
  * @param {HTMLCanvasElement} canvas Context lifecycle event source.
  * @returns {void}
@@ -127,7 +127,9 @@ export function cacheIndexQueries(gl, canvas)
 		sizes.delete(buffer);
 	});
 	wrap('bufferData', 2, (allocate, ...args) => {
-		sizes = new WeakMap();
+		// Streaming vertex uploads cannot resize an element buffer. For other
+		// targets, re-read the actual size, including after a failed allocation.
+		if (args[0] !== gl.ARRAY_BUFFER) sizes = new WeakMap();
 		return allocate(...args);
 	});
 	wrap('getParameter', 1, (query, parameter) => {
