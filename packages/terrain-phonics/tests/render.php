@@ -594,6 +594,9 @@ try
 
 $bootstrapSurface = new Landscape;
 $bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere);
+// The fixtures from here to the staged ones check what whole selections do from one update to the next. A
+// clock-driven slice would make their results depend on the speed of the machine, so each sets it to zero.
+$bootstrapScene->selectionSliceMs = 0;
 $bootstrapScene->budgetMs = 1000;
 $bootstrapScene->update(.1, new Camera);
 renderCheck($bootstrapScene->stats()['patches'] === 1, 'one completed bootstrap provides whole-world coverage');
@@ -631,6 +634,7 @@ $bootstrapSurface->close();
 
 $loadingSurface = new Landscape;
 $loadingScene = new Scene($loadingSurface, new Water, new Atmosphere);
+$loadingScene->selectionSliceMs = 0;
 $loadingScene->budgetMs = .25;
 $loadingCamera = new Camera;
 $partialUpdates = 0;
@@ -670,6 +674,7 @@ $canyonSurface = new Landscape([
 ]);
 
 $canyonScene = new Scene($canyonSurface, new Water, new Atmosphere);
+$canyonScene->selectionSliceMs = 0;
 $canyonScene->quality = 2;
 $canyonScene->budgetMs = 1000;
 renderSet($canyonScene, 'viewportHeight', 360);
@@ -707,6 +712,7 @@ $canyonSurface->close();
 // A downward flight predicts future detail while the current high-altitude view needs only root.
 $predictedSurface = new Landscape(['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
 $predictedScene = new Scene($predictedSurface, new Water, new Atmosphere);
+$predictedScene->selectionSliceMs = 0;
 $predictedScene->budgetMs = 1000;
 // These checks follow speculative jobs from one 60 Hz update to the next, so each changed view must select at once.
 $predictedScene->selectionInterval = 0;
@@ -769,6 +775,7 @@ $predictedSurface->close();
 // The old quadrant-ordered scheduler left this camera over level-three patches.
 $flightSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $flightScene = new Scene($flightSurface, new Water, new Atmosphere);
+$flightScene->selectionSliceMs = 0;
 $flightScene->budgetMs = 1000;
 // This flight checks how motion and finished siblings share a selection on every frame. The limited flight follows it.
 $flightScene->selectionInterval = 0;
@@ -877,6 +884,7 @@ $flightSurface->close();
 // The same 300 m/s flight as above with the limiter on.
 $limitedSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $limitedScene = new Scene($limitedSurface, new Water, new Atmosphere);
+$limitedScene->selectionSliceMs = 0;
 $limitedScene->budgetMs = 1000;
 $limitedScene->selectionInterval = .1;
 $limitedCamera = new Camera;
@@ -922,6 +930,7 @@ $limitedSurface->close();
 $travelSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $travelWater = new Water;
 $travelScene = new Scene($travelSurface, $travelWater, new Atmosphere);
+$travelScene->selectionSliceMs = 0;
 $travelScene->budgetMs = 1000;
 $travelScene->selectionInterval = .1;
 $travelCamera = new Camera;
@@ -1092,6 +1101,7 @@ $stalled = static fn(string $action, string $path, string $key, string $payload)
 // The root never arrives from this worker, so nothing is drawn and the limiter must stay out of the way.
 $emptySurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $emptyScene = new Scene($emptySurface, new Water, new Atmosphere, new BrowserPatchBuilder($stalled));
+$emptyScene->selectionSliceMs = 0;
 $emptyScene->selectionInterval = .1;
 $emptyCamera = new Camera;
 $selected = 0;
@@ -1117,6 +1127,7 @@ foreach([0.0,.1] as $interval)
 {
 	$twinSurface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0]);
 	$twinScene = new Scene($twinSurface, new Water, new Atmosphere);
+	$twinScene->selectionSliceMs = 0;
 	$twinScene->budgetMs = 1000;
 	$twinScene->selectionInterval = $interval;
 	$twins[] = [$twinSurface,$twinScene];
@@ -1193,9 +1204,714 @@ foreach($twins as [$twinSurface,$twinScene])
 	$twinSurface->close();
 }
 
+// Spread selections. These fixtures slice selections by steps with selectionSliceSteps, so what they check does
+// not depend on the clock or the speed of the machine. The fixtures above run every selection whole with
+// selectionSliceMs at zero, which is the behaviour from before selections were spread.
+
+// A walk that pauses returns the lists of one that does not, and a walk without credit never pauses.
+$spreadView = new Camera;
+$spreadView->position = [-300.0, 40.0, 200.0];
+$spreadView->yaw = 2.6;
+$spreadView->pitch = -.6;
+$spreadPlanes = $spreadView->clipPlanes(1280, 720);
+$pausedWalk = $detailLod->walk($spreadView->position, $detailPatches, 1, 600, null, $spreadPlanes, -1.5, 1.5, 3);
+$pauses = 0;
+
+for($pausedWalk->current(); $pausedWalk->valid(); $pausedWalk->send(3)) $pauses++;
+
+renderCheck(
+	$pauses > 5 && $pausedWalk->getReturn()
+		=== $detailLod->select($spreadView->position, $detailPatches, 1, 600, null, $spreadPlanes, -1.5, 1.5)
+	, 'a walk that pauses every three refined nodes returns the lists of a whole walk'
+);
+
+$wholeWalk = $detailLod->walk($spreadView->position, $detailPatches, 1, 600);
+$wholeWalk->current();
+renderCheck(!$wholeWalk->valid(), 'a walk without credit never pauses');
+
+/**
+ * Make a scene for the spread-selection checks: a flat 256 m world whose patches finish one per update.
+ * @param int $steps Selection steps per update; zero runs every selection whole.
+ * @param float $interval Selection limiter spacing in seconds.
+ * @param array $recipe Recipe entries that replace the fixture's own.
+ * @return array The landscape, its water and the scene.
+ */
+function renderSpreadScene(int $steps, float $interval = 0, array $recipe = []): array
+{
+	$surface = new Landscape($recipe + ['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
+	$water = new Water;
+	$scene = new Scene($surface, $water, new Atmosphere);
+	$scene->budgetMs = 1000;
+	$scene->selectionInterval = $interval;
+	$scene->selectionSliceMs = 0;
+	$scene->selectionSliceSteps = $steps;
+
+	return [$surface, $water, $scene];
+}
+
+/**
+ * Check that every drawn patch and every ancestor of one is resident.
+ * @param Scene $scene Scene to inspect.
+ * @param string $message Failure message.
+ * @return void Records one check.
+ */
+function renderResident(Scene $scene, string $message): void
+{
+	$patches = renderGet($scene, 'patches');
+	$resident = true;
+
+	foreach(renderGet($scene, 'draw') as $node)
+	for($level = $node['level'], $x = $node['ix'], $z = $node['iz']; $level >= 0; $level--, $x >>= 1, $z >>= 1)
+	$resident = $resident && isset($patches["$level:$x:$z"]);
+
+	renderCheck($resident, $message);
+}
+
+/**
+ * Advance a scene as a host does after moving the camera: once, then until it reports no more work.
+ * @param Scene $scene Scene to advance.
+ * @param Camera $camera Viewing camera.
+ * @param int $limit Most updates to run.
+ * @return int Updates run.
+ */
+function renderSettle(Scene $scene, Camera $camera, int $limit = 3000): int
+{
+	$updates = 0;
+
+	do $scene->update(1 / 60, $camera);
+	while(++$updates < $limit && $scene->dirty());
+
+	return $updates;
+}
+
+$spreadCamera = new Camera;
+$spreadCamera->position = [0.0, 12.0, 0.0];
+$spreadCamera->pitch = -.3;
+
+// A slice wide enough for every selection runs the spread machinery to the end inside each update. It must then
+// do exactly what whole selections do, with and without the limiter, while patches finish and the view moves.
+foreach([0.0, .1] as $interval)
+{
+	$pair = [renderSpreadScene(0, $interval), renderSpreadScene(1000000000, $interval)];
+	[[, , $whole], [, , $wide]] = $pair;
+	$pairCamera = clone $spreadCamera;
+	$same = true;
+
+	for($frame = 0; $frame < 260; $frame++)
+	{
+		if($frame >= 90 && $frame < 200)
+		{
+			$pairCamera->position[0] += .9;
+			$pairCamera->yaw += .01;
+		}
+
+		$whole->update(1 / 60, $pairCamera);
+		$wide->update(1 / 60, $pairCamera);
+
+		$same = $same && renderGet($whole, 'draw') === renderGet($wide, 'draw')
+			&& array_keys(renderGet($whole, 'jobs')) === array_keys(renderGet($wide, 'jobs'))
+			&& renderGet($whole, 'reserved') === renderGet($wide, 'reserved')
+			&& renderGet($whole, 'selections') === renderGet($wide, 'selections')
+			&& renderGet($whole, 'retiring') === renderGet($wide, 'retiring')
+			&& !$wide->stats()['selectionInFlight'] && !$whole->stats()['selectionInFlight']
+			&& $wide->dirty() === $whole->dirty();
+	}
+
+	renderCheck(
+		$same && renderGet($wide, 'selections') > 10 && $wide->stats()['selectionUpdates'] === 1
+			&& $whole->stats()['selectionUpdates'] === 1
+		, 'a slice that holds every selection draws, reserves and queues exactly what whole selections do'
+	);
+
+	foreach($pair as [$pairSurface, , $pairScene])
+	{
+		$pairScene->close();
+		$pairSurface->close();
+	}
+}
+
+// One step per update. Warm up with a wider slice, then follow single steps while the camera moves.
+[$spreadSurface, $spreadWater, $spread] = renderSpreadScene(40);
+// The first update selects twice: once with nothing resident, which requests the root, and once when the root
+// arrives in the same update. Neither may wait for a slice.
+renderCheck(
+	$spread->stats()['selections'] === 0 && renderSelections($spread, 1 / 60, $spreadCamera) === 2
+		&& !$spread->stats()['selectionInFlight'] && $spread->stats()['visible'] === 1
+	, 'with nothing drawn every selection runs whole and the root draws in its first update'
+);
+renderSettle($spread, $spreadCamera);
+$low = $spreadCamera->position;
+
+// Rising until the cover is coarse leaves the fine patches cached, so the first selection after coming back down
+// splits into them. Then the camera travels at 36 m/s, which keeps the lookahead walks running.
+$spreadCamera->position = [0.0, 60000.0, 0.0];
+renderSettle($spread, $spreadCamera);
+renderCheck($spread->stats()['visible'] === 1, 'the risen view settles on the root alone');
+$spread->selectionSliceSteps = 1;
+$spreadCamera->position = $low;
+$applied = $phases = $seen = [];
+
+// One step per update is slow, over a hundred updates for each selection here, so the loop runs long enough
+// for several selections that start while the camera travels.
+for($frame = 0; $frame < 1400; $frame++)
+{
+	if($frame >= 300)
+	{
+		$spreadCamera->position[0] += $frame % 600 < 300 ? .6 : -.6;
+		$spreadCamera->yaw += .002;
+	}
+
+	$phase = $spread->stats()['selectionPhase'];
+	$before = renderGet($spread, 'draw');
+	$spread->update(1 / 60, $spreadCamera);
+	$after = $spread->stats()['selectionPhase'];
+
+	if(renderGet($spread, 'draw') !== $before) $applied[] = $phase;
+
+	if($phase !== null && $phase === $after) $phases[$phase] = ($phases[$phase] ?? 0) + 1;
+
+	if($phase !== null) $seen[$phase] = true;
+
+	renderResident($spread, 'every drawn patch is resident while selections are spread one step at a time');
+
+	if($frame % 10 === 0) $spread->render($spreadCamera, 1280, 720, $frame / 60);
+
+	if($frame % 50 === 0) renderCover(renderGet($spread, 'draw'), 256);
+}
+
+renderCheck(
+	count($applied) >= 2 && array_unique($applied) === ['apply']
+	, 'the drawn cover changes only in the update that applies a selection, never part way through one'
+);
+
+// Everything is resident in this small world once the view has refined, so the corridor asks for nothing more
+// and speculate has nothing to pause in. It still runs after every pair of lookahead walks.
+renderCheck(
+	($phases['walk'] ?? 0) > 20 && ($phases['groups'] ?? 0) > 20 && ($phases['midpoint'] ?? 0) > 5
+		&& ($phases['endpoint'] ?? 0) > 5 && isset($seen['speculate'])
+	, 'the view walk, the grouping and the lookahead walks resume where they paused'
+);
+
+renderCheck(
+	$spread->dirty() && $spread->stats()['selectionInFlight'] && $spread->stats()['selectionPending']
+	, 'a selection in flight keeps the scene dirty and is reported as pending'
+);
+
+// Turning the slice off finishes the selection in flight in the next update.
+$spread->selectionSliceSteps = 0;
+$spread->update(1 / 60, $spreadCamera);
+renderCheck(!$spread->stats()['selectionInFlight'], 'a slice turned off finishes the selection in flight at once');
+
+// Patches that the view walk read can leave the cache before the selection applies. Refine close to the
+// ground, rise until the cover is coarse and the fine patches are only cached, then come back down. While the
+// selection for the low view is in flight, a smaller cache evicts the fine patches it was about to draw.
+$spread->selectionSliceSteps = 40;
+$low = [-60.0, 12.0, -60.0];
+$spreadCamera->position = $low;
+renderSettle($spread, $spreadCamera);
+$spreadCamera->position = [-60.0, 60000.0, -60.0];
+renderSettle($spread, $spreadCamera);
+$spread->selectionSliceSteps = 1;
+$spreadCamera->position = $low;
+$spread->update(1 / 60, $spreadCamera);
+renderCheck($spread->stats()['selectionPhase'] === 'walk', 'the low view starts a selection that pauses in its walk');
+
+while($spread->stats()['selectionPhase'] !== 'balance') $spread->update(1 / 60, $spreadCamera);
+
+// The walk is complete and every patch it chose was resident when it read them. The update that balances its
+// choice also evicts down to the smaller cache, before the next update applies it.
+$chosen = array_column(renderGet($spread, 'flight')['view']['draw'], 'key');
+$spread->maximumPatches = 40;
+$spread->update(1 / 60, $spreadCamera);
+$resident = renderGet($spread, 'patches');
+$gone = array_diff($chosen, array_keys($resident));
+
+renderCheck(
+	$spread->stats()['selectionPhase'] === 'apply' && count($gone) > 10
+		&& array_diff(array_column(renderGet($spread, 'flight')['desired'], 'key'), array_keys($resident)) !== []
+	, 'eviction removes patches that the selection in flight read and still targets'
+);
+
+$spread->update(1 / 60, $spreadCamera);
+renderCheck($spread->stats()['selectionPhase'] === 'groups', 'the selection applies with part of its target gone');
+renderResident($spread, 'a selection whose target lost patches to eviction draws only resident patches');
+renderCover(renderGet($spread, 'draw'), 256);
+$spread->maximumPatches = 21;
+$spread->selectionSliceSteps = 2;
+
+for($frame = 0; $frame < 400; $frame++)
+{
+	$spreadCamera->position[2] += $frame % 2 ? 3 : -2;
+	$spreadCamera->yaw += .02;
+	$spread->update(1 / 60, $spreadCamera);
+	$spread->render($spreadCamera, 1280, 720, $frame / 60);
+	renderResident($spread, 'a tight cache keeps every drawn patch resident while selections are spread');
+	$stats = $spread->stats();
+	renderCheck($stats['reservedPatches'] <= $stats['maximumPatches'], 'spread selections keep the hard cache bound');
+}
+
+$spread->close();
+$spreadSurface->close();
+
+// From its grouping phase to publish, a spread selection has its own reservation while the jobs of the last
+// selection stay queued, and some of those grow from parents that only the older reservation holds. buildVertex()
+// reads a job's parent for the morph heights, so a cache that shrinks then must not evict those parents. A flight
+// at 3 m a frame over a flat 512 m world queues such jobs within a few dozen frames.
+[$orphanSurface, , $orphan] = renderSpreadScene(30, 0, ['worldSize' => 512]);
+$orphanCamera = new Camera;
+$orphanCamera->position = [-236.0, 12.0, 0.0];
+$orphanCamera->yaw = -M_PI / 2;
+$orphanCamera->pitch = -.3;
+
+/**
+ * List the parents of queued jobs that a set of patch keys lacks.
+ * @param Scene $scene Scene whose jobs to read.
+ * @param array $keys Patch keys to look the parents up in.
+ * @return array Missing parent keys, as keys.
+ */
+function renderJobParentsMissing(Scene $scene, array $keys): array
+{
+	$missing = [];
+
+	foreach(renderGet($scene, 'jobs') as $job)
+	{
+		$parent = ($job['level'] - 1) . ':' . ($job['ix'] >> 1) . ':' . ($job['iz'] >> 1);
+
+		if($job['level'] > 0 && !isset($keys[$parent])) $missing[$parent] = true;
+	}
+
+	return $missing;
+}
+
+$exposed = [];
+
+for($frame = 0; $frame < 150 && $exposed === []; $frame++)
+{
+	$orphanCamera->position[0] += 3;
+	$orphan->update(1 / 60, $orphanCamera);
+	$flight = renderGet($orphan, 'flight');
+
+	if(isset($flight['reservation'])) $exposed = renderJobParentsMissing($orphan, $flight['reservation']);
+}
+
+renderCheck($exposed !== [], 'a spread selection reserves apart from the parents of jobs still queued');
+$orphan->maximumPatches = 13;
+$orphaned = [];
+
+for($frame = 0; $frame < 40; $frame++)
+{
+	$orphan->update(1 / 60, $orphanCamera);
+	$orphaned += renderJobParentsMissing($orphan, renderGet($orphan, 'patches'));
+	renderResident($orphan, 'a cache that shrinks during a spread selection keeps every drawn patch resident');
+}
+
+renderCheck($orphaned === [], 'a cache that shrinks during a spread selection keeps the parent of every queued job');
+$orphan->close();
+$orphanSurface->close();
+
+// Every event that makes the last selection wrong, not merely late, drops a selection in flight. Its replacement
+// starts in the same update and is spread like any other, because the cover drawn meanwhile stays complete and
+// resident. Only with nothing drawn does it run whole: the picture would stay empty until it completed.
+[$forcedSurface, $forcedWater, $forced] = renderSpreadScene(40);
+$forcedCamera = new Camera;
+$forcedCamera->position = [0.0, 12.0, 0.0];
+$forcedCamera->pitch = -.3;
+renderSettle($forced, $forcedCamera);
+$forced->selectionSliceSteps = 2;
+
+/**
+ * Put a selection in flight, apply one event while it is in flight and report what the next update made of it.
+ *
+ * The selection in flight from the event before runs to its end first, so that every event meets a selection
+ * that follows a completed one. After two drops in a row the third selection runs whole, which the checks after
+ * the events cover.
+ * @param Scene $scene Scene with a cover drawn.
+ * @param Water $water The scene's water.
+ * @param Camera $camera Viewing camera, moved by 20 m to start the selection.
+ * @param string $event detail, fov, water, waves, viewport, jump, turn, travel or restore.
+ * @return array Whether the event alone dropped the selection, whether the update started a replacement, and
+ *     whether a selection is in flight after the update.
+ */
+function renderInterrupt(Scene $scene, Water $water, Camera $camera, string $event): array
+{
+	for($updates = 0; $updates < 3000 && renderGet($scene, 'flight') !== null; $updates++)
+	$scene->update(1 / 60, $camera);
+
+	$camera->position[2] += $camera->position[2] > 0 ? -20 : 20;
+	$scene->update(1 / 60, $camera);
+	$first = renderGet($scene, 'flight')['first'] ?? null;
+	renderCheck($first !== null, 'a move of 20 m starts a selection that stays in flight');
+
+	// Each event changes the view or a setting between two updates, as the host would.
+	switch($event)
+	{
+		case 'detail': $scene->quality = 2; break;
+		case 'fov': $camera->fov = 1.2; break;
+		case 'water': $water->setLevel(3); break;
+		case 'waves': $water->setWaveScale(.5); break;
+		case 'viewport': $scene->render($camera, 900, 700, 0); break;
+		case 'jump': $camera->position[0] += 90; break;
+		case 'turn': $camera->yaw += 1.2; break;
+		case 'travel': $camera->position[0] += 2; $camera->yaw += .05; break;
+
+		case 'restore':
+			// A lost context takes every name with it. This scene owns all that are left at this point.
+			foreach(['buffers','vaos','textures','programs','framebuffers','renderbuffers'] as $kind)
+			$GLOBALS['terrainGl'][$kind] = [];
+			$scene->restore();
+	}
+
+	$dropped = renderGet($scene, 'flight') === null;
+	$selections = renderGet($scene, 'selections');
+	$scene->update(1 / 60, $camera);
+	$flight = renderGet($scene, 'flight');
+	$restarted = renderGet($scene, 'selections') === $selections + 1
+		&& ($flight === null || $flight['first'] !== $first);
+
+	return [$dropped, $restarted, $flight !== null];
+}
+
+$events = [
+	'detail' => 'a new detail setting', 'fov' => 'a new field of view', 'water' => 'a new water level'
+	, 'waves' => 'a new wave height', 'viewport' => 'a new viewport', 'jump' => 'a jump of more than 64 m'
+	, 'turn' => 'a turn of more than half the field of view'
+];
+
+foreach($events as $event => $name)
+{
+	[$dropped, $restarted, $inFlight] = renderInterrupt($forced, $forcedWater, $forcedCamera, $event);
+
+	renderCheck(
+		!$dropped && $restarted && $inFlight
+		, "$name drops the selection in flight and starts a spread replacement at once"
+	);
+
+	renderResident($forced, "$name leaves every drawn patch resident");
+}
+
+[$dropped, $restarted, $inFlight] = renderInterrupt($forced, $forcedWater, $forcedCamera, 'travel');
+renderCheck(!$dropped && !$restarted && $inFlight, 'ordinary travel and turns keep the selection in flight');
+[$dropped, $restarted, $inFlight] = renderInterrupt($forced, $forcedWater, $forcedCamera, 'restore');
+
+renderCheck(
+	$dropped && $restarted && $inFlight
+	, 'restore() drops the selection in flight and the next update spreads its replacement'
+);
+
+// A setting that changes on every update drops each spread selection before it applies. After two such drops in a
+// row the next selection runs whole, so the cover follows a dragged slider or a resized window every third update.
+renderSettle($forced, $forcedCamera);
+$forcedCamera->position[2] += $forcedCamera->position[2] > 0 ? -20 : 20;
+$forced->update(1 / 60, $forcedCamera);
+$streak = [];
+
+foreach([1.0, 2.0] as $detail)
+{
+	$forced->quality = $detail;
+	$completed = $forced->stats()['selectionsCompleted'];
+	$forced->update(1 / 60, $forcedCamera);
+	$streak[] = [$forced->stats()['selectionInFlight'], $forced->stats()['selectionsCompleted'] - $completed];
+}
+
+renderCheck(
+	$streak === [[true, 0], [false, 1]]
+	, 'a second drop in a row runs the replacement whole in the same update'
+);
+
+$completed = $forced->stats()['selectionsCompleted'];
+
+for($frame = 0; $frame < 60; $frame++)
+{
+	$forcedCamera->position[0] += .3;
+	$forced->update(1 / 60, $forcedCamera);
+	$forced->render($forcedCamera, 900 + $frame, 700, 0);
+	renderResident($forced, 'every drawn patch stays resident while the viewport changes on every update');
+}
+
+renderCheck(
+	$forced->stats()['selectionsCompleted'] - $completed >= 19
+	, 'a viewport that changes on every update still gets a selection every third update'
+);
+
+// prepareLandscape() drops the selection at once and no selection runs while the edit is prepared.
+$forcedCamera->position[2] += 9;
+$forced->update(1 / 60, $forcedCamera);
+$edited = Landscape::load($forcedSurface->save());
+$edited->queue(['type' => 'raise', 'x' => 0, 'z' => 0, 'radius' => 30, 'amount' => 4]);
+$edited->commit();
+$forced->prepareLandscape($edited);
+$selections = $forced->stats()['selections'];
+renderCheck(!$forced->stats()['selectionInFlight'], 'prepareLandscape() drops the selection in flight');
+
+for($frame = 0; $frame < 400 && $forced->stats()['pendingEdits'] > 0; $frame++)
+$forced->update(1 / 60, $forcedCamera);
+
+$published = $forced->takePreparedLandscape();
+
+renderCheck(
+	$published === $edited && $forced->stats()['selections'] === $selections && !$forced->stats()['selectionInFlight']
+	, 'no selection starts while an edit is prepared'
+);
+
+$forcedSurface->close();
+$forcedSurface = $published;
+$forced->update(1 / 60, $forcedCamera);
+renderCheck(
+	$forced->stats()['selections'] === $selections + 1 && $forced->stats()['selectionInFlight']
+	, 'the published edit starts a spread selection in the next update'
+);
+
+// A republished landscape and a replaced one empty the cache, so their first selections run whole.
+$forcedCamera->position[2] += 9;
+$forced->update(1 / 60, $forcedCamera);
+renderCheck($forced->stats()['selectionInFlight'], 'a selection is in flight before the landscape is republished');
+$forcedSurface->queue(['type' => 'raise', 'x' => 40, 'z' => 40, 'radius' => 30, 'amount' => 2]);
+$forcedSurface->commit();
+$forced->update(1 / 60, $forcedCamera);
+$stats = $forced->stats();
+
+renderCheck(
+	!$stats['selectionInFlight'] && $stats['visible'] === 1 && $stats['selectionUpdates'] === 1
+	, 'a republished landscape drops the selection in flight and selects whole until it draws'
+);
+
+renderSettle($forced, $forcedCamera);
+$forcedCamera->position[2] += 9;
+$forced->update(1 / 60, $forcedCamera);
+$replacement = new Landscape(['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
+$forced->setLandscape($replacement);
+renderCheck(!$forced->stats()['selectionInFlight'], 'a replaced landscape drops the selection in flight');
+$forced->update(1 / 60, $forcedCamera);
+$stats = $forced->stats();
+
+renderCheck(
+	!$stats['selectionInFlight'] && $stats['visible'] === 1 && $stats['selectionUpdates'] === 1
+	, 'the replaced landscape selects whole until it draws'
+);
+$forced->close();
+$forcedSurface->close();
+$replacement->close();
+
+// While the view keeps moving, the limiter counts its spacing from the start of a selection. A selection that
+// lasts longer than one interval is followed in the next update by another, and a short one waits as before.
+$spacings = [
+	[3, 'a long selection is followed at once by the next'], [1000000000, 'short selections start six frames apart'],
+];
+
+foreach($spacings as [$steps, $message])
+{
+	[$limitSurface, , $limit] = renderSpreadScene(40, .1);
+	$limitCamera = new Camera;
+	$limitCamera->position = [0.0, 12.0, 0.0];
+	renderSettle($limit, $limitCamera);
+	$limit->selectionSliceSteps = $steps;
+	$starts = $ends = [];
+
+	for($frame = 0; $frame < 360; $frame++)
+	{
+		// Mostly more than one 8 m position bucket a frame, without leaving the world.
+		$limitCamera->position[0] = 110 * sin($frame * .09);
+		$before = $limit->stats();
+		$limit->update(1 / 60, $limitCamera);
+		$after = $limit->stats();
+
+		if($after['selections'] > $before['selections']) $starts[] = $frame;
+
+		if($after['selectionsCompleted'] > $before['selectionsCompleted']) $ends[] = $frame;
+	}
+
+	$gaps = [];
+
+	foreach($ends as $end)
+	foreach($starts as $start)
+	if($start >= $end)
+	{
+		$gaps[] = $start - $end;
+		break;
+	}
+
+	$spacing = [];
+
+	foreach($starts as $i => $start) if($i > 0) $spacing[] = $start - $starts[$i - 1];
+
+	renderCheck(
+		count($starts) > 4
+			&& ($steps === 3 ? max($gaps) <= 1 && min($spacing) > 6 : min($spacing) === 6 && max($spacing) === 6)
+		, $message
+	);
+	$limit->close();
+	$limitSurface->close();
+}
+
+// The host slices by time, not by steps, and there a phase that cannot pause also waits for an update of its own
+// when its last cost does not fit. A time slice wider than any selection must give what whole selections give.
+// One far below any step leaves each update a single step, which the clock decides as surely as a step count.
+[$timedSurface, , $timedWhole] = renderSpreadScene(0);
+[$timedWideSurface, , $timedWide] = renderSpreadScene(0);
+[$timedTinySurface, , $timedTiny] = renderSpreadScene(0);
+$timedWide->selectionSliceMs = 1e6;
+$timedTiny->selectionSliceMs = 1e-9;
+$timedCamera = new Camera;
+$timedCamera->position = [0.0, 12.0, 0.0];
+$timedCamera->pitch = -.3;
+$same = $applyOnly = true;
+$longest = $tinyCompleted = 0;
+
+for($frame = 0; $frame < 700; $frame++)
+{
+	if($frame >= 120 && $frame < 400)
+	{
+		$timedCamera->position[0] += .5;
+		$timedCamera->yaw += .004;
+	}
+
+	$timedWhole->update(1 / 60, $timedCamera);
+	$timedWide->update(1 / 60, $timedCamera);
+	$same = $same && renderGet($timedWhole, 'draw') === renderGet($timedWide, 'draw')
+		&& array_keys(renderGet($timedWhole, 'jobs')) === array_keys(renderGet($timedWide, 'jobs'))
+		&& renderGet($timedWhole, 'reserved') === renderGet($timedWide, 'reserved')
+		&& !$timedWide->stats()['selectionInFlight'];
+
+	$phase = $timedTiny->stats()['selectionPhase'];
+	$completed = $timedTiny->stats()['selectionsCompleted'];
+	$before = renderGet($timedTiny, 'draw');
+	$timedTiny->update(1 / 60, $timedCamera);
+	$applyOnly = $applyOnly && (renderGet($timedTiny, 'draw') === $before || $phase === 'apply' || $phase === null);
+	renderResident($timedTiny, 'every drawn patch is resident while a tiny time slice spreads selections');
+
+	if($timedTiny->stats()['selectionsCompleted'] > $completed)
+	{
+		$tinyCompleted++;
+		$longest = max($longest, $timedTiny->stats()['selectionUpdates']);
+	}
+}
+
+renderCheck(
+	$same && renderGet($timedWide, 'selections') > 10
+	, 'a time slice that holds every selection draws, reserves and queues exactly what whole selections do'
+);
+
+renderCheck(
+	$applyOnly && $tinyCompleted > 3 && $longest >= 8
+	, 'a time slice below any step spreads each selection one step an update and changes the cover only in apply'
+);
+
+renderSettle($timedWhole, $timedCamera);
+renderSettle($timedTiny, $timedCamera);
+renderCheck(
+	!$timedWhole->dirty() && !$timedTiny->dirty() && renderKeys($timedWhole) === renderKeys($timedTiny)
+	, 'a view at rest settles on the cover of the whole scene under a tiny time slice'
+);
+
+foreach([[$timedSurface, $timedWhole], [$timedWideSurface, $timedWide], [$timedTinySurface, $timedTiny]]
+	as [$timedLandscape, $timedScene]
+){
+	$timedScene->close();
+	$timedLandscape->close();
+}
+
+// Two scenes share every input and differ only in how selections run. While the eye trembles inside one position
+// bucket, finished groups ask for every selection; the spread scene must draw them while the view moves, and
+// every group must get a selection within one spread selection and one interval of finishing.
+foreach([[.1, 7], [0, 3]] as [$interval, $steps])
+{
+	$twins = [renderSpreadScene(0, $interval), renderSpreadScene($steps, $interval)];
+	[[, , $free], [, , $spread]] = $twins;
+	$twinCamera = new Camera;
+	$twinCamera->position = [1.0, 12.0, 0.0];
+	$twinCamera->pitch = -.4;
+	$waited = $owed = 0;
+	$longest = 0;
+
+	for($frame = 0; $frame < 900; $frame++)
+	{
+		$twinCamera->position[0] = 1 + (($frame + 1) % 2) / 1000;
+		$free->update(1 / 60, $twinCamera);
+		$before = $spread->stats()['selections'];
+		$spread->update(1 / 60, $twinCamera);
+		renderResident($spread, 'a trembling view keeps every drawn patch resident while selections are spread');
+
+		if($spread->stats()['selections'] > $before) $owed = 0;
+		elseif(renderGet($spread, 'selectionDeferred')) $longest = max($longest, ++$owed);
+
+		if($spread->stats()['selectionUpdates'] > $waited) $waited = $spread->stats()['selectionUpdates'];
+	}
+
+	renderCheck(
+		$spread->stats()['visible'] > 16 && $longest <= $waited + ($interval > 0 ? 6 : 0) + 1
+		, 'finished groups are drawn while the view moves and none waits longer than a selection and an interval'
+	);
+
+	renderSettle($free, $twinCamera);
+	renderSettle($spread, $twinCamera);
+	renderCheck(
+		!$free->dirty() && !$spread->dirty() && renderKeys($free) === renderKeys($spread)
+		, 'once the trembling view rests, the spread scene settles on the cover of the whole one'
+	);
+
+	foreach($twins as [$twinSurface, , $twinScene])
+	{
+		$twinScene->close();
+		$twinSurface->close();
+	}
+}
+
+// Rests after travel, a jump and changed settings. Each rest must settle on the cover the whole scene settles on.
+// A cover held down by the cache bound depends on the order in which groups were reserved and coarsened, even
+// between two whole scenes with different limiters. This world has 85 patches in all, far inside the bound.
+foreach([[.1, 9], [0, 25]] as [$interval, $steps])
+{
+	$twins = [renderSpreadScene(0, $interval), renderSpreadScene($steps, $interval)];
+	[[, $freeWater, $free], [, $spreadWater, $spread]] = $twins;
+	$restCamera = new Camera;
+	$restCamera->position = [0.0, 12.0, 0.0];
+	$restCamera->pitch = -.3;
+
+	$legs = [
+		[[0, 0, 1], .01, null], [[1, 0, 0], -.02, null], [[0, 0, 0], 0, 'quality'], [[-120, 5, -150], .5, null],
+		[[-.5, 0, .5], .03, 'water'], [[0, .3, 0], .0, null],
+	];
+	$rests = 0;
+
+	foreach($legs as [$step, $turn, $setting])
+	{
+		if($setting === 'quality') foreach([$free, $spread] as $scene) $scene->quality = .75;
+
+		if($setting === 'water') foreach([$freeWater, $spreadWater] as $water) $water->setLevel(-4);
+
+		// A step longer than travel is a jump, taken once.
+		$frames = abs($step[0]) > 64 ? 1 : 90;
+
+		for($frame = 0; $frame < $frames; $frame++)
+		{
+			for($axis = 0; $axis < 3; $axis++) $restCamera->position[$axis] += $step[$axis];
+
+			$restCamera->yaw += $turn;
+			$free->update(1 / 60, $restCamera);
+			$spread->update(1 / 60, $restCamera);
+			renderResident($spread, 'every drawn patch is resident along the rest fixture');
+		}
+
+		renderSettle($free, $restCamera);
+		renderSettle($spread, $restCamera);
+		$rests++;
+		renderCheck(
+			!$free->dirty() && !$spread->dirty() && renderKeys($free) === renderKeys($spread)
+			, "rest $rests settles on the cover of the whole scene"
+		);
+	}
+
+	foreach($twins as [$twinSurface, , $twinScene])
+	{
+		$twinScene->close();
+		$twinSurface->close();
+	}
+}
+
 $surface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0,'maxTiles' => 32]);
 $water = new Water;
 $scene = new Scene($surface, $water, new Atmosphere);
+$scene->selectionSliceMs = 0;
 $scene->budgetMs = 30;
 $scene->maximumPatches = 21;
 $camera = new Camera;
