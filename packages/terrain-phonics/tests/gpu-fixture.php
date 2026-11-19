@@ -30,6 +30,7 @@ $manyWaves[] = [
 ];
 
 $fullWater = new Water(-1.75, $manyWaves);
+$fullWater->setWaveScale(2.5);
 
 for($i = 0; $i < Water::MAX_WAKES; $i++) $fullWater->wake(2 * $i - 10, $i - 8, .02 * ($i + 1), -2 + .05 * $i);
 

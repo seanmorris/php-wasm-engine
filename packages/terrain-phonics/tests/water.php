@@ -83,6 +83,25 @@ $expect(
 	, 'water-level edit preserves wave shape'
 );
 
+$original = $water->uniforms();
+$sample = $water->sample(2, 1, 2);
+$water->setWaveScale(0);
+$wakeOnly = $water->sample(2, 1, 2);
+$expect($water->uniforms()['waveCount'] === 0 && $water->uniforms()['wakeCount'] === 1, 'calm water keeps the local wake');
+$expect($water->heightRange() === [1.5,2.5], 'calm bounds still enclose wakes');
+$water->setWaveScale(3);
+$rough = $water->sample(2, 1, 2);
+foreach(['height','dx','dz','velocity'] as $field)
+$expect(abs($rough[$field] - $wakeOnly[$field] - 3 * ($sample[$field] - $wakeOnly[$field])) < 1e-10,
+	"rough water scales the directional $field independently of wakes");
+$expect($water->uniforms()['waveVectors'][0][3] === 3 * $original['waveVectors'][0][3], 'renderer receives scaled amplitudes');
+$expect(abs($water->heightRange()[1] - (2.5 + 3 * (.3 + .08))) < 1e-12, 'rough bounds include scaled waves and wakes');
+$revision = $water->revision();
+$water->setWaveScale(3);
+$expect($water->revision() === $revision, 'reapplying a wave scale leaves the revision stable');
+$water->setWaveScale(1);
+$expect($water->uniforms() === $original && $water->sample(2, 1, 2) === $sample, 'restoring the swell recovers its exact phase and amplitude');
+
 for($i = 0; $i < 100; $i++) $water->wake($i, 0, .1, 5);
 
 $expect($water->uniforms()['wakeCount'] === Water::MAX_WAKES, 'wake storage stays bounded');
