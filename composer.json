@@ -33,6 +33,7 @@
       "php packages/doom-phonics/tests/run.php",
       "php packages/terrain-phonics/tests/surface.php",
       "php packages/terrain-phonics/tests/water.php",
+      "php packages/terrain-phonics/tests/appearance.php",
       "php packages/terrain-phonics/tests/atmosphere.php",
       "php packages/terrain-phonics/tests/render.php",
       "php packages/terrain-phonics/tests/atmosphere-renderer.php",

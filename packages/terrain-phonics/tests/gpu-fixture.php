@@ -4,6 +4,7 @@ require dirname(__DIR__) . '/autoload.php';
 
 use TerrainPhonics\Atmosphere;
 use TerrainPhonics\AtmosphereRenderer;
+use TerrainPhonics\TerrainAppearance;
 use TerrainPhonics\Water;
 
 // PHP is the independent numeric reference; the Node test executes the actual shader includes in WebGL2.
@@ -65,5 +66,7 @@ echo json_encode([
 	, 'lut' => base64_encode($lut['rgba8'])
 	, 'source' => AtmosphereRenderer::shaderSource()
 	, 'waterCases' => $waterCases
+	, 'appearance' => (new TerrainAppearance)->uniforms()
+	, 'redGrass' => (new TerrainAppearance(['grassColor' => '#ff0000']))->uniforms()
 ], JSON_THROW_ON_ERROR
 );

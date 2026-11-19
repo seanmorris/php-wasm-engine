@@ -128,9 +128,91 @@ Call `$water->setLevel($metres)` to move the mean surface and `$water->setWaveSc
 
 Set `$water->appearance = new WaterAppearance([...])` to tune water rendering. Use `waterColor` (sRGB hex), `waterTransparency`, `waterReflectivity`, and `waterFoam` (fractions), and `waterFogDensity` (extinction per metre). The renderer blends sky reflection and foam over the opaque scene. Submerged terrain fades toward the water tint according to the length of the sightline below mean water level. Draw custom opaque objects with the optional `drawOpaque` callback to `Scene::render()` so the water surface covers only their submerged portions. Their shaders can use `WaterAppearance::shaderSource()` and `bind()` for the same underwater fog.
 
+## Terrain appearance
+
+`Scene::$appearance` holds a `TerrainAppearance`: the ground's colours, the banding of exposed rock, and the slopes
+and heights where one material gives way to another. Replace it to change the look; the next `render()` uploads it.
+The renderer uploads an appearance once, and again only after a replacement or `restore()`. An application that draws
+only changed frames must draw one after a replacement.
+
+```php
+$scene->appearance = new TerrainPhonics\TerrainAppearance(['snowline' => 220, 'snowColor' => '#f4f8ff'] + $saved);
+```
+
+The constructor reads the keys of `TerrainAppearance::DEFAULTS` and ignores others, so an application can pass its
+whole settings array. It throws `InvalidArgumentException`, naming the setting, for a colour that is not a six-digit
+hex string and for a number that is not a finite integer or float; numeric strings are rejected. Numbers outside
+`TerrainAppearance::RANGES` are clamped. Each start and end listed in `TerrainAppearance::ORDER` stays apart by a
+minimum gap: an end that is too low moves up to the start plus the gap, and when that passes the top of the end's
+range the end stays at the top and the start moves down. `settings` holds the result, in the order of `DEFAULTS`, with
+colours in lower case. `GROUPS` lists the settings in panel order under `colors`, `banding` and `blending`.
+`uniforms()` returns the values `bind()` uploads, for a custom terrain shader.
+
+The defaults reproduce the terrain from before these settings existed. Each default colour is the nearest 8-bit sRGB
+value to the linear constant it replaced, and each number equals the constant it replaced.
+
+The presets use the settings differently. Coast and mountain terrain have grass cover, banded rock and snow; mountain
+terrain also turns to bare rock below the snowline. Version-one canyons have soil cover and banded rock. Current
+canyons draw rock from the canyon colours and debris from their dust. Sand applies to every preset. The material
+tool's rock, grass, sand, snow and road paint use the same colours as the generated ground.
+
+### Colours
+
+Colours are sRGB hex strings.
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `grassColor` | `#425b2d` | Grass cover on coast and mountain terrain, and grass paint. |
+| `soilColor` | `#815f40` | Soil cover on version-one canyons, mixed 40% toward the banded rock. |
+| `rockColor` | `#867c6f` | Rock between the light bands on coast, mountain and version-one canyon terrain. |
+| `rockBandColor` | `#af957c` | The light bands in that rock. |
+| `sandColor` | `#bfaf8b` | Sand on level ground near the water, and sand paint. |
+| `snowColor` | `#eaf1f8` | Snow on coast and mountain terrain, and snow paint. |
+| `roadColor` | `#65615b` | Road paint. |
+| `canyonRustColor` | `#794944` | The lowest bed of each canyon section. The red beds are a brighter shade of it. |
+| `canyonShaleColor` | `#5f484c` | The soft shale above the rust. |
+| `canyonSandstoneColor` | `#906356` | Both sandstone cliffs. |
+| `canyonCapColor` | `#a38775` | The pale cap rock at the top of the section. The ledges are a darker shade of it. |
+
+The red beds and ledges keep the ratio, channel by channel, that they had to the rust and the cap rock in the default
+palette. Canyon dust and debris, beds too fine to resolve at a distance, and the light the walls throw into shadow
+follow the average of the beds weighted by their thickness.
+
+### Banding
+
+| Setting | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `bandSpacing` | 52.36 m (2π / 0.12) | 5 to 1000 | Height of one dark and one light band in coast, mountain and version-one canyon rock. |
+| `bandContrast` | 1 | 0 to 1 | 0 paints banded rock one colour: halfway between the two rock colours, or the canyon's distant colour. |
+| `bandSharpness` | 1 | 1 to 8 | 1 is a sine profile. Higher values flatten each band and narrow the transitions, and narrow the contacts between canyon beds by the same factor. |
+
+Canyon beds take their spacing from the recipe's `terraceSpacing`, because the relief shares them, so `bandSpacing`
+does not apply to them. Bands fade to their average colour where a pixel spans several of them. A sharpened profile
+returns to a sine over a shorter distance first, so its harmonics do not alias.
+
+### Blending
+
+A slope is 1 minus the upward component of the surface normal: 0 on level ground, 1 on a vertical face. A slope of
+0.08 is about 23° and 0.38 about 52°.
+
+| Setting | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `rockSlopeStart` | 0.08 | 0 to 1 | Slope where rock starts to replace grass, soil or canyon debris. |
+| `rockSlopeEnd` | 0.38 | 0 to 1 | Slope where rock has replaced them. At least 0.01 above the start. |
+| `beachHeight` | 3 m | −100 to 500 | Height above the water up to which level ground is sand. |
+| `beachWidth` | 15 m | 0.5 to 500 | Height over which the sand fades into the ground above it. |
+| `snowline` | 340 m | −1000 to 5000 | World height where snow begins on coast and mountain terrain. |
+| `snowTransition` | 65 m | 1 to 1000 | Height above the snowline over which snow becomes complete. |
+| `alpineStart` | −170 m | −2000 to 0 | Height relative to the snowline where mountain terrain starts turning to bare rock. |
+| `alpineEnd` | −30 m | −2000 to 0 | Height relative to the snowline where it is bare rock. At least 1 m above the start. |
+| `snowSlopeStart` | 0.25 | 0 to 1 | Slope where snow starts to thin. |
+| `snowSlopeEnd` | 0.65 | 0 to 1 | Slope beyond which ground stays bare. At least 0.01 above the start. |
+| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, and the snowline. At 1 the snowline moves up to 25 m either way. 0 removes the variation. |
+
 ## Verify changes
 
-From the engine checkout run `npm run test:terrain`. The surface suite checks derivatives and seams,
+From the engine checkout run `npm run test:terrain`. The appearance suite checks validation, the defaults against the
+old shader constants, and the uniform values `bind()` uploads. The surface suite checks derivatives and seams,
 transaction replay, roads, residency, and picking. Water tests cover derivative parity, wakes, buoyancy,
 shoreline contacts, and fixed-step behavior. Atmosphere tests cover optical depth, boundary cases and cache
 invalidation. Renderer tests check bounded residency, complete coverage and revision publication.

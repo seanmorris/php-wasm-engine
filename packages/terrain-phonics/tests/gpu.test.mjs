@@ -99,6 +99,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform3f(gl.getUniformLocation(linked, 'uWaterTint'), .02, .17, .18);
 			};
 
+			const appearance = (linked, uniforms) => {
+				for(const [name, values] of Object.entries(uniforms))
+				{
+					const location = gl.getUniformLocation(linked, name);
+
+					// Only the canyon palette is longer than a vec4; it is an array of vec3.
+					if(values.length === 1) gl.uniform1f(location, values[0]);
+					else gl[`uniform${values.length > 4 ? 3 : values.length}fv`](location, values);
+				}
+			};
+
 			const texture = (unit, width, height, bytes) => {
 				const created = gl.createTexture();
 				gl.activeTexture(gl.TEXTURE0 + unit);
@@ -392,6 +403,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				);
 
 				parameters(surface);
+
+				if(name === 'terrain') appearance(surface, data.appearance);
+
 				gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
 				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), -3);
 				const colors = [];
@@ -400,6 +414,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				{
 					gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), intensity);
 					colors.push(pixel());
+				}
+
+				// The test vertex paints grass, so a red grass colour must turn the lit fragment red.
+				if(name === 'terrain')
+				{
+					appearance(surface, data.redGrass);
+					colors.push(pixel());
+					appearance(surface, data.appearance);
 				}
 
 				gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), 0);
@@ -769,6 +791,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(sample.night[2] > sample.night[0] && sample.night[1] > sample.night[0], `${sample.name} receives cool night fill`);
 			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
 		}
+
+		const [, grass, redGrass] = result.illuminationResults.find(sample => sample.name === 'terrain').colors;
+		assert.ok(grass[1] > grass[0] && grass[1] > grass[2], `default grass paint draws green: ${grass}`);
+		assert.ok(redGrass[0] > redGrass[1] && redGrass[0] > redGrass[2], `red grass paint draws red: ${redGrass}`);
 
 		const variance = values => {
 			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;

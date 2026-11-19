@@ -49,6 +49,10 @@ $GLOBALS['terrainGl'] = [
 	, 'framebuffer' => 0
 	, 'bound' => []
 	, 'draws' => 0
+	, 'program' => 0
+	, 'uniformNames' => []
+	, 'uniforms' => []
+	, 'uploads' => []
 ];
 
 function terrainGlNames(string $kind, int $count, mixed &$names): void
@@ -129,19 +133,40 @@ function glLinkProgram(...$args): void{}
 
 function glGetProgramiv(...$args): bool{return true;}
 
-function glUseProgram(...$args): void{}
+function glUseProgram(int $id): void{$GLOBALS['terrainGl']['program'] = $id;}
 
-function glGetUniformLocation(...$args): int{return 1;}
+function glGetUniformLocation(int $program, string $name): int
+{
+	$GLOBALS['terrainGl']['uniformNames'][] = $name;
+
+	return count($GLOBALS['terrainGl']['uniformNames']) - 1;
+}
+
+/**
+ * Record a float uniform upload by program and name, with the number of uploads so far.
+ * @param int $location Location returned by glGetUniformLocation().
+ * @param array $values Arguments after the location.
+ * @return void Keeps the latest values for the program in use.
+ */
+function terrainGlUniform(int $location, array $values): void
+{
+	$gl = &$GLOBALS['terrainGl'];
+	$name = $gl['uniformNames'][$location];
+	$gl['uniforms'][$gl['program']][$name] = $values;
+	$gl['uploads'][$gl['program']][$name] = ($gl['uploads'][$gl['program']][$name] ?? 0) + 1;
+}
 
 function glUniform1i(...$args): void{}
 
-function glUniform1f(...$args): void{}
+function glUniform1f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
-function glUniform2f(...$args): void{}
+function glUniform2f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
-function glUniform3f(...$args): void{}
+function glUniform3f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
-function glUniform4f(...$args): void{}
+function glUniform4f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
+
+function glUniform3fv(int $location, int $count, array $values): void{terrainGlUniform($location, [$count, $values]);}
 function glUniform2fv(...$args): void{}
 function glUniform4fv(...$args): void{}
 
@@ -186,6 +211,7 @@ use TerrainPhonics\GpuPatch;
 use TerrainPhonics\Landscape;
 use TerrainPhonics\Lod;
 use TerrainPhonics\Scene;
+use TerrainPhonics\TerrainAppearance;
 use TerrainPhonics\Water;
 
 $checks = 0;
@@ -2229,5 +2255,81 @@ $scene->prepareLandscape($cancelled);
 $scene->close();
 $scene->close();
 renderCheck(array_sum($resources()) === 0, 'close releases all scene GL ownership exactly once');
+
+// The ground program keeps the appearance between frames. A replacement or a relinked program uploads it again.
+$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), new Atmosphere);
+$appearanceCamera = new Camera;
+
+/**
+ * Read what the appearance scene's ground program last received.
+ * @param string $name Uniform name.
+ * @return array|null Values of the last upload, or null before one.
+ */
+$sent = static function(string $name) use (&$appearanceScene): ?array {
+	return $GLOBALS['terrainGl']['uniforms'][renderGet($appearanceScene, 'groundProgram')->id][$name] ?? null;
+};
+
+/**
+ * Count the appearance scene's uploads of one uniform to its current ground program.
+ * @param string $name Uniform name.
+ * @return int Uploads since the program was linked.
+ */
+$uploads = static function(string $name) use (&$appearanceScene): int {
+	return $GLOBALS['terrainGl']['uploads'][renderGet($appearanceScene, 'groundProgram')->id][$name] ?? 0;
+};
+
+/**
+ * Check that the ground program holds every uniform of an appearance.
+ * @param TerrainAppearance $appearance Appearance the program should hold.
+ * @param string $message Description of the expectation.
+ * @return void Records one check per uniform.
+ */
+$holds = static function(TerrainAppearance $appearance, string $message) use ($sent): void {
+	foreach($appearance->uniforms() as $name => $values)
+	renderCheck($sent($name) === (count($values) > 4 ? [count($values) / 3, $values] : $values), "$message: $name");
+};
+
+renderCheck(
+	$appearanceScene->appearance->settings === TerrainAppearance::DEFAULTS
+	, 'a scene starts with the default terrain appearance'
+);
+
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+$holds($appearanceScene->appearance, 'the first frame uploads the default appearance');
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+renderCheck($uploads('uSnowColor') === 1 && $uploads('uCanyonColors[0]') === 1, 'an unchanged appearance stays put');
+renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
+
+$replacement = ['snowColor' => '#ff0000', 'snowline' => 150, 'bandSpacing' => 20];
+$appearanceScene->appearance = new TerrainAppearance($replacement);
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+$holds($appearanceScene->appearance, 'the next frame uploads a replaced appearance');
+renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+renderCheck($uploads('uSnowColor') === 2, 'a replaced appearance uploads once');
+
+$relinked = renderGet($appearanceScene, 'groundProgram')->id;
+$appearanceScene->restore();
+renderCheck(renderGet($appearanceScene, 'groundProgram')->id !== $relinked, 'restoration relinks the ground program');
+renderCheck($sent('uSnowColor') === null, 'a relinked program starts without the appearance');
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+$holds($appearanceScene->appearance, 'the frame after restoration uploads the appearance again');
+$appearanceScene->close();
+
+// Every preset's shading style receives the same appearance uniforms.
+$styles = [
+	[['preset' => 'coast'], 0.0], [['preset' => 'mountain'], 1.0], [['preset' => 'canyon', 'version' => 1], 2.0],
+	[['preset' => 'canyon'], 3.0],
+];
+
+foreach($styles as [$recipe, $style])
+{
+	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere);
+	$appearanceScene->appearance = new TerrainAppearance(['rockColor' => '#123456', 'canyonCapColor' => '#abcdef']);
+	$appearanceScene->render($appearanceCamera, 320, 200, 0);
+	renderCheck($sent('uTerrainStyle') === [$style], "the {$recipe['preset']} recipe draws terrain style $style");
+	$holds($appearanceScene->appearance, "terrain style $style receives the appearance");
+	$appearanceScene->close();
+}
 
 echo "Terrain renderer: $checks checks passed.\n";
