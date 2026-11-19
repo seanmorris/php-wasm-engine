@@ -189,19 +189,22 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
-			target(4, 512, 16);
-			const radiance = texture(5, 512, 16, null);
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
-			gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-			parameters(aerialCache);
-			gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
-			gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
-			gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), 100);
-			gl.drawArrays(gl.TRIANGLES, 0, 3);
-			gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
+			const buildAerialCache = altitude => {
+				target(4, 512, 16);
+				const radiance = texture(5, 512, 16, null);
+				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
+				gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+				parameters(aerialCache);
+				gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
+				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
+				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), altitude);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, null, 0);
 
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			};
+			buildAerialCache(100);
 
 			const aerialSample = program(vertex, `${header}${data.source}
 				uniform vec3 uTestRay; uniform float uTestAltitude; uniform float uTestDistance; out vec4 color;
@@ -233,6 +236,25 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 
 				aerialResults.push({altitude, distance, ray, colors});
+			}
+
+			// The default canyon clamps to sea-level density. A visible wall spans both sides of eye level.
+			buildAerialCache(0);
+			gl.useProgram(aerialSample);
+			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uAerialCacheAltitude'), 0);
+			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestAltitude'), -380);
+			const canyonHaze = [];
+			for(const ready of [0,1])
+			{
+				gl.uniform1i(gl.getUniformLocation(aerialSample, 'uAerialCacheReady'), ready);
+				const colors = [];
+				for(const [elevation,distance] of [[-.001,0],[-.001,4000],[.001,4000]])
+				{
+					gl.uniform3f(gl.getUniformLocation(aerialSample, 'uTestRay'), 1,elevation,0);
+					gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestDistance'), distance);
+					colors.push(pixel());
+				}
+				canyonHaze.push(colors);
 			}
 
 			// Capture shader floats directly, using core WebGL2 transform feedback rather than a float render target.
@@ -660,7 +682,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			return {
 				skyResults, transitionError, starChecks
-				, aerialResults
+				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults
 				, illuminationResults
@@ -707,6 +729,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			aerialError = Math.max(aerialError, delta);
 			const identity = sample.distance === 0 || sample.distance > 90000 || sample.altitude !== 100;
 			assert.ok(delta <= (identity ? 0 : 4), `Aerial cache color deviation: ${JSON.stringify(sample)}`);
+		}
+
+		for(const [clear,below,above] of result.canyonHaze)
+		{
+			assert.ok(Math.max(...below.map((c,i)=>Math.abs(c-clear[i]))) > 8, 'sun haze reaches visible terrain below eye level');
+			assert.ok(below.every((c,i)=>Math.abs(c-above[i]) <= 2), 'sun haze is continuous across the canyon horizon');
 		}
 
 		for(const sample of result.waterResults)
