@@ -28,7 +28,7 @@ foreach([
 	, 'GL_TRIANGLES'
 	, 'GL_BLEND', 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA', 'GL_ONE'
 	, 'GL_CULL_FACE'
-	, 'GL_DEPTH_TEST'
+	, 'GL_DEPTH_TEST', 'GL_LEQUAL', 'GL_LESS'
 	, 'GL_TEXTURE0'
 	, 'GL_TEXTURE1'
 	, 'GL_FRAMEBUFFER_BINDING'
@@ -168,6 +168,8 @@ function glDisable(...$args): void{}
 function glEnable(...$args): void{}
 
 function glBlendFuncSeparate(...$args): void{}
+
+function glDepthFunc(int $function): void {}
 
 function glDepthMask(...$args): void{}
 
@@ -552,7 +554,8 @@ $flightScene->close();
 $flightSurface->close();
 
 $surface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0,'maxTiles' => 32]);
-$scene = new Scene($surface, new Water, new Atmosphere);
+$water = new Water;
+$scene = new Scene($surface, $water, new Atmosphere);
 $scene->budgetMs = 30;
 $scene->maximumPatches = 21;
 $camera = new Camera;
@@ -576,6 +579,16 @@ for($frame = 0; $frame < 90; $frame++)
 renderCheck($scene->stats()['visible'] > 1, 'resident siblings eventually refine');
 $scene->render($camera, 800, 600, 1);
 renderCheck($GLOBALS['terrainGl']['draws'] > 0, 'scene submits owned meshes');
+
+// The flat bed is visible here. A water patch can disappear only when its entire height range is below it.
+$bed = $surface->height(0, 0);
+$water->setLevel($bed - 1);
+$scene->render($camera, 800, 600, 1);
+renderCheck($scene->stats()['groundDraws'] > 0 && !$scene->showsWater(), 'dry ground submits no water');
+$water->setLevel($bed);
+$scene->render($camera, 800, 600, 1);
+renderCheck($scene->showsWater(), 'the water pass keeps a shoreline at the height bound');
+$water->setLevel(0);
 
 // More than twelve independent imbalance repairs are required by this complete cover.
 $fixture = [];
@@ -620,6 +633,7 @@ $c = $lod->node(1, 0, 1);
 $d = $lod->node(1, 1, 1);
 renderSet($scene, 'draw', [$a,$b,$c,$d]);
 renderSet($scene, 'neighbors', []);
+renderSet($scene, 'settledBoundaries', []);
 renderSet($scene, 'drawIndex', null);
 renderSet($scene, 'clock', 1.0);
 renderSet($scene, 'activated', [$a['key'] => .8,$b['key'] => .9,$c['key'] => .75,$d['key'] => .95]);
@@ -635,8 +649,17 @@ renderCheck(
 	, 'all four touching corner vertices share one morph weight'
 );
 
+renderSet($scene, 'clock', 2.0);
+$settled = renderCall($scene, 'boundaryMorph', $a);
+renderCheck($settled === [[0.,0.,0.,0.],[0.,0.,0.,0.]], 'settled siblings have unblended boundaries');
+renderSet($scene, 'retiring', [$root['key'] => ['start' => 1.8]]);
+$coarsening = renderCall($scene, 'boundaryMorph', $a);
+renderCheck($coarsening[0][1] > 0.5, 'coarsening resumes boundary blending on a settled cover');
+renderSet($scene, 'retiring', []);
+
 renderSet($scene, 'draw', $oldDraw);
 renderSet($scene, 'neighbors', []);
+renderSet($scene, 'settledBoundaries', []);
 renderSet($scene, 'drawIndex', null);
 renderSet($scene, 'clock', $oldClock);
 renderSet($scene, 'activated', $oldActivated);
