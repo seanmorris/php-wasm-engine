@@ -283,7 +283,7 @@ definitions.push(
 		, php: {autoload: {'TerrainPhonics\\': 'src/'}, bootstrap: ['autoload.php']}
 		, exports: {}
 		, preload: []
-		, directories: ['src', 'shaders']
+		, directories: ['src', 'shaders', 'browser']
 		, files: ['autoload.php']
 	}]
 );

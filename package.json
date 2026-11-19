@@ -38,7 +38,7 @@
     "bench:php-tris": "php packages/php-tris/benchmarks/board.php",
     "bench:php-tris:browser": "node scripts/bench-php-tris-browser.mjs",
     "build:applications": "node scripts/applications.mjs",
-    "test:terrain": "php packages/terrain-phonics/tests/surface.php && php packages/terrain-phonics/tests/water.php && php packages/terrain-phonics/tests/atmosphere.php && php packages/terrain-phonics/tests/render.php && php packages/terrain-phonics/tests/atmosphere-renderer.php && php packages/terrain-phonics/tests/shadows.php",
+    "test:terrain": "php packages/terrain-phonics/tests/surface.php && php packages/terrain-phonics/tests/water.php && php packages/terrain-phonics/tests/atmosphere.php && php packages/terrain-phonics/tests/render.php && php packages/terrain-phonics/tests/atmosphere-renderer.php && php packages/terrain-phonics/tests/shadows.php && node --test packages/terrain-phonics/tests/patch-mesher.test.mjs",
     "test:terrain:gpu": "node --test packages/terrain-phonics/tests/gpu.test.mjs"
   },
   "devDependencies": {

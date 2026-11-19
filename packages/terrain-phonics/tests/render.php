@@ -619,6 +619,8 @@ $b = $lod->node(1, 1, 0);
 $c = $lod->node(1, 0, 1);
 $d = $lod->node(1, 1, 1);
 renderSet($scene, 'draw', [$a,$b,$c,$d]);
+renderSet($scene, 'neighbors', []);
+renderSet($scene, 'drawIndex', null);
 renderSet($scene, 'clock', 1.0);
 renderSet($scene, 'activated', [$a['key'] => .8,$b['key'] => .9,$c['key'] => .75,$d['key'] => .95]);
 renderSet($scene, 'retiring', []);
@@ -634,6 +636,8 @@ renderCheck(
 );
 
 renderSet($scene, 'draw', $oldDraw);
+renderSet($scene, 'neighbors', []);
+renderSet($scene, 'drawIndex', null);
 renderSet($scene, 'clock', $oldClock);
 renderSet($scene, 'activated', $oldActivated);
 
