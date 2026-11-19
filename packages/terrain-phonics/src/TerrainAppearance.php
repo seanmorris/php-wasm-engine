@@ -35,12 +35,15 @@ final class TerrainAppearance
 	];
 	/**
 	 * Start and end of each blend, with the smallest gap between them. An end that is too low moves up to the start
-	 * plus the gap. When that passes the top of the end's range, the end stays at the top and the start moves down.
+	 * plus the gap, rounded to nine decimal places. When that passes the top of the end's range, the end stays at the
+	 * top and the start moves down. A difference that falls short of the gap by less than SLACK counts as the gap.
 	 */
 	public const ORDER = [
 		['rockSlopeStart', 'rockSlopeEnd', .01], ['snowSlopeStart', 'snowSlopeEnd', .01],
 		['alpineStart', 'alpineEnd', 1.0],
 	];
+	/** Shortfall from an ORDER gap that floating-point subtraction can leave between values one gap apart. */
+	private const SLACK = 1e-9;
 	/** Settings in panel order, grouped by what they control. */
 	public const GROUPS = [
 		'colors' => [
@@ -85,10 +88,12 @@ final class TerrainAppearance
 
 		foreach(self::ORDER as [$start, $end, $gap])
 		{
-			if($settings[$end] - $settings[$start] >= $gap) continue;
+			// In binary, .21 - .2 is a little less than .01, so values one slider step apart need the slack.
+			if($settings[$end] - $settings[$start] >= $gap - self::SLACK) continue;
 			$top = self::RANGES[$end][1];
 
-			if($settings[$start] + $gap <= $top) $settings[$end] = $settings[$start] + $gap;
+			// Rounding puts a pushed end on the next step, where .05 + .01 alone would give 0.060000000000000005.
+			if($settings[$start] + $gap <= $top) $settings[$end] = round($settings[$start] + $gap, 9);
 			else [$settings[$start], $settings[$end]] = [$top - $gap, $top];
 		}
 

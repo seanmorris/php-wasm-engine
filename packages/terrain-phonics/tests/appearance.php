@@ -275,6 +275,26 @@ $expect(
 	, 'an alpine band at the snowline ends there'
 );
 
+// A slope slider moves in steps of the gap. In binary, 18 of the 99 pairs one step apart differ by a little less than
+// .01, and 15 of the sums start + .01 miss the next step by one unit in the last place.
+foreach(range(0, 98) as $step)
+{
+	$start = $step / 100.0;
+	$end = ($step + 1) / 100.0;
+
+	$expect(
+		$order(['rockSlopeStart' => $start, 'rockSlopeEnd' => $end])
+			=== ['rockSlopeStart' => $start, 'rockSlopeEnd' => $end]
+		, "slopes $start and $end one step apart stay as set"
+	);
+
+	$expect(
+		$order(['snowSlopeStart' => $start, 'snowSlopeEnd' => 0])
+			=== ['snowSlopeStart' => $start, 'snowSlopeEnd' => $end]
+		, "an end pushed up by a start of $start lands on $end"
+	);
+}
+
 mt_srand(17);
 
 for($trial = 0; $trial < 300; $trial++)
@@ -290,7 +310,11 @@ for($trial = 0; $trial < 300; $trial++)
 	$expect($settings[$name] >= $min && $settings[$name] <= $max, "random $name stays in range");
 
 	foreach(TerrainAppearance::ORDER as [$start, $end, $gap])
-	$expect($settings[$end] - $settings[$start] >= $gap - 1e-12, "random $start stays below $end");
+	$expect($settings[$end] - $settings[$start] >= $gap - 1e-9, "random $start stays below $end");
+
+	// An application saves settings as JSON and loads them back. Loading must not move them again.
+	$saved = json_decode(json_encode($settings, JSON_THROW_ON_ERROR), true, 4, JSON_THROW_ON_ERROR);
+	$expect((new TerrainAppearance($saved))->settings === $settings, 'random settings load back unchanged');
 }
 
 // bind() uploads every uniform with the function for its type.

@@ -139,15 +139,17 @@ only changed frames must draw one after a replacement.
 $scene->appearance = new TerrainPhonics\TerrainAppearance(['snowline' => 220, 'snowColor' => '#f4f8ff'] + $saved);
 ```
 
-The constructor reads the keys of `TerrainAppearance::DEFAULTS` and ignores others, so an application can pass its
-whole settings array. It throws `InvalidArgumentException`, naming the setting, for a colour that is not a six-digit
-hex string and for a number that is not a finite integer or float; numeric strings are rejected. Numbers outside
+The constructor reads the keys of `TerrainAppearance::DEFAULTS` and ignores others, so an application can pass its whole
+settings array. It throws `InvalidArgumentException`, naming the setting, for a colour that is not a six-digit hex
+string and for a number that is not a finite integer or float; numeric strings are rejected. Numbers outside
 `TerrainAppearance::RANGES` are clamped. Each start and end listed in `TerrainAppearance::ORDER` stays apart by a
-minimum gap: an end that is too low moves up to the start plus the gap, and when that passes the top of the end's
-range the end stays at the top and the start moves down. `settings` holds the result, in the order of `DEFAULTS`, with
-colours in lower case. `GROUPS` lists the settings in panel order under `colors`, `banding` and `blending`.
-`uniforms()` returns the values `bind()` uploads, for a custom terrain shader. `TerrainAppearance::linear($hex)`
-converts one colour to linear RGB and throws `InvalidArgumentException` for anything but a six-digit hex string.
+minimum gap: an end that is too low moves up to the start plus the gap, rounded to nine decimal places, and when that
+passes the top of the end's range the end stays at the top and the start moves down. Values one gap apart, such as 0.2
+and 0.21, stay as they are, although their binary difference is slightly less than 0.01. `settings` holds the result, in
+the order of `DEFAULTS`, with colours in lower case. `GROUPS` lists the settings in panel order under `colors`,
+`banding` and `blending`. `uniforms()` returns the values `bind()` uploads, for a custom terrain shader.
+`TerrainAppearance::linear($hex)` converts one colour to linear RGB and throws `InvalidArgumentException` for anything
+but a six-digit hex string.
 
 The defaults reproduce the terrain from before these settings existed. Each default colour is the nearest 8-bit sRGB
 value to the linear constant it replaced, and each number equals the constant it replaced.
