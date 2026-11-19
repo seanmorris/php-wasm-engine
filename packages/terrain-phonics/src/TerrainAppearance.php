@@ -214,7 +214,8 @@ final class TerrainAppearance
 	}
 
 	/**
-	 * Keep a shade's ratio to the colour it follows, channel by channel.
+	 * Keep a shade's ratio to the colour it follows, channel by channel, up to 1. Red beds are brighter than the rust
+	 * and dust than the bed average, so a light source would otherwise give an albedo above 1.
 	 * @param array $source Linear colour the shade follows.
 	 * @param array $default Linear source colour in the default palette.
 	 * @param array $shade Linear shade in the default palette.
@@ -223,8 +224,8 @@ final class TerrainAppearance
 	private static function shade(array $source, array $default, array $shade): array
 	{
 		return [
-			$source[0] * $shade[0] / $default[0], $source[1] * $shade[1] / $default[1],
-			$source[2] * $shade[2] / $default[2],
+			min(1.0, $source[0] * $shade[0] / $default[0]), min(1.0, $source[1] * $shade[1] / $default[1]),
+			min(1.0, $source[2] * $shade[2] / $default[2]),
 		];
 	}
 

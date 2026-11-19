@@ -368,4 +368,24 @@ $expect(
 	, 'dust, distant beds and bounce light follow the bed average'
 );
 
+// Derived shades are albedos like the hex colours. Red beds are 1.16 to 1.23 times the rust, channel by channel, and
+// dust up to 1.19 times the bed average, so a light rust or palette must not push them past 1.
+$white = ['canyonRustColor' => '#ffffff', 'canyonShaleColor' => '#ffffff', 'canyonSandstoneColor' => '#ffffff'];
+
+foreach([['canyonRustColor' => '#ffffff'], $white + ['canyonCapColor' => '#ffffff']] as $options)
+{
+	$light = (new TerrainAppearance($options))->uniforms();
+
+	$expect(
+		max($light['uCanyonColors[0]']) <= 1.0 && min($light['uCanyonColors[0]']) >= 0.0
+		, 'canyon shades stay between 0 and 1 for ' . json_encode($options)
+	);
+}
+
+$expect(
+	array_slice((new TerrainAppearance(['canyonRustColor' => '#ffffff']))->uniforms()['uCanyonColors[0]'], 12, 3)
+		=== [1.0, 1.0, 1.0]
+	, 'red beds under a white rust are white'
+);
+
 echo "Terrain appearance: $checks checks passed.\n";
