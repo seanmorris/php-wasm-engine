@@ -181,6 +181,7 @@ function glDrawArrays(...$args): void{$GLOBALS['terrainGl']['draws']++;}
 
 use TerrainPhonics\Atmosphere;
 use TerrainPhonics\Camera;
+use TerrainPhonics\GpuPatch;
 use TerrainPhonics\Landscape;
 use TerrainPhonics\Lod;
 use TerrainPhonics\Scene;
@@ -236,6 +237,45 @@ function renderCover(array $nodes, float $extent, bool $balanced = true): void
 	}
 
 	renderCheck(abs($area - $extent * $extent) < 1e-6, 'visible coverage contains no holes');
+}
+
+// Every topology must cover the whole square once, with exactly the endpoints
+// the neighboring patch draws. A collinear triangle can still cut a vertical
+// sliver into a folded surface, so only repeated-index degenerates are allowed.
+$cells = 4; $stride = $cells + 1;
+$regular = GpuPatch::indices($cells);
+$patterns = GpuPatch::stitchPatterns($cells, $regular);
+renderCheck(strlen($patterns) === 16*strlen($regular), 'each edge mask addresses one complete index stream');
+for($mask = 0; $mask < 16; $mask++)
+{
+	$indices = array_values(unpack('v*', substr($patterns, $mask*strlen($regular), strlen($regular))));
+	$edges = []; $area = 0;
+	foreach(array_chunk($indices, 3) as [$a,$b,$c])
+	{
+		if($a === $b || $a === $c || $b === $c) continue;
+		$twiceArea = (intdiv($b,$stride)-intdiv($a,$stride))*($c%$stride-$a%$stride)
+			- ($b%$stride-$a%$stride)*(intdiv($c,$stride)-intdiv($a,$stride));
+		renderCheck($twiceArea > 0, 'stitched triangles retain winding at corners');
+		$area += $twiceArea;
+		foreach([[$a,$b],[$b,$c],[$c,$a]] as [$i,$j])
+		{
+			$key = min($i,$j) . ':' . max($i,$j);
+			$edges[$key] = ($edges[$key] ?? 0) + 1;
+		}
+	}
+	renderCheck($area === 2*$cells*$cells, 'stitched grid covers its entire footprint');
+	foreach([[0,$stride],[$cells,$stride],[0,1],[$cells*$stride,1]] as $side => [$start,$along])
+	{
+		$step = ($mask & (1 << $side)) ? 2 : 1;
+		for($pos = 0; $pos < $cells; $pos += $step)
+		{
+			$a = $start + $along*$pos;
+			$key = $a . ':' . ($a+$along*$step);
+			renderCheck(($edges[$key] ?? 0) === 1, 'perimeter matches neighboring edge tessellation');
+			unset($edges[$key]);
+		}
+	}
+	foreach($edges as $count) renderCheck($count === 2, 'interior grid edges have exactly two incident triangles');
 }
 
 $lod = new Lod(256, 1);
@@ -656,12 +696,20 @@ renderCheck(
 
 renderSet($scene, 'clock', 2.0);
 $settled = renderCall($scene, 'boundaryMorph', $a);
-renderCheck($settled === [[0.,0.,0.,0.],[0.,0.,0.,0.]], 'settled siblings have unblended boundaries');
+renderCheck($settled === [[0.,0.,0.,0.],[0.,0.,0.,0.],0], 'settled siblings have unblended boundaries');
 renderSet($scene, 'retiring', [$root['key'] => ['start' => 1.8]]);
 $coarsening = renderCall($scene, 'boundaryMorph', $a);
 renderCheck($coarsening[0][1] > 0.5, 'coarsening resumes boundary blending on a settled cover');
 renderSet($scene, 'retiring', []);
 
+// Both positive-length neighbors stitch; a coarser neighbor across a corner alone does not.
+$fractional = new Lod(1000.3, 1);
+$corner = $fractional->node(2, 1, 1);
+renderSet($scene, 'draw', [$corner,$fractional->node(1,1,0),$fractional->node(1,0,1),$fractional->node(1,1,1)]);
+renderSet($scene, 'neighbors', []);
+renderSet($scene, 'settledBoundaries', []);
+renderSet($scene, 'drawIndex', null);
+renderCheck(renderCall($scene,'boundaryMorph',$corner)[2] === 10, 'stitch right and bottom on a fractional world extent');
 renderSet($scene, 'draw', $oldDraw);
 renderSet($scene, 'neighbors', []);
 renderSet($scene, 'settledBoundaries', []);

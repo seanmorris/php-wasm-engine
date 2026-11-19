@@ -15,6 +15,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'atmosphere-cache.frag'
 		, 'atmosphere-aerial.frag'
 		, 'atmosphere.glsl'
+		, 'patch-grid.glsl'
 		, 'water-functions.glsl'
 		, 'water-optics.glsl'
 		, 'shadows.vert'
@@ -52,7 +53,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const compile = (type, source) => {
 				const shader = gl.createShader(type);
-				gl.shaderSource(shader, source.replace('// OPTICS', shaders['water-optics.glsl']));
+				gl.shaderSource(shader, source.replace('// PATCH', shaders['patch-grid.glsl']).replace('// OPTICS', shaders['water-optics.glsl']));
 				gl.compileShader(shader);
 
 				if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
@@ -563,6 +564,58 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.disableVertexAttribArray(3);
 			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
+			// Exercise the real water vertex shader at all three types of new fine vertices:
+			// horizontal/vertical edges and the parent triangle diagonal, with a wake crossing them.
+			const waterMesh = program(shaders['water.vert'].replace('// WATER', waterSource),
+				header + 'out vec4 c; void main(){c=vec4(1);}', ['vWorld','vGround']);
+			gl.useProgram(waterMesh);
+			const loc = name => gl.getUniformLocation(waterMesh, name);
+			gl.uniform1i(loc('uWaveCount'), 1);
+			gl.uniform4f(loc('uWaveVectors[0]'), 0.8, 0.6, 0.9, 2);
+			gl.uniform2f(loc('uWaveDynamics[0]'), 1.1, 0.4);
+			gl.uniform1i(loc('uFrameWakeCount'), 1);
+			gl.uniform4f(loc('uFrameWakes[0]'), 20, 20, 3, .7);
+			gl.uniform4f(loc('uWakeBounds'), -50, -50, 50, 50);
+			gl.vertexAttrib3f(0, 0, -8, 0);
+			gl.vertexAttrib1f(2, -3);
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, feedback);
+			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, outputBuffer);
+			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 16, gl.DYNAMIC_READ);
+			gl.enable(gl.RASTERIZER_DISCARD);
+			const sampleMesh = (x, z, step, morph) => {
+				gl.uniform4f(loc('uPatch'), 0, 0, step, morph);
+				gl.beginTransformFeedback(gl.POINTS);
+				gl.drawArrays(gl.POINTS, z * 33 + x, 1);
+				gl.endTransformFeedback();
+				const result = new Float32Array(4);
+				gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, result);
+				return result;
+			};
+			let transitionError = 0;
+			for(const time of [0, 1.5, 3.75])
+			{
+				gl.uniform1f(loc('uWaterTime'), time);
+				for(const [x,z] of [[11,10],[10,11],[11,11],[10,10]])
+				{
+					const step = 1.953125, ox = x % 2, oz = -(z % 2);
+					const a = sampleMesh((x-ox)/2, (z-oz)/2, step*2, 0);
+					const b = sampleMesh((x+ox)/2, (z+oz)/2, step*2, 0);
+					const fine = sampleMesh(x, z, step, 0);
+					for(const morph of [.4,1])
+					{
+						const actual = sampleMesh(x, z, step, morph);
+						for(let k = 0; k < 3; k++)
+						{
+							const expected = fine[k]*(1-morph) + .5*(a[k]+b[k])*morph;
+							transitionError = Math.max(transitionError, Math.abs(actual[k]-expected));
+						}
+						transitionError = Math.max(transitionError, Math.abs(actual[3]-(-8+5*morph)));
+					}
+				}
+			}
+			gl.disable(gl.RASTERIZER_DISCARD);
+			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
 			// Compile the real consuming scene programs too, so include/link compatibility is part of this regression.
 			for(const name of ['sky', 'terrain', 'water'])
 			program(
@@ -574,7 +627,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults
+				skyResults, transitionError
 				, aerialResults
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults
@@ -588,6 +641,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, materialWeights: Array.from(materialWeights)
 			};
 		}, {data, shaders});
+
+		assert.ok(result.transitionError < 1e-5, 'waves, wakes and shoreline depths match the morphing mesh');
 
 		for(const [i, expected] of [0, 128, 255].entries())
 			assert.ok(Math.abs(result.backdropContrast[i] - expected) <= 2, 'surface transmits the selected fraction');
