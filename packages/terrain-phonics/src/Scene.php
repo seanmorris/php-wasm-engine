@@ -778,41 +778,119 @@ final class Scene
 	 */
 	private function balance(array $nodes): array
 	{
+		if($nodes === []) return $nodes;
+
+		// Index the leaves by level, row and column. Lod::node() builds every key from those three
+		// integers, so they identify a leaf exactly as its key does, and a probe becomes three array
+		// lookups in place of one "level:x:z" string composed for each candidate cell.
+		$grid = [];
+
+		foreach($nodes as $n) $grid[$n['level']][$n['iz']][$n['ix']] = true;
+
+		// No leaf is coarser than this level. A replacement is always finer than the coarse
+		// leaf that forces it, so this holds in every pass and no probe has to go further.
+		$coarsest = min(array_keys($grid));
+
+		// Most covers arrive balanced, so the first scan only has to learn whether any leaf is out
+		// of balance. Until one is, it may skip a leaf whose probes another leaf is sure to repeat.
+		$quick = true;
+
 		// Coarsen, never request new data, until shared edges differ by at most one level.
-		for($pass = count($nodes); $pass > 0; $pass--)
+		for($pass = count($nodes); $pass > 0;)
 		{
 			$replace = null;
 
-			$leaves = array_column($nodes, null, 'key');
 			foreach($nodes as $a)
-			for($level = $a['level'] - 2; $level >= 0; $level--)
 			{
-				// Once interior on both axes, the leaf cannot touch this ancestor's
-				// boundary or the boundary of any still larger ancestor.
-				$mask = (1 << ($a['level'] - $level)) - 1;
-				$x = $a['ix'] & $mask;
-				$z = $a['iz'] & $mask;
-				if($x !== 0 && $x !== $mask && $z !== 0 && $z !== $mask) break;
-				if(self::neighborsAt($a, $leaves, $level) === []) continue;
-				$shift = $a['level'] - ($level + 1);
-				$replace = $this->lod->node($level + 1, $a['ix'] >> $shift, $a['iz'] >> $shift);
-				break 2;
+				$level = $a['level'] - 2;
+
+				if($level < $coarsest) continue;
+
+				$x = $a['ix'];
+				$z = $a['iz'];
+
+				// Bit 1 of an index plus one is set exactly when the index is one of the middle two of
+				// the four its grandparent spans. Such a leaf lies on neither grandparent edge of that axis.
+				if(($x + 1) & 2)
+				{
+					// Strictly inside its grandparent on both axes, the leaf cannot touch that
+					// ancestor's boundary or the boundary of any still larger ancestor.
+					if(($z + 1) & 2) continue;
+
+					// On one edge of its grandparent, a leaf probes only the cells across that edge,
+					// here and at every coarser level. The sibling beside it along that edge lies on
+					// the grandparent's corner and probes all of those cells among its own. While
+					// that sibling is in the cover, skipping this leaf cannot hide an imbalance.
+					if($quick && isset($grid[$level + 2][$z][$x ^ 1])) continue;
+				}
+				// The same holds on the other axis, where that sibling shares the column.
+				elseif($quick && (($z + 1) & 2) && isset($grid[$level + 2][$z ^ 1][$x])) continue;
+
+				// Track two cells per axis up the tree: the ancestor holding the leaf, and the ancestor
+				// of the cell one step outward from the leaf. An even index can only lie on the low
+				// edge of an ancestor and an odd index only on the high edge, so the step goes down
+				// for even and up for odd. Where the two cells agree, no ancestor edge lies between.
+				$cx = $x >> 2;
+				$cz = $z >> 2;
+				$nx = ($x + (($x & 1) << 1) - 1) >> 2;
+				$nz = ($z + (($z & 1) << 1) - 1) >> 2;
+
+				// Each level up halves all four indices, also after a probe that found nothing.
+				for(; $level >= $coarsest; --$level, $cx >>= 1, $nx >>= 1, $cz >>= 1, $nz >>= 1)
+				{
+					if($nx === $cx)
+					{
+						// Once interior on both axes, the leaf stays interior under every larger ancestor.
+						if($nz === $cz) break;
+
+						if(!isset($grid[$level][$nz][$cx])) continue;
+					}
+					elseif($nz === $cz)
+					{
+						if(!isset($grid[$level][$cz][$nx])) continue;
+					}
+					elseif(!isset($grid[$level][$cz][$nx]) && !isset($grid[$level][$nz][$cx])
+						&& !isset($grid[$level][$nz][$nx])
+					) continue;
+
+					// One touching leaf two or more levels coarser is enough to decide.
+					$shift = $a['level'] - $level - 1;
+					$replace = $this->lod->node($level + 1, $x >> $shift, $z >> $shift);
+					break 2;
+				}
 			}
 
 			if($replace === null) break;
 
-			$nodes = array_values(array_filter($nodes, /** Keep patches outside the replacement subtree.
-			 * @param array $n Candidate leaf patch.
-			 * @return bool Whether to retain this leaf.
-			 */
-				static fn($n) => !(
-					$n['x'] >= $replace['x'] && $n['z'] >= $replace['z']
-					&& $n['x'] + $n['size'] <= $replace['x'] + $replace['size']
-					&& $n['z'] + $n['size'] <= $replace['z'] + $replace['size']
-				)
-			));
+			// The shortcut proves that some leaf is out of balance, but the leaf it stopped at need
+			// not be the first one in the list, and the first one decides what is replaced and in
+			// which order. Scan again without the shortcut. That scan does not use up a pass.
+			if($quick)
+			{
+				$quick = false;
+				continue;
+			}
 
-			$nodes[] = $replace;
+			// Keep patches outside the replacement subtree, and take the others out of the
+			// index in the same loop so that no pass has to build the index again.
+			$minX = $replace['x'];
+			$minZ = $replace['z'];
+			$maxX = $minX + $replace['size'];
+			$maxZ = $minZ + $replace['size'];
+			$kept = [];
+
+			foreach($nodes as $n)
+			{
+				if($n['x'] >= $minX && $n['z'] >= $minZ
+					&& $n['x'] + $n['size'] <= $maxX && $n['z'] + $n['size'] <= $maxZ
+				) unset($grid[$n['level']][$n['iz']][$n['ix']]);
+				else $kept[] = $n;
+			}
+
+			$kept[] = $replace;
+			$grid[$replace['level']][$replace['iz']][$replace['ix']] = true;
+			$nodes = $kept;
+			$pass--;
 		}
 
 		return $nodes;
@@ -880,17 +958,24 @@ final class Scene
 		foreach($nodes as $node) if($node['level'] > $deepest['level']) $deepest = $node;
 		$parent = $this->lod->node($deepest['level'] - 1, intdiv($deepest['ix'], 2), intdiv($deepest['iz'], 2));
 
-		$nodes = array_values(array_filter($nodes, /** Retain leaves outside the coarsened parent.
-		 * @param array $node Candidate leaf.
-		 * @return bool Whether the leaf survives.
-		 */
-			static fn($node) => !self::contains($parent, $node)
-		));
+		// Retain leaves outside the coarsened parent. This is the test contains() makes, written
+		// out because a closure and a static call for every leaf cost more than the test itself.
+		$level = $parent['level'];
+		$x = $parent['ix'];
+		$z = $parent['iz'];
+		$kept = [];
 
-		$nodes[] = $parent;
+		foreach($nodes as $node)
+		{
+			$shift = $node['level'] - $level;
+
+			if($shift < 0 || ($node['ix'] >> $shift) !== $x || ($node['iz'] >> $shift) !== $z) $kept[] = $node;
+		}
+
+		$kept[] = $parent;
 		$this->activated[$parent['key']] = $this->clock - .35;
 
-		return $nodes;
+		return $kept;
 	}
 
 	/**
