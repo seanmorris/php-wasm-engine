@@ -26,7 +26,7 @@ foreach([
 	, 'GL_ELEMENT_ARRAY_BUFFER'
 	, 'GL_STATIC_DRAW'
 	, 'GL_TRIANGLES'
-	, 'GL_BLEND'
+	, 'GL_BLEND', 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA', 'GL_ONE'
 	, 'GL_CULL_FACE'
 	, 'GL_DEPTH_TEST'
 	, 'GL_TEXTURE0'
@@ -166,6 +166,8 @@ function glTexImage2D(...$args): void{}
 function glDisable(...$args): void{}
 
 function glEnable(...$args): void{}
+
+function glBlendFuncSeparate(...$args): void{}
 
 function glDepthMask(...$args): void{}
 

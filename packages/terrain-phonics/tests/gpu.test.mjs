@@ -16,6 +16,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'atmosphere-aerial.frag'
 		, 'atmosphere.glsl'
 		, 'water-functions.glsl'
+		, 'water-optics.glsl'
 		, 'shadows.vert'
 		, 'shadows.frag'
 
@@ -51,7 +52,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const compile = (type, source) => {
 				const shader = gl.createShader(type);
-				gl.shaderSource(shader, source);
+				gl.shaderSource(shader, source.replace('// OPTICS', shaders['water-optics.glsl']));
 				gl.compileShader(shader);
 
 				if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
@@ -92,6 +93,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 
 				gl.uniform1i(gl.getUniformLocation(linked, 'uTransmittance'), 0);
+				gl.uniform4f(gl.getUniformLocation(linked, 'uWaterOptics'), .85, .85, .035, .65);
+				gl.uniform3f(gl.getUniformLocation(linked, 'uWaterTint'), .02, .17, .18);
 			};
 
 			const texture = (unit, width, height, bytes) => {
@@ -340,9 +343,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
 			const surfaceVertex = `${header}
 				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out float vGround;
+				uniform float uTestGround;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
-					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vGround = -3.0;
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vGround = uTestGround;
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
@@ -356,6 +360,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 				parameters(surface);
 				gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
+				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), -3);
 				const colors = [];
 
 				for(const intensity of [0, 20])
@@ -365,6 +370,43 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 
 				illuminationResults.push({name, colors});
+			}
+
+			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
+			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
+				.replace('// WATER', waterSource));
+			parameters(surface);
+			gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
+			gl.enable(gl.BLEND);
+			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+			const backdropContrast = [];
+			for(const [transparency, reflection, foam, ground] of [
+				[0,0,0,-3], [.5,0,0,-3], [1,0,0,-3], [1,1,0,-3], [1,0,1,0], [1,0,1,-3]
+			])
+			{
+				gl.uniform4f(gl.getUniformLocation(surface, 'uWaterOptics'), transparency, reflection, 0, foam);
+				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), ground);
+				const reds = [];
+				for(const red of [0, 1])
+				{
+					gl.clearColor(red, 0, 0, 1);
+					gl.clear(gl.COLOR_BUFFER_BIT);
+					reds.push(pixel()[0]);
+				}
+				backdropContrast.push(reds[1] - reds[0]);
+			}
+			gl.disable(gl.BLEND);
+			const column = program(vertex, header + shaders['water-optics.glsl'] + `
+				uniform vec3 uOffset; out vec4 color;
+				void main(){ color = vec4(waterColumnLight(vec3(1,0,0), uOffset, 2., 0., 1.), 1.); }`);
+			gl.useProgram(column);
+			gl.uniform3f(gl.getUniformLocation(column, 'uWaterTint'), 0, 1, 0);
+			gl.uniform4f(gl.getUniformLocation(column, 'uWaterOptics'), 1, 0, .1, 0);
+			const waterPaths = [];
+			for(const [y,z] of [[-1,0], [-3,0], [-12,0], [-12,12]])
+			{
+				gl.uniform3f(gl.getUniformLocation(column,'uOffset'), 0, y, z);
+				waterPaths.push(pixel());
 			}
 
 			const visualSource = shaders['water.frag'].replace('// ATMOSPHERE', data.source)
@@ -525,7 +567,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			return {
 				skyResults
 				, aerialResults
-				, waterResults
+				, waterResults, backdropContrast, waterPaths
 				, shadowResults
 				, illuminationResults
 
@@ -537,6 +579,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, materialWeights: Array.from(materialWeights)
 			};
 		}, {data, shaders});
+
+		for(const [i, expected] of [0, 128, 255].entries())
+			assert.ok(Math.abs(result.backdropContrast[i] - expected) <= 2, 'surface transmits the selected fraction');
+		assert.ok(result.backdropContrast[3] < 255 && result.backdropContrast[3] > 230, 'reflection overlays a clear surface');
+		assert.ok(result.backdropContrast[4] < 125, 'foam covers the clear shoreline');
+		assert.equal(result.backdropContrast[5], 255, 'shore foam leaves deep water clear');
+		for(const [i, metres] of [0, 1, 10, Math.sqrt(2)*10].entries())
+		{
+			const red = Math.round(255 * Math.exp(-.1 * metres));
+			assert.ok(Math.abs(result.waterPaths[i][0] - red) <= 1);
+			assert.ok(Math.abs(result.waterPaths[i][1] - (255 - red)) <= 1);
+		}
 
 		let skyError = 0, aerialError = 0, waterError = 0;
 
