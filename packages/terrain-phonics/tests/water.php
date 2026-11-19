@@ -133,6 +133,16 @@ $expect($state['speed'] > 5 && $state['yaw'] < -.2 && $state['x'] < 0,
 $expect(abs($state['pitch']) < .55 && abs($state['roll']) < .65, 'planing hull remains stable while turning');
 $expect($lake->uniforms()['wakeCount'] <= Water::MAX_WAKES, 'moving craft emits bounded wakes');
 
+$lake = new Water;
+$craft->spawn(0, 0, 0, $lake, $terrain, 0);
+for($i = 0; $i < 600; $i++)
+{
+	$craft->step(1 / 60, 1, 0, $lake, $terrain, $i / 60);
+	if($i === 74) $expect($craft->state()['speed'] * 3.6 > 50, 'full throttle clears 50 km/h within 1.25 seconds');
+}
+$cruise = $craft->state()['speed'] * 3.6;
+$expect($cruise > 90 && $cruise < 105, 'planing drag balances full forward thrust near 100 km/h');
+
 foreach([[-1, 1], [1, -1], [-1, -1]] as [$steer, $throttle])
 {
 	$lake = new Water;
