@@ -128,9 +128,20 @@ $craft->spawn(0, 0, 0, $lake, $terrain, 0);
 for($i = 0; $i < 300; $i++) $craft->step(1 / 60, 1, .3, $lake, $terrain, $i / 60);
 
 $state = $craft->state();
-$expect($state['speed'] > 5 && abs($state['yaw']) > .2, 'thrust and steering produce controllable motion');
+$expect($state['speed'] > 5 && $state['yaw'] < -.2 && $state['x'] < 0,
+	'right steering turns a forward-moving +Z hull toward starboard (-X)');
 $expect(abs($state['pitch']) < .55 && abs($state['roll']) < .65, 'planing hull remains stable while turning');
 $expect($lake->uniforms()['wakeCount'] <= Water::MAX_WAKES, 'moving craft emits bounded wakes');
+
+foreach([[-1, 1], [1, -1], [-1, -1]] as [$steer, $throttle])
+{
+	$lake = new Water;
+	$craft->spawn(0, 0, 0, $lake, $terrain, 0);
+	for($i = 0; $i < 60; $i++) $craft->step(1 / 60, $throttle, $steer, $lake, $terrain, $i / 60);
+	$state = $craft->state();
+	$expect($state['yaw'] * $steer * $throttle < -.1 && $state['z'] * $throttle > 0,
+		"bow turns in the expected direction at throttle $throttle and steering $steer");
+}
 
 $terrain->shore = true;
 $craft->spawn(0, 0, 0, new Water, $terrain, 0);
