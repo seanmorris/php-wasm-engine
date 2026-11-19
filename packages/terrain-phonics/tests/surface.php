@@ -788,6 +788,106 @@ $pinned->unpin($token);
 $pinned->unpin($token);
 terrainCheck($pinned->stats()['pinnedTiles'] === 0, 'leases release idempotently');
 
+// The cache counters are part of the contract. A stencil visits its sixteen nodes in row-major order, every
+// visit refreshes that node's tile, and a tile that has to be created evicts the least recently used one.
+// The counts below follow from that rule alone, worked out by hand for four-node tiles with room for four.
+$tiny = ['seed' => 'cache-order','tileSize' => 4,'maxTiles' => 4];
+$cache = new Landscape($tiny);
+$ample = new Landscape(['maxTiles' => 64] + $tiny);
+
+/**
+ * Report the cache counters that the following checks pin.
+ * @param Landscape $land Landscape whose cache is inspected.
+ * @return array Generated nodes, cache hits, evictions and stored samples.
+ */
+$cacheCounts = static function(Landscape $land): array {
+	$stats = $land->stats();
+
+	return [$stats['generated'], $stats['cacheHits'], $stats['evictions'], $stats['samples']];
+};
+
+/**
+ * Query the tiny cache and the ample one, require the same height, and report the tiny cache's counters.
+ * @param float $x World X coordinate in metres.
+ * @param float $z World Z coordinate in metres.
+ * @return array Generated nodes, cache hits, evictions and stored samples of the tiny cache.
+ */
+$cacheStep = static function(float $x, float $z) use ($cache, $ample, $cacheCounts): array {
+	terrainCheck($cache->height($x, $z) === $ample->height($x, $z), "tiny cache reproduces the height at $x, $z");
+
+	return $cacheCounts($cache);
+};
+
+terrainCheck($cacheStep(-.5, -.5) === [16,0,0,16], 'a cold stencil over four tiles generates sixteen nodes');
+terrainCheck($cacheStep(.5, -.5) === [20,12,0,20], 'the next cell reads twelve nodes and generates one column');
+terrainCheck($cacheStep(-.25, -.75) === [20,12,0,20], 'a remembered cell reads no nodes');
+terrainCheck($cache->sample(0, 0) === $ample->sample(0, 0), 'lattice sample matches through the tiny cache');
+terrainCheck($cache->stats()['cacheHits'] === 17, 'a lattice sample reads five nodes');
+
+terrainCheck($cacheStep(9.5, .5) === [36,17,2,28], 'two new tiles evict the two least recently used');
+terrainCheck($cacheStep(-.5, -.5) === [36,17,2,28], 'a remembered cell outlives its evicted tiles');
+terrainCheck($cacheStep(-1.5, -.5) === [50,19,5,20], 'a stencil evicts and recreates one of its own tiles');
+
+$lease = $cache->pin([-3,-3,1,1]);
+terrainCheck($cache->stats()['pinnedTiles'] === 4, 'one lease can hold the whole capacity');
+terrainCheck($cacheStep(20.5, 20.5) === [66,19,5,20], 'nodes outside a full lease are generated and not stored');
+terrainCheck($cacheStep(20.25, 20.75) === [66,19,5,20], 'a cell of unstored nodes is still remembered');
+terrainCheck($cache->sample(20, 20) === $ample->sample(20, 20), 'lattice sample matches without storage');
+terrainCheck($cache->stats()['generated'] === 71, 'an unstored lattice sample generates five nodes');
+terrainCheck($cacheStep(-.5, .5) === [77,29,5,26], 'a stencil over part-filled tiles reads ten nodes and fills six');
+
+$cache->unpin($lease);
+$cache->queue(['type' => 'raise','x' => 30,'z' => 30,'radius' => 1,'amount' => 1]);
+$cache->commit();
+terrainCheck($cacheCounts($cache) === [77,29,5,0], 'publication drops every unleased tile');
+$cache->height(-.5, -.5);
+terrainCheck($cacheCounts($cache) === [93,29,5,16], 'publication forgets remembered cells');
+$cache->close();
+
+// Sixteen cached nodes around a cell that is not remembered. The stencil spans four tiles and leaves them
+// most recently used in row-major order, whatever their order was before. The next evictions reveal it.
+$order = new Landscape($tiny);
+$order->height(2.5, 2.5);
+$order->height(4.5, 2.5);
+terrainCheck($cacheCounts($order) === [24,8,0,24], 'two overlapping cells share eight nodes');
+
+foreach([[4,4],[1,4],[4,1],[1,1]] as [$x,$z]) $order->height($x, $z);
+terrainCheck($order->height(3.5, 2.5) === $ample->height(3.5, 2.5), 'a cell of cached nodes reproduces the height');
+terrainCheck($cacheCounts($order) === [24,28,0,24], 'sixteen cached nodes count as sixteen hits');
+
+foreach([[40,40],[80,80],[1,4],[4,4]] as [$x,$z]) $order->height($x, $z);
+terrainCheck($cacheCounts($order) === [26,30,2,8], 'new tiles evict the first two tiles of the stencil');
+$order->height(4, 1);
+$order->height(1, 1);
+terrainCheck($cacheCounts($order) === [28,30,4,8], 'the two evicted tiles are generated again');
+$order->close();
+
+// The same order holds while a stencil fills holes: a tile that only serves cached nodes is refreshed too.
+$holes = new Landscape($tiny);
+$holes->height(2.5, 2.5);
+
+foreach([[4,4],[1,4],[4,1],[1,1]] as [$x,$z]) $holes->height($x, $z);
+terrainCheck($holes->height(4.5, 2.5) === $ample->height(4.5, 2.5), 'a part-cached cell reproduces the height');
+terrainCheck($cacheCounts($holes) === [24,12,0,24], 'a part-cached cell reads eight nodes and generates eight');
+$holes->height(40, 40);
+$holes->height(1, 4);
+terrainCheck($cacheCounts($holes) === [25,13,1,16], 'the eviction takes the first tile of the stencil');
+$holes->close();
+
+// Sixty-four cells are remembered, first in first out. A forgotten cell over cached nodes costs sixteen hits.
+$row = new Landscape(['maxTiles' => 64] + $tiny);
+
+for($k = 0; $k <= 64; $k++) $row->height($k + .5, .5);
+terrainCheck($cacheCounts($row) === [272,768,0,272], 'each step along a row generates one new column');
+$row->height(.25, .75);
+terrainCheck($row->stats()['cacheHits'] === 784, 'the sixty-fifth cell displaced the first');
+$row->height(2.25, .75);
+terrainCheck($row->stats()['cacheHits'] === 784, 'the third cell is still remembered');
+$row->height(1.25, .75);
+terrainCheck($row->stats()['cacheHits'] === 800, 'returning to the first cell displaced the second');
+$row->close();
+$ample->close();
+
 $plane = new Landscape($flatRecipe);
 $hit = $plane->raycast([0,10,0], [0,-2,0]);
 terrainNear($hit['distance'], 10, 1e-5, 'vertical ray normalizes direction');
