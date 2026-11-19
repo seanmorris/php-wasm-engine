@@ -239,18 +239,20 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const waterProgram = program(
 				`${header}${waterSource}
 				uniform vec2 uTestPosition; uniform float uTestTime;
-				out vec4 vSample; out vec3 vNormal;
+				out vec4 vSample; out vec3 vNormal; out vec4 vFrame;
 				void main() { vSample = terrainWaterSample(uTestPosition, uTestTime);
+					vFrame = terrainFrameWakes(uTestPosition, vec2(0), vec2(0), true);
+					vFrame.xyz += terrainDirectionalSample(uTestPosition, uTestTime).xyz;
 					vNormal = terrainWaterNormal(vSample); gl_Position = vec4(0, 0, 0, 1); gl_PointSize = 1.0; }`
 				, `${header}out vec4 color; void main() { color = vec4(0); }`
-				, ['vSample', 'vNormal']
+				, ['vSample', 'vNormal', 'vFrame']
 			);
 
 			const feedback = gl.createTransformFeedback();
 			const outputBuffer = gl.createBuffer();
 			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, feedback);
 			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, outputBuffer);
-			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 7 * 4, gl.DYNAMIC_READ);
+			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 11 * 4, gl.DYNAMIC_READ);
 			gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, outputBuffer);
 			gl.useProgram(waterProgram);
 			gl.enable(gl.RASTERIZER_DISCARD);
@@ -279,11 +281,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				{
 					gl.uniform2fv(gl.getUniformLocation(waterProgram, 'uTestPosition'), sample.position);
 					gl.uniform1f(gl.getUniformLocation(waterProgram, 'uTestTime'), sample.time);
+					gl.uniform1i(gl.getUniformLocation(waterProgram, 'uFrameWakeCount'), sample.packets.length);
+					if(sample.packets.length)
+					{
+						gl.uniform4fv(gl.getUniformLocation(waterProgram, 'uFrameWakes[0]'), sample.packets.flat());
+						gl.uniform2fv(gl.getUniformLocation(waterProgram, 'uJetVelocities[0]'), sample.jets.flat());
+						gl.uniform4fv(gl.getUniformLocation(waterProgram, 'uWakeBounds'), sample.bounds);
+					}
 					gl.beginTransformFeedback(gl.POINTS);
 					gl.drawArrays(gl.POINTS, 0, 1);
 					gl.endTransformFeedback();
 
-					const actual = new Float32Array(7);
+					const actual = new Float32Array(11);
 					gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, actual);
 					waterResults.push({name: scenario.name, ...sample, actual: Array.from(actual)});
 				}
@@ -615,6 +624,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			waterError = Math.max(waterError, delta);
 			// GLSL uses float32 phase arithmetic; world-edge coordinates need a larger bound than local samples.
 			const tolerance = Math.max(...sample.position.map(Math.abs)) > 10000 ? .003 : .0002;
+			for(let i = 0; i < 3; i++)
+				assert.ok(Math.abs(sample.actual[7+i] - sample.expected[i]) <= tolerance, 'prepared wake height and slopes match physics');
+			const foam = sample.actual[10];
+			if(sample.name === 'wakes' && sample.time === .001 && sample.position.every(value => value === 0))
+				assert.ok(foam > .9, 'fresh propulsion visibly churns the water at the stern');
+			if(sample.name !== 'wakes' || sample.time >= 3 || sample.position[0] < -100)
+				assert.equal(foam, 0, 'unpowered, expired and distant water has no jet wash');
 
 			assert.ok(
 				Number.isFinite(delta) && delta <= tolerance

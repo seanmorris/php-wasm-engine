@@ -366,6 +366,7 @@ $original = Landscape::load($edited->save());
 terrainCheck($edited->changedRegion($original) === [], 'identical committed surfaces have no dirty region');
 $edited->queue(['type' => 'raise','x' => 0,'z' => 0,'radius' => 8,'amount' => 10]);
 terrainNear($edited->height(0, 0), 0, 0, 'queued edits are invisible to physics');
+terrainNear($edited->height(.25, .5), 0, 0, 'warm a fractional hull-probe cell before commit');
 
 terrainCheck(
 	$edited->revision() === 0 && $edited->commit() && $edited->revision() === 1
@@ -373,6 +374,8 @@ terrainCheck(
 );
 
 terrainNear($edited->height(0, 0), 10, 0, 'raise edit reaches its center amplitude');
+$raisedProbe = $edited->height(.25, .5);
+terrainCheck($raisedProbe > 9, 'commit refreshes cached interpolation coefficients');
 
 terrainCheck(
 	$edited->changedRegion($original) === [-10.0,-10.0,10.0,10.0]
@@ -391,8 +394,10 @@ $edited->queue(['type' => 'lower','x' => 0,'z' => 0,'radius' => 8,'amount' => 3]
 $edited->queue(['type' => 'flatten','x' => 0,'z' => 0,'radius' => 4,'height' => 2,'amount' => .5]);
 $edited->commit();
 terrainNear($edited->height(0, 0), 4.5, 1e-12, 'transaction applies operators in order');
+terrainCheck($edited->height(.25, .5) < $raisedProbe, 'the next transaction replaces the warmed hull-probe cell');
 terrainCheck($edited->undo() && $edited->revision() === 3, 'undo advances monotonic revision');
 terrainNear($edited->height(0, 0), 10, 0, 'undo removes complete transaction');
+terrainNear($edited->height(.25, .5), $raisedProbe, 0, 'undo restores the exact hull-probe height');
 
 $restored = Landscape::load($edited->save());
 terrainCheck($restored->redo(), 'saved redo branch is restored');

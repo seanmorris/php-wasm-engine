@@ -142,6 +142,8 @@ function glUniform2f(...$args): void{}
 function glUniform3f(...$args): void{}
 
 function glUniform4f(...$args): void{}
+function glUniform2fv(...$args): void{}
+function glUniform4fv(...$args): void{}
 
 function glUniformMatrix4fv(...$args): void{}
 

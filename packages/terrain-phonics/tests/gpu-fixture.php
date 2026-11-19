@@ -15,7 +15,7 @@ $waves = [
 ];
 
 $wakeWater = new Water(2.5, $waves);
-$wakeWater->wake(0, 0, .7, 0);
+$wakeWater->wake(0, 0, .7, 0, 0, 20);
 $wakeWater->wake(4, -3, -.4, 1.2);
 $wakeWater->wake(-2, 7, 1.5, -7.5);
 $manyWaves = [];
@@ -45,9 +45,13 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 	foreach([0,.001,1.25,5.9,8,9,1000] as $time)
 	{
 		$sample = $water->sample($x, $z, $time);
+		$frame = clone $water;
+		$frame->update($time);
+		$draw = $frame->uniforms();
 		$samples[] = [
 			'position' => [$x,$z]
 			, 'time' => $time
+			, 'packets' => $draw['frameWakes'], 'jets' => $draw['jetVelocities'], 'bounds' => $draw['wakeBounds']
 			, 'expected' => [$sample['height'],$sample['dx'],$sample['dz'],$sample['velocity'],...$sample['normal']]
 		];
 	}
