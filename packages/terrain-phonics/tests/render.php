@@ -330,6 +330,222 @@ foreach([[1920,1080],[640,900]] as [$width,$height])
 	renderCheck(Camera::inView($planes,$view->position,$front,20,30), 'box crossing the near plane remains visible');
 }
 
+// Given clip planes, the selector tests padded bounds itself. It must refine exactly the nodes a predicate
+// allows when that predicate pads the node by its own size and asks Camera::inView().
+$detailLod = new Lod(1024, 1);
+$detailPatches = [];
+$growing = [$detailLod->node()];
+
+while($growing !== [])
+{
+	$node = array_pop($growing);
+	$detailPatches[$node['key']] = $node + [
+		'centerHeight' => 3.0 * $node['ix'] - 2.0 * $node['iz']
+		, 'geometricError' => .25 * (1 + ($node['ix'] + $node['iz']) % 3)
+		, 'minY' => -6.0 - $node['level']
+		, 'maxY' => 9.0 + $node['ix'] % 4
+	];
+
+	if($node['level'] < 4) array_push($growing, ...$detailLod->children($node));
+}
+
+/**
+ * Build the padded-view predicate for one set of planes and one extra height range.
+ * @param array $planes Clip planes relative to the eye.
+ * @param array $eye Camera world position.
+ * @param float $low Lowest height the padded bounds must reach.
+ * @param float $high Highest height the padded bounds must reach.
+ * @param int $refused Counts the nodes the predicate keeps coarse.
+ * @return Closure Predicate for Lod::select().
+ */
+$paddedView = static function(array $planes, array $eye, float $low, float $high, int &$refused): Closure {
+
+	/**
+	 * Test one node's padded bounds against the planes.
+	 * @param array $node Quadtree node to consider refining.
+	 * @param array $patch Resident mesh carrying its vertical bounds.
+	 * @return bool Whether the padded bounds can intersect the view.
+	 */
+	$predicate = static function(array $node, array $patch) use ($planes, $eye, $low, $high, &$refused): bool {
+		$margin = $node['size'];
+		$node['x'] -= $margin;
+		$node['z'] -= $margin;
+		$node['size'] += 2 * $margin;
+
+		$visible = Camera::inView(
+			$planes
+			, $eye
+			, $node
+			, min($patch['minY'], $low) - $margin
+			, max($patch['maxY'], $high) + $margin
+		);
+
+		if(!$visible) $refused++;
+
+		return $visible;
+	};
+
+	return $predicate;
+};
+
+/**
+ * Select the plain way: a depth-first walk that asks importance() about every resident node.
+ * @param Lod $lod Selector whose rules the walk follows.
+ * @param array $patches Resident patches keyed by node key.
+ * @param array $eye Camera world position.
+ * @param float $quality Detail multiplier.
+ * @param float $focal Vertical focal length in pixels.
+ * @return array Lists named draw, request and refine, as Lod::select() returns them.
+ */
+$plainWalk = static function(Lod $lod, array $patches, array $eye, float $quality, float $focal): array {
+	$lists = ['draw' => [], 'request' => [], 'refine' => []];
+	$depth = renderGet($lod, 'depth');
+
+	/**
+	 * Visit one node, then its children from last to first as the selector's stack does.
+	 * @param array $node Quadtree node.
+	 * @return void Appends to the three lists.
+	 */
+	$visit = static function(array $node) use (&$visit, &$lists, $lod, $patches, $eye, $quality, $focal, $depth): void {
+		if(!isset($patches[$node['key']]))
+		{
+			$lists['request'][] = $node + ['priority' => PHP_FLOAT_MAX];
+
+			return;
+		}
+
+		$importance = renderCall($lod, 'importance', $node, $eye, $patches, $quality, $focal);
+
+		if($node['level'] >= $depth || !($importance > 1))
+		{
+			$lists['draw'][] = $node;
+
+			return;
+		}
+
+		$children = $lod->children($node);
+		$lists['refine'][] = $node + ['priority' => $importance];
+		$missing = 0;
+
+		foreach($children as $child)
+		if(!isset($patches[$child['key']]))
+		{
+			$lists['request'][] = $child + ['priority' => $importance];
+			$missing++;
+		}
+
+		if($missing > 0) $lists['draw'][] = $node;
+		else foreach(array_reverse($children) as $child) $visit($child);
+	};
+
+	$visit($lod->node());
+
+	return $lists;
+};
+
+$view->position = [-300.0, 40.0, 200.0];
+$eye = $view->position;
+
+// The selector works importance out inline, with comparisons and a shortcut for coarse nodes, and walks
+// with a counted stack. Its lists must equal those of the plain walk, priorities to the last bit.
+$plain = $detailLod->select($eye, $detailPatches, 1, 600);
+
+renderCheck(
+	count($plain['refine']) > 40 && count($plain['draw']) > count($plain['refine']) && count($plain['request']) > 40
+	, 'plain-walk fixture refines some nodes, keeps more coarse and requests children'
+);
+
+renderCheck($plain === $plainWalk($detailLod, $detailPatches, $eye, 1.0, 600.0), 'selection equals the plain walk');
+
+// A world one level shallower stops at the finest resident level, and two absent patches leave their
+// sibling groups incomplete with other siblings resident. Its sizes and errors are not powers of two, so
+// a product taken in another order would round differently.
+$shallow = new Lod(1000.3, 1);
+$sparse = $detailPatches;
+unset($sparse['3:1:6'], $sparse['4:3:11']);
+
+foreach($sparse as $key => $patch)
+$sparse[$key]['geometricError'] = .9 + .037 * (($patch['ix'] * 7 + $patch['iz']) % 23);
+
+$eyes = [[-200.0, 12.0, 150.0], [-300, 40, 200], [90.5, 3.0, -410.25], [-700.3, 31.7, -650.9], [0.0, 2500.0, 0.0]];
+
+foreach($eyes as $from)
+{
+	$stopped = $shallow->select($from, $sparse, 1.37, 733.5);
+
+	renderCheck(
+		$stopped === $plainWalk($shallow, $sparse, $from, 1.37, 733.5)
+		, 'selection at the leaf depth equals the plain walk'
+	);
+}
+
+renderCheck(
+	count($stopped['draw']) === 1
+		&& $detailLod->select($eye, [], 1, 600) === $plainWalk($detailLod, [], $eye, 1.0, 600.0)
+	, 'a distant eye draws the root alone and an empty cache requests it'
+);
+
+$headings = [[.4, -.2], [2.6, -.6], [-1.9, .1], [0.0, -1.5], [1.3, -.35], [-.8, .4], [3.6, -.05]];
+
+foreach($headings as [$view->yaw, $view->pitch])
+{
+	$planes = $view->clipPlanes(1280, 720);
+	$seven = [...$planes, [0.0, 0.0, 1.0, -20.0]];
+
+	// The narrow range leaves the height of each box to its ground, and the wide range sets it.
+	foreach([[-1.5, 1.5], [-40.0, 60.0]] as [$low, $high])
+	{
+		$refused = 0;
+		$inView = $paddedView($planes, $eye, $low, $high, $refused);
+		$byPredicate = $detailLod->select($eye, $detailPatches, 1, 600, $inView);
+
+		renderCheck(
+			$refused > 0 && count($byPredicate['refine']) > 4
+			, 'padded-view fixture refines some nodes and keeps others coarse'
+		);
+
+		renderCheck(
+			$detailLod->select($eye, $detailPatches, 1, 600, null, $planes, $low, $high) === $byPredicate
+			, 'clip planes select the same patches as the padded-view predicate'
+		);
+
+		// A seventh plane leaves the unrolled test of six, and here it hides nodes the six planes show.
+		$hiddenBySix = $refused;
+		$bySeven = $detailLod->select($eye, $detailPatches, 1, 600, $paddedView($seven, $eye, $low, $high, $refused));
+
+		renderCheck(
+			$bySeven !== $byPredicate && $refused - $hiddenBySix > $hiddenBySix
+				&& $detailLod->select($eye, $detailPatches, 1, 600, null, $seven, $low, $high) === $bySeven
+			, 'any number of clip planes selects as the predicate does'
+		);
+	}
+
+	// A NAN bound and a patch with a NAN bound also leave the unrolled test.
+	renderCheck(
+		$detailLod->select($eye, $detailPatches, 1, 600, null, $planes, -1.5, NAN)
+			=== $detailLod->select($eye, $detailPatches, 1, 600, $paddedView($planes, $eye, -1.5, NAN, $refused))
+		, 'a NAN height bound selects as the predicate does'
+	);
+
+	$odd = $detailPatches;
+	$odd['3:3:6']['minY'] = NAN;
+
+	renderCheck(
+		$detailLod->select($eye, $odd, 1, 600, null, $planes, -1.5, 1.5)
+			=== $detailLod->select($eye, $odd, 1, 600, $paddedView($planes, $eye, -1.5, 1.5, $refused))
+		, 'a patch with a NAN height bound selects as the predicate does'
+	);
+}
+
+try
+{
+	$detailLod->select($eye, $detailPatches, 1, 600, $paddedView($planes, $eye, 0, 0, $refused), $planes);
+	renderCheck(false, 'a predicate and clip planes together must be refused');
+}catch(InvalidArgumentException)
+{
+	renderCheck(true, 'a predicate and clip planes together are refused');
+}
+
 $bootstrapSurface = new Landscape;
 $bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere);
 $bootstrapScene->budgetMs = 1000;

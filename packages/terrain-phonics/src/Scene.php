@@ -479,29 +479,24 @@ final class Scene
 
 		// A one-patch margin leaves room for camera turns and the neighboring
 		// splits needed for 2:1 seams. Out-of-view ground retains coarse coverage.
-		$planes = $camera->clipPlanes(max(1, (int)round($this->viewportHeight * $this->viewportAspect)), $this->viewportHeight);
-		$eye = $camera->position;
+		// The selector applies that margin itself, to ground and water bounds alike, when it gets the
+		// planes: a predicate here would cost a call and a copied node for every patch that wants to split.
+		$planes = $camera->clipPlanes(
+			max(1, (int)round($this->viewportHeight * $this->viewportAspect))
+			, $this->viewportHeight
+		);
+
 		[$waterMin, $waterMax] = $this->water->heightRange();
-		$inDetailView = /** Test the expanded ground and water bounds against the viewing frustum.
-		 * @param array $node Quadtree node to consider refining.
-		 * @param array $patch Resident mesh carrying its vertical bounds.
-		 * @return bool Whether finer detail may be needed near this view.
-		 */
-			static function(array $node, array $patch) use ($planes, $eye, $waterMin, $waterMax): bool {
-			$margin = $node['size'];
-			$node['x'] -= $margin;
-			$node['z'] -= $margin;
-			$node['size'] += 2 * $margin;
-			return Camera::inView($planes, $eye, $node, min($patch['minY'], $waterMin) - $margin,
-				max($patch['maxY'], $waterMax) + $margin);
-		};
 
 		$result = $this->lod->select(
 			$camera->position
 			, $this->patches
 			, $this->quality
 			, $this->viewportHeight / (2 * tan($camera->fov / 2))
-			, $inDetailView
+			, null
+			, $planes
+			, $waterMin
+			, $waterMax
 		);
 
 		$old = array_column($this->draw, 'key');
