@@ -180,6 +180,7 @@ function glDrawElements(...$args): void{$GLOBALS['terrainGl']['draws']++;}
 function glDrawArrays(...$args): void{$GLOBALS['terrainGl']['draws']++;}
 
 use TerrainPhonics\Atmosphere;
+use TerrainPhonics\BrowserPatchBuilder;
 use TerrainPhonics\Camera;
 use TerrainPhonics\GpuPatch;
 use TerrainPhonics\Landscape;
@@ -237,6 +238,51 @@ function renderCover(array $nodes, float $extent, bool $balanced = true): void
 	}
 
 	renderCheck(abs($area - $extent * $extent) < 1e-6, 'visible coverage contains no holes');
+}
+
+/**
+ * Advance a scene and count the selections that update ran.
+ * @param Scene $scene Scene to advance.
+ * @param float $seconds Elapsed display seconds.
+ * @param Camera $camera Viewing camera.
+ * @return int Selections run by this update.
+ */
+function renderSelections(Scene $scene, float $seconds, Camera $camera): int
+{
+	$before = renderGet($scene, 'selections');
+	$scene->update($seconds, $camera);
+
+	return renderGet($scene, 'selections') - $before;
+}
+
+/**
+ * List a scene's drawn cover in a stable order.
+ * @param Scene $scene Scene to inspect.
+ * @return array Sorted quadtree keys of the drawn patches.
+ */
+function renderKeys(Scene $scene): array
+{
+	$keys = array_column(renderGet($scene, 'draw'), 'key');
+	sort($keys);
+
+	return $keys;
+}
+
+/**
+ * Find the quadtree depth of the drawn patch below the camera.
+ * @param Scene $scene Scene to inspect.
+ * @param Camera $camera Viewing camera.
+ * @return int Depth of the patch under the eye, or minus one when none is drawn there.
+ */
+function renderLevelUnder(Scene $scene, Camera $camera): int
+{
+	[$x, , $z] = $camera->position;
+
+	foreach(renderGet($scene, 'draw') as $node)
+	if($x >= $node['x'] && $x < $node['x'] + $node['size'] && $z >= $node['z'] && $z < $node['z'] + $node['size'])
+	return $node['level'];
+
+	return -1;
 }
 
 // Every topology must cover the whole square once, with exactly the endpoints
@@ -662,6 +708,8 @@ $canyonSurface->close();
 $predictedSurface = new Landscape(['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
 $predictedScene = new Scene($predictedSurface, new Water, new Atmosphere);
 $predictedScene->budgetMs = 1000;
+// These checks follow speculative jobs from one 60 Hz update to the next, so each changed view must select at once.
+$predictedScene->selectionInterval = 0;
 $predictedCamera = new Camera;
 $predictedCamera->position = [0,700,0];
 $predictedScene->update(.1, $predictedCamera);
@@ -722,12 +770,15 @@ $predictedSurface->close();
 $flightSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $flightScene = new Scene($flightSurface, new Water, new Atmosphere);
 $flightScene->budgetMs = 1000;
+// This flight checks how motion and finished siblings share a selection on every frame. The limited flight follows it.
+$flightScene->selectionInterval = 0;
 $flightCamera = new Camera;
 $flightCamera->position = [-4000,20,20];
 
 for($frame = 0; $frame < 100; $frame++) $flightScene->update(.1, $flightCamera);
 $flightLevels = [];
 $prefetchPeak = 0;
+$flightSelections = renderGet($flightScene, 'selections');
 
 for($frame = 0; $frame < 120; $frame++)
 {
@@ -781,6 +832,12 @@ renderCheck(
 
 renderCheck($prefetchPeak > 0, 'moving flight reserves bounded future refinement');
 
+// The flight crosses 75 position buckets of 8 m, and each crossing is a changed view.
+renderCheck(
+	renderGet($flightScene, 'selections') - $flightSelections >= 75
+	, 'an interval of zero selects on every changed view of the flight'
+);
+
 for($frame = 0; $frame < 500 && $flightScene->dirty(); $frame++) $flightScene->update(.1, $flightCamera);
 
 renderCheck(
@@ -813,6 +870,328 @@ renderCheck(
 renderCover(renderGet($flightScene, 'draw'), 32768);
 $flightScene->close();
 $flightSurface->close();
+
+// Selection limiter. The fixtures above that follow selection from one update to the next set
+// selectionInterval to zero. The fixtures below set it themselves, so none depends on its default.
+
+// The same 300 m/s flight as above with the limiter on.
+$limitedSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
+$limitedScene = new Scene($limitedSurface, new Water, new Atmosphere);
+$limitedScene->budgetMs = 1000;
+$limitedScene->selectionInterval = .1;
+$limitedCamera = new Camera;
+$limitedCamera->position = [-4000,20,20];
+
+for($frame = 0; $frame < 100; $frame++) $limitedScene->update(.1, $limitedCamera);
+$limitedMarks = $limitedLevels = [];
+
+// One frame more than the flight above, so the last frame selects and the stop below has to wait.
+for($frame = 0; $frame < 121; $frame++)
+{
+	$limitedCamera->position[0] += 5;
+	if(renderSelections($limitedScene, 1 / 60, $limitedCamera)) $limitedMarks[] = $frame;
+	$limitedLevels[] = renderLevelUnder($limitedScene, $limitedCamera);
+}
+
+renderCheck(
+	$limitedMarks === range(0, 120, 6)
+	, 'a limited flight selects ten times a second at 60 Hz, not on nearly every frame'
+);
+
+renderCheck(
+	min($limitedLevels) >= 6 && max($limitedLevels) >= 7
+	, 'ten selections a second keep the nearby coverage that the unlimited flight is held to'
+);
+
+renderCover(renderGet($limitedScene, 'draw'), 32768);
+$limitedScene->update(1 / 60, $limitedCamera);
+$corridor = $limitedScene->stats()['prefetchJobs'];
+
+for($frame = 0; $frame < 5; $frame++) $limitedScene->update(1 / 60, $limitedCamera);
+
+renderCheck(
+	$corridor > 0 && $limitedScene->stats()['lookahead'] === null && $limitedScene->stats()['prefetchJobs'] === 0
+	, 'a limited flight that stops keeps its speculative jobs only until the interval ends'
+);
+
+$limitedScene->close();
+$limitedSurface->close();
+
+// At this height the root alone satisfies the view. No patch is ever requested, so each selection
+// below answers the camera and nothing else.
+$travelSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
+$travelWater = new Water;
+$travelScene = new Scene($travelSurface, $travelWater, new Atmosphere);
+$travelScene->budgetMs = 1000;
+$travelScene->selectionInterval = .1;
+$travelCamera = new Camera;
+$travelCamera->position = [0,60000,0];
+
+for($frame = 0; $frame < 10; $frame++) $travelScene->update(.1, $travelCamera);
+
+renderCheck(
+	!$travelScene->dirty() && $travelScene->stats()['visible'] === 1
+	, 'the limiter fixture rests on a settled root'
+);
+
+$marks = [];
+
+// Nine metres a frame crosses an 8 m position bucket on every frame.
+for($frame = 0; $frame < 32; $frame++)
+{
+	$travelCamera->position[0] += 9;
+	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
+}
+
+renderCheck($marks === [0,6,12,18,24,30], 'a moving view selects once per interval, every sixth frame at 60 Hz');
+
+// The camera now stops one frame after a selection, with a newer view still waiting.
+renderCheck(
+	$travelScene->dirty() && renderGet($travelScene, 'selectionDeferred') && renderGet($travelScene, 'jobs') === []
+		&& !renderGet($travelScene, 'changed') && !renderGet($travelScene, 'selectionPending')
+	, 'a postponed selection keeps a stopped scene dirty with nothing else left to do'
+);
+
+renderCheck($travelScene->stats()['selectionPending'], 'diagnostics report a postponed selection as pending');
+$updates = $selected = $selectedAt = 0;
+
+// The sandbox updates a resting scene only while it reports dirty, so this loop is all a stopped view gets.
+while($travelScene->dirty() && $updates < 20)
+{
+	$updates++;
+
+	if(renderSelections($travelScene, 1 / 60, $travelCamera))
+	{
+		$selected++;
+		$selectedAt = $updates;
+	}
+}
+
+renderCheck(
+	$selected === 1 && $selectedAt === 5
+	, 'a stopped view gets its last selection when the interval ends, with no new input'
+);
+
+// The scene clock stands still once the host stops updating. The scene therefore asks for one more interval of
+// updates, or the limiter would take the selection before a long rest for a recent one.
+renderCheck($updates === 11 && !$travelScene->dirty(), 'the scene goes idle one interval after its last selection');
+
+renderCheck(
+	renderSelections($travelScene, 1 / 60, $travelCamera) === 0 && !$travelScene->dirty()
+	, 'the last selection used the resting pose, so the scene stays idle'
+);
+
+$travelCamera->position[0] += 9;
+
+renderCheck(
+	renderSelections($travelScene, 1 / 60, $travelCamera) === 1
+	, 'the first changed view after a rest selects at once'
+);
+
+// Each row is one frame, one or two frames after a selection. Only a relocation may select that soon.
+$steps = [
+	['position', 9, 0, 'ordinary travel waits for the interval']
+	, ['position', 100, 1, 'a jump of more than 64 m selects at once']
+	, ['position', 60, 0, 'a hop of less than 64 m counts as travel']
+	, ['yaw', .2, 0, 'an ordinary turn waits for the interval']
+	, ['yaw', 1, 1, 'a turn of more than half the field of view selects at once']
+	, ['yaw', 2 * M_PI, 0, 'a yaw that wraps a whole turn is not a jump']
+	, ['pitch', -.2, 0, 'an ordinary tilt waits for the interval']
+	, ['pitch', 1, 1, 'a tilt of more than half the field of view selects at once']
+];
+
+foreach($steps as [$axis,$change,$expected,$message])
+{
+	if($axis === 'position') $travelCamera->position[0] += $change;
+	else $travelCamera->$axis += $change;
+
+	renderCheck(renderSelections($travelScene, 1 / 60, $travelCamera) === $expected, $message);
+}
+
+// A changed setting selects on a frame of travel that would otherwise wait.
+$travelCamera->position[0] += 9;
+$travelScene->quality = .5;
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'a new detail setting selects at once');
+$travelCamera->position[0] += 9;
+$travelWater->setLevel(5);
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'a new water level selects at once');
+
+$travelCamera->position[0] += 9;
+$travelWater->setWaveScale(.5);
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'a new wave height selects at once');
+$travelCamera->position[0] += 9;
+$travelCamera->fov = .9;
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'a new field of view selects at once');
+
+$travelCamera->position[0] += 9;
+$travelScene->render($travelCamera, 640, 360, 0);
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'a new viewport selects at once');
+$travelCamera->position[0] += 9;
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 0, 'the same travel waits once the settings stop changing');
+
+$travelScene->selectionInterval = .2;
+$marks = [];
+
+for($frame = 0; $frame < 36; $frame++)
+{
+	$travelCamera->position[0] += 9;
+	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
+}
+
+// The last selection ran two frames before this loop began.
+renderCheck($marks === [10,22,34], 'a longer interval spaces selections twelve frames apart');
+$travelScene->selectionInterval = 0;
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 1, 'turning the limiter off runs the postponed selection');
+$marks = [];
+
+for($frame = 0; $frame < 12; $frame++)
+{
+	$travelCamera->position[0] += 9;
+	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
+}
+
+renderCheck($marks === range(0, 11), 'an interval of zero selects on every changed view');
+
+// The limiter last saw the camera 13 frames of travel ago, so the first limited update counts as a relocation.
+$travelScene->selectionInterval = .1;
+$travelCamera->position[0] += 9;
+$travelScene->update(1 / 60, $travelCamera);
+$travelCamera->position[0] += 9;
+$ran = renderSelections($travelScene, 1 / 60, $travelCamera);
+renderCheck($ran === 0 && $travelScene->dirty(), 'the limiter postpones travel again once it is back on');
+$ran = 0;
+
+// A paused host may keep updating with no elapsed time. The scene clock stands still then, so no wait could end.
+for($frame = 0; $frame < 3; $frame++) $ran += renderSelections($travelScene, 0, $travelCamera);
+
+renderCheck(
+	$ran === 1 && !$travelScene->dirty()
+	, 'updates of zero seconds run a postponed selection at once and leave the scene idle'
+);
+
+$travelScene->close();
+$travelSurface->close();
+
+/**
+ * Stand in for a patch worker that accepts every request and never finishes one.
+ * @param string $action Bridge command.
+ * @param string $path Transfer file path.
+ * @param string $key Patch key.
+ * @param string $payload Command payload.
+ * @return string The empty reply, which means accepted and still pending.
+ */
+$stalled = static fn(string $action, string $path, string $key, string $payload): string => '';
+
+// The root never arrives from this worker, so nothing is drawn and the limiter must stay out of the way.
+$emptySurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
+$emptyScene = new Scene($emptySurface, new Water, new Atmosphere, new BrowserPatchBuilder($stalled));
+$emptyScene->selectionInterval = .1;
+$emptyCamera = new Camera;
+$selected = 0;
+
+for($frame = 0; $frame < 6; $frame++)
+{
+	$emptyCamera->position[0] += 9;
+	$selected += renderSelections($emptyScene, 1 / 60, $emptyCamera);
+}
+
+renderCheck(
+	$selected === 6 && $emptyScene->stats()['visible'] === 0
+	, 'with nothing drawn every changed view selects at once'
+);
+
+$emptyScene->close();
+$emptySurface->close();
+
+// Two scenes share every input and differ only in the limiter.
+$twins = [];
+
+foreach([0.0,.1] as $interval)
+{
+	$twinSurface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0]);
+	$twinScene = new Scene($twinSurface, new Water, new Atmosphere);
+	$twinScene->budgetMs = 1000;
+	$twinScene->selectionInterval = $interval;
+	$twins[] = [$twinSurface,$twinScene];
+}
+
+[[,$free],[,$limited]] = $twins;
+$twinCamera = new Camera;
+$twinCamera->position = [1,10,0];
+$restSelections = 0;
+
+// A camera at rest is not limited. A sibling group finishes every fourth frame here, and each one selects at once.
+for($frame = 0; $frame < 24; $frame++)
+{
+	$restSelections += renderSelections($free, 1 / 60, $twinCamera);
+	$limited->update(1 / 60, $twinCamera);
+
+	renderCheck(
+		renderKeys($free) === renderKeys($limited)
+			&& renderGet($free, 'selections') === renderGet($limited, 'selections')
+		, 'a resting view selects and refines exactly as it does without the limiter'
+	);
+}
+
+renderCheck($restSelections > 4, 'the resting fixture selects more often than once per interval');
+$freeMarks = $limitedMarks = $served = [];
+$waitingSince = null;
+$refined = $limited->stats()['visible'];
+
+// Now the eye trembles by a millimetre inside one position bucket. The view key never changes, so only
+// finished sibling groups and transitions ask for selections while the view counts as moving.
+for($frame = 0; $frame < 60; $frame++)
+{
+	$twinCamera->position[0] = 1 + (($frame + 1) % 2) / 1000;
+	if(renderSelections($free, 1 / 60, $twinCamera)) $freeMarks[] = $frame;
+
+	if(renderSelections($limited, 1 / 60, $twinCamera))
+	{
+		$limitedMarks[] = $frame;
+		if($waitingSince !== null) $served[] = $frame - $waitingSince;
+		$waitingSince = null;
+	}
+
+	if($waitingSince === null && renderGet($limited, 'selectionDeferred')) $waitingSince = $frame;
+}
+
+$gaps = [];
+
+foreach($limitedMarks as $i => $frame) if($i > 0) $gaps[] = $frame - $limitedMarks[$i - 1];
+
+renderCheck(
+	count($gaps) >= 8 && min($gaps) === 6
+	, 'finished groups in a moving view select once per interval and no sooner'
+);
+
+// A group that finishes during a selection's own update waits longest: one whole interval.
+renderCheck(count($served) >= 8 && max($served) <= 6, 'a finished group waits at most one interval for its selection');
+renderCheck($limited->stats()['visible'] > $refined, 'finished groups are drawn while the view keeps moving');
+renderCheck(count($freeMarks) > count($limitedMarks), 'without the limiter the same groups select as they finish');
+
+for($frame = 0; $frame < 300 && ($free->dirty() || $limited->dirty()); $frame++)
+{
+	$free->update(.1, $twinCamera);
+	$limited->update(.1, $twinCamera);
+}
+
+renderCheck(
+	!$free->dirty() && !$limited->dirty() && renderKeys($free) === renderKeys($limited)
+	, 'once the view rests, the limited scene settles on the cover of the unlimited one'
+);
+
+foreach($twins as [$twinSurface,$twinScene])
+{
+	$twinScene->close();
+	$twinSurface->close();
+}
 
 $surface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0,'maxTiles' => 32]);
 $water = new Water;
