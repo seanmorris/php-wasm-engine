@@ -342,6 +342,229 @@ foreach(range(-8, 8) as $i)
 	);
 }
 
+/**
+ * Remap an elevation through fmod(), max(), min() and Noise::fade(), which CanyonBeds::shape() writes out.
+ * @param float $height Elevation above the bedding datum in metres.
+ * @param float $spacing Positive scale of the section in metres.
+ * @param float $strength Interpolation from the unmodified slope to the bed profile.
+ * @return array Remapped elevation and partial derivatives with respect to height and strength.
+ */
+function terrainBedsByCalls(float $height, float $spacing, float $strength): array
+{
+	$level = fmod($height, 10 * $spacing) / $spacing;
+
+	if($level < -5) $level += 10;
+
+	if($level >= 5) $level -= 10;
+
+	$i = 0;
+
+	while($i < 6 && $level >= CanyonBeds::CONTACTS[$i + 1]) $i++;
+
+	$width = CanyonBeds::CONTACTS[$i + 1] - CanyonBeds::CONTACTS[$i];
+	$fraction = ($level - CanyonBeds::CONTACTS[$i]) / $width;
+	[$start,$end] = CanyonBeds::RAMPS[$i];
+	$t = max(0.0, min(1.0, ($fraction - $start) / ($end - $start)));
+	$displacement = $width * $spacing * (Noise::fade($t) - $fraction);
+
+	return [
+		$height + $strength * $displacement
+		, 1 - $strength + $strength * 30 * $t * $t * ($t - 1) ** 2 / ($end - $start)
+		, $displacement
+	];
+}
+
+/**
+ * Evaluate a recipe through the Noise methods and the plain numeric functions alone.
+ *
+ * Recipe::coarse(), Recipe::height() and CanyonBeds::shape() write those calls out in place because calls
+ * dominate their cost in the browser. This is the definition that every written-out copy must reproduce to
+ * the bit.
+ * @param array $r Normalized recipe values with a positive height scale.
+ * @param Noise $noise Noise source built from the recipe's seed.
+ * @param float $x World X coordinate in metres.
+ * @param float $z World Z coordinate in metres.
+ * @return array Coarse height, its world derivatives and the detailed height [height,dx,dz,detailed].
+ */
+function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
+{
+	[$worldX,$worldZ] = [$x,$z];
+	$f = $r['baseFrequency'];
+	$layered = $r['preset'] === 'canyon' && $r['version'] === 2
+		&& $r['terraceSpacing'] > 0 && $r['terraceStrength'] > 0;
+	$wallStart = .055;
+	$wallWidth = .006;
+
+	if($layered)
+	{
+		$wallStart -= .025 * $r['terraceStrength'];
+		$wallWidth += .105 * $r['terraceStrength'];
+	}
+
+	$datum = $layered ? CanyonBeds::DIP[0]*$x + CanyonBeds::DIP[1]*$z : 0;
+	$jacobian = [1.0,0.0,0.0,1.0];
+
+	if($r['warpAmplitude'] > 0)
+	{
+		$wf = $r['warpFrequency'];
+		$wa = $r['warpAmplitude'];
+		$wx = $noise->sample($x * $wf + 271.13, $z * $wf - 197.41);
+		$wz = $noise->sample($x * $wf - 419.27, $z * $wf + 113.71);
+		$x += $wa * $wx[0];
+		$z += $wa * $wz[0];
+
+		$jacobian = [1 + $wa * $wf * $wx[1], $wa * $wf * $wx[2], $wa * $wf * $wz[1], 1 + $wa * $wf * $wz[2]];
+	}
+
+	$a = $noise->sample($x * $f + 13.17, $z * $f - 9.31);
+	$b = $noise->sample($x * $f * 2 + 71.43, $z * $f * 2 + 53.11);
+
+	if($r['preset'] === 'mountain')
+	{
+		$rounded = sqrt($a[0] * $a[0] + .04 * .04);
+		$value = .35 - $rounded + .24 * $b[0];
+
+		$factor = -$a[0] / $rounded;
+		$dx = $factor * $a[1] * $f + .48 * $b[1] * $f;
+		$dz = $factor * $a[2] * $f + .48 * $b[2] * $f;
+	}
+	elseif($r['preset'] === 'canyon')
+	{
+		$distance = abs($a[0]) - $wallStart;
+		$sign = $a[0] < 0 ? -1 : 1;
+		$erosionX = $erosionZ = 0.0;
+
+		if($layered)
+		{
+			$ef = 22*$f;
+			$erosion = $noise->sample($x*$ef+43.7, $z*$ef-81.3);
+			$retreat = .029*$r['terraceStrength'];
+			$distance -= $retreat*$erosion[0];
+			$erosionX = $retreat*$erosion[1]*$ef;
+			$erosionZ = $retreat*$erosion[2]*$ef;
+
+			$channel = max(0.0,min(1.0,($erosion[0]+.13)/.62));
+			$strength = $r['terraceStrength']*(1-.80*Noise::fade($channel));
+			$ds = -$r['terraceStrength']*.80*30*$channel**2*($channel-1)**2/.62*$ef;
+			$strengthX = $ds*($erosion[1]*$jacobian[0]+$erosion[2]*$jacobian[2]);
+			$strengthZ = $ds*($erosion[1]*$jacobian[1]+$erosion[2]*$jacobian[3]);
+		}
+
+		$wall = max(0.0, min(1.0, $distance / $wallWidth));
+		$value = -.55 + Noise::fade($wall) + .15 * $b[0];
+		$factor = 30 * $wall * $wall * ($wall - 1) ** 2 / $wallWidth;
+
+		$dx = $sign*$factor*$a[1]*$f - $factor*$erosionX + .3*$b[1]*$f;
+		$dz = $sign*$factor*$a[2]*$f - $factor*$erosionZ + .3*$b[2]*$f;
+	}
+	else
+	{
+		$coast = tanh($x / 4500);
+		$value = .6 * $a[0] + .35 * $coast + .15 * $b[0];
+		$dx = .6 * $a[1] * $f + .35 * (1 - $coast * $coast) / 4500 + .3 * $b[1] * $f;
+		$dz = .6 * $a[2] * $f + .3 * $b[2] * $f;
+	}
+
+	$height = $r['heightScale'] * $value;
+
+	[$dx,$dz] = [
+		$r['heightScale'] * ($dx * $jacobian[0] + $dz * $jacobian[2])
+		, $r['heightScale'] * ($dx * $jacobian[1] + $dz * $jacobian[3])
+	];
+
+	if($layered)
+	{
+		[$relative,$factor,$displacement] = terrainBedsByCalls($height - $datum, $r['terraceSpacing'], $strength);
+		$height = $relative + $datum;
+
+		$dx = $factor * $dx + (1 - $factor) * CanyonBeds::DIP[0] + $displacement*$strengthX;
+		$dz = $factor * $dz + (1 - $factor) * CanyonBeds::DIP[1] + $displacement*$strengthZ;
+	}
+	elseif($r['terraceSpacing'] > 0 && $r['terraceStrength'] > 0)
+	{
+		$spacing = $r['terraceSpacing'];
+		$strength = $r['terraceStrength'];
+		$level = floor($height / $spacing);
+		$fraction = $height / $spacing - $level;
+
+		$height += $strength * ($spacing * ($level + Noise::fade($fraction)) - $height);
+		$factor = 1 - $strength + $strength * 30 * $fraction * $fraction * ($fraction - 1) ** 2;
+		$dx *= $factor;
+		$dz *= $factor;
+	}
+
+	$detailed = $height;
+	$slope = ($dx * $dx + $dz * $dz) / ($r['slopeScale'] * $r['slopeScale']);
+	$frequency = $f * 8;
+	$amplitude = $r['detailAmplitude'];
+	// Only a recipe without detail skips the loop. An amplitude that persistence reduces to zero still adds.
+	$octaves = $amplitude === 0.0 ? 0 : $r['detailOctaves'];
+
+	for($i = 0; $i < $octaves; $i++)
+	{
+		$weight = 1 / (1 + $r['damping'] * ($i + 1) * ($i + 1) * $slope);
+
+		$detailed += $amplitude * $weight * $noise->value(
+			$worldX * $frequency + 91.73 + $i * 19.17
+			, $worldZ * $frequency - 23.49 - $i * 31.29
+		);
+
+		$frequency *= $r['lacunarity'];
+		$amplitude *= $r['persistence'];
+	}
+
+	return [$height,$dx,$dz,$detailed];
+}
+
+// Recipe::coarse(), Recipe::height() and CanyonBeds::shape() repeat the Noise methods and the clamps in place.
+// A change to Noise or to one written-out copy that the others do not follow must fail here, because saved
+// heights and the mesh worker depend on every bit.
+$expandedForms = [
+	'coast' => ['preset' => 'coast']
+	, 'mountain' => ['preset' => 'mountain', 'heightScale' => 1400, 'baseFrequency' => 1 / 2200]
+
+	, 'bedded canyon' => [
+		'preset' => 'canyon', 'heightScale' => 650, 'baseFrequency' => 1 / 4000
+		, 'terraceSpacing' => 80
+	]
+
+	// Beds thinner than the relief take the section through fmod(). The beds above stay inside one period.
+	, 'thin beds' => ['preset' => 'canyon', 'terraceSpacing' => 3, 'terraceStrength' => .5]
+	, 'original canyon' => ['preset' => 'canyon', 'version' => 1, 'heightScale' => 650, 'terraceSpacing' => 80]
+	, 'plain canyon' => ['preset' => 'canyon', 'warpAmplitude' => 0, 'seed' => 7]
+	// The fastest warp crosses hundreds of lattice cells. The default warp stays within five.
+	, 'terraced coast' => ['preset' => 'coast', 'terraceSpacing' => 35, 'warpAmplitude' => 5000, 'warpFrequency' => .01]
+	, 'steep octaves' => ['preset' => 'mountain', 'detailOctaves' => 12, 'lacunarity' => 4, 'baseFrequency' => 1]
+];
+
+foreach($expandedForms as $form => $values)
+{
+	$recipe = new Recipe($values);
+	$noise = new Noise($recipe->values()['seed']);
+	// Inside the world the first warp sample never has a negative X cell. A point past the negative corner puts
+	// both coordinates of every sample in negative cells, where the cell index steps down from the cast.
+	$points = [[0.0,0.0],[-.25,.25],[16384.0,-16384.0],[-16384.0,16384.0],[-4.0e6,-4.0e6]];
+
+	// Samples beyond the range that the expanded copies accept go to the Noise methods, so pin that path too.
+	// The steep form leaves the range with its upper octaves inside the world. A distant point takes every
+	// sample of the other forms out of it.
+	if($form !== 'steep octaves') $points[] = [6.0e12,-6.0e12];
+
+	// Quarter-metre nodes scattered over the whole world, on both sides of every axis.
+	for($i = 1; $i <= 400; $i++) $points[] = [($i * 7919 % 131072 - 65536) / 4, ($i * 104729 % 131072 - 65536) / 4];
+
+	$different = null;
+
+	foreach($points as [$x,$z])
+	{
+		$expected = terrainRecipeByCalls($recipe->values(), $noise, $x, $z);
+		$actual = [...$recipe->coarse($x, $z), $recipe->height($x, $z)];
+		$different ??= pack('e4', ...$expected) === pack('e4', ...$actual) ? null : "($x,$z)";
+	}
+
+	terrainCheck($different === null, "$form recipe matches its calls to the bit, first miss at $different");
+}
+
 $tile = new HeightTile(8, 0);
 terrainCheck($tile->get(3, 4) === null, 'unpopulated packed nodes are absent');
 $tile->set(3, 4, -12.75);
