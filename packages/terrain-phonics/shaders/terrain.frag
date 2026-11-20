@@ -83,6 +83,24 @@ float fracture(vec2 face, float footprint)
 	return (1.0 - smoothstep(0.12, 0.28 + edge, offset)) * smoothstep(0.30, 0.68, breaks);
 }
 
+// Value noise with its derivatives along both axes.
+vec3 smoothNoiseGradient(vec2 p)
+{
+	vec2 cell = floor(p), f = fract(p);
+	vec2 w = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), slope = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+	float a = hashCell(cell), b = hashCell(cell + vec2(1.0,0.0)), c = hashCell(cell + vec2(0.0,1.0));
+	float d = hashCell(cell + vec2(1.0)), k = a - b - c + d;
+	return vec3(mix(mix(a, b, w.x), mix(c, d, w.x), w.y), slope * vec2(b - a + k*w.y, c - a + k*w.x));
+}
+
+// cliffNoise() with its gradient in world space: the value, then its derivatives along x, y and z.
+vec4 cliffNoiseGradient(vec3 p, vec2 scale, float xWeight)
+{
+	vec3 front = smoothNoiseGradient(p.xy / scale), side = smoothNoiseGradient(p.zy / scale);
+	return vec4(mix(front.x, side.x, xWeight), (1.0 - xWeight) * front.y / scale.x,
+		mix(front.z, side.z, xWeight) / scale.y, xWeight * side.y / scale.x);
+}
+
 // Tilt a normal by the screen-space gradient of a relief height in metres. `fade` scales the tilt.
 vec3 bump(vec3 normal, float relief, float fade)
 {
@@ -193,10 +211,15 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float gullyFade = 1.0 - smoothstep(9.0, 24.0, footprint), rillFade = 1.0 - smoothstep(2.4, 6.0, footprint);
 	float streakFade = 1.0 - smoothstep(0.8, 2.0, footprint), blotchFade = 1.0 - smoothstep(6.0, 16.0, footprint);
 	float clumpFade = 1.0 - smoothstep(1.5, 4.0, footprint), tuftFade = 1.0 - smoothstep(0.5, 1.3, footprint);
-	float gully = (cliffNoise(vWorld, vec2(40.0, 120.0), xWeight) - 0.5) * spread * gullyFade;
-	float rill = (cliffNoise(vWorld + 71.3, vec2(12.0, 20.0), xWeight) - 0.5) * spread * rillFade;
+	// The relief of the gullies and rills is differentiated with the noise, not across the pixels of a quad, so its
+	// lighting does not break into two-pixel steps where the ground is seen edge-on.
+	vec4 gullyNoise = cliffNoiseGradient(vWorld, vec2(40.0, 120.0), xWeight);
+	vec4 rillNoise = cliffNoiseGradient(vWorld + 71.3, vec2(12.0, 20.0), xWeight);
+	float gully = (gullyNoise.x - 0.5) * spread * gullyFade;
+	float rill = (rillNoise.x - 0.5) * spread * rillFade;
 	float streak = (cliffNoise(vWorld - 23.9, vec2(3.0, 12.0), xWeight) - 0.5) * spread * streakFade;
-	float blotch = (smoothNoise(vWorld.xz / 31.0 + 5.17) - 0.5) * blotchFade;
+	vec3 blotchNoise = smoothNoiseGradient(vWorld.xz / 31.0 + 5.17);
+	float blotch = (blotchNoise.x - 0.5) * blotchFade;
 	float clump = (smoothNoise(vWorld.xz / 7.5 - 21.4) - 0.5) * clumpFade;
 	float tuft = (smoothNoise(vWorld.xz / 2.3 + 9.7) - 0.5) * tuftFade;
 	// The edges of patches take every octave, so they stay ragged at every distance.
@@ -299,15 +322,20 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	rock = mix(mix(talus * blocks, cliff, 0.4), cliff, smoothstep(0.05, 0.16, slope));
 
 	// Slabs tilt as facets, blocks and crowns rise as small domes, and ribs stand out between the gullies. The caller
-	// lights its snow with this normal, so the relief fades out where the snow lies complete. Screen-space gradients
-	// comb along ground seen edge-on and block out in the distance, so the relief fades there too.
+	// lights its snow with this normal, so the relief fades out where the snow lies complete. Relief finer than a few
+	// pixels would shimmer on ground seen edge-on and in the distance, so it fades there too.
 	float relief = (1.0 - smoothstep(snowline, snowline + uSnowline.y, vWorld.y)
 		* (1.0 - smoothstep(uSlopeBlend.z, uSlopeBlend.w, slope)))
 		* smoothstep(0.06, 0.25, abs(dot(normalize(vRelative), normal))) * (1.0 - smoothstep(4.0, 16.0, footprint));
 	vec3 facet = (vec3(hashCell(slabCell + 31.7), slab, hashCell(slabCell + 63.1)) - 0.5) * vec3(0.25, 0.06, 0.25);
 	vec3 knob = vec3(offset.x, 0.0, offset.y) * (0.6*block*(scree + bare*(1.0 - steep)) + 0.5*crown*trees) * cellFade;
 	normal = normalize(normal + (facet * bare * steep * slabFade * settled + knob) * relief);
-	normal = bump(normal, upright * ((26.0 + 24.0*blotch)*groove + 2.5*rill), relief);
+	// Ribs between the gullies rise (26 + 24 * blotch) * groove + 2.5 * rill metres, and the tilt is the gradient of
+	// that height along the surface, as bump() takes it.
+	vec3 lift = upright * (24.0*groove*blotchFade*vec3(blotchNoise.y, 0.0, blotchNoise.z) / 31.0
+		+ (26.0 + 24.0*blotch) * gully / groove * spread * gullyFade * gullyNoise.yzw + 2.5*spread*rillFade*rillNoise.yzw);
+	vec3 tangential = lift - normal * dot(normal, lift);
+	normal = normalize(normal - tangential * relief / (1.0 + length(tangential)));
 }
 
 void main()

@@ -515,10 +515,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					return bytes;
 				});
 
+				// A patch in either colour differs by far more than 8 steps, while a mix of talus into granite at a
+				// weight of 1 can keep a rounding error from the talus colour and move a pixel by one step.
 				let differing = 0;
 
 				for(let i = 0; i < images[0].length; i += 4)
-					if([0, 1, 2].some(c => images[0][i + c] !== images[1][i + c])) differing++;
+					if([0, 1, 2].some(c => Math.abs(images[0][i + c] - images[1][i + c]) > 8)) differing++;
 
 				mountainAmounts.push({material, amount, share: differing / (256 * 64)});
 			}
