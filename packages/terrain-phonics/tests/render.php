@@ -156,7 +156,7 @@ function terrainGlUniform(int $location, array $values): void
 	$gl['uploads'][$gl['program']][$name] = ($gl['uploads'][$gl['program']][$name] ?? 0) + 1;
 }
 
-function glUniform1i(...$args): void{}
+function glUniform1i(...$args): void{if(isset($GLOBALS['terrainGlCalls'])) $GLOBALS['terrainGlCalls'][] = $args;}
 
 function glUniform1f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
@@ -168,7 +168,7 @@ function glUniform4f(int $location, float ...$values): void{terrainGlUniform($lo
 
 function glUniform3fv(int $location, int $count, array $values): void{terrainGlUniform($location, [$count, $values]);}
 function glUniform2fv(...$args): void{}
-function glUniform4fv(...$args): void{}
+function glUniform4fv(...$args): void{if(isset($GLOBALS['terrainGlCalls'])) $GLOBALS['terrainGlCalls'][] = $args;}
 
 function glUniformMatrix4fv(...$args): void{}
 
@@ -1971,6 +1971,186 @@ $water->setLevel($bed);
 $scene->render($camera, 800, 600, 1);
 renderCheck($scene->showsWater(), 'the water pass keeps a shoreline at the height bound');
 $water->setLevel(0);
+
+// Spot lights validate as a whole list, keep the previous list on a failure, and pack twelve floats each.
+$spotLight = [
+	'position' => [3,2,-4], 'direction' => [0,-3,4], 'color' => [1,.5,.25]
+	, 'intensity' => 20000, 'range' => 50, 'inner' => .1, 'outer' => .3
+];
+$spotLights = new TerrainPhonics\SpotLights;
+$spotLights->set([$spotLight, ['position' => [0,0,0]] + $spotLight]);
+$invalidSpotLights = [
+	// The shape of the list and of each light.
+	'three lights' => [$spotLight, $spotLight, $spotLight], 'a keyed list' => ['a' => $spotLight]
+	, 'a light that is not an array' => [1], 'a missing key' => [array_diff_key($spotLight, ['range' => 0])]
+	, 'an unknown key' => [['colour' => [1,1,1]] + $spotLight]
+
+	// Values outside their ranges.
+	, 'a zero direction' => [['direction' => [0,0,0]] + $spotLight]
+	, 'a negative intensity' => [['intensity' => -1] + $spotLight]
+	, 'a negative colour' => [['color' => [1,-.1,1]] + $spotLight]
+	, 'a range under 0.01 metres' => [['range' => .009] + $spotLight]
+
+	// The cone.
+	, 'an inner cone wider than the outer' => [['inner' => .4] + $spotLight]
+	, 'an outer cone over a right angle' => [['outer' => M_PI / 2 + .001] + $spotLight]
+	, 'a zero outer cone' => [['inner' => 0, 'outer' => 0] + $spotLight]
+
+	// Values that are not finite numbers, and vectors of the wrong shape.
+	, 'an infinite position' => [['position' => [INF,0,0]] + $spotLight]
+	, 'a NAN range' => [['range' => NAN] + $spotLight]
+	, 'a numeric string' => [['intensity' => '20000'] + $spotLight]
+	, 'a two-component colour' => [['color' => [1,1]] + $spotLight]
+	, 'a keyed position' => [['position' => ['x' => 0,'y' => 0,'z' => 0]] + $spotLight]
+];
+
+foreach($invalidSpotLights as $case => $lights)
+{
+	try
+	{
+		$spotLights->set($lights);
+
+		renderCheck(false, "spot lights refuse $case");
+	}catch(InvalidArgumentException)
+	{
+		renderCheck($spotLights->count() === 2, "spot lights refuse $case and keep the previous lights");
+	}
+}
+
+$spotLights->set([$spotLight]);
+['uSpotLightCount' => $spotCount, 'uSpotLights[0]' => $packed] = $spotLights->uniforms(0);
+$spotScale = 1 / (cos(.1) - cos(.3));
+$spotExpected = [3.,2.,-4.,1 / 2500, 0.,-.6,.8,$spotScale];
+
+foreach([1,.5,.25] as $channel) $spotExpected[] = $channel * 20000 * TerrainPhonics\SpotLights::LUX;
+
+$spotExpected[] = -cos(.3) * $spotScale;
+renderCheck($spotCount === 1 && count($packed) === 12, 'one spot light packs into three vec4s');
+
+renderCheck(
+	max(array_map(static fn($a, $b) => abs($a - $b) / max(1, abs($b)), $packed, $spotExpected)) < 1e-12
+	, 'a spot light packs its position, inverse squared range, unit axis, cone and irradiance in scene units'
+);
+
+$nightPacked = $spotLights->uniforms(1)['uSpotLights[0]'];
+$duskPacked = $spotLights->uniforms(.5)['uSpotLights[0]'];
+
+renderCheck(
+	$nightPacked[8] === $packed[8] * TerrainPhonics\SpotLights::NIGHT_GAIN
+	&& $duskPacked[10] === $packed[10] * (1 + (TerrainPhonics\SpotLights::NIGHT_GAIN - 1) / 2)
+	&& $spotLights->uniforms(2) === $spotLights->uniforms(1) && $spotLights->uniforms(-1) === $spotLights->uniforms(0)
+	, 'lamp light gains NIGHT_GAIN along the night fill curve and only the colour changes'
+);
+
+renderCheck(
+	array_diff_key($nightPacked, [8 => 0, 9 => 0, 10 => 0]) === array_diff_key($packed, [8 => 0, 9 => 0, 10 => 0])
+	, 'the night gain leaves position, axis and cone alone'
+);
+
+$spotLights->set([['inner' => .3] + $spotLight]);
+$hard = $spotLights->uniforms(0)['uSpotLights[0]'];
+renderCheck(is_finite($hard[7]) && is_finite($hard[11]), 'a hard-edged cone packs finite numbers');
+$spotLights->set([]);
+renderCheck($spotLights->count() === 0 && $spotLights->uniforms(1)['uSpotLights[0]'] === [], 'an empty list clears');
+
+preg_match('/#define TERRAIN_MAX_SPOT_LIGHTS (\d+)/', TerrainPhonics\SpotLights::shaderSource(), $spotDefine);
+renderCheck((int)$spotDefine[1] === TerrainPhonics\SpotLights::MAX, 'the shader holds as many lights as PHP');
+
+// A scene uploads lights only when a program's copy differs. The spot uniforms get their own locations, so the
+// recorded calls name them.
+$spotSky = new Atmosphere;
+$spotScene = new Scene(new Landscape(['worldSize' => 256,'heightScale' => 0]), new Water, $spotSky);
+$spotCamera = new Camera;
+$spotCamera->position = [0,10,0];
+$spotNames = [9001 => 'uSpotLightCount', 9002 => 'uSpotLights[0]'];
+
+foreach(['groundProgram','waterProgram'] as $name)
+{
+	$fragment = renderGet(renderGet($spotScene, $name), 'fragment');
+
+	$include = TerrainPhonics\SpotLights::shaderSource();
+
+	renderCheck(
+		str_contains($fragment, $include) && !str_contains($fragment, '// SPOT LIGHTS')
+		&& substr_count($fragment, 'terrainSpotLight(') === substr_count($include, 'terrainSpotLight(') + 1
+		, "the $name fragment shader includes the spot lights and calls them once"
+	);
+}
+
+/**
+ * Render one frame of the spot-light scene and list its spot-light uploads.
+ * @return array Name and arguments after the location of each upload, in order.
+ */
+$spotFrame = static function() use ($spotScene, $spotCamera, $spotNames): array {
+	foreach(['groundProgram','waterProgram'] as $name)
+	{
+		$program = renderGet($spotScene, $name);
+		renderSet($program, 'locations', array_flip($spotNames) + renderGet($program, 'locations'));
+	}
+
+	$GLOBALS['terrainGlCalls'] = [];
+	$spotScene->render($spotCamera, 320, 200, 0);
+	$uploads = [];
+
+	foreach($GLOBALS['terrainGlCalls'] as $call)
+	if(isset($spotNames[$call[0]])) $uploads[] = [$spotNames[$call[0]], array_slice($call, 1)];
+
+	unset($GLOBALS['terrainGlCalls']);
+
+	return $uploads;
+};
+
+$spotLights->set([$spotLight, ['position' => [1,2,3]] + $spotLight]);
+$spotDay = $spotLights->uniforms(0)['uSpotLights[0]'];
+renderCheck($spotFrame() === [], 'a scene without spot lights uploads none');
+$spotScene->setSpotLights([]);
+renderCheck($spotFrame() === [], 'clearing lights that were never set uploads nothing');
+
+$spotScene->setSpotLights([$spotLight, ['position' => [1,2,3]] + $spotLight]);
+$both = [['uSpotLightCount', [2]], ['uSpotLights[0]', [6, $spotDay]]];
+renderCheck($spotFrame() === [...$both, ...$both], 'the ground and the water programs each receive both lights');
+renderCheck($spotFrame() === [], 'unchanged lights upload nothing');
+$spotScene->setSpotLights([['position' => [3,2,-5]] + $spotLight, ['position' => [1,2,3]] + $spotLight]);
+$moved = $spotFrame();
+
+renderCheck(
+	array_column($moved, 0) === ['uSpotLights[0]','uSpotLights[0]'] && $moved[0][1][1][2] === -5.
+	, 'moved lights upload their data and keep the count'
+);
+
+$spotSky->setSun([0,-1,0]);
+$night = $spotFrame();
+
+renderCheck(
+	count($night) === 2 && $night[0][1][1][8] === $moved[0][1][1][8] * TerrainPhonics\SpotLights::NIGHT_GAIN
+	, 'at night both programs receive the lamps with the night gain'
+);
+
+$spotScene->setSpotLights([$spotLight]);
+$spotLights->set([$spotLight]);
+$one = [['uSpotLightCount', [1]], ['uSpotLights[0]', [3, $spotLights->uniforms(1)['uSpotLights[0]']]]];
+renderCheck($spotFrame() === [...$one, ...$one], 'a shorter list uploads its count and its data');
+$spotScene->setSpotLights([]);
+renderCheck($spotFrame() === array_fill(0, 2, ['uSpotLightCount', [0]]), 'clearing uploads a zero count and no data');
+renderCheck($spotFrame() === [], 'cleared lights cost no uploads');
+
+/**
+ * Restore the spot-light scene as after a lost context, which takes the scene's texture names with it.
+ * @return void Leaves the stub's ownership as a real restoration would.
+ */
+$spotRestore = static function() use ($spotScene): void {
+	$expired = [...renderGet($spotScene, 'textures'), ...renderGet($spotScene, 'heightTexture')];
+	$spotScene->restore();
+	terrainGlDelete('textures', $expired);
+};
+
+$spotRestore();
+renderCheck($spotFrame() === [], 'a relinked program without lights needs no uploads');
+$spotScene->setSpotLights([$spotLight]);
+$spotFrame();
+$spotRestore();
+renderCheck(count($spotFrame()) === 4, 'restoration relinks the programs and the next frame uploads the lights again');
+$spotScene->close();
 
 // More than twelve independent imbalance repairs are required by this complete cover.
 $fixture = [];

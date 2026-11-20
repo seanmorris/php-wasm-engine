@@ -63,8 +63,42 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 $bands = [];
 foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
 
+/**
+ * Pack spot lights as a scene uploads them at full night.
+ * @param array ...$lights Lights for SpotLights::set().
+ * @return array Uniform values by name.
+ */
+$spots = static function(array ...$lights): array {
+	$set = new TerrainPhonics\SpotLights;
+	$set->set($lights);
+
+	return $set->uniforms(1);
+};
+
+// Level ground at the origin. Each lit case gives it the irradiance of the overhead lamp, 4 scene units.
+$intensity = 16 / (TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN);
+$overhead = ['position' => [0,2,0],'direction' => [0,-1,0],'color' => [1,1,1],'intensity' => $intensity,'range' => 100
+	,'inner' => .2,'outer' => .4];
+$spotCases = [
+	'none' => $spots(), 'overhead' => $spots($overhead)
+	, 'higher' => $spots(['position' => [0,4,0],'intensity' => 4 * $intensity] + $overhead)
+	// Twice as far at 45 degrees: eight times the squared distance and half the square root of two of the cosine.
+	, 'oblique' => $spots(['position' => [2,2,0],'direction' => [-1,-1,0],'intensity' => sqrt(8) * $intensity]
+		+ $overhead)
+	, 'pair' => $spots(...array_fill(0, 2, ['intensity' => $intensity / 2] + $overhead))
+
+	// These add no light.
+	, 'away' => $spots(['direction' => [0,1,0]] + $overhead)
+	, 'outside' => $spots(['direction' => [sin(.5),-cos(.5),0]] + $overhead)
+	, 'short' => $spots(['range' => 1.5] + $overhead)
+	, 'below' => $spots(['position' => [0,-2,0],'direction' => [0,1,0]] + $overhead)
+	// A narrow lamp over the point where the sightline from (0, 5, 5) meets water at a level of 1, missing the ground.
+	, 'column' => $spots(['position' => [0,3,1],'inner' => .1,'outer' => .2,'intensity' => 4 * $intensity] + $overhead)
+];
+
 echo json_encode([
-	'uniforms' => $atmosphere->uniforms()
+	'spotLights' => $spotCases
+	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']
 	, 'lut' => base64_encode($lut['rgba8'])
 	, 'source' => AtmosphereRenderer::shaderSource()
