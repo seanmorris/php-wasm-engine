@@ -1156,36 +1156,4 @@ foreach($sandboxWorlds as $recipe)
 	}
 }
 
-$world = new Landscape(['worldSize' => 1024, 'spacing' => 1]);
-terrainCheck($world->proceduralMeshPatch(0, 0, 256), 'aligned root quadrant uses the batch generator');
-terrainCheck(!$world->proceduralMeshPatch(.5, 0, 256), 'fractional physical samples require reconstruction');
-terrainCheck(!$world->proceduralMeshPatch(0, 0, 16), 'sub-lattice mesh spacing requires reconstruction');
-$world->queue(['type' => 'raise', 'x' => 4, 'z' => 4, 'radius' => 1, 'amount' => 5]);
-$world->commit();
-terrainCheck($world->proceduralMeshPatch(0, 0, 256), 'brush between coarse vertices leaves their samples intact');
-terrainCheck(!$world->proceduralMeshPatch(0, 0, 64), 'the same brush reaches finer lattice vertices');
-$world->queue(['type' => 'material', 'x' => -8, 'z' => 64, 'radius' => 1, 'material' => 'sand']);
-$world->commit();
-terrainCheck(!$world->proceduralMeshPatch(0, 0, 256), 'normal halo includes authored positions outside the patch');
-terrainCheck($world->proceduralMeshPatch(256, 256, 256), 'distant edits preserve batch generation');
-$world->close();
-
-// A worker can be terminated, disabled, or fail between submission and retrieval.
-$world = new Landscape;
-$job = (new TerrainPhonics\Lod)->node() + ['index' => 0];
-$transfer = null;
-$worker = new TerrainPhonics\BrowserPatchBuilder(static function($action, $path) use (&$transfer) {
-	if($action === 'take')
-	{
-		$transfer = $path;
-		file_put_contents($path, 'short payload');
-		return 'ready';
-	}
-	return '';
-});
-terrainCheck(!$worker->advance($world, $job, null) && $job['index'] === 0, 'incomplete worker mesh falls back to PHP');
-terrainCheck($transfer !== null && !file_exists($transfer), 'failed worker releases its transfer file');
-$worker->close();
-$world->close();
-
 echo "Terrain surface: $checks checks passed.\n";

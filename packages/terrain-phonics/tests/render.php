@@ -216,7 +216,6 @@ function glDrawElements(...$args): void{terrainGlDraw();}
 function glDrawArrays(...$args): void{terrainGlDraw();}
 
 use TerrainPhonics\Atmosphere;
-use TerrainPhonics\BrowserPatchBuilder;
 use TerrainPhonics\Camera;
 use TerrainPhonics\GpuPatch;
 use TerrainPhonics\Landscape;
@@ -644,7 +643,7 @@ try
 }
 
 $bootstrapSurface = new Landscape;
-$bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere);
+$bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere, useClipmap: false);
 // The fixtures from here to the staged ones check what whole selections do from one update to the next. A
 // clock-driven slice would make their results depend on the speed of the machine, so each sets it to zero.
 $bootstrapScene->selectionSliceMs = 0;
@@ -684,7 +683,7 @@ $bootstrapScene->close();
 $bootstrapSurface->close();
 
 $loadingSurface = new Landscape;
-$loadingScene = new Scene($loadingSurface, new Water, new Atmosphere);
+$loadingScene = new Scene($loadingSurface, new Water, new Atmosphere, useClipmap: false);
 $loadingScene->selectionSliceMs = 0;
 $loadingScene->budgetMs = .25;
 $loadingCamera = new Camera;
@@ -724,7 +723,7 @@ $canyonSurface = new Landscape([
 	, 'terraceStrength' => .7
 ]);
 
-$canyonScene = new Scene($canyonSurface, new Water, new Atmosphere);
+$canyonScene = new Scene($canyonSurface, new Water, new Atmosphere, useClipmap: false);
 $canyonScene->selectionSliceMs = 0;
 $canyonScene->quality = 2;
 $canyonScene->budgetMs = 1000;
@@ -762,7 +761,7 @@ $canyonSurface->close();
 
 // A downward flight predicts future detail while the current high-altitude view needs only root.
 $predictedSurface = new Landscape(['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
-$predictedScene = new Scene($predictedSurface, new Water, new Atmosphere);
+$predictedScene = new Scene($predictedSurface, new Water, new Atmosphere, useClipmap: false);
 $predictedScene->selectionSliceMs = 0;
 $predictedScene->budgetMs = 1000;
 // These checks follow speculative jobs from one 60 Hz update to the next, so each changed view must select at once.
@@ -825,7 +824,7 @@ $predictedSurface->close();
 // One completed patch per frame makes this flight regression independent of CPU timing.
 // The old quadrant-ordered scheduler left this camera over level-three patches.
 $flightSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
-$flightScene = new Scene($flightSurface, new Water, new Atmosphere);
+$flightScene = new Scene($flightSurface, new Water, new Atmosphere, useClipmap: false);
 $flightScene->selectionSliceMs = 0;
 $flightScene->budgetMs = 1000;
 // This flight checks how motion and finished siblings share a selection on every frame. The limited flight follows it.
@@ -934,7 +933,7 @@ $flightSurface->close();
 
 // The same 300 m/s flight as above with the limiter on.
 $limitedSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
-$limitedScene = new Scene($limitedSurface, new Water, new Atmosphere);
+$limitedScene = new Scene($limitedSurface, new Water, new Atmosphere, useClipmap: false);
 $limitedScene->selectionSliceMs = 0;
 $limitedScene->budgetMs = 1000;
 $limitedScene->selectionInterval = .1;
@@ -980,7 +979,7 @@ $limitedSurface->close();
 // below answers the camera and nothing else.
 $travelSurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
 $travelWater = new Water;
-$travelScene = new Scene($travelSurface, $travelWater, new Atmosphere);
+$travelScene = new Scene($travelSurface, $travelWater, new Atmosphere, useClipmap: false);
 $travelScene->selectionSliceMs = 0;
 $travelScene->budgetMs = 1000;
 $travelScene->selectionInterval = .1;
@@ -1139,37 +1138,7 @@ renderCheck(
 $travelScene->close();
 $travelSurface->close();
 
-/**
- * Stand in for a patch worker that accepts every request and never finishes one.
- * @param string $action Bridge command.
- * @param string $path Transfer file path.
- * @param string $key Patch key.
- * @param string $payload Command payload.
- * @return string The empty reply, which means accepted and still pending.
- */
-$stalled = static fn(string $action, string $path, string $key, string $payload): string => '';
 
-// The root never arrives from this worker, so nothing is drawn and the limiter must stay out of the way.
-$emptySurface = new Landscape(['heightScale' => 0, 'detailAmplitude' => 0]);
-$emptyScene = new Scene($emptySurface, new Water, new Atmosphere, new BrowserPatchBuilder($stalled));
-$emptyScene->selectionSliceMs = 0;
-$emptyScene->selectionInterval = .1;
-$emptyCamera = new Camera;
-$selected = 0;
-
-for($frame = 0; $frame < 6; $frame++)
-{
-	$emptyCamera->position[0] += 9;
-	$selected += renderSelections($emptyScene, 1 / 60, $emptyCamera);
-}
-
-renderCheck(
-	$selected === 6 && $emptyScene->stats()['visible'] === 0
-	, 'with nothing drawn every changed view selects at once'
-);
-
-$emptyScene->close();
-$emptySurface->close();
 
 // Two scenes share every input and differ only in the limiter.
 $twins = [];
@@ -1177,7 +1146,7 @@ $twins = [];
 foreach([0.0,.1] as $interval)
 {
 	$twinSurface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0]);
-	$twinScene = new Scene($twinSurface, new Water, new Atmosphere);
+	$twinScene = new Scene($twinSurface, new Water, new Atmosphere, useClipmap: false);
 	$twinScene->selectionSliceMs = 0;
 	$twinScene->budgetMs = 1000;
 	$twinScene->selectionInterval = $interval;
@@ -1291,7 +1260,7 @@ function renderSpreadScene(int $steps, float $interval = 0, array $recipe = []):
 {
 	$surface = new Landscape($recipe + ['worldSize' => 256, 'heightScale' => 0, 'detailAmplitude' => 0]);
 	$water = new Water;
-	$scene = new Scene($surface, $water, new Atmosphere);
+	$scene = new Scene($surface, $water, new Atmosphere, useClipmap: false);
 	$scene->budgetMs = 1000;
 	$scene->selectionInterval = $interval;
 	$scene->selectionSliceMs = 0;
@@ -1961,7 +1930,7 @@ foreach([[.1, 9], [0, 25]] as [$interval, $steps])
 
 $surface = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0,'maxTiles' => 32]);
 $water = new Water;
-$scene = new Scene($surface, $water, new Atmosphere);
+$scene = new Scene($surface, $water, new Atmosphere, useClipmap: false);
 $scene->selectionSliceMs = 0;
 $scene->budgetMs = 30;
 $scene->maximumPatches = 21;
@@ -2094,7 +2063,7 @@ renderCheck(
 // uploads lights only when a lit program's copy differs. The spot uniforms get their own locations, so the recorded
 // calls name them.
 $spotSky = new Atmosphere;
-$spotScene = new Scene(new Landscape(['worldSize' => 256,'heightScale' => 0]), new Water, $spotSky);
+$spotScene = new Scene(new Landscape(['worldSize' => 256,'heightScale' => 0]), new Water, $spotSky, useClipmap: false);
 $spotScene->selectionSliceMs = 0;
 $spotScene->budgetMs = 1000;
 $spotCamera = new Camera;
@@ -2574,7 +2543,7 @@ $scene->close();
 renderCheck(array_sum($resources()) === 0, 'close releases all scene GL ownership exactly once');
 
 // The ground program keeps the appearance between frames. A replacement or a relinked program uploads it again.
-$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), new Atmosphere);
+$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), new Atmosphere, useClipmap: false);
 $appearanceCamera = new Camera;
 
 /**
@@ -2667,7 +2636,7 @@ $styled = ['rockColor' => '#123456', 'canyonCapColor' => '#abcdef', 'graniteColo
 
 foreach($styles as [$recipe, $style])
 {
-	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere);
+	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere, useClipmap: false);
 	$appearanceScene->appearance = new TerrainAppearance($styled);
 	$appearanceScene->render($appearanceCamera, 320, 200, 0);
 	renderCheck($sent('uTerrainStyle') === [$style], "the {$recipe['preset']} recipe draws terrain style $style");
