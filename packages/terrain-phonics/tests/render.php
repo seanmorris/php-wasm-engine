@@ -156,7 +156,7 @@ function terrainGlUniform(int $location, array $values): void
 	$gl['uploads'][$gl['program']][$name] = ($gl['uploads'][$gl['program']][$name] ?? 0) + 1;
 }
 
-function glUniform1i(...$args): void{}
+function glUniform1i(...$args): void{if(isset($GLOBALS['terrainGlCalls'])) $GLOBALS['terrainGlCalls'][] = $args;}
 
 function glUniform1f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
@@ -168,7 +168,7 @@ function glUniform4f(int $location, float ...$values): void{terrainGlUniform($lo
 
 function glUniform3fv(int $location, int $count, array $values): void{terrainGlUniform($location, [$count, $values]);}
 function glUniform2fv(...$args): void{}
-function glUniform4fv(...$args): void{}
+function glUniform4fv(...$args): void{if(isset($GLOBALS['terrainGlCalls'])) $GLOBALS['terrainGlCalls'][] = $args;}
 
 function glUniformMatrix4fv(...$args): void{}
 
@@ -201,8 +201,19 @@ function glDepthFunc(int $function): void {}
 function glDepthMask(...$args): void{}
 
 function glDrawBuffers(...$args): void{}
-function glDrawElements(...$args): void{$GLOBALS['terrainGl']['draws']++;}
-function glDrawArrays(...$args): void{$GLOBALS['terrainGl']['draws']++;}
+/**
+ * Count a draw, and record the program in use while a test collects them.
+ * @return void Updates the draw count and terrainGlDraws.
+ */
+function terrainGlDraw(): void
+{
+	$GLOBALS['terrainGl']['draws']++;
+
+	if(isset($GLOBALS['terrainGlDraws'])) $GLOBALS['terrainGlDraws'][] = $GLOBALS['terrainGl']['program'];
+}
+
+function glDrawElements(...$args): void{terrainGlDraw();}
+function glDrawArrays(...$args): void{terrainGlDraw();}
 
 use TerrainPhonics\Atmosphere;
 use TerrainPhonics\BrowserPatchBuilder;
@@ -1972,6 +1983,291 @@ $scene->render($camera, 800, 600, 1);
 renderCheck($scene->showsWater(), 'the water pass keeps a shoreline at the height bound');
 $water->setLevel(0);
 
+// Spot lights validate as a whole list, keep the previous list on a failure, and pack twelve floats each.
+$spotLight = [
+	'position' => [3,2,-4], 'direction' => [0,-3,4], 'color' => [1,.5,.25]
+	, 'intensity' => 20000, 'range' => 50, 'inner' => .1, 'outer' => .3
+];
+$spotLights = new TerrainPhonics\SpotLights;
+$spotLights->set([$spotLight, ['position' => [0,0,0]] + $spotLight]);
+$invalidSpotLights = [
+	// The shape of the list and of each light.
+	'three lights' => [$spotLight, $spotLight, $spotLight], 'a keyed list' => ['a' => $spotLight]
+	, 'a light that is not an array' => [1], 'a missing key' => [array_diff_key($spotLight, ['range' => 0])]
+	, 'an unknown key' => [['colour' => [1,1,1]] + $spotLight]
+
+	// Values outside their ranges.
+	, 'a zero direction' => [['direction' => [0,0,0]] + $spotLight]
+	, 'a negative intensity' => [['intensity' => -1] + $spotLight]
+	, 'a negative colour' => [['color' => [1,-.1,1]] + $spotLight]
+	, 'a range under 0.01 metres' => [['range' => .009] + $spotLight]
+
+	// The cone.
+	, 'an inner cone wider than the outer' => [['inner' => .4] + $spotLight]
+	, 'an outer cone over a right angle' => [['outer' => M_PI / 2 + .001] + $spotLight]
+	, 'a zero outer cone' => [['inner' => 0, 'outer' => 0] + $spotLight]
+
+	// Values that are not finite numbers, and vectors of the wrong shape.
+	, 'an infinite position' => [['position' => [INF,0,0]] + $spotLight]
+	, 'a NAN range' => [['range' => NAN] + $spotLight]
+	, 'a numeric string' => [['intensity' => '20000'] + $spotLight]
+	, 'a two-component colour' => [['color' => [1,1]] + $spotLight]
+	, 'a keyed position' => [['position' => ['x' => 0,'y' => 0,'z' => 0]] + $spotLight]
+];
+
+foreach($invalidSpotLights as $case => $lights)
+{
+	try
+	{
+		$spotLights->set($lights);
+
+		renderCheck(false, "spot lights refuse $case");
+	}catch(InvalidArgumentException)
+	{
+		renderCheck($spotLights->count() === 2, "spot lights refuse $case and keep the previous lights");
+	}
+}
+
+$spotLights->set([$spotLight]);
+['uSpotLightCount' => $spotCount, 'uSpotLights[0]' => $packed] = $spotLights->uniforms(0);
+$spotScale = 1 / (cos(.1) - cos(.3));
+$spotExpected = [3.,2.,-4.,1 / 2500, 0.,-.6,.8,$spotScale];
+
+foreach([1,.5,.25] as $channel) $spotExpected[] = $channel * 20000 * TerrainPhonics\SpotLights::LUX;
+
+$spotExpected[] = -cos(.3) * $spotScale;
+renderCheck($spotCount === 1 && count($packed) === 12, 'one spot light packs into three vec4s');
+
+renderCheck(
+	max(array_map(static fn($a, $b) => abs($a - $b) / max(1, abs($b)), $packed, $spotExpected)) < 1e-12
+	, 'a spot light packs its position, inverse squared range, unit axis, cone and irradiance in scene units'
+);
+
+$nightPacked = $spotLights->uniforms(1)['uSpotLights[0]'];
+$duskPacked = $spotLights->uniforms(.5)['uSpotLights[0]'];
+
+renderCheck(
+	$nightPacked[8] === $packed[8] * TerrainPhonics\SpotLights::NIGHT_GAIN
+	&& $duskPacked[10] === $packed[10] * (1 + (TerrainPhonics\SpotLights::NIGHT_GAIN - 1) / 2)
+	&& $spotLights->uniforms(2) === $spotLights->uniforms(1) && $spotLights->uniforms(-1) === $spotLights->uniforms(0)
+	, 'lamp light gains NIGHT_GAIN along the night fill curve and only the colour changes'
+);
+
+renderCheck(
+	array_diff_key($nightPacked, [8 => 0, 9 => 0, 10 => 0]) === array_diff_key($packed, [8 => 0, 9 => 0, 10 => 0])
+	, 'the night gain leaves position, axis and cone alone'
+);
+
+$spotLights->set([['inner' => .3] + $spotLight]);
+$hard = $spotLights->uniforms(0)['uSpotLights[0]'];
+renderCheck(is_finite($hard[7]) && is_finite($hard[11]), 'a hard-edged cone packs finite numbers');
+$spotLights->set([]);
+renderCheck($spotLights->count() === 0 && $spotLights->uniforms(1)['uSpotLights[0]'] === [], 'an empty list clears');
+
+preg_match('/#define TERRAIN_MAX_SPOT_LIGHTS (\d+)/', TerrainPhonics\SpotLights::shaderSource(), $spotDefine);
+renderCheck((int)$spotDefine[1] === TerrainPhonics\SpotLights::MAX, 'the shader holds as many lights as PHP');
+preg_match('/#define TERRAIN_SPOT_KNEE (\S+)/', TerrainPhonics\SpotLights::shaderSource(), $spotKnee);
+renderCheck((float)$spotKnee[1] === TerrainPhonics\SpotLights::KNEE, 'the shader knee matches SpotLights::KNEE');
+
+renderCheck(
+	TerrainPhonics\SpotLights::shaderSource(false)
+		=== "#define TERRAIN_NO_SPOT_LIGHTS\n" . TerrainPhonics\SpotLights::shaderSource()
+	&& !str_contains(TerrainPhonics\SpotLights::shaderSource(), '#define TERRAIN_NO_SPOT_LIGHTS')
+	, 'the lamp-free include defines TERRAIN_NO_SPOT_LIGHTS ahead of the lit one'
+);
+
+// A scene draws the lamp-free ground and water programs while no light is set and the lit pair while one is, and
+// uploads lights only when a lit program's copy differs. The spot uniforms get their own locations, so the recorded
+// calls name them.
+$spotSky = new Atmosphere;
+$spotScene = new Scene(new Landscape(['worldSize' => 256,'heightScale' => 0]), new Water, $spotSky);
+$spotScene->selectionSliceMs = 0;
+$spotScene->budgetMs = 1000;
+$spotCamera = new Camera;
+$spotCamera->position = [0,10,0];
+$spotScene->update(.1, $spotCamera);
+$spotNames = [9001 => 'uSpotLightCount', 9002 => 'uSpotLights[0]'];
+$spotPrograms = ['groundProgram' => false,'litGroundProgram' => true,'waterProgram' => false,'litWaterProgram' => true];
+
+foreach($spotPrograms as $name => $lit)
+{
+	$fragment = renderGet(renderGet($spotScene, $name), 'fragment');
+
+	$include = TerrainPhonics\SpotLights::shaderSource($lit);
+
+	renderCheck(
+		str_contains($fragment, $include) && !str_contains($fragment, '// SPOT LIGHTS')
+		&& substr_count($fragment, 'terrainSpotLight(') === substr_count($include, 'terrainSpotLight(') + 1
+		&& str_contains($fragment, '#define TERRAIN_NO_SPOT_LIGHTS') === !$lit
+		, "the $name fragment shader includes the " . ($lit ? 'lit' : 'lamp-free') . ' spot lights and calls them once'
+	);
+}
+
+foreach(['groundProgram' => 'litGroundProgram','waterProgram' => 'litWaterProgram'] as $dark => $lit)
+renderCheck(
+	str_replace("#define TERRAIN_NO_SPOT_LIGHTS\n", '', renderGet(renderGet($spotScene, $dark), 'fragment'))
+		=== renderGet(renderGet($spotScene, $lit), 'fragment')
+	&& renderGet(renderGet($spotScene, $dark), 'vertex') === renderGet(renderGet($spotScene, $lit), 'vertex')
+	, "the $dark and the $lit differ only in the lamp-free define"
+);
+
+$spotDrawn = [];
+
+/**
+ * Render one frame of the spot-light scene and list its spot-light uploads.
+ * @return array Name and arguments after the location of each upload, in order. $spotDrawn receives the names of
+ * the ground and water programs the frame drew with, in order, and the number of draws.
+ */
+$spotFrame = static function() use ($spotScene, $spotCamera, $spotNames, $spotPrograms, &$spotDrawn): array {
+	$ids = [];
+
+	foreach($spotPrograms as $name => $lit)
+	{
+		$program = renderGet($spotScene, $name);
+		$ids[$program->id] = $name;
+		renderSet($program, 'locations', array_flip($spotNames) + renderGet($program, 'locations'));
+	}
+
+	$GLOBALS['terrainGlCalls'] = $GLOBALS['terrainGlDraws'] = [];
+	$spotScene->render($spotCamera, 320, 200, 0);
+	$uploads = [];
+
+	foreach($GLOBALS['terrainGlCalls'] as $call)
+	if(isset($spotNames[$call[0]])) $uploads[] = [$spotNames[$call[0]], array_slice($call, 1)];
+
+	$spotDrawn = [
+		array_values(array_unique(array_map(static fn($id) => $ids[$id], array_filter(
+			$GLOBALS['terrainGlDraws'], static fn($id) => isset($ids[$id])
+		))))
+		, count($GLOBALS['terrainGlDraws'])
+	];
+
+	unset($GLOBALS['terrainGlCalls'], $GLOBALS['terrainGlDraws']);
+
+	return $uploads;
+};
+
+$spotLights->set([$spotLight, ['position' => [1,2,3]] + $spotLight]);
+$spotDay = $spotLights->uniforms(0)['uSpotLights[0]'];
+renderCheck($spotFrame() === [], 'a scene without spot lights uploads none');
+
+renderCheck(
+	$spotDrawn[0] === ['litGroundProgram','litWaterProgram'] && $spotDrawn[1] > 0
+	, 'the first frame draws with the lit programs, so a GL that compiles a pipeline at its first draw does so now'
+);
+
+$spotScene->setSpotLights([]);
+renderCheck($spotFrame() === [], 'clearing lights that were never set uploads nothing');
+// The first frame also filled the sky and shadow caches, so the second gives the draws of a settled frame.
+[$darkDrawn, $darkDraws] = $spotDrawn;
+
+renderCheck(
+	$darkDrawn === ['groundProgram','waterProgram'] && $spotScene->stats()['visible'] > 0
+	, 'without spot lights the ground and the water draw with the lamp-free programs: ' . implode(', ', $darkDrawn)
+);
+
+$spotScene->setSpotLights([$spotLight, ['position' => [1,2,3]] + $spotLight]);
+$both = [['uSpotLightCount', [2]], ['uSpotLights[0]', [6, $spotDay]]];
+renderCheck($spotFrame() === [...$both, ...$both], 'the ground and the water programs each receive both lights');
+
+renderCheck(
+	$spotDrawn === [['litGroundProgram','litWaterProgram'], $darkDraws]
+	, 'with spot lights set the same draws use the lit programs: ' . implode(', ', $spotDrawn[0])
+);
+
+renderCheck($spotFrame() === [], 'unchanged lights upload nothing');
+$spotScene->setSpotLights([['position' => [3,2,-5]] + $spotLight, ['position' => [1,2,3]] + $spotLight]);
+$moved = $spotFrame();
+
+renderCheck(
+	array_column($moved, 0) === ['uSpotLights[0]','uSpotLights[0]'] && $moved[0][1][1][2] === -5.
+	, 'moved lights upload their data and keep the count'
+);
+
+$spotSky->setSun([0,-1,0]);
+$night = $spotFrame();
+
+renderCheck(
+	count($night) === 2 && $night[0][1][1][8] === $moved[0][1][1][8] * TerrainPhonics\SpotLights::NIGHT_GAIN
+	, 'at night both programs receive the lamps with the night gain'
+);
+
+$spotScene->setSpotLights([$spotLight]);
+$spotLights->set([$spotLight]);
+$one = [['uSpotLightCount', [1]], ['uSpotLights[0]', [3, $spotLights->uniforms(1)['uSpotLights[0]']]]];
+renderCheck($spotFrame() === [...$one, ...$one], 'a shorter list uploads its count and its data');
+$spotScene->setSpotLights([]);
+renderCheck($spotFrame() === [], 'clearing uploads nothing');
+
+renderCheck(
+	$spotDrawn[0] === ['groundProgram','waterProgram']
+	, 'clearing returns the ground and the water to the lamp-free programs'
+);
+
+renderCheck($spotFrame() === [], 'cleared lights cost no uploads');
+$spotScene->setSpotLights([$spotLight]);
+
+renderCheck(
+	$spotFrame() === [] && $spotDrawn[0] === ['litGroundProgram','litWaterProgram']
+	, 'the lit programs keep their lights while the lamp-free ones draw, so the same lights again upload nothing'
+);
+
+/**
+ * Restore the spot-light scene as after a lost context, which takes the scene's texture names with it.
+ * @return void Leaves the stub's ownership as a real restoration would.
+ */
+$spotRestore = static function() use ($spotScene): void {
+	$expired = [...renderGet($spotScene, 'textures'), ...renderGet($spotScene, 'heightTexture')];
+	$spotScene->restore();
+	terrainGlDelete('textures', $expired);
+};
+
+$spotScene->setSpotLights([]);
+$spotRestore();
+renderCheck($spotFrame() === [], 'a relinked program without lights needs no uploads');
+
+renderCheck(
+	$spotDrawn[0] === ['litGroundProgram','litWaterProgram']
+	, 'a restored scene draws its relinked lit programs once without lights'
+);
+
+renderCheck(
+	$spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram']
+	, 'and then draws lamp-free'
+);
+
+$spotScene->setSpotLights([$spotLight]);
+$spotFrame();
+$spotRestore();
+renderCheck(count($spotFrame()) === 4, 'restoration relinks the programs and the next frame uploads the lights again');
+renderCheck($spotDrawn[0] === ['litGroundProgram','litWaterProgram'], 'a restored scene with lights draws lit');
+
+// Lights set and cleared while the camera looks away from every patch reach the lit programs, which have not drawn
+// yet. Their first draw must not show the cleared lights.
+$spotScene->setSpotLights([]);
+$spotRestore();
+[$spotPitch, $spotEye] = [$spotCamera->pitch, $spotCamera->position];
+[$spotCamera->pitch, $spotCamera->position] = [1.5, [0,5000,0]];
+$spotScene->setSpotLights([$spotLight]);
+$early = $spotFrame();
+$earlyDrawn = $spotDrawn[0];
+[$spotCamera->pitch, $spotCamera->position] = [$spotPitch, $spotEye];
+$spotScene->setSpotLights([]);
+$cleared = $spotFrame();
+
+renderCheck(
+	count($early) === 4 && $earlyDrawn === [] && $cleared === array_fill(0, 2, ['uSpotLightCount', [0]])
+	&& $spotDrawn[0] === ['litGroundProgram','litWaterProgram']
+	, 'lit programs that received lights before they first drew get a zero count when they do'
+);
+
+renderCheck(
+	$spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram']
+	, 'after that first draw the scene draws lamp-free again'
+);
+
+$spotScene->close();
+
 // More than twelve independent imbalance repairs are required by this complete cover.
 $fixture = [];
 $large = new Lod(1024, 1);
@@ -2308,6 +2604,29 @@ renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [1
 renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest colour arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uSnowColor') === 2, 'a replaced appearance uploads once');
+
+// The lit ground program receives the appearance the first frame it draws, and each program keeps its own copy.
+$appearanceScene->setSpotLights([$spotLight]);
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+$litGround = renderGet($appearanceScene, 'litGroundProgram')->id;
+
+renderCheck(
+	$GLOBALS['terrainGl']['uniforms'][$litGround]['uSnowColor'] === [1.0, 0.0, 0.0]
+	&& $GLOBALS['terrainGl']['uploads'][$litGround]['uSnowColor'] === 1
+	, 'the lit ground program receives the appearance when it first draws'
+);
+
+$appearanceScene->setSpotLights([]);
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+$appearanceScene->setSpotLights([$spotLight]);
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+
+renderCheck(
+	$uploads('uSnowColor') === 2 && $GLOBALS['terrainGl']['uploads'][$litGround]['uSnowColor'] === 1
+	, 'switching between the lamp-free and the lit ground programs uploads no appearance again'
+);
+
+$appearanceScene->setSpotLights([]);
 
 $relinked = renderGet($appearanceScene, 'groundProgram')->id;
 $appearanceScene->restore();

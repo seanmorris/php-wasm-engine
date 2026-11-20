@@ -18,6 +18,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'patch-grid.glsl'
 		, 'water-functions.glsl'
 		, 'water-optics.glsl'
+		, 'spot-lights.glsl'
 		, 'shadows.vert'
 		, 'shadows.frag'
 
@@ -52,9 +53,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			if(!gl) throw new Error('WebGL2 is unavailable');
 
+			const includes = [
+				['// PATCH', 'patch-grid']
+				, ['// OPTICS', 'water-optics']
+				, ['// SPOT LIGHTS', 'spot-lights']
+			];
+
 			const compile = (type, source) => {
 				const shader = gl.createShader(type);
-				gl.shaderSource(shader, source.replace('// PATCH', shaders['patch-grid.glsl']).replace('// OPTICS', shaders['water-optics.glsl']));
+				let text = source;
+
+				for(const [marker, name] of includes) text = text.replace(marker, shaders[`${name}.glsl`]);
+
+				gl.shaderSource(shader, text);
 				gl.compileShader(shader);
 
 				if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader));
@@ -797,12 +808,88 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				dayDark: day.every(v => v === 0), turned: turned.some((v,i) => Math.abs(v-night[i]) > 30),
 				stable: returned.every((v,i) => v === night[i])
 			};
+
+			// Light level ground at the origin, seen from (0, 5, 5), at night with the lamps that PHP packed.
+			gl.disable(gl.BLEND);
+
+			const spotResults = {};
+
+			/**
+			 * Link a surface shader with the lit or the lamp-free spot-light include and set up the night scene.
+			 * @param {string} name 'terrain' or 'water'.
+			 * @param {string} spots Include for the "// SPOT LIGHTS" marker.
+			 * @return {WebGLProgram} The program, in use.
+			 */
+			const atNight = (name, spots) => {
+				const linked = program(
+					surfaceVertex
+					, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
+						.replace('// SPOT LIGHTS', spots)
+				);
+
+				parameters(linked);
+
+				if(name === 'terrain') appearance(linked, data.appearance);
+
+				gl.uniform3f(gl.getUniformLocation(linked, 'uEye'), 0, 5, 5);
+				gl.uniform1f(gl.getUniformLocation(linked, 'uTestGround'), -3);
+				gl.uniform1f(gl.getUniformLocation(linked, 'uSunIntensity'), 0);
+				gl.uniform3fv(gl.getUniformLocation(linked, 'uNightAmbient'), data.nightAmbient);
+
+				return linked;
+			};
+
+			/**
+			 * Sink the surface under a metre of murky water, as for the water column check.
+			 * @param {WebGLProgram} linked Program in use.
+			 * @return {void}
+			 */
+			const submerge = linked => {
+				gl.uniform1f(gl.getUniformLocation(linked, 'uWaterLevel'), 1);
+				gl.uniform4f(gl.getUniformLocation(linked, 'uWaterOptics'), .85, .85, 1, .65);
+			};
+
+			for(const name of ['terrain', 'water'])
+			{
+				// Scene draws the lamp-free variant while no light is set. It must match the lit one without lamps.
+				const lampFree = atNight(name, data.lampFreeSpotLights);
+				const unlit = {dark: pixel()};
+				submerge(lampFree);
+				unlit.submerged = pixel();
+
+				const surface = atNight(name, shaders['spot-lights.glsl']);
+				const colors = {dark: pixel()};
+				const lamps = gl.getUniformLocation(surface, 'uSpotLights[0]');
+				// A count of zero ignores whatever the array holds.
+				gl.uniform4fv(lamps, data.spotLights.pair['uSpotLights[0]']);
+				colors.ignored = pixel();
+
+				for(const [key, uniforms] of Object.entries(data.spotLights))
+				{
+					gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), uniforms.uSpotLightCount);
+
+					if(uniforms.uSpotLightCount) gl.uniform4fv(lamps, uniforms['uSpotLights[0]']);
+
+					colors[key] = pixel();
+				}
+
+				// Under a metre of murky water the column between the surface and the ground scatters lamp light.
+				submerge(surface);
+				gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), 0);
+				colors.submerged = pixel();
+				gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), 1);
+				gl.uniform4fv(lamps, data.spotLights.column['uSpotLights[0]']);
+				colors.column = pixel();
+				spotResults[name] = {...colors, unlit};
+			}
+
 			const error = gl.getError();
 
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
 				skyResults, transitionError, starChecks
+				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults
@@ -826,6 +913,54 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.ok(stars.fade && stars.dayDark, 'stars fade through twilight and vanish by day');
 		assert.ok(stars.turned && stars.stable, 'the star field is fixed to viewing directions');
 		assert.ok(result.transitionError < 1e-5, 'waves, wakes and shoreline depths match the morphing mesh');
+
+		const near = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 1);
+
+		for(const [name, colors] of Object.entries(result.spotResults))
+		{
+			for(const key of ['ignored', 'none', 'away', 'outside', 'short', 'below'])
+			assert.deepEqual(colors[key], colors.dark, `${name}: the ${key} case adds no lamp light`);
+
+			assert.deepEqual(
+				colors.unlit
+				, {dark: colors.dark, submerged: colors.submerged}
+				, `${name}: the lamp-free program draws what the lit one draws without lamps`
+			);
+
+			// The knee keeps colour in light that would otherwise clip: 64 times the overhead lamp stays below white.
+			assert.ok(
+				colors.glare.every((value, i) => value > colors.overhead[i] && value < 250)
+				, `${name}: 64 times the lamp is brighter and does not clip: ${colors.overhead} to ${colors.glare}`
+			);
+
+			// The cones fade the compressed light, so halfway through its band the glare lamp gives a quarter of
+			// what it gives on its axis, less than the overhead lamp. Compressed after the cone, it would be
+			// brighter.
+			assert.ok(
+				colors.band.every((value, i) => value > colors.dark[i] && value < colors.overhead[i])
+				, `${name}: the cone band dims the glare lamp below the overhead lamp: ${colors.band}`
+			);
+
+			if(name === 'terrain')
+			assert.ok(
+				colors.column[1] > colors.submerged[1] + 5 && colors.column[2] > colors.submerged[2] + 5
+				, `the water column scatters lamp light: ${colors.submerged} to ${colors.column}`
+			);
+
+			const gain = colors.overhead.map((value, i) => value - colors.dark[i]);
+
+			assert.ok(
+				Math.min(...gain) > 0 && gain[0] + gain[1] + gain[2] > 30
+				, `${name}: an overhead lamp lights the surface at night: ${colors.dark} to ${colors.overhead}`
+			);
+
+			// Inverse squares, the cosine of incidence and the sum over lamps each keep the irradiance.
+			for(const key of ['higher', 'oblique', 'pair'])
+			assert.ok(
+				near(colors[key], colors.overhead)
+				, `${name}: the ${key} lamp gives the same irradiance: ${colors[key]} and ${colors.overhead}`
+			);
+		}
 
 		for(const [i, expected] of [0, 128, 255].entries())
 			assert.ok(Math.abs(result.backdropContrast[i] - expected) <= 2, 'surface transmits the selected fraction');

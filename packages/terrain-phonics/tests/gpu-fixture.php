@@ -77,8 +77,51 @@ foreach($amounts as $amount)
 	$mountainAmounts[] = ['material' => $material, 'slope' => $slope, 'amount' => $amount, 'cases' => $cases];
 }
 
+/**
+ * Pack spot lights as a scene uploads them at full night.
+ * @param array ...$lights Lights for SpotLights::set().
+ * @return array Uniform values by name.
+ */
+$spots = static function(array ...$lights): array {
+	$set = new TerrainPhonics\SpotLights;
+	$set->set($lights);
+
+	return $set->uniforms(1);
+};
+
+// Level ground at the origin, 2 m below the overhead lamp. The lamp gives it the irradiance that the knee turns into 4
+// scene units, and the next three cases give it the same.
+$knee = TerrainPhonics\SpotLights::KNEE;
+$perCandela = TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN;
+$intensity = 4 * $knee * (exp(4 / $knee) - 1) / $perCandela;
+$overhead = ['position' => [0,2,0],'direction' => [0,-1,0],'color' => [1,1,1],'intensity' => $intensity,'range' => 100
+	,'inner' => .2,'outer' => .4];
+$band = acos((cos(.2) + cos(.4)) / 2);
+$spotCases = [
+	'none' => $spots(), 'overhead' => $spots($overhead)
+	, 'higher' => $spots(['position' => [0,4,0],'intensity' => 4 * $intensity] + $overhead)
+	// Twice as far at 45 degrees: eight times the squared distance and half the square root of two of the cosine.
+	, 'oblique' => $spots(['position' => [2,2,0],'direction' => [-1,-1,0],'intensity' => sqrt(8) * $intensity]
+		+ $overhead)
+	, 'pair' => $spots(...array_fill(0, 2, ['intensity' => $intensity / 2] + $overhead))
+	// Without the knee this would turn both surfaces white.
+	, 'glare' => $spots(['intensity' => 64 * $intensity] + $overhead)
+	// The glare lamp turned so the point lies halfway through its cone band, in cosine: a quarter of its light.
+	, 'band' => $spots(['direction' => [sin($band), -cos($band), 0],'intensity' => 64 * $intensity] + $overhead)
+
+	// These add no light.
+	, 'away' => $spots(['direction' => [0,1,0]] + $overhead)
+	, 'outside' => $spots(['direction' => [sin(.5),-cos(.5),0]] + $overhead)
+	, 'short' => $spots(['range' => 1.5] + $overhead)
+	, 'below' => $spots(['position' => [0,-2,0],'direction' => [0,1,0]] + $overhead)
+	// A narrow lamp over the point where the sightline from (0, 5, 5) meets water at a level of 1, missing the ground.
+	, 'column' => $spots(['position' => [0,3,1],'inner' => .1,'outer' => .2,'intensity' => 4 * $intensity] + $overhead)
+];
+
 echo json_encode([
-	'uniforms' => $atmosphere->uniforms()
+	'spotLights' => $spotCases
+	, 'lampFreeSpotLights' => TerrainPhonics\SpotLights::shaderSource(false)
+	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']
 	, 'lut' => base64_encode($lut['rgba8'])
 	, 'source' => AtmosphereRenderer::shaderSource()
