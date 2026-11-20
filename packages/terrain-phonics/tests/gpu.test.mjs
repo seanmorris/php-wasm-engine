@@ -29,11 +29,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'water.frag'
 		, 'terrain.vert'
 		, 'terrain.frag'
+		, 'surface-layers.glsl'
 	];
 
 	const shaders = Object.fromEntries(names.map(name => [name
 		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
 	]));
+	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// LAYERS', shaders['surface-layers.glsl']);
 
 	const browser = await chromium.launch({
 		executablePath: process.env.CHROMIUM ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
