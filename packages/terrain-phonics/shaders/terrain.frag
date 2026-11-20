@@ -96,8 +96,9 @@ void canyonMaterial(float footprint, vec3 weights, float slope, float macro,
 	vec4 lower = uBedContacts[0], upper = uBedContacts[1];
 	float period = upper.w - lower.x, start = lower.x + 0.8;
 	float h = mod(height - start, period) + start;
-	// Sharper bands narrow each contact. contact() still widens one to the pixel footprint.
-	float sharpness = uBanding.z;
+	// Sharper bands narrow each contact. contact() still widens one to the pixel footprint. The floor keeps a program
+	// that never bound an appearance from dividing by zero; every valid sharpness is at least 1.
+	float sharpness = max(uBanding.z, 1.0);
 	float shale = contact(h, lower.y, 0.09 / sharpness, pixel);
 	float ledge = contact(h, lower.z, 0.023 / sharpness, pixel);
 	float sandstone = contact(h, lower.w, 0.043 / sharpness, pixel);
@@ -171,7 +172,8 @@ void main()
 		float sharpness = 1.0 + (uBanding.z - 1.0) * exp(-0.125 * pow(blur * (uBanding.z + 2.0), 2.0));
 		float profile = clamp(sin(strataPhase) * sharpness, -1.0, 1.0);
 		rock = mix(uRockColor, uRockBandColor, 0.5 + 0.5 * uBanding.y * profile * strataFilter);
-		cover = uTerrainStyle > 1.5 ? mix(uSoilColor, rock, 0.4 + 0.2 * macro) : grass;
+		// Strong macro variation must not push the soil weight outside 0 to 1, past either colour.
+		cover = uTerrainStyle > 1.5 ? mix(uSoilColor, rock, clamp(0.4 + 0.2 * macro, 0.0, 1.0)) : grass;
 	}
 	vec3 sand = uSandColor;
 	vec3 snow = uSnowColor;
