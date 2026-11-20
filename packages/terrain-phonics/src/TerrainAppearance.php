@@ -35,12 +35,15 @@ final class TerrainAppearance
 	];
 	/**
 	 * Start and end of each blend, with the smallest gap between them. An end that is too low moves up to the start
-	 * plus the gap. When that passes the top of the end's range, the end stays at the top and the start moves down.
+	 * plus the gap, rounded to nine decimal places. When that passes the top of the end's range, the end stays at the
+	 * top and the start moves down. A difference that falls short of the gap by less than SLACK counts as the gap.
 	 */
 	public const ORDER = [
 		['rockSlopeStart', 'rockSlopeEnd', .01], ['snowSlopeStart', 'snowSlopeEnd', .01],
 		['alpineStart', 'alpineEnd', 1.0],
 	];
+	/** Shortfall from an ORDER gap that floating-point subtraction can leave between values one gap apart. */
+	private const SLACK = 1e-9;
 	/** Settings in panel order, grouped by what they control. */
 	public const GROUPS = [
 		'colors' => [
@@ -58,7 +61,7 @@ final class TerrainAppearance
 	/**
 	 * Linear canyon shades in the default palette. Each keeps its ratio to the colour it follows: ledges follow the
 	 * cap rock and red beds the rust. Dust, beds too fine to resolve and the light the walls throw into shadow follow
-	 * the beds' average weighted by thickness. Red beds and dust stop at 1 in each channel.
+	 * the beds' average weighted by thickness. Each derived channel stops at 1.
 	 */
 	private const LEDGE = [.285, .196, .148], RED_BEDS = [.235, .082, .067], DUST = [.275, .163, .104],
 		DISTANT = [.246, .133, .106], BOUNCE = [.11, .066, .048];
@@ -85,10 +88,12 @@ final class TerrainAppearance
 
 		foreach(self::ORDER as [$start, $end, $gap])
 		{
-			if($settings[$end] - $settings[$start] >= $gap) continue;
+			// In binary, .21 - .2 is a little less than .01, so values one slider step apart need the slack.
+			if($settings[$end] - $settings[$start] >= $gap - self::SLACK) continue;
 			$top = self::RANGES[$end][1];
 
-			if($settings[$start] + $gap <= $top) $settings[$end] = $settings[$start] + $gap;
+			// Rounding puts a pushed end on the next step, where .05 + .01 alone would give 0.060000000000000005.
+			if($settings[$start] + $gap <= $top) $settings[$end] = round($settings[$start] + $gap, 9);
 			else [$settings[$start], $settings[$end]] = [$top - $gap, $top];
 		}
 
@@ -128,10 +133,17 @@ final class TerrainAppearance
 
 	/**
 	 * Convert an sRGB hex colour to linear RGB.
+	 * @param string $hex Six-digit hex colour with a leading #. Anything else throws InvalidArgumentException.
+	 * @return array Red, green and blue from 0 to 1.
+	 */
+	public static function linear(string $hex): array { return self::decode(self::color('color', $hex)); }
+
+	/**
+	 * Convert a colour that has already been validated.
 	 * @param string $hex Six-digit hex colour with a leading #.
 	 * @return array Red, green and blue from 0 to 1.
 	 */
-	public static function linear(string $hex): array
+	private static function decode(string $hex): array
 	{
 		$rgb = [];
 
@@ -155,9 +167,8 @@ final class TerrainAppearance
 		$average = self::bedAverage($beds);
 		$reference = self::bedAverage(self::canyonBeds(self::DEFAULTS));
 
-		// Distant beds are darker than the average, but dust is lighter. The bounce is light, so it may pass 1.
 		return $beds + [
-			'dust' => self::reflectance(self::shade($average, $reference, self::DUST)),
+			'dust' => self::shade($average, $reference, self::DUST),
 			'distant' => self::shade($average, $reference, self::DISTANT),
 			'bounce' => self::shade($average, $reference, self::BOUNCE),
 		];
@@ -170,17 +181,14 @@ final class TerrainAppearance
 	 */
 	private static function canyonBeds(array $settings): array
 	{
-		$rust = self::linear($settings['canyonRustColor']);
-		$cap = self::linear($settings['canyonCapColor']);
+		$rust = self::decode($settings['canyonRustColor']);
+		$cap = self::decode($settings['canyonCapColor']);
 
 		return [
-			'rust' => $rust, 'shale' => self::linear($settings['canyonShaleColor']),
-			'ledge' => self::shade($cap, self::linear(self::DEFAULTS['canyonCapColor']), self::LEDGE),
-			'sandstone' => self::linear($settings['canyonSandstoneColor']),
-			// Ledges are darker than the cap rock, but red beds are lighter than the rust.
-			'redBeds' => self::reflectance(
-				self::shade($rust, self::linear(self::DEFAULTS['canyonRustColor']), self::RED_BEDS)
-			),
+			'rust' => $rust, 'shale' => self::decode($settings['canyonShaleColor']),
+			'ledge' => self::shade($cap, self::decode(self::DEFAULTS['canyonCapColor']), self::LEDGE),
+			'sandstone' => self::decode($settings['canyonSandstoneColor']),
+			'redBeds' => self::shade($rust, self::decode(self::DEFAULTS['canyonRustColor']), self::RED_BEDS),
 			'cap' => $cap,
 		];
 	}
@@ -206,7 +214,8 @@ final class TerrainAppearance
 	}
 
 	/**
-	 * Keep a shade's ratio to the colour it follows, channel by channel.
+	 * Keep a shade's ratio to the colour it follows, channel by channel, up to 1. Red beds are brighter than the rust
+	 * and dust than the bed average, so a light source would otherwise give an albedo above 1.
 	 * @param array $source Linear colour the shade follows.
 	 * @param array $default Linear source colour in the default palette.
 	 * @param array $shade Linear shade in the default palette.
@@ -215,19 +224,9 @@ final class TerrainAppearance
 	private static function shade(array $source, array $default, array $shade): array
 	{
 		return [
-			$source[0] * $shade[0] / $default[0], $source[1] * $shade[1] / $default[1],
-			$source[2] * $shade[2] / $default[2],
+			min(1.0, $source[0] * $shade[0] / $default[0]), min(1.0, $source[1] * $shade[1] / $default[1]),
+			min(1.0, $source[2] * $shade[2] / $default[2]),
 		];
-	}
-
-	/**
-	 * Limit a derived ground colour to what a surface can reflect.
-	 * @param array $color Linear colour.
-	 * @return array The colour with each channel at most 1.
-	 */
-	private static function reflectance(array $color): array
-	{
-		return [min(1.0, $color[0]), min(1.0, $color[1]), min(1.0, $color[2])];
 	}
 
 	/**
@@ -240,7 +239,7 @@ final class TerrainAppearance
 		$uniforms = [];
 
 		foreach(['grass', 'soil', 'rock', 'rockBand', 'sand', 'snow', 'road'] as $name)
-		$uniforms['u' . ucfirst($name) . 'Color'] = self::linear($settings[$name . 'Color']);
+		$uniforms['u' . ucfirst($name) . 'Color'] = self::decode($settings[$name . 'Color']);
 
 		$palette = self::canyonPalette($settings);
 		$uniforms['uCanyonColors[0]'] = array_merge(...array_values(array_diff_key($palette, ['bounce' => 0])));

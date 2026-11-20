@@ -394,6 +394,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
+			let inactiveAppearance = null;
 
 			for(const name of ['terrain', 'water'])
 			{
@@ -403,6 +404,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				);
 
 				parameters(surface);
+
+				// The compiler drops a uniform the shader stops reading, and uploads to it then do nothing.
+				if(name === 'terrain')
+				{
+					inactiveAppearance = Object.keys(data.appearance)
+						.filter(uniform => gl.getUniformLocation(surface, uniform) === null);
+				}
 
 				if(name === 'terrain') appearance(surface, data.appearance);
 
@@ -741,6 +749,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, shadowResults
 				, illuminationResults
 				, bandResults
+				, inactiveAppearance
 
 				, aliasResults
 				, reflectionResults
@@ -824,6 +833,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(sample.night[2] > sample.night[0] && sample.night[1] > sample.night[0], `${sample.name} receives cool night fill`);
 			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
 		}
+
+		assert.deepEqual(result.inactiveAppearance, [], 'terrain.frag reads every appearance uniform');
 
 		const [, grass, redGrass] = result.illuminationResults.find(sample => sample.name === 'terrain').colors;
 		assert.ok(grass[1] > grass[0] && grass[1] > grass[2], `default grass paint draws green: ${grass}`);
