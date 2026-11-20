@@ -426,4 +426,25 @@ $expect(
 	, 'red beds under a white rust are white'
 );
 
+// USES lists, for each style, settings that exist, in panel order, and every setting is read by some style.
+$panelOrder = array_merge(...array_values(TerrainAppearance::GROUPS));
+$used = [];
+
+foreach(TerrainAppearance::USES as $style => $keys)
+{
+	$expect($keys === array_values(array_intersect($panelOrder, $keys)) && count($keys) === count(array_unique($keys)),
+		"USES lists $style's settings once each in GROUPS order");
+	$used = array_merge($used, $keys);
+}
+
+$expect(array_diff(array_keys(TerrainAppearance::DEFAULTS), $used) === [], 'Every setting is read by at least one style');
+$expect(TerrainAppearance::style(['preset' => 'coast', 'version' => 2]) === 'coast'
+	&& TerrainAppearance::style(['preset' => 'mountain', 'version' => 2]) === 'mountain'
+	&& TerrainAppearance::style(['preset' => 'canyon', 'version' => 2]) === 'canyon'
+	&& TerrainAppearance::style(['preset' => 'canyon', 'version' => 1]) === 'canyon-v1'
+	&& TerrainAppearance::style([]) === 'coast', 'style() names each recipe as Scene draws it');
+$expect(!in_array('rockBandColor', TerrainAppearance::USES['mountain'], true)
+	&& in_array('graniteColor', TerrainAppearance::USES['mountain'], true)
+	&& !in_array('graniteColor', TerrainAppearance::USES['coast'], true), 'Mountains read granite, not the coast strata');
+
 echo "Terrain appearance: $checks checks passed.\n";
