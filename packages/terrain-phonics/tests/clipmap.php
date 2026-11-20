@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-use TerrainPhonics\{Clipmap, Landscape, Recipe, SurfaceLayers};
+use TerrainPhonics\{Clipmap, Landscape, Recipe, SurfaceLayers, TerrainAppearance};
 
 require dirname(__DIR__) . '/autoload.php';
 
@@ -77,11 +77,18 @@ foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
 $layers = new SurfaceLayers([
 	['color' => '#443322'],
 	['color' => '#996644', 'low' => -200, 'high' => 100],
-	['color' => '#ffffff', 'parent' => 1, 'slopeHigh' => .25, 'datum' => 'water'],
+	['color' => '#ffffff', 'parent' => 1, 'slopeHigh' => .25, 'datum' => 'water',
+		'pattern' => 'gravel', 'patternColor' => '#f0bcc8', 'patternScale' => 4.5, 'patternAmount' => .6],
 ]);
 check((new SurfaceLayers(json_decode(json_encode($layers->layers), true)))->layers === $layers->layers,
 	'Nested masks must round-trip through the save format.');
-foreach([['parent' => 1], ['scale' => 0], ['slopeHigh' => 1.2], ['color' => 'black'], ['low' => NAN]] as $invalid)
+check($layers->layers[0]['pattern'] === 'none' && $layers->layers[0]['patternColor'] === '#443322',
+	'Older colour layers retain their solid fill.');
+foreach([
+	['parent' => 1], ['scale' => 0], ['slopeHigh' => 1.2], ['color' => 'black'], ['low' => NAN],
+	['pattern' => 'unexpected'], ['patternColor' => 'black'], ['patternAmount' => 1.1],
+	['patternScale' => 0], ['patternStretch' => -1],
+] as $invalid)
 {
 	try
 	{
@@ -90,4 +97,9 @@ foreach([['parent' => 1], ['scale' => 0], ['slopeHigh' => 1.2], ['color' => 'bla
 	}
 	catch(InvalidArgumentException) {}
 }
+$appearance = new TerrainAppearance;
+$coast = SurfaceLayers::landscape((new Recipe(['preset' => 'coast']))->values(), $appearance)->layers;
+check($coast[0]['color'] === $appearance->settings['grassColor']
+	&& abs($coast[1]['slopeLow'] - $coast[1]['slopeFade'] - $appearance->settings['rockSlopeStart']) < 1e-9,
+	'Rock starts to cover coastal grass only when the slope reaches the configured threshold.');
 echo "Clipmap and expanded terrain recipe checks passed.\n";

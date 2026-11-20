@@ -52,3 +52,79 @@ test('GPU heights agree with the PHP lattice on cliffs and at the world edges',a
 		assert.ok(errors.every(e=>e[3]<=.005),JSON.stringify(errors));
 	} finally {await browser.close();}
 });
+
+test('surface colour patterns are distinct, masked, and anchored to world coordinates', async() => {
+	const vertex = readFileSync(new URL('../shaders/shadows.vert', import.meta.url), 'utf8');
+	const layers = readFileSync(new URL('../shaders/surface-layers.glsl', import.meta.url), 'utf8');
+	const browser = await chromium.launch({
+		executablePath: process.env.CHROMIUM || '/usr/bin/chromium',
+		args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+	});
+
+	try {
+		const page = await browser.newPage();
+		const results = await page.evaluate(({vertex, layers}) => {
+			const canvas = document.createElement('canvas');
+			const width = canvas.width = 128, height = canvas.height = 64;
+			const gl = canvas.getContext('webgl2', {antialias:false});
+			const program = gl.createProgram();
+
+			const fragment = `#version 300 es
+				precision highp float;
+				precision highp int;
+				${layers}
+				uniform float uShift,uHeight,uFootprint;
+				out vec4 color;
+				void main() {
+					vec3 pos = vec3(gl_FragCoord.x+uShift, uHeight, gl_FragCoord.y);
+					color = vec4(layerSurface(pos,vec3(0,1,0),uFootprint,0.),1.);
+				}`;
+			for(const [type, source] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
+				const shader = gl.createShader(type);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+				if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(shader));
+				gl.attachShader(program, shader);
+			}
+			gl.linkProgram(program);
+			if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
+			gl.useProgram(program);
+			gl.disable(gl.DITHER);
+			const location = name => gl.getUniformLocation(program, name);
+			gl.uniform1i(location('uLayerCount'), 2);
+			gl.uniform3fv(location('uLayerColor[0]'), [.25,.3,.22, .4,.45,.3]);
+			gl.uniform3fv(location('uLayerPatternColor[0]'), [.25,.3,.22, .8,.1,.05]);
+			gl.uniform4fv(location('uLayerRange[0]'), [-100,100,0,1, -10,10,0,1]);
+			gl.uniform4fv(location('uLayerBlend[0]'), [1,.05,0,100, 1,.05,0,100]);
+			gl.uniform4fv(location('uLayerMode[0]'), [-1,0,0,0, -1,0,0,0]);
+			gl.uniform2f(location('uPaletteOffset'), 230, 410);
+
+			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1) {
+				gl.uniform1f(location('uShift'), shift);
+				gl.uniform1f(location('uHeight'), elevation);
+				gl.uniform1f(location('uFootprint'), footprint);
+				gl.uniform4fv(location('uLayerPattern[0]'), [0,0,20,4, kind,amount,12,4]);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				const data = new Uint8Array(width*height*4);
+				gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,data);
+				return data.filter((_,i) => i%4===0);
+			}
+
+			const solid = sample(0);
+			const patterned = [1,2,3].map(kind => sample(kind));
+			const moved = sample(2, 7);
+			const sampleOutside = sample(0, 0, 30);
+			return {
+				visible: patterned.map(pixels => new Set(pixels).size > 5),
+				unique: new Set(patterned.map(pixels => pixels.join(','))).size,
+				anchored: moved.every((value,i) => i%width >= width-7 || value === patterned[1][i+7]),
+				masked: sample(2,0,30).every((value,i) => value === sampleOutside[i]),
+				filtered: sample(3,0,0,20).every((value,i) => value === solid[i]),
+				zero: sample(1,0,0,.1,0).every((value,i) => value === solid[i]),
+			};
+		},{vertex,layers});
+		assert.deepEqual(results, {visible:[true,true,true], unique:3, anchored:true, masked:true, filtered:true, zero:true});
+	} finally {
+		await browser.close();
+	}
+});
