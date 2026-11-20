@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-use TerrainPhonics\{Clipmap, Landscape, Recipe, SurfaceLayers, TerrainAppearance};
+use TerrainPhonics\{CanyonBeds, Clipmap, Landscape, Recipe, SurfaceLayers, TerrainAppearance};
 
 require dirname(__DIR__) . '/autoload.php';
 
@@ -102,4 +102,23 @@ $coast = SurfaceLayers::landscape((new Recipe(['preset' => 'coast']))->values(),
 check($coast[0]['color'] === $appearance->settings['grassColor']
 	&& abs($coast[1]['slopeLow'] - $coast[1]['slopeFade'] - $appearance->settings['rockSlopeStart']) < 1e-9,
 	'Rock starts to cover coastal grass only when the slope reaches the configured threshold.');
+$canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
+$bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
+	static fn(array $layer) => $layer['datum'] === 'beds'));
+check(count($bands) === 7, 'The rock material covers every bed in the canyon profile.');
+foreach($bands as $i => $band)
+{
+	check(abs($band['low'] - 80 * (CanyonBeds::CONTACTS[$i] + 5)) < 1e-9
+		&& abs($band['high'] - 80 * (CanyonBeds::CONTACTS[$i + 1] + 5)) < 1e-9
+		&& $band['period'] === 800.0, 'Rock bands align with the authored ledge heights.');
+	check($band['slopeLow'] - $band['slopeFade'] > 0, 'Repeating bands are masked off level ground.');
+}
+check(count(array_unique(array_column($bands, 'color'))) === 6, 'Sandstone repeats and the other beds use distinct colours.');
+$muted = SurfaceLayers::landscape($canyonRecipe, new TerrainAppearance(['bandContrast' => 0, 'bandSharpness' => 4]));
+$mutedBands = array_slice($muted->layers, 1, 7);
+check(count(array_unique(array_column($mutedBands, 'color'))) === 1
+	&& abs(4 * $mutedBands[0]['fade'] - $bands[0]['fade']) < 1e-9, 'Band contrast and sharpness drive the editable layers.');
+$v1 = SurfaceLayers::landscape(['preset' => 'canyon', 'version' => 1], $appearance)->layers;
+check($v1[1]['datum'] === 'absolute' && $v1[1]['period'] === $appearance->settings['bandSpacing'],
+	'Early canyons retain horizontal bands.');
 echo "Clipmap and expanded terrain recipe checks passed.\n";

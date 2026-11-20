@@ -73,11 +73,12 @@ test('surface colour patterns are distinct, masked, and anchored to world coordi
 				precision highp float;
 				precision highp int;
 				${layers}
-				uniform float uShift,uHeight,uFootprint;
+				uniform float uShift,uHeight,uFootprint,uRise,uNormalY;
 				out vec4 color;
 				void main() {
-					vec3 pos = vec3(gl_FragCoord.x+uShift, uHeight, gl_FragCoord.y);
-					color = vec4(layerSurface(pos,vec3(0,1,0),uFootprint,0.),1.);
+					vec3 pos = vec3(gl_FragCoord.x+uShift, uHeight+uRise*gl_FragCoord.y, gl_FragCoord.y);
+					vec3 normal = vec3(sqrt(1.-uNormalY*uNormalY), uNormalY, 0.);
+					color = vec4(layerSurface(pos,normal,uFootprint,0.),1.);
 				}`;
 			for(const [type, source] of [[gl.VERTEX_SHADER, vertex], [gl.FRAGMENT_SHADER, fragment]]) {
 				const shader = gl.createShader(type);
@@ -98,6 +99,8 @@ test('surface colour patterns are distinct, masked, and anchored to world coordi
 			gl.uniform4fv(location('uLayerBlend[0]'), [1,.05,0,100, 1,.05,0,100]);
 			gl.uniform4fv(location('uLayerMode[0]'), [-1,0,0,0, -1,0,0,0]);
 			gl.uniform2f(location('uPaletteOffset'), 230, 410);
+			gl.uniform1f(location('uNormalY'), 1);
+			gl.uniform1f(location('uRise'), 0);
 
 			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1) {
 				gl.uniform1f(location('uShift'), shift);
@@ -114,16 +117,49 @@ test('surface colour patterns are distinct, masked, and anchored to world coordi
 			const patterned = [1,2,3].map(kind => sample(kind));
 			const moved = sample(2, 7);
 			const sampleOutside = sample(0, 0, 30);
+			const masked = sample(2,0,30).every((value,i) => value === sampleOutside[i]);
+			const filtered = sample(3,0,0,20).every((value,i) => value === solid[i]);
+			const zero = sample(1,0,0,.1,0).every((value,i) => value === solid[i]);
+
+			gl.uniform1f(location('uNormalY'), 0);
+			gl.uniform1f(location('uRise'), .125);
+			const wallStreaks = sample(2), wallWithPartings = sample(4);
+			const resolvedPartings = wallWithPartings.filter((value,i) => value - wallStreaks[i] > 3).length > width*height*.01;
+			gl.uniform1f(location('uRise'), 0);
+
+			gl.uniform4fv(location('uLayerRange[0]'), [-100,100,0,1, 0,8,.2,1]);
+			gl.uniform4fv(location('uLayerBlend[0]'), [1,.05,0,100, 1,.1,0,100]);
+			gl.uniform4fv(location('uLayerMode[0]'), [-1,0,0,0, -1,0,20,0]);
+			gl.uniform1f(location('uNormalY'), 0);
+			const contactLeft = sample(0,0,-10.05)[0], contactRight = sample(0,0,-9.95)[0];
+			const cyclic = Math.abs(contactLeft-contactRight) < 5 && sample(0,0,10.05)[0] === contactRight;
+			const bed = sample(0,0,-6)[0], outsideBed = sample(0,0,2)[0];
+			gl.uniform1f(location('uNormalY'), 1);
+			gl.uniform1f(location('uRise'), 20);
+			const filteredMask = sample(0,0,-6).every(value => value === outsideBed);
+
+			gl.uniform1i(location('uLayerCount'), 3);
+			gl.uniform3fv(location('uLayerColor[0]'), [.25,.3,.22, .45,.2,.1, .45,.2,.1]);
+			gl.uniform4fv(location('uLayerRange[0]'), [-100,100,0,1, 0,10,.2,1, 10,20,.2,1]);
+			gl.uniform4fv(location('uLayerBlend[0]'), [1,.05,0,100, 1,.1,0,100, 1,.1,0,100]);
+			gl.uniform4fv(location('uLayerMode[0]'), [-1,0,0,0, -1,0,20,1, -1,0,20,2]);
+			gl.uniform1f(location('uNormalY'), 0);
+			gl.uniform1f(location('uRise'), .5);
+			const section = sample(0,0,-10);
+			const noFalseContacts = new Set(section).size === 1 && section[0] > outsideBed;
+
 			return {
 				visible: patterned.map(pixels => new Set(pixels).size > 5),
 				unique: new Set(patterned.map(pixels => pixels.join(','))).size,
 				anchored: moved.every((value,i) => i%width >= width-7 || value === patterned[1][i+7]),
-				masked: sample(2,0,30).every((value,i) => value === sampleOutside[i]),
-				filtered: sample(3,0,0,20).every((value,i) => value === solid[i]),
-				zero: sample(1,0,0,.1,0).every((value,i) => value === solid[i]),
+				masked, filtered, zero, cyclic, filteredMask, resolvedPartings, noFalseContacts,
+				distinctBed: bed > outsideBed,
 			};
 		},{vertex,layers});
-		assert.deepEqual(results, {visible:[true,true,true], unique:3, anchored:true, masked:true, filtered:true, zero:true});
+		assert.deepEqual(results, {
+			visible:[true,true,true], unique:3, anchored:true, masked:true, filtered:true, zero:true,
+			cyclic:true, filteredMask:true, distinctBed:true, resolvedPartings:true, noFalseContacts:true,
+		});
 	} finally {
 		await browser.close();
 	}
