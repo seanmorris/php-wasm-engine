@@ -78,9 +78,11 @@ $spots = static function(array ...$lights): array {
 // Level ground at the origin, 2 m below the overhead lamp. The lamp gives it the irradiance that the knee turns into 4
 // scene units, and the next three cases give it the same.
 $knee = TerrainPhonics\SpotLights::KNEE;
-$intensity = 4 * $knee * (exp(4 / $knee) - 1) / (TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN);
+$perCandela = TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN;
+$intensity = 4 * $knee * (exp(4 / $knee) - 1) / $perCandela;
 $overhead = ['position' => [0,2,0],'direction' => [0,-1,0],'color' => [1,1,1],'intensity' => $intensity,'range' => 100
 	,'inner' => .2,'outer' => .4];
+$band = acos((cos(.2) + cos(.4)) / 2);
 $spotCases = [
 	'none' => $spots(), 'overhead' => $spots($overhead)
 	, 'higher' => $spots(['position' => [0,4,0],'intensity' => 4 * $intensity] + $overhead)
@@ -90,6 +92,8 @@ $spotCases = [
 	, 'pair' => $spots(...array_fill(0, 2, ['intensity' => $intensity / 2] + $overhead))
 	// Without the knee this would turn both surfaces white.
 	, 'glare' => $spots(['intensity' => 64 * $intensity] + $overhead)
+	// The glare lamp turned so the point lies halfway through its cone band, in cosine: a quarter of its light.
+	, 'band' => $spots(['direction' => [sin($band), -cos($band), 0],'intensity' => 64 * $intensity] + $overhead)
 
 	// These add no light.
 	, 'away' => $spots(['direction' => [0,1,0]] + $overhead)

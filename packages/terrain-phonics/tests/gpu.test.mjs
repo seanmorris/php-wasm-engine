@@ -872,6 +872,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, `${name}: 64 times the lamp is brighter and does not clip: ${colors.overhead} to ${colors.glare}`
 			);
 
+			// The cones fade the compressed light, so halfway through its band the glare lamp gives a quarter of
+			// what it gives on its axis, less than the overhead lamp. Compressed after the cone, it would be
+			// brighter.
+			assert.ok(
+				colors.band.every((value, i) => value > colors.dark[i] && value < colors.overhead[i])
+				, `${name}: the cone band dims the glare lamp below the overhead lamp: ${colors.band}`
+			);
+
 			if(name === 'terrain')
 			assert.ok(
 				colors.column[1] > colors.submerged[1] + 5 && colors.column[2] > colors.submerged[2] + 5
