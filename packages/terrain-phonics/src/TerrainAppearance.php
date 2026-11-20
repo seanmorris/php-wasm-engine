@@ -18,15 +18,15 @@ final class TerrainAppearance
 		'sandColor' => '#bfaf8b', 'snowColor' => '#eaf1f8', 'roadColor' => '#65615b',
 		'canyonRustColor' => '#794944', 'canyonShaleColor' => '#5f484c', 'canyonSandstoneColor' => '#906356',
 		'canyonCapColor' => '#a38775',
-		'forestColor' => '#1d291b', 'meadowColor' => '#48581f', 'tundraColor' => '#484230', 'graniteColor' => '#575959',
+		'forestColor' => '#1d291b', 'meadowColor' => '#48581f', 'tundraColor' => '#484230', 'graniteColor' => '#565a5c',
 		'stainColor' => '#74605a', 'talusColor' => '#7b7b77',
 
 		'bandSpacing' => 2 * M_PI / .12, 'bandContrast' => 1.0, 'bandSharpness' => 1.0,
 
 		'rockSlopeStart' => .08, 'rockSlopeEnd' => .38, 'beachHeight' => 3.0, 'beachWidth' => 15.0,
-		'snowline' => 340.0, 'snowTransition' => 65.0, 'alpineStart' => -170.0, 'alpineEnd' => -30.0,
-		'snowSlopeStart' => .25, 'snowSlopeEnd' => .65, 'macroVariation' => 1.0, 'treeline' => -190.0,
-		'tundraStart' => -100.0,
+		'snowline' => 340.0, 'snowTransition' => 65.0, 'alpineStart' => -110.0, 'alpineEnd' => -30.0,
+		'snowSlopeStart' => .25, 'snowSlopeEnd' => .65, 'macroVariation' => 1.0, 'treeline' => -150.0,
+		'tundraStart' => -90.0,
 
 		'talusAmount' => .5, 'stainAmount' => .3, 'lichenAmount' => .5,
 	];

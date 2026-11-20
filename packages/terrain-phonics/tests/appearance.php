@@ -145,7 +145,7 @@ $expect(
 $expect($close($uniforms['uCanyonBounce'], [.11, .066, .048]), 'canyon bounce light equals the old constant');
 $expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per metre and profile');
 $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends are the old constants');
-$expect($uniforms['uHeightBlend'] === [3.0, 18.0, -170.0, -30.0], 'default sand and alpine heights are the old ones');
+$expect($uniforms['uHeightBlend'] === [3.0, 18.0, -110.0, -30.0], 'default sand heights are the old ones');
 $expect($uniforms['uSnowline'] === [340.0, 65.0], 'default snowline and transition are the old constants');
 $expect($uniforms['uMacroVariation'] === [1.0], 'default variation keeps the old strength');
 
@@ -157,7 +157,12 @@ $expect(
 	, "mountain colour $i comes from {$name}Color"
 );
 
-$expect($uniforms['uMountainZones'] === [-190.0, -100.0], 'default treeline and tundra lie below the snowline');
+$expect($uniforms['uMountainZones'] === [-150.0, -90.0], 'default treeline and tundra lie below the snowline');
+$expect(
+	TerrainAppearance::DEFAULTS['treeline'] < TerrainAppearance::DEFAULTS['alpineStart']
+		&& TerrainAppearance::DEFAULTS['alpineStart'] < TerrainAppearance::DEFAULTS['tundraStart']
+	, 'default alpine rock starts between the treeline and the tundra'
+);
 $expect($uniforms['uMountainAmounts'] === [.5, .3, .5], 'default talus, stain and lichen amounts upload in order');
 $expect($defaults->settings === TerrainAppearance::DEFAULTS, 'no options give the defaults');
 
