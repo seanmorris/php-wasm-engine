@@ -755,22 +755,50 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const spotResults = {};
 
-			for(const name of ['terrain', 'water'])
-			{
-				const surface = program(
+			/**
+			 * Link a surface shader with the lit or the lamp-free spot-light include and set up the night scene.
+			 * @param {string} name 'terrain' or 'water'.
+			 * @param {string} spots Include for the "// SPOT LIGHTS" marker.
+			 * @return {WebGLProgram} The program, in use.
+			 */
+			const atNight = (name, spots) => {
+				const linked = program(
 					surfaceVertex
 					, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
+						.replace('// SPOT LIGHTS', spots)
 				);
 
-				parameters(surface);
+				parameters(linked);
 
-				if(name === 'terrain') appearance(surface, data.appearance);
+				if(name === 'terrain') appearance(linked, data.appearance);
 
-				gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
-				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), -3);
-				gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), 0);
-				gl.uniform3fv(gl.getUniformLocation(surface, 'uNightAmbient'), data.nightAmbient);
+				gl.uniform3f(gl.getUniformLocation(linked, 'uEye'), 0, 5, 5);
+				gl.uniform1f(gl.getUniformLocation(linked, 'uTestGround'), -3);
+				gl.uniform1f(gl.getUniformLocation(linked, 'uSunIntensity'), 0);
+				gl.uniform3fv(gl.getUniformLocation(linked, 'uNightAmbient'), data.nightAmbient);
 
+				return linked;
+			};
+
+			/**
+			 * Sink the surface under a metre of murky water, as for the water column check.
+			 * @param {WebGLProgram} linked Program in use.
+			 * @return {void}
+			 */
+			const submerge = linked => {
+				gl.uniform1f(gl.getUniformLocation(linked, 'uWaterLevel'), 1);
+				gl.uniform4f(gl.getUniformLocation(linked, 'uWaterOptics'), .85, .85, 1, .65);
+			};
+
+			for(const name of ['terrain', 'water'])
+			{
+				// Scene draws the lamp-free variant while no light is set. It must match the lit one without lamps.
+				const lampFree = atNight(name, data.lampFreeSpotLights);
+				const unlit = {dark: pixel()};
+				submerge(lampFree);
+				unlit.submerged = pixel();
+
+				const surface = atNight(name, shaders['spot-lights.glsl']);
 				const colors = {dark: pixel()};
 				const lamps = gl.getUniformLocation(surface, 'uSpotLights[0]');
 				// A count of zero ignores whatever the array holds.
@@ -787,14 +815,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 
 				// Under a metre of murky water the column between the surface and the ground scatters lamp light.
-				gl.uniform1f(gl.getUniformLocation(surface, 'uWaterLevel'), 1);
-				gl.uniform4f(gl.getUniformLocation(surface, 'uWaterOptics'), .85, .85, 1, .65);
+				submerge(surface);
 				gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), 0);
 				colors.submerged = pixel();
 				gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), 1);
 				gl.uniform4fv(lamps, data.spotLights.column['uSpotLights[0]']);
 				colors.column = pixel();
-				spotResults[name] = colors;
+				spotResults[name] = {...colors, unlit};
 			}
 
 			const error = gl.getError();
@@ -832,6 +859,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		{
 			for(const key of ['ignored', 'none', 'away', 'outside', 'short', 'below'])
 			assert.deepEqual(colors[key], colors.dark, `${name}: the ${key} case adds no lamp light`);
+
+			assert.deepEqual(
+				colors.unlit
+				, {dark: colors.dark, submerged: colors.submerged}
+				, `${name}: the lamp-free program draws what the lit one draws without lamps`
+			);
+
+			// The knee keeps colour in light that would otherwise clip: 64 times the overhead lamp stays below white.
+			assert.ok(
+				colors.glare.every((value, i) => value > colors.overhead[i] && value < 250)
+				, `${name}: 64 times the lamp is brighter and does not clip: ${colors.overhead} to ${colors.glare}`
+			);
 
 			if(name === 'terrain')
 			assert.ok(

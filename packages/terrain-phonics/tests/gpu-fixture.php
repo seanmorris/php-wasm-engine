@@ -75,8 +75,10 @@ $spots = static function(array ...$lights): array {
 	return $set->uniforms(1);
 };
 
-// Level ground at the origin. Each lit case gives it the irradiance of the overhead lamp, 4 scene units.
-$intensity = 16 / (TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN);
+// Level ground at the origin, 2 m below the overhead lamp. The lamp gives it the irradiance that the knee turns into 4
+// scene units, and the next three cases give it the same.
+$knee = TerrainPhonics\SpotLights::KNEE;
+$intensity = 4 * $knee * (exp(4 / $knee) - 1) / (TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN);
 $overhead = ['position' => [0,2,0],'direction' => [0,-1,0],'color' => [1,1,1],'intensity' => $intensity,'range' => 100
 	,'inner' => .2,'outer' => .4];
 $spotCases = [
@@ -86,6 +88,8 @@ $spotCases = [
 	, 'oblique' => $spots(['position' => [2,2,0],'direction' => [-1,-1,0],'intensity' => sqrt(8) * $intensity]
 		+ $overhead)
 	, 'pair' => $spots(...array_fill(0, 2, ['intensity' => $intensity / 2] + $overhead))
+	// Without the knee this would turn both surfaces white.
+	, 'glare' => $spots(['intensity' => 64 * $intensity] + $overhead)
 
 	// These add no light.
 	, 'away' => $spots(['direction' => [0,1,0]] + $overhead)
@@ -98,6 +102,7 @@ $spotCases = [
 
 echo json_encode([
 	'spotLights' => $spotCases
+	, 'lampFreeSpotLights' => TerrainPhonics\SpotLights::shaderSource(false)
 	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']
 	, 'lut' => base64_encode($lut['rgba8'])
