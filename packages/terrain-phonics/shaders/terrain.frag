@@ -159,14 +159,21 @@ void canyonMaterial(float footprint, vec3 weights, float slope, float macro,
 	normal = bump(normal, cliff*5.0*grooves, 1.0 - smoothstep(6.0, 24.0, footprint));
 }
 
-// Share of the ground that a patchy material covers. The noise runs from about -0.5 to 0.5 and has been faded for the
-// footprint; `detail` is how much of it is left. As it fades, the edge widens into a blend with about the same mean.
-// The edge is never narrower than a pixel.
+// Share of the ground that a patchy material covers. The noise mostly runs from -0.5 to 0.5, peaks near -0.9 and 0.9,
+// and has been faded for the footprint; `detail` is how much of it is left. As it fades, the edge widens into a blend
+// with about the same mean. The edge is never narrower than a pixel.
 float patchy(float amount, float noise, float detail)
 {
 	float value = amount - 0.5 + noise;
 	float edge = max(mix(0.5, 0.1, detail), fwidth(value));
 	return smoothstep(-edge, edge, value);
+}
+
+// A patch whose amount must leave none at 0. The noise of patchy() reaches past 0.5, so it would still cover a few
+// percent of the ground there; below an amount of 0.1 the cover also falls with the amount.
+float sparse(float amount, float noise, float detail)
+{
+	return patchy(amount, noise, detail) * min(1.0, 10.0*amount);
 }
 
 // Granite mountains. Steep ground shows jointed slabs streaked down the fall line, talus lies on the moderately steep
@@ -249,7 +256,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float talusShare = uMountainAmounts.x * (1.0 - 0.6*lowland)
 		* smoothstep(uSlopeBlend.x, mix(uSlopeBlend.x, uSlopeBlend.y, 0.4), slope)
 		* (1.0 - smoothstep(mix(uSlopeBlend.x, uSlopeBlend.y, 0.5), mix(uSlopeBlend.x, uSlopeBlend.y, 0.8), slope));
-	float scree = patchy(talusShare, 0.5*rill - 0.7*gully + 0.3*ragged + 0.3*(seed - 0.5)*cellFade,
+	float scree = sparse(talusShare, 0.5*rill - 0.7*gully + 0.3*ragged + 0.3*(seed - 0.5)*cellFade,
 		max(rillFade, raggedDetail));
 	cover = mix(cover, talus * blocks * (1.0 + 0.15*blotch), scree);
 
@@ -281,7 +288,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float tone = (1.0 + 0.2*(slab - 0.5)*slabFade*settled) * (1.0 - 0.3*joints) * (1.0 - 0.22*wet)
 		* (1.0 + 0.12*blotch + 0.1*macro);
 	// Iron stains run down the gullies and streaks; lichen tints the rock grey-green in patches.
-	float stained = patchy(0.6*uMountainAmounts.y, 0.3*rill - 0.9*gully + 0.4*streak, max(rillFade, gullyFade));
+	float stained = sparse(0.6*uMountainAmounts.y, 0.3*rill - 0.9*gully + 0.4*streak, max(rillFade, gullyFade));
 	vec3 cliff = mix(granite, stain, 0.5*stained) * tone;
 	float lichen = uMountainAmounts.z * patchy(0.55, blotch + ragged + 0.4*streak, max(raggedDetail, blotchFade));
 	cliff *= mix(vec3(1.0), vec3(0.85, 0.93, 0.78), lichen);
