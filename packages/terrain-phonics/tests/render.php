@@ -2150,6 +2150,12 @@ $spotFrame = static function() use ($spotScene, $spotCamera, $spotNames, $spotPr
 $spotLights->set([$spotLight, ['position' => [1,2,3]] + $spotLight]);
 $spotDay = $spotLights->uniforms(0)['uSpotLights[0]'];
 renderCheck($spotFrame() === [], 'a scene without spot lights uploads none');
+
+renderCheck(
+	$spotDrawn[0] === ['litGroundProgram','litWaterProgram'] && $spotDrawn[1] > 0
+	, 'the first frame draws with the lit programs, so a GL that compiles a pipeline at its first draw does so now'
+);
+
 $spotScene->setSpotLights([]);
 renderCheck($spotFrame() === [], 'clearing lights that were never set uploads nothing');
 // The first frame also filled the sky and shadow caches, so the second gives the draws of a settled frame.
@@ -2219,12 +2225,47 @@ $spotRestore = static function() use ($spotScene): void {
 $spotScene->setSpotLights([]);
 $spotRestore();
 renderCheck($spotFrame() === [], 'a relinked program without lights needs no uploads');
-renderCheck($spotDrawn[0] === ['groundProgram','waterProgram'], 'a restored scene without lights draws lamp-free');
+
+renderCheck(
+	$spotDrawn[0] === ['litGroundProgram','litWaterProgram']
+	, 'a restored scene draws its relinked lit programs once without lights'
+);
+
+renderCheck(
+	$spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram']
+	, 'and then draws lamp-free'
+);
+
 $spotScene->setSpotLights([$spotLight]);
 $spotFrame();
 $spotRestore();
 renderCheck(count($spotFrame()) === 4, 'restoration relinks the programs and the next frame uploads the lights again');
 renderCheck($spotDrawn[0] === ['litGroundProgram','litWaterProgram'], 'a restored scene with lights draws lit');
+
+// Lights set and cleared while the camera looks away from every patch reach the lit programs, which have not drawn
+// yet. Their first draw must not show the cleared lights.
+$spotScene->setSpotLights([]);
+$spotRestore();
+[$spotPitch, $spotEye] = [$spotCamera->pitch, $spotCamera->position];
+[$spotCamera->pitch, $spotCamera->position] = [1.5, [0,5000,0]];
+$spotScene->setSpotLights([$spotLight]);
+$early = $spotFrame();
+$earlyDrawn = $spotDrawn[0];
+[$spotCamera->pitch, $spotCamera->position] = [$spotPitch, $spotEye];
+$spotScene->setSpotLights([]);
+$cleared = $spotFrame();
+
+renderCheck(
+	count($early) === 4 && $earlyDrawn === [] && $cleared === array_fill(0, 2, ['uSpotLightCount', [0]])
+	&& $spotDrawn[0] === ['litGroundProgram','litWaterProgram']
+	, 'lit programs that received lights before they first drew get a zero count when they do'
+);
+
+renderCheck(
+	$spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram']
+	, 'after that first draw the scene draws lamp-free again'
+);
+
 $spotScene->close();
 
 // More than twelve independent imbalance repairs are required by this complete cover.
