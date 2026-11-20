@@ -199,12 +199,17 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	// upright planes would stretch their noise across it.
 	float upright = smoothstep(0.015, 0.08, slope);
 	float cut = sqrt(gully*gully + pow(0.01 + 0.012*footprint, 2.0));
+	// The relief turns the lighting normal over at each bottom, so its rounding is at least a pixel and a half on each
+	// side, measured by fwidth() across the gully. On ground seen edge-on that is a far smaller distance than the
+	// footprint, and a bottom rounded by the footprint alone turns within a pixel there.
+	float groove = sqrt(gully*gully + pow(max(0.01 + 0.012*footprint, 1.5*fwidth(gully)), 2.0));
 	float rib = mix(blotch, 2.0*(cut - 0.08*gullyFade) + 0.5*rill, upright);
 
 	// Height above the snowline, raised on ribs and lowered in gullies. The broad variation keeps distant boundaries,
 	// where the finer noise has faded, off the contours.
 	float above = vWorld.y - snowline + 160.0*rib + 60.0*blotch + 70.0*macro;
-	float lowland = smoothstep(uMountainZones.x + 35.0, uMountainZones.x - 45.0, above);
+	// GLSL leaves smoothstep() undefined when its first edge is not below the second, so the fall is written as a rise.
+	float lowland = 1.0 - smoothstep(uMountainZones.x - 45.0, uMountainZones.x + 35.0, above);
 	float steep = smoothstep(uSlopeBlend.x, uSlopeBlend.y, slope + 0.5*rib - 0.06*lowland);
 
 	// One staggered grid of cells holds tree crowns and talus blocks, each block turned and sized at random.
@@ -214,12 +219,17 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec2 offset = fract(grid) - 0.5 - 0.25*(vec2(seed, seed2) - 0.5);
 	float turn = 6.2832 * seed2;
 	offset = mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * offset;
-	float aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.5, 1.5, footprint);
+	// The pixel has a floor because smoothstep() is undefined for two equal edges.
+	float pixel = max(footprint, 0.001), aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.5, 1.5, footprint);
+	// Large blocks and crowns reach past their cell, which cuts them off. The cut fades over a pixel, so it is no
+	// hard step between two cells.
+	vec2 inside = min(fract(grid), 1.0 - fract(grid));
+	float within = smoothstep(0.0, pixel / 3.0, min(inside.x, inside.y));
 	float size = 0.28 + 0.12*seed;
-	float block = 1.0 - smoothstep(size - 0.05, size + 0.03 + aa,
-		max(abs(offset.x), abs(offset.y) * (0.75 + 0.5*seed2)));
+	float block = (1.0 - smoothstep(size - 0.05, size + 0.03 + aa,
+		max(abs(offset.x), abs(offset.y) * (0.75 + 0.5*seed2)))) * within;
 	float blocks = mix(1.0, mix(0.82, 0.88 + 0.24*seed, block) / 0.91, cellFade);
-	float crown = 1.0 - smoothstep(0.2, 0.46 + aa, length(offset));
+	float crown = (1.0 - smoothstep(0.2, 0.46 + aa, length(offset))) * within;
 	float crowns = mix(1.0, mix(0.7, 1.15 + 0.2*seed2, crown) / 0.89, cellFade);
 
 	// Shrubs mottle the meadow, tundra keeps meadow green in its hollows, and wet grass fills level floors.
@@ -252,16 +262,23 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float along = (face.y + tilt * across * 13.0) / 23.0 + hashCell(vec2(column, 1.9));
 	vec2 slabCell = vec2(column, floor(along));
 	float slab = hashCell(slabCell);
-	// Each slab steps down over the one below it, so a joint shades the foot of the slab above it.
-	float riser = fract(along) * 23.0 * inversesqrt(1.0 + tilt*tilt);
-	float joint = min(min(across, 1.0 - across) * 13.0, riser);
+	// Each slab steps down over the one below it, so a joint shades the foot of the slab above it. `riser` is the
+	// distance up from the joint below and `below` the distance down from the joint above, in metres.
+	float rise = 23.0 * inversesqrt(1.0 + tilt*tilt);
+	float riser = fract(along) * rise, below = (1.0 - fract(along)) * rise, side = min(across, 1.0 - across) * 13.0;
 	float jointFade = 1.0 - smoothstep(0.4, 1.5, footprint), slabFade = 1.0 - smoothstep(1.5, 4.5, footprint);
-	// Joints show in broken lengths.
-	float joints = mix(0.07, (1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, joint)) * smoothstep(-0.1, 0.1, ragged),
-		jointFade);
+	// The two upright planes give different slabs. Where the choice changes, and at every edge of a slab, the slab's
+	// own tone, facet and joints fade to their mean over about a pixel, so no edge is a hard step.
+	float seam = smoothstep(0.5, 1.5, abs(xWeight - 0.5) / max(fwidth(xWeight), 0.0001));
+	float settled = smoothstep(0.0, pixel, min(side, min(riser, below))) * seam;
+	// The shaded foot starts over a pixel across the joint, and joints show in broken lengths.
+	float foot = smoothstep(-pixel, pixel, riser < below ? riser : -below)
+		* (1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, riser < below ? riser : 0.0));
+	float line = max(1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, side), foot);
+	float joints = mix(0.07, line * smoothstep(-0.1, 0.1, ragged), jointFade * seam);
 	// Water leaves dark streaks with sharp edges down the faces.
 	float wet = patchy(0.3, streak + 0.3*rill, streakFade);
-	float tone = (1.0 + 0.2*(slab - 0.5)*slabFade) * (1.0 - 0.3*joints) * (1.0 - 0.22*wet)
+	float tone = (1.0 + 0.2*(slab - 0.5)*slabFade*settled) * (1.0 - 0.3*joints) * (1.0 - 0.22*wet)
 		* (1.0 + 0.12*blotch + 0.1*macro);
 	// Iron stains run down the gullies and streaks; lichen tints the rock grey-green in patches.
 	float stained = patchy(0.6*uMountainAmounts.y, 0.3*rill - 0.9*gully + 0.4*streak, max(rillFade, gullyFade));
@@ -282,8 +299,8 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 		* smoothstep(0.06, 0.25, abs(dot(normalize(vRelative), normal))) * (1.0 - smoothstep(4.0, 16.0, footprint));
 	vec3 facet = (vec3(hashCell(slabCell + 31.7), slab, hashCell(slabCell + 63.1)) - 0.5) * vec3(0.25, 0.06, 0.25);
 	vec3 knob = vec3(offset.x, 0.0, offset.y) * (0.6*block*(scree + bare*(1.0 - steep)) + 0.5*crown*trees) * cellFade;
-	normal = normalize(normal + (facet * bare * steep * slabFade + knob) * relief);
-	normal = bump(normal, upright * ((26.0 + 24.0*blotch)*cut + 2.5*rill), relief);
+	normal = normalize(normal + (facet * bare * steep * slabFade * settled + knob) * relief);
+	normal = bump(normal, upright * ((26.0 + 24.0*blotch)*groove + 2.5*rill), relief);
 }
 
 void main()
