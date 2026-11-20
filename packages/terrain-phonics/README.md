@@ -131,7 +131,8 @@ Set `$water->appearance = new WaterAppearance([...])` to tune water rendering. U
 ## Terrain appearance
 
 `Scene::$appearance` holds a `TerrainAppearance`: the ground's colours, the banding of exposed rock, the slopes
-and heights where one material gives way to another, and the amounts of talus, stain and lichen on mountain rock. Replace it to change the look; the next `render()` uploads it.
+and heights where one material gives way to another, and the amounts of talus, stain and lichen on mountain rock.
+Replace it to change the look; the next `render()` uploads it.
 The renderer uploads an appearance once, and again only after a replacement or `restore()`. An application that draws
 only changed frames must draw one after a replacement.
 
@@ -161,7 +162,7 @@ moderately steep ground, and the cover runs from forest through subalpine meadow
 nears the snowline. Grass covers level valley floors below the treeline. Version-one canyons have soil cover and banded
 rock. Current canyons draw rock from the canyon colours and debris from their dust. Sand applies to every preset. The
 material tool's rock, grass, sand, snow and road paint use the same colours as the generated ground; mountain rock paint
-is the granite.
+is the mountain rock, granite mixed with talus blocks on gentle ground.
 
 The table lists what each setting changes in each preset. A preset ignores the settings with an empty cell.
 
@@ -178,7 +179,8 @@ The table lists what each setting changes in each preset. A preset ignores the s
 | `canyonRustColor`, `canyonShaleColor`, `canyonSandstoneColor`, `canyonCapColor` | | | | Beds |
 | `forestColor`, `meadowColor`, `tundraColor`, `graniteColor`, `stainColor`, `talusColor` | | Ground | | |
 | `rockSlopeStart`, `rockSlopeEnd` | Rock | Bare rock, talus | Rock | Rock |
-| `snowline`, `snowTransition`, `snowSlopeStart`, `snowSlopeEnd` | Snow | Snow | | |
+| `snowline` | Snow | Snow, and the zones that follow it | | |
+| `snowTransition`, `snowSlopeStart`, `snowSlopeEnd` | Snow | Snow | | |
 | `alpineStart`, `alpineEnd` | | Bare rock | | |
 | `treeline`, `tundraStart` | | Zones | | |
 | `talusAmount`, `stainAmount`, `lichenAmount` | | Rock | | |
@@ -192,7 +194,7 @@ Colours are sRGB hex strings.
 | --- | --- | --- |
 | `grassColor` | `#425b2d` | Grass cover on coast and mountain terrain, and grass paint. |
 | `soilColor` | `#815f40` | Soil cover on version-one canyons, mixed 40% toward the banded rock. |
-| `rockColor` | `#867c6f` | Rock between the light bands on coast, mountain and version-one canyon terrain. |
+| `rockColor` | `#867c6f` | Rock between the light bands on coast and version-one canyon terrain. |
 | `rockBandColor` | `#af957c` | The light bands in that rock. |
 | `sandColor` | `#bfaf8b` | Sand on level ground near the water, and sand paint. |
 | `snowColor` | `#eaf1f8` | Snow on coast and mountain terrain, and snow paint. |
@@ -217,7 +219,7 @@ follow, so each derived channel stops at 1: red beds under a white rust are whit
 
 | Setting | Default | Range | Effect |
 | --- | --- | --- | --- |
-| `bandSpacing` | 52.36 m (2π / 0.12) | 5 to 1000 | Height of one dark and one light band in coast, mountain and version-one canyon rock. |
+| `bandSpacing` | 52.36 m (2π / 0.12) | 5 to 1000 | Height of one dark and one light band in coast and version-one canyon rock. |
 | `bandContrast` | 1 | 0 to 1 | 0 paints banded rock one colour: halfway between the two rock colours, or the canyon's distant colour. |
 | `bandSharpness` | 1 | 1 to 8 | 1 is a sine profile. Higher values flatten each band and narrow the transitions, and narrow the contacts between canyon beds by the same factor. |
 
@@ -245,11 +247,12 @@ A slope is 1 minus the upward component of the surface normal: 0 on level ground
 | `tundraStart` | −100 m | −2000 to 0 | Height relative to the snowline where the meadow gives way to tundra. At least 1 m above the treeline. |
 | `snowSlopeStart` | 0.25 | 0 to 1 | Slope where snow starts to thin. |
 | `snowSlopeEnd` | 0.65 | 0 to 1 | Slope beyond which ground stays bare. At least 0.01 above the start. |
-| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, granite brightness, and the snowline. At 1 the snowline moves up to 25 m either way, and the mountain zones move with it. 0 removes the variation. |
+| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, granite brightness, the snowline and the mountain zones. At 1 the snowline moves up to 25 m either way. 0 removes the variation. |
 
-On mountains, ribs and patchy noise raise the treeline, the foot of the tundra and the bare rock by up to about 180 m,
-and gullies lower them by up to about 90 m, so rock runs down the ribs and vegetation climbs the gullies. At a `macroVariation` of 1,
-broad noise moves them up to 70 m more either way. The transitions break into clumps of trees, shrubs and rock.
+On mountains, ribs and patchy noise lower the treeline, the foot of the tundra and the start of bare rock by up to
+about 180 m, and gullies raise them by up to about 90 m, so rock runs down the ribs and vegetation climbs the gullies.
+The broad noise moves these zones 70 m against the snowline at a `macroVariation` of 1: where it raises the snowline
+25 m, the zones lie 45 m lower. The transitions break into clumps of trees, shrubs and rock.
 
 ### Rock
 
@@ -269,7 +272,9 @@ transaction replay, roads, residency, and picking. Water tests cover derivative 
 shoreline contacts, and fixed-step behavior. Atmosphere tests cover optical depth, boundary cases and cache
 invalidation. Renderer tests check bounded residency, complete coverage and revision publication.
 Run `npm run test:terrain:gpu` with Chromium installed to compare cached scattering against direct GLSL
-integration and to check GPU wave heights, derivatives, velocities, and normals against PHP.
+integration and to check GPU wave heights, derivatives, velocities, and normals against PHP. It also checks that every
+appearance uniform is read, that banded rock does not alias, that mountain rock has no bands, and that talus and stain
+colours show nowhere at an amount of 0.
 
 The performance target is hardware-accelerated desktop WebGL2 at 1080p/60 FPS. Record the browser and GPU
 alongside measured frame distributions; software WebGL results are correctness evidence, not proof of that
