@@ -131,9 +131,9 @@ Set `$water->appearance = new WaterAppearance([...])` to tune water rendering. U
 ## Terrain appearance
 
 `Scene::$appearance` holds a `TerrainAppearance`: the ground's colours, the banding of exposed rock, the slopes
-and heights where one material gives way to another, and the amounts of talus, stain and lichen on mountain rock. Replace it to change the look; the next `render()` uploads it.
-The renderer uploads an appearance once, and again only after a replacement or `restore()`. An application that draws
-only changed frames must draw one after a replacement.
+and heights where one material gives way to another, and the amounts of talus, stain and lichen on mountain rock.
+Replace it to change the look; the next `render()` uploads it. The renderer uploads an appearance once, and again only
+after a replacement or `restore()`. An application that draws only changed frames must draw one after a replacement.
 
 ```php
 $scene->appearance = new TerrainPhonics\TerrainAppearance(['snowline' => 220, 'snowColor' => '#f4f8ff'] + $saved);
@@ -182,7 +182,7 @@ The table lists what each setting changes in each preset. A preset ignores the s
 | `alpineStart`, `alpineEnd` | | Bare rock | | |
 | `treeline`, `tundraStart` | | Zones | | |
 | `talusAmount`, `stainAmount`, `lichenAmount` | | Rock | | |
-| `macroVariation` | Grass, snowline | Granite, snowline and zones | Soil | Dust and debris |
+| `macroVariation` | Grass, snowline | Granite, talus, snowline and zones | Soil | Dust and debris |
 
 ### Colours
 
@@ -204,7 +204,7 @@ Colours are sRGB hex strings.
 | `forestColor` | `#1d291b` | Spruce-fir forest below the mountain treeline. |
 | `meadowColor` | `#48581f` | Subalpine shrubs and meadow above the treeline. Shrub clumps mix it about halfway to the forest colour. |
 | `tundraColor` | `#484230` | Tundra between the meadow and the snow. |
-| `graniteColor` | `#575959` | Mountain rock. Lichen tints it grey-green. |
+| `graniteColor` | `#565a5c` | Mountain rock. Lichen tints it grey-green. |
 | `stainColor` | `#74605a` | Iron stains on the granite. |
 | `talusColor` | `#7b7b77` | Talus, and the block fields on gentle bare ground near the snowline. |
 
@@ -239,17 +239,19 @@ A slope is 1 minus the upward component of the surface normal: 0 on level ground
 | `beachWidth` | 15 m | 0.5 to 500 | Height over which the sand fades into the ground above it. |
 | `snowline` | 340 m | −1000 to 5000 | World height where snow begins on coast and mountain terrain. |
 | `snowTransition` | 65 m | 1 to 1000 | Height above the snowline over which snow becomes complete. |
-| `alpineStart` | −170 m | −2000 to 0 | Height relative to the snowline where mountain terrain starts turning to bare rock. |
+| `alpineStart` | −110 m | −2000 to 0 | Height relative to the snowline where mountain terrain starts turning to bare rock. |
 | `alpineEnd` | −30 m | −2000 to 0 | Height relative to the snowline where it is bare rock. At least 1 m above the start. |
-| `treeline` | −190 m | −2000 to 0 | Height relative to the snowline where mountain forest gives way to subalpine meadow. |
-| `tundraStart` | −100 m | −2000 to 0 | Height relative to the snowline where the meadow gives way to tundra. At least 1 m above the treeline. |
+| `treeline` | −150 m | −2000 to 0 | Height relative to the snowline where mountain forest gives way to subalpine meadow. |
+| `tundraStart` | −90 m | −2000 to 0 | Height relative to the snowline where the meadow gives way to tundra. At least 1 m above the treeline. |
 | `snowSlopeStart` | 0.25 | 0 to 1 | Slope where snow starts to thin. |
 | `snowSlopeEnd` | 0.65 | 0 to 1 | Slope beyond which ground stays bare. At least 0.01 above the start. |
-| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, granite brightness, and the snowline. At 1 the snowline moves up to 25 m either way, and the mountain zones move with it. 0 removes the variation. |
+| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, granite brightness, mountain talus, and the snowline. At 1 the snowline moves up to 25 m either way, and the mountain zones move with it. 0 removes the variation. |
 
-On mountains, ribs and patchy noise raise the treeline, the foot of the tundra and the bare rock by up to about 180 m,
-and gullies lower them by up to about 90 m, so rock runs down the ribs and vegetation climbs the gullies. At a `macroVariation` of 1,
-broad noise moves them up to 70 m more either way. The transitions break into clumps of trees, shrubs and rock.
+On mountains, ribs and patchy noise raise the treeline, the foot of the tundra and the bare rock by up to about 95 m,
+and gullies lower them by up to about 75 m, so rock runs down the ribs and vegetation climbs the gullies. At a
+`macroVariation` of 1, broad noise moves them up to 70 m more either way. The transitions break into clumps of trees,
+shrubs and rock, and avalanche chutes open the forest down the gullies of steeper slopes. Below the treeline, soil holds
+on slopes about 0.07 steeper than it does above it.
 
 ### Rock
 
