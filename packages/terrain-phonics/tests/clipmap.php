@@ -121,4 +121,22 @@ check(count(array_unique(array_column($mutedBands, 'color'))) === 1
 $v1 = SurfaceLayers::landscape(['preset' => 'canyon', 'version' => 1], $appearance)->layers;
 check($v1[1]['datum'] === 'absolute' && $v1[1]['period'] === $appearance->settings['bandSpacing'],
 	'Early canyons retain horizontal bands.');
+foreach([.5, 1., 2.] as $quality)
+{
+	foreach([$canyonRecipe, (new Recipe(['preset' => 'coast']))->values()] as $recipe)
+	{
+		$spans = Clipmap::spans($recipe, $quality);
+		foreach($spans as $level => $span)
+		{
+			check($span % 4 === 0, 'Every clipmap edge lands on an even shared parent cell.');
+			if($level === 0) continue;
+
+			check($span / 2 - Clipmap::transition($span) >= $spans[$level - 1] / 4 + 4,
+				'Fine rings join the parent before its own transition begins.');
+		}
+	}
+}
+$spanAtCanyonWall = Clipmap::spans($canyonRecipe, 1.)[4];
+check(($spanAtCanyonWall / 2 - Clipmap::transition($spanAtCanyonWall) - 3) * 16 >= 1500,
+	'The balanced profile covers a canyon wall 1.5 km away at 16 metre spacing before transitioning.');
 echo "Clipmap and expanded terrain recipe checks passed.\n";

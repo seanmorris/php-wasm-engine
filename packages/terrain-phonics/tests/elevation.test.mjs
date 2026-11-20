@@ -164,3 +164,109 @@ test('surface colour patterns are distinct, masked, and anchored to world coordi
 		await browser.close();
 	}
 });
+
+test('advancing the clipmap grid exchanges matching height and normals at its boundary', async() => {
+	const grid = readFileSync(new URL('../shaders/clip-grid.glsl', import.meta.url), 'utf8');
+	const browser = await chromium.launch({
+		executablePath: process.env.CHROMIUM || '/usr/bin/chromium',
+		args: ['--use-angle=swiftshader','--enable-unsafe-swiftshader'],
+	});
+	try {
+		const page = await browser.newPage();
+		const result = await page.evaluate(grid => {
+			const canvas = document.createElement('canvas');
+			canvas.width = canvas.height = 136;
+			const gl = canvas.getContext('webgl2', {antialias:false});
+			const program = gl.createProgram();
+			const shaders = [
+				[gl.VERTEX_SHADER,`#version 300 es
+					precision highp float;
+					precision highp int;
+					${grid}
+					out float vHeight;
+					out vec3 vNormal;
+					void main() {
+						ivec2 cell = clipStitchedCell(clipCell());
+						float morph = clipMorph(cell);
+						vHeight = clipHeight(cell,morph);
+						vNormal = clipNormal(cell,morph);
+						gl_Position = vec4(vec2(cell)*uGridStep/17.,0.,1.);
+					}`],
+				[gl.FRAGMENT_SHADER,`#version 300 es
+					precision highp float;
+					in float vHeight;
+					in vec3 vNormal;
+					out vec4 color;
+					void main() {
+						color = vec4(.5+.05*vHeight,.5+.5*normalize(vNormal).xz,1.);
+					}`],
+			];
+			for(const [type, text] of shaders) {
+				const shader = gl.createShader(type);
+				gl.shaderSource(shader, text);
+				gl.compileShader(shader);
+				if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(shader));
+				gl.attachShader(program,shader);
+			}
+			gl.linkProgram(program);
+			if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
+			gl.useProgram(program);
+			gl.disable(gl.DITHER);
+			const loc = name => gl.getUniformLocation(program,name);
+			gl.uniform1i(loc('uElevations'),0);
+			gl.uniform1f(loc('uMorphWidth'),2.4);
+			gl.uniform1i(loc('uTextureMask'),31);
+
+			function texture(step) {
+				const size = 32, heights = new Float32Array(size*size);
+				for(let z=-14;z<18;++z)
+				for(let x=-14;x<18;++x) {
+					const wx=x*step, wz=z*step;
+					heights[(z&31)*size+(x&31)] = 3*Math.sin(wx*.9+wz*.47)+2.5*Math.cos(wz*.86-wx*.53);
+				}
+				const texture=gl.createTexture();
+				gl.bindTexture(gl.TEXTURE_2D,texture);
+				gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+				gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,size,size,0,gl.RED,gl.FLOAT,heights);
+				return texture;
+			}
+
+			const coarse = texture(2), fine = texture(1);
+			function draw(gridTexture, step, minX, minZ, span, hasParent) {
+				gl.bindTexture(gl.TEXTURE_2D,gridTexture);
+				gl.uniform1f(loc('uGridStep'),step);
+				gl.uniform2f(loc('uEyeCell'),2/step,2/step);
+				gl.uniform1i(loc('uHasParent'),hasParent);
+				gl.uniform2i(loc('uRingMin'),minX,minZ);
+				gl.uniform2i(loc('uDrawCell'),minX,minZ);
+				gl.uniform1i(loc('uSpan'),span);
+				gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,2*(span+1),span);
+			}
+
+			function capture(fineX, fineZ) {
+				gl.clear(gl.COLOR_BUFFER_BIT);
+				draw(coarse,2,-10,-10,20,false);
+				if(fineX !== null) draw(fine,1,fineX,fineZ,24,true);
+				const samples = new Uint8Array(canvas.width*canvas.height*4);
+				gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,samples);
+				return samples;
+			}
+
+			// The same eye can exchange the X edge, the Z edge, or both at this point.
+			const parent = capture(null), before = capture(-12,-12);
+			const moved = [capture(-10,-12), capture(-12,-10), capture(-10,-10)];
+			let detailed = 0, largest = 0;
+			for(let i = 0; i < before.length; i++) {
+				if(Math.abs(before[i]-parent[i]) > 8) detailed++;
+				for(const after of moved) largest = Math.max(largest, Math.abs(before[i]-after[i]));
+			}
+			return {detailed,largest};
+		}, grid);
+		// The same interpolant may round differently when rasterized as smaller triangles.
+		assert.ok(result.largest<=2,JSON.stringify(result));
+		assert.ok(result.detailed>100,JSON.stringify(result));
+	} finally {
+		await browser.close();
+	}
+});
