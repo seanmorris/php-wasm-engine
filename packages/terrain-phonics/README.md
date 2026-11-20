@@ -189,7 +189,8 @@ follow, so they stop at 1 in each channel: with a white rust the red beds are wh
 
 Canyon beds take their spacing from the recipe's `terraceSpacing`, because the relief shares them, so `bandSpacing`
 does not apply to them. Bands fade to their average colour where a pixel spans several of them. A sharpened profile
-returns to a sine over a shorter distance first, so its harmonics do not alias.
+turns back into a sine where one band covers fewer than about twice (sharpness + 2) pixels, so the harmonics that
+sharpen it have faded before they pass the pixel rate.
 
 ### Blending
 

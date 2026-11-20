@@ -60,13 +60,19 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 	$waterCases[] = ['name' => $name,'uniforms' => $water->uniforms(),'samples' => $samples];
 }
 
+$bands = [];
+foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
+
 echo json_encode([
 	'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']
 	, 'lut' => base64_encode($lut['rgba8'])
 	, 'source' => AtmosphereRenderer::shaderSource()
 	, 'waterCases' => $waterCases
+
+	// Terrain appearances for the paint and band checks.
 	, 'appearance' => (new TerrainAppearance)->uniforms()
 	, 'redGrass' => (new TerrainAppearance(['grassColor' => '#ff0000']))->uniforms()
+	, 'bands' => $bands
 ], JSON_THROW_ON_ERROR
 );

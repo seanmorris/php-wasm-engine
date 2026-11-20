@@ -165,9 +165,10 @@ void main()
 		float strataPhase = vWorld.y * uBanding.x;
 		float blur = fwidth(strataPhase);
 		float strataFilter = exp(-0.125 * pow(blur, 2.0));
-		// Clamping sharpens the sine with harmonics up to about the sharpness times its frequency, so the harmonics
-		// fade out over a shorter distance than the bands themselves.
-		float sharpness = 1.0 + (uBanding.z - 1.0) * exp(-0.125 * pow(blur * uBanding.z, 2.0));
+		// Clamping the sine adds odd harmonics: strong ones up to about the sharpness times the band frequency, and a
+		// third harmonic at any sharpness above 1. The sharpening fades with the filter of the harmonic two orders
+		// above the sharpness, before any of them passes the pixel rate and folds back.
+		float sharpness = 1.0 + (uBanding.z - 1.0) * exp(-0.125 * pow(blur * (uBanding.z + 2.0), 2.0));
 		float profile = clamp(sin(strataPhase) * sharpness, -1.0, 1.0);
 		rock = mix(uRockColor, uRockBandColor, 0.5 + 0.5 * uBanding.y * profile * strataFilter);
 		cover = uTerrainStyle > 1.5 ? mix(uSoilColor, rock, 0.4 + 0.2 * macro) : grass;
