@@ -402,6 +402,20 @@ renderCheck(
 $view = new Camera;
 $view->position = [30,24,15];
 $view->pitch = 0;
+$upright = $view->basis();
+foreach([M_PI/2, M_PI, -M_PI/3] as $roll)
+{
+	$view->roll = $roll;
+	[$forward,$right,$up] = $view->basis();
+	renderCheck($forward === $upright[0], 'bank preserves viewing direction');
+	renderCheck(abs($right[1]-sin($roll)) < 1e-12 && abs($up[1]-cos($roll)) < 1e-12, 'bank rotates screen right and up');
+	$ray = $view->ray(.85,.30,16/9);
+	$m = $view->viewProjection(1600,900);
+	$project = static fn(int $row): float => $ray[0]*$m[$row]+$ray[1]*$m[$row+4]+$ray[2]*$m[$row+8];
+	renderCheck(abs($project(0)/$project(3)-.7) < 1e-9 && abs($project(1)/$project(3)-.4) < 1e-9,
+		'rotated picking ray projects to its screen position');
+}
+$view->roll = 0.0;
 foreach([[1920,1080],[640,900]] as [$width,$height])
 {
 	$planes = $view->clipPlanes($width,$height);
