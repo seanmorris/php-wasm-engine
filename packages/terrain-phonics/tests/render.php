@@ -2444,10 +2444,13 @@ for($z = 0; $z <= 32; $z++)
 
 $candidate = Landscape::load($surface->save());
 $candidate->queue(['type' => 'raise','x' => 0,'z' => 0,'radius' => 6,'amount' => 10]);
+$candidate->queue(['type' => 'material','x' => 0,'z' => 0,'radius' => 6,'material' => 'road']);
 $candidate->commit();
 $oldRevision = $scene->stats()['revision'];
 $scene->prepareLandscape($candidate);
 renderCheck($scene->takePreparedLandscape() === null, 'partially prepared edit cannot publish');
+renderCheck($scene->surfacePatch('0:0:0')['heights'][544] === 0.0 && $scene->surfacePatch('99:0:0') === null,
+	'Surface charts see the published grid and reading a missing patch does not start a job');
 
 renderCheck(
 	$scene->stats()['revision'] === $oldRevision && $surface->height(0, 0) === 0.0
@@ -2473,6 +2476,10 @@ renderCheck(
 	, 'publication advances scene revision atomically'
 );
 
+$chart = $scene->surfacePatch('0:0:0');
+renderCheck(count($chart['heights']) === 1089 && $chart['heights'][544] === $candidate->height(0,0)
+	&& ord($chart['materials'][544]) === 5 && ord($chart['materials'][0]) === 0,
+	'Published chart samples carry edited height and road paint in the same row-major grid');
 renderCheck(renderGet($scene, 'landscape') === $candidate, 'rendering now samples the published physics surface');
 $surface = $candidate;
 
