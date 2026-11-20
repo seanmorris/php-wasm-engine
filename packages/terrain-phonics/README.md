@@ -130,8 +130,8 @@ Set `$water->appearance = new WaterAppearance([...])` to tune water rendering. U
 
 ## Terrain appearance
 
-`Scene::$appearance` holds a `TerrainAppearance`: the ground's colours, the banding of exposed rock, and the slopes
-and heights where one material gives way to another. Replace it to change the look; the next `render()` uploads it.
+`Scene::$appearance` holds a `TerrainAppearance`: the ground's colours, the banding of exposed rock, the slopes
+and heights where one material gives way to another, and the amounts of talus, stain and lichen on mountain rock. Replace it to change the look; the next `render()` uploads it.
 The renderer uploads an appearance once, and again only after a replacement or `restore()`. An application that draws
 only changed frames must draw one after a replacement.
 
@@ -147,17 +147,42 @@ minimum gap: an end that is too low moves up to the start plus the gap, rounded 
 passes the top of the end's range the end stays at the top and the start moves down. Values one gap apart, such as 0.2
 and 0.21, stay as they are, although their binary difference is slightly less than 0.01. `settings` holds the result, in
 the order of `DEFAULTS`, with colours in lower case. `GROUPS` lists the settings in panel order under `colors`,
-`banding` and `blending`. `uniforms()` returns the values `bind()` uploads, for a custom terrain shader.
+`banding`, `blending` and `rock`. `uniforms()` returns the values `bind()` uploads, for a custom terrain shader.
 `TerrainAppearance::linear($hex)` converts one colour to linear RGB and throws `InvalidArgumentException` for anything
 but a six-digit hex string.
 
-The defaults reproduce the terrain from before these settings existed. Each default colour is the nearest 8-bit sRGB
-value to the linear constant it replaced, and each number equals the constant it replaced.
+Coast and canyon terrain look as they did before these settings existed. Each of their default colours is the nearest
+8-bit sRGB value to the linear constant it replaced, and each number equals the constant it replaced. Mountain terrain
+has its own material, whose settings were tuned against photographs of granite cirques and forested ranges.
 
-The presets use the settings differently. Coast and mountain terrain have grass cover, banded rock and snow; mountain
-terrain also turns to bare rock below the snowline. Version-one canyons have soil cover and banded rock. Current
-canyons draw rock from the canyon colours and debris from their dust. Sand applies to every preset. The material
-tool's rock, grass, sand, snow and road paint use the same colours as the generated ground.
+The presets use the settings differently. Coast terrain has grass cover, banded rock and snow. Mountain terrain is
+granite: steep ground shows jointed slabs, iron stains and lichen streaked down the fall line, talus lies on the
+moderately steep ground, and the cover runs from forest through subalpine meadow to tundra and bare rock as the ground
+nears the snowline. Grass covers level valley floors below the treeline. Version-one canyons have soil cover and banded
+rock. Current canyons draw rock from the canyon colours and debris from their dust. Sand applies to every preset. The
+material tool's rock, grass, sand, snow and road paint use the same colours as the generated ground; mountain rock paint
+is the granite.
+
+The table lists what each setting changes in each preset. A preset ignores the settings with an empty cell.
+
+| Setting | Coast | Mountain | Version-one canyon | Canyon |
+| --- | --- | --- | --- | --- |
+| `grassColor` | Cover | Level valley floors | Paint only | Paint only |
+| `soilColor` | | | Cover | |
+| `rockColor`, `rockBandColor`, `bandSpacing` | Rock | | Rock | |
+| `bandContrast` | Rock | | Rock | Beds |
+| `bandSharpness` | Rock | | Rock | Bed contacts |
+| `sandColor`, `beachHeight`, `beachWidth` | Beach | Beach | Beach | Beach |
+| `snowColor` | Snow | Snow | Paint only | Paint only |
+| `roadColor` | Paint | Paint | Paint | Paint |
+| `canyonRustColor`, `canyonShaleColor`, `canyonSandstoneColor`, `canyonCapColor` | | | | Beds |
+| `forestColor`, `meadowColor`, `tundraColor`, `graniteColor`, `stainColor`, `talusColor` | | Ground | | |
+| `rockSlopeStart`, `rockSlopeEnd` | Rock | Bare rock, talus | Rock | Rock |
+| `snowline`, `snowTransition`, `snowSlopeStart`, `snowSlopeEnd` | Snow | Snow | | |
+| `alpineStart`, `alpineEnd` | | Bare rock | | |
+| `treeline`, `tundraStart` | | Zones | | |
+| `talusAmount`, `stainAmount`, `lichenAmount` | | Rock | | |
+| `macroVariation` | Grass, snowline | Granite, snowline and zones | Soil | Dust and debris |
 
 ### Colours
 
@@ -176,6 +201,12 @@ Colours are sRGB hex strings.
 | `canyonShaleColor` | `#5f484c` | The soft shale above the rust. |
 | `canyonSandstoneColor` | `#906356` | Both sandstone cliffs. |
 | `canyonCapColor` | `#a38775` | The pale cap rock at the top of the section. The ledges are a darker shade of it. |
+| `forestColor` | `#1d291b` | Spruce-fir forest below the mountain treeline. |
+| `meadowColor` | `#48581f` | Subalpine shrubs and meadow above the treeline. Shrub clumps mix it about halfway to the forest colour. |
+| `tundraColor` | `#484230` | Tundra between the meadow and the snow. |
+| `graniteColor` | `#575959` | Mountain rock. Lichen tints it grey-green. |
+| `stainColor` | `#74605a` | Iron stains on the granite. |
+| `talusColor` | `#7b7b77` | Talus, and the block fields on gentle bare ground near the snowline. |
 
 The red beds and ledges keep the ratio, channel by channel, that they had to the rust and the cap rock in the default
 palette. Canyon dust and debris, beds too fine to resolve at a distance, and the light the walls throw into shadow
@@ -210,9 +241,25 @@ A slope is 1 minus the upward component of the surface normal: 0 on level ground
 | `snowTransition` | 65 m | 1 to 1000 | Height above the snowline over which snow becomes complete. |
 | `alpineStart` | −170 m | −2000 to 0 | Height relative to the snowline where mountain terrain starts turning to bare rock. |
 | `alpineEnd` | −30 m | −2000 to 0 | Height relative to the snowline where it is bare rock. At least 1 m above the start. |
+| `treeline` | −190 m | −2000 to 0 | Height relative to the snowline where mountain forest gives way to subalpine meadow. |
+| `tundraStart` | −100 m | −2000 to 0 | Height relative to the snowline where the meadow gives way to tundra. At least 1 m above the treeline. |
 | `snowSlopeStart` | 0.25 | 0 to 1 | Slope where snow starts to thin. |
 | `snowSlopeEnd` | 0.65 | 0 to 1 | Slope beyond which ground stays bare. At least 0.01 above the start. |
-| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, and the snowline. At 1 the snowline moves up to 25 m either way. 0 removes the variation. |
+| `macroVariation` | 1 | 0 to 3 | Strength of the broad noise that varies grass brightness, soil cover, canyon dust and debris, granite brightness, and the snowline. At 1 the snowline moves up to 25 m either way, and the mountain zones move with it. 0 removes the variation. |
+
+On mountains, ribs and patchy noise raise the treeline, the foot of the tundra and the bare rock by up to about 180 m,
+and gullies lower them by up to about 90 m, so rock runs down the ribs and vegetation climbs the gullies. At a `macroVariation` of 1,
+broad noise moves them up to 70 m more either way. The transitions break into clumps of trees, shrubs and rock.
+
+### Rock
+
+These settings apply to mountain terrain.
+
+| Setting | Default | Range | Effect |
+| --- | --- | --- | --- |
+| `talusAmount` | 0.5 | 0 to 1 | Share of the moderately steep ground covered by talus. 0 leaves none. |
+| `stainAmount` | 0.3 | 0 to 1 | Share of the granite stained with iron. |
+| `lichenAmount` | 0.5 | 0 to 1 | Strength of the lichen that tints the granite grey-green in patches. |
 
 ## Verify changes
 

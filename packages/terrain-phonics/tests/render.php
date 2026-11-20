@@ -2300,11 +2300,12 @@ $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uSnowColor') === 1 && $uploads('uCanyonColors[0]') === 1, 'an unchanged appearance stays put');
 renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
 
-$replacement = ['snowColor' => '#ff0000', 'snowline' => 150, 'bandSpacing' => 20];
+$replacement = ['snowColor' => '#ff0000', 'snowline' => 150, 'bandSpacing' => 20, 'forestColor' => '#00ff00'];
 $appearanceScene->appearance = new TerrainAppearance($replacement);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the next frame uploads a replaced appearance');
 renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
+renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest colour arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uSnowColor') === 2, 'a replaced appearance uploads once');
 
@@ -2322,10 +2323,12 @@ $styles = [
 	[['preset' => 'canyon'], 3.0],
 ];
 
+$styled = ['rockColor' => '#123456', 'canyonCapColor' => '#abcdef', 'graniteColor' => '#fedcba', 'treeline' => -250];
+
 foreach($styles as [$recipe, $style])
 {
 	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere);
-	$appearanceScene->appearance = new TerrainAppearance(['rockColor' => '#123456', 'canyonCapColor' => '#abcdef']);
+	$appearanceScene->appearance = new TerrainAppearance($styled);
 	$appearanceScene->render($appearanceCamera, 320, 200, 0);
 	renderCheck($sent('uTerrainStyle') === [$style], "the {$recipe['preset']} recipe draws terrain style $style");
 	$holds($appearanceScene->appearance, "terrain style $style receives the appearance");

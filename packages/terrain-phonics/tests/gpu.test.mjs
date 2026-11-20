@@ -467,6 +467,21 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				bandResults.push({sharpness: uniforms.uBanding[2], bin, red});
 			}
 
+			// The same rows on a mountain face, which is granite without strata.
+			gl.uniform1f(gl.getUniformLocation(bandProgram, 'uTerrainStyle'), 1);
+			appearance(bandProgram, data.bands[0]);
+			const mountainBands = [];
+
+			for(const bin of [43, 26, 19, 15])
+			{
+				const bytes = new Uint8Array(256 * 4);
+
+				gl.uniform1f(bandStep, 2 * Math.PI * bin / 256 / data.bands[0].uBanding[0]);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				gl.readPixels(0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+				mountainBands.push({bin, red: Array.from({length: 256}, (_, i) => bytes[i * 4])});
+			}
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -749,6 +764,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, shadowResults
 				, illuminationResults
 				, bandResults
+				, mountainBands
 				, inactiveAppearance
 
 				, aliasResults
@@ -880,6 +896,22 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		{
 			assert.ok(fundamental > 5, `bands at sharpness ${sharpness}, bin ${bin} are visible: ${fundamental}`);
 			assert.ok(ratio < .06, `bands at sharpness ${sharpness}, bin ${bin} alias by ${ratio} of their amplitude`);
+		}
+
+		// The mountain face varies, but no more at the band frequency than at the frequencies around it.
+		const mountainBands = result.mountainBands.map(({bin, red}) => {
+			const around = [-3, -2, -1, 1, 2, 3].map(step => amplitude(red, bin + step));
+
+			return {bin, band: +amplitude(red, bin).toFixed(2), around: +Math.max(...around).toFixed(2)};
+		});
+
+		console.log('Mountain face at the band frequencies:', JSON.stringify(mountainBands));
+
+		for(const {bin, band, around} of mountainBands)
+		{
+			const coast = bandAliases.find(sample => sample.sharpness === 1 && sample.bin === bin).fundamental;
+			const flat = band < coast / 4 && band <= Math.max(1, 1.5 * around);
+			assert.ok(flat, `mountain rock has no bands at bin ${bin}: ${band}`);
 		}
 
 		const variance = values => {

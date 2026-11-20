@@ -148,6 +148,17 @@ $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends
 $expect($uniforms['uHeightBlend'] === [3.0, 18.0, -170.0, -30.0], 'default sand and alpine heights are the old ones');
 $expect($uniforms['uSnowline'] === [340.0, 65.0], 'default snowline and transition are the old constants');
 $expect($uniforms['uMacroVariation'] === [1.0], 'default variation keeps the old strength');
+
+// The mountain palette uploads its six colours in the shader's order.
+foreach(['forest', 'meadow', 'tundra', 'granite', 'stain', 'talus'] as $i => $name)
+$expect(
+	array_slice($uniforms['uMountainColors[0]'], 3 * $i, 3)
+		=== TerrainAppearance::linear(TerrainAppearance::DEFAULTS[$name . 'Color'])
+	, "mountain colour $i comes from {$name}Color"
+);
+
+$expect($uniforms['uMountainZones'] === [-190.0, -100.0], 'default treeline and tundra lie below the snowline');
+$expect($uniforms['uMountainAmounts'] === [.5, .3, .5], 'default talus, stain and lichen amounts upload in order');
 $expect($defaults->settings === TerrainAppearance::DEFAULTS, 'no options give the defaults');
 
 // Every setting belongs to exactly one panel group, and every numeric setting has a range holding its default.
@@ -239,6 +250,10 @@ $clamped = [
 	['snowline', -1e6, -1000.0], ['snowline', 1e6, 5000.0], ['snowTransition', 0, 1.0],
 	['snowTransition', 1e6, 1000.0], ['alpineStart', -1e6, -2000.0], ['alpineEnd', 10, 0.0],
 	['snowSlopeStart', -1, 0.0], ['snowSlopeEnd', 2, 1.0], ['macroVariation', -1, 0.0], ['macroVariation', 9, 3.0],
+
+	['treeline', -1e6, -2000.0], ['treeline', 5, -1.0], ['tundraStart', 5, 0.0], ['talusAmount', -1, 0.0],
+	['talusAmount', 2, 1.0], ['stainAmount', -1, 0.0], ['stainAmount', 2, 1.0], ['lichenAmount', -1, 0.0],
+	['lichenAmount', 2, 1.0],
 ];
 
 foreach($clamped as [$name, $value, $result])
@@ -273,6 +288,11 @@ $expect(
 $expect(
 	$order(['alpineStart' => 0, 'alpineEnd' => -500]) === ['alpineStart' => -1.0, 'alpineEnd' => 0.0]
 	, 'an alpine band at the snowline ends there'
+);
+
+$expect(
+	$order(['treeline' => -80, 'tundraStart' => -150]) === ['treeline' => -80.0, 'tundraStart' => -79.0]
+	, 'tundra starting below the treeline moves up to a metre above it'
 );
 
 // A slope slider moves in steps of the gap. In binary, 18 of the 99 pairs one step apart differ by a little less than
@@ -332,13 +352,15 @@ foreach($uniforms as $name => $values)
 }
 
 $expect($uploads['uCanyonColors[0]'][1][0] === 8, 'the canyon palette uploads as eight colours');
+$expect($uploads['uMountainColors[0]'][1][0] === 6, 'the mountain palette uploads as six colours');
 
 // A changed appearance changes what bind() uploads, and the derived canyon shades follow their sources.
 $changed = new TerrainAppearance([
 	'snowColor' => '#ff0000', 'bandSpacing' => 100, 'bandContrast' => .5, 'bandSharpness' => 4,
 	'rockSlopeStart' => .2, 'rockSlopeEnd' => .25, 'beachHeight' => -2, 'beachWidth' => 6, 'snowline' => 200,
 	'snowTransition' => 20, 'alpineStart' => -60, 'alpineEnd' => -10, 'macroVariation' => 2,
-	'canyonCapColor' => '#ffffff', 'canyonRustColor' => '#000000',
+	'canyonCapColor' => '#ffffff', 'canyonRustColor' => '#000000', 'stainColor' => '#00ff00', 'treeline' => -300,
+	'tundraStart' => -20, 'talusAmount' => .25, 'stainAmount' => 1, 'lichenAmount' => 0,
 ]);
 $changed->bind($program);
 $after = $GLOBALS['appearanceGl']['uploads'];
@@ -348,10 +370,18 @@ $expected = [
 	'uSnowColor' => ['glUniform3f', [1.0, 0.0, 0.0]], 'uBanding' => ['glUniform3f', [2 * M_PI / 100, .5, 4.0]],
 	'uSlopeBlend' => ['glUniform4f', [.2, .25, .25, .65]], 'uHeightBlend' => ['glUniform4f', [-2.0, 4.0, -60.0, -10.0]],
 	'uSnowline' => ['glUniform2f', [200.0, 20.0]], 'uMacroVariation' => ['glUniform1f', [2.0]],
+	'uMountainZones' => ['glUniform2f', [-300.0, -20.0]], 'uMountainAmounts' => ['glUniform3f', [.25, 1.0, 0.0]],
 	'uGrassColor' => $uploads['uGrassColor'],
 ];
 
 foreach($expected as $name => $upload) $expect($after[$name] === $upload, "the changed appearance uploads $name");
+
+$mountain = $after['uMountainColors[0]'][1];
+$expect($mountain[0] === 6 && array_slice($mountain[1], 12, 3) === [0.0, 1.0, 0.0], 'a changed stain colour uploads');
+$expect(
+	array_slice($mountain[1], 0, 12) === array_slice($uploads['uMountainColors[0]'][1][1], 0, 12)
+	, 'the other mountain colours stay as they were'
+);
 
 $palette = $after['uCanyonColors[0]'][1][1];
 $cap = TerrainAppearance::linear(TerrainAppearance::DEFAULTS['canyonCapColor']);

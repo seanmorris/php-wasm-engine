@@ -5,25 +5,30 @@ namespace TerrainPhonics;
 use Phonics\Render\Program;
 
 /**
- * Colours, rock banding and material blending for the terrain shader.
+ * Colours, rock banding, material blending and the mountain material for the terrain shader.
  *
  * Settings are flat so that an application can store them beside its own. Colours are sRGB hex strings. Heights are
  * in metres. A slope is 1 minus the upward component of the surface normal: 0 on level ground, 1 on a vertical face.
  */
 final class TerrainAppearance
 {
-	/** The terrain as it looked before these settings existed. */
+	/** Coast and canyon terrain as it looked before these settings existed, and the mountain material as tuned. */
 	public const DEFAULTS = [
 		'grassColor' => '#425b2d', 'soilColor' => '#815f40', 'rockColor' => '#867c6f', 'rockBandColor' => '#af957c',
 		'sandColor' => '#bfaf8b', 'snowColor' => '#eaf1f8', 'roadColor' => '#65615b',
 		'canyonRustColor' => '#794944', 'canyonShaleColor' => '#5f484c', 'canyonSandstoneColor' => '#906356',
 		'canyonCapColor' => '#a38775',
+		'forestColor' => '#1d291b', 'meadowColor' => '#48581f', 'tundraColor' => '#484230', 'graniteColor' => '#575959',
+		'stainColor' => '#74605a', 'talusColor' => '#7b7b77',
 
 		'bandSpacing' => 2 * M_PI / .12, 'bandContrast' => 1.0, 'bandSharpness' => 1.0,
 
 		'rockSlopeStart' => .08, 'rockSlopeEnd' => .38, 'beachHeight' => 3.0, 'beachWidth' => 15.0,
 		'snowline' => 340.0, 'snowTransition' => 65.0, 'alpineStart' => -170.0, 'alpineEnd' => -30.0,
-		'snowSlopeStart' => .25, 'snowSlopeEnd' => .65, 'macroVariation' => 1.0,
+		'snowSlopeStart' => .25, 'snowSlopeEnd' => .65, 'macroVariation' => 1.0, 'treeline' => -190.0,
+		'tundraStart' => -100.0,
+
+		'talusAmount' => .5, 'stainAmount' => .3, 'lichenAmount' => .5,
 	];
 	/** Inclusive range of each numeric setting. A value outside it is clamped. */
 	public const RANGES = [
@@ -31,7 +36,9 @@ final class TerrainAppearance
 		'rockSlopeStart' => [0.0, 1.0], 'rockSlopeEnd' => [0.0, 1.0], 'beachHeight' => [-100.0, 500.0],
 		'beachWidth' => [.5, 500.0], 'snowline' => [-1000.0, 5000.0], 'snowTransition' => [1.0, 1000.0],
 		'alpineStart' => [-2000.0, 0.0], 'alpineEnd' => [-2000.0, 0.0], 'snowSlopeStart' => [0.0, 1.0],
-		'snowSlopeEnd' => [0.0, 1.0], 'macroVariation' => [0.0, 3.0],
+		'snowSlopeEnd' => [0.0, 1.0], 'macroVariation' => [0.0, 3.0], 'treeline' => [-2000.0, 0.0],
+		'tundraStart' => [-2000.0, 0.0], 'talusAmount' => [0.0, 1.0], 'stainAmount' => [0.0, 1.0],
+		'lichenAmount' => [0.0, 1.0],
 	];
 	/**
 	 * Start and end of each blend, with the smallest gap between them. An end that is too low moves up to the start
@@ -40,7 +47,7 @@ final class TerrainAppearance
 	 */
 	public const ORDER = [
 		['rockSlopeStart', 'rockSlopeEnd', .01], ['snowSlopeStart', 'snowSlopeEnd', .01],
-		['alpineStart', 'alpineEnd', 1.0],
+		['alpineStart', 'alpineEnd', 1.0], ['treeline', 'tundraStart', 1.0],
 	];
 	/** Shortfall from an ORDER gap that floating-point subtraction can leave between values one gap apart. */
 	private const SLACK = 1e-9;
@@ -49,14 +56,17 @@ final class TerrainAppearance
 		'colors' => [
 			'grassColor', 'soilColor', 'rockColor', 'rockBandColor', 'sandColor', 'snowColor', 'roadColor',
 			'canyonRustColor', 'canyonShaleColor', 'canyonSandstoneColor', 'canyonCapColor',
+			'forestColor', 'meadowColor', 'tundraColor', 'graniteColor', 'stainColor', 'talusColor',
 		],
 
 		'banding' => ['bandSpacing', 'bandContrast', 'bandSharpness'],
 
 		'blending' => [
 			'rockSlopeStart', 'rockSlopeEnd', 'beachHeight', 'beachWidth', 'snowline', 'snowTransition',
-			'alpineStart', 'alpineEnd', 'snowSlopeStart', 'snowSlopeEnd', 'macroVariation',
+			'alpineStart', 'alpineEnd', 'snowSlopeStart', 'snowSlopeEnd', 'macroVariation', 'treeline', 'tundraStart',
 		],
+
+		'rock' => ['talusAmount', 'stainAmount', 'lichenAmount'],
 	];
 	/**
 	 * Linear canyon shades in the default palette. Each keeps its ratio to the colour it follows: ledges follow the
@@ -252,12 +262,22 @@ final class TerrainAppearance
 		$uniforms['uSnowline'] = [$s['snowline'], $s['snowTransition']];
 		$uniforms['uMacroVariation'] = [$s['macroVariation']];
 
+		$mountain = [];
+
+		foreach(['forest', 'meadow', 'tundra', 'granite', 'stain', 'talus'] as $name)
+		array_push($mountain, ...self::decode($s[$name . 'Color']));
+
+		$uniforms['uMountainColors[0]'] = $mountain;
+		$uniforms['uMountainZones'] = [$s['treeline'], $s['tundraStart']];
+		$uniforms['uMountainAmounts'] = [$s['talusAmount'], $s['stainAmount'], $s['lichenAmount']];
+
 		return $uniforms;
 	}
 
 	/**
 	 * Report the values that bind() uploads.
-	 * @return array Float lists by uniform name. A list of 24 is the eight-colour canyon palette.
+	 * @return array Float lists by uniform name. Lists longer than four are palettes of three-channel colours: eight
+	 * for the canyon and six for the mountain.
 	 */
 	public function uniforms(): array { return $this->uniforms; }
 
@@ -279,7 +299,7 @@ final class TerrainAppearance
 				3 => glUniform3f($location, ...$values),
 				4 => glUniform4f($location, ...$values),
 
-				// The canyon palette is the only array.
+				// Only the canyon and mountain palettes are longer than a vec4. Both are arrays of vec3.
 				default => glUniform3fv($location, intdiv(count($values), 3), $values),
 			};
 		}
