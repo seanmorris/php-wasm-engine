@@ -58,7 +58,7 @@ final class TerrainAppearance
 	/**
 	 * Linear canyon shades in the default palette. Each keeps its ratio to the colour it follows: ledges follow the
 	 * cap rock and red beds the rust. Dust, beds too fine to resolve and the light the walls throw into shadow follow
-	 * the beds' average weighted by thickness.
+	 * the beds' average weighted by thickness. Red beds and dust stop at 1 in each channel.
 	 */
 	private const LEDGE = [.285, .196, .148], RED_BEDS = [.235, .082, .067], DUST = [.275, .163, .104],
 		DISTANT = [.246, .133, .106], BOUNCE = [.11, .066, .048];
@@ -155,8 +155,9 @@ final class TerrainAppearance
 		$average = self::bedAverage($beds);
 		$reference = self::bedAverage(self::canyonBeds(self::DEFAULTS));
 
+		// Distant beds are darker than the average, but dust is lighter. The bounce is light, so it may pass 1.
 		return $beds + [
-			'dust' => self::shade($average, $reference, self::DUST),
+			'dust' => self::reflectance(self::shade($average, $reference, self::DUST)),
 			'distant' => self::shade($average, $reference, self::DISTANT),
 			'bounce' => self::shade($average, $reference, self::BOUNCE),
 		];
@@ -176,7 +177,10 @@ final class TerrainAppearance
 			'rust' => $rust, 'shale' => self::linear($settings['canyonShaleColor']),
 			'ledge' => self::shade($cap, self::linear(self::DEFAULTS['canyonCapColor']), self::LEDGE),
 			'sandstone' => self::linear($settings['canyonSandstoneColor']),
-			'redBeds' => self::shade($rust, self::linear(self::DEFAULTS['canyonRustColor']), self::RED_BEDS),
+			// Ledges are darker than the cap rock, but red beds are lighter than the rust.
+			'redBeds' => self::reflectance(
+				self::shade($rust, self::linear(self::DEFAULTS['canyonRustColor']), self::RED_BEDS)
+			),
 			'cap' => $cap,
 		];
 	}
@@ -214,6 +218,16 @@ final class TerrainAppearance
 			$source[0] * $shade[0] / $default[0], $source[1] * $shade[1] / $default[1],
 			$source[2] * $shade[2] / $default[2],
 		];
+	}
+
+	/**
+	 * Limit a derived ground colour to what a surface can reflect.
+	 * @param array $color Linear colour.
+	 * @return array The colour with each channel at most 1.
+	 */
+	private static function reflectance(array $color): array
+	{
+		return [min(1.0, $color[0]), min(1.0, $color[1]), min(1.0, $color[2])];
 	}
 
 	/**

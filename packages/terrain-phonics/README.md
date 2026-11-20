@@ -176,7 +176,8 @@ Colours are sRGB hex strings.
 
 The red beds and ledges keep the ratio, channel by channel, that they had to the rust and the cap rock in the default
 palette. Canyon dust and debris, beds too fine to resolve at a distance, and the light the walls throw into shadow
-follow the average of the beds weighted by their thickness.
+follow the average of the beds weighted by their thickness. The red beds and the dust are lighter than the colours they
+follow, so they stop at 1 in each channel: with a white rust the red beds are white too.
 
 ### Banding
 
@@ -188,7 +189,8 @@ follow the average of the beds weighted by their thickness.
 
 Canyon beds take their spacing from the recipe's `terraceSpacing`, because the relief shares them, so `bandSpacing`
 does not apply to them. Bands fade to their average colour where a pixel spans several of them. A sharpened profile
-returns to a sine over a shorter distance first, so its harmonics do not alias.
+turns back into a sine where one band covers fewer than about twice (sharpness + 2) pixels, so the harmonics that
+sharpen it have faded before they pass the pixel rate.
 
 ### Blending
 

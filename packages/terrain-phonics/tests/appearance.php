@@ -325,4 +325,12 @@ $expect(
 	, 'dust, distant beds and bounce light follow the bed average'
 );
 
+// The default red beds and dust are lighter than the colours they follow. A white palette must not take them past 1.
+$white = (new TerrainAppearance([
+	'canyonRustColor' => '#ffffff', 'canyonShaleColor' => '#ffffff', 'canyonSandstoneColor' => '#ffffff',
+	'canyonCapColor' => '#ffffff',
+]))->uniforms()['uCanyonColors[0]'];
+$expect(max($white) <= 1.0, 'derived canyon shades of a white palette reflect at most all the light');
+$expect(array_slice($white, 12, 3) === [1.0, 1.0, 1.0], 'red beds below a white rust are white');
+
 echo "Terrain appearance: $checks checks passed.\n";

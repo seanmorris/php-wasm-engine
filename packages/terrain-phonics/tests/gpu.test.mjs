@@ -429,6 +429,38 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				illuminationResults.push({name, colors, night: pixel()});
 			}
 
+			// One row of banded rock on a vertical face, with the strata phase advancing by a fixed step per pixel.
+			// Each step puts the bands on a whole DFT bin and one of their odd harmonics just past the pixel rate.
+			const bandVertex = `${header}
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1;
+				uniform float uBandStep;
+				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+					vRelative = vec3(-50, 0, 0); vWorld = vec3(0, 500.0 + p.x * 256.0 * uBandStep, 0);
+					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0);
+					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
+
+			const bandProgram = program(bandVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
+			parameters(bandProgram);
+			gl.uniform3f(gl.getUniformLocation(bandProgram, 'uEye'), 0, 3000, 0);
+			target(7, 256, 1);
+			const bandStep = gl.getUniformLocation(bandProgram, 'uBandStep');
+			const bandResults = [];
+
+			for(const uniforms of data.bands)
+			for(const bin of [43, 26, 19, 15])
+			{
+				const bytes = new Uint8Array(256 * 4);
+
+				appearance(bandProgram, uniforms);
+				gl.uniform1f(bandStep, 2 * Math.PI * bin / 256 / uniforms.uBanding[0]);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				gl.readPixels(0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+				const red = Array.from({length: 256}, (_, i) => bytes[i * 4]);
+				bandResults.push({sharpness: uniforms.uBanding[2], bin, red});
+			}
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
 			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
 				.replace('// WATER', waterSource));
@@ -708,6 +740,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults
 				, illuminationResults
+				, bandResults
 
 				, aliasResults
 				, reflectionResults
@@ -795,6 +828,48 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		const [, grass, redGrass] = result.illuminationResults.find(sample => sample.name === 'terrain').colors;
 		assert.ok(grass[1] > grass[0] && grass[1] > grass[2], `default grass paint draws green: ${grass}`);
 		assert.ok(redGrass[0] > redGrass[1] && redGrass[0] > redGrass[2], `red grass paint draws red: ${redGrass}`);
+
+		const amplitude = (values, bin) => {
+			let real = 0, imaginary = 0;
+
+			values.forEach((value, i) => {
+				real += value * Math.cos(2 * Math.PI * bin * i / values.length);
+				imaginary -= value * Math.sin(2 * Math.PI * bin * i / values.length);
+			});
+
+			return 2 * Math.hypot(real, imaginary) / values.length;
+		};
+
+		// A harmonic past the pixel rate folds back onto a bin below it. Tone mapping folds back 1 to 2% of a plain
+		// sine's amplitude. Sharpened bands must fade their harmonics out before they fold back 6%.
+		const bandAliases = [];
+
+		for(const {sharpness, bin, red} of result.bandResults)
+		{
+			const resolved = new Set(), folded = new Set();
+
+			for(let k = 1; k * bin <= 128; k++) resolved.add(k * bin);
+
+			// Bins 1 to 3 hold the slow change of sunlight with height.
+			for(let k = 2; k <= 21; k++)
+			{
+				const wrapped = k * bin % 256, alias = wrapped > 128 ? 256 - wrapped : wrapped;
+
+				if(k * bin > 128 && alias > 3 && !resolved.has(alias)) folded.add(alias);
+			}
+
+			const fundamental = amplitude(red, bin);
+			const ratio = Math.hypot(...[...folded].map(alias => amplitude(red, alias))) / fundamental;
+			bandAliases.push({sharpness, bin, fundamental: +fundamental.toFixed(2), ratio: +ratio.toFixed(4)});
+		}
+
+		console.log('Folded band harmonics:', JSON.stringify(bandAliases));
+
+		for(const {sharpness, bin, fundamental, ratio} of bandAliases)
+		{
+			assert.ok(fundamental > 5, `bands at sharpness ${sharpness}, bin ${bin} are visible: ${fundamental}`);
+			assert.ok(ratio < .06, `bands at sharpness ${sharpness}, bin ${bin} alias by ${ratio} of their amplitude`);
+		}
 
 		const variance = values => {
 			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
