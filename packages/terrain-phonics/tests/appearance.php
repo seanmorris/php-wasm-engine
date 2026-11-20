@@ -145,7 +145,10 @@ $expect(
 $expect($close($uniforms['uCanyonBounce'], [.11, .066, .048]), 'canyon bounce light equals the old constant');
 $expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per metre and profile');
 $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends are the old constants');
-$expect($uniforms['uHeightBlend'] === [3.0, 18.0, -110.0, -30.0], 'default sand heights are the old ones');
+$expect(
+	$uniforms['uHeightBlend'] === [3.0, 18.0, -110.0, -30.0]
+	, 'default sand heights are the old ones and alpine rock starts 110 m below the snowline'
+);
 $expect($uniforms['uSnowline'] === [340.0, 65.0], 'default snowline and transition are the old constants');
 $expect($uniforms['uMacroVariation'] === [1.0], 'default variation keeps the old strength');
 

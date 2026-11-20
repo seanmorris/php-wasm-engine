@@ -104,7 +104,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				{
 					const location = gl.getUniformLocation(linked, name);
 
-					// Only the canyon palette is longer than a vec4; it is an array of vec3.
+					// Only the canyon and mountain palettes are longer than a vec4; both are arrays of vec3.
 					if(values.length === 1) gl.uniform1f(location, values[0]);
 					else gl[`uniform${values.length > 4 ? 3 : values.length}fv`](location, values);
 				}
@@ -482,6 +482,50 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				mountainBands.push({bin, red: Array.from({length: 256}, (_, i) => bytes[i * 4])});
 			}
 
+			// A mountain face 200 m across at the given slope, seen square on at under a metre per pixel, so every
+			// patch noise is at full strength. It lies 150 m below the snowline, at the default treeline, where talus
+			// still shows between the trees.
+			const amountVertex = `${header}
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1;
+				uniform float uFaceSlope;
+				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+					vec2 s = p * 2.0 - 1.0;
+					float c = 1.0 - uFaceSlope, a = sqrt(1.0 - c * c);
+					vNormal = vec3(a, c, 0);
+					vWorld = vec3(-1200, 190, 3000) + s.x * vec3(0, 0, 100) + s.y * 25.0 * vec3(-c, a, 0);
+					vRelative = -150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0);
+					gl_Position = vec4(s, 0, 1); }`;
+
+			const amountProgram = program(amountVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
+			parameters(amountProgram);
+			gl.uniform1f(gl.getUniformLocation(amountProgram, 'uTerrainStyle'), 1);
+			gl.uniform3f(gl.getUniformLocation(amountProgram, 'uEye'), 0, 3000, 0);
+			target(7, 256, 64);
+			const mountainAmounts = [];
+
+			for(const {material, slope, amount, cases} of data.mountainAmounts)
+			{
+				gl.uniform1f(gl.getUniformLocation(amountProgram, 'uFaceSlope'), slope);
+
+				const images = cases.map(uniforms => {
+					const bytes = new Uint8Array(256 * 64 * 4);
+					appearance(amountProgram, uniforms);
+					gl.drawArrays(gl.TRIANGLES, 0, 3);
+					gl.readPixels(0, 0, 256, 64, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+
+					return bytes;
+				});
+
+				// A patch in either colour differs by far more than 8 steps, while a mix of talus into granite at a
+				// weight of 1 can keep a rounding error from the talus colour and move a pixel by one step.
+				let differing = 0;
+
+				for(let i = 0; i < images[0].length; i += 4)
+					if([0, 1, 2].some(c => Math.abs(images[0][i + c] - images[1][i + c]) > 8)) differing++;
+
+				mountainAmounts.push({material, amount, share: differing / (256 * 64)});
+			}
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -765,6 +809,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
+				, mountainAmounts
 				, inactiveAppearance
 
 				, aliasResults
@@ -912,6 +957,15 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const coast = bandAliases.find(sample => sample.sharpness === 1 && sample.bin === bin).fundamental;
 			const flat = band < coast / 4 && band <= Math.max(1, 1.5 * around);
 			assert.ok(flat, `mountain rock has no bands at bin ${bin}: ${band}`);
+		}
+
+		// Talus and stain colours must show at their default amounts and nowhere at an amount of 0.
+		console.log('Mountain colours shown by amount:', JSON.stringify(result.mountainAmounts));
+
+		for(const {material, amount, share} of result.mountainAmounts)
+		{
+			if(amount === 0) assert.equal(share, 0, `${material} shows on ${share} of a face at an amount of 0`);
+			else assert.ok(share > .01, `${material} shows on ${share} of a face at an amount of ${amount}`);
 		}
 
 		const variance = values => {

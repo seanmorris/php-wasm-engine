@@ -63,6 +63,20 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 $bands = [];
 foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
 
+// Mountain faces drawn twice in two colours of one material: at an amount of 0 the colour must not show.
+$mountainAmounts = [];
+
+foreach([['talus', .2, [0, .5]], ['stain', .7, [0, .3]]] as [$material, $slope, $amounts])
+foreach($amounts as $amount)
+{
+	$cases = [];
+
+	foreach(['#ff00ff', '#00ff00'] as $color)
+	$cases[] = (new TerrainAppearance([$material . 'Amount' => $amount, $material . 'Color' => $color]))->uniforms();
+
+	$mountainAmounts[] = ['material' => $material, 'slope' => $slope, 'amount' => $amount, 'cases' => $cases];
+}
+
 echo json_encode([
 	'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']
@@ -70,9 +84,10 @@ echo json_encode([
 	, 'source' => AtmosphereRenderer::shaderSource()
 	, 'waterCases' => $waterCases
 
-	// Terrain appearances for the paint and band checks.
+	// Terrain appearances for the paint, band and mountain amount checks.
 	, 'appearance' => (new TerrainAppearance)->uniforms()
 	, 'redGrass' => (new TerrainAppearance(['grassColor' => '#ff0000']))->uniforms()
 	, 'bands' => $bands
+	, 'mountainAmounts' => $mountainAmounts
 ], JSON_THROW_ON_ERROR
 );

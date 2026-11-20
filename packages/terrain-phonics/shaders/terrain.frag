@@ -83,6 +83,24 @@ float fracture(vec2 face, float footprint)
 	return (1.0 - smoothstep(0.12, 0.28 + edge, offset)) * smoothstep(0.30, 0.68, breaks);
 }
 
+// Value noise with its derivatives along both axes.
+vec3 smoothNoiseGradient(vec2 p)
+{
+	vec2 cell = floor(p), f = fract(p);
+	vec2 w = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), slope = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+	float a = hashCell(cell), b = hashCell(cell + vec2(1.0,0.0)), c = hashCell(cell + vec2(0.0,1.0));
+	float d = hashCell(cell + vec2(1.0)), k = a - b - c + d;
+	return vec3(mix(mix(a, b, w.x), mix(c, d, w.x), w.y), slope * vec2(b - a + k*w.y, c - a + k*w.x));
+}
+
+// cliffNoise() with its gradient in world space: the value, then its derivatives along x, y and z.
+vec4 cliffNoiseGradient(vec3 p, vec2 scale, float xWeight)
+{
+	vec3 front = smoothNoiseGradient(p.xy / scale), side = smoothNoiseGradient(p.zy / scale);
+	return vec4(mix(front.x, side.x, xWeight), (1.0 - xWeight) * front.y / scale.x,
+		mix(front.z, side.z, xWeight) / scale.y, xWeight * side.y / scale.x);
+}
+
 // Tilt a normal by the screen-space gradient of a relief height in metres. `fade` scales the tilt.
 vec3 bump(vec3 normal, float relief, float fade)
 {
@@ -159,14 +177,21 @@ void canyonMaterial(float footprint, vec3 weights, float slope, float macro,
 	normal = bump(normal, cliff*5.0*grooves, 1.0 - smoothstep(6.0, 24.0, footprint));
 }
 
-// Share of the ground that a patchy material covers. The noise runs from about -0.5 to 0.5 and has been faded for the
-// footprint; `detail` is how much of it is left. As it fades, the edge widens into a blend with about the same mean.
-// The edge is never narrower than a pixel.
+// Share of the ground that a patchy material covers. The noise mostly runs from -0.5 to 0.5, peaks near -0.9 and 0.9,
+// and has been faded for the footprint; `detail` is how much of it is left. As it fades, the edge widens into a blend
+// with about the same mean. The edge is never narrower than a pixel.
 float patchy(float amount, float noise, float detail)
 {
 	float value = amount - 0.5 + noise;
 	float edge = max(mix(0.5, 0.1, detail), fwidth(value));
 	return smoothstep(-edge, edge, value);
+}
+
+// A patch whose amount must leave none at 0. The noise of patchy() reaches past 0.5, so it would still cover a few
+// percent of the ground there; below an amount of 0.1 the cover also falls with the amount.
+float sparse(float amount, float noise, float detail)
+{
+	return patchy(amount, noise, detail) * min(1.0, 10.0*amount);
 }
 
 // Granite mountains. Steep ground shows jointed slabs streaked down the fall line, talus lies on the moderately steep
@@ -185,12 +210,14 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float gullyFade = 1.0 - smoothstep(9.0, 24.0, footprint), rillFade = 1.0 - smoothstep(2.4, 6.0, footprint);
 	float streakFade = 1.0 - smoothstep(1.0, 2.5, footprint), blotchFade = 1.0 - smoothstep(6.0, 16.0, footprint);
 	float clumpFade = 1.0 - smoothstep(1.5, 4.0, footprint), tuftFade = 1.0 - smoothstep(0.5, 1.3, footprint);
-	// The relief takes the noise before it fades. The footprint jumps at triangle edges, and the screen-space
-	// gradient of anything that follows it would draw the mesh in the lighting.
-	float gullyNoise = (cliffNoise(vWorld, vec2(40.0, 240.0), xWeight) - 0.5) * spread;
-	float rillNoise = (cliffNoise(vWorld + 71.3, vec2(12.0, 20.0), xWeight) - 0.5) * spread;
-	float blotchNoise = smoothNoise(vWorld.xz / 31.0 + 5.17) - 0.5;
-	float gully = gullyNoise * gullyFade, rill = rillNoise * rillFade, blotch = blotchNoise * blotchFade;
+	// The relief of the gullies and rills is differentiated with the noise, not across the pixels of a quad, so its
+	// lighting does not break into two-pixel steps where the ground is seen edge-on.
+	vec4 gullyGradient = cliffNoiseGradient(vWorld, vec2(40.0, 240.0), xWeight);
+	vec4 rillGradient = cliffNoiseGradient(vWorld + 71.3, vec2(12.0, 20.0), xWeight);
+	vec3 blotchGradient = smoothNoiseGradient(vWorld.xz / 31.0 + 5.17);
+	float gullyNoise = (gullyGradient.x - 0.5) * spread, blotchNoise = blotchGradient.x - 0.5;
+	float gully = gullyNoise * gullyFade, rill = (rillGradient.x - 0.5) * spread * rillFade;
+	float blotch = blotchNoise * blotchFade;
 	float streak = (cliffNoise(vWorld - 23.9, vec2(4.0, 30.0), xWeight) - 0.5) * spread * streakFade;
 	float clump = (smoothNoise(vWorld.xz / 7.5 - 21.4) - 0.5) * clumpFade;
 	float tuft = (smoothNoise(vWorld.xz / 2.3 + 9.7) - 0.5) * tuftFade;
@@ -211,6 +238,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	// Height above the snowline, raised on ribs and lowered in gullies. The broad variation keeps distant boundaries,
 	// where the finer noise has faded, off the contours.
 	float above = vWorld.y - snowline + 80.0*rib + 50.0*blotch + 70.0*macro;
+	// GLSL leaves smoothstep() undefined when its first edge is not below the second, so the fall is written as a rise.
 	float lowland = 1.0 - smoothstep(uMountainZones.x - 45.0, uMountainZones.x + 35.0, above);
 	// Soil holds on steeper ground low down.
 	float steep = smoothstep(uSlopeBlend.x, uSlopeBlend.y, slope + 0.15*rib - 0.07*lowland);
@@ -222,23 +250,31 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec2 offset = fract(grid) - 0.5 - 0.25*(vec2(seed, seed2) - 0.5);
 	float turn = 6.2832 * seed2;
 	offset = mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * offset;
-	float aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.5, 1.5, footprint);
+	// The pixel has a floor because smoothstep() is undefined for two equal edges.
+	float pixel = max(footprint, 0.001), aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.5, 1.5, footprint);
+	// Large blocks and crowns reach past their cell, which cuts them off. The cut fades over a pixel, so it is no
+	// hard step between two cells.
+	vec2 inside = min(fract(grid), 1.0 - fract(grid));
+	float within = smoothstep(0.0, pixel / 3.0, min(inside.x, inside.y));
 	float size = 0.28 + 0.12*seed;
-	float block = 1.0 - smoothstep(size - 0.05, size + 0.03 + aa,
-		max(abs(offset.x), abs(offset.y) * (0.75 + 0.5*seed2)));
+	float block = (1.0 - smoothstep(size - 0.05, size + 0.03 + aa,
+		max(abs(offset.x), abs(offset.y) * (0.75 + 0.5*seed2)))) * within;
 	float blocks = mix(1.0, mix(0.82, 0.88 + 0.24*seed, block) / 0.91, cellFade);
-	float crown = 1.0 - smoothstep(0.2, 0.46 + aa, length(offset));
+	float crown = (1.0 - smoothstep(0.2, 0.46 + aa, length(offset))) * within;
 	float crowns = mix(1.0, mix(0.7, 1.15 + 0.2*seed2, crown) / 0.89, cellFade);
 	// Boulders on a grid three times coarser carry the rubble's texture further out than the blocks do. Each is
-	// turned and sized at random, and the blocks show between the smaller ones and in the cells that have none.
+	// turned and sized at random, and the blocks show between the smaller ones and in the cells that have none. Their
+	// cells cut them off as the small cells cut the blocks.
 	vec2 boulderGrid = grid / 2.7 + 0.37;
 	float boulderSeed = hashCell(floor(boulderGrid) + 17.3);
 	float boulderPlace = fract(boulderSeed * 29.3);
 	float boulderTurn = 6.2832 * fract(boulderSeed * 13.7);
 	vec2 boulderOffset = abs(mat2(cos(boulderTurn), sin(boulderTurn), -sin(boulderTurn), cos(boulderTurn))
 		* (fract(boulderGrid) - 0.5 - 0.3*(vec2(boulderPlace, fract(boulderSeed * 7.3)) - 0.5)));
+	vec2 boulderInside = min(fract(boulderGrid), 1.0 - fract(boulderGrid));
 	float boulder = (1.0 - smoothstep(0.1 + 0.2*boulderSeed, 0.16 + 0.2*boulderSeed + footprint / 8.1,
-		max(boulderOffset.x, boulderOffset.y * (0.7 + 0.5*fract(boulderSeed * 3.1))))) * step(0.4, boulderPlace);
+		max(boulderOffset.x, boulderOffset.y * (0.7 + 0.5*fract(boulderSeed * 3.1))))) * step(0.4, boulderPlace)
+		* smoothstep(0.0, pixel / 8.1, min(boulderInside.x, boulderInside.y));
 	float boulders = mix(1.0, mix(0.84, 0.98 + 0.3*boulderSeed, boulder) / 0.88, 1.0 - smoothstep(1.5, 4.5, footprint));
 
 	// Shrubs mottle the meadow, tundra keeps meadow green in its hollows, and wet grass fills level floors. Shrubs
@@ -270,7 +306,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	// The sign of the gully noise places the tongues. The gullies themselves, where the noise is near zero, outline
 	// each region of one sign, and tongues placed in them would close into rings. Broad variation breaks the talus
 	// into separate fans along a slope.
-	float scree = patchy(talusShare, 0.5*rill - 0.9*gully + 0.3*ragged + 0.3*(seed - 0.5)*cellFade + 0.8*macro,
+	float scree = sparse(talusShare, 0.5*rill - 0.9*gully + 0.3*ragged + 0.3*(seed - 0.5)*cellFade + 0.8*macro,
 		0.6*max(rillFade, max(raggedDetail, gullyFade)));
 	vec3 rubble = talus * blocks * boulders;
 	cover = mix(cover, rubble * (1.0 + 0.15*blotch), scree);
@@ -285,19 +321,26 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float along = (face.y + tilt * across * 13.0) / 23.0 + hashCell(vec2(column, 1.9));
 	vec2 slabCell = vec2(column, floor(along));
 	float slab = hashCell(slabCell);
-	// Each slab steps down over the one below it, so a joint shades the foot of the slab above it.
-	float riser = fract(along) * 23.0 * inversesqrt(1.0 + tilt*tilt);
-	float joint = min(min(across, 1.0 - across) * 13.0, riser);
+	// Each slab steps down over the one below it, so a joint shades the foot of the slab above it. `riser` is the
+	// distance up from the joint below and `below` the distance down from the joint above, in metres.
+	float rise = 23.0 * inversesqrt(1.0 + tilt*tilt);
+	float riser = fract(along) * rise, below = (1.0 - fract(along)) * rise, side = min(across, 1.0 - across) * 13.0;
 	float jointFade = 1.0 - smoothstep(0.4, 1.5, footprint), slabFade = 1.0 - smoothstep(1.5, 4.5, footprint);
-	// Joints show in broken lengths.
-	float joints = mix(0.07, (1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, joint)) * smoothstep(-0.1, 0.1, ragged),
-		jointFade);
+	// The two upright planes give different slabs. Where the choice changes, and at every edge of a slab, the slab's
+	// own tone, stain, facet and joints fade to their mean over about a pixel, so no edge is a hard step.
+	float seam = smoothstep(0.5, 1.5, abs(xWeight - 0.5) / max(fwidth(xWeight), 0.0001));
+	float settled = smoothstep(0.0, pixel, min(side, min(riser, below))) * seam;
+	// The shaded foot starts over a pixel across the joint, and joints show in broken lengths.
+	float foot = smoothstep(-pixel, pixel, riser < below ? riser : -below)
+		* (1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, riser < below ? riser : 0.0));
+	float line = max(1.0 - smoothstep(0.15, 0.9 + 0.7*footprint, side), foot);
+	float joints = mix(0.07, line * smoothstep(-0.1, 0.1, ragged), jointFade * seam);
 	// Water leaves long dark streaks down the faces.
 	float wet = patchy(0.25, streak + 0.3*rill, max(streakFade, rillFade));
-	float tone = (1.0 + 0.2*(slab - 0.5)*slabFade) * (1.0 - 0.3*joints) * (1.0 - 0.2*wet)
+	float tone = (1.0 + 0.2*(slab - 0.5)*slabFade*settled) * (1.0 - 0.3*joints) * (1.0 - 0.2*wet)
 		* (1.0 + 0.12*blotch + 0.1*macro) * hollows;
 	// Iron stains broad sheets of the faces and runs down them in streaks; lichen tints the rock grey-green in patches.
-	float sheets = patchy(0.6*uMountainAmounts.y, 0.4*blotch - 0.8*gully + 0.3*(slab - 0.5)*slabFade,
+	float sheets = sparse(0.6*uMountainAmounts.y, 0.4*blotch - 0.8*gully + 0.3*(slab - 0.5)*slabFade*settled,
 		max(blotchFade, gullyFade));
 	vec3 cliff = mix(granite, stain, sheets * clamp(0.5 + 0.8*streak + 0.4*rill, 0.0, 0.85)) * tone;
 	float lichen = uMountainAmounts.z * patchy(0.55, blotch + ragged + 0.4*streak, max(raggedDetail, blotchFade));
@@ -310,21 +353,28 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	rock = mix(mix(rubble, cliff, 0.4), cliff, smoothstep(0.05, 0.16, slope));
 
 	// Slabs tilt as facets, blocks and crowns rise as small domes, and ribs stand out between the gullies. The caller
-	// lights its snow with this normal, so the relief fades out where the snow lies complete. Screen-space gradients
-	// comb along ground seen edge-on and block out in the distance, so the relief fades there too.
+	// lights its snow with this normal, so the relief fades out where the snow lies complete. Relief finer than a few
+	// pixels would shimmer on ground seen edge-on and in the distance, so it fades there too.
 	float relief = (1.0 - smoothstep(snowline, snowline + uSnowline.y, vWorld.y)
 		* (1.0 - smoothstep(uSlopeBlend.z, uSlopeBlend.w, slope)))
 		* smoothstep(0.06, 0.25, abs(dot(normalize(vRelative), normal))) * (1.0 - smoothstep(3.0, 10.0, footprint));
 	vec3 facet = (vec3(hashCell(slabCell + 31.7), slab, hashCell(slabCell + 63.1)) - 0.5) * vec3(0.18, 0.05, 0.18);
 	vec3 knob = vec3(offset.x, 0.0, offset.y) * (0.6*block*(scree + bare*(1.0 - steep)) + 0.5*crown*trees) * cellFade;
-	normal = normalize(normal + (facet * bare * steep * slabFade + knob) * relief);
-	// Distance, unlike the footprint, is continuous across triangles. It rounds the gully bottoms of the relief and
-	// fades its rills.
+	normal = normalize(normal + (facet * bare * steep * slabFade * settled + knob) * relief);
+	// Ribs between the gullies rise (26 + 24 * blotch) * groove + 2.5 * rill metres, and the tilt is the gradient of
+	// that height along the surface, as bump() takes it. The relief takes the gully and blotch noise before the
+	// footprint fades them, since the footprint jumps at triangle edges. Each gully bottom is rounded by the view
+	// distance and over at least a pixel and a half across the gully; the footprint, measured along the ground seen
+	// edge-on, is far longer than a pixel across the gully there. The rills fade with the footprint and the distance.
 	float viewDistance = length(vRelative);
-	float reliefBottom = 0.01 + 0.00004*viewDistance;
-	float reliefCut = sqrt(gullyNoise*gullyNoise + reliefBottom*reliefBottom);
-	float rills = 2.5 * rillNoise * (1.0 - smoothstep(200.0, 700.0, viewDistance));
-	normal = bump(normal, upright * ((26.0 + 24.0*blotchNoise)*reliefCut + rills), relief);
+	vec3 gullySlope = spread * gullyGradient.yzw;
+	float gullyPixel = abs(dot(gullySlope, dFdx(vWorld))) + abs(dot(gullySlope, dFdy(vWorld)));
+	float groove = sqrt(gullyNoise*gullyNoise + pow(max(0.01 + 0.00004*viewDistance, 1.5*gullyPixel), 2.0));
+	float rills = 2.5 * spread * rillFade * (1.0 - smoothstep(200.0, 700.0, viewDistance));
+	vec3 lift = upright * (24.0*groove*vec3(blotchGradient.y, 0.0, blotchGradient.z) / 31.0
+		+ (26.0 + 24.0*blotchNoise) * gullyNoise / groove * gullySlope + rills * rillGradient.yzw);
+	vec3 tangential = lift - normal * dot(normal, lift);
+	normal = normalize(normal - tangential * relief / (1.0 + length(tangential)));
 }
 
 void main()

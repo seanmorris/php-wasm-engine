@@ -106,7 +106,7 @@
     "shaders/sky.vert": "sha256-SXzckrvME1jSTC/hdNaWcJbN8x2TpL8sPFsx837//2Y=",
     "shaders/stars.frag": "sha256-iT87V40qiUf40avlm0soZjGO/J1WgjlKc33tEh0N77k=",
     "shaders/stars.vert": "sha256-71D8/TsLXl5zD9ceWR5xDIg6Tk024Er7NSjEvEc7/JU=",
-    "shaders/terrain.frag": "sha256-R8gHAFKQHjjjDxovb2c8dbDbfhh72jgxxOCATr7tXPg=",
+    "shaders/terrain.frag": "sha256-8Rl8JXZYHybLH+S16WBPMokkNzcik1vmsJZeNMljAS0=",
     "shaders/terrain.vert": "sha256-Q74tjxA/sCRcBNRpMF/0RNwCGS+R6sg6Bfg8DyTJpbY=",
     "shaders/water-functions.glsl": "sha256-o0RESmAinx18vCptaz1x1zI19X7ybaGb1Lw8QxhAB60=",
     "shaders/water-optics.glsl": "sha256-kz4GNjxL+Sf1lZaTFY+vMZyHAfJDfwDN0wKcaQ+g8SQ=",
