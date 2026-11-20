@@ -38,6 +38,8 @@ test('GPU heights agree with the PHP lattice on cliffs and at the world edges',a
 					uRock:['secondary','terraceSpacing','terraceStrength','bedding'],uDetail:['detailAmplitude','persistence','lacunarity','damping']}))
 					gl.uniform4fv(loc(name),keys.map(k=>r[k]));
 				gl.uniform2f(loc('uFieldResidual'),r.baseFrequency-Math.fround(r.baseFrequency),r.warpFrequency-Math.fround(r.warpFrequency));
+				const erosion = 22*r.baseFrequency;
+				gl.uniform2f(loc('uErosion'),erosion,erosion-Math.fround(erosion));
 				gl.uniform1f(loc('uSlopeScale'),r.slopeScale); gl.uniform1i(loc('uOctaves'),r.detailOctaves);
 				let error=0;
 				for(const [x,z,reference] of samples) {

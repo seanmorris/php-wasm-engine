@@ -139,4 +139,16 @@ foreach([.5, 1., 2.] as $quality)
 $spanAtCanyonWall = Clipmap::spans($canyonRecipe, 1.)[4];
 check(($spanAtCanyonWall / 2 - Clipmap::transition($spanAtCanyonWall) - 3) * 16 >= 1500,
 	'The balanced profile covers a canyon wall 1.5 km away at 16 metre spacing before transitioning.');
+$doubleWidth = new Landscape(['worldSize' => 65536, 'heightScale' => 0, 'detailAmplitude' => 0]);
+check($doubleWidth->height(32768, -32768) === 0.0, 'The expanded corner is available to physics.');
+check(Landscape::load($doubleWidth->save())->recipe()['worldSize'] === 65536.0, 'The expanded extent survives save and reload.');
+try
+{
+	new Landscape(['worldSize' => 131072]);
+	throw new RuntimeException('The recipe accepted an extent beyond 65,536 metres.');
+}
+catch(InvalidArgumentException) {}
+$wideRecipe = array_replace($canyonRecipe, ['worldSize' => 65536.0]);
+check(Clipmap::spans($wideRecipe, 1.) === Clipmap::spans($canyonRecipe, 1.),
+	'The wider playable canyon uses the same visible clipmap layout.');
 echo "Clipmap and expanded terrain recipe checks passed.\n";
