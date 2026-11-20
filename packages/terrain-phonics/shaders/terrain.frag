@@ -250,8 +250,9 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec2 offset = fract(grid) - 0.5 - 0.25*(vec2(seed, seed2) - 0.5);
 	float turn = 6.2832 * seed2;
 	offset = mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * offset;
-	// The pixel has a floor because smoothstep() is undefined for two equal edges.
-	float pixel = max(footprint, 0.001), aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.5, 1.5, footprint);
+	// The pixel has a floor because smoothstep() is undefined for two equal edges. Crowns, blocks and boulders fade out
+	// before a cell spans three pixels.
+	float pixel = max(footprint, 0.001), aa = footprint / 3.0, cellFade = 1.0 - smoothstep(0.4, 1.0, footprint);
 	// Large blocks and crowns reach past their cell, which cuts them off. The cut fades over a pixel, so it is no
 	// hard step between two cells.
 	vec2 inside = min(fract(grid), 1.0 - fract(grid));
@@ -260,7 +261,8 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float block = (1.0 - smoothstep(size - 0.05, size + 0.03 + aa,
 		max(abs(offset.x), abs(offset.y) * (0.75 + 0.5*seed2)))) * within;
 	float blocks = mix(1.0, mix(0.82, 0.88 + 0.24*seed, block) / 0.91, cellFade);
-	float crown = (1.0 - smoothstep(0.2, 0.46 + aa, length(offset))) * within;
+	// Crowns vary in size, and the tufts wobble their edges, so the grid does not show as a lattice.
+	float crown = (1.0 - smoothstep(0.2, 0.34 + 0.2*fract(seed * 7.7) + aa, length(offset) + 0.25*tuft)) * within;
 	float crowns = mix(1.0, mix(0.7, 1.15 + 0.2*seed2, crown) / 0.89, cellFade);
 	// Boulders on a grid three times coarser carry the rubble's texture further out than the blocks do. Each is
 	// turned and sized at random, and the blocks show between the smaller ones and in the cells that have none. Their
@@ -275,14 +277,14 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	float boulder = (1.0 - smoothstep(0.1 + 0.2*boulderSeed, 0.16 + 0.2*boulderSeed + footprint / 8.1,
 		max(boulderOffset.x, boulderOffset.y * (0.7 + 0.5*fract(boulderSeed * 3.1))))) * step(0.4, boulderPlace)
 		* smoothstep(0.0, pixel / 8.1, min(boulderInside.x, boulderInside.y));
-	float boulders = mix(1.0, mix(0.84, 0.98 + 0.3*boulderSeed, boulder) / 0.88, 1.0 - smoothstep(1.5, 4.5, footprint));
+	float boulders = mix(1.0, mix(0.84, 0.98 + 0.3*boulderSeed, boulder) / 0.88, 1.0 - smoothstep(1.2, 3.0, footprint));
 
 	// Shrubs mottle the meadow, tundra keeps meadow green in its hollows, and wet grass fills level floors. Shrubs
 	// blend into the meadow over a few metres rather than ending at a line, and they fill most openings in the forest.
-	// Ledges on steep ground lie in the shade of the rock around them.
+	// Shrub crowns show more faintly than tree crowns. Ledges on steep ground lie in the shade of the rock around them.
 	float shrubs = max(patchy(0.4 + 0.3*steep, ragged + 0.4*blotch, 0.6*max(raggedDetail, blotchFade)),
 		0.7*lowland);
-	vec3 vegetation = mix(meadow * (1.0 + 0.5*tuft), mix(meadow, forest, 0.55) * crowns, shrubs)
+	vec3 vegetation = mix(meadow * (1.0 + 0.5*tuft), mix(meadow, forest, 0.55) * mix(1.0, crowns, 0.6), shrubs)
 		* (1.0 + 0.2*clump + 0.2*rill) * (1.0 - 0.25*steep);
 	vegetation = mix(vegetation, tundra * (1.0 + 0.3*clump + 0.4*tuft + 0.3*rill),
 		patchy(smoothstep(uMountainZones.y - 35.0, uMountainZones.y + 35.0, above), 0.8*ragged + 0.3*rill,
