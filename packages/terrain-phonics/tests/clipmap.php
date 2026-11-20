@@ -10,6 +10,25 @@ function check(bool $valid, string $message): void
 	if(!$valid) throw new RuntimeException($message);
 }
 
+foreach([0., M_PI/8, M_PI/4, M_PI/2, 7*M_PI/8] as $bearing)
+{
+	$diagonal = abs(cos($bearing)) + abs(sin($bearing));
+	foreach([[0,0], [7200,-7200], [12000,400], [-1400,-12000]] as $position)
+	{
+		$room = 16384. - max(abs($position[0]), abs($position[1]));
+		$span = Clipmap::chartSpan(32768., $position, $bearing, true);
+		check($span > 4000. && $span <= 12000. && $span/2*$diagonal <= $room + 1e-9,
+			'The wide chart shows more ground and stays filled at every heading away from the edges.');
+	}
+	$edge = [16000,15000];
+	check(Clipmap::chartSpan(32768., $edge, $bearing, true) === 6000.
+		&& Clipmap::chartSpan(32768., $edge, $bearing, false) === 4000.,
+		'Very close to a boundary, the wide chart still shows 50% more than the local chart.');
+	$small = Clipmap::chartSpan(128., [0,0], $bearing, true);
+	check($small > Clipmap::chartSpan(128., [0,0], $bearing, false) && $small/2*$diagonal <= 64. + 1e-9,
+		'A small world still has two distinct zoom levels and fills the wide view at a diagonal heading.');
+}
+
 foreach(['coast', 'mountain', 'canyon'] as $preset)
 {
 	foreach([1, 2] as $version)
