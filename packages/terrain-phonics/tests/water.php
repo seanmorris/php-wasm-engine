@@ -130,18 +130,18 @@ $terrain = new class implements TerrainSurface {
 };
 
 $lake = new Water;
-$craft = new Watercraft(0, 0, 0, 2);
+foreach([[new Watercraft(y: 2), 9.81], [new Watercraft(y: 2, gravity: 12), 12.0]] as [$craft, $gravity])
+{
+	$craft->step(.25, 0, 0, $lake, $terrain, 0);
+	$expect(abs($craft->state()['velocity'][1] + .25*$gravity) < 1e-10, 'A dry hull falls at the chosen gravity');
+	for($i = 30; $i < 600; $i++) $craft->step(1 / 120, 0, 0, $lake, $terrain, $i / 120);
+	$state = $craft->state();
+	$expect(abs($state['y'] - .232) < .01 && abs($state['velocity'][1]) < .01,
+		'Four buoyancy probes settle the dropped hull at the same waterline under either gravity');
+	$expect(abs($state['pitch']) < 1e-8 && abs($state['roll']) < 1e-8, 'Symmetric flat-water hull stays level');
+}
 
-for($i = 0; $i < 600; $i++) $craft->step(1 / 120, 0, 0, $lake, $terrain, $i / 120);
-
-$state = $craft->state();
-
-$expect(
-	abs($state['y'] - .232) < .01 && abs($state['velocity'][1]) < .01
-	, 'four buoyancy probes settle a dropped hull at its waterline'
-);
-
-$expect(abs($state['pitch']) < 1e-8 && abs($state['roll']) < 1e-8, 'symmetric flat-water hull stays level');
+$craft = new Watercraft;
 $craft->spawn(0, 0, 0, $lake, $terrain, 0);
 
 for($i = 0; $i < 300; $i++) $craft->step(1 / 60, 1, .3, $lake, $terrain, $i / 60);
