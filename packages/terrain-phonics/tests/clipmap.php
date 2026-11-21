@@ -29,7 +29,7 @@ foreach([0., M_PI/8, M_PI/4, M_PI/2, 7*M_PI/8] as $bearing)
 		'A small world still has two distinct zoom levels and fills the wide view at a diagonal heading.');
 }
 
-foreach(['coast', 'mountain', 'canyon'] as $preset)
+foreach(Recipe::PRESETS as $preset)
 {
 	foreach([1, 2] as $version)
 	{
