@@ -404,6 +404,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const mountainShadow = shaders['terrain.frag'].split('float mountainShadow')[1].split('#ifdef')[0];
 			const receiver = program(vertex, header + `
 				uniform highp sampler2D uTerrainShadowMap;
+				uniform vec3 uEye;
+				const vec2 uShadowReceiverRange=vec2(100.,300.);
+				const float uCraft=0.;
 				const vec3 uSunDirection=vec3(1.,.6,0.);
 				const int uTerrainShadowReady=1;
 				const float uTerrainShadowExtent=2048.;
@@ -414,10 +417,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			target(7,2,1);
 			gl.useProgram(receiver);
 			gl.uniform1i(gl.getUniformLocation(receiver,'uTerrainShadowMap'),6);
+			gl.uniform3f(gl.getUniformLocation(receiver,'uEye'),-508,100,4);
 			gl.drawArrays(gl.TRIANGLES,0,3);
 			const ledges = new Uint8Array(8);
 			gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,ledges);
 			shadowResults.push({name:'ledges',visibility:[ledges[0],ledges[4]]});
+			for(const [name,distance] of [['transition',200],['distant',400]])
+			{
+				gl.uniform3f(gl.getUniformLocation(receiver,'uEye'),-508+distance,100,4);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,ledges);
+				shadowResults.push({name,visibility:[ledges[0],ledges[4]]});
+			}
 
 			// A wall only one metre thick crosses the interior of an eight-metre terrain triangle.
 			// Run both production passes against a signed, toroidal lattice in each storage format.
@@ -426,6 +437,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const sampleFunction = shaders['terrain.frag'].split('float localSunlight')[1].split('#endif')[0];
 			const sampleTriangle = program(vertex, header + `
 				uniform highp sampler2D uShadowTriangles;
+				uniform vec3 uEye;
 				uniform vec3 uShadowGrid;
 				uniform float uCraft;
 				out vec4 color;
@@ -477,6 +489,20 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				const rendered = new Uint8Array(24);
 				gl.readPixels(0,0,6,1,gl.RGBA,gl.UNSIGNED_BYTE,rendered);
 				adaptiveResults.push({record:[...pixel], pixels:[...rendered.filter((_,i)=>i%4===0)]});
+			}
+			// A shadowed point in the blend region stays at the same shade when the cache
+			// snaps eight cells, even if the eye crosses the boundary by only a millimetre.
+			texture(13,128,64,new Uint8Array(128*64*4));
+			target(14,6,1);
+			gl.useProgram(sampleTriangle);
+			for(const [eye,left] of [[-20.001,-56],[-19.999,-48]])
+			{
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uEye'),eye,0,0);
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uShadowGrid'),left,-32,1);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				const pixels = new Uint8Array(8);
+				gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+				shadowResults.push({name:'snap '+left,visibility:[pixels[0],pixels[4]]});
 			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -1117,6 +1143,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.deepEqual(visibility.reversed, [255, 0], 'reversing the sun reverses the ridge shadow');
 		assert.deepEqual(visibility['near rim'], [0,255], 'a one-texel rim between the old long ray steps casts a shadow');
 		assert.deepEqual(visibility.ledges, [0,255], 'the true receiver elevation keeps the lower ledge dark and the upper ledge lit');
+		assert.ok(visibility.transition[1] >= 126 && visibility.transition[1] <= 129, 'lighting blends across the mesh detail transition');
+		assert.deepEqual(visibility.distant,[0,0], 'changing a distant triangle elevation does not move its shadow');
+		assert.ok(Math.abs(visibility['snap -56'][0]-128)<=1 && visibility['snap -56'][1]>245);
+		assert.ok(visibility['snap -56'].every((v,i)=> Math.abs(v-visibility['snap -48'][i])<=1), 'recentering the local grid preserves its blend');
 		assert.deepEqual(visibility.night, [0, 0], 'the coarse map contains no direct visibility at night');
 
 		for(const sample of result.illuminationResults)

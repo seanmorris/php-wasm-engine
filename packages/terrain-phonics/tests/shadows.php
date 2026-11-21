@@ -80,6 +80,8 @@ namespace TerrainPhonics
 	function glActiveTexture(int $unit): void {}
 
 	function glBindTexture(int $target, int $texture): void {}
+	function glGenerateMipmap(int $target): void {}
+	function glTexParameteri(int $target,int $name,int $value): void {}
 
 	function glUniform1i(int $location, int $value): void { ShadowCalls::$uniforms[$location] = $value; }
 
@@ -109,7 +111,7 @@ namespace
 	use Phonics\Render\Program;
 
 	foreach([
-		'GL_LINEAR'
+		'GL_LINEAR', 'GL_TEXTURE_MIN_FILTER', 'GL_LINEAR_MIPMAP_LINEAR'
 		, 'GL_NEAREST', 'GL_DITHER'
 		, 'GL_DEPTH_TEST'
 		, 'GL_CULL_FACE'
@@ -244,6 +246,12 @@ namespace
 	ShadowCalls::$failDraw = false;
 	$update(3);
 	$expect($triangles->generation === 5,'Local shadows recover after an interrupted rebuild');
+	$eye = [31.9,0.,-31.9];
+	$triangles->update($level,24,$eye,$sun,99,32768.,false,0.,3,12);
+	$triangles->bind($consumer);
+	[$left,$front,$cell] = $uniform('uShadowGrid');
+	$expect(max(abs(($eye[0]-$left)/$cell-32),abs(($eye[2]-$front)/$cell-32)) <= 4,
+		'Even the smallest caster level leaves 28 probe cells around the eye after snapping');
 	$triangles->close();
 	echo "Terrain shadows: {$checks} checks passed\n";
 }

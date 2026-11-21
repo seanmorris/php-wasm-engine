@@ -36,7 +36,7 @@ foreach([
 	, 'GL_COLOR_ATTACHMENT0'
 	, 'GL_FRAMEBUFFER_COMPLETE'
 	, 'GL_SCISSOR_TEST', 'GL_DITHER'
-	, 'GL_LINEAR'
+	, 'GL_LINEAR', 'GL_LINEAR_MIPMAP_LINEAR'
 ] as $i => $name) if(!defined($name)) define($name, $i + 1);
 $GLOBALS['terrainGl'] = [
 	'next' => 1
@@ -187,6 +187,7 @@ function glVertexAttribPointer(...$args): void{}
 function glBindTexture(...$args): void{}
 
 function glTexParameteri(...$args): void{}
+function glGenerateMipmap(...$args): void{}
 
 function glTexImage2D(...$args): void{}
 
