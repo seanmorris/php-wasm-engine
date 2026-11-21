@@ -21,6 +21,17 @@ foreach(['stream','first-light'] as $seed) foreach(['mountain','coast','canyon-v
 	$cases[]=['recipe'=>$recipe->values(),'perm'=>(new Noise($seed))->permutation(),'samples'=>$samples];
 }
 
+// The car collides with the PHP surface while the clipmap draws the limestone benches on the GPU.
+$karst = new Recipe(['preset' => 'limestone']);
+$samples = [];
+foreach([[2440, -4880], [4110, -4933], [637, -3747], [-5100, -15600]] as [$x, $z])
+{
+	$row = [];
+	for($i = 0; $i < 32; $i++) $row[] = $karst->height($x+$i, $z);
+	$samples[] = [$x, $z, $row];
+}
+$cases[] = ['recipe' => $karst->values(), 'perm' => (new Noise($karst->values()['seed']))->permutation(), 'samples' => $samples];
+
 // Cross the negative block seam on a bank, turn back into the same tile, then cross a later road.
 $ground = new Landscape(['worldSize' => 2048, 'seed' => 'road-atlas', 'heightScale' => 140, 'detailAmplitude' => 6]);
 $ground->queue(['type' => 'road', 'width' => 14, 'shoulder' => 9, 'crown' => .5,
