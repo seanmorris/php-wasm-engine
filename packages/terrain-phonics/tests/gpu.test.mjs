@@ -361,15 +361,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			for(const [name, sun, ridge] of [['flat', [1, .001, 0], false]
 				, ['ridge', [1, .1, 0], true]
 				, ['reversed', [-1, .1, 0], true], ['night', [1, -.1, 0], false]
+				, ['near rim', [1,.6,0], true]
 			]){
-				const heights = new Float32Array(33 * 33);
+				const side = name === 'near rim' ? 257 : 33;
+				const heights = new Float32Array(side * side);
 
-				if(ridge)
+				if(name === 'near rim')
+					for(let z = 0; z < side; z++) heights[z*side+68] = 42;
+				else if(ridge)
 				for(let z = 0; z < 33; z++) for(let x = 16; x <= 18; x++) heights[z * 33 + x] = 300;
 
 				gl.activeTexture(gl.TEXTURE1);
 				gl.bindTexture(gl.TEXTURE_2D, heightTexture);
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 33, 33, 0, gl.RED, gl.FLOAT, heights);
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, side, side, 0, gl.RED, gl.FLOAT, heights);
 				target(6, 256, 256);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -377,6 +381,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform1i(gl.getUniformLocation(shadowProgram, 'uTerrainHeights'), 1);
 				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowExtent'), 2048);
 				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowSize'), 256);
+				gl.uniform2f(gl.getUniformLocation(shadowProgram, 'uShadowHeightRange'), -400,800);
 
 				gl.uniform3fv(
 					gl.getUniformLocation(shadowProgram, 'uShadowSunDirection')
@@ -395,6 +400,24 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 				shadowResults.push({name, visibility});
 			}
+			// Two faces in the same shadow texel can fall on opposite sides of the projected rim.
+			const mountainShadow = shaders['terrain.frag'].split('float mountainShadow')[1].split('#ifdef')[0];
+			const receiver = program(vertex, header + `
+				uniform highp sampler2D uTerrainShadowMap;
+				const vec3 uSunDirection=vec3(1.,.6,0.);
+				const int uTerrainShadowReady=1;
+				const float uTerrainShadowExtent=2048.;
+				const vec2 uShadowHeightRange=vec2(-400.,800.);
+				out vec4 color;
+				float mountainShadow` + mountainShadow + `
+				void main(){color=vec4(vec3(mountainShadow(vec3(-508.,gl_FragCoord.x < 1. ? 0. : 48.,4.))),1.);}`);
+			target(7,2,1);
+			gl.useProgram(receiver);
+			gl.uniform1i(gl.getUniformLocation(receiver,'uTerrainShadowMap'),6);
+			gl.drawArrays(gl.TRIANGLES,0,3);
+			const ledges = new Uint8Array(8);
+			gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,ledges);
+			shadowResults.push({name:'ledges',visibility:[ledges[0],ledges[4]]});
 
 			// A wall only one metre thick crosses the interior of an eight-metre terrain triangle.
 			// Run both production passes against a signed, toroidal lattice in each storage format.
@@ -1092,6 +1115,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.deepEqual(visibility.flat, [255, 255], 'a flat plane remains sunlit even at low sun angles');
 		assert.deepEqual(visibility.ridge, [0, 255], 'a broad ridge blocks the down-sun side');
 		assert.deepEqual(visibility.reversed, [255, 0], 'reversing the sun reverses the ridge shadow');
+		assert.deepEqual(visibility['near rim'], [0,255], 'a one-texel rim between the old long ray steps casts a shadow');
+		assert.deepEqual(visibility.ledges, [0,255], 'the true receiver elevation keeps the lower ledge dark and the upper ledge lit');
 		assert.deepEqual(visibility.night, [0, 0], 'the coarse map contains no direct visibility at night');
 
 		for(const sample of result.illuminationResults)

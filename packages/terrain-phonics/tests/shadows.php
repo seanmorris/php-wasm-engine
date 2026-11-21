@@ -139,6 +139,7 @@ namespace
 	$expect(ShadowCalls::$draws === 1 && $cache->stats()['generation'] === 1, 'one bounded pass populates the map');
 	$expect(ShadowCalls::$framebuffer === 73, 'generation restores the caller framebuffer');
 	$expect(!$cache->update(99, 32768, [0,2,0], 1), 'normalized identical sunlight reuses visibility');
+	$expect(!$cache->update(99, 32768, [.001,1,0], 1), 'a small clock step reuses the broad shadow map');
 	$expect(!$cache->update(99, 32768, [0,1,0], 1), 'unchanged frames never repeat the coarse march');
 	$cache->bind($consumer);
 	$expect($uniform('uTerrainShadowReady') === 1, 'valid visibility enables filtered sampling');
@@ -180,6 +181,15 @@ namespace
 	ShadowCalls::$failDraw = false;
 	$cache->update(100, 16384, [1,.1,0], 3);
 	$expect($cache->stats()['generation'] === 8, 'the next explicit update can rebuild failed content');
+	$expect($cache->update(100,16384,[1,.1,0],3,false,-300.,500.), 'changing the encoded height range refreshes the map');
+	$cache->bind($consumer);
+	$expect($uniform('uShadowHeightRange') === [-300.,800.], 'producer and receiver use the same height scale');
+	$expect(!$cache->update(100,16384,[1,.101,0],3,false,-300.,500.), 'small changes accumulate from the last rendered direction');
+	$expect($cache->update(100,16384,[1,.102,0],3,false,-300.,500.), 'accumulated sun drift crosses the threshold');
+	$cache->update(100,16384,[1,.00001,0],3);
+	$expect($cache->update(100,16384,[1,-.00001,0],3), 'sunset crosses the horizon even within the angular tolerance');
+	$expect(!$cache->update(100,16384,[1,-.5,0],3), 'moving the sun at night reuses the dark map');
+	$expect($cache->update(100,16384,[1,.00001,0],3), 'sunrise refreshes the map');
 
 	try
 	{

@@ -35,7 +35,7 @@ foreach([
 	, 'GL_FRAMEBUFFER'
 	, 'GL_COLOR_ATTACHMENT0'
 	, 'GL_FRAMEBUFFER_COMPLETE'
-	, 'GL_SCISSOR_TEST'
+	, 'GL_SCISSOR_TEST', 'GL_DITHER'
 	, 'GL_LINEAR'
 ] as $i => $name) if(!defined($name)) define($name, $i + 1);
 $GLOBALS['terrainGl'] = [
