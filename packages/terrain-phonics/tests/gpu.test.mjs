@@ -680,10 +680,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Sample the old 3 m talus grid at eight pixels per cell. Moving 3.6 cm
 			// across a former edge should not switch the material of an entire cell.
-			const rockProbe = program(vertex, header + shaders['surface-layers.glsl'] + shaders['material-noise.glsl'] + `
+			const fieldSource = header + shaders['surface-layers.glsl'] + shaders['material-noise.glsl'] + `
 				uniform vec4 uSlopeBlend,uHeightBlend;
 				uniform vec2 uSnowline,uMountainZones;
-				uniform vec3 uMountainAmounts;
+				uniform vec3 uMountainAmounts;`;
+			const rockProbe = program(vertex, fieldSource + `
 				uniform float uShift,uAspect,uOblique;
 				out vec4 color;
 				void main() {
@@ -734,6 +735,61 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				screeRange: percentile(screeValues,.95)-percentile(screeValues,.05), reliefJump,
 				reliefRange: percentile(reliefValues,.95)-percentile(reliefValues,.05),
 			};
+
+			// Across a 512 m hillside, compare the forest, bare rock and scree cover of
+			// one distant pixel with the mean of the finer samples at the same location.
+			const hillside = program(vertex, fieldSource + `
+				#define MATERIAL_STACK
+				uniform float uMeters;
+				out vec4 color;
+				void main() {
+					vec2 local=gl_FragCoord.xy*uMeters;
+					vec3 pos=vec3(-2705.+local.x,157.+.62*local.y,1779.+local.y);
+					vec3 normal=normalize(vec3(0.,1.,-.62)), relative=vec3(0.,-800.,0.);
+					vec3 weights=pow(abs(normal),vec3(4.));
+					weights/=dot(weights,vec3(1.));
+					float slope=1.-normal.y, water=0., footprint=uMeters*length(vec2(1.,.62));
+					float macro=landVariation(pos.xz,footprint), snowline=uSnowline.x+25.*macro, stipple=0.;
+					${shaders['material-fields.glsl']}
+					color=vec4(trees,bare,scree,min(1.,length(lift)));
+				}`);
+			gl.useProgram(hillside);
+			appearance(hillside,data.appearance);
+			const fieldScale = gl.getUniformLocation(hillside, 'uFieldScale');
+			gl.uniform4f(fieldScale, 48, 3, 13, 23);
+			function hillsidePixels(meters) {
+				const width = 512/meters, height = 128/meters;
+				gl.uniform1f(gl.getUniformLocation(hillside, 'uMeters'), meters);
+				gl.viewport(0, 0, width, height);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				const pixels = new Uint8Array(4*width*height);
+				gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+				return pixels;
+			}
+			const hillsideCover = [];
+			for(const seed of [[0,0], [0x4567,0x1234]]) {
+				gl.uniform2fv(gl.getUniformLocation(hillside, 'uPaletteOffset'), seed);
+				const reference = hillsidePixels(2);
+				for(const meters of [4, 8, 16, 32]) {
+					const coarse = hillsidePixels(meters), width = 512/meters, factor = meters/2;
+					for(const [channel, material] of ['forest','rock','scree'].entries()) {
+						const errors = [], levels = [];
+						for(let y=0; y<128/meters; y++) for(let x=0; x<width; x++) {
+							let sum = 0;
+							for(let j=0; j<factor; j++) for(let i=0; i<factor; i++)
+								sum += reference[4*((factor*y+j)*256+factor*x+i)+channel];
+							const cover = coarse[4*(width*y+x)+channel];
+							levels.push(cover);
+							errors.push(Math.abs(cover - sum/(factor*factor)));
+						}
+						hillsideCover.push({seed, meters, material, p95Error: percentile(errors,.95),
+							range: percentile(levels,.95)-percentile(levels,.05)});
+					}
+				}
+			}
+			gl.uniform4f(fieldScale, 1, 3, 13, 23);
+			const unresolvedRibs = hillsidePixels(8).filter((_, i) => i%4 === 3);
+			const maxUnresolvedTilt = Math.max(...unresolvedRibs);
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -1122,7 +1178,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
-				, mountainAmounts, rockDetail
+				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt
 				, inactiveAppearance
 
 				, aliasResults
@@ -1358,6 +1414,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.ok(aspectJump < 3, 'granite joints continue around the diagonal between upright projections');
 		assert.ok(reliefJump <= 1 && reliefRange > 12, 'scree relief varies across the face and stays stable under a change of view');
 		assert.ok(toneRange > 18 && screeRange > 32, 'loose rock keeps both tonal detail and patchy coverage');
+
+		for(const {seed, meters, material, p95Error, range} of result.hillsideCover) {
+			const label = `${material} at ${meters} m per pixel with seed ${seed}`;
+			assert.ok(p95Error < (meters <= 8 ? 24 : 45), `${label} differs from area coverage by ${p95Error} steps`);
+			assert.ok(range > 32, `${label} still varies across the hillside`);
+		}
+		assert.equal(result.maxUnresolvedTilt, 0, 'one-meter ribs leave no lighting grid at eight meters per pixel');
 
 		const variance = values => {
 			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
