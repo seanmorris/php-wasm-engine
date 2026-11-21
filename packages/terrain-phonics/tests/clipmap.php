@@ -146,6 +146,18 @@ $coast = SurfaceLayers::landscape((new Recipe(['preset' => 'coast']))->values(),
 check($coast[0]['color'] === $appearance->settings['grassColor']
 	&& abs($coast[1]['slopeLow'] - $coast[1]['slopeFade'] - $appearance->settings['rockSlopeStart']) < 1e-9,
 	'Rock starts to cover coastal grass only when the slope reaches the configured threshold.');
+$limestone = (new Recipe(['preset' => 'limestone']))->values();
+$karst = SurfaceLayers::landscape($limestone, $appearance)->layers;
+$stone = array_search('veins', array_column($karst, 'pattern'), true);
+check($karst[0]['pattern'] === 'fractal' && $karst[1]['patternScale'] < $karst[0]['patternScale']
+	&& $karst[0]['patternColor'] !== $karst[0]['color'], 'Limestone vegetation has separate grass and canopy scales.');
+check($stone !== false && $karst[$stone]['parent'] >= 0 && $karst[$stone]['patternStretch'] > 1.
+	&& $karst[$karst[$stone]['parent']]['color'] === $appearance->settings['rockColor'],
+	'Limestone veins follow the exposed rock mask.');
+$raised = SurfaceLayers::landscape(array_replace($limestone, ['baseBias' => .5]), $appearance)->layers;
+check($raised[1]['high'] - $karst[1]['high'] === $limestone['heightScale'] * .5,
+	'The grass transition follows the floor when its base elevation changes.');
+check((new SurfaceLayers($karst))->layers === $karst, 'Authored limestone layers round-trip with both procedural patterns.');
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
