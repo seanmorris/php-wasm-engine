@@ -159,8 +159,8 @@ for($i = 0; $i < 600; $i++)
 	$craft->step(1 / 60, 1, 0, $lake, $terrain, $i / 60);
 	if($i === 74) $expect($craft->state()['speed'] * 3.6 > 50, 'full throttle clears 50 km/h within 1.25 seconds');
 }
-$cruise = $craft->state()['speed'] * 3.6;
-$expect($cruise > 90 && $cruise < 105, 'planing drag balances full forward thrust near 100 km/h');
+$cruiseMph = $craft->state()['speed'] / .44704;
+$expect($cruiseMph >= 90 && $cruiseMph < 120, 'the hull reaches a stable planing speed between 90 and 120 mph on open water');
 
 foreach([[-1, 1], [1, -1], [-1, -1]] as [$steer, $throttle])
 {
@@ -173,17 +173,21 @@ foreach([[-1, 1], [1, -1], [-1, -1]] as [$steer, $throttle])
 }
 
 $terrain->shore = true;
-$craft->spawn(0, 0, 0, new Water, $terrain, 0);
 $lake = new Water;
+$craft->spawn(0, -300, 0, $lake, $terrain, 0);
 $contacts = 0;
+$approachSpeed = 0.;
 
 for($i = 0; $i < 600; $i++)
 {
 	$craft->step(1 / 60, 1, 0, $lake, $terrain, $i / 60);
-	$contacts += $craft->state()['contacts'];
+	$state = $craft->state();
+	$approachSpeed = max($approachSpeed, $state['speed']);
+	$contacts += $state['contacts'];
 }
 
-$expect($contacts > 0 && $craft->state()['z'] < 12, 'full-resolution shore samples stop the hull before land');
+$expect($approachSpeed / .44704 >= 90 && $contacts > 0 && $craft->state()['z'] < 12,
+	'full-resolution shore samples stop a 90 mph approach before land');
 $terrain->shore = false;
 $terrain->base = 3;
 $terrain->version++;
