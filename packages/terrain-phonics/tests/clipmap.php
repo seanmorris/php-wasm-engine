@@ -63,10 +63,16 @@ for($z = -400; $z <= 1800; $z += 55)
 $ground = new Landscape(['worldSize' => 512, 'spacing' => 1, 'heightScale' => 0, 'detailAmplitude' => 0]);
 $ground->queue(['type' => 'raise', 'x' => 32, 'z' => -40, 'radius' => 12, 'amount' => 3]);
 check($ground->editIndex()->intersect([28, -45, 34, -38]) === [], 'Uncommitted edits are invisible.');
+$emptyHeights = $ground->heightEditIndex();
+check($emptyHeights->isEmpty(), 'Pending edits cannot affect driving heights.');
 $ground->commit();
+$heights = $ground->heightEditIndex();
+check($heights !== $emptyHeights && $heights === $ground->heightEditIndex()
+	&& $heights->intersect([45,-41,46,-39]), 'A revision shares its height index and interpolation halo.');
 check($ground->editIndex()->intersect([45, -41, 46, -39]) === [[45, -41, 46.0, -39]], 'Edited cells include the reconstruction halo.');
 check($ground->editIndex()->intersect([-90, -41, -22, -39]) === [], 'Unrelated cells use the natural field.');
 $ground->undo();
+check($ground->heightEditIndex()->isEmpty(), 'Undo removes the committed height footprint.');
 check($ground->editIndex()->intersect([28, -45, 34, -38]) === [], 'Undo invalidates the edit footprint.');
 $ground->redo();
 check(count($ground->editIndex()->intersect([28, -45, 34, -38])) === 1, 'Redo restores the edit footprint.');
@@ -85,6 +91,10 @@ $ground->undo();
 check(!$ground->roads(), 'Undo removes the last road from the GPU input.');
 $ground->redo();
 check(count($ground->roads()) === 1, 'Redo restores its normalized planes.');
+$ground->queue(['type'=>'material','material'=>'grass','x'=>180,'z'=>180,'radius'=>10]);
+$ground->commit();
+check($ground->heightEditIndex()->intersect($roadPoint) && !$ground->heightEditIndex()->intersect([179,179,181,181])
+	&& $ground->editIndex()->intersect([179,179,181,181]), 'Driving sees the road and rendering also sees the grass paint.');
 $ground->close();
 
 foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
