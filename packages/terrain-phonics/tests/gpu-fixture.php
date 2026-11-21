@@ -63,18 +63,34 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 $bands = [];
 foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
 
+// Exercise the emitted PHP shader beside the standalone appearance reference on identical sample faces.
+$ridge = static fn(TerrainAppearance $appearance) => TerrainPhonics\SurfaceLayers::landscape(['preset'=>'mountain'],$appearance);
+$shader = TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$ridge(new TerrainAppearance));
+$stackInputs = static function($stack): array {
+	$inputs = ['uLayerCount'=>[count($stack->layers)],'uMaterialBounce'=>$stack->bounce];
+	$inspect = new ReflectionClass($stack);
+	foreach(['colors'=>'Color','ranges'=>'Range','blends'=>'Blend','modes'=>'Mode','effects'=>'Effect',
+		'patterns'=>'Pattern','patternColors'=>'PatternColor'] as $key=>$name)
+		$inputs['uLayer'.$name.'[0]'] = $inspect->getProperty($key)->getValue($stack);
+	return $inputs + $inspect->getProperty('fieldUniforms')->getValue($stack);
+};
+
 // Mountain faces drawn twice in two colors of one material: at an amount of 0 the color must not show.
 $mountainAmounts = [];
 
 foreach([['talus', .2, [0, .5]], ['stain', .7, [0, .3]]] as [$material, $slope, $amounts])
 foreach($amounts as $amount)
 {
-	$cases = [];
+	$cases = []; $stacks = [];
 
 	foreach(['#ff00ff', '#00ff00'] as $color)
-	$cases[] = (new TerrainAppearance([$material . 'Amount' => $amount, $material . 'Color' => $color]))->uniforms();
+	{
+		$appearance = new TerrainAppearance([$material.'Amount'=>$amount,$material.'Color'=>$color]);
+		$cases[] = $appearance->uniforms();
+		$stacks[] = $stackInputs($ridge($appearance));
+	}
 
-	$mountainAmounts[] = ['material' => $material, 'slope' => $slope, 'amount' => $amount, 'cases' => $cases];
+	$mountainAmounts[] = ['material'=>$material,'slope'=>$slope,'amount'=>$amount,'cases'=>$cases,'stacks'=>$stacks];
 }
 
 /**
@@ -119,7 +135,9 @@ $spotCases = [
 ];
 
 echo json_encode([
-	'spotLights' => $spotCases
+	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
+		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
+	'ridgeShader'=>$shader, 'spotLights' => $spotCases
 	, 'lampFreeSpotLights' => TerrainPhonics\SpotLights::shaderSource(false)
 	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']

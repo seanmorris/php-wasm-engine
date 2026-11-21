@@ -141,6 +141,20 @@ foreach([
 	}
 	catch(InvalidArgumentException) {}
 }
+foreach([
+	[['id'=>'sand'],['id'=>'sand']], [['channel'=>'relief']], [[],['parent'=>'missing']],
+	[[],['strength'=>NAN]], [[],['flatten'=>1.5]], [[],['mask'=>'missing']],
+] as $rows) {
+	try { new SurfaceLayers($rows); throw new RuntimeException('Expected an invalid material recipe.'); }
+	catch(InvalidArgumentException) {}
+}
+$parented = new SurfaceLayers([['id'=>'sand'],['parent'=>'sand','channel'=>'relief','relief'=>'pattern','pattern'=>'ripples']]);
+check($parented->layers[1]['parent'] === 0,'A saved mask ID resolves to its earlier layer.');
+$retuned = $parented->layers;
+$retuned[1]['strength'] = .25;
+check((new SurfaceLayers($retuned))->structure === $parented->structure,'Relief strength is a uniform-only edit.');
+$retuned[1]['relief'] = 'facets';
+check((new SurfaceLayers($retuned))->structure !== $parented->structure,'A new relief operator selects its shader program.');
 $appearance = new TerrainAppearance;
 $coast = SurfaceLayers::landscape((new Recipe(['preset' => 'coast']))->values(), $appearance)->layers;
 check($coast[0]['color'] === $appearance->settings['grassColor']

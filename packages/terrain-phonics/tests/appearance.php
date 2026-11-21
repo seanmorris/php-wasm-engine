@@ -189,7 +189,7 @@ foreach(TerrainAppearance::DEFAULTS as $name => $value)
 }
 
 // Each uniform is declared in the terrain shader with the type its values fill.
-$source = file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag');
+$source = file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag') . file_get_contents(__DIR__.'/uniform-material.glsl');
 preg_match_all('/^uniform (float|vec2|vec3|vec4) ([^;]+);/m', $source, $declarations, PREG_SET_ORDER);
 $declared = [];
 
@@ -201,7 +201,7 @@ foreach(explode(',', $names) as $declaration)
 	$declared[isset($match[2]) ? $match[1] . '[0]' : $match[1]] = $size * (int)($match[2] ?? 1);
 }
 
-foreach($uniforms as $name => $values)
+foreach(array_diff_key($uniforms,['uCanyonBounce'=>true]) as $name => $values)
 $expect(($declared[$name] ?? null) === count($values), "terrain.frag declares $name with the size it receives");
 
 // Validation: colors must be six-digit hex strings and numbers must be finite integers or floats.

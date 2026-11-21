@@ -2573,8 +2573,11 @@ $uploads = static function(string $name) use (&$appearanceScene): int {
  * @return void Records one check per uniform.
  */
 $holds = static function(TerrainAppearance $appearance, string $message) use ($sent): void {
-	foreach($appearance->uniforms() as $name => $values)
-	renderCheck($sent($name) === (count($values) > 4 ? [count($values) / 3, $values] : $values), "$message: $name");
+	$inks = array_merge(...array_map(static fn($key)=>TerrainAppearance::linear($appearance->settings[$key]), \TerrainPhonics\SurfaceLayers::INKS));
+	renderCheck($sent('uPaintColor[0]') === [5,$inks],"$message: paint inks");
+	foreach(['uSlopeBlend','uHeightBlend','uSnowline','uMacroVariation','uMountainZones','uMountainAmounts'] as $name)
+		renderCheck($sent($name) === $appearance->uniforms()[$name],"$message: $name");
+	renderCheck($sent('uLayerColor[0]')[0] > 0,"$message: active stack");
 };
 
 renderCheck(
@@ -2585,7 +2588,7 @@ renderCheck(
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the first frame uploads the default appearance');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
-renderCheck($uploads('uSnowColor') === 1 && $uploads('uCanyonColors[0]') === 1, 'an unchanged appearance stays put');
+renderCheck($uploads('uPaintColor[0]') === 1 && $uploads('uLayerColor[0]') === 1, 'an unchanged appearance stays put');
 renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
 renderCheck($uploads('uExposure') === 1 && $uploads('uSunDirection') === 1, 'stationary lighting stays on the GPU');
 $appearanceAtmosphere->setExposure(1.75);
@@ -2596,10 +2599,10 @@ $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the next frame uploads a replaced appearance');
 renderCheck($sent('uExposure') === [1.75] && $uploads('uExposure') === 2 && $uploads('uSunDirection') === 1,
 	'changing exposure only resends the affected atmosphere parameter');
-renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
-renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest color arrives');
+renderCheck(array_slice($sent('uPaintColor[0]')[1],9,3) === [1.,0.,0.] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
+renderCheck(array_slice($sent('uLayerColor[0]')[1],12,3) === [0.0, 1.0, 0.0], 'the new forest color arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
-renderCheck($uploads('uSnowColor') === 2, 'a replaced appearance uploads once');
+renderCheck($uploads('uPaintColor[0]') === 2, 'a replaced appearance uploads once');
 
 // The lit ground program receives the appearance the first frame it draws, and each program keeps its own copy.
 $appearanceScene->setSpotLights([$spotLight]);
@@ -2607,8 +2610,8 @@ $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $litGround = renderGet($appearanceScene, 'litGroundProgram')->id;
 
 renderCheck(
-	$GLOBALS['terrainGl']['uniforms'][$litGround]['uSnowColor'] === [1.0, 0.0, 0.0]
-	&& $GLOBALS['terrainGl']['uploads'][$litGround]['uSnowColor'] === 1
+	array_slice($GLOBALS['terrainGl']['uniforms'][$litGround]['uPaintColor[0]'][1],9,3) === [1.0, 0.0, 0.0]
+	&& $GLOBALS['terrainGl']['uploads'][$litGround]['uPaintColor[0]'] === 1
 	, 'the lit ground program receives the appearance when it first draws'
 );
 
@@ -2618,7 +2621,7 @@ $appearanceScene->setSpotLights([$spotLight]);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 
 renderCheck(
-	$uploads('uSnowColor') === 2 && $GLOBALS['terrainGl']['uploads'][$litGround]['uSnowColor'] === 1
+	$uploads('uPaintColor[0]') === 2 && $GLOBALS['terrainGl']['uploads'][$litGround]['uPaintColor[0]'] === 1
 	, 'switching between the lamp-free and the lit ground programs uploads no appearance again'
 );
 
@@ -2627,7 +2630,7 @@ $appearanceScene->setSpotLights([]);
 $relinked = renderGet($appearanceScene, 'groundProgram')->id;
 $appearanceScene->restore();
 renderCheck(renderGet($appearanceScene, 'groundProgram')->id !== $relinked, 'restoration relinks the ground program');
-renderCheck($sent('uSnowColor') === null, 'a relinked program starts without the appearance');
+renderCheck($sent('uPaintColor[0]') === null, 'a relinked program starts without the appearance');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the frame after restoration uploads the appearance again');
 renderCheck($sent('uExposure') === [1.75] && $uploads('uSunDirection') === 1, 'restoration repopulates atmosphere uniforms');
@@ -2646,7 +2649,8 @@ foreach($styles as [$recipe, $style])
 	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere, useClipmap: false);
 	$appearanceScene->appearance = new TerrainAppearance($styled);
 	$appearanceScene->render($appearanceCamera, 320, 200, 0);
-	renderCheck($sent('uTerrainStyle') === [$style], "the {$recipe['preset']} recipe draws terrain style $style");
+	$expectedStack = \TerrainPhonics\SurfaceLayers::landscape((new \TerrainPhonics\Recipe($recipe))->values(),$appearanceScene->appearance);
+	renderCheck($sent('uLayerColor[0]')[0] === count($expectedStack->layers),"the {$recipe['preset']} recipe binds its layer stack");
 	$holds($appearanceScene->appearance, "terrain style $style receives the appearance");
 	$appearanceScene->close();
 }

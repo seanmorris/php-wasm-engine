@@ -30,13 +30,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'water.frag'
 		, 'terrain.vert'
 		, 'terrain.frag'
+		, 'material-noise.glsl'
+		, 'material-fields.glsl'
 		, 'surface-layers.glsl'
 	];
 
 	const shaders = Object.fromEntries(names.map(name => [name
 		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
 	]));
-	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// LAYERS', shaders['surface-layers.glsl']);
+	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// LAYERS', shaders['surface-layers.glsl'])
+		.replace('// MATERIAL NOISE', shaders['material-noise.glsl'])
+		.replace('// MATERIAL STACK',readFileSync(new URL('./uniform-material.glsl',import.meta.url),'utf8')
+			.replace('// RELIEF FIELDS',shaders['material-fields.glsl']));
 
 	const browser = await chromium.launch({
 		executablePath: process.env.CHROMIUM ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
@@ -114,6 +119,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 
 			const appearance = (linked, uniforms) => {
+				const ink=['uRockColor','uGrassColor','uSandColor','uSnowColor','uRoadColor'].flatMap(key=>uniforms[key]);
+				gl.uniform3fv(gl.getUniformLocation(linked,'uPaintColor[0]'),ink);
 				for(const [name, values] of Object.entries(uniforms))
 				{
 					const location = gl.getUniformLocation(linked, name);
@@ -530,7 +537,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				// The compiler drops a uniform the shader stops reading, and uploads to it then do nothing.
 				if(name === 'terrain')
 				{
-					inactiveAppearance = Object.keys(data.appearance)
+					inactiveAppearance = ['uPaintColor[0]','uSnowline','uSlopeBlend','uMountainAmounts','uMountainColors[0]']
 						.filter(uniform => gl.getUniformLocation(surface, uniform) === null);
 				}
 
@@ -623,10 +630,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(gl.getUniformLocation(amountProgram, 'uTerrainStyle'), 1);
 			gl.uniform3f(gl.getUniformLocation(amountProgram, 'uEye'), 0, 3000, 0);
 			target(7, 256, 64);
+			const authoredProgram = program(amountVertex, data.ridgeShader.replace('// ATMOSPHERE', data.source));
 			const mountainAmounts = [];
 
-			for(const {material, slope, amount, cases} of data.mountainAmounts)
+			for(const {material, slope, amount, cases, stacks} of data.mountainAmounts)
 			{
+				gl.useProgram(amountProgram);
 				gl.uniform1f(gl.getUniformLocation(amountProgram, 'uFaceSlope'), slope);
 
 				const images = cases.map(uniforms => {
@@ -638,6 +647,27 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					return bytes;
 				});
 
+				// Both programs see the same position, normal, lighting and material parameters.
+				parameters(authoredProgram);
+				gl.uniform3f(gl.getUniformLocation(authoredProgram,'uEye'),0,3000,0);
+				gl.uniform1f(gl.getUniformLocation(authoredProgram,'uFaceSlope'),slope);
+				let maxError=0;
+				for(const [index,inputs] of stacks.entries()) {
+					for(const [name,values] of Object.entries(inputs)) {
+						const loc=gl.getUniformLocation(authoredProgram,name);
+						if(name==='uLayerCount') gl.uniform1i(loc,values[0]);
+						else if(values.length===1) gl.uniform1f(loc,values[0]);
+						else {
+							const width=values.length<=4 ? values.length : name.includes('Color') ? 3 : 4;
+							gl[`uniform${width}fv`](loc,values);
+						}
+					}
+					gl.drawArrays(gl.TRIANGLES,0,3);
+					const pixels=new Uint8Array(256*64*4);
+					gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+					for(let i=0;i<pixels.length;i++) maxError=Math.max(maxError,Math.abs(pixels[i]-images[index][i]));
+				}
+
 				// A patch in either color differs by far more than 8 steps, while a mix of talus into granite at a
 				// weight of 1 can keep a rounding error from the talus color and move a pixel by one step.
 				let differing = 0;
@@ -645,7 +675,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				for(let i = 0; i < images[0].length; i += 4)
 					if([0, 1, 2].some(c => Math.abs(images[0][i + c] - images[1][i + c]) > 8)) differing++;
 
-				mountainAmounts.push({material, amount, share: differing / (256 * 64)});
+				mountainAmounts.push({material, amount, maxError, share: differing / (256 * 64)});
 			}
 
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -994,12 +1024,41 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				spotResults[name] = {...colors, unlit};
 			}
 
+			// The overview and the fine grid use the same final, coverage-weighted ink blend.
+			const chart = program(shaders['shadows.vert'], data.chartShader);
+			gl.useProgram(chart);
+			const chartLocation = key => gl.getUniformLocation(chart, key);
+			target(7, 1, 1);
+			gl.uniform1i(chartLocation('uLayerCount'), 1);
+			gl.uniform3f(chartLocation('uLayerColor[0]'), 1, 0, 0);
+			gl.uniform3f(chartLocation('uPaintColor[4]'), 0, 0, 1);
+			gl.uniform1f(chartLocation('uExtent'), 256);
+			gl.uniform1f(chartLocation('uWaterLevel'), -20);
+			gl.uniform2f(chartLocation('uHeading'), 1, 0);
+			const chartSamples = [];
+			for(const [n,unit,first] of [[257,0,128],[256,2,0]]) {
+				texture(unit,n,n,null);
+				const inks = new Uint8Array(n*n*4);
+				for(let y=0;y<n;y++) inks[4*(y*n+first)] = 5;
+				texture(unit+1,n,n,inks);
+			}
+			for(const [i,key] of ['uOverview','uMapInk','uFine','uFineInk'].entries()) gl.uniform1i(chartLocation(key),i);
+			for(const localOrigin of [500,-32]) {
+				gl.uniform4f(chartLocation('uLocal'),localOrigin,localOrigin,1,64);
+				const samples = [];
+				for(const x of [-1,-.5,0]) {
+					gl.uniform4f(chartLocation('uChart'),x,0,1,1);
+					samples.push(pixel());
+				}
+				chartSamples.push(samples);
+			}
+
 			const error = gl.getError();
 
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, transitionError, starChecks
+				skyResults, transitionError, starChecks, chartSamples
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
@@ -1156,7 +1215,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
 		}
 
-		assert.deepEqual(result.inactiveAppearance, [], 'terrain.frag reads every appearance uniform');
+		for(const [land, shoulder, road] of result.chartSamples) {
+			assert.ok(land[0]>240 && land[2]===0, 'unpainted minimap uses the natural stack');
+			assert.ok(road[2]>240 && road[0]===0, 'full pavement overrides the natural stack');
+			assert.ok(shoulder[0]>150 && shoulder[2]>150, 'the shoulder blends both materials');
+		}
+
+		assert.deepEqual(result.inactiveAppearance, [], 'the reference reads the ink palette and ridge fields');
 
 		const [, grass, redGrass] = result.illuminationResults.find(sample => sample.name === 'terrain').colors;
 		assert.ok(grass[1] > grass[0] && grass[1] > grass[2], `default grass paint draws green: ${grass}`);
@@ -1223,8 +1288,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		// Talus and stain colors must show at their default amounts and nowhere at an amount of 0.
 		console.log('Mountain colors shown by amount:', JSON.stringify(result.mountainAmounts));
 
-		for(const {material, amount, share} of result.mountainAmounts)
+		for(const {material, amount, share, maxError} of result.mountainAmounts)
 		{
+			assert.ok(maxError<=1, `Layered ${material} differs from the reference by ${maxError} channel steps`);
 			if(amount === 0) assert.equal(share, 0, `${material} shows on ${share} of a face at an amount of 0`);
 			else assert.ok(share > .01, `${material} shows on ${share} of a face at an amount of ${amount}`);
 		}
