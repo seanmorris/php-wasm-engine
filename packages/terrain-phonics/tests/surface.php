@@ -786,6 +786,24 @@ $roadReloaded = Landscape::load($road->save());
 terrainCheck($road->sample(.3, 3.7) === $roadReloaded->sample(.3, 3.7), 'road acceleration rebuild preserves geometry');
 terrainCheck(!str_contains($road->save(), '_road'), 'persistent roads omit derived spatial indexes');
 
+$banked = new Landscape($flatRecipe);
+$banked->queue(['type'=>'road','points'=>[[-24,5,0],[0,5,0],[24,5,0]],
+	'banks'=>[.15,.15,.15],'width'=>16,'shoulder'=>5]);
+$banked->commit();
+terrainNear($banked->height(0,4)-$banked->height(0,-4),1.2,1e-8,
+	'road bank raises one side across the graded width');
+terrainNear($banked->height(0,15),0.,0.,'road bank blends into the existing embankment');
+$bankedCopy = Landscape::load($banked->save());
+terrainNear($bankedCopy->height(0,4),$banked->height(0,4),0.,'road cross slope survives save and reload');
+terrainReject(fn() => $banked->queue(['type'=>'road','points'=>[[0,1,0],[24,1,0]],'banks'=>[.2]]),
+	'a banked road needs one cross slope per control point');
+$diagonal = new Landscape($flatRecipe);
+$diagonal->queue(['type'=>'road','points'=>[[-50,5,-50],[50,5,50]],'width'=>8,'shoulder'=>7]);
+$diagonal->commit();
+$strip = $diagonal->editIndex();
+terrainCheck($strip->intersect([-5,-5,5,5]) !== [] && $strip->intersect([-48,44,-44,48]) === [],
+	'road texture updates follow the strip and skip empty corners of its rectangle');
+
 $pinned = new Landscape($flatRecipe);
 $token = $pinned->pin([0,0,3,3]);
 
