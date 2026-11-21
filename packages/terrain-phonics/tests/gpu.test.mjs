@@ -741,24 +741,28 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const hillside = program(vertex, fieldSource + `
 				#define MATERIAL_STACK
 				uniform float uMeters;
+				uniform vec2 uFaceStep;
+				uniform bool uInspectRelief;
 				out vec4 color;
 				void main() {
 					vec2 local=gl_FragCoord.xy*uMeters;
-					vec3 pos=vec3(-2705.+local.x,157.+.62*local.y,1779.+local.y);
-					vec3 normal=normalize(vec3(0.,1.,-.62)), relative=vec3(0.,-800.,0.);
+					vec3 pos=vec3(-2705.,157.,1779.)+vec3(local.x,uFaceStep*local.y);
+					vec3 normal=normalize(vec3(0.,uFaceStep.y,-uFaceStep.x)), relative=-80.*normal;
 					vec3 weights=pow(abs(normal),vec3(4.));
 					weights/=dot(weights,vec3(1.));
-					float slope=1.-normal.y, water=0., footprint=uMeters*length(vec2(1.,.62));
+					float slope=1.-normal.y, water=0., footprint=uMeters*length(uFaceStep);
 					float macro=landVariation(pos.xz,footprint), snowline=uSnowline.x+25.*macro, stipple=0.;
 					${shaders['material-fields.glsl']}
 					color=vec4(trees,bare,scree,min(1.,length(lift)));
+					if(uInspectRelief) color=vec4(length(lift-normal*dot(normal,lift)),2.*length(facet),3.*length(blockTilt),.5*jointTint.r);
 				}`);
 			gl.useProgram(hillside);
 			appearance(hillside,data.appearance);
 			const fieldScale = gl.getUniformLocation(hillside, 'uFieldScale');
+			const faceStep = gl.getUniformLocation(hillside, 'uFaceStep');
+			gl.uniform2f(faceStep, .62, 1);
 			gl.uniform4f(fieldScale, 48, 3, 13, 23);
-			function hillsidePixels(meters) {
-				const width = 512/meters, height = 128/meters;
+			function hillsidePixels(meters, width = 512/meters, height = 128/meters) {
 				gl.uniform1f(gl.getUniformLocation(hillside, 'uMeters'), meters);
 				gl.viewport(0, 0, width, height);
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -790,6 +794,26 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform4f(fieldScale, 1, 3, 13, 23);
 			const unresolvedRibs = hillsidePixels(8).filter((_, i) => i%4 === 3);
 			const maxUnresolvedTilt = Math.max(...unresolvedRibs);
+			gl.uniform4f(fieldScale, 48, 3, 13, 23);
+			gl.uniform1i(gl.getUniformLocation(hillside, 'uInspectRelief'), 1);
+			const rockDamping = gl.getUniformLocation(hillside, 'uRockSlopeDamping');
+			const slopeRelief = [];
+			for(const degrees of [0,30,50,72,90]) {
+				const angle = degrees*Math.PI/180;
+				gl.uniform2f(faceStep, Math.sin(angle), Math.cos(angle));
+				const sample = damping => {
+					gl.uniform1f(rockDamping, damping/.45**2);
+					return hillsidePixels(.25,128,64);
+				};
+				const full = sample(0), damped = sample(2), strong = sample(20);
+				const totals = pixels => [0,1,2].map(channel => {
+					let sum = 0;
+					for(let i=channel; i<pixels.length; i+=4) sum+=pixels[i];
+					return sum;
+				});
+				const sameTint = full.every((v,i) => i%4 !== 3 || v === damped[i] && v === strong[i]);
+				slopeRelief.push({degrees,full:totals(full),damped:totals(damped),strong:totals(strong),sameTint});
+			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -1178,7 +1202,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
-				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt
+				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt, slopeRelief
 				, inactiveAppearance
 
 				, aliasResults
@@ -1421,6 +1445,25 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(range > 32, `${label} still varies across the hillside`);
 		}
 		assert.equal(result.maxUnresolvedTilt, 0, 'one-meter ribs leave no lighting grid at eight meters per pixel');
+		let previous = [1,1,1];
+		for(const {degrees,full,damped,strong,sameTint} of result.slopeRelief) {
+			assert.ok(sameTint, 'rock tint stays fixed when its lighting relief is damped');
+			if(degrees === 0) {
+				assert.deepEqual(strong, full, 'level rock keeps its full relief');
+				continue;
+			}
+			const ratios = damped.map((value,i) => value/full[i]);
+			for(const [i,name] of ['ribs','facets','blocks'].entries()) {
+				assert.ok(full[i] > 0 && ratios[i] < previous[i], `${name} relief fades on the ${degrees} degree face`);
+				assert.ok(strong[i] <= damped[i], `increasing damping smooths ${name}`);
+			}
+			if(degrees === 50) {
+				assert.ok(ratios[0] > .45 && ratios[0] < .9, 'broad ribs retain their form on steep rock');
+				assert.ok(ratios[1] < .5*ratios[0] && ratios[2] < .5*ratios[0], 'fine rock detail softens first');
+			}
+			if(degrees === 90) assert.deepEqual(damped,[0,0,0], 'a vertical face has finite, fully damped rock relief');
+			previous = ratios;
+		}
 
 		const variance = values => {
 			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;

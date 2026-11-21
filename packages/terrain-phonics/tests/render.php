@@ -2590,6 +2590,8 @@ $holds($appearanceScene->appearance, 'the first frame uploads the default appear
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uPaintColor[0]') === 1 && $uploads('uLayerColor[0]') === 1, 'an unchanged appearance stays put');
 renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
+renderCheck($sent('uRockSlopeDamping') === [2. / .45**2] && $uploads('uRockSlopeDamping') === 1,
+	'the rock material receives the recipe damping and slope scale once');
 renderCheck($uploads('uExposure') === 1 && $uploads('uSunDirection') === 1, 'stationary lighting stays on the GPU');
 $appearanceAtmosphere->setExposure(1.75);
 
@@ -2625,6 +2627,14 @@ renderCheck(
 	, 'switching between the lamp-free and the lit ground programs uploads no appearance again'
 );
 
+$appearanceScene->setSpotLights([]);
+
+$appearanceScene->setLandscape(new Landscape(['worldSize'=>256, 'damping'=>3., 'slopeScale'=>.5]));
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+renderCheck($sent('uRockSlopeDamping') === [12.], 'a replacement landscape refreshes rock damping on the same shader');
+$appearanceScene->setSpotLights([$spotLight]);
+$appearanceScene->render($appearanceCamera, 320, 200, 0);
+renderCheck($GLOBALS['terrainGl']['uniforms'][$litGround]['uRockSlopeDamping'] === [12.], 'lamps use the new landscape damping too');
 $appearanceScene->setSpotLights([]);
 
 $relinked = renderGet($appearanceScene, 'groundProgram')->id;
