@@ -5,7 +5,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {chromium} from '@playwright/test';
 
-test('GPU heights agree with the PHP lattice on cliffs and at the world edges',async()=>{
+test('GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges',async()=>{
 	const cases=JSON.parse(execFileSync('php',[fileURLToPath(new URL('elevation-reference.php',import.meta.url))]));
 	const source=name=>readFileSync(new URL('../shaders/'+name,import.meta.url),'utf8');
 	const browser=await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
@@ -29,9 +29,24 @@ test('GPU heights agree with the PHP lattice on cliffs and at the world edges',a
 			const permutation=gl.getParameter(gl.TEXTURE_BINDING_2D);
 			gl.bindTexture(gl.TEXTURE_2D,target); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA8,32,1);
 			gl.bindFramebuffer(gl.FRAMEBUFFER,fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,target,0);
+			const ink=gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D,ink); gl.texStorage2D(gl.TEXTURE_2D,1,gl.RGBA8,32,1);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,ink,0);
+			gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
 			gl.bindTexture(gl.TEXTURE_2D,permutation); gl.viewport(0,0,32,1);
 			gl.uniform1i(loc('uPacked'),1); gl.uniform1f(loc('uStep'),1); gl.uniform4f(loc('uRegion'),16384,0,1,0);
-			return cases.map(({recipe:r,perm,samples})=>{
+			return cases.map(({recipe:r,perm,samples,atlas})=>{
+				gl.uniform4f(loc('uRegion'),r.worldSize / 2,0,1,0);
+				if(atlas) {
+					gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
+					gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+					gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+					const bytes=Uint8Array.from(atob(atlas.bytes), c => c.charCodeAt(0));
+					gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,atlas.width,atlas.height,0,gl.RGBA,gl.FLOAT,new Float32Array(bytes.buffer));
+					gl.uniform1i(loc('uRoadAtlas'),1);
+					gl.uniform4i(loc('uRoadGrid'),atlas.directory,atlas.blocksAcross,atlas.minTile,atlas.cell);
+					gl.activeTexture(gl.TEXTURE0);
+				}
 				gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,1,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array(perm));
 				for(const [name,keys] of Object.entries({uShape:['baseBias','rolling','directionalRise','ridgeHeight'],
 					uProfile:['ridgeRoundness','wallHeight','floorWidth','wallWidth'],uField:['heightScale','baseFrequency','warpAmplitude','warpFrequency'],
@@ -42,11 +57,15 @@ test('GPU heights agree with the PHP lattice on cliffs and at the world edges',a
 				gl.uniform2f(loc('uErosion'),erosion,erosion-Math.fround(erosion));
 				gl.uniform1f(loc('uSlopeScale'),r.slopeScale); gl.uniform1i(loc('uOctaves'),r.detailOctaves);
 				let error=0;
-				for(const [x,z,reference] of samples) {
+				for(const [x,z,reference,materials] of samples) {
 					gl.uniform2i(loc('uOriginCell'),x,z); gl.drawArrays(gl.TRIANGLES,0,3);
-					const bytes=new Uint8Array(128); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
+					const bytes=new Uint8Array(128); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 					const values=new Float32Array(bytes.buffer);
 					reference.forEach((h,i)=>{error=Math.max(error,Math.abs(h-values[i]));});
+					if(materials) {
+						gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
+						materials.forEach((m,i)=>{if(m!==bytes[4*i]) throw Error(`Material at ${x+i},${z}: ${bytes[4*i]} expected ${m}`);});
+					}
 				}
 				return [r.seed,r.preset,r.version,error];
 			});

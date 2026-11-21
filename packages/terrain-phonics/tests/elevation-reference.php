@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-use TerrainPhonics\{Noise,Recipe};
+use TerrainPhonics\{Landscape,Noise,Recipe,RoadAtlas};
 require dirname(__DIR__).'/autoload.php';
 
 $cases=[];
@@ -20,4 +20,38 @@ foreach(['stream','first-light'] as $seed) foreach(['mountain','coast','canyon-v
 	}
 	$cases[]=['recipe'=>$recipe->values(),'perm'=>(new Noise($seed))->permutation(),'samples'=>$samples];
 }
+
+// Cross the negative block seam on a bank, turn back into the same tile, then cross a later road.
+$ground = new Landscape(['worldSize' => 2048, 'seed' => 'road-atlas', 'heightScale' => 140, 'detailAmplitude' => 6]);
+$ground->queue(['type' => 'road', 'width' => 14, 'shoulder' => 9, 'crown' => .5,
+	'banks' => [-.1, .18, -.08, .15, -.1], 'points' => [
+		[-610, 70, -512], [-480, 82, -512], [-460, 87, -462], [-510, 75, -494], [-560, 69, -530],
+	]]);
+$ground->queue(['type' => 'road', 'width' => 9, 'shoulder' => 4, 'material' => 'snow',
+	'points' => [[-530, 95, -555], [-499, 87, -478]]]);
+$ground->queue(['type' => 'road', 'width' => 4, 'shoulder' => 1, 'material' => null,
+	'points' => [[-508, 65, -540], [-508, 79, -480]]]);
+$ground->queue(['type' => 'road', 'width' => 20, 'shoulder' => 5,
+	'points' => [[935, 40, 975], [1030, 65, 1025]]]);
+$ground->commit();
+$atlas = RoadAtlas::build($ground->roads(), $ground->recipe()['worldSize']);
+$atlas['bytes'] = base64_encode($atlas['bytes']);
+$samples = [];
+foreach([[-565,-542,6,18], [-15,-5,1,2], [965,978,1,1], [993,1024,1,1]] as [$left,$front,$columns,$rows])
+for($j = 0; $j < $rows; $j++)
+for($i = 0; $i < $columns; $i++)
+{
+	$x = $left + 24*$i;
+	$z = $front + 5*$j;
+	$heights = $materials = [];
+	for($n = 0; $n < 32; $n++)
+	{
+		$heights[] = $ground->height($x+$n, $z);
+		$id = array_search($ground->material($x+$n, $z), RoadAtlas::MATERIALS, true);
+		$materials[] = $id === false ? 0 : $id + 1;
+	}
+	$samples[] = [$x, $z, $heights, $materials];
+}
+$cases[] = ['recipe' => $ground->recipe(), 'perm' => (new Noise('road-atlas'))->permutation(),
+	'atlas' => $atlas, 'samples' => $samples];
 echo json_encode($cases,JSON_THROW_ON_ERROR);

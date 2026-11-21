@@ -70,6 +70,21 @@ $ground->undo();
 check($ground->editIndex()->intersect([28, -45, 34, -38]) === [], 'Undo invalidates the edit footprint.');
 $ground->redo();
 check(count($ground->editIndex()->intersect([28, -45, 34, -38])) === 1, 'Redo restores the edit footprint.');
+$roadPoint = [-11, 0, -11, 0];
+$ground->queue(['type' => 'road', 'points' => [[-20, 7, 0], [0, 7, 0]]]);
+check(!$ground->roads(), 'Staged roads have no GPU records.');
+$ground->commit();
+check(count($ground->roads()) === 1 && $ground->editIndex()->intersect($roadPoint)
+	&& !$ground->editIndex(false)->intersect($roadPoint), 'The clipmap can delegate only the road to the GPU.');
+$ground->queue(['type' => 'raise', 'x' => -11, 'z' => 0, 'radius' => 2, 'amount' => 3]);
+$ground->commit();
+check($ground->editIndex(false)->intersect($roadPoint) && $ground->height(-11, 0) === 10.,
+	'The overlapping brush supplies the fully composed road and brush height.');
+$ground->undo();
+$ground->undo();
+check(!$ground->roads(), 'Undo removes the last road from the GPU input.');
+$ground->redo();
+check(count($ground->roads()) === 1, 'Redo restores its normalized planes.');
 $ground->close();
 
 foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
