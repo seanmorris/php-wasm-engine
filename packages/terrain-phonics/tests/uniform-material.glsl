@@ -100,15 +100,6 @@ void canyonMaterial(float footprint, vec3 weights, float slope, float macro,
 	normal = bump(normal, cliff*5.0*grooves, 1.0 - smoothstep(6.0, 24.0, footprint));
 }
 
-// Small flecks stay tied to the ground and fade out before a fleck shrinks below a few pixels.
-float mountainStipple(float footprint, vec3 weights)
-{
-	const float size = 1.6;
-	float fade = patternVisibility(footprint,size,STIPPLE_PATTERN);
-	if(fade <= 0.0) return 0.0;
-	return fade * projectedPattern(vWorld,weights,size,1.0,vec2(73.37,19.81),STIPPLE_PATTERN);
-}
-
 // Granite mountains. Steep ground shows jointed slabs streaked down the fall line, talus lies on the moderately steep
 // ground, and the cover runs from forest through subalpine meadow to tundra as the ground nears the snowline. Ribs and
 // gullies running down the fall line move every boundary up or down, so none of them follows a contour.
@@ -131,7 +122,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec3 cliff = mix(granite,stain,sheets*clamp(.5+.42*streak+.4*rill,0.,.85))*jointTint;
 	rock = mix(rubble,cliff,cliffFraction);
 	outBare = bare;
-	vec3 knob = vec3(offset.x,0.,offset.y)*(.6*block*(scree+bare*(1.-steep))+.5*crown*trees)*cellFade;
+	vec3 knob = vec3(offset.x,0.,offset.y)*(.6*block*(scree+bare*(1.-steep))+.5*crownRelief*trees)*cellFade;
 	normal = normalize(normal + (facet*bare*steep*slabFade*settled+knob)*relief);
 	vec3 tangential = lift-normal*dot(normal,lift);
 	normal = normalize(normal-tangential*relief/(1.+length(tangential)));
@@ -149,7 +140,7 @@ vec3 materialSurface(vec3 pos,vec3 n,vec3 relative,float footprint,float water,f
 		float stipple = 0.0;
 		if(uTerrainStyle > 0.5 && uTerrainStyle < 1.5)
 		{
-			stipple = mountainStipple(footprint, weights);
+			stipple = stippleGrain(vWorld,1.6,1.0,footprint);
 			mountainMaterial(footprint, weights, slope, macro, snowline, stipple, rock, cover, bare, lightingNormal);
 		}
 		else if(uTerrainStyle > 2.5)

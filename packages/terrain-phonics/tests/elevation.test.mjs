@@ -94,10 +94,11 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 				precision highp float;
 				precision highp int;
 				${layers}
-				uniform float uShift,uHeight,uFootprint,uRise,uNormalY;
+				uniform float uShift,uHeight,uFootprint,uRise,uNormalY,uSampleStep;
 				out vec4 color;
 				void main() {
-					vec3 pos = vec3(gl_FragCoord.x+uShift, uHeight+uRise*gl_FragCoord.y, gl_FragCoord.y);
+					vec2 xz=(gl_FragCoord.xy+vec2(uShift,0.))*uSampleStep;
+					vec3 pos = vec3(xz.x, uHeight+uRise*xz.y, xz.y);
 					vec3 normal = vec3(sqrt(1.-uNormalY*uNormalY), uNormalY, 0.);
 					color = vec4(layerSurface(pos,normal,uFootprint,0.),1.);
 				}`;
@@ -122,12 +123,13 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			gl.uniform2f(location('uPaletteOffset'), 230, 410);
 			gl.uniform1f(location('uNormalY'), 1);
 			gl.uniform1f(location('uRise'), 0);
+			gl.uniform1f(location('uSampleStep'), 1);
 
-			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1) {
+			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1, scale = 12) {
 				gl.uniform1f(location('uShift'), shift);
 				gl.uniform1f(location('uHeight'), elevation);
 				gl.uniform1f(location('uFootprint'), footprint);
-				gl.uniform4fv(location('uLayerPattern[0]'), [0,0,20,4, kind,amount,12,4]);
+				gl.uniform4fv(location('uLayerPattern[0]'), [0,0,20,4, kind,amount,scale,4]);
 				gl.drawArrays(gl.TRIANGLES,0,3);
 				const data = new Uint8Array(width*height*4);
 				gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,data);
@@ -141,6 +143,19 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			const masked = sample(2,0,30).every((value,i) => value === sampleOutside[i]);
 			const filtered = sample(3,0,0,20).every((value,i) => value === solid[i]);
 			const zero = sample(1,0,0,.1,0).every((value,i) => value === solid[i]);
+
+			// Render the same half-meter patch at each filter width. Single-scale dots give
+			// identical images here, even across a dot's edge.
+			gl.uniform1f(location('uSampleStep'), 1/256);
+			const stipple = (footprint, shift = 0) => sample(5,shift,0,footprint,1,1.6);
+			const widths = [.045,.016,.005,.0018];
+			const closeups = widths.map(footprint => stipple(footprint));
+			const bandsVisible = closeups.slice(1).map((pixels, index) =>
+				pixels.filter((value, i) => Math.abs(value-closeups[index][i]) > 1).length > .08*pixels.length);
+			const near = closeups.at(-1);
+			const stableGrain = stipple(widths.at(-1),7).every((value,i) => i%width >= width-7 || value === near[i+7]);
+			const distantGrain = stipple(.5).every((value,i) => value === solid[i]);
+			gl.uniform1f(location('uSampleStep'), 1);
 
 			gl.uniform1f(location('uNormalY'), 0);
 			gl.uniform1f(location('uRise'), .125);
@@ -173,12 +188,13 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 				visible: patterned.map(pixels => new Set(pixels).size > 5),
 				unique: new Set(patterned.map(pixels => pixels.join(','))).size,
 				anchored: moved.every((value,i) => i%width >= width-7 || value === patterned[1][i+7]),
-				masked, filtered, zero, cyclic, filteredMask, resolvedPartings, noFalseContacts,
+				bandsVisible, stableGrain, distantGrain, masked, filtered, zero, cyclic, filteredMask, resolvedPartings, noFalseContacts,
 				distinctBed: bed > outsideBed,
 			};
 		},{vertex,layers});
 		assert.deepEqual(results, {
-			visible:[true,true,true], unique:3, anchored:true, masked:true, filtered:true, zero:true,
+			visible:[true,true,true], unique:3, anchored:true, bandsVisible:[true,true,true], stableGrain:true, distantGrain:true,
+			masked:true, filtered:true, zero:true,
 			cyclic:true, filteredMask:true, distinctBed:true, resolvedPartings:true, noFalseContacts:true,
 		});
 	} finally {
