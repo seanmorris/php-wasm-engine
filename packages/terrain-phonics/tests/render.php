@@ -2543,7 +2543,8 @@ $scene->close();
 renderCheck(array_sum($resources()) === 0, 'close releases all scene GL ownership exactly once');
 
 // The ground program keeps the appearance between frames. A replacement or a relinked program uploads it again.
-$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), new Atmosphere, useClipmap: false);
+$appearanceAtmosphere = new Atmosphere;
+$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), $appearanceAtmosphere, useClipmap: false);
 $appearanceCamera = new Camera;
 
 /**
@@ -2585,11 +2586,15 @@ $holds($appearanceScene->appearance, 'the first frame uploads the default appear
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uSnowColor') === 1 && $uploads('uCanyonColors[0]') === 1, 'an unchanged appearance stays put');
 renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
+renderCheck($uploads('uExposure') === 1 && $uploads('uSunDirection') === 1, 'stationary lighting stays on the GPU');
+$appearanceAtmosphere->setExposure(1.75);
 
 $replacement = ['snowColor' => '#ff0000', 'snowline' => 150, 'bandSpacing' => 20, 'forestColor' => '#00ff00'];
 $appearanceScene->appearance = new TerrainAppearance($replacement);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the next frame uploads a replaced appearance');
+renderCheck($sent('uExposure') === [1.75] && $uploads('uExposure') === 2 && $uploads('uSunDirection') === 1,
+	'changing exposure only resends the affected atmosphere parameter');
 renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
 renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest colour arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
@@ -2624,6 +2629,7 @@ renderCheck(renderGet($appearanceScene, 'groundProgram')->id !== $relinked, 'res
 renderCheck($sent('uSnowColor') === null, 'a relinked program starts without the appearance');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the frame after restoration uploads the appearance again');
+renderCheck($sent('uExposure') === [1.75] && $uploads('uSunDirection') === 1, 'restoration repopulates atmosphere uniforms');
 $appearanceScene->close();
 
 // Every preset's shading style receives the same appearance uniforms.
