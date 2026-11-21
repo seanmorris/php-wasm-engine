@@ -100,7 +100,7 @@ final class EmbeddedPlanarGraph
 				if($side % 2 === 0) $y += $offset;
 				else $x += $offset;
 
-				// Leave the special building and its inter-storey approaches untouched.
+				// Leave the special building and its inter-story approaches untouched.
 				if($x < $specialSize || max(abs($x + $w), abs($y + $h)) > 12000) continue;
 
 				if(!$isAnchor)

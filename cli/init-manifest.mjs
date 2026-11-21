@@ -159,7 +159,7 @@ export async function initManifest(directory, settings = {})
 
 		if(rl && !['y', 'yes'].includes((await ask('Write phonics.json? yes/no', 'yes')).toLowerCase()))
 		{
-			console.log('Cancelled; no manifest written.');
+			console.log('Canceled; no manifest written.');
 
 			return;
 		}

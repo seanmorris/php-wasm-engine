@@ -189,17 +189,17 @@ export class GameLauncher
 		dialog.append(header, body, footer);
 		const abortSignal = signal ? AbortSignal.any([signal, this.signal]) : this.signal;
 
-		const abort = () => pending.reject(abortSignal.reason ?? new Error('Invitation cancelled'));
+		const abort = () => pending.reject(abortSignal.reason ?? new Error('Invitation canceled'));
 		ownPointerInput(dialog);
 		input.addEventListener('change', () => { choose.disabled = !input.files?.length; });
 
 		choose.addEventListener('click', () => { if(input.files?.[0]) pending.resolve(input.files[0]); });
 
-		cancel.addEventListener('click', () => pending.reject(new Error('Invitation cancelled')));
+		cancel.addEventListener('click', () => pending.reject(new Error('Invitation canceled')));
 
 		dialog.addEventListener(
 			'cancel'
-			, event => { event.preventDefault(); pending.reject(new Error('Invitation cancelled')); }
+			, event => { event.preventDefault(); pending.reject(new Error('Invitation canceled')); }
 		);
 
 		abortSignal.addEventListener('abort', abort, {once: true});

@@ -546,7 +546,7 @@ export class LobbyOverlay
 		this.oauthButton.addEventListener('click', () => this.signIn(), {signal});
 
 		this.oauthCancelButton.addEventListener('click', () => {
-			this.oauthAbort?.abort(new Error('Matrix sign-in was cancelled'));
+			this.oauthAbort?.abort(new Error('Matrix sign-in was canceled'));
 		}, {signal});
 
 		this.logoutButton.addEventListener(
@@ -681,7 +681,7 @@ export class LobbyOverlay
 	cancelMatch()
 	{
 		if(this.controller.joinAttempt) void this.cancelOutgoing();
-		else this.controller.closeMatch('Cancelled', {local: true});
+		else this.controller.closeMatch('Canceled', {local: true});
 	}
 
 	/**

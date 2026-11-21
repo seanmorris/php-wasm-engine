@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace Phonics\Render;
 
 /**
- * An offscreen colour target: one RGBA8 texture, an optional 24-bit depth renderbuffer, and the framebuffer that
+ * An offscreen color target: one RGBA8 texture, an optional 24-bit depth renderbuffer, and the framebuffer that
  * joins them.
  *
  * Post-process passes and offscreen scene targets allocate the same three GL objects, bind them while saving the
@@ -16,7 +16,7 @@ final class RenderTarget
 {
 	/** @var array<int,int> Framebuffer and depth renderbuffer names as the GL bindings return them. */
 	private array $framebuffer = [], $depthBuffer = [];
-	/** Colour texture name, and the framebuffer bound when this target was bound. */
+	/** Color texture name, and the framebuffer bound when this target was bound. */
 	private int $texture = 0, $parent = 0;
 	/** Whether the target is bound, and whether it has been closed for good. */
 	private bool $bound = false, $closed = false;
@@ -26,7 +26,7 @@ final class RenderTarget
 	 *
 	 * @param int $width Positive width in pixels.
 	 * @param int $height Positive height in pixels.
-	 * @param int $filter Texture filter for sampling the colour texture: GL_NEAREST or GL_LINEAR.
+	 * @param int $filter Texture filter for sampling the color texture: GL_NEAREST or GL_LINEAR.
 	 * @param bool $depth Whether to attach a 24-bit depth renderbuffer.
 	 * @param string $label Name used in the error raised when the framebuffer is incomplete.
 	 * @return void Creates the GL objects, or releases what was made and rethrows on failure.
@@ -47,7 +47,7 @@ final class RenderTarget
 	}
 
 	/**
-	 * The colour texture to sample the target's contents from.
+	 * The color texture to sample the target's contents from.
 	 *
 	 * @return int GL texture name, or zero once closed.
 	 */
@@ -86,7 +86,7 @@ final class RenderTarget
 	 * and optionally clear it.
 	 *
 	 * @param array{0:float|int,1:float|int,2:float|int,3:float|int}|null $clearColor Normalized RGBA to clear
-	 * colour, and depth to one, with; null leaves the contents alone.
+	 * color, and depth to one, with; null leaves the contents alone.
 	 * @return void Leaves the target bound until `unbind()`.
 	 */
 	public function bind(?array $clearColor = null): void
@@ -189,7 +189,7 @@ final class RenderTarget
 	}
 
 	/**
-	 * Allocate the texture, framebuffer and depth buffer, leaving the caller's framebuffer bound afterwards.
+	 * Allocate the texture, framebuffer and depth buffer, leaving the caller's framebuffer bound afterward.
 	 *
 	 * @return void Releases any partial allocation and rethrows when the framebuffer is incomplete.
 	 */

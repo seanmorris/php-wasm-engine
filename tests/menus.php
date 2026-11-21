@@ -779,7 +779,7 @@ test('text pages separate blocks, keep headings with their text, and line every 
 		, 'BUILT WITH PHONICS'
 		, ['name' => 'ART', 'value' => 'VINCENT PONTIER']
 		, ['name' => 'MUSIC', 'value' => 'MR SPASTIC']
-		, ['heading' => 'LICENCE']
+		, ['heading' => 'LICENSE']
 		, ['name' => 'CODE', 'value' => 'APACHE']
 	]);
 
@@ -792,7 +792,7 @@ test('text pages separate blocks, keep headings with their text, and line every 
 		, 'name:ART | value:VINCENT PONTIER@54'
 		, 'name:MUSIC | value:MR SPASTIC@54'
 		, ''
-		, 'heading:LICENCE'
+		, 'heading:LICENSE'
 		, 'name:CODE | value:APACHE@54'
 	], implode(',', textPageLines($page)));
 
@@ -807,15 +807,15 @@ test('text pages separate blocks, keep headings with their text, and line every 
 		, 'value:MR SPASTIC@8'
 	], implode(',', textPageLines($page)));
 
-	$plain = "CREDITS\n\nBUILT WITH PHONICS\n\nART: VINCENT PONTIER\nMUSIC: MR SPASTIC\n\nLICENCE\n\nCODE: APACHE";
+	$plain = "CREDITS\n\nBUILT WITH PHONICS\n\nART: VINCENT PONTIER\nMUSIC: MR SPASTIC\n\nLICENSE\n\nCODE: APACHE";
 	check($page->plain() === $plain);
 });
 
 test('text page notes stand under a pair\'s value or alone, as their own kind of span', function() {
 	$font = new BitmapFont(new Loader, dirname(__DIR__) . '/examples/assets/font.tsj');
 	$credit = ['name' => 'ART', 'value' => 'ME', 'note' => 'CC0'];
-	$licence = ['name' => 'CODE', 'note' => 'MIT'];
-	$page = new TextPage([$credit, ['name' => 'TUNE', 'value' => 'YOU'], $licence, ['note' => 'MIT']]);
+	$license = ['name' => 'CODE', 'note' => 'MIT'];
+	$page = new TextPage([$credit, ['name' => 'TUNE', 'value' => 'YOU'], $license, ['note' => 'MIT']]);
 
 	$page->layout($font, 240, 20);
 	$lines = textPageLines($page);
@@ -944,7 +944,7 @@ test('menu text pages scroll from keys, wheel, arrows, track, thumb and drags, t
 	$pointer('move', 50, 0);
 	check($page->first === 5);
 
-	// The track pages towards the press; the thumb drags in proportion.
+	// The track pages toward the press; the thumb drags in proportion.
 	$page->scrollTo(0);
 	$pointer('down', 205, 60);
 	$pointer('up', 205, 60);

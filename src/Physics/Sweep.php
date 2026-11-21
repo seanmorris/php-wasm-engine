@@ -6,7 +6,7 @@ namespace Phonics\Physics;
  * Swept tests against axis-aligned boxes: the slab test shared by games that move a body against another body's
  * expanded bounds.
  *
- * A point at (x, y) moving by (dx, dy) over one step is tested against a box centred at (cx, cy) with the given
+ * A point at (x, y) moving by (dx, dy) over one step is tested against a box centered at (cx, cy) with the given
  * half extents, usually the other body's extents grown by the mover's. Each axis gives the fraction of the motion
  * at which the point enters and leaves the box; the intersection of the two is the time inside. An axis without
  * motion decides by containment alone. The arithmetic is the one both callers used to write by hand, plane by plane,
@@ -22,8 +22,8 @@ final class Sweep
 	 * @param float $y Start y of the moving point.
 	 * @param float $dx Motion in x over the step.
 	 * @param float $dy Motion in y over the step.
-	 * @param float $cx Box centre x.
-	 * @param float $cy Box centre y.
+	 * @param float $cx Box center x.
+	 * @param float $cy Box center y.
 	 * @param float $halfWidth Half the box width, the mover's radius included.
 	 * @param float $halfHeight Half the box height, the mover's half height included.
 	 * @param float $epsilon Motion below which an axis counts as still and is decided by containment.

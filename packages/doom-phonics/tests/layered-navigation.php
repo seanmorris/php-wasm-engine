@@ -94,7 +94,7 @@ foreach([64,240] as $depth)
 
 	verifyWad(
 		$reachable($routes, 'balcony') && !$routes['traps']
-		, 'moving the basement/cavern deeper preserves anchored upper storeys and a solvable flood route'
+		, 'moving the basement/cavern deeper preserves anchored upper stories and a solvable flood route'
 	);
 }
 

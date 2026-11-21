@@ -26,7 +26,7 @@ require_once __DIR__ . '/RouteTraversal.php';
  * Generate reproducible basement, ground and upper planar room networks.
  *
  * Local room elevations are resolved before architectural layer placement. A
- * flooded ledge and a curved stair hall connect the storeys; recessed passages
+ * flooded ledge and a curved stair hall connect the stories; recessed passages
  * pin adjacent rooms together independently of their packed WAD coordinates.
  * Deterministic repairs preserve connectivity, stair clearance and layer slabs.
  */
@@ -40,8 +40,8 @@ final class SeededLevel
 	public const ROOM_SIZE = 1280;
 	/** Minimum open headroom in ordinary rooms, approaches and spiral landings. */
 	public const HEADROOM = 192;
-	/** Reserve solid separation between ordinary rooms on adjacent storeys. */
-	public const STOREY_SLAB = 32;
+	/** Reserve solid separation between ordinary rooms on adjacent stories. */
+	public const STORY_SLAB = 32;
 
 	/** Build a fresh map and certify all regions with the runtime movement rules. */
 	public static function build(
@@ -140,7 +140,7 @@ final class SeededLevel
 		$random = new SeedSequence('phonics-seeded-' . self::RANDOM_REVISION . ':' . $seed);
 		$repairs = [];
 		// Leave a basement slab while keeping the drain height in a Hexen byte.
-		$depth = self::HEADROOM + self::STOREY_SLAB + $random->integer(0, 1) * 16;
+		$depth = self::HEADROOM + self::STORY_SLAB + $random->integer(0, 1) * 16;
 		$steps = $random->integer(12, 16);
 		$mirror = (bool)$random->integer(0, 1);
 		$stairSweep = (new SeedSequence('stair-sweep:' . $seed))->integer(0, 1) ? 90 : 180;
@@ -231,7 +231,7 @@ final class SeededLevel
 				$requested = $random->integer(0, 12) * 16;
 				$height = $i === 0
 					? ($plane !== 'basement' && $layout === 'organic' ? 64 : 0)
-					: min($requested, $plane === 'basement' ? $depth - self::HEADROOM - self::STOREY_SLAB : 192);
+					: min($requested, $plane === 'basement' ? $depth - self::HEADROOM - self::STORY_SLAB : 192);
 
 				if($height !== $requested)
 				$repairs[] = [
@@ -239,7 +239,7 @@ final class SeededLevel
 					, 'room' => $name
 					, 'from' => $requested
 					, 'to' => $height
-					, 'reason' => 'Preserve storey headroom and the fixed inter-layer landings'
+					, 'reason' => 'Preserve story headroom and the fixed inter-layer landings'
 				];
 
 				$specs[$name] = [
@@ -657,7 +657,7 @@ final class SeededLevel
 
 		$required = max(
 			array_column(array_filter($layers, static fn($r) => $r['plane'] === 'ground'), 'ceiling')
-		) + self::STOREY_SLAB;
+		) + self::STORY_SLAB;
 
 		if($steps * 16 < $required)
 		{
@@ -685,7 +685,7 @@ final class SeededLevel
 		foreach($layers['spiral']['cells'] as &$cell) $cell['id'] = 'spiral.' . $cell['id'];
 		unset($cell);
 		$positions = SpatialLayout::solve($layers, $pins, 'ground.0', [0,0,0]);
-		// Keep each planar network physically contiguous; only storey links are portals.
+		// Keep each planar network physically contiguous; only story links are portals.
 		$packing = [];
 
 		foreach([
@@ -741,7 +741,7 @@ final class SeededLevel
 					$face[$key][1] += $y;
 				}
 
-				// Neighbors precede the door sector, so each usable front faces outwards.
+				// Neighbors precede the door sector, so each usable front faces outward.
 				$boundaries[] = [
 					'from' => $face['from']
 					, 'to' => $face['to']

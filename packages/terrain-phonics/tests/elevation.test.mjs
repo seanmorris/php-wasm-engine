@@ -74,7 +74,7 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 	} finally {await browser.close();}
 });
 
-test('surface colour patterns are distinct, masked, and anchored to world coordinates', async() => {
+test('surface color patterns are distinct, masked, and anchored to world coordinates', async() => {
 	const vertex = readFileSync(new URL('../shaders/shadows.vert', import.meta.url), 'utf8');
 	const layers = readFileSync(new URL('../shaders/surface-layers.glsl', import.meta.url), 'utf8');
 	const browser = await chromium.launch({

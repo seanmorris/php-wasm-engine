@@ -7,7 +7,7 @@ use PhpWasmEngine\Render\RectRenderer;
 use Phonics\Render\RenderTarget;
 use Phonics\Render\RenderTargetPair;
 
-// RenderTarget owns the framebuffer, colour texture and depth buffer that post-process passes and offscreen scene
+// RenderTarget owns the framebuffer, color texture and depth buffer that post-process passes and offscreen scene
 // targets used to allocate themselves. It must bind over whatever framebuffer the caller has, hand it back with
 // the viewport the caller asks for, survive context restoration, and release everything exactly once.
 
@@ -55,7 +55,7 @@ $checks['bind records the parent and the viewport covers the target'] = $target-
 	&& glGetIntegerv(GL_FRAMEBUFFER_BINDING) === $target->framebuffer()
 	&& glGetIntegerv(GL_VIEWPORT) === [0, 0, 16, 8];
 
-$checks['bind clears to the given colour'] = $pixel(3, 3) === 'ff0000ff';
+$checks['bind clears to the given color'] = $pixel(3, 3) === 'ff0000ff';
 $rects->render([[0, 0, 16, 8, 0, 1, 0, 1]], 16, 8);
 $checks['draws land in the target'] = $pixel(3, 3) === '00ff00ff';
 $target->unbind(7, 9);
@@ -64,7 +64,7 @@ $checks['unbind returns to the parent with the requested viewport'] = !$target->
 	&& glGetIntegerv(GL_VIEWPORT) === [0, 0, 7, 9];
 
 $target->bind();
-$checks['bind without a colour keeps the contents'] = $pixel(3, 3) === '00ff00ff';
+$checks['bind without a color keeps the contents'] = $pixel(3, 3) === '00ff00ff';
 $target->unbind();
 $checks['unbind without a size leaves the target viewport in place'] = glGetIntegerv(GL_VIEWPORT) === [0, 0, 16, 8]
 	&& glGetIntegerv(GL_FRAMEBUFFER_BINDING) === $parentFramebuffer[0];

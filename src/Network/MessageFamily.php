@@ -15,7 +15,7 @@ final class MessageFamily
 	 */
 	public const HELLO = 1;
 	/**
-	 * Compatibility acknowledgement family.
+	 * Compatibility acknowledgment family.
 	 */
 	public const COMPATIBILITY = 2;
 	/**

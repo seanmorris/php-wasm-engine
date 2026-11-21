@@ -63,7 +63,7 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 $bands = [];
 foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
 
-// Mountain faces drawn twice in two colours of one material: at an amount of 0 the colour must not show.
+// Mountain faces drawn twice in two colors of one material: at an amount of 0 the color must not show.
 $mountainAmounts = [];
 
 foreach([['talus', .2, [0, .5]], ['stain', .7, [0, .3]]] as [$material, $slope, $amounts])

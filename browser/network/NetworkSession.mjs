@@ -692,7 +692,7 @@ export class NetworkSession extends EventTarget
 	}
 
 	/**
-	 * Verify the guest's compatibility acknowledgement and resource resolutions (host only).
+	 * Verify the guest's compatibility acknowledgment and resource resolutions (host only).
 	 * @param {object} value Compatibility payload with ok, descriptorDigest, and resolutions.
 	 * @returns {void}
 	 * @throws {NetworkError} When the guest rejected or named another descriptor.

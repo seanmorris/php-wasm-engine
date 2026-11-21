@@ -15,7 +15,7 @@ to fly over a landscape, change its shape, lay a road, and drive a test watercra
 ## Choose the ground
 
 A landscape recipe selects a seed, a mountain/canyon/coast preset, and a bounded world size. Coordinates are
-metres with Y upward. The default world is 32,768 metres square with a one-metre authoritative sample lattice.
+meters with Y upward. The default world is 32,768 meters square with a one-meter authoritative sample lattice.
 The cache only generates samples that are requested; it does not allocate the entire world.
 
 ```php

@@ -2,7 +2,7 @@
 
 I. Choose the ground
    A. Introduce the optional package and sandbox.
-   B. Establish metres, bounds, lattice spacing, and lazy residency.
+   B. Establish meters, bounds, lattice spacing, and lazy residency.
    C. Separate authoritative queries from visual LOD.
    D. Explain slope-guided amplitude attenuation in plain language.
 II. Prepare an edit before publishing it

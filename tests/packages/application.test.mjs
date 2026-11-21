@@ -179,9 +179,9 @@ test('external archive resources retry, retire and cancel with their owning scop
 	assert.equal(attempts, 3, 'retired resources are fetched again');
 
 	const pending = scope.read('https://game.test/pending');
-	const cancelled = assert.rejects(pending, /closed/);
+	const canceled = assert.rejects(pending, /closed/);
 	scope.close();
-	await cancelled;
+	await canceled;
 	assert.equal(transportSignal.aborted, true);
 	assert.equal(remote.entries.size, 0);
 	archive.close();
@@ -215,7 +215,7 @@ test('application cancellation, readiness failures and runtime errors dispose on
 		php.run = async () => {
 			if(mode === 'ready') module.sceneReady(null);
 
-			if(mode === 'abort') controller.abort(new Error('cancelled by test'));
+			if(mode === 'abort') controller.abort(new Error('canceled by test'));
 
 			return mode === 'exit' ? 1 : 0;
 		};
@@ -236,7 +236,7 @@ test('application cancellation, readiness failures and runtime errors dispose on
 			await session.dispose();
 			await session.dispose();
 		}
-		else await assert.rejects(pending, /cancelled by test|did not become ready|PHP returned 1/);
+		else await assert.rejects(pending, /canceled by test|did not become ready|PHP returned 1/);
 
 		assert.equal(refreshes, 1);
 		assert.equal(resources.entries.size, 0);
@@ -274,15 +274,15 @@ test('cancellation and timeout release loading sessions before a late runtime fi
 
 		await entered;
 
-		if(cancel) controller.abort(new Error('cancelled during startup'));
+		if(cancel) controller.abort(new Error('canceled during startup'));
 
-		await assert.rejects(pending, /cancelled during startup|did not become ready/);
+		await assert.rejects(pending, /canceled during startup|did not become ready/);
 		assert.equal(resources.entries.size, 0);
 		assert.equal(refreshes, 0);
 		finish(stage === 'factory' ? php : {});
 		await new Promise(resolve => setImmediate(resolve));
 		assert.equal(refreshes, 1, 'late runtimes are released exactly once');
-		assert.equal(executions, 0, 'a cancelled application must not execute');
+		assert.equal(executions, 0, 'a canceled application must not execute');
 	}
 });
 

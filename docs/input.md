@@ -208,7 +208,7 @@ $codes->remove('debug');
 
 `.75` sets a maximum gap of 750 ms between matched steps. Times use seconds throughout this API. An optional fourth
 argument limits total duration. A fifth argument, `strict: false`, lets unrelated
-presses pass without cancelling progress. Those presses do not extend the gap.
+presses pass without canceling progress. Those presses do not extend the gap.
 
 Each fresh press advances at most one step. Key repeat, holding a pad button,
 and ordinary releases do not repeat a press. Wrong presses cancel a strict

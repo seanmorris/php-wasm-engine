@@ -162,7 +162,7 @@ namespace
 	$expect(!$cache->update(10, 99), 'adjusting night glow reuses the physical caches');
 	$model->setExposure(3);
 	$expect(!$cache->update(10, 99), 'display exposure does not invalidate physical radiance');
-	$expect(!$cache->update(10.1, 99), 'small vertical movement reuses half-metre altitude buckets');
+	$expect(!$cache->update(10.1, 99), 'small vertical movement reuses half-meter altitude buckets');
 	$cache->update(10.3, 99);
 	$expect($cache->stats()['generations'] === [2,1], 'camera altitude only rebuilds the eye map');
 	$expect($cache->stats()['aerialGeneration'] === 2, 'camera altitude also rebuilds eye aerial perspective');

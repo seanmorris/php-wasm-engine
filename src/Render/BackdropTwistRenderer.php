@@ -50,7 +50,7 @@ final class BackdropTwistRenderer
 	/**
 	 * The offscreen scene target the twist samples from.
 	 *
-	 * @return RenderTarget Nearest-filtered colour with a depth buffer, sized to the drawing buffer.
+	 * @return RenderTarget Nearest-filtered color with a depth buffer, sized to the drawing buffer.
 	 */
 	public function target(): RenderTarget { return $this->target; }
 

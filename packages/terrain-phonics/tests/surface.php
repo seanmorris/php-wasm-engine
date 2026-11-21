@@ -204,7 +204,7 @@ foreach($canyonCases as $case)
 
 	terrainCheck(
 		$crossings[1] - $crossings[0] < $case['width']
-		, 'ten-to-ninety-percent cliff rise occurs across a narrow measured width in metres'
+		, 'ten-to-ninety-percent cliff rise occurs across a narrow measured width in meters'
 	);
 
 	foreach($case['edges'] as $edge)
@@ -249,7 +249,7 @@ foreach($canyonCases as $case)
 
 	terrainCheck(
 		hypot($contact['dx'], $contact['dz']) > max(20, $case['slope'] / 2) && $contact['normal'][1] < .05
-		, 'one-metre collision reconstruction retains genuinely steep canyon walls'
+		, 'one-meter collision reconstruction retains genuinely steep canyon walls'
 	);
 
 	$physicalCanyon->close();
@@ -367,8 +367,8 @@ foreach(range(-8, 8) as $i)
 
 /**
  * Remap an elevation through fmod(), max(), min() and Noise::fade(), which CanyonBeds::shape() writes out.
- * @param float $height Elevation above the bedding datum in metres.
- * @param float $spacing Positive scale of the section in metres.
+ * @param float $height Elevation above the bedding datum in meters.
+ * @param float $spacing Positive scale of the section in meters.
  * @param float $strength Interpolation from the unmodified slope to the bed profile.
  * @return array Remapped elevation and partial derivatives with respect to height and strength.
  */
@@ -405,8 +405,8 @@ function terrainBedsByCalls(float $height, float $spacing, float $strength): arr
  * the bit.
  * @param array $r Normalized recipe values with a positive height scale.
  * @param Noise $noise Noise source built from the recipe's seed.
- * @param float $x World X coordinate in metres.
- * @param float $z World Z coordinate in metres.
+ * @param float $x World X coordinate in meters.
+ * @param float $z World Z coordinate in meters.
  * @return array Coarse height, its world derivatives and the detailed height [height,dx,dz,detailed].
  */
 function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
@@ -573,7 +573,7 @@ foreach($expandedForms as $form => $values)
 	// sample of the other forms out of it.
 	if($form !== 'steep octaves') $points[] = [6.0e12,-6.0e12];
 
-	// Quarter-metre nodes scattered over the whole world, on both sides of every axis.
+	// Quarter-meter nodes scattered over the whole world, on both sides of every axis.
 	for($i = 1; $i <= 400; $i++) $points[] = [($i * 7919 % 131072 - 65536) / 4, ($i * 104729 % 131072 - 65536) / 4];
 
 	$different = null;
@@ -862,8 +862,8 @@ $cacheCounts = static function(Landscape $land): array {
 
 /**
  * Query the tiny cache and the ample one, require the same height, and report the tiny cache's counters.
- * @param float $x World X coordinate in metres.
- * @param float $z World Z coordinate in metres.
+ * @param float $x World X coordinate in meters.
+ * @param float $z World Z coordinate in meters.
  * @return array Generated nodes, cache hits, evictions and stored samples of the tiny cache.
  */
 $cacheStep = static function(float $x, float $z) use ($cache, $ample, $cacheCounts): array {
@@ -1005,8 +1005,8 @@ $cancel->advance(1, 1);
 $cancel->cancel();
 $cancel->cancel();
 terrainCheck($cancel->done() && $cancel->stats()['cancelled'], 'cancellation retires traversal idempotently');
-terrainReject(fn() => $cancel->advance(), 'cancelled work cannot restart');
-terrainReject(fn() => $cancel->result(), 'cancelled query cannot publish a stale hit');
+terrainReject(fn() => $cancel->advance(), 'canceled work cannot restart');
+terrainReject(fn() => $cancel->result(), 'canceled query cannot publish a stale hit');
 
 $stale = $sweep->rayQuery([-60,5,0], [1,0,0], 120);
 $stale->advance(1, 1);
@@ -1144,7 +1144,7 @@ foreach($sandboxWorlds as $recipe)
 		$aligned += (int)($block['minX'] <= $x && $x < $block['maxX'] && $block['minZ'] <= $z && $z < $block['maxZ']
 			&& $block['maxX'] - $block['minX'] === $width && $block['maxZ'] - $block['minZ'] === $width
 			&& fmod($block['minX'], $width) === 0.0 && fmod($block['minZ'], $width) === 0.0);
-		// The lower edges belong to the block. The upper edges belong to its neighbours.
+		// The lower edges belong to the block. The upper edges belong to its neighbors.
 		foreach([[0,0],[0,.999],[.999,0],[.999,.999],[.5,.5],[.37,.81]] as [$u,$v])
 		{
 			$height = $world->height($block['minX'] + $u * $width, $block['minZ'] + $v * $width);

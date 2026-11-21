@@ -127,7 +127,7 @@ $layers = new SurfaceLayers([
 check((new SurfaceLayers(json_decode(json_encode($layers->layers), true)))->layers === $layers->layers,
 	'Nested masks must round-trip through the save format.');
 check($layers->layers[0]['pattern'] === 'none' && $layers->layers[0]['patternColor'] === '#443322',
-	'Older colour layers retain their solid fill.');
+	'Older color layers retain their solid fill.');
 foreach([
 	['parent' => 1], ['scale' => 0], ['slopeHigh' => 1.2], ['color' => 'black'], ['low' => NAN],
 	['pattern' => 'unexpected'], ['patternColor' => 'black'], ['patternAmount' => 1.1],
@@ -169,7 +169,7 @@ foreach($bands as $i => $band)
 		&& $band['period'] === 800.0, 'Rock bands align with the authored ledge heights.');
 	check($band['slopeLow'] - $band['slopeFade'] > 0, 'Repeating bands are masked off level ground.');
 }
-check(count(array_unique(array_column($bands, 'color'))) === 6, 'Sandstone repeats and the other beds use distinct colours.');
+check(count(array_unique(array_column($bands, 'color'))) === 6, 'Sandstone repeats and the other beds use distinct colors.');
 $muted = SurfaceLayers::landscape($canyonRecipe, new TerrainAppearance(['bandContrast' => 0, 'bandSharpness' => 4]));
 $mutedBands = array_slice($muted->layers, 1, 7);
 check(count(array_unique(array_column($mutedBands, 'color'))) === 1
@@ -194,14 +194,14 @@ foreach([.5, 1., 2.] as $quality)
 }
 $spanAtCanyonWall = Clipmap::spans($canyonRecipe, 1.)[4];
 check(($spanAtCanyonWall / 2 - Clipmap::transition($spanAtCanyonWall) - 3) * 16 >= 1500,
-	'The balanced profile covers a canyon wall 1.5 km away at 16 metre spacing before transitioning.');
+	'The balanced profile covers a canyon wall 1.5 km away at 16 meter spacing before transitioning.');
 $doubleWidth = new Landscape(['worldSize' => 65536, 'heightScale' => 0, 'detailAmplitude' => 0]);
 check($doubleWidth->height(32768, -32768) === 0.0, 'The expanded corner is available to physics.');
 check(Landscape::load($doubleWidth->save())->recipe()['worldSize'] === 65536.0, 'The expanded extent survives save and reload.');
 try
 {
 	new Landscape(['worldSize' => 131072]);
-	throw new RuntimeException('The recipe accepted an extent beyond 65,536 metres.');
+	throw new RuntimeException('The recipe accepted an extent beyond 65,536 meters.');
 }
 catch(InvalidArgumentException) {}
 $wideRecipe = array_replace($canyonRecipe, ['worldSize' => 65536.0]);

@@ -24,7 +24,7 @@ export class TouchPad
 	 * @param {HTMLElement} container Element the buttons are appended to; hidden until `visible` is set.
 	 * @param {Array<{id: string, label: string, text?: string}>} buttons Buttons to make, with their accessible
 	 * label and visible text (the label by default).
-	 * @param {object} options Behaviour.
+	 * @param {object} options Behavior.
 	 * @param {AbortSignal} options.signal Removes the listeners when it aborts.
 	 * @param {function(Set<string>): void} [options.onChange] Runs whenever the held set changes.
 	 * @param {function(): void} [options.focus] Returns focus to the game on a press, such as to its canvas.

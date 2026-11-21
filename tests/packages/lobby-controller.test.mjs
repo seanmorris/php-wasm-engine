@@ -170,7 +170,7 @@ test('unanswered and withdrawn invitations release both lobbies', async () => {
 	assert.equal(guest.expiries.size, 0);
 });
 
-test('cancelled signaling cannot fail a replacement match', async () => {
+test('canceled signaling cannot fail a replacement match', async () => {
 	for(const queued of [true, false])
 	{
 		let rejectSignal, applying;

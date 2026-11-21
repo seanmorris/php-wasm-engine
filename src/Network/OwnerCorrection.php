@@ -21,7 +21,7 @@ final class OwnerCorrection
 	 * @param CommandSequence $acknowledged Newest local command the host had applied in that snapshot.
 	 * @param array<class-string,object> $components Fresh owner-authoritative components decoded from the snapshot,
 	 * keyed by component class. They are detached from the registry.
-	 * @param list<InputCommand> $commands Retained local commands after the acknowledgement, oldest first.
+	 * @param list<InputCommand> $commands Retained local commands after the acknowledgment, oldest first.
 	 * @return void Creates an immutable correction value.
 	 */
 	public function __construct(
@@ -40,7 +40,7 @@ final class OwnerCorrection
 		 */
 		public readonly array $components
 		, /**
-		 * Retained local commands after the acknowledgement, oldest first.
+		 * Retained local commands after the acknowledgment, oldest first.
 		 *
 		 * @var list<InputCommand>
 		 */

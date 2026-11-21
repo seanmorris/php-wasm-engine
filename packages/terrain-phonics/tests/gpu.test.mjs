@@ -430,7 +430,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				shadowResults.push({name,visibility:[ledges[0],ledges[4]]});
 			}
 
-			// A wall only one metre thick crosses the interior of an eight-metre terrain triangle.
+			// A wall only one meter thick crosses the interior of an eight-meter terrain triangle.
 			// Run both production passes against a signed, toroidal lattice in each storage format.
 			const adaptive = program(shaders['shadows.vert'], shaders['triangle-shadows.frag']);
 			const adaptiveResults = [];
@@ -491,7 +491,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				adaptiveResults.push({record:[...pixel], pixels:[...rendered.filter((_,i)=>i%4===0)]});
 			}
 			// A shadowed point in the blend region stays at the same shade when the cache
-			// snaps eight cells, even if the eye crosses the boundary by only a millimetre.
+			// snaps eight cells, even if the eye crosses the boundary by only a millimeter.
 			texture(13,128,64,new Uint8Array(128*64*4));
 			target(14,6,1);
 			gl.useProgram(sampleTriangle);
@@ -546,7 +546,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					colors.push(pixel());
 				}
 
-				// The test vertex paints grass, so a red grass colour must turn the lit fragment red.
+				// The test vertex paints grass, so a red grass color must turn the lit fragment red.
 				if(name === 'terrain')
 				{
 					appearance(surface, data.redGrass);
@@ -604,7 +604,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				mountainBands.push({bin, red: Array.from({length: 256}, (_, i) => bytes[i * 4])});
 			}
 
-			// A mountain face 200 m across at the given slope, seen square on at under a metre per pixel, so every
+			// A mountain face 200 m across at the given slope, seen square on at under a meter per pixel, so every
 			// patch noise is at full strength. It lies 150 m below the snowline, at the default treeline, where talus
 			// still shows between the trees.
 			const amountVertex = `${header}
@@ -638,8 +638,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					return bytes;
 				});
 
-				// A patch in either colour differs by far more than 8 steps, while a mix of talus into granite at a
-				// weight of 1 can keep a rounding error from the talus colour and move a pixel by one step.
+				// A patch in either color differs by far more than 8 steps, while a mix of talus into granite at a
+				// weight of 1 can keep a rounding error from the talus color and move a pixel by one step.
 				let differing = 0;
 
 				for(let i = 0; i < images[0].length; i += 4)
@@ -890,7 +890,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				shaders[`${name}.vert`].replace('// WATER', waterSource)
 				, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
 			);
-			// Render the stellar catalogue through the horizon at two headings on an otherwise black target.
+			// Render the stellar catalog through the horizon at two headings on an otherwise black target.
 			const stars = program(shaders['stars.vert'], shaders['stars.frag']);
 			target(7, 256, 128);
 			gl.useProgram(stars);
@@ -951,7 +951,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 
 			/**
-			 * Sink the surface under a metre of murky water, as for the water column check.
+			 * Sink the surface under a meter of murky water, as for the water column check.
 			 * @param {WebGLProgram} linked Program in use.
 			 * @return {void}
 			 */
@@ -984,7 +984,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					colors[key] = pixel();
 				}
 
-				// Under a metre of murky water the column between the surface and the ground scatters lamp light.
+				// Under a meter of murky water the column between the surface and the ground scatters lamp light.
 				submerge(surface);
 				gl.uniform1i(gl.getUniformLocation(surface, 'uSpotLightCount'), 0);
 				colors.submerged = pixel();
@@ -1038,7 +1038,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, `${name}: the lamp-free program draws what the lit one draws without lamps`
 			);
 
-			// The knee keeps colour in light that would otherwise clip: 64 times the overhead lamp stays below white.
+			// The knee keeps color in light that would otherwise clip: 64 times the overhead lamp stays below white.
 			assert.ok(
 				colors.glare.every((value, i) => value > colors.overhead[i] && value < 250)
 				, `${name}: 64 times the lamp is brighter and does not clip: ${colors.overhead} to ${colors.glare}`
@@ -1078,9 +1078,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.ok(result.backdropContrast[3] < 255 && result.backdropContrast[3] > 230, 'reflection overlays a clear surface');
 		assert.ok(result.backdropContrast[4] < 125, 'foam covers the clear shoreline');
 		assert.equal(result.backdropContrast[5], 255, 'shore foam leaves deep water clear');
-		for(const [i, metres] of [0, 1, 10, Math.sqrt(2)*10].entries())
+		for(const [i, meters] of [0, 1, 10, Math.sqrt(2)*10].entries())
 		{
-			const red = Math.round(255 * Math.exp(-.1 * metres));
+			const red = Math.round(255 * Math.exp(-.1 * meters));
 			assert.ok(Math.abs(result.waterPaths[i][0] - red) <= 1);
 			assert.ok(Math.abs(result.waterPaths[i][1] - (255 - red)) <= 1);
 		}
@@ -1134,7 +1134,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.deepEqual(wall.pixels.slice(0,3), [255,0,255], 'the shadow edge cuts across the near triangle');
 		assert.ok(wall.pixels[3] > 180 && wall.pixels[3] < 211, 'about three quarters of the distant triangle is lit');
 		assert.deepEqual(wall.pixels.slice(4), [0,0], 'the reflected triangle meets the same edge on the diagonal');
-		assert.equal(stripe.record[0], 8, 'the centre probe finds the narrow shadow between three lit vertices');
+		assert.equal(stripe.record[0], 8, 'the center probe finds the narrow shadow between three lit vertices');
 		assert.deepEqual(stripe.pixels.slice(0,3), [255,255,0], 'only the interior of the near triangle is shaded');
 		assert.ok(stripe.pixels[3] > 204 && stripe.pixels[3] < 255, 'the interior shadow contributes to distant coverage');
 		const visibility = Object.fromEntries(result.shadowResults.map(sample => [sample.name, sample.visibility]));
@@ -1220,8 +1220,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(flat, `mountain rock has no bands at bin ${bin}: ${band}`);
 		}
 
-		// Talus and stain colours must show at their default amounts and nowhere at an amount of 0.
-		console.log('Mountain colours shown by amount:', JSON.stringify(result.mountainAmounts));
+		// Talus and stain colors must show at their default amounts and nowhere at an amount of 0.
+		console.log('Mountain colors shown by amount:', JSON.stringify(result.mountainAmounts));
 
 		for(const {material, amount, share} of result.mountainAmounts)
 		{

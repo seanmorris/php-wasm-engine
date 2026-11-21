@@ -298,9 +298,9 @@ export class InMemoryLobbyProvider extends EventTarget
 	}
 
 	/**
-	 * Deliver a cloned signalling payload to one peer.
+	 * Deliver a cloned signaling payload to one peer.
 	 * @param {string} peerId Receiving peer ID.
-	 * @param {*} payload Signalling payload.
+	 * @param {*} payload Signaling payload.
 	 * @returns {Promise<void>}
 	 */
 	async signalPeer(peerId, payload)

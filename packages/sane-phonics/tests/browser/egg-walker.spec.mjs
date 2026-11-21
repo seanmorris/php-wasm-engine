@@ -55,7 +55,7 @@ test('EggWalker seats its rider and composes crouch, booster, punch and cannon c
 	// A crouch only arms the landing drop when it begins while the walker is falling, and the drop needs height to
 	// reach its trigger speed. Waiting for a fall with real keys raced the runner: a 100 ms jump hold spans only a few
 	// frames on a slow one, and the latched booster flips between rising and falling every few frames. So hold the
-	// crouch (cancelling the booster), then lift the walker, start it falling and clear its crouch in one step: the
+	// crouch (canceling the booster), then lift the walker, start it falling and clear its crouch in one step: the
 	// held key begins a new crouch on the next frame, mid-fall.
 	await page.keyboard.down('ArrowDown');
 	await expect.poll(async() => (await state(page)).vehicles[0].boosting).toBe(false);

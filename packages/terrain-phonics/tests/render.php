@@ -996,7 +996,7 @@ renderCheck(
 
 $marks = [];
 
-// Nine metres a frame crosses an 8 m position bucket on every frame.
+// Nine meters a frame crosses an 8 m position bucket on every frame.
 for($frame = 0; $frame < 32; $frame++)
 {
 	$travelCamera->position[0] += 9;
@@ -1177,7 +1177,7 @@ $freeMarks = $limitedMarks = $served = [];
 $waitingSince = null;
 $refined = $limited->stats()['visible'];
 
-// Now the eye trembles by a millimetre inside one position bucket. The view key never changes, so only
+// Now the eye trembles by a millimeter inside one position bucket. The view key never changes, so only
 // finished sibling groups and transitions ask for selections while the view counts as moving.
 for($frame = 0; $frame < 60; $frame++)
 {
@@ -1227,7 +1227,7 @@ foreach($twins as [$twinSurface,$twinScene])
 
 // Spread selections. These fixtures slice selections by steps with selectionSliceSteps, so what they check does
 // not depend on the clock or the speed of the machine. The fixtures above run every selection whole with
-// selectionSliceMs at zero, which is the behaviour from before selections were spread.
+// selectionSliceMs at zero, which is the behavior from before selections were spread.
 
 // A walk that pauses returns the lists of one that does not, and a walk without credit never pauses.
 $spreadView = new Camera;
@@ -1978,13 +1978,13 @@ $invalidSpotLights = [
 	// The shape of the list and of each light.
 	'three lights' => [$spotLight, $spotLight, $spotLight], 'a keyed list' => ['a' => $spotLight]
 	, 'a light that is not an array' => [1], 'a missing key' => [array_diff_key($spotLight, ['range' => 0])]
-	, 'an unknown key' => [['colour' => [1,1,1]] + $spotLight]
+	, 'an unknown key' => [['unexpected' => [1,1,1]] + $spotLight]
 
 	// Values outside their ranges.
 	, 'a zero direction' => [['direction' => [0,0,0]] + $spotLight]
 	, 'a negative intensity' => [['intensity' => -1] + $spotLight]
-	, 'a negative colour' => [['color' => [1,-.1,1]] + $spotLight]
-	, 'a range under 0.01 metres' => [['range' => .009] + $spotLight]
+	, 'a negative color' => [['color' => [1,-.1,1]] + $spotLight]
+	, 'a range under 0.01 meters' => [['range' => .009] + $spotLight]
 
 	// The cone.
 	, 'an inner cone wider than the outer' => [['inner' => .4] + $spotLight]
@@ -1995,7 +1995,7 @@ $invalidSpotLights = [
 	, 'an infinite position' => [['position' => [INF,0,0]] + $spotLight]
 	, 'a NAN range' => [['range' => NAN] + $spotLight]
 	, 'a numeric string' => [['intensity' => '20000'] + $spotLight]
-	, 'a two-component colour' => [['color' => [1,1]] + $spotLight]
+	, 'a two-component color' => [['color' => [1,1]] + $spotLight]
 	, 'a keyed position' => [['position' => ['x' => 0,'y' => 0,'z' => 0]] + $spotLight]
 ];
 
@@ -2034,7 +2034,7 @@ renderCheck(
 	$nightPacked[8] === $packed[8] * TerrainPhonics\SpotLights::NIGHT_GAIN
 	&& $duskPacked[10] === $packed[10] * (1 + (TerrainPhonics\SpotLights::NIGHT_GAIN - 1) / 2)
 	&& $spotLights->uniforms(2) === $spotLights->uniforms(1) && $spotLights->uniforms(-1) === $spotLights->uniforms(0)
-	, 'lamp light gains NIGHT_GAIN along the night fill curve and only the colour changes'
+	, 'lamp light gains NIGHT_GAIN along the night fill curve and only the color changes'
 );
 
 renderCheck(
@@ -2526,19 +2526,19 @@ foreach(['buffers','vaos','textures','programs','framebuffers','renderbuffers'] 
 $GLOBALS['terrainGl'][$kind] = [];
 $scene->restore();
 renderCheck($resources() === $before, 'context restoration recreates ownership after old context names expire');
-$cancelled = Landscape::load($surface->save());
-$cancelled->queue(['type' => 'raise','x' => 10,'z' => 10,'radius' => 3,'amount' => 1]);
-$cancelled->commit();
-$scene->prepareLandscape($cancelled);
+$canceled = Landscape::load($surface->save());
+$canceled->queue(['type' => 'raise','x' => 10,'z' => 10,'radius' => 3,'amount' => 1]);
+$canceled->commit();
+$scene->prepareLandscape($canceled);
 $scene->update(.1, $camera);
 
 renderCheck(
-	$scene->cancelPreparedLandscape() === $cancelled && !$cancelled->stats()['closed']
-	, 'cancelling preparation preserves caller ownership of candidate'
+	$scene->cancelPreparedLandscape() === $canceled && !$canceled->stats()['closed']
+	, 'canceling preparation preserves caller ownership of candidate'
 );
 
-renderCheck($scene->takePreparedLandscape() === null, 'cancelled candidate cannot publish');
-$scene->prepareLandscape($cancelled);
+renderCheck($scene->takePreparedLandscape() === null, 'canceled candidate cannot publish');
+$scene->prepareLandscape($canceled);
 $scene->close();
 $scene->close();
 renderCheck(array_sum($resources()) === 0, 'close releases all scene GL ownership exactly once');
@@ -2597,7 +2597,7 @@ $holds($appearanceScene->appearance, 'the next frame uploads a replaced appearan
 renderCheck($sent('uExposure') === [1.75] && $uploads('uExposure') === 2 && $uploads('uSunDirection') === 1,
 	'changing exposure only resends the affected atmosphere parameter');
 renderCheck($sent('uSnowColor') === [1.0, 0.0, 0.0] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
-renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest colour arrives');
+renderCheck(array_slice($sent('uMountainColors[0]')[1], 0, 3) === [0.0, 1.0, 0.0], 'the new forest color arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uSnowColor') === 2, 'a replaced appearance uploads once');
 

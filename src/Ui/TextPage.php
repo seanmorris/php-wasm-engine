@@ -5,7 +5,7 @@ namespace Phonics\Ui;
 use Phonics\Render\BitmapFont;
 
 /**
- * A page of text to read inside a menu: how to play, credits, licences.
+ * A page of text to read inside a menu: how to play, credits, licenses.
  *
  * Its blocks are headings, paragraphs and name/value pairs. `layout()` sets them in one column for a font and a width,
  * as lines of equal height, and the page scrolls by whole lines, as a text-mode viewer does. The page holds no GPU
@@ -13,7 +13,7 @@ use Phonics\Render\BitmapFont;
  */
 final class TextPage
 {
-	/** Span kind of a heading, which renderers set in an accent colour. */
+	/** Span kind of a heading, which renderers set in an accent color. */
 	public const HEADING = 'heading';
 	/** Span kind of running text. */
 	public const TEXT = 'text';
@@ -21,7 +21,7 @@ final class TextPage
 	public const NAME = 'name';
 	/** Span kind of the value side of a name/value pair. */
 	public const VALUE = 'value';
-	/** Secondary text, such as a licence, which renderers set a little darker than the rest. */
+	/** Secondary text, such as a license, which renderers set a little darker than the rest. */
 	public const NOTE = 'note';
 	/** Share of the width that a column of names may take before pairs stack each value under its name. */
 	public const NAME_COLUMN = .45;
@@ -368,7 +368,7 @@ final class TextPage
 	/**
 	 * Move the view by whole lines.
 	 *
-	 * @param int $lines Negative scrolls towards the top.
+	 * @param int $lines Negative scrolls toward the top.
 	 * @return void Stops at the first and last lines.
 	 */
 	public function scroll(int $lines): void { $this->scrollTo($this->first + $lines); }

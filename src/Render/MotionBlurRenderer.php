@@ -50,7 +50,7 @@ final class MotionBlurRenderer
 	/**
 	 * The offscreen scene target the blur samples from.
 	 *
-	 * @return RenderTarget Linearly filtered colour with a depth buffer, sized to the drawing buffer.
+	 * @return RenderTarget Linearly filtered color with a depth buffer, sized to the drawing buffer.
 	 */
 	public function target(): RenderTarget { return $this->target; }
 

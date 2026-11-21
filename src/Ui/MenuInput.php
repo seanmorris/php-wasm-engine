@@ -543,7 +543,7 @@ final class MenuInput
 				return true;
 			}
 
-			// The track pages towards a press above or below the thumb; a press on the thumb picks it up.
+			// The track pages toward a press above or below the thumb; a press on the thumb picks it up.
 			if($thumb !== null && ($event['y'] < $y + $thumb[0] || $event['y'] >= $y + $thumb[0] + $thumb[1]))
 			{
 				$page->page($event['y'] < $y + $thumb[0] ? -1 : 1);

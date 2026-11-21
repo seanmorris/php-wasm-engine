@@ -96,7 +96,7 @@ $close = static function(array $a, array $b, float $tolerance = 1e-12): bool {
 	return count($a) === count($b);
 };
 
-// Literal colours and limits from terrain.frag before the appearance existed.
+// Literal colors and limits from terrain.frag before the appearance existed.
 $old = [
 	'grassColor' => [.055, .105, .026], 'soilColor' => [.22, .115, .052], 'rockColor' => [.24, .20, .16],
 	'rockBandColor' => [.43, .30, .20], 'sandColor' => [.52, .43, .26], 'snowColor' => [.82, .88, .94],
@@ -118,19 +118,19 @@ foreach($old as $name => $linear)
 	foreach(str_split(substr($hex, 1), 2) as $i => $channel)
 	$expect(
 		abs(hexdec($channel) - 255 * $srgb($linear[$i])) <= .5
-		, "$name $hex is the nearest 8-bit sRGB colour to the old linear constant"
+		, "$name $hex is the nearest 8-bit sRGB color to the old linear constant"
 	);
 
 	$expect($close(TerrainAppearance::linear($hex), $linear, .0105), "$name converts back near the old constant");
 }
 
-$expect($uniforms['uGrassColor'] === TerrainAppearance::linear('#425b2d'), 'grass uploads the converted hex colour');
+$expect($uniforms['uGrassColor'] === TerrainAppearance::linear('#425b2d'), 'grass uploads the converted hex color');
 
-// The four chosen canyon colours carry their hex rounding. The shades derived from them reproduce the old ones.
+// The four chosen canyon colors carry their hex rounding. The shades derived from them reproduce the old ones.
 foreach([2, 4, 6, 7] as $i)
 $expect(
 	$close(array_slice($uniforms['uCanyonColors[0]'], 3 * $i, 3), $oldCanyon[$i])
-	, "derived canyon colour $i equals the old constant"
+	, "derived canyon color $i equals the old constant"
 );
 
 $chosen = [0 => 'canyonRustColor', 1 => 'canyonShaleColor', 3 => 'canyonSandstoneColor', 5 => 'canyonCapColor'];
@@ -139,11 +139,11 @@ foreach($chosen as $i => $name)
 $expect(
 	array_slice($uniforms['uCanyonColors[0]'], 3 * $i, 3)
 		=== TerrainAppearance::linear(TerrainAppearance::DEFAULTS[$name])
-	, "canyon colour $i comes from $name"
+	, "canyon color $i comes from $name"
 );
 
 $expect($close($uniforms['uCanyonBounce'], [.11, .066, .048]), 'canyon bounce light equals the old constant');
-$expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per metre and profile');
+$expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per meter and profile');
 $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends are the old constants');
 $expect(
 	$uniforms['uHeightBlend'] === [3.0, 18.0, -110.0, -30.0]
@@ -152,12 +152,12 @@ $expect(
 $expect($uniforms['uSnowline'] === [340.0, 65.0], 'default snowline and transition are the old constants');
 $expect($uniforms['uMacroVariation'] === [1.0], 'default variation keeps the old strength');
 
-// The mountain palette uploads its six colours in the shader's order.
+// The mountain palette uploads its six colors in the shader's order.
 foreach(['forest', 'meadow', 'tundra', 'granite', 'stain', 'talus'] as $i => $name)
 $expect(
 	array_slice($uniforms['uMountainColors[0]'], 3 * $i, 3)
 		=== TerrainAppearance::linear(TerrainAppearance::DEFAULTS[$name . 'Color'])
-	, "mountain colour $i comes from {$name}Color"
+	, "mountain color $i comes from {$name}Color"
 );
 
 $expect($uniforms['uMountainZones'] === [-150.0, -90.0], 'default treeline and tundra lie below the snowline');
@@ -180,7 +180,7 @@ foreach(TerrainAppearance::DEFAULTS as $name => $value)
 {
 	if(is_string($value))
 	{
-		$expect(str_ends_with($name, 'Color') && !isset(TerrainAppearance::RANGES[$name]), "$name is a colour");
+		$expect(str_ends_with($name, 'Color') && !isset(TerrainAppearance::RANGES[$name]), "$name is a color");
 		continue;
 	}
 
@@ -204,7 +204,7 @@ foreach(explode(',', $names) as $declaration)
 foreach($uniforms as $name => $values)
 $expect(($declared[$name] ?? null) === count($values), "terrain.frag declares $name with the size it receives");
 
-// Validation: colours must be six-digit hex strings and numbers must be finite integers or floats.
+// Validation: colors must be six-digit hex strings and numbers must be finite integers or floats.
 foreach([null, 4365869, '#fff', 'red', '#12345g', "#425b2d\n", ' #425b2d', ['#425b2d'], true] as $value)
 $rejects(['snowColor' => $value], 'snowColor');
 
@@ -213,10 +213,10 @@ $rejects(['bandSpacing' => $value], 'bandSpacing');
 
 $rejects(['grassColor' => '#425b2d', 'snowline' => '340'], 'snowline');
 $upper = new TerrainAppearance(['sandColor' => '#C0FFEE', 'beachHeight' => 4]);
-$expect($upper->settings['sandColor'] === '#c0ffee', 'hex colours are stored in lower case');
+$expect($upper->settings['sandColor'] === '#c0ffee', 'hex colors are stored in lower case');
 $expect($upper->settings['beachHeight'] === 4.0, 'integer settings are stored as floats');
 
-$ignored = new TerrainAppearance(['waterColor' => 'not a colour', 'tool' => 'raise', 'quality' => '2']);
+$ignored = new TerrainAppearance(['waterColor' => 'not a color', 'tool' => 'raise', 'quality' => '2']);
 $expect($ignored->settings === TerrainAppearance::DEFAULTS, 'settings that belong to other systems are ignored');
 $reordered = new TerrainAppearance(['snowline' => 200, 'grassColor' => '#000000']);
 $expect(array_keys($reordered->settings) === array_keys($defaults->settings), 'settings keep the DEFAULTS order');
@@ -224,7 +224,7 @@ $expect(array_keys($reordered->settings) === array_keys($defaults->settings), 's
 // Hex conversion follows the sRGB transfer function, including its linear toe.
 $expect(TerrainAppearance::linear('#000000') === [0.0, 0.0, 0.0], 'black is zero');
 $expect(TerrainAppearance::linear('#ffffff') === [1.0, 1.0, 1.0], 'white is one');
-$expect($close(TerrainAppearance::linear('#808080'), array_fill(0, 3, .21586050011389926)), 'mid grey');
+$expect($close(TerrainAppearance::linear('#808080'), array_fill(0, 3, .21586050011389926)), 'mid gray');
 $expect($close(TerrainAppearance::linear('#0a0000'), [10 / 255 / 12.92, 0.0, 0.0]), 'dark values use the linear toe');
 $expect(
 	$close(TerrainAppearance::linear('#ff8000'), [1.0, .21586050011389926, 0.0])
@@ -290,7 +290,7 @@ $expect(
 
 $expect(
 	$order(['alpineStart' => -30, 'alpineEnd' => -30]) === ['alpineStart' => -30.0, 'alpineEnd' => -29.0]
-	, 'equal alpine heights separate by a metre'
+	, 'equal alpine heights separate by a meter'
 );
 
 $expect(
@@ -300,7 +300,7 @@ $expect(
 
 $expect(
 	$order(['treeline' => -80, 'tundraStart' => -150]) === ['treeline' => -80.0, 'tundraStart' => -79.0]
-	, 'tundra starting below the treeline moves up to a metre above it'
+	, 'tundra starting below the treeline moves up to a meter above it'
 );
 
 // A slope slider moves in steps of the gap. In binary, 18 of the 99 pairs one step apart differ by a little less than
@@ -359,8 +359,8 @@ foreach($uniforms as $name => $values)
 	$expect($uploads[$name] === [$function, $sent], "bind uploads $name with $function");
 }
 
-$expect($uploads['uCanyonColors[0]'][1][0] === 8, 'the canyon palette uploads as eight colours');
-$expect($uploads['uMountainColors[0]'][1][0] === 6, 'the mountain palette uploads as six colours');
+$expect($uploads['uCanyonColors[0]'][1][0] === 8, 'the canyon palette uploads as eight colors');
+$expect($uploads['uMountainColors[0]'][1][0] === 6, 'the mountain palette uploads as six colors');
 
 // A changed appearance changes what bind() uploads, and the derived canyon shades follow their sources.
 $changed = new TerrainAppearance([
@@ -373,7 +373,7 @@ $changed = new TerrainAppearance([
 $changed->bind($program);
 $after = $GLOBALS['appearanceGl']['uploads'];
 
-// The grass colour did not change, so it uploads the same values as before.
+// The grass color did not change, so it uploads the same values as before.
 $expected = [
 	'uSnowColor' => ['glUniform3f', [1.0, 0.0, 0.0]], 'uBanding' => ['glUniform3f', [2 * M_PI / 100, .5, 4.0]],
 	'uSlopeBlend' => ['glUniform4f', [.2, .25, .25, .65]], 'uHeightBlend' => ['glUniform4f', [-2.0, 4.0, -60.0, -10.0]],
@@ -385,10 +385,10 @@ $expected = [
 foreach($expected as $name => $upload) $expect($after[$name] === $upload, "the changed appearance uploads $name");
 
 $mountain = $after['uMountainColors[0]'][1];
-$expect($mountain[0] === 6 && array_slice($mountain[1], 12, 3) === [0.0, 1.0, 0.0], 'a changed stain colour uploads');
+$expect($mountain[0] === 6 && array_slice($mountain[1], 12, 3) === [0.0, 1.0, 0.0], 'a changed stain color uploads');
 $expect(
 	array_slice($mountain[1], 0, 12) === array_slice($uploads['uMountainColors[0]'][1][1], 0, 12)
-	, 'the other mountain colours stay as they were'
+	, 'the other mountain colors stay as they were'
 );
 
 $palette = $after['uCanyonColors[0]'][1][1];
@@ -406,7 +406,7 @@ $expect(
 	, 'dust, distant beds and bounce light follow the bed average'
 );
 
-// Derived shades are albedos like the hex colours. Red beds are 1.16 to 1.23 times the rust, channel by channel, and
+// Derived shades are albedos like the hex colors. Red beds are 1.16 to 1.23 times the rust, channel by channel, and
 // dust up to 1.19 times the bed average, so a light rust or palette must not push them past 1.
 $white = ['canyonRustColor' => '#ffffff', 'canyonShaleColor' => '#ffffff', 'canyonSandstoneColor' => '#ffffff'];
 
