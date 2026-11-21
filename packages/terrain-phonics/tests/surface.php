@@ -797,6 +797,19 @@ $bankedCopy = Landscape::load($banked->save());
 terrainNear($bankedCopy->height(0,4),$banked->height(0,4),0.,'road cross slope survives save and reload');
 terrainReject(fn() => $banked->queue(['type'=>'road','points'=>[[0,1,0],[24,1,0]],'banks'=>[.2]]),
 	'a banked road needs one cross slope per control point');
+$feathered = new Landscape($flatRecipe);
+$feathered->queue(['type'=>'road','points'=>[[-60,8,0],[0,8,0],[60,8,0]],'width'=>8,'shoulder'=>4,'endBlend'=>36]);
+$feathered->commit();
+foreach([-1,1] as $end)
+{
+	$outer = $feathered->height($end*54,0);
+	$inner = $feathered->height($end*36,0);
+	terrainCheck($outer > 0 && $outer < 2 && $inner > 4 && $inner < 8, 'Both caps gradually hand over the height');
+	terrainCheck($feathered->material($end*54,0) !== 'road' && $feathered->material($end*36,0) === 'road',
+		'Road paint follows the same end blend as its grade');
+}
+terrainNear($feathered->height(0,0),8.,1e-9,'A feathered road still reaches its full height in the middle');
+terrainNear(Landscape::load($feathered->save())->height(54,0),$feathered->height(54,0),0.,'End blends survive reload');
 $diagonal = new Landscape($flatRecipe);
 $diagonal->queue(['type'=>'road','points'=>[[-50,5,-50],[50,5,50]],'width'=>8,'shoulder'=>7]);
 $diagonal->commit();

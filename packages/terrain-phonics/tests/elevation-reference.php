@@ -27,7 +27,7 @@ $ground->queue(['type' => 'road', 'width' => 14, 'shoulder' => 9, 'crown' => .5,
 	'banks' => [-.1, .18, -.08, .15, -.1], 'points' => [
 		[-610, 70, -512], [-480, 82, -512], [-460, 87, -462], [-510, 75, -494], [-560, 69, -530],
 	]]);
-$ground->queue(['type' => 'road', 'width' => 9, 'shoulder' => 4, 'material' => 'snow',
+$ground->queue(['type' => 'road', 'width' => 9, 'shoulder' => 4, 'material' => 'snow', 'endBlend' => 24,
 	'points' => [[-530, 95, -555], [-499, 87, -478]]]);
 $ground->queue(['type' => 'road', 'width' => 4, 'shoulder' => 1, 'material' => null,
 	'points' => [[-508, 65, -540], [-508, 79, -480]]]);
