@@ -21,6 +21,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'spot-lights.glsl'
 		, 'shadows.vert'
 		, 'shadows.frag'
+		, 'triangle-shadows.frag'
 
 		, 'stars.vert', 'stars.frag'
 		, 'sky.vert'
@@ -395,6 +396,65 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				shadowResults.push({name, visibility});
 			}
 
+			// A wall only one metre thick crosses the interior of an eight-metre terrain triangle.
+			// Run both production passes against a signed, toroidal lattice in each storage format.
+			const adaptive = program(shaders['shadows.vert'], shaders['triangle-shadows.frag']);
+			const adaptiveResults = [];
+			const sampleFunction = shaders['terrain.frag'].split('float localSunlight')[1].split('#endif')[0];
+			const sampleTriangle = program(vertex, header + `
+				uniform highp sampler2D uShadowTriangles;
+				uniform vec3 uShadowGrid;
+				uniform float uCraft;
+				out vec4 color;
+				float localSunlight` + sampleFunction + `
+				void main() {
+					vec2 samples[6] = vec2[6](vec2(1),vec2(7,.2),vec2(8./3.),vec2(4,2),vec2(6,1.99),vec2(6,2.01));
+					int i = int(gl_FragCoord.x);
+					color = vec4(localSunlight(samples[i],i == 3 ? 10. : .01,1.),0.,0.,1.);
+				}`);
+			const local = name => gl.getUniformLocation(adaptive,name);
+			for(const packed of [false,true])
+			for(const stripe of [false,true]) {
+				const field = new Float32Array(64*64).fill(-350);
+				for(let z = 0; z < 64; z++) {
+					if(!stripe || z === 2 || z === 3) field[z*64+(stripe ? 8 : 10)] += stripe ? 12 : 6;
+				}
+				texture(10,64,64,null);
+				if(packed) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,64,64,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(field.buffer));
+				else gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,64,64,0,gl.RED,gl.FLOAT,field);
+				// Keep the far field below every sun ray.
+				const distant = new Float32Array(4).fill(-1000);
+				texture(11,2,2,null);
+				if(packed) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,2,2,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(distant.buffer));
+				else gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,2,2,0,gl.RED,gl.FLOAT,distant);
+				gl.useProgram(adaptive);
+				gl.uniform1i(local('uCaster'),10);
+				gl.uniform1i(local('uOverview'),11);
+				gl.uniform1i(local('uPacked'),+packed);
+				gl.uniform1f(local('uCasterStep'),1);
+				gl.uniform1f(local('uReach'),24);
+				gl.uniform1f(local('uExtent'),64);
+				gl.uniform3f(local('uSun'),Math.SQRT1_2,Math.SQRT1_2,0);
+				gl.uniform3f(local('uShadowGrid'),-64,-64,8);
+				target(12,17,17);
+				gl.uniform1i(local('uVertices'),10);
+				gl.uniform1i(local('uRefine'),0);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				target(13,32,16);
+				gl.uniform1i(local('uVertices'),12);
+				gl.uniform1i(local('uRefine'),1);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				const pixel = new Uint8Array(4);
+				gl.readPixels(16,8,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+				target(14,6,1);
+				gl.useProgram(sampleTriangle);
+				gl.uniform1i(gl.getUniformLocation(sampleTriangle,'uShadowTriangles'),13);
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uShadowGrid'),-64,-64,8);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				const rendered = new Uint8Array(24);
+				gl.readPixels(0,0,6,1,gl.RGBA,gl.UNSIGNED_BYTE,rendered);
+				adaptiveResults.push({record:[...pixel], pixels:[...rendered.filter((_,i)=>i%4===0)]});
+			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
@@ -894,7 +954,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
-				, shadowResults
+				, shadowResults, adaptiveResults
 				, illuminationResults
 				, bandResults
 				, mountainBands
@@ -1019,6 +1079,15 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			);
 		}
 
+		const [wall, stripe, packedWall, packedStripe] = result.adaptiveResults;
+		assert.deepEqual([packedWall, packedStripe], [wall, stripe], 'packed heights produce the same edges as float heights');
+		assert.equal(wall.record[0], 3, 'only the second corner lies in shadow');
+		assert.deepEqual(wall.pixels.slice(0,3), [255,0,255], 'the shadow edge cuts across the near triangle');
+		assert.ok(wall.pixels[3] > 180 && wall.pixels[3] < 211, 'about three quarters of the distant triangle is lit');
+		assert.deepEqual(wall.pixels.slice(4), [0,0], 'the reflected triangle meets the same edge on the diagonal');
+		assert.equal(stripe.record[0], 8, 'the centre probe finds the narrow shadow between three lit vertices');
+		assert.deepEqual(stripe.pixels.slice(0,3), [255,255,0], 'only the interior of the near triangle is shaded');
+		assert.ok(stripe.pixels[3] > 204 && stripe.pixels[3] < 255, 'the interior shadow contributes to distant coverage');
 		const visibility = Object.fromEntries(result.shadowResults.map(sample => [sample.name, sample.visibility]));
 		assert.deepEqual(visibility.flat, [255, 255], 'a flat plane remains sunlit even at low sun angles');
 		assert.deepEqual(visibility.ridge, [0, 255], 'a broad ridge blocks the down-sun side');

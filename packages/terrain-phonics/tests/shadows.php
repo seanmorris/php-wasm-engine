@@ -104,11 +104,13 @@ namespace
 {
 	require dirname(__DIR__) . '/autoload.php';
 	use TerrainPhonics\TerrainShadows;
+	use TerrainPhonics\TriangleShadows;
 	use TerrainPhonicsTests\ShadowCalls;
 	use Phonics\Render\Program;
 
 	foreach([
 		'GL_LINEAR'
+		, 'GL_NEAREST', 'GL_DITHER'
 		, 'GL_DEPTH_TEST'
 		, 'GL_CULL_FACE'
 		, 'GL_BLEND'
@@ -199,5 +201,39 @@ namespace
 	);
 
 	$expect(ShadowCalls::$arrays === [] && !$cache->stats()['ready'], 'vertex arrays and visibility are released');
+	$triangles = new TriangleShadows;
+	$level = ['step'=>8.,'textures'=>[17,18]];
+	$eye = [0.,0.,0.];
+	$sun = [0.,1.,0.];
+	$update = static fn(int $revision) => $triangles->update($level,184,$eye,$sun,99,32768.,false,0.,$revision,12);
+	$draws = ShadowCalls::$draws;
+	$update(1);
+	$triangles->bind($consumer);
+	$expect(ShadowCalls::$draws === $draws+2 && $uniform('uShadowGrid')[2] > 0,
+		'One vertex pass and one refinement pass populate a shared triangle cache');
+	$update(1);
+	$triangles->update($level,184,[15.,70.,-20.],[0.,cos(.001),sin(.001)],99,32768.,false,0.,1,12);
+	$expect($triangles->generation === 1 && ShadowCalls::$draws === $draws+2,
+		'Small camera moves and sub-tolerance sun drift reuse both passes');
+	$triangles->update($level,184,[70.,0.,0.],$sun,99,32768.,false,0.,1,12);
+	$expect($triangles->generation === 2, 'Crossing a grid block regenerates the cache');
+	$triangles->update($level,184,[70.,0.,0.],[1.,0.,0.],99,32768.,false,0.,1,12);
+	$expect($triangles->generation === 3, 'Turning the sun regenerates the cache at the same position');
+	$triangles->update($level,184,[70.,0.,0.],[1.,0.,0.],99,32768.,false,0.,2,12);
+	$expect($triangles->generation === 4, 'Changing the terrain revision refreshes stationary shadows');
+	$triangles->invalidate();
+	$triangles->bind($consumer);
+	$expect($uniform('uShadowGrid')[2] === 0., 'Night or a missing resident level disables stale local shadows');
+	ShadowCalls::$failDraw = true;
+	try { $update(3); $expect(false,'Failed local draws must propagate'); }
+	catch(RuntimeException $error)
+	{
+		$triangles->bind($consumer);
+		$expect(ShadowCalls::$framebuffer === 73 && $uniform('uShadowGrid')[2] === 0., 'A failed pass restores its parent and disables partial results');
+	}
+	ShadowCalls::$failDraw = false;
+	$update(3);
+	$expect($triangles->generation === 5,'Local shadows recover after an interrupted rebuild');
+	$triangles->close();
 	echo "Terrain shadows: {$checks} checks passed\n";
 }
