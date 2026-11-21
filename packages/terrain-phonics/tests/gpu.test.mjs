@@ -678,6 +678,62 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				mountainAmounts.push({material, amount, maxError, share: differing / (256 * 64)});
 			}
 
+			// Sample the old 3 m talus grid at eight pixels per cell. Moving 3.6 cm
+			// across a former edge should not switch the material of an entire cell.
+			const rockProbe = program(vertex, header + shaders['surface-layers.glsl'] + shaders['material-noise.glsl'] + `
+				uniform vec4 uSlopeBlend,uHeightBlend;
+				uniform vec2 uSnowline,uMountainZones;
+				uniform vec3 uMountainAmounts;
+				uniform float uShift,uAspect,uOblique;
+				out vec4 color;
+				void main() {
+					vec2 point=gl_FragCoord.xy-.5;
+					point.y+=(point.y-32.)*uOblique;
+					vec2 gridPos=point/8.+vec2(-623.+uShift,912.);
+					vec2 xz=3.*mat2(.8,-.6,.6,.8)*gridPos;
+					vec3 pos=vec3(xz.x,240.+.1*(point.y+.5),xz.y), relative=vec3(0.,-80.,0.);
+					vec3 normal=normalize(vec3(.55+uAspect,1.,.55)), weights=pow(abs(normal),vec3(4.));
+					weights/=dot(weights,vec3(1.));
+					float slope=1.-normal.y, footprint=.375, water=0., macro=landVariation(xz,footprint);
+					float snowline=uSnowline.x+25.*macro, stipple=0.;
+					${shaders['material-fields.glsl']}
+					color=vec4(.5*blocks*boulders,scree,.6*tone,.5+2.*blockTilt.z);
+				}`);
+			gl.useProgram(rockProbe);
+			appearance(rockProbe, data.appearance);
+			function rockSample(shift, aspect, oblique = 0) {
+				gl.uniform1f(gl.getUniformLocation(rockProbe,'uShift'),shift);
+				gl.uniform1f(gl.getUniformLocation(rockProbe,'uAspect'),aspect);
+				gl.uniform1f(gl.getUniformLocation(rockProbe,'uOblique'),oblique);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				const pixels = new Uint8Array(256*64*4);
+				gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+				return pixels;
+			}
+			const left = rockSample(-.006,-.002), right = rockSample(.006,-.002), otherAspect = rockSample(-.006,.002);
+			// Foreshorten the view about the middle row. Its world points, normals,
+			// and filter width stay fixed while the neighboring pixels move.
+			const oblique = rockSample(-.006,-.002,2);
+			const stone = [], screeValues = [], reliefValues = [], edgeJumps = [], aspectJumps = [];
+			let centerSum = 0, edgeSum = 0, reliefJump = 0;
+			for(let y=0;y<64;y++) for(let x=0;x<256;x++) {
+				const i=4*(y*256+x);
+				stone.push(left[i]);
+				screeValues.push(left[i+1]);
+				reliefValues.push(left[i+3]);
+				if(y===32) reliefJump=Math.max(reliefJump,Math.abs(left[i+3]-oblique[i+3]));
+				if(x%8===0) edgeJumps.push(Math.abs(left[i+1]-right[i+1]));
+				if(y%8===4 && x%8===4) centerSum+=left[i];
+				if(y%8===4 && x%8===0) edgeSum+=left[i];
+				aspectJumps.push(Math.abs(left[i+2]-otherAspect[i+2]));
+			}
+			const percentile = (values,p) => values.sort((a,b)=>a-b)[Math.floor(p*values.length)];
+			const rockDetail = {
+				centerEdge: Math.abs(centerSum-edgeSum)/(32*8), edgeJump: percentile(edgeJumps,.95),
+				aspectJump: percentile(aspectJumps,.95), toneRange: percentile(stone,.95)-percentile(stone,.05),
+				screeRange: percentile(screeValues,.95)-percentile(screeValues,.05), reliefJump,
+				reliefRange: percentile(reliefValues,.95)-percentile(reliefValues,.05),
+			};
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
@@ -1066,7 +1122,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
-				, mountainAmounts
+				, mountainAmounts, rockDetail
 				, inactiveAppearance
 
 				, aliasResults
@@ -1294,6 +1350,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(amount === 0) assert.equal(share, 0, `${material} shows on ${share} of a face at an amount of 0`);
 			else assert.ok(share > .01, `${material} shows on ${share} of a face at an amount of ${amount}`);
 		}
+
+		console.log('Rock field samples in 8-bit channel steps:', result.rockDetail);
+		const {centerEdge,edgeJump,aspectJump,toneRange,screeRange,reliefJump,reliefRange} = result.rockDetail;
+		assert.ok(centerEdge < 4, 'stone centers and edges have similar average brightness');
+		assert.ok(edgeJump < 14, 'scree cover varies continuously across the former cell boundaries');
+		assert.ok(aspectJump < 3, 'granite joints continue around the diagonal between upright projections');
+		assert.ok(reliefJump <= 1 && reliefRange > 12, 'scree relief varies across the face and stays stable under a change of view');
+		assert.ok(toneRange > 18 && screeRange > 32, 'loose rock keeps both tonal detail and patchy coverage');
 
 		const variance = values => {
 			const mean = values.reduce((sum, value) => sum + value, 0) / values.length;

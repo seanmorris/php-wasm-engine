@@ -122,8 +122,8 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec3 cliff = mix(granite,stain,sheets*clamp(.5+.42*streak+.4*rill,0.,.85))*jointTint;
 	rock = mix(rubble,cliff,cliffFraction);
 	outBare = bare;
-	vec3 knob = vec3(offset.x,0.,offset.y)*(.6*block*(scree+bare*(1.-steep))+.5*crownRelief*trees)*cellFade;
-	normal = normalize(normal + (facet*bare*steep*slabFade*settled+knob)*relief);
+	vec3 knob = blockTilt*(scree+bare*(1.-steep)) + vec3(offset.x,0.,offset.y)*.5*crownRelief*trees*cellFade;
+	normal = normalize(normal + (facet*bare*steep+knob)*relief);
 	vec3 tangential = lift-normal*dot(normal,lift);
 	normal = normalize(normal-tangential*relief/(1.+length(tangential)));
 	}
