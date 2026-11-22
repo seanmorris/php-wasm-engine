@@ -2581,8 +2581,8 @@ $holds = static function(TerrainAppearance $appearance, string $message) use ($s
 };
 
 renderCheck(
-	$appearanceScene->appearance->settings === TerrainAppearance::DEFAULTS
-	, 'a scene starts with the default terrain appearance'
+	$appearanceScene->appearance->settings === array_replace(TerrainAppearance::DEFAULTS,TerrainAppearance::PRESET_DEFAULTS['mountain'])
+	, 'a mountain scene starts with the alpine palette'
 );
 
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
