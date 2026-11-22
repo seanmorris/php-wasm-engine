@@ -231,6 +231,14 @@ foreach([.5, 1., 2.] as $quality)
 	foreach([$canyonRecipe, (new Recipe(['preset' => 'coast']))->values()] as $recipe)
 	{
 		$spans = Clipmap::spans($recipe, $quality);
+		$driving = Clipmap::spans($recipe, $quality, true);
+		check($driving[0] >= $spans[0]*4/3 && $driving[0]%4 === 0, 'The focused grid widens both shoulders.');
+		foreach($driving as $level=>$span) {
+			if($level === 0) continue;
+			$lead = $level === 1 ? $driving[0]/12 : 0.;
+			check($span/2-Clipmap::transition($span) >= $driving[$level-1]/4+$lead+4,
+				'At maximum lead the child still fits entirely inside the unmorphed parent.');
+		}
 		foreach($spans as $level => $span)
 		{
 			check($span % 4 === 0, 'Every clipmap edge lands on an even shared parent cell.');

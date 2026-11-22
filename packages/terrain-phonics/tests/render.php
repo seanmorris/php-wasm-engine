@@ -2713,6 +2713,39 @@ if(!function_exists('glTexSubImage2D'))
 			$arguments[8]];
 	}
 }
+// A driver can look sideways while the finest ring leads the signed travel direction.
+$land = new Landscape(['preset'=>'canyon','spacing'=>1,'worldSize'=>8192]);
+$driver = new Scene($land,new Water,new Atmosphere,useClipmap:true);
+$eye = new Camera;
+$eye->position = [-101.5,30.,19.5];
+$eye->yaw = M_PI/2;
+$driver->budgetMs = 1e5;
+do { $driver->update(1/60,$eye); } while($driver->stats()['pending']);
+$before = $driver->stats();
+$driver->update(1/60,$eye,[-101.5,-10000.]);
+$ahead = $driver->stats();
+renderCheck($ahead['visible'] === $before['visible'] && !$ahead['pending']
+	&& array_slice($ahead['visibleCoverage'],1) === array_slice($before['visibleCoverage'],1),
+	'Boarding in the canyon preserves its resident horizon and walls');
+[$left,$front,$width,$step] = $ahead['visibleCoverage'][0];
+renderCheck($step === $before['cameraSpacing'] && $width === 76. && $eye->position[2]-$front >= 50.
+	&& $left+16 < $eye->position[0] && $left+$width-16 > $eye->position[0],
+	'The fine road grid reaches ahead of travel and covers both shoulders');
+renderCheck($ahead['heightTexelsWritten']-$before['heightTexelsWritten'] === (76+5)**2,
+	'Boarding fills just the near grid vertices and halo inside the larger texture');
+$driver->update(1/60,$eye,[-101.5,10000.]);
+$reverse = $driver->stats();
+renderCheck($reverse['visibleCoverage'][0][1] > $front+22. && $reverse['visibleCoverage'][0][1] < $eye->position[2]
+	&& $reverse['heightTexelsWritten']-$ahead['heightTexelsWritten'] < (76+5)**2,
+	'Reversing keeps the eye covered and updates strips rather than refilling the near level');
+$driver->update(1/60,$eye,[-101.5,10000.]);
+renderCheck($driver->stats()['heightTexelsWritten'] === $reverse['heightTexelsWritten'],
+	'A settled focus writes no further elevation texels');
+$driver->update(1/60,$eye);
+renderCheck($driver->stats()['visibleCoverage'] === $before['visibleCoverage'], 'Leaving the car restores camera-centered coverage');
+$driver->close();
+$land->close();
+
 $paintRun = static function(float $budgetMs): array {
 	$land = new Landscape(['preset' => 'coast']);
 	for($i = 0; $i < 30; $i++)
