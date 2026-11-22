@@ -184,7 +184,7 @@ function glEnableVertexAttribArray(...$args): void{}
 
 function glVertexAttribPointer(...$args): void{}
 
-function glBindTexture(...$args): void{}
+function glBindTexture(...$args): void{$GLOBALS['boundTexture'] = $args[1] ?? 0;}
 
 function glTexParameteri(...$args): void{}
 function glGenerateMipmap(...$args): void{}
@@ -2677,5 +2677,70 @@ foreach($styles as [$recipe, $style])
 	$holds($appearanceScene->appearance, "terrain style $style receives the appearance");
 	$appearanceScene->close();
 }
+
+// The clipmap scene the sandbox uses. Edited texels take PHP's heights and ink after the GPU fills a level, and that
+// CPU paint runs within the scene's budget; a budgeted scene must end with the same texels as an unbounded one.
+foreach(['GL_RGBA32F','GL_R8','GL_TRIANGLE_STRIP','GL_RGB','GL_TEXTURE2','GL_COLOR_BUFFER_BIT','GL_DEPTH_BUFFER_BIT',
+	'GL_RGBA16F','GL_HALF_FLOAT','GL_DEPTH_COMPONENT24','GL_DEPTH_ATTACHMENT','GL_RENDERBUFFER','GL_REPEAT'] as $i => $name)
+	if(!defined($name)) define($name, 0x9a00 + $i);
+foreach(['glUniform2i','glUniform4i','glUniform3i','glUniform1fv','glUniform1iv','glClear','glClearColor','glReadPixels',
+	'glTexStorage2D','glCullFace','glBlendFunc','glScissor','glPixelStorei'] as $name)
+	if(!function_exists($name)) eval("function $name(...\$arguments): void {}");
+if(!function_exists('glDrawArraysInstanced')) { function glDrawArraysInstanced(...$arguments): void { terrainGlDraw(); } }
+if(!function_exists('glTexSubImage2D'))
+{
+	function glTexSubImage2D(...$arguments): void
+	{
+		$GLOBALS['subImages'][] = [$GLOBALS['boundTexture'] ?? 0, $arguments[2], $arguments[3], $arguments[4], $arguments[5],
+			$arguments[8]];
+	}
+}
+$paintRun = static function(float $budgetMs): array {
+	$land = new Landscape(['preset' => 'coast']);
+	for($i = 0; $i < 30; $i++)
+		$land->queue(['type' => $i % 2 ? 'flatten' : 'material', 'x' => -300 + 20*$i, 'z' => 0, 'radius' => 18,
+			'amount' => .8, 'material' => 'sand', 'height' => 5]);
+	$land->commit();
+	$GLOBALS['subImages'] = [];
+	$base = $GLOBALS['terrainGl']['next'];
+	$scene = new Scene($land, new Water, new Atmosphere, useClipmap: true);
+	$scene->budgetMs = $budgetMs;
+	$camera = new Camera;
+	$camera->position = [-300, 30, 0];
+	$camera->yaw = M_PI / 2;
+	$camera->pitch = -.1;
+	$updates = 0;
+	$mostTexels = 0;
+	do
+	{
+		$before = count($GLOBALS['subImages']);
+		$scene->update(1/60, $camera);
+		$texels = 0;
+		foreach(array_slice($GLOBALS['subImages'], $before) as [, , , $w, $h]) $texels += $w * $h;
+		$mostTexels = max($mostTexels, $texels / 2); // Each painted rectangle uploads heights and ink.
+		$updates++;
+	}
+	while(($scene->stats()['pending'] ?? 0) > 0 && $updates < 50000);
+	renderCheck(($scene->stats()['pending'] ?? 0) === 0, "A clipmap scene with a {$budgetMs} ms budget finishes painting its edits");
+	// The last value written to each texel, by texture in allocation order.
+	$final = [];
+	foreach($GLOBALS['subImages'] as [$texture, $x, $y, $w, $h, $bytes])
+	{
+		$size = intdiv(strlen($bytes), $w * $h);
+		for($j = 0; $j < $h; $j++)
+		for($i = 0; $i < $w; $i++)
+			$final[($texture - $base) . ':' . ($x + $i) . ':' . ($y + $j)] = substr($bytes, ($j * $w + $i) * $size, $size);
+	}
+	ksort($final);
+	$scene->close();
+	$land->close();
+	return [$final, $updates, $mostTexels];
+};
+[$unbounded, , ] = $paintRun(1e6);
+[$budgeted, $budgetedUpdates, $mostTexels] = $paintRun(.25);
+renderCheck(count($unbounded) > 1000, 'The edited coast paints more than a thousand texels from PHP');
+renderCheck($budgeted === $unbounded, 'A 0.25 ms budget ends with exactly the texels an unbounded paint leaves');
+renderCheck($budgetedUpdates > 10 && $mostTexels <= 64,
+	"The budgeted paint spreads over $budgetedUpdates updates, at most $mostTexels texels in one");
 
 echo "Terrain renderer: $checks checks passed.\n";
