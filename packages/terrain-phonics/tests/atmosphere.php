@@ -106,7 +106,7 @@ $atmosphere->setSun([0,-1,0], 0);
 $atmosphere->setNightGlow(0);
 $expect($atmosphere->uniforms()['nightVisibility'] === 1.0, 'stars remain visible with the fill off');
 $expect($atmosphere->sky([0,1,0]) === [0.0,0.0,0.0], 'zero solar irradiance yields zero scattered radiance');
-$vacuum = ['rayleigh'=>[0.,0.,0.], 'mie'=>0., 'ozone'=>[0.,0.,0.], 'sunDirection'=>[0.,1.,0.]];
+$vacuum = ['rayleigh' => [0.,0.,0.], 'mie' => 0., 'ozone' => [0.,0.,0.], 'sunDirection' => [0.,1.,0.]];
 $solar = new Atmosphere($vacuum);
 $expect($solar->uniforms()['angularRadius'] === .00935, 'The default solar radius is twice the original radius.');
 $inside = $solar->sky([sin(.008),cos(.008),0.])[0];
@@ -143,17 +143,26 @@ foreach([[['top'=>0]], [['density'=>-1]], [['density'=>INF]], [['color'=>'orange
 	try { $air->setLayers($invalid); $expect(false,'Invalid atmosphere layers should fail'); }
 	catch(InvalidArgumentException) { $expect($before === $air->layers(),'Invalid layer edits preserve the previous atmosphere.'); }
 }
+
 // The sky's diffuse light on terrain comes from the model's own sky.
 $sky = new Atmosphere;
+
 $fill = static function(Atmosphere $a, float $degrees): array {
 	$e = deg2rad($degrees);
 	$a->setSun([.6 * cos($e), sin($e), .8 * cos($e)]);
+
 	return $a->uniforms()['skyAmbient'];
 };
+
 $noon = $fill($sky, 60.);
 $low = $fill($sky, 8.);
 $dusk = $fill($sky, -3.);
-$expect($noon[2] > $noon[1] && $noon[1] > $noon[0] && $noon[2] > .4, 'A high sun lights the ground with a strong blue sky');
+
+$expect(
+	$noon[2] > $noon[1] && $noon[1] > $noon[0] && $noon[2] > .4
+	, 'A high sun lights the ground with a strong blue sky'
+);
+
 $expect($low[2] / $low[0] < $noon[2] / $noon[0] && $low[2] < $noon[2], 'A low sun gives a dimmer, less blue sky light');
 $expect(max($dusk) < .05, 'Sky light fades after sunset');
 $e = deg2rad(35.5);
@@ -163,80 +172,187 @@ $sky->setSun([cos($e), sin($e), 0.]);
 $expect($sky->uniforms()['skyAmbient'] === $middle, 'Sky light on level ground ignores the sun azimuth');
 $a35 = $fill($sky, 35.);
 $a36 = $fill($sky, 36.);
-$expect(abs($middle[2] - .5 * ($a35[2] + $a36[2])) < 1e-12, 'Sky light interpolates between whole degrees of elevation');
+
+$expect(
+	abs($middle[2] - .5 * ($a35[2] + $a36[2])) < 1e-12
+	, 'Sky light interpolates between whole degrees of elevation'
+);
+
 $sky->setSkyLight(.5);
 $half = $fill($sky, 35.);
 $expect(abs($half[1] - .5 * $a35[1]) < 1e-12, 'The sky-light setting scales the fill');
 $sky->setSkyLight(1.);
 $sky->setHaze(3.);
 $expect($fill($sky, 35.) !== $a35, 'Haze changes the sky light');
-try { $sky->setSkyLight(-1.); $expect(false, 'A negative sky light must fail'); }
-catch(InvalidArgumentException) { $expect(true, 'A negative sky light fails'); }
+
+try
+{
+	$sky->setSkyLight(-1.);
+	$expect(false, 'A negative sky light must fail');
+}
+catch(InvalidArgumentException)
+{
+	$expect(true, 'A negative sky light fails');
+}
 
 // Sky color scales molecular scattering against the default zenith color.
 $colored = new Atmosphere;
 $colored->setSkyColor(Atmosphere::DEFAULT_SKY_COLOR);
-$generation = $colored->transmittanceLut(8,4,8)['generation'];
-$expect($colored->uniforms()['rayleigh'] === Atmosphere::DEFAULT_RAYLEIGH, 'The default sky color keeps the default scattering');
-$expect($colored->transmittanceLut(8,4,8)['generation'] === $generation, 'An unchanged sky color keeps the sunlight texture');
+$generation = $colored->transmittanceLut(8, 4, 8)['generation'];
+
+$expect(
+	$colored->uniforms()['rayleigh'] === Atmosphere::DEFAULT_RAYLEIGH
+	, 'The default sky color keeps the default scattering'
+);
+
+$expect(
+	$colored->transmittanceLut(8, 4, 8)['generation'] === $generation
+	, 'An unchanged sky color keeps the sunlight texture'
+);
+
 $colored->setSkyColor('#2C4FA8');
 $royal = $colored->uniforms()['rayleigh'];
-$expect($colored->skyColor() === '#2c4fa8' && $royal[2] / $royal[0] > Atmosphere::DEFAULT_RAYLEIGH[2] / Atmosphere::DEFAULT_RAYLEIGH[0],
-	'A royal blue sky scatters blue more strongly against red');
-$expect($colored->transmittanceLut(8,4,8)['generation'] > $generation, 'A new sky color rebuilds sunlight');
-$expect($royal[0] < Atmosphere::DEFAULT_RAYLEIGH[0] && $royal[2] / $royal[1] <= (Atmosphere::DEFAULT_RAYLEIGH[2] / Atmosphere::DEFAULT_RAYLEIGH[1]) ** 1.25 + 1e-12,
-	'The scattering law stays within a fifth-power fit, however blue the chosen color');
+
+$expect(
+	$colored->skyColor() === '#2c4fa8' && $royal[2] / $royal[0] > Atmosphere::DEFAULT_RAYLEIGH[
+		2
+	] / Atmosphere::DEFAULT_RAYLEIGH[0]
+	, 'A royal blue sky scatters blue more strongly against red'
+);
+
+$expect($colored->transmittanceLut(8, 4, 8)['generation'] > $generation, 'A new sky color rebuilds sunlight');
+
+$expect(
+	$royal[0] < Atmosphere::DEFAULT_RAYLEIGH[0] && $royal[2] / $royal[1] <= (Atmosphere::DEFAULT_RAYLEIGH[
+		2
+	] / Atmosphere::DEFAULT_RAYLEIGH[1]
+	) ** 1.25 + 1e-12
+	, 'The scattering law stays within a fifth-power fit, however blue the chosen color'
+);
+
 $e = deg2rad(1.);
 $colored->setSun([0., sin($e), cos($e)]);
 $glow = $colored->sky([0., sin(deg2rad(2.)), cos(deg2rad(2.))], 0., 48);
 $low = $colored->transmittance(0., sin(deg2rad(2.)));
-$expect($glow[0] >= $glow[1] && $glow[1] > $glow[2] && $low[0] > $low[1] && $low[1] > $low[2],
-	'A deep blue sky still gives a warm sunset glow and reddened sunlight');
+
+$expect(
+	$glow[0] >= $glow[1] && $glow[1] > $glow[2] && $low[0] > $low[1] && $low[1] > $low[2]
+	, 'A deep blue sky still gives a warm sunset glow and reddened sunlight'
+);
+
 $alpine = new Atmosphere;
 $alpine->setSkyColor('#41659a');
 $e = deg2rad(35.);
 $alpine->setSun([0., sin($e), cos($e)]);
-$zenith = Atmosphere::toneMap($alpine->sky([0.,1.,0.],0.,64));
+$zenith = Atmosphere::toneMap($alpine->sky([0.,1.,0.], 0., 64));
+
 foreach([0x41, 0x65, 0x9a] as $c => $wanted)
-	$expect(abs($zenith[$c] * 255 - $wanted) < 12, 'A sky color the scattering law can reach displays close to it at the zenith');
+$expect(
+	abs($zenith[$c] * 255 - $wanted) < 12
+	, 'A sky color the scattering law can reach displays close to it at the zenith'
+);
 $pale = new Atmosphere;
 $pale->setSkyColor('#8fa6bd');
 $expect($pale->uniforms()['rayleigh'][0] > Atmosphere::DEFAULT_RAYLEIGH[0], 'A pale sky scatters more red');
-foreach(['blue', '#12345', '#gg0000'] as $invalid) {
-	try { $pale->setSkyColor($invalid); $expect(false, 'An invalid sky color must fail'); }
-	catch(InvalidArgumentException) { $expect($pale->skyColor() === '#8fa6bd', 'An invalid sky color keeps the previous one'); }
+
+foreach(['blue', '#12345', '#gg0000'] as $invalid)
+{
+	try
+	{
+		$pale->setSkyColor($invalid);
+		$expect(false, 'An invalid sky color must fail');
+	}
+	catch(InvalidArgumentException)
+	{
+		$expect($pale->skyColor() === '#8fa6bd', 'An invalid sky color keeps the previous one');
+	}
 }
+
+// Eyes adapt to a shadow by the ratio of sunlit to shaded level ground.
+$adapt = new Atmosphere;
+$ratios = [];
+
+foreach([60., 35., 15., 5., 1.] as $degrees)
+{
+	$e = deg2rad($degrees);
+	$adapt->setSun([0., sin($e), cos($e)]);
+	$ratios[] = $adapt->shadeAdaptation();
+}
+
+$sorted = $ratios;
+rsort($sorted);
+
+$expect(
+	$sorted === $ratios && $ratios[1] > 9 && $ratios[1] < 14 && $ratios[4] < 1.2
+	, 'Shade adaptation falls from about 11 at 35 degrees to one at sunset'
+);
+
+$adapt->setSun([0., -.1, 1.]);
+$expect($adapt->shadeAdaptation() === 1.0, 'After sunset the shade adaptation is one');
+$e = deg2rad(35.);
+$adapt->setSun([0., sin($e), cos($e)]);
+$adapt->setSkyLight(2.);
+$expect($adapt->shadeAdaptation() < $ratios[1], 'More sky light leaves less to adapt to');
 
 // Ozone absorbs green and red along long sunlight paths and barely touches the noon sun.
 $clear = new Atmosphere(['ozone' => [0., 0., 0.]]);
 $ozone = new Atmosphere;
 $sunset = [$clear->transmittance(0., sin(deg2rad(2.))), $ozone->transmittance(0., sin(deg2rad(2.)))];
 $noon = [$clear->transmittance(0., 1.), $ozone->transmittance(0., 1.)];
-$expect($sunset[1][1] < .9 * $sunset[0][1] && $sunset[1][2] > .97 * $sunset[0][2], 'Ozone takes green out of a setting sun');
+
+$expect(
+	$sunset[1][1] < .9 * $sunset[0][1] && $sunset[1][2] > .97 * $sunset[0][2]
+	, 'Ozone takes green out of a setting sun'
+);
+
 $expect($noon[1][1] > .95 * $noon[0][1], 'Ozone barely dims the noon sun');
-try { new Atmosphere(['ozone' => [0., -1., 0.]]); $expect(false, 'Negative ozone must fail'); }
-catch(InvalidArgumentException) { $expect(true, 'Negative ozone fails'); }
+
+try
+{
+	new Atmosphere(['ozone' => [0., -1., 0.]]);
+	$expect(false, 'Negative ozone must fail');
+}
+catch(InvalidArgumentException)
+{
+	$expect(true, 'Negative ozone fails');
+}
 
 // Haze color tints aerosol scattering without touching sunlight.
 $dust = new Atmosphere;
 $e = deg2rad(35.);
 $dust->setSun([0., sin($e), cos($e)]);
-$generation = $dust->transmittanceLut(8,4,8)['generation'];
-$before = $dust->sky([0.,.2,1.],0.,24);
+$generation = $dust->transmittanceLut(8, 4, 8)['generation'];
+$before = $dust->sky([0.,.2,1.], 0., 24);
 $sun = $dust->transmittance(0., .5);
 $dust->setHazeColor('#ffffff');
-$expect($dust->sky([0.,.2,1.],0.,24) === $before, 'White haze reproduces the neutral sky');
+$expect($dust->sky([0.,.2,1.], 0., 24) === $before, 'White haze reproduces the neutral sky');
 $dust->setHazeColor('#d9b380');
-$after = $dust->sky([0.,.2,1.],0.,24);
-$expect($dust->hazeColor() === '#d9b380' && $after[0] === $before[0] && $after[2] < $before[2],
-	'Warm haze keeps its red glow toward the sun and scatters less blue');
+$after = $dust->sky([0.,.2,1.], 0., 24);
+
+$expect(
+	$dust->hazeColor() === '#d9b380' && $after[0] === $before[0] && $after[2] < $before[2]
+	, 'Warm haze keeps its red glow toward the sun and scatters less blue'
+);
+
 $dust->setHazeColor('#808080');
-$expect($dust->sky([0.,.2,1.],0.,24) === $before, 'Gray haze is neutral: the haze setting alone sets its strength');
+$expect($dust->sky([0.,.2,1.], 0., 24) === $before, 'Gray haze is neutral: the haze setting alone sets its strength');
 $dust->setHazeColor('#d9b380');
-$expect($dust->transmittance(0., .5) === $sun && $dust->transmittanceLut(8,4,8)['generation'] === $generation,
-	'Haze color leaves sunlight and its texture unchanged');
+
+$expect(
+	$dust->transmittance(0., .5) === $sun && $dust->transmittanceLut(8, 4, 8)['generation'] === $generation
+	, 'Haze color leaves sunlight and its texture unchanged'
+);
+
 $expect($dust->uniforms()['hazeColor'][2] < $dust->uniforms()['hazeColor'][0], 'Haze color uploads as linear channels');
-try { new Atmosphere(['hazeColor' => [1., 1.2, 1.]]); $expect(false, 'Haze brighter than white must fail'); }
-catch(InvalidArgumentException) { $expect(true, 'Haze channels above one fail'); }
+
+try
+{
+	new Atmosphere(['hazeColor' => [1., 1.2, 1.]]);
+	$expect(false, 'Haze brighter than white must fail');
+}
+catch(InvalidArgumentException)
+{
+	$expect(true, 'Haze channels above one fail');
+}
 
 echo "Atmosphere: {$checks} checks passed\n";

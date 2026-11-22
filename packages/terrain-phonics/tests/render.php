@@ -2060,6 +2060,35 @@ renderCheck(
 	, 'the night gain leaves position, axis and cone alone'
 );
 
+// Eyes adapted to a shadow by day see the lamps brighter; the larger of that gain and the night gain applies.
+$spotLights->set([$spotLight], 8.);
+$adapted = $spotLights->uniforms(0)['uSpotLights[0]'];
+
+$irradiance = [8 => 0, 9 => 0, 10 => 0];
+
+renderCheck(
+	$adapted[8] === $packed[8] * 8.
+	&& $spotLights->uniforms(1)['uSpotLights[0]'] === $nightPacked
+	&& array_diff_key($adapted, $irradiance) === array_diff_key($packed, $irradiance)
+	, 'shade adaptation scales lamp light by day and the night gain takes over after dark'
+);
+
+foreach([.5, NAN, INF, TerrainPhonics\SpotLights::NIGHT_GAIN * 2] as $adaptation)
+{
+	try
+	{
+		$spotLights->set([$spotLight], $adaptation);
+		renderCheck(false, 'spot lights refuse an adaptation of ' . $adaptation);
+	}
+	catch(InvalidArgumentException)
+	{
+		renderCheck($spotLights->uniforms(0)['uSpotLights[0]'] === $adapted, 'a refused adaptation keeps the lights');
+	}
+}
+
+$spotLights->set([$spotLight]);
+renderCheck($spotLights->uniforms(0)['uSpotLights[0]'] === $packed, 'lights set without an adaptation get none');
+
 $spotLights->set([['inner' => .3] + $spotLight]);
 $hard = $spotLights->uniforms(0)['uSpotLights[0]'];
 renderCheck(is_finite($hard[7]) && is_finite($hard[11]), 'a hard-edged cone packs finite numbers');
