@@ -99,12 +99,23 @@ $close = static function(array $a, array $b, float $tolerance = 1e-12): bool {
 // Literal colors and limits from terrain.frag before the appearance existed. Grass and the canyon beds have since been
 // retuned to look more natural (2026-11-22); the rest still reproduce the old constants.
 $old = [
-	'soilColor' => [.22, .115, .052], 'rockColor' => [.24, .20, .16],
-	'rockBandColor' => [.43, .30, .20], 'sandColor' => [.52, .43, .26], 'snowColor' => [.82, .88, .94],
+	'soilColor' => [.22, .115, .052]
+	, 'rockColor' => [.24, .20, .16]
+	, 'rockBandColor' => [.43, .30, .20]
+	, 'sandColor' => [.52, .43, .26]
+	, 'snowColor' => [.82, .88, .94]
 ];
-$expect(TerrainAppearance::DEFAULTS['grassColor'] === '#55693a' && TerrainAppearance::DEFAULTS['canyonRustColor'] === '#8a4f35'
-	&& TerrainAppearance::DEFAULTS['canyonShaleColor'] === '#6b5546' && TerrainAppearance::DEFAULTS['canyonSandstoneColor'] === '#b07a4f'
-	&& TerrainAppearance::DEFAULTS['canyonCapColor'] === '#c2aa86', 'grass and the canyon beds use the retuned natural defaults');
+
+$expect(
+	TerrainAppearance::DEFAULTS['grassColor'] === '#55693a' && TerrainAppearance::DEFAULTS[
+		'canyonRustColor'
+	] === '#8a4f35' && TerrainAppearance::DEFAULTS['canyonShaleColor'] === '#6b5546'
+		&& TerrainAppearance::DEFAULTS['canyonSandstoneColor'] === '#b07a4f' && TerrainAppearance::DEFAULTS[
+		'canyonCapColor'
+		] === '#c2aa86'
+	, 'grass and the canyon beds use the retuned natural defaults'
+);
+
 // The default palette's derived shades: ledges, red beds, fine-bed dust and distant walls.
 $oldCanyon = [2 => [.42, .32, .19], 4 => [.31, .10, .045], 6 => [.396, .252, .112], 7 => [.354, .206, .115]];
 
