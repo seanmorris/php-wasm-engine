@@ -792,6 +792,14 @@ $highway = ['type'=>'road','points'=>[[-12000,8,0],[0,12,80],[12000,8,0]],'width
 $abandoned = $long->queueSteps($highway);
 $abandoned->valid(); unset($abandoned);
 terrainCheck(!$long->commit() && !$long->roads(),'An interrupted road leaves no staged fragments');
+$other = $long->fork();
+$stale = $other->queueSteps($highway);
+$stale->valid();
+$other->queue(['type'=>'raise','x'=>0,'z'=>0,'radius'=>8,'amount'=>1]);
+$other->commit();
+try { iterator_count($stale); terrainCheck(false,'An old road job cannot stage into a new revision'); }
+catch(LogicException $error) { terrainCheck(!$other->commit() && !$other->roads(),'Concurrent publication leaves the road job unstaged'); }
+$other->close();
 $building = $long->queueSteps($highway);
 terrainCheck(iterator_count($building)>20 && $long->commit(),'Long road yields across many preparation slices');
 terrainCheck(count($long->roads()[0]['_road']['samples'])>4096 && count($long->roadRecords())===1,
