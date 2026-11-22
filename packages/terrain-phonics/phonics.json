@@ -137,7 +137,7 @@
     "shaders/water-optics.glsl": "sha256-42MQ3XCXTgheD6xu2mcRMl3qMBtrK+DGHpx2cIyuPts=",
     "shaders/water.frag": "sha256-oHFF9EuhA76mvuxByxkvD1Fl7MnuoTxVGc3E1tJbwic=",
     "shaders/water.vert": "sha256-eJ3adiIHgTVT/F2O/nB7wfqwnC71a6u9LugTVh8jmzs=",
-    "src/Atmosphere.php": "sha256-8aM0EFu0O2HlhtWOKBpS2YDUPTf+TQBP6EnbUsvd12c=",
+    "src/Atmosphere.php": "sha256-V4nhSnT8MGtQNSHaID2gF5J37Rnrbjvv5gZJ/mWNYEs=",
     "src/AtmosphereLayers.php": "sha256-QfaGLg4YYIwauVvmhf8dbFjIQzoYNABTT+JeaFxivPM=",
     "src/AtmosphereRenderer.php": "sha256-3I03hBji2P8sDVZDdbgZEme58FytoiX7ow1LDvimrSI=",
     "src/Camera.php": "sha256-fcwGUHxmbL/yNMLceiR7+MoVK/ZgUD7lm/gfceb+abU=",

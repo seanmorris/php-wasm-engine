@@ -27,7 +27,7 @@ for($channel = 0; $channel < 3; $channel++)
 $expect($atmosphere->transmittance(10, -1) === [0.0,0.0,0.0], 'planet blocks rays toward the ground');
 $expect($atmosphere->transmittance(80000, 1) === [1.0,1.0,1.0], 'outward ray at atmosphere top is unattenuated');
 $expect($atmosphere->transmittance(-100, 1) === $zenith, 'below-sea-level altitude remains stable');
-$molecular = new Atmosphere(['mie' => 0]);
+$molecular = new Atmosphere(['mie' => 0, 'ozone' => [0, 0, 0]]);
 $numeric = $molecular->transmittance(0, 1, 256);
 $params = $molecular->uniforms();
 $integral = $params['rayleighHeight'] * (1 - exp(-$params['atmosphereHeight'] / $params['rayleighHeight']));
@@ -106,7 +106,7 @@ $atmosphere->setSun([0,-1,0], 0);
 $atmosphere->setNightGlow(0);
 $expect($atmosphere->uniforms()['nightVisibility'] === 1.0, 'stars remain visible with the fill off');
 $expect($atmosphere->sky([0,1,0]) === [0.0,0.0,0.0], 'zero solar irradiance yields zero scattered radiance');
-$vacuum = ['rayleigh'=>[0.,0.,0.], 'mie'=>0., 'sunDirection'=>[0.,1.,0.]];
+$vacuum = ['rayleigh'=>[0.,0.,0.], 'mie'=>0., 'ozone'=>[0.,0.,0.], 'sunDirection'=>[0.,1.,0.]];
 $solar = new Atmosphere($vacuum);
 $expect($solar->uniforms()['angularRadius'] === .00935, 'The default solar radius is twice the original radius.');
 $inside = $solar->sky([sin(.008),cos(.008),0.])[0];
@@ -184,10 +184,21 @@ $royal = $colored->uniforms()['rayleigh'];
 $expect($colored->skyColor() === '#2c4fa8' && $royal[2] / $royal[0] > Atmosphere::DEFAULT_RAYLEIGH[2] / Atmosphere::DEFAULT_RAYLEIGH[0],
 	'A royal blue sky scatters blue more strongly against red');
 $expect($colored->transmittanceLut(8,4,8)['generation'] > $generation, 'A new sky color rebuilds sunlight');
-$e = deg2rad(35.);
+$expect($royal[0] < Atmosphere::DEFAULT_RAYLEIGH[0] && $royal[2] / $royal[1] <= (Atmosphere::DEFAULT_RAYLEIGH[2] / Atmosphere::DEFAULT_RAYLEIGH[1]) ** 1.25 + 1e-12,
+	'The scattering law stays within a fifth-power fit, however blue the chosen color');
+$e = deg2rad(1.);
 $colored->setSun([0., sin($e), cos($e)]);
-$zenith = Atmosphere::toneMap($colored->sky([0.,1.,0.],0.,64));
-$expect(abs($zenith[2] * 255 - 0xa8) < 16 && abs($zenith[0] * 255 - 0x2c) < 16, 'The zenith displays close to the chosen sky color');
+$glow = $colored->sky([0., sin(deg2rad(2.)), cos(deg2rad(2.))], 0., 48);
+$low = $colored->transmittance(0., sin(deg2rad(2.)));
+$expect($glow[0] >= $glow[1] && $glow[1] > $glow[2] && $low[0] > $low[1] && $low[1] > $low[2],
+	'A deep blue sky still gives a warm sunset glow and reddened sunlight');
+$alpine = new Atmosphere;
+$alpine->setSkyColor('#41659a');
+$e = deg2rad(35.);
+$alpine->setSun([0., sin($e), cos($e)]);
+$zenith = Atmosphere::toneMap($alpine->sky([0.,1.,0.],0.,64));
+foreach([0x41, 0x65, 0x9a] as $c => $wanted)
+	$expect(abs($zenith[$c] * 255 - $wanted) < 12, 'A sky color the scattering law can reach displays close to it at the zenith');
 $pale = new Atmosphere;
 $pale->setSkyColor('#8fa6bd');
 $expect($pale->uniforms()['rayleigh'][0] > Atmosphere::DEFAULT_RAYLEIGH[0], 'A pale sky scatters more red');
@@ -195,6 +206,16 @@ foreach(['blue', '#12345', '#gg0000'] as $invalid) {
 	try { $pale->setSkyColor($invalid); $expect(false, 'An invalid sky color must fail'); }
 	catch(InvalidArgumentException) { $expect($pale->skyColor() === '#8fa6bd', 'An invalid sky color keeps the previous one'); }
 }
+
+// Ozone absorbs green and red along long sunlight paths and barely touches the noon sun.
+$clear = new Atmosphere(['ozone' => [0., 0., 0.]]);
+$ozone = new Atmosphere;
+$sunset = [$clear->transmittance(0., sin(deg2rad(2.))), $ozone->transmittance(0., sin(deg2rad(2.)))];
+$noon = [$clear->transmittance(0., 1.), $ozone->transmittance(0., 1.)];
+$expect($sunset[1][1] < .9 * $sunset[0][1] && $sunset[1][2] > .97 * $sunset[0][2], 'Ozone takes green out of a setting sun');
+$expect($noon[1][1] > .95 * $noon[0][1], 'Ozone barely dims the noon sun');
+try { new Atmosphere(['ozone' => [0., -1., 0.]]); $expect(false, 'Negative ozone must fail'); }
+catch(InvalidArgumentException) { $expect(true, 'Negative ozone fails'); }
 
 // Haze color tints aerosol scattering without touching sunlight.
 $dust = new Atmosphere;

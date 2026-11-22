@@ -5,8 +5,8 @@ namespace TerrainPhonics;
 /**
  * Spherical exponential Rayleigh/Mie single scattering in meters and linear RGB.
  *
- * Optical depth follows Beer-Lambert extinction. The model includes planet shadow and a finite solar disk;
- * multiple scattering, clouds, ozone, and ground-reflected light are deliberately outside this first model.
+ * Optical depth follows Beer-Lambert extinction. The model includes planet shadow, a finite solar disk, and ozone
+ * absorption along sunlight paths; multiple scattering, clouds, and ground-reflected light are deliberately outside it.
  */
 final class Atmosphere
 {
@@ -17,6 +17,12 @@ final class Atmosphere
 	public const DEFAULT_SKY_COLOR = '#4b698a';
 	/** Aerosol haze scatters every channel equally by default. */
 	public const DEFAULT_HAZE_COLOR = '#ffffff';
+	/**
+	 * Ozone absorption per meter at the peak of its layer, which rises linearly from 10 km to 25 km and falls to
+	 * zero at 40 km (Bruneton and Hillaire's Earth values). It absorbs green and red, so long sunlight paths at
+	 * sunrise and sunset turn orange instead of yellow-green.
+	 */
+	public const DEFAULT_OZONE = [0.650e-6,1.881e-6,0.085e-6];
 	/** Scale of the sky's diffuse light on terrain; 1 is the single-scattering model's own irradiance. */
 	public const DEFAULT_SKY_LIGHT = 1.0;
 
@@ -59,6 +65,7 @@ final class Atmosphere
 			, 'nightGlow' => self::DEFAULT_NIGHT_GLOW
 			, 'hazeColor' => [1.0,1.0,1.0]
 			, 'skyLight' => self::DEFAULT_SKY_LIGHT
+			, 'ozone' => self::DEFAULT_OZONE
 		], $options
 		);
 
@@ -89,6 +96,13 @@ final class Atmosphere
 		foreach($this->parameters['rayleigh'] as $value)
 		if(!is_numeric($value) || !is_finite((float)$value) || $value < 0)
 		throw new \InvalidArgumentException('Invalid Rayleigh coefficient');
+
+		if(count($this->parameters['ozone']) !== 3)
+		throw new \InvalidArgumentException('Ozone absorption requires three channels');
+
+		foreach($this->parameters['ozone'] as $value)
+		if(!is_numeric($value) || !is_finite((float)$value) || $value < 0)
+		throw new \InvalidArgumentException('Invalid ozone absorption');
 
 		if(count($this->parameters['hazeColor']) !== 3)
 		throw new \InvalidArgumentException('Haze color requires three channels');
@@ -152,19 +166,36 @@ final class Atmosphere
 	}
 
 	/**
-	 * Color the sky by scaling molecular scattering, channel by channel, against the default sky.
+	 * Color the sky through the molecular scattering law fitted to a chosen zenith color.
 	 * @param string $hex Six-digit hex color the zenith should display with the sun 35 degrees up at exposure 1.
 	 * @return void Rebuilds sunlight and sky data only when the coefficients change.
-	 * The tone map is inverted first, so a channel's coefficient follows the radiance the color needs. The model
-	 * is thin enough that zenith radiance stays close to proportional to the coefficient. A deeper, more saturated
-	 * blue scatters less red and green: views reach farther and low sun reddens less.
+	 * The tone map is inverted, each channel's radiance is compared with the default sky's, and a density and a
+	 * wavelength exponent are fitted to those ratios in log space, as for Earth's air (exponent 4). The exponent stays
+	 * between 3 and 5: freer channels turn sunsets yellow-green, since red and green then cross a long path alike
+	 * while green scatters far more. A deeper blue raises the exponent and thins the air, so distant land stays
+	 * clearer; a paler blue lowers the exponent or thickens it.
 	 */
 	public function setSkyColor(string $hex): void
 	{
 		$target = self::displayedRadiance($hex);
 		$reference = self::displayedRadiance(self::DEFAULT_SKY_COLOR);
+		$beta = self::DEFAULT_RAYLEIGH;
+		// Spectral positions that give the default coefficients a fourth-power law around green.
+		$x = [log($beta[0] / $beta[1]) / 4, 0.0, log($beta[2] / $beta[1]) / 4];
+		$y = [];
+		foreach($target as $c => $radiance) $y[] = log(max(1e-6, $radiance) / $reference[$c]);
+		$mx = array_sum($x) / 3;
+		$my = array_sum($y) / 3;
+		$covariance = $variance = 0.0;
+		for($c = 0; $c < 3; $c++) {
+			$covariance += ($x[$c] - $mx) * ($y[$c] - $my);
+			$variance += ($x[$c] - $mx) ** 2;
+		}
+		$slope = max(-1.0, min(1.0, $covariance / $variance));
+		$density = exp($my - $slope * $mx);
 		$rayleigh = [];
-		foreach(self::DEFAULT_RAYLEIGH as $c => $beta) $rayleigh[] = $beta * ($target[$c] / $reference[$c]);
+		foreach($beta as $c => $value) $rayleigh[] = $value * $density * exp($slope * $x[$c]);
+		if(strtolower($hex) === self::DEFAULT_SKY_COLOR) $rayleigh = self::DEFAULT_RAYLEIGH;
 		$this->skyColor = strtolower($hex);
 		if($rayleigh === $this->parameters['rayleigh']) return;
 		$this->parameters['rayleigh'] = $rayleigh;
@@ -341,7 +372,7 @@ final class Atmosphere
 		$airTransmission = exp(-$airDepth);
 		if($ground) return [0.0,0.0,0.0];
 
-		$dr = $dm = 0.0;
+		$dr = $dm = $do = 0.0;
 		$step = $distance / $samples;
 
 		for($i = 0; $i < $samples; $i++)
@@ -349,9 +380,13 @@ final class Atmosphere
 			$h = $this->rayAltitude($altitude, $cosZenith, ($i + .5) * $step);
 			$dr += exp(-$h / $this->parameters['rayleighHeight']) * $step;
 			$dm += exp(-$h / $this->parameters['mieHeight']) * $step;
+			$do += max(0.0, 1 - abs($h - 25000) / 15000) * $step;
 		}
 
-		return $this->attenuation($dr, $dm, $layers ? $airDepth : 0.);
+		// Ozone lies far above any view of the terrain, so only sunlight paths cross it.
+		$light = $this->attenuation($dr, $dm, $layers ? $airDepth : 0.);
+		foreach($this->parameters['ozone'] as $c => $absorption) $light[$c] *= exp(-$absorption * $do);
+		return $light;
 	}
 
 	/**
