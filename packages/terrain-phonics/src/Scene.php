@@ -177,7 +177,7 @@ final class Scene
 		if($useClipmap) $this->clipmap = new Clipmap;
 		$this->indices = $useClipmap ? '' : GpuPatch::indices(Lod::CELLS);
 		$this->lod = new Lod($landscape->recipe()['worldSize'], $landscape->recipe()['spacing']);
-		$this->appearance = new TerrainAppearance;
+		$this->appearance = new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS[$landscape->recipe()['preset']] ?? []);
 
 		$this->create();
 	}
