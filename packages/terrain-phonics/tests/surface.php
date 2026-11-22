@@ -1187,4 +1187,16 @@ foreach($sandboxWorlds as $recipe)
 	}
 }
 
+// Tile cache keys hold rows and columns within Landscape::TILE_REACH of the origin. A 65.5 km world with a 1 m tile
+// edge would put its edge tiles past that, and two tiles would share a key, so such a recipe is refused.
+terrainReject(static fn() => new Recipe(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 4]),
+	'A world whose edge tiles pass the key range is refused');
+$wide = new Landscape(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 8, 'preset' => 'mountain']);
+$fresh = new Landscape(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 8, 'preset' => 'mountain']);
+$far = $wide->height(30000, 0);
+$back = $wide->height(-10000, 1);
+terrainNear($back, $fresh->height(-10000, 1), 0.0, 'Far tiles on a fine 65.5 km world keep their own heights');
+terrainNear($far, $fresh->height(30000, 0), 0.0, 'The tile read first still answers for itself');
+$wide->close(); $fresh->close();
+
 echo "Terrain surface: $checks checks passed.\n";
