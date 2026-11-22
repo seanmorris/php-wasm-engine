@@ -125,11 +125,11 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			gl.uniform1f(location('uRise'), 0);
 			gl.uniform1f(location('uSampleStep'), 1);
 
-			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1, scale = 12) {
+			function sample(kind, shift = 0, elevation = 0, footprint = .1, amount = 1, scale = 12, stretch = 4) {
 				gl.uniform1f(location('uShift'), shift);
 				gl.uniform1f(location('uHeight'), elevation);
 				gl.uniform1f(location('uFootprint'), footprint);
-				gl.uniform4fv(location('uLayerPattern[0]'), [0,0,20,4, kind,amount,scale,4]);
+				gl.uniform4fv(location('uLayerPattern[0]'), [0,0,20,4, kind,amount,scale,stretch]);
 				gl.drawArrays(gl.TRIANGLES,0,3);
 				const data = new Uint8Array(width*height*4);
 				gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,data);
@@ -161,6 +161,28 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			gl.uniform1f(location('uRise'), .125);
 			const wallStreaks = sample(2), wallWithPartings = sample(4);
 			const resolvedPartings = wallWithPartings.filter((value,i) => value - wallStreaks[i] > 3).length > width*height*.01;
+
+			// Look across several exposed flow tops. A fixed interval would reproduce the same
+			// marks when the face moves vertically by one mean spacing (32 m × .375 = 12 m).
+			gl.uniform4fv(location('uLayerRange[0]'), [-1000,1000,0,1, -1000,1000,0,1]);
+			gl.uniform1f(location('uSampleStep'), 2);
+			gl.uniform1f(location('uRise'), 1);
+			const contacts = (shift, elevation, footprint) => sample(10,shift,elevation,footprint,1,32,.375);
+			const blank = sample(0), face = contacts(0,0,.2), nextBed = contacts(0,12,.2);
+			const marks = face.filter((v,i) => v > blank[i]+4).length;
+			const sparseContacts = marks > .005*face.length && marks < .2*face.length;
+			const irregularContacts = face.filter((v,i) => v > blank[i]+4 && nextBed[i] <= blank[i]+4).length > marks*.5;
+			const anchoredContacts = contacts(7,0,.2).every((v,i) => i%width >= width-7 || v === face[i+7]);
+			const distantContacts = contacts(0,0,12).every((v,i) => v === blank[i]);
+			gl.uniform1f(location('uSampleStep'), 1);
+			gl.uniform1f(location('uRise'), .55);
+			// Each vertical traverse covers nearly three mean flow thicknesses. Some
+			// traverses expose the weathered tops, while adjacent rock can bury every one.
+			const interruptedContacts = [0,48,-48].some(elevation => {
+				const columns = new Uint8Array(width);
+				contacts(0,elevation,.2).forEach((v,i) => { if(v > blank[i]+4) columns[i%width]++; });
+				return columns.includes(0) && columns.some(count => count >= 2);
+			});
 			gl.uniform1f(location('uRise'), 0);
 
 			gl.uniform4fv(location('uLayerRange[0]'), [-100,100,0,1, 0,8,.2,1]);
@@ -189,6 +211,7 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 				unique: new Set(patterned.map(pixels => pixels.join(','))).size,
 				anchored: moved.every((value,i) => i%width >= width-7 || value === patterned[1][i+7]),
 				bandsVisible, stableGrain, distantGrain, masked, filtered, zero, cyclic, filteredMask, resolvedPartings, noFalseContacts,
+				sparseContacts, irregularContacts, interruptedContacts, anchoredContacts, distantContacts,
 				distinctBed: bed > outsideBed,
 			};
 		},{vertex,layers});
@@ -196,6 +219,7 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			visible:[true,true,true], unique:3, anchored:true, bandsVisible:[true,true,true], stableGrain:true, distantGrain:true,
 			masked:true, filtered:true, zero:true,
 			cyclic:true, filteredMask:true, distinctBed:true, resolvedPartings:true, noFalseContacts:true,
+			sparseContacts:true, irregularContacts:true, interruptedContacts:true, anchoredContacts:true, distantContacts:true,
 		});
 	} finally {
 		await browser.close();

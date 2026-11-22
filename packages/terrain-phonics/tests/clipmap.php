@@ -175,10 +175,11 @@ check((new SurfaceLayers($karst))->layers === $karst, 'Authored limestone layers
 $fjord = (new Recipe(['preset'=>'basalt-fjords']))->values();
 $cliffs = SurfaceLayers::landscape($fjord,$appearance)->layers;
 $flow = array_column($cliffs,null,'id')['lava-beds'];
-check($cliffs[$flow['parent']]['id'] === 'basalt-faces' && $flow['period'] === $fjord['terraceSpacing'],
-	'Fjord beds follow the terrace spacing and cover exposed basalt.');
-$smooth = SurfaceLayers::landscape(array_replace($fjord,['terraceSpacing'=>0.]),$appearance)->layers;
-check(array_column($smooth,'opacity','id')['lava-beds'] === 0.,'Disabling the benches removes their repeating tint.');
+check($cliffs[$flow['parent']]['id'] === 'basalt-faces' && $flow['pattern'] === 'contacts' && $flow['period'] === 0.,
+	'Fjord flow contacts follow exposed basalt without a repeating elevation mask.');
+check($fjord['terraceStrength'] === 0.
+	&& SurfaceLayers::landscape(array_replace($fjord,['terraceStrength'=>.4,'terraceSpacing'=>60.]),$appearance)->layers === $cliffs,
+	'Fjord flow thickness is independent of optional geometric terraces.');
 $dunes = (new Recipe(['preset'=>'amber-dunes']))->values();
 $sand = array_column(SurfaceLayers::landscape($dunes,$appearance)->layers,null,'id');
 $lifted = SurfaceLayers::landscape(array_replace($dunes,['baseBias'=>$dunes['baseBias']+1.]),$appearance);
