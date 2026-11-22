@@ -100,7 +100,7 @@ $close = static function(array $a, array $b, float $tolerance = 1e-12): bool {
 $old = [
 	'grassColor' => [.055, .105, .026], 'soilColor' => [.22, .115, .052], 'rockColor' => [.24, .20, .16],
 	'rockBandColor' => [.43, .30, .20], 'sandColor' => [.52, .43, .26], 'snowColor' => [.82, .88, .94],
-	'roadColor' => [.13, .12, .105], 'canyonRustColor' => [.190, .067, .057], 'canyonShaleColor' => [.115, .064, .072],
+	'canyonRustColor' => [.190, .067, .057], 'canyonShaleColor' => [.115, .064, .072],
 	'canyonSandstoneColor' => [.280, .125, .092], 'canyonCapColor' => [.365, .244, .179],
 ];
 $oldCanyon = [
@@ -110,6 +110,7 @@ $oldCanyon = [
 
 $defaults = new TerrainAppearance;
 $uniforms = $defaults->uniforms();
+$expect(TerrainAppearance::DEFAULTS['roadColor'] === '#373b3d', 'Roads use charcoal pavement by default');
 
 foreach($old as $name => $linear)
 {

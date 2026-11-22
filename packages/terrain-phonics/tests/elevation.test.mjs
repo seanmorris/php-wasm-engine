@@ -57,14 +57,20 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 				gl.uniform2f(loc('uErosion'),erosion,erosion-Math.fround(erosion));
 				gl.uniform1f(loc('uSlopeScale'),r.slopeScale); gl.uniform1i(loc('uOctaves'),r.detailOctaves);
 				let error=0;
-				for(const [x,z,reference,materials] of samples) {
+				for(const [x,z,reference,inkRow] of samples) {
 					gl.uniform2i(loc('uOriginCell'),x,z); gl.drawArrays(gl.TRIANGLES,0,3);
 					const bytes=new Uint8Array(128); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 					const values=new Float32Array(bytes.buffer);
 					reference.forEach((h,i)=>{error=Math.max(error,Math.abs(h-values[i]));});
-					if(materials) {
+					if(inkRow) {
 						gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
-						materials.forEach((m,i)=>{if(m!==bytes[4*i]) throw Error(`Material at ${x+i},${z}: ${bytes[4*i]} expected ${m}`);});
+						const expected = Uint8Array.from(atob(inkRow), c => c.charCodeAt(0));
+						for(let i = 0; i < 128; i += 4) {
+							if(bytes[i] !== expected[i]) throw Error('Material differs at ' + [x+i/4,z]);
+							const offsets = row => [(row[i+1]<<4)|(row[i+3]>>4), (row[i+2]<<4)|(row[i+3]&15)];
+							const [dx,dz] = offsets(bytes), [rx,rz] = offsets(expected);
+							if(Math.abs(dx-rx)>1 || Math.abs(dz-rz)>1) throw Error('Centerline differs at ' + [x+i/4,z,dx,dz,rx,rz]);
+						}
 					}
 				}
 				return [r.seed,r.preset,r.version,error];

@@ -786,6 +786,39 @@ $roadReloaded = Landscape::load($road->save());
 terrainCheck($road->sample(.3, 3.7) === $roadReloaded->sample(.3, 3.7), 'road acceleration rebuild preserves geometry');
 terrainCheck(!str_contains($road->save(), '_road'), 'persistent roads omit derived spatial indexes');
 
+// Regrading a saved road moves its original footprint and keeps subsequent paint above it.
+$routes = new Landscape($flatRecipe);
+$line = ['type'=>'road', 'points'=>[[-32,6,0],[32,6,0]], 'width'=>12, 'shoulder'=>2];
+$routes->queue($line);
+$routes->commit();
+terrainCheck(json_decode($routes->save(),true)['version'] === 1, 'Automatic roads keep the original file format');
+terrainCheck($routes->paintTexel(0,0) === pack('C4',5,128,128,0), 'Pavement encodes zero offset on its center');
+terrainCheck($routes->paintTexel(0,2) === pack('C4',5,128,132,0), 'Pavement encodes transverse offset in meters');
+$routes->queue(['type'=>'material','x'=>0,'z'=>18,'radius'=>3,'material'=>'road']);
+$routes->commit();
+$revised = ['points'=>[[-32,8,0],[32,8,0]], 'handles'=>[['out'=>[16,0,24]],['in'=>[-16,0,24]]],
+	'banks'=>[.12,-.12],'endBlend'=>3.,'replaceAt'=>0] + $line;
+$routes->queue($revised);
+$routes->commit();
+terrainCheck(count($routes->roadRecords()) === 1 && $routes->material(0,0) === null, 'Moving a curve clears its old footprint');
+terrainNear($routes->height(0,0),0.,1e-9,'Old elevation is restored after moving a road');
+terrainNear($routes->height(0,18),8.,.10,'Both horizontal handles control the new grade');
+terrainCheck($routes->paintTexel(0,18) === pack('C4',5,0,0,0),'Solid paint applied after a road covers the stripe');
+terrainReject(fn()=>$routes->queue(['replaceAt'=>1]+$line),'A replacement cannot overwrite a later paint edit');
+terrainReject(fn()=>$routes->queue(['replaceAt'=>3]+$line),'A replacement cannot create a missing road');
+terrainReject(fn()=>$routes->queue(['handles'=>[['out'=>[0,1]]]]+$line),'Road handle dimensions and count are validated');
+$routes->undo();
+$oldFile = $routes->save();
+terrainCheck(json_decode($oldFile,true)['version'] === 2, 'Redo history retains explicit handles in version 2');
+$restored = Landscape::load($oldFile);
+terrainCheck($restored->material(0,0) === 'road' && !isset($restored->roadRecords()[0]['handles']), 'Undo restores the automatic curve after reload');
+$restored->redo();
+$record = $restored->roadRecords()[0];
+terrainCheck(isset($record['handles'][1]['in']) && $record['banks'] === [.12,-.12] && $record['endBlend'] === 3.
+	&& !isset($record['replaceAt']), 'Redo restores handles, bank and feathering in the same effective slot');
+terrainCheck($restored->paintTexel(0,18) === pack('C4',5,0,0,0), 'Later solid paint still covers the restored curve');
+$restored->close(); $routes->close();
+
 $banked = new Landscape($flatRecipe);
 $banked->queue(['type'=>'road','points'=>[[-24,5,0],[0,5,0],[24,5,0]],
 	'banks'=>[.15,.15,.15],'width'=>16,'shoulder'=>5]);

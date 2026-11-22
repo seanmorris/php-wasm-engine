@@ -61,14 +61,13 @@ for($i = 0; $i < $columns; $i++)
 {
 	$x = $left + 24*$i;
 	$z = $front + 5*$j;
-	$heights = $materials = [];
+	$heights = []; $ink = '';
 	for($n = 0; $n < 32; $n++)
 	{
 		$heights[] = $ground->height($x+$n, $z);
-		$id = array_search($ground->material($x+$n, $z), RoadAtlas::MATERIALS, true);
-		$materials[] = $id === false ? 0 : $id + 1;
+		$ink .= $ground->paintTexel($x+$n, $z);
 	}
-	$samples[] = [$x, $z, $heights, $materials];
+	$samples[] = [$x, $z, $heights, base64_encode($ink)];
 }
 $cases[] = ['recipe' => $ground->recipe(), 'perm' => (new Noise('road-atlas'))->permutation(),
 	'atlas' => $atlas, 'samples' => $samples];
@@ -92,14 +91,13 @@ foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
 	{
 		$x = $cx - 130 + 32*$i;
 		$z = $cz - 55 + 11*$j;
-		$heights = $materials = [];
+		$heights = []; $ink = '';
 		for($n = 0; $n < 32; $n++)
 		{
 			$heights[] = $far->height($x+$n, $z);
-			$id = array_search($far->material($x+$n, $z), RoadAtlas::MATERIALS, true);
-			$materials[] = $id === false ? 0 : $id + 1;
+			$ink .= $far->paintTexel($x+$n, $z);
 		}
-		$farSamples[] = [$x, $z, $heights, $materials];
+		$farSamples[] = [$x, $z, $heights, base64_encode($ink)];
 	}
 	$cases[] = ['recipe' => $far->recipe(), 'perm' => (new Noise('road-atlas'))->permutation(),
 		'atlas' => $farAtlas, 'samples' => $farSamples];
