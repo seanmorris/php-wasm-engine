@@ -655,7 +655,7 @@ foreach([0,4] as $z)
 {
 	$index = (16+intdiv($z,4))*33+16;
 	$material = unpack('f', $rootBytes, $index*44+28)[1];
-	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::markCode([$z,48.]),
+	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::markCode([$z,48.,6.]),
 		'The PHP patch records lateral and traveled distance while retaining its material and stride');
 }
 renderCheck(ord($markedScene->surfacePatch('0:0:0')['materials'][544]) === 5, 'Charts see the ordinary road material');

@@ -846,10 +846,15 @@ foreach([[0.,0.,32.],[2.,2.,34.],[8.,-2.,40.]] as [$x,$z,$along]) {
 	terrainNear($offset[1],$z,1e-9,'Center offset stays in world axes');
 	terrainNear($mark[0],$z,1e-9,'Marking measures signed distance across the road');
 	terrainNear($mark[1],$along,1e-8,'Marking measures distance from the start through successive spline samples');
-	$code = TerrainPhonics\RoadAtlas::markCode([$z,$along]);
+	terrainNear($mark[2],6.,1e-9,'Marking carries the authored half-width to locate both edge stripes');
+	$code = TerrainPhonics\RoadAtlas::markCode([$z,$along,6.]);
 	terrainCheck($routes->paintTexel($x,$z) === pack('C4',5,$code>>16,($code>>8)&255,$code&255),
 		'Paint atlas carries the same dash phase as the patch mesh');
 }
+// The outer vertices of an edge triangle need coordinates while their material stays procedural.
+terrainCheck($routes->material(0.,9.,$offset,$mark) === null && $offset === null && $mark[0] === 9.,
+	'Edge interpolation does not widen the pavement or mark the material as painted');
+terrainCheck($routes->paintTexel(0.,16.) === pack('C4',0,0,0,0),'Bare ground beyond the road keeps an empty ink texel');
 terrainCheck($routes->paintTexel(34.,0.) === pack('C4',5,0,0,0),'The stripe stops at the last control point');
 $routes->queue(['type'=>'material','x'=>0,'z'=>18,'radius'=>3,'material'=>'road']);
 $routes->commit();
