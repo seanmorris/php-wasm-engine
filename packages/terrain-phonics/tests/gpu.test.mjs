@@ -928,11 +928,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// View one face from several directions under a known sky, then cover it with paint, snow or water.
 			const iceVertex = `${header}
 				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
-				uniform vec3 uView; uniform float uRoad;
+				uniform vec3 uView; uniform float uRoad,uGrade,uMark,uLateral;
 				void main() {
 					vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
-					vWorld=vec3(0.,10.,0.); vRelative=-uView; vNormal=vec3(0.,1.,0.);
-					vRoadMark=vec4(0.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+					vec2 span=.1*(p-.5);
+					vWorld=vec3(span.x,10.+uGrade*span.x,span.y); vRelative=-uView;
+					// A smoothed lighting normal can remain level at a sharp road cut.
+					vNormal=vec3(0.,1.,0.);
+					vRoadMark=uMark*vec4(uLateral+span.y/8.,cos(.098175),sin(.098175),1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
 			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
 			parameters(ice);
@@ -968,12 +971,30 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1i(iceLoc('uTerrainShadowReady'),0);
 			gl.uniform1f(iceLoc('uRoad'),1);
 			iceSamples.road=[sampleIce(mirror),sampleIce(mirror,0)];
+			gl.uniform1f(iceLoc('uGrade'),6);
+			iceSamples.wall=sampleIce(mirror);
+			gl.uniform1f(iceLoc('uGrade'),0);
 			gl.uniform1f(iceLoc('uRoad'),0);
 			gl.uniform1f(iceLoc('uWaterLevel'),15);
 			iceSamples.submerged=[sampleIce(mirror),sampleIce(mirror,0)];
 			gl.uniform1f(iceLoc('uWaterLevel'),0);
 			gl.uniform4f(iceLoc('uLayerEffect[1]'),1,0,1,1);
 			iceSamples.covered=[sampleIce(mirror),sampleIce(mirror,0)];
+
+			// Isolate the nighttime dash and shoulder emissions on the same face.
+			gl.uniform1f(iceLoc('uSunIntensity'),0);
+			gl.uniform3f(iceLoc('uSkyAmbient'),0,0,0);
+			gl.uniform3f(iceLoc('uSunDirection'),0,-1,0);
+			gl.uniform1f(iceLoc('uRoad'),1);
+			gl.uniform1f(iceLoc('uMark'),1);
+			const stripeCuts = [];
+			for(const lateral of [0,.95625]) {
+				gl.uniform1f(iceLoc('uLateral'),lateral);
+				stripeCuts.push([0,.35,2.4,6,-6].map(grade => {
+					gl.uniform1f(iceLoc('uGrade'),grade);
+					return sampleIce(mirror,0);
+				}));
+			}
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
 			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
@@ -1331,11 +1352,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(chartLocation('uExtent'), 256);
 			gl.uniform1f(chartLocation('uWaterLevel'), -20);
 			gl.uniform2f(chartLocation('uHeading'), 1, 0);
-			const chartSamples = [];
+			const chartSamples = [], chartCutSamples = [];
+			gl.uniform1i(chartLocation('uPacked'),1);
+			gl.uniform3f(chartLocation('uPaintColor[1]'),0,1,0);
 			for(const [n,unit,first] of [[257,0,128],[256,2,0]]) {
-				texture(unit,n,n,null);
+				const heights = new Float32Array(n*n);
+				heights[(first+4)*n+first+1] = 12;
+				texture(unit,n,n,new Uint8Array(heights.buffer));
 				const inks = new Uint8Array(n*n*4);
 				for(let y=0;y<n;y++) inks[4*(y*n+first)] = 5;
+				for(const y of [first+3,first+4]) {
+					inks[4*(y*n+first+1)] = 5;
+					inks[4*(y*n+first+2)] = 2;
+				}
 				texture(unit+1,n,n,inks);
 			}
 			for(const [i,key] of ['uOverview','uMapInk','uFine','uFineInk'].entries()) gl.uniform1i(chartLocation(key),i);
@@ -1347,6 +1376,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					samples.push(pixel());
 				}
 				chartSamples.push(samples);
+				const cut = [];
+				for(const [x,z] of [[.2,3.2],[.8,3.8],[1.5,3.8]]) {
+					gl.uniform4f(chartLocation('uChart'),x,z,1,1);
+					cut.push(pixel());
+				}
+				chartCutSamples.push(cut);
 			}
 
 			const error = gl.getError();
@@ -1354,7 +1389,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples
+				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, stripeCuts
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
@@ -1374,8 +1409,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 		}, {data, shaders});
 
+		for(const [level,bank,transition,cliff,reverseCliff] of result.stripeCuts) {
+			assert.ok(level > 5 && bank === level && transition > 0 && transition < bank,
+				`Paint glows on the bank and fades on a steepening slope: ${[level,bank,transition,cliff,reverseCliff]}`);
+			assert.deepEqual([cliff,reverseCliff],[0,0],'Uphill and downhill cut walls have no glowing markings');
+		}
+		for(const [level,cliff,mixed] of result.chartCutSamples) {
+			assert.ok(level[2]>200 && level[0]===0, 'Level half of a road cell stays paved');
+			assert.ok(cliff[0]>180 && cliff[2]===0, 'Steep half exposes the natural material');
+			assert.ok(mixed[0]>100 && mixed[1]>100 && mixed[2]===0, 'Only the pavement fraction of mixed wall paint is removed');
+		}
 		const stars = result.starChecks;
 		const ice = result.iceSamples;
+		assert.equal(ice.wall,ice.glint,'Revealing the cliff also restores its natural surface finish');
 		assert.ok(ice.grazing > ice.normal+40, `Exposed ice reflects more sky at grazing incidence: ${JSON.stringify(ice)}`);
 		assert.ok(ice.glint > ice.turned+40 && ice.glint > ice.frost+40 && ice.glint > ice.shaded+40,
 			'Polished ice catches a sharp, view-dependent solar highlight in sunlight');
