@@ -740,21 +740,27 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// one distant pixel with the mean of the finer samples at the same location.
 			const hillside = program(vertex, fieldSource + `
 				#define MATERIAL_STACK
-				uniform float uMeters;
+				uniform float uMeters,uBearing;
 				uniform vec2 uFaceStep;
-				uniform bool uInspectRelief;
+				uniform int uInspect;
 				out vec4 color;
 				void main() {
 					vec2 local=gl_FragCoord.xy*uMeters;
-					vec3 pos=vec3(-2705.,157.,1779.)+vec3(local.x,uFaceStep*local.y);
-					vec3 normal=normalize(vec3(0.,uFaceStep.y,-uFaceStep.x)), relative=-80.*normal;
+					mat2 faceTurn=mat2(cos(uBearing),sin(uBearing),-sin(uBearing),cos(uBearing));
+					vec3 facePoint=vec3(local.x,uFaceStep*local.y);
+					facePoint.xz=faceTurn*facePoint.xz;
+					vec3 pos=vec3(-2705.,157.,1779.)+facePoint;
+					vec3 normal=normalize(vec3(0.,uFaceStep.y,-uFaceStep.x));
+					normal.xz=faceTurn*normal.xz;
+					vec3 relative=-80.*normal;
 					vec3 weights=pow(abs(normal),vec3(4.));
 					weights/=dot(weights,vec3(1.));
 					float slope=1.-normal.y, water=0., footprint=uMeters*length(uFaceStep);
 					float macro=landVariation(pos.xz,footprint), snowline=uSnowline.x+25.*macro, stipple=0.;
 					${shaders['material-fields.glsl']}
 					color=vec4(trees,bare,scree,min(1.,length(lift)));
-					if(uInspectRelief) color=vec4(length(lift-normal*dot(normal,lift)),2.*length(facet),3.*length(blockTilt),.5*jointTint.r);
+					if(uInspect==1) color=vec4(length(lift-normal*dot(normal,lift)),2.*length(facet),3.*length(blockTilt),.5*jointTint.r);
+					if(uInspect==2) color=vec4(.5+gully,.5+rill,0.,1.);
 				}`);
 			gl.useProgram(hillside);
 			appearance(hillside,data.appearance);
@@ -795,7 +801,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const unresolvedRibs = hillsidePixels(8).filter((_, i) => i%4 === 3);
 			const maxUnresolvedTilt = Math.max(...unresolvedRibs);
 			gl.uniform4f(fieldScale, 48, 3, 13, 23);
-			gl.uniform1i(gl.getUniformLocation(hillside, 'uInspectRelief'), 1);
+			const inspect = gl.getUniformLocation(hillside, 'uInspect');
+			gl.uniform1i(inspect, 1);
 			const rockDamping = gl.getUniformLocation(hillside, 'uRockSlopeDamping');
 			const slopeRelief = [];
 			for(const degrees of [0,30,50,72,90]) {
@@ -813,6 +820,30 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				});
 				const sameTint = full.every((v,i) => i%4 !== 3 || v === damped[i] && v === strong[i]);
 				slopeRelief.push({degrees,full:totals(full),damped:totals(damped),strong:totals(strong),sameTint});
+			}
+			// The two image axes span equal distances across and down the face.
+			// Turning the face in the world should turn the drainage with it.
+			const drainage = [];
+			gl.uniform1i(inspect, 2);
+			for(const seed of [[0,0], [0x4567,0x1234]]) {
+				gl.uniform2fv(gl.getUniformLocation(hillside, 'uPaletteOffset'), seed);
+				for(const degrees of [30,55]) for(const bearing of [0,.73,2.32]) {
+					const angle = degrees*Math.PI/180;
+					gl.uniform2f(faceStep, Math.sin(angle), Math.cos(angle));
+					gl.uniform1f(gl.getUniformLocation(hillside, 'uBearing'), bearing);
+					const width = 256, height = 64, step = 2;
+					const pixels = hillsidePixels(2,width,height);
+					for(const [channel,field] of ['gully','rill'].entries()) {
+						let across = 0, downhill = 0;
+						for(let y=0; y<height-step; y++) for(let x=0; x<width-step; x++) {
+							const i = 4*(y*width+x)+channel;
+							across += Math.abs(pixels[i+4*step]-pixels[i]);
+							downhill += Math.abs(pixels[i+4*width*step]-pixels[i]);
+						}
+						const count = (width-step)*(height-step);
+						drainage.push({field,seed,degrees,bearing,across:across/count,downhill:downhill/count});
+					}
+				}
 			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -1202,7 +1233,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
-				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt, slopeRelief
+				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt, slopeRelief, drainage
 				, inactiveAppearance
 
 				, aliasResults
@@ -1445,10 +1476,16 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(range > 32, `${label} still varies across the hillside`);
 		}
 		assert.equal(result.maxUnresolvedTilt, 0, 'one-meter ribs leave no lighting grid at eight meters per pixel');
+		for(const {field,seed,degrees,bearing,across,downhill} of result.drainage) {
+			const label = `${field} on a ${degrees}° slope at bearing ${bearing} with seed ${seed}`;
+			assert.ok(across > 2*downhill, `${label} should run downhill (across ${across}, downhill ${downhill})`);
+			assert.ok(downhill > 1, `${label} should still change along its course`);
+		}
 		let previous = [1,1,1];
 		for(const {degrees,full,damped,strong,sameTint} of result.slopeRelief) {
 			assert.ok(sameTint, 'rock tint stays fixed when its lighting relief is damped');
 			if(degrees === 0) {
+				assert.equal(full[0], 0, 'gullies end on level ground');
 				assert.deepEqual(strong, full, 'level rock keeps its full relief');
 				continue;
 			}
