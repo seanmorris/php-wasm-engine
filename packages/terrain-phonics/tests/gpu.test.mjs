@@ -604,9 +604,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), -3);
 				const colors = [];
 
+				// The sky's fill is integrated from sunlight on the CPU, so it goes dark with the sun.
 				for(const intensity of [0, 20])
 				{
 					gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), intensity);
+					const fill = intensity ? data.uniforms.skyAmbient : [0, 0, 0];
+					gl.uniform3fv(gl.getUniformLocation(surface, 'uSkyAmbient'), fill);
 					colors.push(pixel());
 				}
 
@@ -619,6 +622,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 
 				gl.uniform1f(gl.getUniformLocation(surface, 'uSunIntensity'), 0);
+				gl.uniform3fv(gl.getUniformLocation(surface, 'uSkyAmbient'), [0, 0, 0]);
 				gl.uniform3fv(gl.getUniformLocation(surface, 'uNightAmbient'), data.nightAmbient);
 				illuminationResults.push({name, colors, night: pixel()});
 			}
@@ -1266,6 +1270,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform3f(gl.getUniformLocation(linked, 'uEye'), 0, 5, 5);
 				gl.uniform1f(gl.getUniformLocation(linked, 'uTestGround'), -3);
 				gl.uniform1f(gl.getUniformLocation(linked, 'uSunIntensity'), 0);
+				gl.uniform3fv(gl.getUniformLocation(linked, 'uSkyAmbient'), [0, 0, 0]);
 				gl.uniform3fv(gl.getUniformLocation(linked, 'uNightAmbient'), data.nightAmbient);
 
 				return linked;
