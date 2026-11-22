@@ -190,23 +190,73 @@ $arctic = SurfaceLayers::landscape((new Recipe(['preset'=>'arctic-meltwater']))-
 	new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['arctic-meltwater']))->layers;
 $ice = array_column($arctic,null,'id');
 check(!$layers->reflective && $layers->layers[0]['reflectivity'] === 0., 'Earlier material stacks default to matte.');
-$coated = new SurfaceLayers([['reflectivity'=>1.,'roughness'=>.18]]);
-check($coated->reflective && $coated->structure !== (new SurfaceLayers([[]]))->structure
-	&& $coated->structure === (new SurfaceLayers([['reflectivity'=>.4,'roughness'=>.75]]))->structure
-	&& !(new SurfaceLayers([[],['channel'=>'relief','reflectivity'=>1.]]))->reflective,
-	'Reflective color layers enable the finish shader. Tuning a coating reuses its program.');
-check($ice['glacier-ice']['datum'] === 'water' && $ice['glacier-ice']['pattern'] === 'fractures'
-	&& $ice['glacier-ice']['reflectivity'] === 1. && $ice['wind-packed-snow']['reflectivity'] === 0.
-	&& $ice['wind-packed-snow']['slopeHigh'] < $ice['rock-outcrops']['slopeLow']
-	&& $arctic[$ice['snow-ripples']['parent']]['id'] === 'wind-packed-snow',
-	'Blue ice follows the channel banks and snow ripples use the gentler snow-covered slopes.');
-$lagoon = SurfaceLayers::landscape((new Recipe(['preset'=>'tidal-lagoon']))->values(),
-	new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['tidal-lagoon']))->layers;
-$cays = array_column($lagoon,null,'id');
-check($cays['seagrass-beds']['datum'] === 'water' && $cays['seagrass-beds']['high'] < 0
-	&& $cays['cay-scrub']['datum'] === 'water' && $cays['cay-scrub']['low'] > 0
-	&& $lagoon[$cays['sand-ripples']['parent']]['id'] === 'shoal-sand',
-	'Lagoon vegetation straddles the waterline and underwater sand carries the ripple relief.');
+$coated = new SurfaceLayers([['reflectivity' => 1.,'roughness' => .18]]);
+
+check(
+	$coated->reflective && $coated->structure !== (new SurfaceLayers([[]]))->structure && $coated->structure === (
+		new SurfaceLayers([['reflectivity' => .4,'roughness' => .75]])
+	)->structure && !(new SurfaceLayers([
+		[]
+		, [
+			'channel' => 'relief'
+			, 'reflectivity' => 1.
+		]
+	]))->reflective
+	, 'Reflective color layers enable the finish shader. Tuning a coating reuses its program.'
+);
+
+check(
+	$ice['glacier-ice']['datum'] === 'water' && $ice['glacier-ice']['pattern'] === 'fractures' && $ice['glacier-ice'][
+		'reflectivity'
+	] === 1. && $ice['wind-packed-snow']['reflectivity'] === 0. && $ice['wind-packed-snow'][
+		'slopeHigh'
+	] < $ice['rock-outcrops']['slopeLow'] && $arctic[$ice['snow-ripples']['parent']][
+		'id'
+	] === 'wind-packed-snow'
+	, 'Blue ice follows the channel banks and snow ripples use the gentler snow-covered slopes.'
+);
+
+$lagoon = SurfaceLayers::landscape(
+	(new Recipe(['preset' => 'tidal-lagoon']))->values()
+	, new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['tidal-lagoon'])
+)->layers;
+
+$cays = array_column($lagoon, null, 'id');
+
+check(
+	$cays['seagrass-beds']['datum'] === 'water' && $cays['seagrass-beds']['high'] < 0 && $cays['cay-scrub'][
+		'datum'
+	] === 'water' && $cays['cay-scrub']['low'] > 0 && $lagoon[$cays['sand-ripples']['parent']][
+		'id'
+	] === 'shoal-sand'
+	, 'Lagoon vegetation straddles the waterline and underwater sand carries the ripple relief.'
+);
+
+$mesas = (new Recipe(['preset' => 'red-mesas']))->values();
+$mesaLayers = SurfaceLayers::landscape($mesas, new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['red-mesas']));
+$canyonLayers = SurfaceLayers::landscape((new Recipe(['preset' => 'canyon']))->values(), new TerrainAppearance);
+
+check(
+	TerrainAppearance::style($mesas) === 'canyon' && $mesaLayers->structure === $canyonLayers->structure && $mesaLayers
+		->layers[1]['color'] !== $canyonLayers->layers[1]['color']
+	, 'Red Mesas reuse the canyon program with their own bed colors.'
+);
+
+$moor = SurfaceLayers::landscape(
+	(new Recipe(['preset' => 'heather-moor']))->values()
+	, new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['heather-moor'])
+)->layers;
+
+$heath = array_column($moor, null, 'id');
+
+check(
+	count($moor) === 5 && $heath['moor-grass']['datum'] === 'water' && $heath['peat-banks']['datum'] === 'water'
+		&& $heath['peat-banks']['high'] < $heath['moor-grass']['high'] && $heath['bracken']['slopeHigh'] <= $heath[
+		'granite-tors'
+		]['slopeLow'] && $heath['granite-tors']['pattern'] === 'jointed'
+	, 'Moor grass and peat follow the lochans, and bracken gives way to granite on the steepest ground.'
+);
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
