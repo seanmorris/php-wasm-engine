@@ -2646,6 +2646,19 @@ $holds($appearanceScene->appearance, 'the frame after restoration uploads the ap
 renderCheck($sent('uExposure') === [1.75] && $uploads('uSunDirection') === 1, 'restoration repopulates atmosphere uniforms');
 $appearanceScene->close();
 
+$fjords = new Landscape(['preset'=>'basalt-fjords', 'worldSize'=>256]);
+$dunes = new Landscape(['preset'=>'amber-dunes', 'worldSize'=>256]);
+$presetScene = new Scene($fjords, new Water, new Atmosphere, useClipmap: false);
+renderCheck($presetScene->appearance->settings['rockColor'] === TerrainAppearance::PRESET_DEFAULTS['basalt-fjords']['rockColor'],
+	'A scene starts with the palette of its landscape.');
+$presetScene->setLandscape($dunes);
+renderCheck($presetScene->appearance->settings['sandColor'] === TerrainAppearance::PRESET_DEFAULTS['amber-dunes']['sandColor'],
+	'Swapping landscapes also switches the scene-owned palette.');
+$authored = $presetScene->appearance = new TerrainAppearance(['sandColor'=>'#abcabc']);
+$presetScene->setLandscape($fjords);
+renderCheck($presetScene->appearance === $authored, 'Swapping landscapes preserves an application-owned appearance.');
+$presetScene->close();
+
 // Every preset's shading style receives the same appearance uniforms.
 $styles = [
 	[['preset' => 'coast'], 0.0], [['preset' => 'mountain'], 1.0], [['preset' => 'canyon', 'version' => 1], 2.0],
