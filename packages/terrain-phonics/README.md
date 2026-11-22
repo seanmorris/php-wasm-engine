@@ -308,8 +308,8 @@ Colors are sRGB hex strings.
 | --- | --- | --- |
 | `grassColor` | `#425b2d` | Grass cover on coast and mountain terrain, and grass paint. |
 | `soilColor` | `#815f40` | Base soil color on version-one canyons. |
-| `rockColor` | `#867c6f` | Rock between the light bands on coast and version-one canyon terrain. |
-| `rockBandColor` | `#af957c` | The light bands in that rock. |
+| `rockColor` | `#867c6f` | Exposed rock, and the rock between the light bands on version-one canyon terrain. |
+| `rockBandColor` | `#af957c` | The light bands in version-one canyon rock, and the coast's optional bands, which have zero coverage by default. |
 | `sandColor` | `#bfaf8b` | Sand on level ground near the water, and sand paint. |
 | `snowColor` | `#eaf1f8` | Snow on coast and mountain terrain, and snow paint. |
 | `roadColor` | `#373b3d` | Road paint. |
@@ -333,7 +333,7 @@ follow, so each derived channel stops at 1: red beds under a white rust are whit
 
 | Setting | Default | Range | Effect |
 | --- | --- | --- | --- |
-| `bandSpacing` | 52.36 m (2π / 0.12) | 5 to 1000 | Height of one dark and one light band in coast and version-one canyon rock. |
+| `bandSpacing` | 52.36 m (2π / 0.12) | 5 to 1000 | Height of one dark and one light band in version-one canyon rock, and in the coast's optional bands. |
 | `bandContrast` | 1 | 0 to 1 | 0 paints banded rock one color: halfway between the two rock colors, or the canyon's distant color. |
 | `bandSharpness` | 1 | 1 to 8 | Higher values narrow the transitions between canyon beds. |
 
