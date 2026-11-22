@@ -736,6 +736,31 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				reliefRange: percentile(reliefValues,.95)-percentile(reliefValues,.05),
 			};
 
+			// Sample one exposed face at walking distance, far beyond the coarsest
+			// pigment, with half-sized slabs, and finally with the pattern turned off.
+			const pigmentProbe = program(vertex,header + shaders['surface-layers.glsl'] + `
+				out vec4 color;
+				void main() {
+					vec3 pos=vec3(-1200.,100.+gl_FragCoord.y*.34,1600.+gl_FragCoord.x*.34);
+					vec3 n=vec3(1.,0.,0.);
+					color=vec4(layerPatternWeight(0,pos,n,.04,0.,0.),layerPatternWeight(0,pos,n,80.,0.,0.),
+						layerPatternWeight(1,pos,n,.04,0.,0.),layerPatternWeight(2,pos,n,.04,0.,0.));
+				}`);
+			gl.useProgram(pigmentProbe);
+			gl.uniform4fv(gl.getUniformLocation(pigmentProbe,'uLayerPattern[0]'),[
+				9,1,13,23/13, 9,1,6.5,23/13, 9,0,13,23/13,
+			]);
+			gl.drawArrays(gl.TRIANGLES,0,3);
+			const pigments=new Uint8Array(256*64*4);
+			gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pigments);
+			const near=[], far=[], resized=[], off=[];
+			for(let i=0;i<pigments.length;i+=4) {
+				near.push(pigments[i]); far.push(pigments[i+1]);
+				resized.push(Math.abs(pigments[i]-pigments[i+2])); off.push(pigments[i+3]);
+			}
+			const granitePigment = {localRange:percentile(near,.95)-percentile(near,.05),
+				distantRange:Math.max(...far)-Math.min(...far),resizedDelta:percentile(resized,.75),off:Math.max(...off)};
+
 			// Across a 512 m hillside, compare the forest, bare rock and scree cover of
 			// one distant pixel with the mean of the finer samples at the same location.
 			const hillside = program(vertex, fieldSource + `
@@ -1233,7 +1258,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, illuminationResults
 				, bandResults
 				, mountainBands
-				, mountainAmounts, rockDetail, hillsideCover, maxUnresolvedTilt, slopeRelief, drainage
+				, mountainAmounts, rockDetail, granitePigment, hillsideCover, maxUnresolvedTilt, slopeRelief, drainage
 				, inactiveAppearance
 
 				, aliasResults
@@ -1469,6 +1494,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.ok(aspectJump < 3, 'granite joints continue around the diagonal between upright projections');
 		assert.ok(reliefJump <= 1 && reliefRange > 12, 'scree relief varies across the face and stays stable under a change of view');
 		assert.ok(toneRange > 18 && screeRange > 32, 'loose rock keeps both tonal detail and patchy coverage');
+
+		const {localRange,distantRange,resizedDelta,off} = result.granitePigment;
+		assert.ok(localRange > 45 && resizedDelta > 12, 'granite pigment resolves locally and responds to slab spacing');
+		assert.equal(distantRange,0,'unresolved granite pigment converges to the same average across a face');
+		assert.equal(off,0,'zero pattern amount restores the base granite color');
 
 		for(const {seed, meters, material, p95Error, range} of result.hillsideCover) {
 			const label = `${material} at ${meters} m per pixel with seed ${seed}`;

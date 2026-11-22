@@ -3,6 +3,7 @@ uniform float uTerrainStyle;
 uniform vec4 uBedContacts[2];
 uniform vec3 uBedDatum;
 uniform vec3 uMountainColors[6];
+uniform vec3 uGranitePigments[2];
 // TerrainAppearance. Colors are linear. The canyon palette runs rust, shale, ledge, sandstone, red beds, cap, dust,
 // then the color of beds too fine to resolve.
 uniform vec3 uGrassColor, uSoilColor, uRockColor, uRockBandColor, uSandColor, uSnowColor, uRoadColor;
@@ -107,7 +108,9 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	out vec3 rock, out vec3 cover, out float outBare, inout vec3 normal)
 {
 	vec3 forest = uMountainColors[0], meadow = uMountainColors[1], tundra = uMountainColors[2];
-	vec3 granite = uMountainColors[3], stain = uMountainColors[4], talus = uMountainColors[5];
+	vec3 stain = uMountainColors[4], talus = uMountainColors[5];
+	vec3 granite = mix(uGranitePigments[0],uGranitePigments[1],
+		jointedPigment(vWorld,normal,footprint,vec4(9.,1.,13.,23./13.),vec2(0.),vec2(0.)));
 
 	vec3 pos = vWorld, relative = vRelative;
 	float water = uWaterLevel;

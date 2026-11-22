@@ -60,11 +60,16 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 	$waterCases[] = ['name' => $name,'uniforms' => $water->uniforms(),'samples' => $samples];
 }
 
-$bands = [];
-foreach([1, 2, 3, 8] as $sharpness) $bands[] = (new TerrainAppearance(['bandSharpness' => $sharpness]))->uniforms();
-
 // Exercise the emitted PHP shader beside the standalone appearance reference on identical sample faces.
 $ridge = static fn(TerrainAppearance $appearance) => TerrainPhonics\SurfaceLayers::landscape(['preset'=>'mountain'],$appearance);
+$referenceAppearance = static function(TerrainAppearance $appearance) use ($ridge): array {
+	$granite = array_column($ridge($appearance)->layers,null,'id')['granite-slabs'];
+	return $appearance->uniforms() + ['uGranitePigments[0]'=>[
+		...TerrainAppearance::linear($granite['color']), ...TerrainAppearance::linear($granite['patternColor']),
+	]];
+};
+$bands = [];
+foreach([1, 2, 3, 8] as $sharpness) $bands[] = $referenceAppearance(new TerrainAppearance(['bandSharpness' => $sharpness]));
 $shader = TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$ridge(new TerrainAppearance));
 $stackInputs = static function($stack): array {
 	$inputs = ['uLayerCount'=>[count($stack->layers)],'uMaterialBounce'=>$stack->bounce];
@@ -86,7 +91,7 @@ foreach($amounts as $amount)
 	foreach(['#ff00ff', '#00ff00'] as $color)
 	{
 		$appearance = new TerrainAppearance([$material.'Amount'=>$amount,$material.'Color'=>$color]);
-		$cases[] = $appearance->uniforms();
+		$cases[] = $referenceAppearance($appearance);
 		$stacks[] = $stackInputs($ridge($appearance));
 	}
 
@@ -146,8 +151,8 @@ echo json_encode([
 	, 'waterCases' => $waterCases
 
 	// Terrain appearances for the paint, band and mountain amount checks.
-	, 'appearance' => (new TerrainAppearance)->uniforms()
-	, 'redGrass' => (new TerrainAppearance(['grassColor' => '#ff0000']))->uniforms()
+	, 'appearance' => $referenceAppearance(new TerrainAppearance)
+	, 'redGrass' => $referenceAppearance(new TerrainAppearance(['grassColor' => '#ff0000']))
 	, 'bands' => $bands
 	, 'mountainAmounts' => $mountainAmounts
 ], JSON_THROW_ON_ERROR
