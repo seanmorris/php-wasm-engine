@@ -310,6 +310,13 @@ test('advancing the clipmap grid exchanges matching height, normals, paint and r
 			}
 
 			const coarse = texture(2), fine = texture(1);
+			gl.activeTexture(gl.TEXTURE2);
+			gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
+			gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+			gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,1,1,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array([255]));
+			gl.uniform1i(loc('uRoadsideMask'),2);
+			gl.uniform3f(loc('uParentSafe'),0,0,40);
+			let pad = 0;
 			function draw(gridTexture, step, minX, minZ, span, hasParent) {
 				gl.activeTexture(gl.TEXTURE0);
 				gl.bindTexture(gl.TEXTURE_2D,gridTexture[0]);
@@ -320,7 +327,9 @@ test('advancing the clipmap grid exchanges matching height, normals, paint and r
 				gl.uniform1i(loc('uHasParent'),hasParent);
 				gl.uniform2i(loc('uRingMin'),minX,minZ);
 				gl.uniform2i(loc('uDrawCell'),minX,minZ);
-				gl.uniform1i(loc('uSpan'),span);
+				gl.uniform1f(loc('uRoadsidePad'),hasParent ? pad : 0);
+				gl.uniform2i(loc('uRingMax'),minX+span,minZ+span);
+				gl.uniform1i(loc('uSpan'),hasParent ? span-2*pad : span);
 				gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,2*(span+1),span);
 			}
 
@@ -334,7 +343,8 @@ test('advancing the clipmap grid exchanges matching height, normals, paint and r
 			}
 
 			// The same eye can exchange the X edge, the Z edge, or both at this point.
-			return [false,true].map(ink => {
+			return [[false,0],[true,0],[false,4],[true,4]].map(([ink,extra]) => {
+				pad = extra;
 				gl.uniform1i(loc('uTestInk'),Number(ink));
 				const parent = capture(null), before = capture(-12,-12);
 				const moved = [capture(-10,-12), capture(-12,-10), capture(-10,-10)];
@@ -343,7 +353,7 @@ test('advancing the clipmap grid exchanges matching height, normals, paint and r
 					if(Math.abs(before[i]-parent[i]) > 8) detailed++;
 					for(const after of moved) largest = Math.max(largest, Math.abs(before[i]-after[i]));
 				}
-				return {ink,detailed,largest};
+				return {ink,pad,detailed,largest};
 			});
 		},terrain);
 		for(const sample of result) {
@@ -351,6 +361,108 @@ test('advancing the clipmap grid exchanges matching height, normals, paint and r
 			assert.ok(sample.largest<=2,JSON.stringify(sample));
 			assert.ok(sample.detailed>100,JSON.stringify(sample));
 		}
+	} finally {
+		await browser.close();
+	}
+});
+
+test('steep roadside vertices retain their fine height and rejoin the parent continuously', async() => {
+	const grid = readFileSync(new URL('../shaders/clip-grid.glsl', import.meta.url), 'utf8');
+	const browser = await chromium.launch({
+		executablePath: process.env.CHROMIUM || '/usr/bin/chromium',
+		args: ['--use-angle=swiftshader','--enable-unsafe-swiftshader'],
+	});
+	try {
+		const page = await browser.newPage();
+		const samples = await page.evaluate(grid => {
+			const gl = document.createElement('canvas').getContext('webgl2');
+			const program = gl.createProgram();
+			for(const [type, source] of [
+				[gl.VERTEX_SHADER, `#version 300 es
+					precision highp float;
+					precision highp int;
+					${grid}
+					uniform ivec2 sampleCell;
+					out vec3 measured;
+					void main(){
+						ivec2 c=clipStitchedCell(sampleCell);
+						float m=clipMorph(c);
+						measured=vec3(m,clipHeight(c,m),float(c.y));
+						gl_Position=vec4(0,0,0,1);
+					}`],
+				[gl.FRAGMENT_SHADER,'#version 300 es\nprecision highp float; out vec4 color; void main(){color=vec4(0);}'],
+			]) {
+				const shader = gl.createShader(type);
+				gl.shaderSource(shader,source);
+				gl.compileShader(shader);
+				if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(shader));
+				gl.attachShader(program,shader);
+			}
+			gl.transformFeedbackVaryings(program,['measured'],gl.INTERLEAVED_ATTRIBS);
+			gl.linkProgram(program);
+			if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
+			gl.useProgram(program);
+			const loc = name => gl.getUniformLocation(program,name);
+			function texture(unit, size, values) {
+				gl.activeTexture(gl.TEXTURE0+unit);
+				gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
+				gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+				gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,size,size,0,gl.RED,gl.FLOAT,values);
+			}
+			// Odd columns sit a meter above the parent interpolation. Row 16 is flat.
+			const heights = new Float32Array(128*128);
+			for(let z=-64; z<64; z++) for(let x=-64; x<64; x++)
+				heights[(z&127)*128+(x&127)] = z<10 ? x+(x&1) : 0;
+			texture(0,128,heights);
+			texture(1,1,new Float32Array([1]));
+			texture(2,1,new Float32Array([0]));
+			gl.uniform1i(loc('uElevations'),0);
+			gl.uniform1i(loc('uRoadsideMask'),1);
+			gl.uniform1i(loc('uTextureMask'),127);
+			gl.uniform1i(loc('uHasParent'),1);
+			gl.uniform1i(loc('uSpan'),76);
+			gl.uniform1f(loc('uMorphWidth'),7.6);
+			gl.uniform1f(loc('uGridStep'),1);
+			gl.uniform2i(loc('uRingMin'),-60,-60);
+			gl.uniform2i(loc('uRingMax'),60,60);
+			gl.uniform3f(loc('uParentSafe'),0,0,90);
+			const out = gl.createBuffer();
+			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER,out);
+			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER,12,gl.STREAM_READ);
+			gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER,0,out);
+			gl.enable(gl.RASTERIZER_DISCARD);
+			function sample(x,z) {
+				gl.uniform2i(loc('sampleCell'),x,z);
+				gl.beginTransformFeedback(gl.POINTS);
+				gl.drawArrays(gl.POINTS,0,1);
+				gl.endTransformFeedback();
+				const data = new Float32Array(3);
+				gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER,0,data);
+				return Array.from(data);
+			}
+			const original = sample(35,0);
+			gl.uniform1f(loc('uRoadsidePad'),22);
+			const bank = sample(35,0), flat = sample(35,16), outer = sample(57,0);
+			const gradient = [35,39,43,47,51,55,57].map(x=>sample(x,0)[0]);
+			const join = sample(60,3);
+			gl.uniform1i(loc('uRoadsideMask'),2);
+			const offRoad = sample(35,0);
+			gl.uniform1i(loc('uRoadsideMask'),1);
+			gl.uniform3f(loc('uParentSafe'),-20,0,56);
+			const parentTransition = sample(35,0);
+			return {original,bank,flat,outer,gradient,join,offRoad,parentTransition,error:gl.getError()};
+		},grid);
+		assert.equal(samples.error,0);
+		assert.deepEqual(samples.original.slice(0,2),[1,35]);
+		assert.deepEqual(samples.bank.slice(0,2),[0,36]);
+		assert.deepEqual(samples.offRoad,samples.original);
+		assert.equal(samples.flat[0],1);
+		assert.equal(samples.parentTransition[0],1);
+		assert.deepEqual(samples.outer.slice(0,2),[1,57]);
+		assert.equal(samples.join[2],2);
+		assert.ok(samples.gradient.every((v,i,a)=>i===0 || v>=a[i-1]));
+		assert.ok(samples.gradient.filter(v=>v>0 && v<1).length>=3);
 	} finally {
 		await browser.close();
 	}

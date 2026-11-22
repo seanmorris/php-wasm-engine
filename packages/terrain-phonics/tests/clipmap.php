@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-use TerrainPhonics\{CanyonBeds, Clipmap, Landscape, Recipe, SurfaceLayers, TerrainAppearance};
+use TerrainPhonics\{CanyonBeds, Clipmap, Landscape, Recipe, RoadsideDetail, SurfaceLayers, TerrainAppearance};
 
 require dirname(__DIR__) . '/autoload.php';
 
@@ -98,11 +98,12 @@ check($ground->heightEditIndex()->intersect($roadPoint) && !$ground->heightEditI
 $ground->close();
 
 foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
+foreach([8,16,24] as $oldSize)
 {
 	$old = [-6, -6];
 	$size = 16;
 	$filled = [];
-	foreach(Clipmap::exposed($x, $z, $size, $old) as [$left, $front, $right, $back])
+	foreach(Clipmap::exposed($x, $z, $size, $old, $oldSize) as [$left, $front, $right, $back])
 	for($column = $left; $column < $right; ++$column)
 	for($row = $front; $row < $back; ++$row)
 	{
@@ -113,7 +114,7 @@ foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
 	for($column = $x; $column < $x + $size; ++$column)
 	for($row = $z; $row < $z + $size; ++$row)
 	{
-		$shared = $column >= $old[0] && $column < $old[0] + $size && $row >= $old[1] && $row < $old[1] + $size;
+		$shared = $column >= $old[0] && $column < $old[0] + $oldSize && $row >= $old[1] && $row < $old[1] + $oldSize;
 		check(isset($filled["$column:$row"]) === !$shared, 'Exposed strips must write every new cell exactly once.');
 	}
 }
@@ -311,6 +312,46 @@ foreach([.5, 1., 2.] as $quality)
 				'Fine rings join the parent before its own transition begins.');
 		}
 	}
+}
+check(Clipmap::roadsidePad(76,32.) === 0, 'Very coarse grids skip roadside processing entirely.');
+$graded = new Landscape(['worldSize'=>512, 'spacing'=>1]);
+$graded->queue(['type'=>'road','points'=>[[-32,0,-150],[-32,0,-16],[-32,0,32],[-120,0,100]],'width'=>16,'shoulder'=>8]);
+$graded->commit();
+$shoulders = new RoadsideDetail($graded->roads());
+function shoulderWeight(RoadsideDetail $mask, array $focus, int $x, int $z): int
+{
+	$window = RoadsideDetail::window($focus,100.);
+	[$bytes] = $mask->sampleWindow($window);
+	[$left,$top,$size] = $window;
+	return ord($bytes[(intdiv($z,16)-$top)*$size+intdiv($x,16)-$left]);
+}
+foreach([[-33.,-65.],[-31.,-63.]] as $focus) {
+	check(shoulderWeight($shoulders,$focus,-64,-64) === 255
+		&& shoulderWeight($shoulders,$focus,0,-64) === 255, 'Both cut banks retain full detail across a mask scroll.');
+	$fade = shoulderWeight($shoulders,$focus,16,-64);
+	check($fade > 0 && $fade < 255 && shoulderWeight($shoulders,$focus,32,-64) === 0,
+		'The roadside footprint tapers into unedited terrain.');
+}
+check(shoulderWeight($shoulders,[-100,100],-112,96) === 255, 'The footprint follows the turn.');
+check($shoulders->sampleWindow(RoadsideDetail::window([1000,1000],100.))[1] === null, 'Distant roads have no footprint.');
+foreach([.5,1.,2.] as $quality) {
+	[$span,$parent] = Clipmap::spans($canyonRecipe,$quality,true);
+	$pad = Clipmap::roadsidePad($span,1.);
+	check($pad > 0 && $pad <= 24 && $pad%2 === 0, 'Extension fits the target distance and parent lattice.');
+	$origin = [-$span/2-2,-$span/2-2];
+	$eye = [0.,0.,-$span/6];
+	$safe = 2*($parent/2-Clipmap::transition($parent)-3);
+	$rect = Clipmap::roadsideRect($origin,$span,$pad,1.,[-200,-200,200,200],$eye,$safe);
+	check($rect !== null && $rect[0] < -$span/2 && $rect[2] > $span/2, 'Both sides can grow at every quality.');
+	foreach($rect as $i=>$edge) {
+		check($edge%2 === 0 && abs($edge) <= $span/2+$pad
+			&& abs($edge-$eye[$i%2===0 ? 0 : 2]) <= $safe, 'All edges stitch inside the unmorphed parent.');
+	}
+	check(Clipmap::roadsideRect($origin,$span,$pad,1.,[0,-4,$span/2-3,4],$eye,$safe)
+		=== [(int)(-$span/2),(int)(-$span/2),(int)($span/2),(int)($span/2)],
+		'A road ending inside the regular morph strip keeps its weights when the extra draw area shrinks.');
+	check(Clipmap::roadsideRect($origin,$span,$pad,1.,[500,500,700,700],$eye,$safe) === null,
+		'The standard footprint is used away from roads.');
 }
 $spanAtCanyonWall = Clipmap::spans($canyonRecipe, 1.)[4];
 check(($spanAtCanyonWall / 2 - Clipmap::transition($spanAtCanyonWall) - 3) * 16 >= 1500,
