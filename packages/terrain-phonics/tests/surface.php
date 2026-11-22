@@ -835,6 +835,42 @@ $plus = TerrainPhonics\Edits::normalize($zeroRoad);
 terrainCheck(TerrainPhonics\RoadAtlas::build([$plus],256.,$zeroCache)['rebuilt']===0,
 	'JSON round trips that discard a handle’s negative zero retain its painted overlay');
 
+// Splitting a painted straightaway into editable sections must produce exactly the same ink.
+$section = ['type'=>'road','width'=>12.,'shoulder'=>8.];
+$whole = new Landscape($flatRecipe);
+$whole->queue($section+['points'=>[[-48,0,0],[48,0,0]]]); $whole->commit();
+foreach([false,true] as $reverseOrder) {
+	$parts = [[[-48,0,0],[0,0,0]],[[0,0,0],[48,0,0]]];
+	$split = new Landscape($flatRecipe);
+	foreach($reverseOrder ? array_reverse($parts) : $parts as $points) $split->queue($section+compact('points'));
+	$split->commit();
+	foreach(range(-11,11) as $x) foreach([-7.,-5.65,0.,5.65,7.] as $z)
+		terrainCheck($split->paintTexel($x,$z) === $whole->paintTexel($x,$z),
+			"Center dashes, shoulder stripes and outer clipping continue through the section join at $x,$z");
+	$restoredSplit = Landscape::load($split->save());
+	terrainCheck($restoredSplit->paintTexel(-3,0) === $whole->paintTexel(-3,0),'Loading rebuilds joined pavement');
+	$restoredSplit->close();
+	$split->queue(['type'=>'material','x'=>0,'z'=>0,'radius'=>4,'material'=>'road']); $split->commit();
+	terrainCheck($split->paintTexel(0,0) === pack('C4',5,0,0,0),'Brush paint still covers a joined centerline');
+	$split->undo(); $split->undo(); $split->redo();
+	terrainCheck($split->paintTexel(3,0) === $whole->paintTexel(3,0),'Redo restores connected sections');
+	$split->close();
+}
+// Detaching an endpoint invalidates its former neighbor, including cached cap ink.
+$split = new Landscape($flatRecipe);
+foreach($parts as $points) $split->queue($section+compact('points'));
+$split->commit();
+$detached = $split->fork();
+$detached->queue(['replaceAt'=>1,'points'=>[[0,0,35],[48,0,35]]]+$section); $detached->commit();
+terrainCheck($detached->paintTexel(3,0) === pack('C4',5,0,0,0) && $split->paintTexel(3,0) === $whole->paintTexel(3,0),
+	'Detaching a road restores its open cap while the source landscape retains the join');
+$cache = [];
+TerrainPhonics\RoadAtlas::build($split->roads(),256.,$cache);
+terrainCheck(TerrainPhonics\RoadAtlas::build($detached->roads(),256.,$cache)['bytes'] ===
+	TerrainPhonics\RoadAtlas::build($detached->roads(),256.)['bytes'],'A cached former neighbor drops its continuation');
+$detached->close(); $split->close();
+$whole->close();
+
 // Regrading a saved road moves its original footprint and keeps subsequent paint above it.
 $routes = new Landscape($flatRecipe);
 $line = ['type'=>'road', 'points'=>[[-32,6,0],[32,6,0]], 'width'=>12, 'shoulder'=>2];

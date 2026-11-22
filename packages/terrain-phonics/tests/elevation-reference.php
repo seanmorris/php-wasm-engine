@@ -51,11 +51,17 @@ $ground->queue(['type' => 'road', 'width' => 4, 'shoulder' => 1, 'material' => n
 	'points' => [[-508, 65, -540], [-508, 79, -480]]]);
 $ground->queue(['type' => 'road', 'width' => 20, 'shoulder' => 5,
 	'points' => [[935, 40, 975], [1030, 65, 1025]]]);
+// Two smooth sections share both ends. Read through the outgoing and incoming caps of the loop.
+foreach([[[130,5,90],[185,7,140],[130,5,190]], [[130,5,190],[75,3,140],[130,5,90]]] as $i=>$points) {
+	$sign = $i === 0 ? 1 : -1;
+	$ground->queue(['type'=>'road','width'=>20,'shoulder'=>12,'points'=>$points,
+		'handles'=>[['out'=>[24*$sign,0,0]],null,['in'=>[24*$sign,0,0]]]]);
+}
 $ground->commit();
 $atlas = RoadAtlas::build($ground->roads(), $ground->recipe()['worldSize']);
 $atlas['bytes'] = base64_encode($atlas['bytes']);
 $samples = [];
-foreach([[-565,-542,6,18], [-15,-5,1,2], [965,978,1,1], [993,1024,1,1]] as [$left,$front,$columns,$rows])
+foreach([[-565,-542,6,18], [-15,-5,1,2], [965,978,1,1], [993,1024,1,1], [102,70,2,9], [102,170,2,9]] as [$left,$front,$columns,$rows])
 for($j = 0; $j < $rows; $j++)
 for($i = 0; $i < $columns; $i++)
 {
