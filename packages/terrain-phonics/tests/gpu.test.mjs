@@ -572,11 +572,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
 			const surfaceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vGround;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out float vGround;
 				uniform float uTestGround;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
-					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vRoadMark = vec4(0); vGround = uTestGround;
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vSplinePaint=0.; vRoadMark = vec4(0); vGround = uTestGround;
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
@@ -630,11 +630,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// One row of banded rock on a vertical face, with the strata phase advancing by a fixed step per pixel.
 			// Each step puts the bands on a whole DFT bin and one of their odd harmonics just past the pixel rate.
 			const bandVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint;
 				uniform float uBandStep;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(-50, 0, 0); vWorld = vec3(0, 500.0 + p.x * 256.0 * uBandStep, 0);
-					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadMark = vec4(0);
+					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vSplinePaint=0.; vRoadMark = vec4(0);
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const bandProgram = program(bandVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -676,14 +676,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// patch noise is at full strength. It lies 150 m below the snowline, at the default treeline, where talus
 			// still shows between the trees.
 			const amountVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint;
 				uniform float uFaceSlope;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vec2 s = p * 2.0 - 1.0;
 					float c = 1.0 - uFaceSlope, a = sqrt(1.0 - c * c);
 					vNormal = vec3(a, c, 0);
 					vWorld = vec3(-1200, 190, 3000) + s.x * vec3(0, 0, 100) + s.y * 25.0 * vec3(-c, a, 0);
-					vRelative = -150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadMark = vec4(0);
+					vRelative = -150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vSplinePaint=0.; vRoadMark = vec4(0);
 					gl_Position = vec4(s, 0, 1); }`;
 
 			const amountProgram = program(amountVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -927,7 +927,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// View one face from several directions under a known sky, then cover it with paint, snow or water.
 			const iceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint;
 				uniform vec3 uView; uniform float uRoad,uGrade,uMark,uLateral;
 				void main() {
 					vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
@@ -935,7 +935,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vWorld=vec3(span.x,10.+uGrade*span.x,span.y); vRelative=-uView;
 					// A smoothed lighting normal can remain level at a sharp road cut.
 					vNormal=vec3(0.,1.,0.);
-					vRoadMark=uMark*vec4(uLateral+span.y/8.,cos(.098175),sin(.098175),1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+					vSplinePaint=uMark*uRoad; vRoadMark=uMark*vec4(uLateral+span.y/8.,cos(.098175),sin(.098175),1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
 			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
 			parameters(ice);
@@ -971,6 +971,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1i(iceLoc('uTerrainShadowReady'),0);
 			gl.uniform1f(iceLoc('uRoad'),1);
 			iceSamples.road=[sampleIce(mirror),sampleIce(mirror,0)];
+			gl.uniform1f(iceLoc('uMark'),1);
+			gl.uniform1f(iceLoc('uLateral'),1.3);
+			iceSamples.gradedShoulder=sampleIce(mirror);
+			gl.uniform1f(iceLoc('uMark'),0);
 			gl.uniform1f(iceLoc('uGrade'),6);
 			iceSamples.wall=sampleIce(mirror);
 			gl.uniform1f(iceLoc('uGrade'),0);
@@ -1352,7 +1356,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(chartLocation('uExtent'), 256);
 			gl.uniform1f(chartLocation('uWaterLevel'), -20);
 			gl.uniform2f(chartLocation('uHeading'), 1, 0);
-			const chartSamples = [], chartCutSamples = [];
+			const chartSamples = [], chartCutSamples = [], chartVerge = [];
 			gl.uniform1i(chartLocation('uPacked'),1);
 			gl.uniform3f(chartLocation('uPaintColor[1]'),0,1,0);
 			for(const [n,unit,first] of [[257,0,128],[256,2,0]]) {
@@ -1364,6 +1368,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				for(const y of [first+3,first+4]) {
 					inks[4*(y*n+first+1)] = 5;
 					inks[4*(y*n+first+2)] = 2;
+				}
+				// Raw ink also covers the grading shoulder. Only the spline coordinate distinguishes it from pavement.
+				for(let y=first+7;y<=first+9;y++) for(let x=first;x<=first+4;x++) {
+					const i=4*(y*n+x);
+					inks[i]=5;
+					const code=((4096+(x<first+2 ? 1024 : 3072))<<11);
+					inks[i+1]=code>>16; inks[i+2]=(code>>8)&255;
 				}
 				texture(unit+1,n,n,inks);
 			}
@@ -1382,6 +1393,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					cut.push(pixel());
 				}
 				chartCutSamples.push(cut);
+				for(const x of [.2,2.2]) {
+					gl.uniform4f(chartLocation('uChart'),x,8,.02,1);
+					chartVerge.push(pixel());
+				}
 			}
 
 			const error = gl.getError();
@@ -1389,7 +1404,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, stripeCuts
+				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
@@ -1414,6 +1429,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				`Paint glows on the bank and fades on a steepening slope: ${[level,bank,transition,cliff,reverseCliff]}`);
 			assert.deepEqual([cliff,reverseCliff],[0,0],'Uphill and downhill cut walls have no glowing markings');
 		}
+		for(const [i,sample] of result.chartVerge.entries()) {
+			const channel=i%2===0 ? 2 : 0;
+			assert.ok(sample[channel]>240 && sample[2-channel]===0,'The road map respects the authored pavement edge');
+		}
 		for(const [level,cliff,mixed] of result.chartCutSamples) {
 			assert.ok(level[2]>200 && level[0]===0, 'Level half of a road cell stays paved');
 			assert.ok(cliff[0]>180 && cliff[2]===0, 'Steep half exposes the natural material');
@@ -1421,6 +1440,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		}
 		const stars = result.starChecks;
 		const ice = result.iceSamples;
+		assert.equal(ice.gradedShoulder,ice.glint,'The grading shoulder outside the authored width retains its terrain finish');
 		assert.equal(ice.wall,ice.glint,'Revealing the cliff also restores its natural surface finish');
 		assert.ok(ice.grazing > ice.normal+40, `Exposed ice reflects more sky at grazing incidence: ${JSON.stringify(ice)}`);
 		assert.ok(ice.glint > ice.turned+40 && ice.glint > ice.frost+40 && ice.glint > ice.shaded+40,
