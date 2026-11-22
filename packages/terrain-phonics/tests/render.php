@@ -643,7 +643,7 @@ try
 	renderCheck(true, 'a predicate and clip planes together are refused');
 }
 
-// The patch mesh carries the same centerline offsets as the clipmap in its 44-byte vertex layout.
+// The patch mesh carries the same stripe coordinates as the clipmap in its 44-byte vertex layout.
 $markedRoad = new Landscape(['worldSize'=>128,'spacing'=>1,'heightScale'=>0,'detailAmplitude'=>0]);
 $markedRoad->queue(['type'=>'road','points'=>[[-48,0,0],[48,0,0]],'width'=>12,'shoulder'=>2]);
 $markedRoad->commit();
@@ -655,8 +655,8 @@ foreach([0,4] as $z)
 {
 	$index = (16+intdiv($z,4))*33+16;
 	$material = unpack('f', $rootBytes, $index*44+28)[1];
-	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::centerCode([0,$z]),
-		'The PHP patch records the transverse offset while retaining its material and stride');
+	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::markCode([$z,48.]),
+		'The PHP patch records lateral and traveled distance while retaining its material and stride');
 }
 renderCheck(ord($markedScene->surfacePatch('0:0:0')['materials'][544]) === 5, 'Charts see the ordinary road material');
 $markedScene->close(); $markedRoad->close();

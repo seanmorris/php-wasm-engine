@@ -786,14 +786,53 @@ $roadReloaded = Landscape::load($road->save());
 terrainCheck($road->sample(.3, 3.7) === $roadReloaded->sample(.3, 3.7), 'road acceleration rebuild preserves geometry');
 terrainCheck(!str_contains($road->save(), '_road'), 'persistent roads omit derived spatial indexes');
 
+// A long spline remains one record. Abandoning a partial preparation cannot expose half a road.
+$long = new Landscape(['worldSize'=>32768,'heightScale'=>0.,'detailAmplitude'=>0.]);
+$highway = ['type'=>'road','points'=>[[-12000,8,0],[0,12,80],[12000,8,0]],'width'=>9.,'shoulder'=>2.];
+$abandoned = $long->queueSteps($highway);
+$abandoned->valid(); unset($abandoned);
+terrainCheck(!$long->commit() && !$long->roads(),'An interrupted road leaves no staged fragments');
+$building = $long->queueSteps($highway);
+terrainCheck(iterator_count($building)>20 && $long->commit(),'Long road yields across many preparation slices');
+terrainCheck(count($long->roads()[0]['_road']['samples'])>4096 && count($long->roadRecords())===1,
+	'More than 4096 samples belong to the same editable spline');
+$long->queue(['type'=>'road','points'=>[[-80,0,8000],[80,0,8000]],'width'=>8.]); $long->commit();
+$cache = [];
+$firstAtlas = TerrainPhonics\RoadAtlas::build($long->roads(),32768.,$cache);
+$copyRoad = $long->fork();
+$copyRoad->queue(['replaceAt'=>1,'crown'=>.3]+$copyRoad->roadRecords()[1]); $copyRoad->commit();
+$secondAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(),32768.,$cache);
+terrainCheck($firstAtlas['rebuilt']===2 && $secondAtlas['rebuilt']===1 && count($cache)===2,
+	'Changing one road reuses the other overlay');
+$plainAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(),32768.);
+terrainCheck($secondAtlas['bytes']===$plainAtlas['bytes'],'Cached overlays compose exactly like a cold build');
+$copyRoad->queue(['replaceAt'=>0,'crown'=>.4]+$highway); $copyRoad->commit();
+terrainCheck($long->changedRegion($copyRoad)[3]>8000,'Multiple changes include both footprints');
+$single = $long->fork(); $single->queue(['replaceAt'=>0,'crown'=>.2]+$highway); $single->commit();
+terrainCheck($long->changedRegion($single)[3]<200,'An untouched later road retains its painted terrain tiles');
+$single->undo(); $single->redo();
+$reloadedLong = Landscape::load($single->save());
+terrainCheck($single->roadRecords()===$reloadedLong->roadRecords() && $single->paintTexel(0,80)===$reloadedLong->paintTexel(0,80),
+	'One undo, redo and save round trip preserve the complete long road and its stripe');
+$single->close(); $reloadedLong->close(); $copyRoad->close(); $long->close();
+unset($firstAtlas,$secondAtlas,$plainAtlas,$cache);
+
 // Regrading a saved road moves its original footprint and keeps subsequent paint above it.
 $routes = new Landscape($flatRecipe);
 $line = ['type'=>'road', 'points'=>[[-32,6,0],[32,6,0]], 'width'=>12, 'shoulder'=>2];
 $routes->queue($line);
 $routes->commit();
 terrainCheck(json_decode($routes->save(),true)['version'] === 1, 'Automatic roads keep the original file format');
-terrainCheck($routes->paintTexel(0,0) === pack('C4',5,128,128,0), 'Pavement encodes zero offset on its center');
-terrainCheck($routes->paintTexel(0,2) === pack('C4',5,128,132,0), 'Pavement encodes transverse offset in meters');
+foreach([[0.,0.,32.],[2.,2.,34.],[8.,-2.,40.]] as [$x,$z,$along]) {
+	$routes->material($x,$z,$offset,$mark);
+	terrainNear($offset[1],$z,1e-9,'Center offset stays in world axes');
+	terrainNear($mark[0],$z,1e-9,'Marking measures signed distance across the road');
+	terrainNear($mark[1],$along,1e-8,'Marking measures distance from the start through successive spline samples');
+	$code = TerrainPhonics\RoadAtlas::markCode([$z,$along]);
+	terrainCheck($routes->paintTexel($x,$z) === pack('C4',5,$code>>16,($code>>8)&255,$code&255),
+		'Paint atlas carries the same dash phase as the patch mesh');
+}
+terrainCheck($routes->paintTexel(34.,0.) === pack('C4',5,0,0,0),'The stripe stops at the last control point');
 $routes->queue(['type'=>'material','x'=>0,'z'=>18,'radius'=>3,'material'=>'road']);
 $routes->commit();
 $revised = ['points'=>[[-32,8,0],[32,8,0]], 'handles'=>[['out'=>[16,0,24]],['in'=>[-16,0,24]]],

@@ -67,9 +67,11 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 						const expected = Uint8Array.from(atob(inkRow), c => c.charCodeAt(0));
 						for(let i = 0; i < 128; i += 4) {
 							if(bytes[i] !== expected[i]) throw Error('Material differs at ' + [x+i/4,z]);
-							const offsets = row => [(row[i+1]<<4)|(row[i+3]>>4), (row[i+2]<<4)|(row[i+3]&15)];
-							const [dx,dz] = offsets(bytes), [rx,rz] = offsets(expected);
-							if(Math.abs(dx-rx)>1 || Math.abs(dz-rz)>1) throw Error('Centerline differs at ' + [x+i/4,z,dx,dz,rx,rz]);
+							const mark = row => (row[i+1]<<16)|(row[i+2]<<8)|row[i+3];
+							const gpu = mark(bytes), php = mark(expected);
+							const phase = Math.abs((gpu&8191)-(php&8191));
+							if(Boolean(gpu)!==Boolean(php) || Math.abs((gpu>>13)-(php>>13))>1 || Math.min(phase,8192-phase)>1)
+								throw Error('Road marking differs at ' + [x+i/4,z,gpu,php]);
 						}
 					}
 				}

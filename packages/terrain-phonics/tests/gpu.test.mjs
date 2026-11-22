@@ -572,11 +572,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
 			const surfaceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1, vRoadOffset; out float vGround;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vGround;
 				uniform float uTestGround;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
-					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vRoadOffset = vec3(0); vGround = uTestGround;
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vRoadMark = vec4(0); vGround = uTestGround;
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
@@ -626,11 +626,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// One row of banded rock on a vertical face, with the strata phase advancing by a fixed step per pixel.
 			// Each step puts the bands on a whole DFT bin and one of their odd harmonics just past the pixel rate.
 			const bandVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1, vRoadOffset;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
 				uniform float uBandStep;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(-50, 0, 0); vWorld = vec3(0, 500.0 + p.x * 256.0 * uBandStep, 0);
-					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadOffset = vec3(0);
+					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadMark = vec4(0);
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const bandProgram = program(bandVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -672,14 +672,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// patch noise is at full strength. It lies 150 m below the snowline, at the default treeline, where talus
 			// still shows between the trees.
 			const amountVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1, vRoadOffset;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
 				uniform float uFaceSlope;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vec2 s = p * 2.0 - 1.0;
 					float c = 1.0 - uFaceSlope, a = sqrt(1.0 - c * c);
 					vNormal = vec3(a, c, 0);
 					vWorld = vec3(-1200, 190, 3000) + s.x * vec3(0, 0, 100) + s.y * 25.0 * vec3(-c, a, 0);
-					vRelative = -150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadOffset = vec3(0);
+					vRelative = -150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadMark = vec4(0);
 					gl_Position = vec4(s, 0, 1); }`;
 
 			const amountProgram = program(amountVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -923,12 +923,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// View one face from several directions under a known sky, then cover it with paint, snow or water.
 			const iceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1, vRoadOffset;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark;
 				uniform vec3 uView; uniform float uRoad;
 				void main() {
 					vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
 					vWorld=vec3(0.,10.,0.); vRelative=-uView; vNormal=vec3(0.,1.,0.);
-					vRoadOffset=vec3(0.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+					vRoadMark=vec4(0.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
 			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
 			parameters(ice);
