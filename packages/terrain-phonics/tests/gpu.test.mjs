@@ -185,6 +185,35 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+			// Neutral incident irradiance makes RGB scattering and extinction independently measurable.
+			const bands = program(vertex, `${header}${shaders['atmosphere.glsl']}
+				uniform float uTestDistance, uTestEye, uTestUp; out vec4 color;
+				void main() {
+					vec3 t, light;
+					terrainIntegrateAtmosphere(vec3(0.,uTestUp,0.),uTestEye,uTestDistance,true,t,light);
+					color = vec4(t.r,light.r,light.b,1.);
+				}`);
+			parameters(bands);
+			texture(7,1,1,new Uint8Array([255,255,255,255]));
+			const at = key => gl.getUniformLocation(bands,key);
+			gl.uniform1i(at('uTransmittance'),7);
+			gl.uniform2f(at('uTransmittanceSize'),1,1);
+			gl.uniform3f(at('uRayleigh'),0,0,0);
+			gl.uniform1f(at('uMie'),0);
+			gl.uniform1f(at('uSunIntensity'),4*Math.PI);
+			gl.uniform1f(at('uAirLayerCount'),2);
+			gl.uniform3f(at('uAirBand[0]'),100,120,.005);
+			gl.uniform3f(at('uAirBand[1]'),105,130,.002);
+			gl.uniform3f(at('uAirColor[0]'),1,0,0);
+			gl.uniform3f(at('uAirColor[1]'),0,0,1);
+			const bandSamples = [];
+			for(const [eye,up,distance] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]]) {
+				gl.uniform1f(at('uTestEye'),eye);
+				gl.uniform1f(at('uTestUp'),up);
+				gl.uniform1f(at('uTestDistance'),distance);
+				bandSamples.push(pixel());
+			}
+
 			const skySample = program(vertex, `${header}${data.source}
 				uniform vec3 uTestRay; uniform float uTestAltitude; out vec4 color;
 				void main() { color = vec4(terrainToneMap(skyRadiance(uTestRay, uTestAltitude)), 1.0); }`
@@ -1250,7 +1279,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, transitionError, starChecks, chartSamples
+				skyResults, bandSamples, transitionError, starChecks, chartSamples
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
@@ -1334,6 +1363,23 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const red = Math.round(255 * Math.exp(-.1 * meters));
 			assert.ok(Math.abs(result.waterPaths[i][0] - red) <= 1);
 			assert.ok(Math.abs(result.waterPaths[i][1] - (255 - red)) <= 1);
+		}
+
+		// Through each homogeneous segment, transmitted energy is exp(-optical depth) and the
+		// scattered fraction is shared by the two colors in proportion to their extinction.
+		const red = [5,.005,0], both = [15,.005,.002], blue = [10,0,.002];
+		const paths = [[],[red,[5,.005,.002]],[red,both,blue],[blue,both,red]];
+		for(const [index,segments] of paths.entries()) {
+			let transmission = 1, r = 0, b = 0;
+			for(const [length,kr,kb] of segments) {
+				const after = transmission*Math.exp(-length*(kr+kb));
+				r += (transmission-after)*kr/(kr+kb);
+				b += (transmission-after)*kb/(kr+kb);
+				transmission = after;
+			}
+			const expected = [transmission,r,b].map(value=>Math.round(255*value));
+			assert.ok(result.bandSamples[index].every((v,c)=>Math.abs(v-expected[c])<=1),
+				`Atmosphere path ${index}: GPU ${result.bandSamples[index]}, reference ${expected}`);
 		}
 
 		let skyError = 0, aerialError = 0, waterError = 0;

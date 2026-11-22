@@ -198,6 +198,14 @@ namespace
 	SkyCalls::$failDraw = false;
 	$cache->update(30, 100, 2);
 	$expect($cache->stats()['generations'] === [6,5], 'failed altitude is regenerated on the next explicit update');
+	$model->setLayers([['color'=>'#ff8844']]);
+	$transmission = $model->transmittanceLut(8,4,8)['generation'];
+	$expect($cache->update(30,100,2) && $uniform('uAirLayerCount') == 1,
+		'The render targets receive the active atmosphere layer.');
+	$model->setLayers([['color'=>'#4488ff']]);
+	$expect($model->transmittanceLut(8,4,8)['generation'] === $transmission && $cache->update(30,100,2),
+		'A tint change redraws scattering from the existing extinction texture.');
+	$expect(!$cache->update(30,100,2),'Unchanged colored air reuses the sky, reflection and aerial caches.');
 	$cache->close();
 	$cache->close();
 	$cache->restore();
