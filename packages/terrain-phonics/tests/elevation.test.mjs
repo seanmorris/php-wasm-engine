@@ -414,6 +414,7 @@ test('steep roadside vertices retain their fine height and rejoin the parent con
 			const heights = new Float32Array(128*128);
 			for(let z=-64; z<64; z++) for(let x=-64; x<64; x++)
 				heights[(z&127)*128+(x&127)] = z<10 ? x+(x&1) : 0;
+			heights[20*128+35] = 2; // Isolated lip. Equal heights on opposite sides give a level tangent.
 			texture(0,128,heights);
 			texture(1,1,new Float32Array([1]));
 			texture(2,1,new Float32Array([0]));
@@ -444,6 +445,7 @@ test('steep roadside vertices retain their fine height and rejoin the parent con
 			const original = sample(35,0);
 			gl.uniform1f(loc('uRoadsidePad'),22);
 			const bank = sample(35,0), flat = sample(35,16), outer = sample(57,0);
+			const lip = sample(35,20);
 			const gradient = [35,39,43,47,51,55,57].map(x=>sample(x,0)[0]);
 			const join = sample(60,3);
 			gl.uniform1i(loc('uRoadsideMask'),2);
@@ -451,12 +453,43 @@ test('steep roadside vertices retain their fine height and rejoin the parent con
 			gl.uniform1i(loc('uRoadsideMask'),1);
 			gl.uniform3f(loc('uParentSafe'),-20,0,56);
 			const parentTransition = sample(35,0);
-			return {original,bank,flat,outer,gradient,join,offRoad,parentTransition,error:gl.getError()};
+			// A 3x3 stencil from the four-meter grid at (-3108, 7172) on the first-light canyon circuit.
+			// Follow the same bank vertex for an entire approach, two world meters per frame.
+			const patch = [-297.13370,-296.42630,-295.90101,-340.31684,-340.03152,-339.77297,
+				-344.50304,-344.29872,-344.09980];
+			const x=-777, z=1793;
+			for(let j=-1;j<=1;j++) for(let i=-1;i<=1;i++)
+				heights[((z+j)&127)*128+((x+i)&127)] = patch[(j+1)*3+i+1];
+			texture(0,128,heights);
+			gl.uniform1f(loc('uGridStep'),4);
+			gl.uniform1i(loc('uSpan'),120);
+			gl.uniform1f(loc('uMorphWidth'),12);
+			const approach = pad => {
+				let previous, peak=0, first, last;
+				gl.uniform1f(loc('uRoadsidePad'),pad);
+				for(let distance=440; distance>=152; distance-=2) {
+					const eye=x-distance/4;
+					gl.uniform2f(loc('uEyeCell'),eye,z+7);
+					gl.uniform3f(loc('uParentSafe'),eye,z+7,141.2);
+					const height=sample(x,z)[1];
+					first ??= height;
+					if(previous!==undefined) peak=Math.max(peak,Math.abs(previous-height));
+					previous=last=height;
+				}
+				return {peak,first,last};
+			};
+			const oldTrace=approach(0), newTrace=approach(48);
+			return {original,bank,lip,flat,outer,gradient,join,offRoad,parentTransition,oldTrace,newTrace,error:gl.getError()};
 		},grid);
 		assert.equal(samples.error,0);
+		assert.ok(samples.oldTrace.peak>1.2,JSON.stringify(samples.oldTrace));
+		assert.ok(samples.newTrace.peak<.25,JSON.stringify(samples.newTrace));
+		assert.equal(samples.newTrace.first,samples.oldTrace.first);
+		assert.equal(samples.newTrace.last,samples.oldTrace.last);
 		assert.deepEqual(samples.original.slice(0,2),[1,35]);
 		assert.deepEqual(samples.bank.slice(0,2),[0,36]);
 		assert.deepEqual(samples.offRoad,samples.original);
+		assert.deepEqual(samples.lip.slice(0,2),[0,2]);
 		assert.equal(samples.flat[0],1);
 		assert.equal(samples.parentTransition[0],1);
 		assert.deepEqual(samples.outer.slice(0,2),[1,57]);

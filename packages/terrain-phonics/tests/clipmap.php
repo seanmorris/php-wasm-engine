@@ -99,11 +99,12 @@ $ground->close();
 
 foreach([[-8, -8], [3, -9], [-16, 2], [2, 4], [100, -100]] as [$x, $z])
 foreach([8,16,24] as $oldSize)
+foreach([[16,$oldSize],[9,24],[22,7]] as [$rows,$oldRows])
 {
 	$old = [-6, -6];
 	$size = 16;
 	$filled = [];
-	foreach(Clipmap::exposed($x, $z, $size, $old, $oldSize) as [$left, $front, $right, $back])
+	foreach(Clipmap::exposed($x, $z, $size, $old, $oldSize,$rows,$oldRows) as [$left, $front, $right, $back])
 	for($column = $left; $column < $right; ++$column)
 	for($row = $front; $row < $back; ++$row)
 	{
@@ -112,9 +113,9 @@ foreach([8,16,24] as $oldSize)
 		$filled[$key] = true;
 	}
 	for($column = $x; $column < $x + $size; ++$column)
-	for($row = $z; $row < $z + $size; ++$row)
+	for($row = $z; $row < $z + $rows; ++$row)
 	{
-		$shared = $column >= $old[0] && $column < $old[0] + $oldSize && $row >= $old[1] && $row < $old[1] + $oldSize;
+		$shared = $column >= $old[0] && $column < $old[0] + $oldSize && $row >= $old[1] && $row < $old[1] + $oldRows;
 		check(isset($filled["$column:$row"]) === !$shared, 'Exposed strips must write every new cell exactly once.');
 	}
 }
@@ -333,11 +334,16 @@ foreach([[-33.,-65.],[-31.,-63.]] as $focus) {
 		'The roadside footprint tapers into unedited terrain.');
 }
 check(shoulderWeight($shoulders,[-100,100],-112,96) === 255, 'The footprint follows the turn.');
+$graded->queue(['type'=>'road','points'=>[[96,0,-150],[96,0,150]],'width'=>16,'shoulder'=>80]);
+$graded->commit();
+$wideBank = new RoadsideDetail($graded->roads());
+check(shoulderWeight($wideBank,[160,0],176,0) === 255 && shoulderWeight($wideBank,[160,0],224,0) === 0,
+	'The full graded cut is refined even where an authored shoulder is wider than the normal roadside band.');
 check($shoulders->sampleWindow(RoadsideDetail::window([1000,1000],100.))[1] === null, 'Distant roads have no footprint.');
 foreach([.5,1.,2.] as $quality) {
 	[$span,$parent] = Clipmap::spans($canyonRecipe,$quality,true);
 	$pad = Clipmap::roadsidePad($span,1.);
-	check($pad > 0 && $pad <= 24 && $pad%2 === 0, 'Extension fits the target distance and parent lattice.');
+	check($pad > 0 && $pad <= 48 && $pad%2 === 0, 'Extension fits the target distance and parent lattice.');
 	$origin = [-$span/2-2,-$span/2-2];
 	$eye = [0.,0.,-$span/6];
 	$safe = 2*($parent/2-Clipmap::transition($parent)-3);
