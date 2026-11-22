@@ -929,18 +929,24 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const iceVertex = `${header}
 				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint;
 				uniform vec3 uView; uniform float uRoad,uGrade,uMark,uLateral;
+				uniform vec2 uPixelSpan;
+				uniform float uDashAngle;
 				void main() {
 					vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
-					vec2 span=.1*(p-.5);
+					vec2 span=uPixelSpan*(p-.5);
 					vWorld=vec3(span.x,10.+uGrade*span.x,span.y); vRelative=-uView;
 					// A smoothed lighting normal can remain level at a sharp road cut.
 					vNormal=vec3(0.,1.,0.);
-					vSplinePaint=uMark*uRoad; vRoadMark=uMark*vec4(uLateral+span.y/8.,cos(.098175),sin(.098175),1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+					vec2 phase=vec2(cos(uDashAngle),sin(uDashAngle));
+					phase+=span.x*(6.2831853/97.536)*vec2(-phase.y,phase.x);
+					vSplinePaint=uMark*uRoad; vRoadMark=uMark*vec4(uLateral+span.y/8.,phase,1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
 			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
 			parameters(ice);
 			stackUniforms(ice,data.finishInputs);
 			const iceLoc = name => gl.getUniformLocation(ice,name);
+			gl.uniform2f(iceLoc('uPixelSpan'),.1,.1);
+			gl.uniform1f(iceLoc('uDashAngle'),.098175);
 			texture(14,1,1,new Uint8Array([64,68,75,255]));
 			gl.uniform1i(iceLoc('uSkyCacheReady'),1);
 			gl.uniform2f(iceLoc('uSkyCacheSize'),1,1);
@@ -999,6 +1005,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					return sampleIce(mirror,0);
 				}));
 			}
+
+			// Move a driver's elongated pixel along the same dash, then across the stripe.
+			gl.uniform1f(iceLoc('uGrade'),0);
+			const dashSweep = (along, across, offset = 0) => {
+				gl.uniform2f(iceLoc('uPixelSpan'),along,across);
+				gl.uniform1f(iceLoc('uLateral'),offset/8);
+				return [.25,.5,.75,.99].map(phase => {
+					gl.uniform1f(iceLoc('uDashAngle'),phase*(2*Math.PI/16));
+					return sampleIce(mirror,0);
+				});
+			};
+			const dashPixels = {near:dashSweep(.2,.1), cycle:dashSweep(6.096,.1), several:dashSweep(18,.1),
+				subpixel:dashSweep(12,.8), beside:dashSweep(12,.8,.65), across:dashSweep(.2,6.096)};
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
 			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
@@ -1412,7 +1431,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			return {
 				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts
-				, spotResults
+				, spotResults, dashPixels
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults, adaptiveResults
@@ -1436,6 +1455,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				`Paint glows on the bank and fades on a steepening slope: ${[level,bank,transition,cliff,reverseCliff]}`);
 			assert.deepEqual([cliff,reverseCliff],[0,0],'Uphill and downhill cut walls have no glowing markings');
 		}
+		const dash = result.dashPixels;
+		assert.ok(dash.near[0] > 5 && dash.near[2] === 0, 'A resolved dash retains its paint and gap');
+		for(const sweep of [dash.cycle, dash.several, dash.subpixel]) {
+			assert.ok(Math.min(...sweep) > 0 && Math.max(...sweep)-Math.min(...sweep) <= 1,
+				`Unresolved dashes keep a stable mean as the view moves: ${sweep}`);
+		}
+		assert.ok(dash.several[0] < dash.near[0] && dash.subpixel[0] < dash.several[0],
+			'The stripe dims in proportion to the paint inside the pixel');
+		assert.deepEqual(dash.beside,[0,0,0,0], 'The distant centerline stays inside the projected stripe');
+		assert.ok(dash.across[0] > 0 && dash.across[2] === 0,
+			'A pixel extending across the road still resolves the gap along it');
 		for(const [i,sample] of result.chartVerge.entries()) {
 			const channel=i%2===0 ? 2 : 0;
 			assert.ok(sample[channel]>240 && sample[2-channel]===0,'The road map respects the authored pavement edge');
