@@ -96,17 +96,17 @@ $close = static function(array $a, array $b, float $tolerance = 1e-12): bool {
 	return count($a) === count($b);
 };
 
-// Literal colors and limits from terrain.frag before the appearance existed.
+// Literal colors and limits from terrain.frag before the appearance existed. Grass and the canyon beds have since been
+// retuned to look more natural (2026-11-22); the rest still reproduce the old constants.
 $old = [
-	'grassColor' => [.055, .105, .026], 'soilColor' => [.22, .115, .052], 'rockColor' => [.24, .20, .16],
+	'soilColor' => [.22, .115, .052], 'rockColor' => [.24, .20, .16],
 	'rockBandColor' => [.43, .30, .20], 'sandColor' => [.52, .43, .26], 'snowColor' => [.82, .88, .94],
-	'canyonRustColor' => [.190, .067, .057], 'canyonShaleColor' => [.115, .064, .072],
-	'canyonSandstoneColor' => [.280, .125, .092], 'canyonCapColor' => [.365, .244, .179],
 ];
-$oldCanyon = [
-	[.190, .067, .057], [.115, .064, .072], [.285, .196, .148], [.280, .125, .092], [.235, .082, .067],
-	[.365, .244, .179], [.275, .163, .104], [.246, .133, .106],
-];
+$expect(TerrainAppearance::DEFAULTS['grassColor'] === '#55693a' && TerrainAppearance::DEFAULTS['canyonRustColor'] === '#8a4f35'
+	&& TerrainAppearance::DEFAULTS['canyonShaleColor'] === '#6b5546' && TerrainAppearance::DEFAULTS['canyonSandstoneColor'] === '#b07a4f'
+	&& TerrainAppearance::DEFAULTS['canyonCapColor'] === '#c2aa86', 'grass and the canyon beds use the retuned natural defaults');
+// The default palette's derived shades: ledges, red beds, fine-bed dust and distant walls.
+$oldCanyon = [2 => [.42, .32, .19], 4 => [.31, .10, .045], 6 => [.396, .252, .112], 7 => [.354, .206, .115]];
 
 $defaults = new TerrainAppearance;
 $uniforms = $defaults->uniforms();
@@ -125,13 +125,13 @@ foreach($old as $name => $linear)
 	$expect($close(TerrainAppearance::linear($hex), $linear, .0105), "$name converts back near the old constant");
 }
 
-$expect($uniforms['uGrassColor'] === TerrainAppearance::linear('#425b2d'), 'grass uploads the converted hex color');
+$expect($uniforms['uGrassColor'] === TerrainAppearance::linear('#55693a'), 'grass uploads the converted hex color');
 
 // The four chosen canyon colors carry their hex rounding. The shades derived from them reproduce the old ones.
 foreach([2, 4, 6, 7] as $i)
 $expect(
 	$close(array_slice($uniforms['uCanyonColors[0]'], 3 * $i, 3), $oldCanyon[$i])
-	, "derived canyon color $i equals the old constant"
+	, "derived canyon color $i equals the default palette's shade"
 );
 
 $chosen = [0 => 'canyonRustColor', 1 => 'canyonShaleColor', 3 => 'canyonSandstoneColor', 5 => 'canyonCapColor'];
@@ -143,7 +143,7 @@ $expect(
 	, "canyon color $i comes from $name"
 );
 
-$expect($close($uniforms['uCanyonBounce'], [.11, .066, .048]), 'canyon bounce light equals the old constant');
+$expect($close($uniforms['uCanyonBounce'], [.158, .102, .052]), 'canyon bounce light equals the default palette\'s');
 $expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per meter and profile');
 $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends are the old constants');
 $expect(
@@ -395,7 +395,7 @@ $expect(
 $palette = $after['uCanyonColors[0]'][1][1];
 $cap = TerrainAppearance::linear(TerrainAppearance::DEFAULTS['canyonCapColor']);
 $expect(
-	$close(array_slice($palette, 6, 3), [.285 / $cap[0], .196 / $cap[1], .148 / $cap[2]])
+	$close(array_slice($palette, 6, 3), [.42 / $cap[0], .32 / $cap[1], .19 / $cap[2]])
 	, 'ledges keep their ratio to a white cap rock'
 );
 
@@ -407,8 +407,8 @@ $expect(
 	, 'dust, distant beds and bounce light follow the bed average'
 );
 
-// Derived shades are albedos like the hex colors. Red beds are 1.16 to 1.23 times the rust, channel by channel, and
-// dust up to 1.19 times the bed average, so a light rust or palette must not push them past 1.
+// Derived shades are albedos like the hex colors. Red beds are 1.22 to 1.28 times the rust, channel by channel, and
+// dust up to 1.17 times the bed average, so a light rust or palette must not push them past 1.
 $white = ['canyonRustColor' => '#ffffff', 'canyonShaleColor' => '#ffffff', 'canyonSandstoneColor' => '#ffffff'];
 
 foreach([['canyonRustColor' => '#ffffff'], $white + ['canyonCapColor' => '#ffffff']] as $options)
