@@ -573,10 +573,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
 			const surfaceVertex = `${header}
 				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out float vGround;
-				uniform float uTestGround;
+				uniform float uTestGround, uGroundGradient;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
-					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vSplinePaint=0.; vRoadMark = vec4(0); vGround = uTestGround;
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vSplinePaint=0.; vRoadMark = vec4(0); vGround = uTestGround + (p.x - 0.5) * uGroundGradient;
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
@@ -1008,12 +1008,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			const backdropContrast = [];
-			for(const [transparency, reflection, foam, ground] of [
-				[0,0,0,-3], [.5,0,0,-3], [1,0,0,-3], [1,1,0,-3], [1,0,1,0], [1,0,1,-3]
+			for(const [transparency, reflection, foam, ground, gradient = 0, level = 0] of [
+				[0,0,0,-3], [.5,0,0,-3], [1,0,0,-3], [1,1,0,-3], [1,0,1,-.15], [1,0,1,-3],
+				// A bright, opaque surface at and just inside the water/terrain intersection.
+				[0,1,1,.01], [0,1,1,0], [0,1,1,-.01], [0,1,1,-.09], [0,1,1,-.2],
+				[0,1,1,-.2,.4],
+				// The analytic wave sample can crest above the displaced triangle between mesh vertices.
+				[0,1,1,0,0,.06]
 			])
 			{
 				gl.uniform4f(gl.getUniformLocation(surface, 'uWaterOptics'), transparency, reflection, 0, foam);
 				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), ground);
+				gl.uniform1f(gl.getUniformLocation(surface, 'uGroundGradient'), gradient);
+				gl.uniform1f(gl.getUniformLocation(surface, 'uWaterLevel'), level);
 				const reds = [];
 				for(const red of [0, 1])
 				{
@@ -1503,8 +1510,15 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		for(const [i, expected] of [0, 128, 255].entries())
 			assert.ok(Math.abs(result.backdropContrast[i] - expected) <= 2, 'surface transmits the selected fraction');
 		assert.ok(result.backdropContrast[3] < 255 && result.backdropContrast[3] > 230, 'reflection overlays a clear surface');
-		assert.ok(result.backdropContrast[4] < 125, 'foam covers the clear shoreline');
+		assert.ok(result.backdropContrast[4] < 200, 'foam remains visible on the wet side of the shoreline');
 		assert.equal(result.backdropContrast[5], 255, 'shore foam leaves deep water clear');
+		const [dry, touching, film, shallow, submerged, distant, crest] = result.backdropContrast.slice(6);
+		assert.equal(dry, 255);
+		assert.equal(touching, 255, 'even opaque, foamy water transmits the bed at contact');
+		assert.ok(film >= 250 && film > shallow && shallow > submerged, 'a rising surface fades in continuously');
+		assert.equal(submerged, 0, 'resolved submerged water retains the selected opacity');
+		assert.ok(distant > shallow, 'a pixel spanning the shoreline has a wider transition');
+		assert.equal(crest, 255, 'an optical crest cannot light a dry, intersecting triangle');
 		for(const [i, meters] of [0, 1, 10, Math.sqrt(2)*10].entries())
 		{
 			const red = Math.round(255 * Math.exp(-.1 * meters));
