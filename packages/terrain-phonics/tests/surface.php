@@ -825,6 +825,16 @@ terrainCheck($single->roadRecords()===$reloadedLong->roadRecords() && $single->p
 $single->close(); $reloadedLong->close(); $copyRoad->close(); $long->close();
 unset($firstAtlas,$secondAtlas,$plainAtlas,$cache);
 
+$zeroRoad = ['type'=>'road','points'=>[[-46,1,-32],[0,1,35]],
+	'handles'=>[['out'=>[3.5,-0.0,4.]],null]];
+$zeroCache = [];
+$minus = TerrainPhonics\Edits::normalize($zeroRoad);
+TerrainPhonics\RoadAtlas::build([$minus],256.,$zeroCache);
+$zeroRoad['handles'][0]['out'][1] = 0;
+$plus = TerrainPhonics\Edits::normalize($zeroRoad);
+terrainCheck(TerrainPhonics\RoadAtlas::build([$plus],256.,$zeroCache)['rebuilt']===0,
+	'JSON round trips that discard a handle’s negative zero retain its painted overlay');
+
 // Regrading a saved road moves its original footprint and keeps subsequent paint above it.
 $routes = new Landscape($flatRecipe);
 $line = ['type'=>'road', 'points'=>[[-32,6,0],[32,6,0]], 'width'=>12, 'shoulder'=>2];
