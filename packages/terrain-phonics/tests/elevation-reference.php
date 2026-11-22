@@ -72,4 +72,37 @@ for($i = 0; $i < $columns; $i++)
 }
 $cases[] = ['recipe' => $ground->recipe(), 'perm' => (new Noise('road-atlas'))->permutation(),
 	'atlas' => $atlas, 'samples' => $samples];
+// Far from the origin a 32-bit sample position is off by up to 1 mm, which the kernel weights once turned into 27 mm
+// of road height at 30 km. Grade the same banked, crossing roads near two corners of a 65.5 km world.
+foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
+{
+	$far = new Landscape(['worldSize' => 65536, 'seed' => 'road-atlas', 'heightScale' => 140, 'detailAmplitude' => 6]);
+	$far->queue(['type' => 'road', 'width' => 14, 'shoulder' => 9, 'crown' => .5,
+		'banks' => [-.1, .18, -.08, .15, -.1], 'points' => [
+			[$cx-110, 70, $cz], [$cx+20, 82, $cz], [$cx+40, 87, $cz+50], [$cx-10, 75, $cz+18], [$cx-60, 69, $cz-18],
+		]]);
+	$far->queue(['type' => 'road', 'width' => 9, 'shoulder' => 4, 'material' => 'snow', 'endBlend' => 24,
+		'points' => [[$cx-30, 95, $cz-43], [$cx+1, 87, $cz+34]]]);
+	$far->commit();
+	$farAtlas = RoadAtlas::build($far->roads(), $far->recipe()['worldSize']);
+	$farAtlas['bytes'] = base64_encode($farAtlas['bytes']);
+	$farSamples = [];
+	for($j = 0; $j < 12; $j++)
+	for($i = 0; $i < 6; $i++)
+	{
+		$x = $cx - 130 + 32*$i;
+		$z = $cz - 55 + 11*$j;
+		$heights = $materials = [];
+		for($n = 0; $n < 32; $n++)
+		{
+			$heights[] = $far->height($x+$n, $z);
+			$id = array_search($far->material($x+$n, $z), RoadAtlas::MATERIALS, true);
+			$materials[] = $id === false ? 0 : $id + 1;
+		}
+		$farSamples[] = [$x, $z, $heights, $materials];
+	}
+	$cases[] = ['recipe' => $far->recipe(), 'perm' => (new Noise('road-atlas'))->permutation(),
+		'atlas' => $farAtlas, 'samples' => $farSamples];
+	$far->close();
+}
 echo json_encode($cases,JSON_THROW_ON_ERROR);

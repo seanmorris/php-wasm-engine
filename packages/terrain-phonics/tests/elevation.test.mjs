@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {chromium} from '@playwright/test';
 
 test('GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges',async()=>{
-	const cases=JSON.parse(execFileSync('php',[fileURLToPath(new URL('elevation-reference.php',import.meta.url))]));
+	const cases=JSON.parse(execFileSync('php',[fileURLToPath(new URL('elevation-reference.php',import.meta.url))],{maxBuffer:16<<20}));
 	const source=name=>readFileSync(new URL('../shaders/'+name,import.meta.url),'utf8');
 	const browser=await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 	try {
