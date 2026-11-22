@@ -2728,13 +2728,14 @@ $paintRun = static function(float $budgetMs): array {
 	$camera->yaw = M_PI / 2;
 	$camera->pitch = -.1;
 	$updates = 0;
-	$mostTexels = 0;
+	$mostTexels = $backgroundSlices = 0;
 	do
 	{
 		$before = count($GLOBALS['subImages']);
-		$scene->update(1/60, $camera);
+		$redraw = $scene->update(1/60, $camera);
 		$texels = 0;
 		foreach(array_slice($GLOBALS['subImages'], $before) as [, , , $w, $h]) $texels += $w * $h;
+		if($texels && !$redraw) $backgroundSlices++;
 		$mostTexels = max($mostTexels, $texels / 2); // Each painted rectangle uploads heights and ink.
 		$updates++;
 	}
@@ -2750,6 +2751,7 @@ $paintRun = static function(float $budgetMs): array {
 			$final[($texture - $base) . ':' . ($x + $i) . ':' . ($y + $j)] = substr($bytes, ($j * $w + $i) * $size, $size);
 	}
 	ksort($final);
+	if($budgetMs < 1.) renderCheck($backgroundSlices > 0, 'Stationary paint slices finish in the background between redraws');
 	$scene->close();
 	$land->close();
 	return [$final, $updates, $mostTexels];
