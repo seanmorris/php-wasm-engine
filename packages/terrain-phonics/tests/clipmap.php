@@ -131,7 +131,7 @@ check($layers->layers[0]['pattern'] === 'none' && $layers->layers[0]['patternCol
 foreach([
 	['parent' => 1], ['scale' => 0], ['slopeHigh' => 1.2], ['color' => 'black'], ['low' => NAN],
 	['pattern' => 'unexpected'], ['patternColor' => 'black'], ['patternAmount' => 1.1],
-	['patternScale' => 0], ['patternStretch' => -1],
+	['patternScale' => 0], ['patternStretch' => -1], ['reflectivity'=>1.1], ['roughness'=>-.1], ['roughness'=>NAN],
 ] as $invalid)
 {
 	try
@@ -186,6 +186,27 @@ $lifted = SurfaceLayers::landscape(array_replace($dunes,['baseBias'=>$dunes['bas
 check(abs(array_column($lifted->layers,'high','id')['salt-crust']-$sand['salt-crust']['high']-$dunes['heightScale'])<1e-8
 	&& $sand['salt-crust']['flatten'] === 1. && $sand['wind-ripples']['channel'] === 'relief',
 	'Salt pans follow the elevation of the dune field and suppress sand ripple relief.');
+$arctic = SurfaceLayers::landscape((new Recipe(['preset'=>'arctic-meltwater']))->values(),
+	new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['arctic-meltwater']))->layers;
+$ice = array_column($arctic,null,'id');
+check(!$layers->reflective && $layers->layers[0]['reflectivity'] === 0., 'Earlier material stacks default to matte.');
+$coated = new SurfaceLayers([['reflectivity'=>1.,'roughness'=>.18]]);
+check($coated->reflective && $coated->structure !== (new SurfaceLayers([[]]))->structure
+	&& $coated->structure === (new SurfaceLayers([['reflectivity'=>.4,'roughness'=>.75]]))->structure
+	&& !(new SurfaceLayers([[],['channel'=>'relief','reflectivity'=>1.]]))->reflective,
+	'Reflective color layers enable the finish shader. Tuning a coating reuses its program.');
+check($ice['glacier-ice']['datum'] === 'water' && $ice['glacier-ice']['pattern'] === 'fractures'
+	&& $ice['glacier-ice']['reflectivity'] === 1. && $ice['wind-packed-snow']['reflectivity'] === 0.
+	&& $ice['wind-packed-snow']['slopeHigh'] < $ice['rock-outcrops']['slopeLow']
+	&& $arctic[$ice['snow-ripples']['parent']]['id'] === 'wind-packed-snow',
+	'Blue ice follows the channel banks and snow ripples use the gentler snow-covered slopes.');
+$lagoon = SurfaceLayers::landscape((new Recipe(['preset'=>'tidal-lagoon']))->values(),
+	new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['tidal-lagoon']))->layers;
+$cays = array_column($lagoon,null,'id');
+check($cays['seagrass-beds']['datum'] === 'water' && $cays['seagrass-beds']['high'] < 0
+	&& $cays['cay-scrub']['datum'] === 'water' && $cays['cay-scrub']['low'] > 0
+	&& $lagoon[$cays['sand-ripples']['parent']]['id'] === 'shoal-sand',
+	'Lagoon vegetation straddles the waterline and underwater sand carries the ripple relief.');
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));

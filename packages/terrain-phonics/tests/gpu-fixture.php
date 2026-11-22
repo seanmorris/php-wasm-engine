@@ -71,6 +71,7 @@ $referenceAppearance = static function(TerrainAppearance $appearance) use ($ridg
 $bands = [];
 foreach([1, 2, 3, 8] as $sharpness) $bands[] = $referenceAppearance(new TerrainAppearance(['bandSharpness' => $sharpness]));
 $shader = TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$ridge(new TerrainAppearance));
+$finish = new TerrainPhonics\SurfaceLayers([['color'=>'#262626','reflectivity'=>1.], ['color'=>'#262626','opacity'=>0.]]);
 $stackInputs = static function($stack): array {
 	$inputs = ['uLayerCount'=>[count($stack->layers)],'uMaterialBounce'=>$stack->bounce];
 	$inspect = new ReflectionClass($stack);
@@ -143,6 +144,8 @@ echo json_encode([
 	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
 		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
 	'ridgeShader'=>$shader, 'spotLights' => $spotCases
+	, 'finishShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$finish)
+	, 'finishInputs'=>$stackInputs($finish)
 	, 'lampFreeSpotLights' => TerrainPhonics\SpotLights::shaderSource(false)
 	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']

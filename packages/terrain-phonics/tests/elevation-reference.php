@@ -21,11 +21,13 @@ foreach(['stream','first-light'] as $seed) foreach(['mountain','coast','canyon-v
 	$cases[]=['recipe'=>$recipe->values(),'perm'=>(new Noise($seed))->permutation(),'samples'=>$samples];
 }
 
-// The authored presets must draw the same fjord walls, dunes and limestone benches that the vehicles collide with.
+// Sample the authored landforms where vehicles can cross their banks, slopes and crests.
 foreach([
 	'limestone'=>[[2440,-4880],[4110,-4933],[637,-3747],[-5100,-15600]],
 	'basalt-fjords'=>[[-3250,-2600],[-3800,-3000],[-4600,-3400],[2200,3100]],
 	'amber-dunes'=>[[-862,575],[140,1350],[750,1700],[-2420,3060]],
+	'arctic-meltwater'=>[[1550,775],[1660,785],[1667,892],[2123,1348]],
+	'tidal-lagoon'=>[[-648,-185],[-605,-26],[-578,76],[-531,250]],
 ] as $preset => $points) {
 	$recipe = new Recipe(['preset'=>$preset]);
 	$samples = [];

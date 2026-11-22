@@ -131,6 +131,18 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 			};
 
+			const stackUniforms = (linked, inputs) => {
+				for(const [name,values] of Object.entries(inputs)) {
+					const loc=gl.getUniformLocation(linked,name);
+					if(name==='uLayerCount') gl.uniform1i(loc,values[0]);
+					else if(values.length===1) gl.uniform1f(loc,values[0]);
+					else {
+						const width=name.endsWith('[0]') ? (name.includes('Color') ? 3 : 4) : values.length;
+						gl[`uniform${width}fv`](loc,values);
+					}
+				}
+			};
+
 			const texture = (unit, width, height, bytes) => {
 				const created = gl.createTexture();
 				gl.activeTexture(gl.TEXTURE0 + unit);
@@ -682,15 +694,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform1f(gl.getUniformLocation(authoredProgram,'uFaceSlope'),slope);
 				let maxError=0;
 				for(const [index,inputs] of stacks.entries()) {
-					for(const [name,values] of Object.entries(inputs)) {
-						const loc=gl.getUniformLocation(authoredProgram,name);
-						if(name==='uLayerCount') gl.uniform1i(loc,values[0]);
-						else if(values.length===1) gl.uniform1f(loc,values[0]);
-						else {
-							const width=values.length<=4 ? values.length : name.includes('Color') ? 3 : 4;
-							gl[`uniform${width}fv`](loc,values);
-						}
-					}
+					stackUniforms(authoredProgram,inputs);
 					gl.drawArrays(gl.TRIANGLES,0,3);
 					const pixels=new Uint8Array(256*64*4);
 					gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
@@ -900,6 +904,56 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			// View one face from several directions under a known sky, then cover it with paint, snow or water.
+			const iceVertex = `${header}
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1;
+				uniform vec3 uView; uniform float uRoad;
+				void main() {
+					vec2 p=vec2(float((gl_VertexID << 1) & 2),float(gl_VertexID & 2));
+					vWorld=vec3(0.,10.,0.); vRelative=-uView; vNormal=vec3(0.,1.,0.);
+					vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+				}`;
+			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
+			parameters(ice);
+			stackUniforms(ice,data.finishInputs);
+			const iceLoc = name => gl.getUniformLocation(ice,name);
+			texture(14,1,1,new Uint8Array([64,68,75,255]));
+			gl.uniform1i(iceLoc('uSkyCacheReady'),1);
+			gl.uniform2f(iceLoc('uSkyCacheSize'),1,1);
+			gl.uniform1i(iceLoc('uSkyCacheEye'),14);
+			gl.uniform1i(iceLoc('uSkyCacheWater'),14);
+			gl.uniform3f(iceLoc('uNightAmbient'),0,0,0);
+			gl.uniform3f(iceLoc('uEye'),0,11,0);
+			gl.uniform1f(iceLoc('uSunIntensity'),0);
+			const sampleIce = (view,strength=1,roughness=0) => {
+				gl.uniform3fv(iceLoc('uView'),view);
+				gl.uniform2fv(iceLoc('uLayerFinish[0]'),[strength,strength*roughness**2,0,0]);
+				return pixel()[0];
+			};
+			const iceSunY=.4, iceSunZ=Math.sqrt(1-iceSunY**2);
+			const mirror=[0,iceSunY,-iceSunZ];
+			const iceSamples={normal:sampleIce([0,1,0]), grazing:sampleIce([Math.sqrt(.99),.1,0])};
+			gl.uniform3f(iceLoc('uSunDirection'),0,iceSunY,iceSunZ);
+			gl.uniform1f(iceLoc('uSunIntensity'),5);
+			iceSamples.glint=sampleIce(mirror);
+			iceSamples.frost=sampleIce(mirror,1,.85);
+			iceSamples.turned=sampleIce([iceSunZ,iceSunY,0]);
+			const offDisc=[Math.sin(.19)*iceSunZ,iceSunY,-Math.cos(.19)*iceSunZ];
+			iceSamples.shoulder=[sampleIce(offDisc),sampleIce(offDisc,1,.38)];
+			gl.uniform1i(iceLoc('uTerrainShadowReady'),1);
+			gl.uniform1f(iceLoc('uTerrainShadowExtent'),32);
+			gl.uniform2f(iceLoc('uShadowHeightRange'),100,0);
+			iceSamples.shaded=sampleIce(mirror);
+			gl.uniform1i(iceLoc('uTerrainShadowReady'),0);
+			gl.uniform1f(iceLoc('uRoad'),1);
+			iceSamples.road=[sampleIce(mirror),sampleIce(mirror,0)];
+			gl.uniform1f(iceLoc('uRoad'),0);
+			gl.uniform1f(iceLoc('uWaterLevel'),15);
+			iceSamples.submerged=[sampleIce(mirror),sampleIce(mirror,0)];
+			gl.uniform1f(iceLoc('uWaterLevel'),0);
+			gl.uniform4f(iceLoc('uLayerEffect[1]'),1,0,1,1);
+			iceSamples.covered=[sampleIce(mirror),sampleIce(mirror,0)];
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
 			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
@@ -1284,7 +1338,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults, adaptiveResults
-				, illuminationResults
+				, illuminationResults, iceSamples
 				, bandResults
 				, mountainBands
 				, mountainAmounts, rockDetail, granitePigment, hillsideCover, maxUnresolvedTilt, slopeRelief, drainage
@@ -1300,6 +1354,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		}, {data, shaders});
 
 		const stars = result.starChecks;
+		const ice = result.iceSamples;
+		assert.ok(ice.grazing > ice.normal+40, `Exposed ice reflects more sky at grazing incidence: ${JSON.stringify(ice)}`);
+		assert.ok(ice.glint > ice.turned+40 && ice.glint > ice.frost+40 && ice.glint > ice.shaded+40,
+			'Polished ice catches a sharp, view-dependent solar highlight in sunlight');
+		assert.ok(ice.shoulder[1] > ice.shoulder[0]+10, 'Frost spreads reflected sunlight beyond the polished solar disc');
+		for(const surface of ['road','submerged','covered']) assert.equal(ice[surface][0],ice[surface][1], `${surface} covers the ice reflection`);
 		assert.ok(stars.litPixels > 80 && stars.litPixels < 2500 && !stars.belowHorizon, 'stars sparsely cover the visible sky');
 		assert.ok(stars.fade && stars.dayDark, 'stars fade through twilight and vanish by day');
 		assert.ok(stars.turned && stars.stable, 'the star field is fixed to viewing directions');
