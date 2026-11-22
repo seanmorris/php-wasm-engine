@@ -140,7 +140,17 @@ $spotCases = [
 	, 'column' => $spots(['position' => [0,3,1],'inner' => .1,'outer' => .2,'intensity' => 4 * $intensity] + $overhead)
 ];
 
+// A 900 m layer at 10 per km: the texture's rows near the ground sit 356 m apart, so lighting through it must come from
+// the shaders' exact layer depth, not from the texture.
+$fog = new Atmosphere(['layers' => [['name' => 'Fog', 'enabled' => true, 'bottom' => 0., 'top' => 900., 'density' => 10.,
+	'color' => '#ffffff']]]);
+$thinLayer = ['band' => [0., 900., .01], 'samples' => []];
+foreach([200., 600., 880., 920., 1200.] as $height)
+	foreach([sin(deg2rad(35)), 1.] as $mu)
+		$thinLayer['samples'][] = [$height, $mu, $fog->transmittance($height, $mu)];
+
 echo json_encode([
+	'thinLayer' => $thinLayer,
 	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
 		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
 	'ridgeShader'=>$shader, 'spotLights' => $spotCases

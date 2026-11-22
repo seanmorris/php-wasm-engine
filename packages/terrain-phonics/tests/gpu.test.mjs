@@ -218,6 +218,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform3f(at('uAirBand[1]'),105,130,.002);
 			gl.uniform3f(at('uAirColor[0]'),1,0,0);
 			gl.uniform3f(at('uAirColor[1]'),0,0,1);
+			// An overhead sun keeps the reference simple; sunlight reaching each sample is dimmed by the layers above it.
+			gl.uniform3f(at('uSunDirection'),0,1,0);
 			const bandSamples = [];
 			for(const [eye,up,distance] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]]) {
 				gl.uniform1f(at('uTestEye'),eye);
@@ -225,6 +227,20 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform1f(at('uTestDistance'),distance);
 				bandSamples.push(pixel());
 			}
+
+			// Sunlight through a thin authored layer, with the real clear-air texture: the layer is too thin for the
+			// texture's altitude rows, so the shaders must add it exactly.
+			const thin = program(vertex, `${header}${shaders['atmosphere.glsl']}
+				uniform float uTestAltitude, uTestMu; out vec4 color;
+				void main() { color = vec4(terrainTransmittance(uTestAltitude, uTestMu), 1.); }`);
+			parameters(thin);
+			gl.uniform1f(gl.getUniformLocation(thin,'uAirLayerCount'),1);
+			gl.uniform3fv(gl.getUniformLocation(thin,'uAirBand[0]'),data.thinLayer.band);
+			const thinLayerSamples = data.thinLayer.samples.map(([altitude, mu]) => {
+				gl.uniform1f(gl.getUniformLocation(thin,'uTestAltitude'),altitude);
+				gl.uniform1f(gl.getUniformLocation(thin,'uTestMu'),mu);
+				return pixel();
+			});
 
 			const skySample = program(vertex, `${header}${data.source}
 				uniform vec3 uTestRay; uniform float uTestAltitude; out vec4 color;
@@ -1333,7 +1349,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, bandSamples, transitionError, starChecks, chartSamples
+				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples
 				, spotResults
 				, aerialResults, canyonHaze
 				, waterResults, backdropContrast, waterPaths
@@ -1425,21 +1441,36 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.ok(Math.abs(result.waterPaths[i][1] - (255 - red)) <= 1);
 		}
 
-		// Through each homogeneous segment, transmitted energy is exp(-optical depth) and the
-		// scattered fraction is shared by the two colors in proportion to their extinction.
-		const red = [5,.005,0], both = [15,.005,.002], blue = [10,0,.002];
-		const paths = [[],[red,[5,.005,.002]],[red,both,blue],[blue,both,red]];
-		for(const [index,segments] of paths.entries()) {
-			let transmission = 1, r = 0, b = 0;
-			for(const [length,kr,kb] of segments) {
-				const after = transmission*Math.exp(-length*(kr+kb));
-				r += (transmission-after)*kr/(kr+kb);
-				b += (transmission-after)*kb/(kr+kb);
+		// Along each view path, transmitted energy is exp(-optical depth). Each thin slice scatters its share of the
+		// sunlight that reaches it, split between the two colors in proportion to their extinction; the overhead sun
+		// is dimmed by the layers above the slice.
+		const bands = [[100,120,.005,0],[105,130,.002,1]];
+		for(const [index,[eye,up,distance]] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]].entries()) {
+			let transmission = 1;
+			const scattered = [0,0], steps = 20000, slice = distance/steps;
+			for(let i = 0; i < steps; i++) {
+				const height = eye + up*(i + .5)*slice;
+				const k = [0,0];
+				let above = 0;
+				for(const [bottom,top,extinction,color] of bands) {
+					if(height >= bottom && height < top) k[color] += extinction;
+					above += extinction*Math.max(0, top - Math.max(height, bottom));
+				}
+				const after = transmission*Math.exp(-(k[0] + k[1])*slice);
+				if(k[0] + k[1] > 0) for(const c of [0,1])
+					scattered[c] += (transmission - after)*k[c]/(k[0] + k[1])*Math.exp(-above);
 				transmission = after;
 			}
-			const expected = [transmission,r,b].map(value=>Math.round(255*value));
+			const expected = [transmission,...scattered].map(value=>Math.round(255*value));
 			assert.ok(result.bandSamples[index].every((v,c)=>Math.abs(v-expected[c])<=1),
 				`Atmosphere path ${index}: GPU ${result.bandSamples[index]}, reference ${expected}`);
+		}
+		// Sunlight inside and just above a thin layer matches the exact CPU transmittance. Through the texture alone
+		// it was 0.255 instead of 0.004 at 600 m.
+		for(const [index,[altitude,mu,exact]] of data.thinLayer.samples.entries()) {
+			const expected = exact.map(value=>Math.round(255*value));
+			assert.ok(result.thinLayerSamples[index].every((v,c)=>Math.abs(v-expected[c])<=4),
+				`Thin layer at ${altitude} m, mu ${mu.toFixed(3)}: GPU ${result.thinLayerSamples[index]}, exact ${expected}`);
 		}
 
 		let skyError = 0, aerialError = 0, waterError = 0;
