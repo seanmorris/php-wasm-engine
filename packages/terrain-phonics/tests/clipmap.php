@@ -257,6 +257,19 @@ check(
 	, 'Moor grass and peat follow the lochans, and bracken gives way to granite on the steepest ground.'
 );
 
+$pans = new Recipe(['preset'=>'salt-pans']);
+$salt = array_column(SurfaceLayers::landscape($pans->values(),$appearance)->layers,null,'id');
+check($pans->height(1875,1775) < $pans->values()['waterLevel'] && $pans->height(1600,2040) > $pans->values()['waterLevel']
+	&& $pans->height(4710,2205) > 300., 'Dry playa and shallow brine share a basin beneath a high rim.');
+check($salt['salt-crust']['datum'] === 'absolute' && $salt['salt-crust']['reflectivity'] === 0.
+	&& $salt['brine-margin']['datum'] === 'water' && $salt['brine-margin']['reflectivity'] > 0.,
+	'Salt deposits stay on the basin floor while the wet margin follows the water level.');
+$cinders = new Recipe(['preset'=>'cinder-highlands']);
+$volcanic = array_column(SurfaceLayers::landscape($cinders->values(),$appearance)->layers,null,'id');
+check($cinders->height(618,-2277) - $cinders->height(-415,-1409) > 700.
+	&& $volcanic['lichen-islands']['high'] < $volcanic['oxidized-scoria']['low'] && $volcanic['lava-ribs']['slopeLow'] > 0.,
+	'The cinder slopes rise above sheltered lichen ground and expose lava on steep faces.');
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
