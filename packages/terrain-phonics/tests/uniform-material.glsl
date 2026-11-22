@@ -125,7 +125,7 @@ void mountainMaterial(float footprint, vec3 weights, float slope, float macro, f
 	vec3 knob = blockTilt*(scree+bare*(1.-steep)) + vec3(offset.x,0.,offset.y)*.5*crownRelief*trees*cellFade;
 	normal = normalize(normal + (facet*bare*steep+knob)*relief);
 	vec3 tangential = lift-normal*dot(normal,lift);
-	normal = normalize(normal-tangential*relief/(1.+length(tangential)));
+	normal = normalize(normal-.5*tangential*relief/(1.+length(tangential)));
 	}
 }
 
