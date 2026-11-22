@@ -643,6 +643,24 @@ try
 	renderCheck(true, 'a predicate and clip planes together are refused');
 }
 
+// The patch mesh carries the same centerline offsets as the clipmap in its 44-byte vertex layout.
+$markedRoad = new Landscape(['worldSize'=>128,'spacing'=>1,'heightScale'=>0,'detailAmplitude'=>0]);
+$markedRoad->queue(['type'=>'road','points'=>[[-48,0,0],[48,0,0]],'width'=>12,'shoulder'=>2]);
+$markedRoad->commit();
+$markedScene = new Scene($markedRoad, new Water, new Atmosphere, useClipmap:false);
+$markedScene->budgetMs = 1000;
+$markedScene->update(.1, new Camera);
+$rootBytes = renderGet(renderGet($markedScene,'patches')['0:0:0']['mesh'],'vertices');
+foreach([0,4] as $z)
+{
+	$index = (16+intdiv($z,4))*33+16;
+	$material = unpack('f', $rootBytes, $index*44+28)[1];
+	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::centerCode([0,$z]),
+		'The PHP patch records the transverse offset while retaining its material and stride');
+}
+renderCheck(ord($markedScene->surfacePatch('0:0:0')['materials'][544]) === 5, 'Charts see the ordinary road material');
+$markedScene->close(); $markedRoad->close();
+
 $bootstrapSurface = new Landscape;
 $bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere, useClipmap: false);
 // The fixtures from here to the staged ones check what whole selections do from one update to the next. A
