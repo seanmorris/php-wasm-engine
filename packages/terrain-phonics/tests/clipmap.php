@@ -272,6 +272,22 @@ check($cinders->height(618,-2277) - $cinders->height(-415,-1409) > 700.
 	&& $volcanic['lichen-islands']['high'] < $volcanic['oxidized-scoria']['low'] && $volcanic['lava-ribs']['slopeLow'] > 0.,
 	'The cinder slopes rise above sheltered lichen ground and expose lava on steep faces.');
 
+$prairie = new Recipe(['preset'=>'rolling-prairie']);
+check($prairie->height(832,3968) - $prairie->height(448,3968) > 45.
+	&& $prairie->height(832,3968) - $prairie->height(1472,3968) > 45., 'Grass swells separate the prairie swales.');
+$river = new Recipe(['preset'=>'river-valley']);
+$waterline = $river->values()['waterLevel'];
+check($river->height(-4032,2624) > $waterline && $river->height(-4416,2624) < $waterline - 2.
+	&& $river->height(-4800,2624) > $waterline + 20., 'The opening river reach has a submerged bed between two dry banks.');
+$foothills = new Recipe(['preset'=>'wooded-foothills']);
+$woods = array_column(SurfaceLayers::landscape($foothills->values(),$appearance)->layers,null,'id');
+check($foothills->height(704,-704) - $foothills->height(64,-1344) > 85.
+	&& $woods['woodland-canopy']['mask'] === 'trees' && $woods['woodland-canopy']['channel'] === 'both',
+	'Wooded spurs rise above the glades and the canopy carries its own color and relief.');
+$steppe = new Recipe(['preset'=>'high-desert-steppe']);
+check($steppe->height(-1664,-1024) - $steppe->values()['waterLevel'] > 600.
+	&& $steppe->height(-1024,-384) - $steppe->height(-1664,-1024) > 200., 'The dry steppe apron gives way to a high rim.');
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
