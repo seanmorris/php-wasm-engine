@@ -717,6 +717,13 @@ terrainCheck($edited->sample(0, 0)['material'] === null, 'material erasure survi
 $edited->queue(['type' => 'smooth','x' => 0,'z' => 0,'radius' => 8,'amount' => 1]);
 $edited->commit();
 terrainCheck(is_finite($edited->height(0, 0)), 'smoothing evaluates previous stage without recursion cycles');
+$smoothedHeight = $edited->height(.3,-.8);
+$smoothedCopy = Landscape::load($edited->save());
+$smoothedFork = $smoothedCopy->fork();
+terrainCheck($smoothedCopy->height(.3,-.8) === $smoothedHeight && $smoothedFork->height(.3,-.8) === $smoothedHeight,
+	'Saved and forked terrain preserves neighbor evaluation for smoothing.');
+$smoothedCopy->close(); $smoothedFork->close();
+
 $edited->queue(['type' => 'crater','x' => 20,'z' => 20,'radius' => 5,'amount' => 7]);
 $edited->commit();
 terrainNear($edited->height(20, 20), -7, 0, 'crater lowers its center');
