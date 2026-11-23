@@ -288,6 +288,13 @@ $steppe = new Recipe(['preset'=>'high-desert-steppe']);
 check($steppe->height(-1664,-1024) - $steppe->values()['waterLevel'] > 600.
 	&& $steppe->height(-1024,-384) - $steppe->height(-1664,-1024) > 200., 'The dry steppe apron gives way to a high rim.');
 
+$alaska = new Recipe(['preset'=>'alaska-range']);
+check($alaska->height(-2841,935)-max($alaska->height(-1104,1149),$alaska->height(-4578,722)) > 1500.,
+	'A snow-bearing divide rises over 1,500 m above the glacial valleys on both sides.');
+$chalk = new Recipe(['preset'=>'chalk-headlands']);
+check($chalk->height(1801,-43)<-8. && $chalk->height(1747,-55)-$chalk->height(1801,-43)>65.
+	&& $chalk->height(2497,118)>100., 'Two chalk headlands rise above a navigable cove with a steep seaward face.');
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
