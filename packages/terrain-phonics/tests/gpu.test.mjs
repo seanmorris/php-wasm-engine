@@ -278,12 +278,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
-			const buildAerialCache = altitude => {
+			const buildAerialCache = (altitude, band) => {
 				target(4, 512, 16);
 				const radiance = texture(5, 512, 16, null);
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
 				gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 				parameters(aerialCache);
+				if(band) {
+					gl.uniform1f(gl.getUniformLocation(aerialCache,'uAirLayerCount'),1);
+					gl.uniform3fv(gl.getUniformLocation(aerialCache,'uAirBand[0]'),band);
+					gl.uniform3f(gl.getUniformLocation(aerialCache,'uAirColor[0]'),.7,.55,.4);
+				}
 				gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
 				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
 				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), altitude);
@@ -344,6 +349,32 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					colors.push(pixel());
 				}
 				canyonHaze.push(colors);
+			}
+
+			// A wall spanning eye level at -990 ft. Compare the same wall through clear air,
+			// a sea-level layer above it, and canyon dust that fills the sightline.
+			const dustViews = [];
+			for(const bottom of [null,0,-600]) {
+				const band = bottom===null ? null : [bottom,620,.038/1000];
+				const bucket = band ? -302 : 0;
+				buildAerialCache(bucket,band);
+				gl.useProgram(aerialSample);
+				const u = name => gl.getUniformLocation(aerialSample,name);
+				gl.uniform1f(u('uAerialCacheAltitude'),bucket);
+				gl.uniform1f(u('uTestAltitude'),-990*.3048);
+				gl.uniform1f(u('uAirLayerCount'),band ? 1 : 0);
+				if(band) {
+					gl.uniform3fv(u('uAirBand[0]'),band);
+					gl.uniform3f(u('uAirColor[0]'),.7,.55,.4);
+				}
+				dustViews.push([0,1].map(ready => {
+					gl.uniform1i(u('uAerialCacheReady'),ready);
+					return [[-.001,0],[-.001,500],[-.001,4000],[.001,4000]].map(([slope,distance]) => {
+						gl.uniform3f(u('uTestRay'),1,slope,0);
+						gl.uniform1f(u('uTestDistance'),distance);
+						return pixel();
+					});
+				}));
 			}
 
 			// Capture shader floats directly, using core WebGL2 transform feedback rather than a float render target.
@@ -1283,7 +1314,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, shaders[`${name}.frag`].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
 			);
 			// Render the stellar catalog through the horizon at two headings on an otherwise black target.
-			const stars = program(shaders['stars.vert'], shaders['stars.frag']);
+			const stars = program(integrate(shaders['stars.vert']), shaders['stars.frag']);
 			target(7, 256, 128);
 			gl.useProgram(stars);
 			gl.uniform1f(gl.getUniformLocation(stars,'uPixelScale'), 1);
@@ -1448,7 +1479,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			return {
 				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts
 				, spotResults, dashPixels, paintEdges
-				, aerialResults, canyonHaze
+				, aerialResults, canyonHaze, dustViews
 				, waterResults, backdropContrast, waterPaths
 				, shadowResults, adaptiveResults
 				, illuminationResults, iceSamples
@@ -1589,8 +1620,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				const k = [0,0];
 				let above = 0;
 				for(const [bottom,top,extinction,color] of bands) {
-					if(height >= bottom && height < top) k[color] += extinction;
-					above += extinction*Math.max(0, top - Math.max(height, bottom));
+					const h = Math.max(0,Math.min(1,(height-bottom)/(top-bottom)));
+					k[color] += extinction*6*h*(1-h);
+					above += extinction*(top-bottom)*(1-3*h*h+2*h*h*h);
 				}
 				const after = transmission*Math.exp(-(k[0] + k[1])*slice);
 				if(k[0] + k[1] > 0) for(const c of [0,1])
@@ -1630,6 +1662,16 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		{
 			assert.ok(Math.max(...below.map((c,i)=>Math.abs(c-clear[i]))) > 8, 'sun haze reaches visible terrain below eye level');
 			assert.ok(below.every((c,i)=>Math.abs(c-above[i]) <= 2), 'sun haze is continuous across the canyon horizon');
+		}
+
+		for(const ready of [0,1]) {
+			const delta=(a,b)=>Math.max(...a.map((value,i)=>Math.abs(value-b[i])));
+			const [clear,aloft,filled]=result.dustViews.map(row=>row[ready]);
+			for(const profile of [aloft,filled]) {
+				assert.deepEqual(profile[0],clear[0],'A surface at the camera has no fog');
+				assert.ok(delta(profile[2],profile[3])<=3,'Dust stays continuous across eye level on a visible wall');
+			}
+			assert.ok(delta(filled[2],aloft[2])>delta(filled[1],aloft[1])+2,'Dust below sea level increases with the distance to visible terrain');
 		}
 
 		for(const sample of result.waterResults)

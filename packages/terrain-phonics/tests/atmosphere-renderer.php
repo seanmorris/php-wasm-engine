@@ -206,6 +206,9 @@ namespace
 	$expect($model->transmittanceLut(8,4,8)['generation'] === $transmission && $cache->update(30,100,2),
 		'A tint change redraws scattering from the existing extinction texture.');
 	$expect(!$cache->update(30,100,2),'Unchanged colored air reuses the sky, reflection and aerial caches.');
+	$cache->update(-990*.3048,100,-450.);
+	$expect($cache->stats()['altitudes'] === [-302.,-450.] && !$cache->update(-301.8,100,-450.),
+		'The camera and reflected sky retain their own below-sea-level height and reuse a settled cache.');
 	$cache->close();
 	$cache->close();
 	$cache->restore();

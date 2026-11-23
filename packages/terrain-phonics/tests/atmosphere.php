@@ -117,13 +117,23 @@ $expect($inside > 1000 && $outside === 0. && abs($inside * 2*M_PI*(1-cos(.00935)
 $mist = ['bottom'=>100.,'top'=>120.,'density'=>5.,'color'=>'#ff0000'];
 $upper = ['bottom'=>105.,'top'=>130.,'density'=>2.,'color'=>'#0000ff'];
 $air = new Atmosphere($vacuum + ['layers'=>[$mist,$upper]]);
-foreach([[0., .15], [110., .09], [120., .02], [130., 0.]] as [$eye,$tau])
-	$expect(abs($air->transmittance($eye,1,8)[0]-exp(-$tau)) < 1e-10,
-		'Vertical sunlight crosses the exact length of thin and overlapping shells.');
+foreach([[0., .15], [110., .0948], [120., .0176], [130., 0.]] as [$eye,$tau])
+	$expect(abs($air->transmittance($eye,1,8)[0]-exp(-$tau)) < 1e-7,
+		'Vertical sunlight integrates the tapered density of thin and overlapping shells.');
 $horizonDistance = sqrt((120.-110.)*(2.*6371000+110.+120.));
 $air->setLayers([['density'=>.05]+$mist]);
-$expect(abs($air->transmittance(110.,0.,8)[0]-exp(-.00005*$horizonDistance)) < 1e-12,
-	'A horizontal ray exits the curved layer at the sphere intersection.');
+// Numerical reference along a curved, grazing ray, independent of the renderer's polynomial integral.
+$column = 0.;
+for($i=0; $i<2000; $i++) {
+	$d = ($i+.5)*$horizonDistance/2000;
+	$h = (hypot(6371000+110.,$d)-6371000-100.)/20.;
+	$column += 6*$h*(1-$h)*$horizonDistance/2000;
+}
+$expect(abs($air->transmittance(110.,0.,8)[0]-exp(-.00005*$column)) < 1e-6,
+	'The tapered horizontal column follows the curvature of its layer.');
+$below = new Atmosphere($vacuum + ['layers'=>[['bottom'=>-500.,'top'=>-100.,'density'=>1.]]]);
+foreach([[-600.,.4],[-500.,.4],[-300.,.2],[-100.,0.],[0.,0.]] as [$eye,$depth])
+	$expect(abs($below->transmittance($eye,1.,8)[0]-exp(-$depth)) < 2e-6,'Sunlight includes only the haze above the signed sample height.');
 $expect($air->transmittance(130.,1.) === [1.,1.,1.], 'Looking up above the mist leaves the ray clear.');
 $air->setLayers([$mist]);
 $air->setSun([1.,.6,0.]);
