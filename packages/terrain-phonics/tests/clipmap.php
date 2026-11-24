@@ -328,8 +328,15 @@ $badlandBeds = array_filter(
 	, static fn(array $layer) => $layer['datum'] === 'beds'
 );
 check(
-	$badlands->height(-169, -650) - $badlands->height(-138, -650) > 40. && count($badlandBeds) === 7
-	, 'Banded clay mounds stand 40 m over the floor and show every bed.'
+	$badlands->height(192, 1117) - $badlands->height(161, 1117) > 40. && count($badlandBeds) === 7
+	, 'Banded clay crests rise over 40 m within 31 m of a wash and show every bed.'
+);
+
+$emerald = new Recipe(['preset' => 'emerald-ridges']);
+check(
+	$emerald->height(-673, 975) - $emerald->height(-704, 975) > 70. && $emerald->height(1000, -400) > 550.
+	&& $emerald->height(-1714, 1029) < -100.
+	, 'Green ridges climb over 70 m in 31 m to peaks above 550 m, across a bay deep enough for the craft.'
 );
 
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
