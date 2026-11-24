@@ -1510,6 +1510,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),x,10,z);
 					colors.push(pixel(4));
 				}
+				gl.uniform1i(gl.getUniformLocation(linked,'uBlendProfile'),0);
+				gl.uniform1i(gl.getUniformLocation(linked,'magnifyGreen'),1);
+				for(const t of [.03,.055,.065]) {
+					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),4096*(t-.5),10,-2048);
+					colors.push(pixel(4));
+				}
 				gl.deleteBuffer(buffer);
 				journeyColors.push(colors);
 			}
@@ -1565,8 +1571,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		for(const [i,expected] of [[red,green,green,[128,128,0,102],[229,26,0,21]],[red,green,blue,[128,64,64,51],[229,3,24,2]]].entries()) {
 			const colors=result.journeyColors[i];
 			assert.deepEqual(colors.slice(5,8),colors.slice(0,3),'Pure landscape materials survive the noisy transition.');
-			assert.ok(colors.slice(8).some((pixel,j)=>Math.abs(pixel[0]-colors[3+j][0])>1),
+			assert.ok(colors.slice(8,10).some((pixel,j)=>Math.abs(pixel[0]-colors[3+j][0])>1),
 				'World-space noise varies material coverage inside the connector.');
+			const [trimmed, fading, full] = colors.slice(10).map(pixel=>pixel[1]);
+			assert.equal(trimmed,0,'A negligible second material drops out entirely.');
+			assert.ok(fading>0 && fading<35 && full>55 && full<70,'A growing material eases back to its full weight.');
 			for(const [j,rgba] of expected.entries())
 				assert.ok(rgba.every((v,k)=>Math.abs(result.journeyColors[i][j][k]-v)<=1),
 					'Regional color and coating weights agree at the endpoints and in the transition: '+JSON.stringify(result.journeyColors[i][j]));

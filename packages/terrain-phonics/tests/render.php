@@ -23,6 +23,7 @@ foreach([
 	, 'GL_RED'
 	, 'GL_FLOAT'
 	, 'GL_ARRAY_BUFFER'
+	, 'GL_UNIFORM_BUFFER', 'GL_DYNAMIC_DRAW'
 	, 'GL_ELEMENT_ARRAY_BUFFER'
 	, 'GL_STATIC_DRAW'
 	, 'GL_TRIANGLES', 'GL_POINTS', 'GL_ZERO'
@@ -177,6 +178,11 @@ function glActiveTexture(...$args): void{}
 function glBindVertexArray(...$args): void{}
 
 function glBindBuffer(...$args): void{}
+
+function glBindBufferBase(int $target,int $index,int $buffer): void
+{
+	$GLOBALS['terrainGl']['indexedBindings'][] = [$target,$index,$buffer];
+}
 
 function glBufferData(...$args): void{}
 
@@ -2825,5 +2831,26 @@ renderCheck(count($unbounded) > 1000, 'The edited coast paints more than a thous
 renderCheck($budgeted === $unbounded, 'A 0.25 ms budget ends with exactly the texels an unbounded paint leaves');
 renderCheck($budgetedUpdates > 10 && $mostTexels <= 64,
 	"The budgeted paint spreads over $budgetedUpdates updates, at most $mostTexels texels in one");
+
+// The sandbox's live and replay scenes share binding zero. Other hosts can share it with their own GL code.
+$journey = new Landscape(['preset'=>'rolling-prairie','join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon']]]]);
+$live = new Scene($journey,new Water,new Atmosphere,retainJourneyBinding:true);
+$replay = new Scene($journey,new Water,new Atmosphere,retainJourneyBinding:true);
+$shared = new Scene($journey,new Water,new Atmosphere);
+$chart = static fn(Scene $scene) => $scene->drawChart([0.,0.],0.,false,320,200,[0.,0.,1.]);
+$GLOBALS['terrainGl']['indexedBindings'] = [];
+foreach([$live,$live,$replay,$replay,$live,$shared,$shared,$live,$live] as $scene) $chart($scene);
+$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'],2);
+[$liveBuffer,$replayBuffer,,$sharedBuffer] = $bindings;
+$sceneBuffers = [$liveBuffer,$replayBuffer,$sharedBuffer];
+renderCheck(count(array_unique($sceneBuffers))===3 && $bindings===[$liveBuffer,$replayBuffer,$liveBuffer,$sharedBuffer,$sharedBuffer,$liveBuffer],
+	'Retained palettes bind only on scene switches. Shared bindings are reasserted on each draw.');
+$live->restore();
+$chart($live);
+$chart($live);
+$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'],2);
+renderCheck(count($bindings)===7 && !in_array(end($bindings),$sceneBuffers,true),'Context restoration binds the replacement palette once.');
+foreach([$shared,$replay,$live] as $scene) $scene->close();
+$journey->close();
 
 echo "Terrain renderer: $checks checks passed.\n";

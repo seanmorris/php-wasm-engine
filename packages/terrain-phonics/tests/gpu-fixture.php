@@ -159,11 +159,13 @@ uniform float uWaterLevel;
 // MATERIAL NOISE
 // MATERIAL STACK
 uniform vec3 atWorld;
+uniform bool magnifyGreen;
 out vec4 color;
 void main() {
 	vec3 n, bounce;
 	vec2 finish;
 	color.rgb=journeySurface(atWorld,vec3(0,1,0),vec3(0,1,0),1.,false,n,finish,bounce);
+	if(magnifyGreen) color.g*=100.;
 	color.a=finish.x;
 }
 GLSL;
