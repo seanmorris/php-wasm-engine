@@ -83,11 +83,15 @@ foreach([[[130,5,90],[185,7,140],[130,5,190]], [[130,5,190],[75,3,140],[130,5,90
 	$ground->queue(['type'=>'road','width'=>20,'shoulder'=>12,'points'=>$points,
 		'handles'=>[['out'=>[24*$sign,0,0]],null,['in'=>[24*$sign,0,0]]]]);
 }
+// Asphalt contributions overlap at the throat, on both shoulders and in the gore.
+foreach([[[-120,3,360],[0,3,360]],[[0,3,360],[40,3,356],[80,3,344],[160,3,304]],
+	[[0,3,360],[40,3,364],[80,3,376],[160,3,416]]] as $points)
+	$ground->queue(['type'=>'road','width'=>28,'shoulder'=>18,'stationSpacing'=>7,'points'=>$points]);
 $ground->commit();
 $atlas = RoadAtlas::build($ground->roads(), $ground->recipe()['worldSize']);
 $atlas['bytes'] = base64_encode($atlas['bytes']);
 $samples = [];
-foreach([[-565,-542,6,18], [-15,-5,1,2], [965,978,1,1], [993,1024,1,1], [102,70,2,9], [102,170,2,9]] as [$left,$front,$columns,$rows])
+foreach([[-565,-542,6,18], [-15,-5,1,2], [965,978,1,1], [993,1024,1,1], [102,70,2,9], [102,170,2,9],[-30,314,8,19]] as [$left,$front,$columns,$rows])
 for($j = 0; $j < $rows; $j++)
 for($i = 0; $i < $columns; $i++)
 {

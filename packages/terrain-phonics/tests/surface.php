@@ -881,6 +881,38 @@ foreach([false,true] as $reverseOrder) {
 	terrainCheck($split->paintTexel(3,0) === $whole->paintTexel(3,0),'Redo restores connected sections');
 	$split->close();
 }
+// The later grading shoulder used to clip the neighboring pavement at a shallow fork.
+$arms=[
+	[[-160,0,0],[0,0,0]],
+	[[0,0,0],[40,0,-4],[80,0,-16],[160,0,-56]],
+	[[0,0,0],[40,0,4],[80,0,16],[160,0,56]],
+];
+$floors=[];
+foreach([[0,1,2],[2,1,0]] as $order) {
+	$fork=new Landscape(['worldSize'=>512,'heightScale'=>0,'detailAmplitude'=>0]);
+	foreach($order as $id) $fork->queue(['type'=>'road','width'=>$id===2 ? 24 : 28,
+		'shoulder'=>18,'stationSpacing'=>7,'points'=>$arms[$id]]);
+	$fork->commit();
+	$roads=$fork->roads(); $ink='';
+	for($x=-36;$x<=128;$x+=2) for($z=-48;$z<=48;$z+=2) {
+		$tex=$fork->paintTexel($x,$z);
+		$ink.=$tex;
+		$code=(ord($tex[1])<<16)|(ord($tex[2])<<8)|ord($tex[3]);
+		$d=($code>>11)===8191 ? ($code&2047)/1024. : abs(($code>>11)-4096)/2048.;
+		$paved=ord($tex[0])===5 && (!$code || $d<=1.);
+		if(abs($d-1.)>.001) terrainCheck($paved===TerrainPhonics\Edits::onRoad($x,$z,$roads),
+			"Fork pavement follows the combined road widths at $x,$z");
+	}
+	$floors[]=$ink;
+	$fork->queue(['type'=>'material','material'=>'grass','radius'=>10,'x'=>10,'z'=>0]); $fork->commit();
+	terrainCheck($fork->paintTexel(10,0)===pack('C4',2,0,0,0),'A later paint brush covers the shared junction');
+	$fork->undo();
+	$restoredFork=Landscape::load($fork->save());
+	terrainCheck($fork->paintTexel(10,0)===$restoredFork->paintTexel(10,0),'Saved forks rebuild the same union');
+	$restoredFork->close();
+	$fork->close();
+}
+terrainCheck($floors[0]===$floors[1],'Reordering the three arms preserves their outline and paint');
 // Detaching an endpoint invalidates its former neighbor, including cached cap ink.
 $split = new Landscape($flatRecipe);
 foreach($parts as $points) $split->queue($section+compact('points'));
