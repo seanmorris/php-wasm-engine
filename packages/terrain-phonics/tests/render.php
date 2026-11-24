@@ -2796,6 +2796,9 @@ $driver->update(1/60,$eye);
 $first = $driver->stats();
 renderCheck($first['cameraSpacing']===1. && $first['heightTexelsWritten']<100000,
 	"The first fork frame resolves the pavement within the overview and small grids ({$first['heightTexelsWritten']} texels).");
+[$west,$north,$width,$step] = $first['visibleCoverage'][3];
+renderCheck($step===8. && $west+$width>=128. && $north<=-60. && $north+$width>=60.,
+	'Both separating arms are covered on approach, including the road ahead of the finest ring.');
 for($i=0; $driver->stats()['pending'] && $i<100; $i++) $driver->update(1/60,$eye);
 renderCheck(!$driver->stats()['pending'], 'The small fork rings grow to normal coverage and settle.');
 $eye->position = [8000.,90.,5000.];
