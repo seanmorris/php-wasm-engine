@@ -352,6 +352,20 @@ check(
 	, 'Dunes rise over 200 m within 900 m of a straight shore, off which the sea is deep enough for the craft.'
 );
 
+$blackSand = new Recipe(['preset' => 'black-sand-coast']);
+check(
+	$blackSand->height(2700, -1150) > 800. && $blackSand->height(-13, 950) - $blackSand->height(-44, 950) > 50.
+	&& $blackSand->height(0, -300) > 0. && $blackSand->height(0, -300) < 5. && $blackSand->height(-1040, 300) < -100.
+	, 'Peaks above 800 m and fluted slopes rise behind a beach just above a deep sea.'
+);
+
+$yardangs = new Recipe(['preset' => 'yardang-desert']);
+check(
+	$yardangs->height(-900, -200) < 2. && $yardangs->height(-924, -134) > 35. && $yardangs->height(-876, -266) > 35.
+	&& $yardangs->height(-618, -97) < 2. && $yardangs->height(-1120, -250) - $yardangs->height(-1089, -250) > 30.
+	, 'A flat corridor runs 300 m down the wind between hull walls over 35 m high.'
+);
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
