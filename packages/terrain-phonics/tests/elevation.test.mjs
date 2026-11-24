@@ -61,6 +61,8 @@ for(const joined of [false,true]) test(joined
 						uRock:['secondary','terraceSpacing','terraceStrength','bedding'],uDetail:['detailAmplitude','persistence','lacunarity','damping']}))
 						gl.uniform4fv(field(name),keys.map(k=>form[k]));
 					gl.uniform2f(field('uFieldResidual'),form.baseFrequency-Math.fround(form.baseFrequency),form.warpFrequency-Math.fround(form.warpFrequency));
+					const x = Math.floor(form.noiseOffsetX), z = Math.floor(form.noiseOffsetZ);
+					gl.uniform4f(field('uNoiseOffset'),x,z,form.noiseOffsetX-x,form.noiseOffsetZ-z);
 					const erosion = 22*form.baseFrequency;
 					gl.uniform2f(field('uErosion'),erosion,erosion-Math.fround(erosion));
 					gl.uniform1f(field('uSlopeScale'),form.slopeScale); gl.uniform1i(field('uOctaves'),form.detailOctaves);

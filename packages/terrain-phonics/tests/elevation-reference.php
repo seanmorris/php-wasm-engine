@@ -4,10 +4,11 @@ use TerrainPhonics\{Landscape,Noise,Recipe,RoadAtlas};
 require dirname(__DIR__).'/autoload.php';
 
 $cases=[];
-foreach(['stream','first-light'] as $seed) foreach(['mountain','coast','canyon-v1','canyon'] as $style) {
+foreach(['stream','first-light','translated'] as $seed) foreach(['mountain','coast','canyon-v1','canyon'] as $style) {
 	$recipe=new Recipe(['preset'=>$style==='canyon-v1'?'canyon':$style,'seed'=>$seed,'version'=>$style==='canyon-v1'?1:2,
 		'worldSize'=>65536.,'heightScale'=>$style==='mountain'?1400:650,'baseFrequency'=>1/($style==='mountain'?2200:4000),
-		'terraceSpacing'=>str_starts_with($style,'canyon')?80:0]);
+		'terraceSpacing'=>str_starts_with($style,'canyon')?80:0]
+		+ ($seed==='translated' ? ['noiseOffsetX'=>-61111.12345,'noiseOffsetZ'=>63544.6789] : []));
 	$samples=[];
 	$points=[[-16384,-16384],[16350,16350],[170,3000],[-16,-16],
 		[-32768,-32768],[32732,32768],[32732,-32768],[-32768,32768],
@@ -95,7 +96,8 @@ $cases[] = ['recipe' => $ground->recipe(), 'perm' => (new Noise('road-atlas'))->
 // of road height at 30 km. Grade the same banked, crossing roads near two corners of a 65.5 km world.
 foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
 {
-	$far = new Landscape(['worldSize' => 65536, 'seed' => 'road-atlas', 'heightScale' => 140, 'detailAmplitude' => 6]);
+	$far = new Landscape(['worldSize' => 65536, 'seed' => 'road-atlas', 'heightScale' => 140, 'detailAmplitude' => 6]
+		+ ($cx < 0 ? ['noiseOffsetX'=>1800.53,'noiseOffsetZ'=>-2700.15] : []));
 	$far->queue(['type' => 'road', 'width' => 14, 'shoulder' => 9, 'crown' => .5,
 		'banks' => [-.1, .18, -.08, .15, -.1], 'points' => [
 			[$cx-110, 70, $cz], [$cx+20, 82, $cz], [$cx+40, 87, $cz+50], [$cx-10, 75, $cz+18], [$cx-60, 69, $cz-18],
@@ -124,7 +126,7 @@ foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
 	$far->close();
 }
 foreach([32768,65536] as $span) foreach([1,2] as $joinVersion) {
-	$east = [['preset'=>'mountain','seed'=>'ridge','waterLevel'=>51.]];
+	$east = [['preset'=>'mountain','seed'=>'ridge','waterLevel'=>51.,'noiseOffsetX'=>-4100.125,'noiseOffsetZ'=>305.789]];
 	if($span === 65536) $east[] = ['preset'=>'canyon','waterLevel'=>2.];
 	$joined = new Landscape(['preset'=>'coast','seed'=>'west','worldSize'=>$span,'waterLevel'=>-200.,
 		'join'=>['version'=>$joinVersion,'span'=>$span,'destinations'=>$east]]);

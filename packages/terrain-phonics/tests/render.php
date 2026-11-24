@@ -2676,8 +2676,9 @@ renderCheck(
 
 $appearanceScene->setSpotLights([]);
 
-$appearanceScene->setLandscape(new Landscape(['worldSize'=>256, 'damping'=>3., 'slopeScale'=>.5]));
+$appearanceScene->setLandscape(new Landscape(['worldSize'=>256, 'damping'=>3., 'slopeScale'=>.5, 'noiseOffsetX'=>124.5, 'noiseOffsetZ'=>-73.25]));
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
+renderCheck($sent('uMaterialOrigin') === [-124.5,0.,73.25], 'a replacement landscape translates surface patterns with its heights');
 renderCheck($sent('uRockSlopeDamping') === [12.], 'a replacement landscape refreshes rock damping on the same shader');
 $appearanceScene->setSpotLights([$spotLight]);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);

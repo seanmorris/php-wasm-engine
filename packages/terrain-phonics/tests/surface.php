@@ -43,6 +43,24 @@ function terrainReject(callable $action, string $message): void
 }
 
 $noise = new Noise('terrain-tests');
+foreach(Recipe::PRESETS as $preset)
+{
+	$original = new Recipe(['preset'=>$preset]);
+	$shifted = new Recipe(['preset'=>$preset, 'noiseOffsetX'=>4051.125, 'noiseOffsetZ'=>-712.75]);
+	$r = $original->values();
+	terrainCheck($r['noiseOffsetX'] === 0.0 && $r['noiseOffsetZ'] === 0.0, 'Legacy presets default to zero offsets');
+	foreach([[0,0],[-23.5,77.125],[16384,-16384]] as [$x,$z])
+	{
+		$u = $x + 4051.125; $v = $z - 712.75;
+		terrainCheck($shifted->coarse($x,$z) === $original->coarse($u,$v), 'Macro height and derivatives translate together');
+		terrainCheck($shifted->height($x,$z) === $original->height($u,$v), 'Fine terrain translates with the macro field');
+		terrainCheck($shifted->regionalBounds([$x,$z,$x+8,$z+8]) === $original->regionalBounds([$u,$v,$u+8,$v+8]),
+			'Ray queries bound the translated field');
+	}
+}
+terrainReject(fn()=>new Recipe(['noiseOffsetX'=>INF]), 'Non-finite noise offset rejected');
+terrainReject(fn()=>new Recipe(['noiseOffsetZ'=>-65000]), 'Out-of-range noise offset rejected');
+
 $same = new Noise('terrain-tests');
 $other = new Noise('different');
 $step = 1e-5;
