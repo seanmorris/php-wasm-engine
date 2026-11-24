@@ -366,6 +366,40 @@ check(
 	, 'A flat corridor runs 300 m down the wind between hull walls over 35 m high.'
 );
 
+$terraces = new Recipe(['preset' => 'rice-terraces']);
+$onStep = 0;
+
+for($x = 300; $x < 700; $x += 4)
+{
+	$step = fmod($terraces->height($x, 2300), 3.5);
+	$step += $step < 0 ? 3.5 : 0;
+	$onStep += min($step, 3.5 - $step) < .6;
+}
+
+check(
+	$onStep > 45 && $terraces->height(811, 1917) - $terraces->height(780, 1917) > 30.
+	, 'Steep hillsides sit mostly on the 3.5 m terrace steps.'
+);
+
+$boreal = new Recipe(['preset' => 'boreal-lakes']);
+$land = 0;
+$count = 0;
+$knob = -INF;
+
+for($x = -1875; $x <= 125; $x += 40)
+for($z = 1625; $z <= 3625; $z += 40)
+{
+	$height = $boreal->height($x, $z);
+	$land += $height > 0;
+	$count++;
+	$knob = max($knob, $height);
+}
+
+check(
+	$land > .35 * $count && $land < .8 * $count && $knob > 35. && $boreal->height(-875, 2625) < -10.
+	, 'Lakes and granite knobs share a 2 km square, and the opening lake is deep enough for the craft.'
+);
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
