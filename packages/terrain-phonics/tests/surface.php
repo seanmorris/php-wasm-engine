@@ -924,6 +924,25 @@ terrainCheck(isset($record['handles'][1]['in']) && $record['banks'] === [.12,-.1
 terrainCheck($restored->paintTexel(0,18) === pack('C4',5,0,0,0), 'Later solid paint still covers the restored curve');
 $restored->close(); $routes->close();
 
+foreach([12.,32.] as $pavementWidth) {
+	$highway = new Landscape($flatRecipe);
+	$record = ['type'=>'road','width'=>$pavementWidth,'stationSpacing'=>7.,
+		'points'=>[[-64,2,-24],[0,4,24],[64,3,-24]]];
+	$highway->queue($record);
+	$highway->commit();
+	$samples = $highway->roads()[0]['_road']['samples'];
+	$longest = 0.;
+	for($i=1; $i<count($samples); $i++) {
+		$longest = max($longest,hypot($samples[$i][0]-$samples[$i-1][0],$samples[$i][2]-$samples[$i-1][2]));
+	}
+	terrainCheck($longest <= min(7.,$pavementWidth/4.)+1.e-8,'Station spacing respects curvature and pavement width');
+	$copy = Landscape::load($highway->save());
+	terrainCheck($copy->roadRecords()[0]['stationSpacing'] === 7. && $copy->roads()[0]['_road']['samples'] === $samples,
+		'Wide highway sampling survives save and reload');
+	terrainReject(fn() => $highway->queue(['stationSpacing'=>9.]+$record),'Road station spacing must be bounded');
+	$copy->close(); $highway->close();
+}
+
 $banked = new Landscape($flatRecipe);
 $banked->queue(['type'=>'road','points'=>[[-24,5,0],[0,5,0],[24,5,0]],
 	'banks'=>[.15,.15,.15],'width'=>16,'shoulder'=>5]);
