@@ -146,4 +146,28 @@ foreach([32768,65536] as $span) foreach([1,2] as $joinVersion) {
 	$cases[]=['recipe'=>$r,'perm'=>$perm,'origins'=>$origins,'samples'=>$samples];
 	$joined->close();
 }
+// Independently adjusted coast, ridges, detail and one scale of true terrain erosion.
+$authored = ['domainRotation'=>-17.5,'ridgeStretch'=>3.2,'ridgeBearing'=>38.,'coastWidth'=>3200.,
+	'coastBearing'=>77.,'detailShape'=>.85,'gullyDepth'=>3.5,'gullySpacing'=>96.,
+	'noiseOffsetX'=>27711.123,'noiseOffsetZ'=>-18111.74];
+foreach(['coast','painted-badlands','canyon','fork'] as $name) {
+	$parameters = $authored+['preset'=>$name==='fork' ? 'coast' : $name];
+	if($name==='fork') $parameters['join']=['version'=>2,'span'=>32768,'destinations'=>[
+		['preset'=>'painted-badlands','detailShape'=>-.6,'gullyDepth'=>2.],['preset'=>'emerald-ridges']]];
+	$field = $name==='fork' ? new TerrainPhonics\JoinedTerrain($parameters) : new Recipe($parameters);
+	$r=$field->values(); $samples=[]; $perm=[]; $axes=[];
+	foreach([$r,...($r['join']['destinations'] ?? [])] as $form) {
+		array_push($perm,...(new Noise($form['seed']))->permutation());
+		$axes[]=Recipe::axes($form);
+	}
+	$locations=[[-32768,32760],[31253,-25113],[-256,-277],[0,31],[511,2047],[-1704,1832]];
+	for($i=1;$i<=32;$i++) $locations[]=[($i*4217)%65504-32768,($i*7441)%65537-32768];
+	foreach($locations as [$x,$z]) {
+		$row=[];
+		for($i=0;$i<32;$i++) $row[]=$field->height($x+$i,$z);
+		$samples[]=[$x,$z,$row];
+	}
+	$cases[]=['recipe'=>$r,'axes'=>$axes,'samples'=>$samples,'perm'=>$perm,
+		'origins'=>$name==='fork' ? TerrainPhonics\JoinedTerrain::origins(32768,2) : null];
+}
 echo json_encode($cases,JSON_THROW_ON_ERROR);

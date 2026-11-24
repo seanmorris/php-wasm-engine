@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
 import {pharExtension} from '../cli/phar-extension.mjs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -23,6 +25,10 @@ Usage: phonics <command> [directory] [options]
   pack [directory]           Build an executable PHAR (default: dist/game.phar).
   build [directory]          Refresh integrity and build a publishable package.
     --out dist               Output relative to the project; only generated output is replaced.
+  terrain preview            Survey a procedural landform and write hillshade and perspective PNGs.
+    --preset NAME --seed S   Use a named preset, or --file PATH for a saved recipe or sandbox file.
+    --camera X,Z,H,YAW,PITCH  Meters of clearance above land/water and angles in degrees.
+    --size N --out PREFIX    Survey N by N cell centers (16–256). Print coverage and relief as JSON.
   integrity [directory]      Rebuild phonics.json hashes for declared files.
   validate [directory]       Verify files, exports, dependencies, and integrity without running code.
     --world worlds/game.world  Also validate world references and Tiled resources.
@@ -59,6 +65,7 @@ const commands = {
 	, manifest: ['name', 'yes', 'version']
 	, build: ['out']
 	, pack: ['out']
+	, terrain: ['preset','seed','file','camera','size','out']
 	, integrity: []
 	, validate: ['world', 'allow-origin']
 	, preview: ['world', 'runtime', 'allow-origin', 'port', 'host']
@@ -203,7 +210,21 @@ try
 
 		const settings = options(args), directory = path.resolve(settings.directory ?? '.');
 
-		if(command === 'manifest' || (command === 'init' && !settings.directory))
+		if(command === 'terrain') {
+			if(settings.directory !== 'preview') throw Error('Use phonics terrain preview.');
+			const terrain = '@seanmorris/terrain-phonics/phonics.json';
+			let root;
+			try { root = path.dirname(createRequire(path.resolve('package.json')).resolve(terrain)); }
+			catch {
+				root = fileURLToPath(new URL('../packages/terrain-phonics/',import.meta.url));
+				await fs.access(path.join(root,'autoload.php')).catch(() => { throw Error('Install @seanmorris/terrain-phonics to use terrain preview.'); });
+			}
+			const runner = fileURLToPath(new URL('../cli/terrain-preview.php',import.meta.url));
+			const child = spawnSync('php',[runner,root,JSON.stringify(settings)],{stdio:'inherit'});
+			if(child.error) throw child.error;
+			process.exitCode = child.status ?? 1;
+		}
+		else if(command === 'manifest' || (command === 'init' && !settings.directory))
 			await initManifest(directory, settings);
 		else if(command === 'init')
 		{

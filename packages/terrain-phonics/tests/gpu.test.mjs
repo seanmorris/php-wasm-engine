@@ -725,6 +725,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(gl.getUniformLocation(amountProgram, 'uTerrainStyle'), 1);
 			gl.uniform3f(gl.getUniformLocation(amountProgram, 'uEye'), 0, 3000, 0);
 			target(7, 256, 64);
+			gl.deleteProgram(program(amountVertex,data.tiltShader.replace('// ATMOSPHERE',data.source)));
 			const authoredProgram = program(amountVertex, data.ridgeShader.replace('// ATMOSPHERE', data.source));
 			const mountainAmounts = [];
 

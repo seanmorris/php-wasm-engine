@@ -5,9 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {chromium} from '@playwright/test';
 
-for(const joined of [false,true]) test(joined
+for(const advanced of [false,true]) for(const joined of [false,true]) test((advanced ? 'Authored terrain: ' : '')+(joined
 	? 'GPU heights agree with PHP throughout a two- or three-map landscape junction'
-	: 'GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges',async()=>{
+	: 'GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges'),async()=>{
 	const cases=JSON.parse(execFileSync('php',[fileURLToPath(new URL('elevation-reference.php',import.meta.url))],{maxBuffer:16<<20}));
 	const source=name=>readFileSync(new URL('../shaders/'+name,import.meta.url),'utf8');
 	const browser=await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
@@ -37,7 +37,7 @@ for(const joined of [false,true]) test(joined
 			gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
 			gl.bindTexture(gl.TEXTURE_2D,permutation); gl.viewport(0,0,32,1);
 			gl.uniform1i(loc('uPacked'),1); gl.uniform1f(loc('uStep'),1); gl.uniform4f(loc('uRegion'),16384,0,1,0);
-			return cases.map(({recipe:r,perm,samples,atlas,origins})=>{
+			return cases.map(({recipe:r,perm,samples,atlas,origins,axes})=>{
 				gl.uniform4f(loc('uRegion'),r.worldSize / 2,0,1,0);
 				if(atlas) {
 					gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
@@ -55,6 +55,13 @@ for(const joined of [false,true]) test(joined
 				gl.uniform1i(loc('uFormCount'),forms.length); gl.uniform1f(loc('uJoinWidth'),4096);
 				for(const [i,form] of forms.entries()) {
 					const field=name=>loc(r.join ? name+'Set['+i+']' : name);
+					if(axes) {
+						const opt = name => loc(name+'Set'+(r.join ? '['+i+']' : ''));
+						gl.uniform4fv(opt('uMacroAxes'),axes[i].macro);
+						gl.uniform4fv(opt('uDetailCoast'),[...axes[i].rotation,...axes[i].coast]);
+						gl.uniform1f(opt('uDetailShape'),form.detailShape);
+						gl.uniform2f(opt('uGully'),form.gullyDepth,form.gullySpacing);
+					}
 					if(origins) gl.uniform3f(loc('uFormOrigin['+i+']'),...origins[i],r.waterLevel-form.waterLevel);
 					for(const [name,keys] of Object.entries({uShape:['baseBias','rolling','directionalRise','ridgeHeight'],
 						uProfile:['ridgeRoundness','wallHeight','floorWidth','wallWidth'],uField:['heightScale','baseFrequency','warpAmplitude','warpFrequency'],
@@ -72,7 +79,7 @@ for(const joined of [false,true]) test(joined
 					gl.uniform2i(loc('uOriginCell'),x,z); gl.drawArrays(gl.TRIANGLES,0,3);
 					const bytes=new Uint8Array(128); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 					const values=new Float32Array(bytes.buffer);
-					reference.forEach((h,i)=>{if(Math.abs(h-values[i])>error) { error=Math.abs(h-values[i]); worst=[x+i,z,h,values[i]]; }});
+					reference.forEach((h,i)=>{if(!Number.isFinite(values[i])) throw Error('Nonfinite elevation'); if(Math.abs(h-values[i])>error) { error=Math.abs(h-values[i]); worst=[x+i,z,h,values[i]]; }});
 					if(inkRow) {
 						gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 						const expected = Uint8Array.from(atob(inkRow), c => c.charCodeAt(0));
@@ -88,8 +95,10 @@ for(const joined of [false,true]) test(joined
 				}
 				return [r.seed,r.preset,r.version,error,worst];
 			});
-		},{cases:cases.filter(c=>Boolean(c.recipe.join)===joined),vert:source('shadows.vert'),
-			frag:joined ? source('elevation.frag').replace('#version 300 es','#version 300 es\n#define JOINED_TERRAIN') : source('elevation.frag')});
+		},{cases:cases.filter(c=>Boolean(c.recipe.join)===joined && Boolean(c.axes)===advanced),vert:source('shadows.vert'),
+			frag:source('elevation.frag').replace('#version 300 es','#version 300 es'
+				+(joined ? '\n#define JOINED_TERRAIN' : '')
+				+(advanced ? '\n#define FORM_AXES\n#define COAST_PROFILE\n#define DETAIL_SHAPE\n#define GULLY_CUT' : ''))});
 		assert.ok(errors.every(e=>e[3]<=.005),JSON.stringify(errors));
 	} finally {await browser.close();}
 });
@@ -157,6 +166,7 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			}
 
 			const solid = sample(0);
+			const flatStreaks = sample(12).every((v,i)=>v===solid[i]);
 			const patterned = [1,2,3].map(kind => sample(kind));
 			const moved = sample(2, 7);
 			const sampleOutside = sample(0, 0, 30);
@@ -179,6 +189,8 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 
 			gl.uniform1f(location('uNormalY'), 0);
 			gl.uniform1f(location('uRise'), .125);
+			const downhillMarks = new Set(sample(12)).size>5;
+			const distantStreaks = sample(12,0,0,20).every((v,i)=>v===solid[i]);
 			const wallStreaks = sample(2), wallWithPartings = sample(4);
 			const resolvedPartings = wallWithPartings.filter((value,i) => value - wallStreaks[i] > 3).length > width*height*.01;
 
@@ -227,7 +239,7 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			const noFalseContacts = new Set(section).size === 1 && section[0] > outsideBed;
 
 			return {
-				visible: patterned.map(pixels => new Set(pixels).size > 5),
+				flatStreaks, downhillMarks, distantStreaks, visible: patterned.map(pixels => new Set(pixels).size > 5),
 				unique: new Set(patterned.map(pixels => pixels.join(','))).size,
 				anchored: moved.every((value,i) => i%width >= width-7 || value === patterned[1][i+7]),
 				bandsVisible, stableGrain, distantGrain, masked, filtered, zero, cyclic, filteredMask, resolvedPartings, noFalseContacts,
@@ -236,7 +248,7 @@ test('surface color patterns are distinct, masked, and anchored to world coordin
 			};
 		},{vertex,layers});
 		assert.deepEqual(results, {
-			visible:[true,true,true], unique:3, anchored:true, bandsVisible:[true,true,true], stableGrain:true, distantGrain:true,
+			flatStreaks:true, downhillMarks:true, distantStreaks:true, visible:[true,true,true], unique:3, anchored:true, bandsVisible:[true,true,true], stableGrain:true, distantGrain:true,
 			masked:true, filtered:true, zero:true,
 			cyclic:true, filteredMask:true, distinctBed:true, resolvedPartings:true, noFalseContacts:true,
 			sparseContacts:true, irregularContacts:true, interruptedContacts:true, anchoredContacts:true, distantContacts:true,

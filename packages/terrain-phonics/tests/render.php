@@ -81,7 +81,7 @@ function glDeleteVertexArrays(int $n, array $ids): void{terrainGlDelete('vaos', 
 
 function glGenTextures(int $n, mixed &$ids): void{terrainGlNames('textures', $n, $ids);}
 
-function glDeleteTextures(int $n, array $ids): void{terrainGlDelete('textures', $ids);}
+function glDeleteTextures(int $n, array $ids): void{if($n!==count($ids)) throw new ValueError('Invalid texture handle count'); terrainGlDelete('textures', $ids);}
 
 function glGenFramebuffers(int $n, mixed &$ids): void{terrainGlNames('framebuffers', $n, $ids);}
 

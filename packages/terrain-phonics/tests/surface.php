@@ -1423,4 +1423,59 @@ $loaded->commit();
 terrainCheck(array_keys(Landscape::load($loaded->save())->roadRecords()) === [3],
 	'Adding a road after deleting the last road allocates a fresh ID that replays identically');
 
+// Heights recorded before adding authoring controls. Exercise omitted defaults across all shipped presets.
+$legacyHeights = [
+	'coast'=>[-38.23803448,-49.91558900,141.11966404],
+	'mountain'=>[371.74917166,455.63556597,358.50408326],
+	'canyon'=>[247.26189275,-332.27696223,287.76837217],
+	'limestone'=>[0.70198865,0.39307288,0.52777968],
+	'basalt-fjords'=>[-6.99136233,498.89373709,589.74457774],
+	'amber-dunes'=>[198.53705013,199.70767134,78.12019943],
+	'arctic-meltwater'=>[10.03606249,-34.71656913,113.19068123],
+	'tidal-lagoon'=>[-4.38494876,3.36603900,0.32035925],
+	'red-mesas'=>[4.53275653,-10.56153320,326.80004768],
+	'heather-moor'=>[78.74351141,0.03973762,50.23302399],
+	'salt-pans'=>[6.70812628,2.39512256,4.67175715],
+	'cinder-highlands'=>[303.10486896,220.43987117,402.12177735],
+	'rolling-prairie'=>[115.67654276,71.35151141,112.28088188],
+	'river-valley'=>[-3.00900233,-5.77290726,-4.97682181],
+	'wooded-foothills'=>[475.53617606,308.50414190,511.53433764],
+	'high-desert-steppe'=>[798.39181417,715.77358355,1041.47871226],
+	'alaska-range'=>[1613.65429611,696.14073860,418.55885062],
+	'chalk-headlands'=>[6.01290373,-32.64734754,20.76211254],
+	'karst-bay'=>[274.09293957,8.26025884,-1.67068568],
+	'tepui-highlands'=>[10.78883130,9.89478766,-27.03460828],
+	'painted-badlands'=>[-12.04243843,-23.13049653,-43.50089214],
+	'emerald-ridges'=>[248.44172021,-395.75585848,388.16607701],
+];
+foreach($legacyHeights as $name=>$heights) {
+	$form = new Recipe(Recipe::showcase($name));
+	foreach([[735,-517],[-1058,900],[12517,-13752]] as $i=>$point)
+		terrainNear($form->height(...$point),$heights[$i],1e-7,"Legacy $name sample $i");
+}
+
+// Stretch/rotation must transform gradients and bounds as well as the height used by wheels and picks.
+$axes=['domainRotation'=>-31.,'ridgeBearing'=>51.,'ridgeStretch'=>4.5,'coastBearing'=>84.,'coastWidth'=>1500.];
+foreach(['coast','painted-badlands','canyon'] as $preset) foreach([-.85,.75] as $shape) {
+	$r=new Recipe($axes+['preset'=>$preset,'detailShape'=>$shape,'gullyDepth'=>3.5,'gullySpacing'=>96.]);
+	$dry=new Recipe(['gullyDepth'=>0.]+$r->values());
+	for($i=0;$i<61;$i++) {
+		$x=$i*449-16384; $z=($i*941)%30503-12001;
+		[$h,$dx,$dz]=$r->coarse($x,$z);
+		terrainNear($dx,($r->coarse($x+.005,$z)[0]-$r->coarse($x-.005,$z)[0])/.01,.001,'World X gradient');
+		terrainNear($dz,($r->coarse($x,$z+.005)[0]-$r->coarse($x,$z-.005)[0])/.01,.001,'World Z gradient');
+		[$lo,$hi]=$r->regionalBounds([$x-1,$z-1,$x+2,$z+2]);
+		$value=$r->height($x,$z);
+		terrainCheck($value>=$lo && $value<=$hi,'Authored height within local bounds');
+		$cut=$dry->height($x,$z)-$value;
+		terrainCheck($cut>=-1e-9 && $cut<=3.5+1e-9,'Gully depth bounded at every point');
+	}
+}
+$coast=['preset'=>'coast','rolling'=>0.,'secondary'=>0.,'detailAmplitude'=>0.,'warpAmplitude'=>0.];
+$plain=new Recipe($coast); $rotated=new Recipe(['ridgeStretch'=>8.,'ridgeBearing'=>33.]+$coast);
+terrainNear($plain->height(3600,-1500),$rotated->height(3600,-1500),.001,'Stretch preserves independent coastal reach');
+$survey=new TerrainPhonics\LandformPreview(['heightScale'=>0.,'detailAmplitude'=>0.],-1.,16);
+$job=$survey->survey(); foreach($job as $_) {} $rows=$job->getReturn();
+terrainCheck($rows['land']==1 && $rows['steep']==0 && $rows['crestSpacing']===null,'Flat dry survey');
+terrainCheck(array_sum($rows['bins'])===256 && strlen(base64_decode($rows['rgb']))===768,'Every sampled cell plotted and counted');
 echo "Terrain surface: $checks checks passed.\n";

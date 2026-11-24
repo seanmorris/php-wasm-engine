@@ -183,6 +183,8 @@ foreach(['#ff0000','#00ff00','#0000ff'] as $i=>$color) {
 
 echo json_encode([
 	'thinLayer' => $thinLayer, 'journey'=>$journey,
+	'tiltShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),
+		new TerrainPhonics\SurfaceLayers([['color'=>'#557755'],['channel'=>'both','pattern'=>'fall-line','relief'=>'rib-tilt','strength'=>24.]])),
 	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
 		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
 	'ridgeShader'=>$shader, 'spotLights' => $spotCases
