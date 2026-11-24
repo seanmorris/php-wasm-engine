@@ -2784,6 +2784,46 @@ renderCheck($driver->stats()['visibleCoverage'] === $before['visibleCoverage'], 
 $driver->close();
 $land->close();
 
+// A close view can arrive before the regular rings have finished loading.
+$land = new Landscape(['preset'=>'rolling-prairie','worldSize'=>32768,'spacing'=>1]);
+foreach ([[[-200,10,0],[0,10,0]],[[0,10,0],[160,10,-60]],[[0,10,0],[160,10,60]]] as $points)
+	$land->queue(['type'=>'road','width'=>28,'points'=>$points]);
+$land->commit();
+$driver = new Scene($land,new Water,new Atmosphere,useClipmap:true);
+$eye = new Camera;
+$eye->position = [-48.,93.,5.];
+$driver->update(1/60,$eye);
+$first = $driver->stats();
+renderCheck($first['cameraSpacing']===1. && $first['heightTexelsWritten']<100000,
+	"The first fork frame resolves the pavement within the overview and small grids ({$first['heightTexelsWritten']} texels).");
+for($i=0; $driver->stats()['pending'] && $i<100; $i++) $driver->update(1/60,$eye);
+renderCheck(!$driver->stats()['pending'], 'The small fork rings grow to normal coverage and settle.');
+$eye->position = [8000.,90.,5000.];
+do { $driver->update(1/60,$eye); } while ($driver->stats()['pending']);
+$before = $driver->stats();
+$chartAtFork = static fn() => $driver->drawChart([0.,0.],0.,false,500,350,[0.,0.,1.],300,fixedSpan:200.);
+$chartAtFork();
+$after = $driver->stats();
+$local = $GLOBALS['terrainGl']['uniforms'][$GLOBALS['terrainGl']['program']]['uLocal'];
+renderCheck($local[2]===2. && $local[0]<=-100. && $local[0]+($local[3]-1)*$local[2]>=100.
+	&& $after['heightTexelsWritten']-$before['heightTexelsWritten']===128**2 && $before['visibleCoverage']===$after['visibleCoverage'],
+	'The road editor samples its remote fork at two meters without moving the driving grids.');
+$chartAtFork();
+renderCheck($driver->stats()['heightTexelsWritten']===$after['heightTexelsWritten'],'Reopening the same view reuses its terrain samples.');
+$land->queue(['type'=>'material','material'=>'sand','x'=>0,'z'=>0,'radius'=>6]);
+$land->commit();
+$driver->update(1/60,$eye);
+$chartAtFork();
+$inkTexture = $GLOBALS['boundTexture'];
+$GLOBALS['subImages'] = [];
+do { $driver->update(1/60,$eye); } while ($driver->stats()['pending']);
+$centerInk = null;
+foreach ($GLOBALS['subImages'] as [$texture,$x,$z,,,$bytes])
+	if ($texture===$inkTexture && $x===0 && $z===0) $centerInk = ord($bytes[0]);
+renderCheck($centerInk===3,'A later sand brush replaces the asphalt in the zoomed editor texture.');
+$driver->close();
+$land->close();
+
 $paintRun = static function(float $budgetMs): array {
 	$land = new Landscape(['preset' => 'coast']);
 	for($i = 0; $i < 30; $i++)
