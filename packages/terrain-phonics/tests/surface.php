@@ -1356,4 +1356,24 @@ terrainNear($back, $fresh->height(-10000, 1), 0.0, 'Far tiles on a fine 65.5 km 
 terrainNear($far, $fresh->height(30000, 0), 0.0, 'The tile read first still answers for itself');
 $wide->close(); $fresh->close();
 
+// A saved legacy join keeps the original endpoint-height blend. A new fork morphs
+// the profiles and extends the facing edges, retaining the same standalone landscapes.
+$source = ['preset'=>'canyon','join'=>['span'=>32768,'destinations'=>[['preset'=>'mountain'],['preset'=>'coast']]]];
+$legacy = new TerrainPhonics\JoinedTerrain($source);
+$source['join']['version']=2;
+$morph = new TerrainPhonics\JoinedTerrain($source);
+$difference=0.;
+foreach([-2050.,-2048.,-2047.,-680.,0.,1040.,2047.,2048.,3300.] as $x)
+foreach([-2800.,-2048.,775.,2047.,2048.,2600.] as $z) {
+	$height=$morph->height($x,$z);
+	[$lo,$hi]=$morph->regionalBounds([$x-2.,$z-2.,$x+2.,$z+2.]);
+	terrainCheck($height>=$lo && $height<=$hi,'Joined local extrema enclose the shaped and stretched terrain');
+	if($x<=-2048. || ($x>=2048. && abs($z)>=2048.))
+		terrainNear($height,$legacy->height($x,$z),0.,'Exact endpoint landscape and water datum');
+	else $difference=max($difference,abs($height-$legacy->height($x,$z)));
+}
+terrainCheck($difference>1.,'The connector changes the landform before road edits');
+terrainCheck(!isset($legacy->values()['join']['version']) && $morph->values()['join']['version']===2,
+	'Legacy and morphed junctions round trip separately');
+
 echo "Terrain surface: $checks checks passed.\n";

@@ -120,11 +120,11 @@ foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
 		'atlas' => $farAtlas, 'samples' => $farSamples];
 	$far->close();
 }
-foreach([32768,65536] as $span) {
+foreach([32768,65536] as $span) foreach([1,2] as $joinVersion) {
 	$east = [['preset'=>'mountain','seed'=>'ridge','waterLevel'=>51.]];
-	if($span === 65536) $east[] = ['preset'=>'salt-pans','waterLevel'=>2.];
+	if($span === 65536) $east[] = ['preset'=>'canyon','waterLevel'=>2.];
 	$joined = new Landscape(['preset'=>'coast','seed'=>'west','worldSize'=>$span,'waterLevel'=>-200.,
-		'join'=>['span'=>$span,'destinations'=>$east]]);
+		'join'=>['version'=>$joinVersion,'span'=>$span,'destinations'=>$east]]);
 	$r = $joined->recipe();
 	$origins = TerrainPhonics\JoinedTerrain::origins($span,count($east));
 	$perm = [];

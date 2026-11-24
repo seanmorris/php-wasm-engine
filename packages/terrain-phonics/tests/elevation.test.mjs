@@ -51,6 +51,7 @@ for(const joined of [false,true]) test(joined
 				}
 				const forms=[r,...(r.join?.destinations ?? [])];
 				gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,forms.length,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array(perm));
+				gl.uniform1i(loc('uBlendProfile'),Number(r.join?.version === 2));
 				gl.uniform1i(loc('uFormCount'),forms.length); gl.uniform1f(loc('uJoinWidth'),4096);
 				for(const [i,form] of forms.entries()) {
 					const field=name=>loc(r.join ? name+'Set['+i+']' : name);
@@ -64,12 +65,12 @@ for(const joined of [false,true]) test(joined
 					gl.uniform2f(field('uErosion'),erosion,erosion-Math.fround(erosion));
 					gl.uniform1f(field('uSlopeScale'),form.slopeScale); gl.uniform1i(field('uOctaves'),form.detailOctaves);
 				}
-				let error=0;
+				let error=0, worst;
 				for(const [x,z,reference,inkRow] of samples) {
 					gl.uniform2i(loc('uOriginCell'),x,z); gl.drawArrays(gl.TRIANGLES,0,3);
 					const bytes=new Uint8Array(128); gl.readBuffer(gl.COLOR_ATTACHMENT0); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 					const values=new Float32Array(bytes.buffer);
-					reference.forEach((h,i)=>{error=Math.max(error,Math.abs(h-values[i]));});
+					reference.forEach((h,i)=>{if(Math.abs(h-values[i])>error) { error=Math.abs(h-values[i]); worst=[x+i,z,h,values[i]]; }});
 					if(inkRow) {
 						gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0,0,32,1,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
 						const expected = Uint8Array.from(atob(inkRow), c => c.charCodeAt(0));
@@ -83,7 +84,7 @@ for(const joined of [false,true]) test(joined
 						}
 					}
 				}
-				return [r.seed,r.preset,r.version,error];
+				return [r.seed,r.preset,r.version,error,worst];
 			});
 		},{cases:cases.filter(c=>Boolean(c.recipe.join)===joined),vert:source('shadows.vert'),
 			frag:joined ? source('elevation.frag').replace('#version 300 es','#version 300 es\n#define JOINED_TERRAIN') : source('elevation.frag')});

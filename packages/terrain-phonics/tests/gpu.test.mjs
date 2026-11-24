@@ -1487,7 +1487,9 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.bindBufferBase(gl.UNIFORM_BUFFER,0,buffer);
 				gl.uniform1f(gl.getUniformLocation(linked,'uJoinWidth'),4096);
 				const colors = [];
-				for(const [x,z] of [[-2048,0],[2048,-2048],[2048,2048],[0,0],[-1024,1024]]) {
+				const points=[[-2048,0],[2048,-2048],[2048,2048],[0,0],[-1024,1024]];
+				for(const enabled of [0,1]) for(const [x,z] of points) {
+					gl.uniform1i(gl.getUniformLocation(linked,'uBlendProfile'),enabled);
 					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),x,10,z);
 					colors.push(pixel(4));
 				}
@@ -1543,6 +1545,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			'A pixel extending across the road still resolves the gap along it');
 		const red=[255,0,0,0], green=[0,255,0,204], blue=[0,0,255,0];
 		for(const [i,expected] of [[red,green,green,[128,128,0,102],[229,26,0,21]],[red,green,blue,[128,64,64,51],[229,3,24,2]]].entries()) {
+			const colors=result.journeyColors[i];
+			assert.deepEqual(colors.slice(5,8),colors.slice(0,3),'Pure landscape materials survive the noisy transition.');
+			assert.ok(colors.slice(8).some((pixel,j)=>Math.abs(pixel[0]-colors[3+j][0])>1),
+				'World-space noise varies material coverage inside the connector.');
 			for(const [j,rgba] of expected.entries())
 				assert.ok(rgba.every((v,k)=>Math.abs(result.journeyColors[i][j][k]-v)<=1),
 					'Regional color and coating weights agree at the endpoints and in the transition: '+JSON.stringify(result.journeyColors[i][j]));
