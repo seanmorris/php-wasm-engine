@@ -32,7 +32,7 @@ final class RoadMarkings
 			$previous[$to[0]] = $from[0];
 			$remaining[$from[0]] = $remaining[$to[0]] = true;
 		}
-		$paths=$atJunction=$bearings=$keys=[];
+		$paths=$bearings=$keys=[];
 		// Visit open chains from their physical start, then any remaining closed loops.
 		foreach([...array_keys(array_diff_key($remaining,$previous)), ...array_keys($remaining)] as $first) {
 			if(!isset($remaining[$first])) continue;
@@ -71,7 +71,6 @@ final class RoadMarkings
 					$ends[]=[$x,$y,$z,$direction*$tx,$direction*$tz];
 					$point=$end ? $endFork : $startFork;
 					if($point===null) continue;
-					$atJunction[$point][]=$first;
 					$bearings[$point][$first]=[$direction*$tx,$direction*$tz,$direction];
 				}
 				sort($ends);
@@ -108,8 +107,8 @@ final class RoadMarkings
 					$ink['network']=$root+1; $ink['arm']=$arm+1; $ink['stripeRole']=$roles[$arm];
 					foreach($junctions[$id]??[] as $end=>$point) {
 						$ink['forkCaps']=($ink['forkCaps']??0)|(1<<$end);
-						foreach($atJunction[$point]??[] as $neighbor) $stack[]=$neighbor;
-						unset($atJunction[$point]);
+						foreach($bearings[$point]??[] as $neighbor=>$_) $stack[]=$neighbor;
+						unset($bearings[$point]);
 					}
 					unset($ink);
 				}

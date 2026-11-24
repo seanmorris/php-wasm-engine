@@ -260,7 +260,10 @@ void main()
 	if(markWeight > .65 && road > 0.) {
 		float area=dx.x*dy.y-dx.y*dy.x;
 		// This vector follows the line of constant crossTrack through this pixel, even on a bend.
-		vec2 stripeGradient=outline>.5 ? outlinePixel : lateralPixel;
+		// A change of arm can flip the signed offset without crossing a
+		// centerline. Its derivative must not widen the dash at the split.
+		vec2 centerPixel=outline-abs(crossTrack)>.00001 ? unsignedPixel : lateralPixel;
+		vec2 stripeGradient=outline>.5 ? outlinePixel : centerPixel;
 		vec2 alongRoad=stripeGradient.x*dy-stripeGradient.y*dx;
 		float alongLength=length(alongRoad);
 		float unitsPerMeter=alongLength/max(abs(area),1e-10);

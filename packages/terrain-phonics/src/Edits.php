@@ -230,10 +230,12 @@ final class Edits
 		return null;
 	}
 
-	private static function nearerMark(array $a,array $b): bool
+	/** Break projection ties consistently when overlapping arms are reordered. */
+	private static function nearerMark(array $candidate,array $current): bool
 	{
-		$da=abs($a[0])/$a[2]; $db=abs($b[0])/$b[2];
-		return $da<$db || ($da===$db && ($a[4]??0)<($b[4]??0));
+		$distance=abs($candidate[0])/$candidate[2];
+		$previous=abs($current[0])/$current[2];
+		return $distance<$previous || ($distance==$previous && ($candidate[4]??0)<($current[4]??0));
 	}
 
 	/**
@@ -610,7 +612,10 @@ final class Edits
 		}
 		if(!$past) {
 			$mark = [($side < 0. ? -1. : 1.)*sqrt($nearest),$along,$road['half']];
-			if(isset($road['ink'])) { $mark[]=$phase; $mark[]=$road['ink']['stripeRole']??0; }
+			if(isset($road['ink'])) {
+				$mark[]=$phase;
+				$mark[]=$road['ink']['stripeRole']??0;
+			}
 		}
 		return $offset;
 	}
