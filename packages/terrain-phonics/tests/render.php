@@ -92,6 +92,8 @@ function glGenRenderbuffers(int $n, mixed &$ids): void{terrainGlNames('renderbuf
 
 function glDeleteRenderbuffers(int $n, array $ids): void{terrainGlDelete('renderbuffers', $ids);}
 
+function glGetFloatv(int $name): array{return [.15,.25,.35,1.];}
+
 function glGetIntegerv(int $name): int{return $GLOBALS['terrainGl']['framebuffer'];}
 
 function glBindFramebuffer(int $target, int $id): void{$GLOBALS['terrainGl']['framebuffer'] = $id;}
@@ -2735,10 +2737,10 @@ foreach($styles as [$recipe, $style])
 // The clipmap scene the sandbox uses. Edited texels take PHP's heights and ink after the GPU fills a level, and that
 // CPU paint runs within the scene's budget; a budgeted scene must end with the same texels as an unbounded one.
 foreach(['GL_RGBA32F','GL_R8','GL_TRIANGLE_STRIP','GL_RGB','GL_TEXTURE2','GL_COLOR_BUFFER_BIT','GL_DEPTH_BUFFER_BIT',
-	'GL_RGBA16F','GL_HALF_FLOAT','GL_DEPTH_COMPONENT24','GL_DEPTH_ATTACHMENT','GL_RENDERBUFFER','GL_REPEAT'] as $i => $name)
+	'GL_RGBA16F','GL_HALF_FLOAT','GL_DEPTH_COMPONENT24','GL_DEPTH_ATTACHMENT','GL_RENDERBUFFER','GL_REPEAT','GL_TEXTURE_2D_ARRAY','GL_COLOR_CLEAR_VALUE'] as $i => $name)
 	if(!defined($name)) define($name, 0x9a00 + $i);
 foreach(['glUniform2i','glUniform4i','glUniform3i','glUniform1fv','glUniform1iv','glClear','glClearColor','glReadPixels',
-	'glTexStorage2D','glCullFace','glBlendFunc','glScissor','glPixelStorei'] as $name)
+	'glTexStorage2D','glTexStorage3D','glFramebufferTextureLayer','glClearDepth','glCullFace','glBlendFunc','glScissor','glPixelStorei'] as $name)
 	if(!function_exists($name)) eval("function $name(...\$arguments): void {}");
 if(!function_exists('glDrawArraysInstanced')) { function glDrawArraysInstanced(...$arguments): void { terrainGlDraw(); } }
 if(!function_exists('glTexSubImage2D'))
@@ -2852,5 +2854,42 @@ $bindings = array_column($GLOBALS['terrainGl']['indexedBindings'],2);
 renderCheck(count($bindings)===7 && !in_array(end($bindings),$sceneBuffers,true),'Context restoration binds the replacement palette once.');
 foreach([$shared,$replay,$live] as $scene) $scene->close();
 $journey->close();
+
+// The persistent fields are independent of elevation, paint and roads. Only entering new cells needs draws.
+$fork = new Landscape(['preset'=>'rolling-prairie','join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon'],['preset'=>'mountain']]]]);
+$scene = new Scene($fork,new Water,new Atmosphere);
+$eye = new Camera;
+$eye->position = [-1.,60.,-1.];
+$renderFields = static function() use ($scene,$eye) {
+	$scene->update(1/60,$eye);
+	$scene->render($eye,320,200,0.);
+	return $scene->stats()['materialFieldTexels'];
+};
+$initial = $renderFields();
+renderCheck($initial === 256**2 && $renderFields() === $initial,'A stationary fork fills its material fields once');
+$eye->position[0] = 1.;
+renderCheck($renderFields() === $initial+16*256,'Crossing zero fills only the entering strip of the world texture');
+$eye->position[0] = 5000.;
+$written = $renderFields();
+renderCheck($written === 2*$initial+16*256,'Teleporting repopulates the resident window');
+foreach([['type'=>'raise','x'=>5000,'z'=>0,'radius'=>20,'amount'=>5],
+	['type'=>'material','x'=>5000,'z'=>0,'radius'=>12,'material'=>'sand'],
+	['type'=>'road','points'=>[[4980,40,0],[5020,40,0]],'width'=>8,'shoulder'=>2]] as $operation) {
+	$fork->queue($operation); $fork->commit();
+	renderCheck($renderFields() === $written,'Edits update geometry and ink without rebaking position-only noise');
+}
+$fork->undo(); $fork->redo();
+renderCheck($renderFields() === $written,'Undo and redo preserve position-only noise');
+$scene->restore();
+renderCheck($renderFields() === $initial,'The displayed fork rebuilds its fields on a restored context');
+$recipe = $fork->recipe();
+$recipe['join']['destinations'][0]['seed'] = 'changed-seed';
+$reseeded = new Landscape($recipe);
+$scene->setLandscape($reseeded);
+renderCheck($renderFields() === 2*$initial,'A destination seed change invalidates cached noise at the same location');
+$solo = new Landscape(['preset'=>'mountain']);
+$scene->setLandscape($solo);
+renderCheck($renderFields() === 0,'A single landscape releases the journey field cache');
+$scene->close(); $solo->close(); $reseeded->close(); $fork->close();
 
 echo "Terrain renderer: $checks checks passed.\n";

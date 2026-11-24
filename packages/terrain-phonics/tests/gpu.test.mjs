@@ -33,6 +33,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'terrain.frag'
 		, 'material-noise.glsl'
 		, 'material-fields.glsl'
+		, 'material-cache.frag'
 		, 'surface-layers.glsl'
 	];
 
@@ -1519,6 +1520,59 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.deleteBuffer(buffer);
 				journeyColors.push(colors);
 			}
+
+			// Compare the four cached fields to direct evaluation on both sides of a physical texture wrap.
+			const library = shaders['surface-layers.glsl']+'\n'+shaders['material-noise.glsl'];
+			const bake = program(shaders['shadows.vert'],shaders['material-cache.frag']
+				.replace('// LAYERS',library).replace('// MATERIAL NOISE',''));
+			const fieldTexture=gl.createTexture(), fieldFbo=gl.createFramebuffer(), size=16;
+			gl.activeTexture(gl.TEXTURE12);
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY,fieldTexture);
+			gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,size,size,4);
+			gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+			gl.bindFramebuffer(gl.FRAMEBUFFER,fieldFbo);
+			const outputs=[0,1,2,3].map(i=>gl.COLOR_ATTACHMENT0+i);
+			for(const [i,attachment] of outputs.entries())
+				gl.framebufferTextureLayer(gl.FRAMEBUFFER,attachment,fieldTexture,0,i);
+			gl.drawBuffers(outputs);
+			gl.disable(gl.BLEND);
+			gl.disable(gl.DITHER);
+			gl.useProgram(bake);
+			const regions=[[16384,-32,17,4],[-8192,17,65535,73],[175,-16222,99,8]];
+			gl.uniform4fv(gl.getUniformLocation(bake,'uRegions[0]'),regions.flat());
+			gl.uniform1f(gl.getUniformLocation(bake,'uStep'),2);
+			for(const x of [-8,0]) for(const z of [-8,0]) {
+				const u=x&15, v=z&15;
+				gl.viewport(u,v,8,8);
+				gl.uniform2f(gl.getUniformLocation(bake,'uCellOffset'),x-u,z-v);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+			}
+			const compare=program(shaders['shadows.vert'],header+library+`
+				uniform highp sampler2DArray cache; uniform vec2 xz; uniform vec4 region;
+				uniform int slice; uniform bool useCache; out vec4 result;
+				void main() {
+					vec2 p=xz-region.xy;
+					result=useCache ? texture(cache,vec3((xz/2.+.5)/16.,float(slice))) :
+						slice==3 ? .5+.5*scatterBands(xz) : vec4(macroBands(p),.5+.5*grassStand(p,ivec2(region.zw)));
+				}`);
+			target(0,1,1);
+			gl.useProgram(compare);
+			gl.uniform1i(gl.getUniformLocation(compare,'cache'),12);
+			for(const [i,region] of [...regions,regions[0]].entries()) {
+				gl.uniform1i(gl.getUniformLocation(compare,'slice'),i);
+				gl.uniform4fv(gl.getUniformLocation(compare,'region'),region);
+				for(const xy of [[-14,12],[-.5,.5],[1.25,-3.25],[11.7,7.5]]) {
+					gl.uniform2fv(gl.getUniformLocation(compare,'xz'),xy);
+					gl.uniform1i(gl.getUniformLocation(compare,'useCache'),0);
+					const expected=pixel(4);
+					gl.uniform1i(gl.getUniformLocation(compare,'useCache'),1);
+					if(pixel(4).some((byte,j)=>Math.abs(byte-expected[j])>3))
+						throw Error(`Cached material field ${i} diverged at ${xy}`);
+				}
+			}
+			gl.deleteFramebuffer(fieldFbo);
+			gl.deleteTexture(fieldTexture);
 
 			const error = gl.getError();
 
