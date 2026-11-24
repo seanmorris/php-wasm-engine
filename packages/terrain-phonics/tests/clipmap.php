@@ -309,6 +309,29 @@ $chalk = new Recipe(['preset'=>'chalk-headlands']);
 check($chalk->height(1801,-43)<-8. && $chalk->height(1747,-55)-$chalk->height(1801,-43)>65.
 	&& $chalk->height(2497,118)>100., 'Two chalk headlands rise above a navigable cove with a steep seaward face.');
 
+$karst = new Recipe(['preset' => 'karst-bay']);
+check(
+	$karst->height(684, -1275) - 18. > 200. && $karst->height(715, -1275) < 8. && $karst->height(400, -1733) < 10.
+	, 'Limestone towers rise over 200 m straight out of a bay deep enough for the craft.'
+);
+
+$tepui = new Recipe(['preset' => 'tepui-highlands']);
+check(
+	$tepui->height(2049, -2593) - $tepui->height(2080, -2593) > 700. && $tepui->height(4457, -343) < 100.
+	, 'Sandstone walls fall over 700 m from a table top to the forest floor.'
+);
+
+$badlands = new Recipe(['preset' => 'painted-badlands']);
+$badlandLook = new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS['painted-badlands']);
+$badlandBeds = array_filter(
+	SurfaceLayers::landscape($badlands->values(), $badlandLook)->layers
+	, static fn(array $layer) => $layer['datum'] === 'beds'
+);
+check(
+	$badlands->height(-169, -650) - $badlands->height(-138, -650) > 40. && count($badlandBeds) === 7
+	, 'Banded clay mounds stand 40 m over the floor and show every bed.'
+);
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
