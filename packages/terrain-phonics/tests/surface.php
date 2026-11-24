@@ -1394,4 +1394,33 @@ terrainCheck($difference>1.,'The connector changes the landform before road edit
 terrainCheck(!isset($legacy->values()['join']['version']) && $morph->values()['join']['version']===2,
 	'Legacy and morphed junctions round trip separately');
 
+$layers = new Landscape(['worldSize'=>256,'heightScale'=>0,'detailAmplitude'=>0]);
+$road = ['type'=>'road','width'=>12,'shoulder'=>3,'crown'=>0.,'points'=>[[-40,8,0],[40,8,0]]];
+$otherRoad = array_replace($road,['points'=>[[-40,12,40],[40,12,40]]]);
+$layers->queue($road);
+$layers->queue(['type'=>'raise','x'=>0,'z'=>0,'radius'=>4,'amount'=>2]);
+$layers->queue($otherRoad);
+$layers->commit();
+$before = $layers->height(0,0);
+$preview = $layers->previewWithoutRoads([0]);
+terrainNear($preview->height(0,0),2.,1e-8,'Hiding a road uncovers the ground and later brush');
+terrainCheck($preview->material(0,0) === null && $layers->material(0,0) === 'road','Preview affects only its own road paint');
+terrainCheck($preview->changedRegion($layers)[3] < 40., 'Hiding a road only invalidates its footprint and dependent edits');
+$layers->queue(['type'=>'delete-road','id'=>0]);
+$layers->commit();
+terrainCheck(array_keys($layers->roadRecords()) === [2] && $layers->height(0,0) === $preview->height(0,0),
+	'Deletion keeps the later road ID and brush');
+$loaded = Landscape::load($layers->save());
+terrainCheck($loaded->undo() && $loaded->height(0,0) === $before && $loaded->redo(), 'Saved deletion can be undone and redone');
+$loaded->queue($otherRoad + ['replaceAt'=>2]);
+$loaded->commit();
+terrainReject(fn()=>$loaded->queue(['type'=>'delete-road','id'=>1]), 'A brush cannot be deleted as a road');
+terrainReject(fn()=>$loaded->queue(['type'=>'delete-road','id'=>0]), 'Deleting a missing road leaves the edit log intact');
+terrainCheck(array_keys($loaded->roadRecords()) === [2], 'Replacements use stable IDs after reloading the deletion');
+$loaded->queue(['type'=>'delete-road','id'=>2]);
+$loaded->queue($road);
+$loaded->commit();
+terrainCheck(array_keys(Landscape::load($loaded->save())->roadRecords()) === [3],
+	'Adding a road after deleting the last road allocates a fresh ID that replays identically');
+
 echo "Terrain surface: $checks checks passed.\n";
