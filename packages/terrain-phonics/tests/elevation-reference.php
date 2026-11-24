@@ -43,6 +43,8 @@ foreach([
 	, 'tepui-highlands' => [[2049,-2593],[4657,-1093],[2625,2157],[4457,-343]]
 	, 'painted-badlands' => [[161,1117],[353,1317],[305,917],[417,1250]]
 	, 'emerald-ridges' => [[-704,975],[736,-1025],[-480,-150],[1000,-400]]
+	, 'autumn-folds' => [[2360,-300],[2840,0],[3624,1100],[1828,2740]]
+	, 'namib-coast' => [[-172,2700],[-284,2300],[852,700],[-360,0]]
 ] as $preset => $points)
 {
 	$recipe = new Recipe(['preset' => $preset]);
@@ -52,7 +54,15 @@ foreach([
 		for($i = 0; $i < 32; $i++) $row[] = $recipe->height($x+$i,$z);
 		$samples[] = [$x,$z,$row];
 	}
-	$cases[] = ['recipe'=>$recipe->values(), 'perm'=>(new Noise($recipe->values()['seed']))->permutation(), 'samples'=>$samples];
+	$values = $recipe->values();
+	$case = ['recipe' => $values, 'perm' => (new Noise($values['seed']))->permutation(), 'samples' => $samples];
+	// Presets that orient or cut their landform draw with the specialized shader, so test them there.
+	if(
+		$values['domainRotation'] != 0 || $values['ridgeStretch'] != 1 || $values['coastBearing'] != 0
+		|| $values['coastWidth'] != 4500 || $values['detailShape'] != 0 || $values['gullyDepth'] > 0
+	)
+	$case['axes'] = [Recipe::axes($values)];
+	$cases[] = $case;
 }
 
 // Cross the negative block seam on a bank, turn back into the same tile, then cross a later road.

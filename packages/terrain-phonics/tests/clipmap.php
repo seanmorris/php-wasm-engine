@@ -339,6 +339,19 @@ check(
 	, 'Green ridges climb over 70 m in 31 m to peaks above 550 m, across a bay deep enough for the craft.'
 );
 
+$folds = new Recipe(['preset' => 'autumn-folds']);
+check(
+	$folds->height(1828, 2740) > 320. && $folds->height(1337, 2396) > 270. && $folds->height(2319, 3084) > 270.
+	&& $folds->height(2172, 2249) < 200. && $folds->height(3120, 1200) < -50.
+	, 'A fold crest holds its height 600 m either way along its bearing, drops across it, and faces a deep lake.'
+);
+
+$namib = new Recipe(['preset' => 'namib-coast']);
+check(
+	$namib->height(500, 0) > 200. && $namib->height(-400, 0) < 0. && $namib->height(-700, 1500) < -50.
+	, 'Dunes rise over 200 m within 900 m of a straight shore, off which the sea is deep enough for the craft.'
+);
+
 $canyonRecipe = (new Recipe(['preset' => 'canyon', 'terraceSpacing' => 80]))->values();
 $bands = array_values(array_filter(SurfaceLayers::landscape($canyonRecipe, $appearance)->layers,
 	static fn(array $layer) => $layer['datum'] === 'beds'));
