@@ -5,7 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {chromium} from '@playwright/test';
 
-test('GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges',async()=>{
+for(const joined of [false,true]) test(joined
+	? 'GPU heights agree with PHP throughout a two- or three-map landscape junction'
+	: 'GPU heights and road materials agree with PHP on cliffs, banks, intersections and world edges',async()=>{
 	const cases=JSON.parse(execFileSync('php',[fileURLToPath(new URL('elevation-reference.php',import.meta.url))],{maxBuffer:16<<20}));
 	const source=name=>readFileSync(new URL('../shaders/'+name,import.meta.url),'utf8');
 	const browser=await chromium.launch({executablePath:process.env.CHROMIUM || '/usr/bin/chromium',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
@@ -35,7 +37,7 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 			gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
 			gl.bindTexture(gl.TEXTURE_2D,permutation); gl.viewport(0,0,32,1);
 			gl.uniform1i(loc('uPacked'),1); gl.uniform1f(loc('uStep'),1); gl.uniform4f(loc('uRegion'),16384,0,1,0);
-			return cases.map(({recipe:r,perm,samples,atlas})=>{
+			return cases.map(({recipe:r,perm,samples,atlas,origins})=>{
 				gl.uniform4f(loc('uRegion'),r.worldSize / 2,0,1,0);
 				if(atlas) {
 					gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());
@@ -47,15 +49,21 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 					gl.uniform4i(loc('uRoadGrid'),atlas.directory,atlas.blocksAcross,atlas.minTile,atlas.cell);
 					gl.activeTexture(gl.TEXTURE0);
 				}
-				gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,1,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array(perm));
-				for(const [name,keys] of Object.entries({uShape:['baseBias','rolling','directionalRise','ridgeHeight'],
-					uProfile:['ridgeRoundness','wallHeight','floorWidth','wallWidth'],uField:['heightScale','baseFrequency','warpAmplitude','warpFrequency'],
-					uRock:['secondary','terraceSpacing','terraceStrength','bedding'],uDetail:['detailAmplitude','persistence','lacunarity','damping']}))
-					gl.uniform4fv(loc(name),keys.map(k=>r[k]));
-				gl.uniform2f(loc('uFieldResidual'),r.baseFrequency-Math.fround(r.baseFrequency),r.warpFrequency-Math.fround(r.warpFrequency));
-				const erosion = 22*r.baseFrequency;
-				gl.uniform2f(loc('uErosion'),erosion,erosion-Math.fround(erosion));
-				gl.uniform1f(loc('uSlopeScale'),r.slopeScale); gl.uniform1i(loc('uOctaves'),r.detailOctaves);
+				const forms=[r,...(r.join?.destinations ?? [])];
+				gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,256,forms.length,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array(perm));
+				gl.uniform1i(loc('uFormCount'),forms.length); gl.uniform1f(loc('uJoinWidth'),4096);
+				for(const [i,form] of forms.entries()) {
+					const field=name=>loc(r.join ? name+'Set['+i+']' : name);
+					if(origins) gl.uniform3f(loc('uFormOrigin['+i+']'),...origins[i],r.waterLevel-form.waterLevel);
+					for(const [name,keys] of Object.entries({uShape:['baseBias','rolling','directionalRise','ridgeHeight'],
+						uProfile:['ridgeRoundness','wallHeight','floorWidth','wallWidth'],uField:['heightScale','baseFrequency','warpAmplitude','warpFrequency'],
+						uRock:['secondary','terraceSpacing','terraceStrength','bedding'],uDetail:['detailAmplitude','persistence','lacunarity','damping']}))
+						gl.uniform4fv(field(name),keys.map(k=>form[k]));
+					gl.uniform2f(field('uFieldResidual'),form.baseFrequency-Math.fround(form.baseFrequency),form.warpFrequency-Math.fround(form.warpFrequency));
+					const erosion = 22*form.baseFrequency;
+					gl.uniform2f(field('uErosion'),erosion,erosion-Math.fround(erosion));
+					gl.uniform1f(field('uSlopeScale'),form.slopeScale); gl.uniform1i(field('uOctaves'),form.detailOctaves);
+				}
 				let error=0;
 				for(const [x,z,reference,inkRow] of samples) {
 					gl.uniform2i(loc('uOriginCell'),x,z); gl.drawArrays(gl.TRIANGLES,0,3);
@@ -77,7 +85,8 @@ test('GPU heights and road materials agree with PHP on cliffs, banks, intersecti
 				}
 				return [r.seed,r.preset,r.version,error];
 			});
-		},{cases,vert:source('shadows.vert'),frag:source('elevation.frag')});
+		},{cases:cases.filter(c=>Boolean(c.recipe.join)===joined),vert:source('shadows.vert'),
+			frag:joined ? source('elevation.frag').replace('#version 300 es','#version 300 es\n#define JOINED_TERRAIN') : source('elevation.frag')});
 		assert.ok(errors.every(e=>e[3]<=.005),JSON.stringify(errors));
 	} finally {await browser.close();}
 });

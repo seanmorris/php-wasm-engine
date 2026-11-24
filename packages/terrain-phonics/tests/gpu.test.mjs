@@ -29,6 +29,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'water.vert'
 		, 'water.frag'
 		, 'terrain.vert'
+		, 'joined-material.glsl'
 		, 'terrain.frag'
 		, 'material-noise.glsl'
 		, 'material-fields.glsl'
@@ -38,7 +39,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 	const shaders = Object.fromEntries(names.map(name => [name
 		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
 	]));
-	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// LAYERS', shaders['surface-layers.glsl'])
+	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// REGIONS', shaders['joined-material.glsl']).replace('// LAYERS', shaders['surface-layers.glsl'])
 		.replace('// MATERIAL NOISE', shaders['material-noise.glsl'])
 		.replace('// MATERIAL STACK',readFileSync(new URL('./uniform-material.glsl',import.meta.url),'utf8')
 			.replace('// RELIEF FIELDS',shaders['material-fields.glsl']));

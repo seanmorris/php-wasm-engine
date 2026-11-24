@@ -120,4 +120,24 @@ foreach([[29988, -30019], [-16000, 16000]] as [$cx, $cz])
 		'atlas' => $farAtlas, 'samples' => $farSamples];
 	$far->close();
 }
+foreach([32768,65536] as $span) {
+	$east = [['preset'=>'mountain','seed'=>'ridge','waterLevel'=>51.]];
+	if($span === 65536) $east[] = ['preset'=>'salt-pans','waterLevel'=>2.];
+	$joined = new Landscape(['preset'=>'coast','seed'=>'west','worldSize'=>$span,'waterLevel'=>-200.,
+		'join'=>['span'=>$span,'destinations'=>$east]]);
+	$r = $joined->recipe();
+	$origins = TerrainPhonics\JoinedTerrain::origins($span,count($east));
+	$perm = [];
+	foreach([$r,...$r['join']['destinations']] as $field)
+		array_push($perm,...(new Noise($field['seed']))->permutation());
+	$samples=[];
+	foreach([-$span,-2064,-1050,-16,1024,2032,$span] as $x)
+	foreach([-3100,0,1120,4300] as $z) {
+		$row=[];
+		for($i=0;$i<32;$i++) $row[]=$joined->height($x+$i,$z);
+		$samples[]=[$x,$z,$row];
+	}
+	$cases[]=['recipe'=>$r,'perm'=>$perm,'origins'=>$origins,'samples'=>$samples];
+	$joined->close();
+}
 echo json_encode($cases,JSON_THROW_ON_ERROR);
