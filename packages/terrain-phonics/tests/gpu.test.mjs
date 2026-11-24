@@ -170,13 +170,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.viewport(0, 0, width, height);
 			};
 
-			const pixel = () => {
+			const pixel = (channels = 3) => {
 				gl.viewport(0, 0, 1, 1);
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const bytes = new Uint8Array(4);
 				gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
 
-				return Array.from(bytes).slice(0, 3);
+				return Array.from(bytes).slice(0,channels);
 			};
 
 			const vertex = shaders['atmosphere-cache.vert'];
@@ -1473,12 +1473,34 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 			}
 
+			const journeyColors = [];
+			for(const {shader,block} of data.journey) {
+				const linked = program(shaders['shadows.vert'],shader);
+				gl.useProgram(linked);
+				const bytes = Uint8Array.from(atob(block), c=>c.charCodeAt(0));
+				const index = gl.getUniformBlockIndex(linked,'JourneyPalettes');
+				if(gl.getActiveUniformBlockParameter(linked,index,gl.UNIFORM_BLOCK_DATA_SIZE)!==bytes.length)
+					throw Error('PHP and the shader disagree on the journey palette layout');
+				const buffer = gl.createBuffer();
+				gl.bindBuffer(gl.UNIFORM_BUFFER,buffer);
+				gl.bufferData(gl.UNIFORM_BUFFER,bytes,gl.STATIC_DRAW);
+				gl.bindBufferBase(gl.UNIFORM_BUFFER,0,buffer);
+				gl.uniform1f(gl.getUniformLocation(linked,'uJoinWidth'),4096);
+				const colors = [];
+				for(const [x,z] of [[-2048,0],[2048,-2048],[2048,2048],[0,0],[-1024,1024]]) {
+					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),x,10,z);
+					colors.push(pixel(4));
+				}
+				gl.deleteBuffer(buffer);
+				journeyColors.push(colors);
+			}
+
 			const error = gl.getError();
 
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts
+				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts, journeyColors
 				, spotResults, dashPixels, paintEdges
 				, aerialResults, canyonHaze, dustViews
 				, waterResults, backdropContrast, waterPaths
@@ -1519,6 +1541,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			assert.deepEqual(moved,originEdges,'World position must not scatter pixels at the centerline or shoulder');
 		assert.ok(dash.across[0] > 0 && dash.across[2] === 0,
 			'A pixel extending across the road still resolves the gap along it');
+		const red=[255,0,0,0], green=[0,255,0,204], blue=[0,0,255,0];
+		for(const [i,expected] of [[red,green,green,[128,128,0,102],[229,26,0,21]],[red,green,blue,[128,64,64,51],[229,3,24,2]]].entries()) {
+			for(const [j,rgba] of expected.entries())
+				assert.ok(rgba.every((v,k)=>Math.abs(result.journeyColors[i][j][k]-v)<=1),
+					'Regional color and coating weights agree at the endpoints and in the transition: '+JSON.stringify(result.journeyColors[i][j]));
+		}
 		for(const [i,sample] of result.chartVerge.entries()) {
 			const channel=i%2===0 ? 2 : 0;
 			assert.ok(sample[channel]>240 && sample[2-channel]===0,'The road map respects the authored pavement edge');

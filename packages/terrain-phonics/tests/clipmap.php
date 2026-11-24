@@ -157,6 +157,20 @@ $retuned[1]['strength'] = .25;
 check((new SurfaceLayers($retuned))->structure === $parented->structure,'Relief strength is a uniform-only edit.');
 $retuned[1]['relief'] = 'facets';
 check((new SurfaceLayers($retuned))->structure !== $parented->structure,'A new relief operator selects its shader program.');
+$retuned = $parented->layers;
+$retuned[1]['parent'] = -1;
+check((new SurfaceLayers($retuned))->structure !== $parented->structure,'Removing an advanced layer parent changes its shader lookup.');
+$retuned = $parented->layers;
+$retuned[1]['high'] = 120.;
+$limited = new SurfaceLayers($retuned);
+check($limited->structure !== $parented->structure,'Adding elevation bounds enables the range calculation.');
+$retuned[1]['high'] = 150.;
+check((new SurfaceLayers($retuned))->structure === $limited->structure,'Adjusting an existing elevation bound reuses the program.');
+$section = new SurfaceLayers([['reflectivity'=>.2],['period'=>10.,'low'=>0.,'high'=>5.],['period'=>10.,'low'=>5.,'high'=>10.]]);
+$retuned = $section->layers;
+$retuned[2]['low'] = 6.;
+check($section->section(2) === 2 && (new SurfaceLayers($retuned))->structure !== $section->structure,
+	'Breaking a full repeating section changes how its color and coating are composed.');
 $appearance = new TerrainAppearance;
 $coast = SurfaceLayers::landscape((new Recipe(['preset' => 'coast']))->values(), $appearance)->layers;
 check($coast[0]['color'] === $appearance->settings['grassColor']

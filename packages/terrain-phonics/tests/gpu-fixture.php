@@ -149,8 +149,40 @@ foreach([200., 600., 880., 920., 1200.] as $height)
 	foreach([sin(deg2rad(35)), 1.] as $mu)
 		$thinLayer['samples'][] = [$height, $mu, $fog->transmittance($height, $mu)];
 
+// Isolate the material inputs to lighting so the fork weights have an independent linear RGB reference.
+$probe = <<<'GLSL'
+#version 300 es
+precision highp float;
+precision highp int;
+// LAYERS
+uniform float uWaterLevel;
+// MATERIAL NOISE
+// MATERIAL STACK
+uniform vec3 atWorld;
+out vec4 color;
+void main() {
+	vec3 n, bounce;
+	vec2 finish;
+	color.rgb=journeySurface(atWorld,vec3(0,1,0),vec3(0,1,0),1.,false,n,finish,bounce);
+	color.a=finish.x;
+}
+GLSL;
+$stacks = $blocks = $journey = [];
+foreach(['#ff0000','#00ff00','#0000ff'] as $i=>$color) {
+	// At world height 10 the second region has local height 2. Water-relative height stays 10 in all three.
+	$layers = match($i) {
+		0 => [['color'=>$color]],
+		1 => [['color'=>'#000000'],['color'=>$color,'high'=>3.,'fade'=>.1,'reflectivity'=>.8]],
+		2 => [['color'=>'#000000'],['color'=>$color,'datum'=>'water','low'=>9.,'fade'=>.1]],
+	};
+	$stack = new TerrainPhonics\SurfaceLayers($layers,['macroVariation'=>0.]);
+	$stacks[] = $stack;
+	$blocks[] = $stack->journeyBlock(['seed'=>$i,'damping'=>1.,'slopeScale'=>1.],[$i*32.,$i*8.,0.]);
+	if($i>0) $journey[] = ['shader'=>TerrainPhonics\MaterialShader::assemble($probe,$stacks), 'block'=>base64_encode(implode('',$blocks))];
+}
+
 echo json_encode([
-	'thinLayer' => $thinLayer,
+	'thinLayer' => $thinLayer, 'journey'=>$journey,
 	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
 		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
 	'ridgeShader'=>$shader, 'spotLights' => $spotCases
