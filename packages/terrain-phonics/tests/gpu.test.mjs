@@ -627,11 +627,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
 			const surfaceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec2 vForkMark; out float vGround;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec4 vRoadArms; out float vGround;
 				uniform float uTestGround, uGroundGradient;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vRelative = vec3(0, -5, -5); vWorld = vec3(0); vNormal = vec3(0, 1, 0);
-					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vForkMark=vec2(0.); vSplinePaint=0.; vRoadMark = vec4(0); vGround = uTestGround + (p.x - 0.5) * uGroundGradient;
+					vPaint0 = vec3(0, 1, 0); vPaint1 = vec3(0); vRoadArms=vec4(0.); vSplinePaint=0.; vRoadMark = vec4(0); vGround = uTestGround + (p.x - 0.5) * uGroundGradient;
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const illuminationResults = [];
@@ -685,12 +685,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// One row of banded rock on a vertical face, with the strata phase advancing by a fixed step per pixel.
 			// Each step puts the bands on a whole DFT bin and one of their odd harmonics just past the pixel rate.
 			const bandVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec2 vForkMark;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec4 vRoadArms;
 				uniform float uBandStep;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					float rise = p.x * 256.0 * uBandStep;
 					vRelative = vec3(-50, rise, 0); vWorld = vec3(0, 500.0 + rise, 0);
-					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vForkMark=vec2(0.); vSplinePaint=0.; vRoadMark = vec4(0);
+					vNormal = vec3(1, 0, 0); vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadArms=vec4(0.); vSplinePaint=0.; vRoadMark = vec4(0);
 					gl_Position = vec4(p * 2.0 - 1.0, 0, 1); }`;
 
 			const bandProgram = program(bandVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -732,7 +732,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// patch noise is at full strength. It lies 150 m below the snowline, at the default treeline, where talus
 			// still shows between the trees.
 			const amountVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec2 vForkMark;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec4 vRoadArms;
 				uniform float uFaceSlope;
 				void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
 					vec2 s = p * 2.0 - 1.0;
@@ -740,7 +740,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vNormal = vec3(a, c, 0);
 					vec3 offset = s.x * vec3(0, 0, 100) + s.y * 25.0 * vec3(-c, a, 0);
 					vWorld = vec3(-1200, 190, 3000) + offset;
-					vRelative = offset - 150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vForkMark=vec2(0.); vSplinePaint=0.; vRoadMark = vec4(0);
+					vRelative = offset - 150.0 * vNormal; vPaint0 = vec3(0); vPaint1 = vec3(0); vRoadArms=vec4(0.); vSplinePaint=0.; vRoadMark = vec4(0);
 					gl_Position = vec4(s, 0, 1); }`;
 
 			const amountProgram = program(amountVertex, shaders['terrain.frag'].replace('// ATMOSPHERE', data.source));
@@ -985,8 +985,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// View one face from several directions under a known sky, then cover it with paint, snow or water.
 			const iceVertex = `${header}
-				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec2 vForkMark;
-				uniform vec3 uView; uniform float uRoad,uGrade,uMark,uLateral; uniform vec2 uTestFork;
+				out vec3 vRelative, vWorld, vNormal, vPaint0, vPaint1; out vec4 vRoadMark; out float vSplinePaint; out vec4 vRoadArms;
+				uniform vec3 uView; uniform float uRoad,uGrade,uMark,uLateral; uniform vec2 uOtherArm;
 				uniform vec2 uPixelSpan, uWorldOrigin;
 				uniform float uDashAngle;
 				void main() {
@@ -999,7 +999,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vNormal=vec3(0.,1.,0.);
 					vec2 phase=vec2(cos(uDashAngle),sin(uDashAngle));
 					phase+=span.x*(6.2831853/97.536)*vec2(-phase.y,phase.x);
-					vForkMark=uTestFork; vSplinePaint=uRoad*(uMark+uTestFork.y); vRoadMark=uMark*vec4(uLateral+span.y/8.,phase,1.); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
+					float offsetA=uMark*(uLateral+span.y/8.);
+					vRoadArms=vec4(offsetA,uOtherArm.x,0.,0.);
+					float weight=uMark+uOtherArm.y;
+					vSplinePaint=uRoad*weight;
+					vRoadMark=vec4(abs(offsetA)+abs(uOtherArm.x),weight*phase,weight); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
 			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
 			parameters(ice);
@@ -1067,14 +1071,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}));
 			}
 
-			// A triangle leaving the shared pavement can have one painted vertex
-			// exactly on its centerline. Its dash must not fill the triangle.
+			// Equal and opposite offsets from different arms must never paint a center dash in the median.
 			gl.uniform1f(iceLoc('uGrade'),0);
 			gl.uniform1f(iceLoc('uMark'),.7);
-			gl.uniform1f(iceLoc('uLateral'),0);
-			gl.uniform2f(iceLoc('uTestFork'),.12,.3);
+			gl.uniform1f(iceLoc('uLateral'),-.12/.7);
+			gl.uniform2f(iceLoc('uOtherArm'),.12,.3);
 			const junctionInk=sampleIce(mirror,0);
-			gl.uniform2f(iceLoc('uTestFork'),0,0);
+			gl.uniform2f(iceLoc('uOtherArm'),0,0);
 			gl.uniform1f(iceLoc('uMark'),1);
 			// Move a driver's elongated pixel along the same dash, then across the stripe.
 			gl.uniform1f(iceLoc('uGrade'),0);
@@ -1480,14 +1483,13 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				for(let y=first+7;y<=first+9;y++) for(let x=first;x<=first+4;x++) {
 					const i=4*(y*n+x);
 					inks[i]=5;
-					const code=((4096+(x<first+2 ? 1024 : 3072))<<11);
+					const code=((2048+(x<first+2 ? 512 : 1536))<<12);
 					inks[i+1]=code>>16; inks[i+2]=(code>>8)&255;
 				}
-				// At the fork boundary, signed coordinates from a single arm meet the
-				// unsigned distance to both arms. The grass in the median must survive.
+				// Opposite signed offsets on neighboring arms must preserve the grass median.
 				for(let y=first+11;y<=first+13;y++) for(let k=0;k<4;k++) {
 					const distance=k<2 ? .75 : 1.25;
-					const code=k%2 ? (8191<<11)|(distance*1024) : (4096-distance*2048)<<11;
+					const code=((2048+(k%2 ? 1 : -1)*distance*1024)<<12)|((k%2)<<10);
 					inks.set([5,code>>16,(code>>8)&255,code&255],4*(y*n+first+k));
 				}
 				texture(unit+1,n,n,inks);

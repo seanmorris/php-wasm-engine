@@ -87,8 +87,8 @@ for(const advanced of [false,true]) for(const joined of [false,true]) test((adva
 							if(bytes[i] !== expected[i]) throw Error('Material differs at ' + [x+i/4,z]);
 							const mark = row => (row[i+1]<<16)|(row[i+2]<<8)|row[i+3];
 							const gpu = mark(bytes), php = mark(expected);
-							const phase = Math.abs((gpu&2047)-(php&2047));
-							if(Boolean(gpu)!==Boolean(php) || Math.abs((gpu>>11)-(php>>11))>1 || Math.min(phase,2048-phase)>1)
+							const phase = Math.abs((gpu&1023)-(php&1023));
+							if(Boolean(gpu)!==Boolean(php) || ((gpu^php)&3072)!==0 || Math.abs((gpu>>12)-(php>>12))>1 || Math.min(phase,1024-phase)>1)
 								throw Error('Road marking differs at ' + [x+i/4,z,gpu,php]);
 						}
 					}

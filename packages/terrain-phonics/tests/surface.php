@@ -898,7 +898,7 @@ foreach([[0,1,2],[2,1,0]] as $order) {
 		$tex=$fork->paintTexel($x,$z);
 		$ink.=$tex;
 		$code=(ord($tex[1])<<16)|(ord($tex[2])<<8)|ord($tex[3]);
-		$d=($code>>11)===8191 ? ($code&2047)/1024. : abs(($code>>11)-4096)/2048.;
+		$d=abs(($code>>12)-2048)/1024.;
 		$paved=ord($tex[0])===5 && (!$code || $d<=1.);
 		if(abs($d-1.)>.001) terrainCheck($paved===TerrainPhonics\Edits::onRoad($x,$z,$roads),
 			"Fork pavement follows the combined road widths at $x,$z");
@@ -913,6 +913,47 @@ foreach([[0,1,2],[2,1,0]] as $order) {
 	$fork->close();
 }
 terrainCheck($floors[0]===$floors[1],'Reordering the three arms preserves their outline and paint');
+
+// Two arms split at one node and rejoin at another. Reverse one arm so
+// neither the edit order nor the direction of its control points defines the dash.
+$junctionRoads=[
+	[[-100,0,0],[0,0,0]],
+	[[0,0,0],[40,0,-8],[80,0,-28],[140,0,-8],[180,0,0]],
+	[[180,0,0],[140,0,8],[80,0,28],[40,0,8],[0,0,0]],
+	[[180,0,0],[250,0,0]]
+];
+$network=new Landscape(['worldSize'=>512,'heightScale'=>0,'detailAmplitude'=>0]);
+foreach($junctionRoads as $points) $network->queue($section+compact('points'));
+$network->commit();
+foreach($network->roads() as $id=>$op) {
+	$r=$op['_road'];
+	$last=array_key_last($r['samples']);
+	foreach([0,$last] as $i) {
+		[$x,,$z]=$r['samples'][$i];
+		if($x!==0. && $x!==180.) continue;
+		terrainNear(TerrainPhonics\RoadMarkings::station($r,$i),TerrainPhonics\RoadMarkings::DASH_METERS/2,
+			1e-8,"Arm $id shares a dash midpoint at the junction at $x");
+	}
+	// Sample the baked paint along each physical centerline, through both
+	// junction aprons. A missing phase produces a long unbroken dash or gap.
+	$previous=null; $run=0.; $changes=0;
+	for($i=1;$i<=$last;$i++) {
+		[$ax,,$az]=$r['samples'][$i-1]; [$bx,,$bz]=$r['samples'][$i];
+		$length=hypot($bx-$ax,$bz-$az); $steps=max(1,(int)ceil($length/.25));
+		for($k=0;$k<$steps;$k++) {
+			$x=$ax+($bx-$ax)*$k/$steps; $z=$az+($bz-$az)*$k/$steps;
+			$texel=$network->paintTexel($x,$z);
+			$code=(ord($texel[1])<<16)|(ord($texel[2])<<8)|ord($texel[3]);
+			terrainCheck(ord($texel[0])===5 && ($code>>12)===2048,"Arm $id retains its physical center at $x,$z");
+			$dash=($code&63)<32;
+			if($previous!==$dash) { $run=0.; $previous=$dash; $changes++; }
+			$run+=$length/$steps;
+			terrainCheck($run<3.6,"Arm $id has a long dash or gap at $x,$z");
+		}
+	}
+	terrainCheck($changes>15,"Dashes alternate along arm $id");
+}
+$network->close();
 // Detaching an endpoint invalidates its former neighbor, including cached cap ink.
 $split = new Landscape($flatRecipe);
 foreach($parts as $points) $split->queue($section+compact('points'));
