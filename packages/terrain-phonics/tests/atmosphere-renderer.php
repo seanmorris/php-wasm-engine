@@ -114,7 +114,7 @@ namespace
 	use Phonics\Render\Program;
 
 	foreach([
-		'GL_NEAREST'
+		'GL_NEAREST', 'GL_LINEAR'
 		, 'GL_DEPTH_TEST'
 		, 'GL_CULL_FACE'
 		, 'GL_BLEND'

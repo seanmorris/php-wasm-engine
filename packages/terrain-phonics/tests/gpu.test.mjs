@@ -35,6 +35,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'material-fields.glsl'
 		, 'material-cache.frag'
 		, 'surface-layers.glsl'
+		, 'surface-samples.glsl'
 	];
 
 	const shaders = Object.fromEntries(names.map(name => [name
@@ -145,12 +146,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				}
 			};
 
-			const texture = (unit, width, height, bytes) => {
+			const texture = (unit, width, height, bytes, filter = gl.NEAREST) => {
 				const created = gl.createTexture();
 				gl.activeTexture(gl.TEXTURE0 + unit);
 				gl.bindTexture(gl.TEXTURE_2D, created);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
@@ -160,8 +161,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			const framebuffer = gl.createFramebuffer();
 
-			const target = (unit, width, height) => {
-				const created = texture(unit, width, height, null);
+			const target = (unit, width, height, filter = gl.NEAREST) => {
+				const created = texture(unit, width, height, null, filter);
 				gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, created, 0);
 
@@ -281,8 +282,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
 			const buildAerialCache = (altitude, band) => {
-				target(4, 512, 16);
-				const radiance = texture(5, 512, 16, null);
+				target(4, 512, 17, gl.LINEAR);
+				const radiance = texture(5, 512, 17, null, gl.LINEAR);
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
 				gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 				parameters(aerialCache);
@@ -301,6 +302,27 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			};
 			buildAerialCache(100);
+
+			const solar = program(vertex,header+data.source+`
+				uniform float altitude; uniform bool useTable; out vec4 color;
+				void main() {
+					vec3 direct=useTable ? terrainCachedSunlight(altitude) : terrainSunlight(altitude);
+					color=vec4(terrainToneMap(direct*.15),1.);
+				}`);
+			parameters(solar);
+			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheTransmittance'),4);
+			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheRadiance'),5);
+			gl.uniform3f(gl.getUniformLocation(solar,'uAerialCacheGrid'),32,16,16);
+			gl.uniform1f(gl.getUniformLocation(solar,'uAerialCacheAltitude'),100);
+			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheReady'),1);
+			for(const height of [-157,-155.75,-4,.5,76.25,100,349.99,355.5,5200]) {
+				gl.uniform1f(gl.getUniformLocation(solar,'altitude'),height);
+				gl.uniform1i(gl.getUniformLocation(solar,'useTable'),0);
+				const direct=pixel();
+				gl.uniform1i(gl.getUniformLocation(solar,'useTable'),1);
+				if(pixel().some((v,i)=>Math.abs(v-direct[i])>1))
+					throw Error('Solar table differs from the analytic light at '+height);
+			}
 
 			const aerialSample = program(vertex, `${header}${data.source}
 				uniform vec3 uTestRay; uniform float uTestAltitude; uniform float uTestDistance; out vec4 color;
@@ -1573,6 +1595,34 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			}
 			gl.deleteFramebuffer(fieldFbo);
 			gl.deleteTexture(fieldTexture);
+
+			// The four material taps straddle two surfaces at different depths. The foreground is red
+			// and the background blue. Clearing or painting a tap must affect the very next lookup.
+			const resolve=program(shaders['shadows.vert'],header+'#define READ_SURFACE_SAMPLES\n'+shaders['surface-samples.glsl']+`
+				out vec4 color;
+				void main() {
+					vec3 pigment=vec3(0.,1.,0.), normal=vec3(0.,1.,0.);
+					nativeDepthSlope=vec2(dFdx(gl_FragCoord.w),dFdy(gl_FragCoord.w));
+					bool found=sampleSurface(vec3(0.,1.,0.),pigment,normal);
+					color=vec4(found ? pigment : vec3(0.,1.,0.),1.);
+				}`);
+			target(0,1,1);
+			gl.useProgram(resolve);
+			gl.uniform2f(gl.getUniformLocation(resolve,'uSurfacePixel'),1,1);
+			gl.uniform1i(gl.getUniformLocation(resolve,'uMaterialPigment'),13);
+			gl.uniform1i(gl.getUniformLocation(resolve,'uMaterialNormal'),14);
+			const redDepth=Math.round(65535/17), blueDepth=Math.round(Math.log2(21)*65535/17);
+			const redSample=[180,0,0,redDepth>>8], blueSample=[0,0,180,blueDepth>>8];
+			const up=depth=>[128,128,depth&255,255];
+			texture(13,2,2,Uint8Array.from([...redSample,...blueSample,...redSample,...blueSample]));
+			texture(14,2,2,Uint8Array.from([...up(redDepth),...up(blueDepth),...up(redDepth),...up(blueDepth)]));
+			const edge=pixel();
+			if(edge[0]<250 || edge[1]!==0 || edge[2]!==0) throw Error('Different depths bled across a silhouette: '+edge);
+			texture(14,2,2,new Uint8Array(16));
+			if(String(pixel())!=='0,255,0') throw Error('An empty material neighborhood must request the base pigment');
+			texture(13,2,2,Uint8Array.from(Array(4).fill([0,0,180,redDepth>>8]).flat()));
+			texture(14,2,2,Uint8Array.from(Array(4).fill(up(redDepth)).flat()));
+			if(pixel()[2]<250) throw Error('A replacement surface still shows the previous pigment');
 
 			const error = gl.getError();
 
