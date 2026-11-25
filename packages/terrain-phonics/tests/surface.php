@@ -1318,7 +1318,8 @@ terrainReject(fn() => new Recipe(['terraceStrength' => 1.1]), 'terraces reject s
 // Exhaustive reference splits each ray at all lattice crossings, sorts the distances,
 // then solves each segment using the cell containing its midpoint.
 $exhaustive = [
-	'coast' => [181.946400631, 97.383072653, 3.978038728, 113.058136124, 2.747950511, null, 55.730226949, 59.663528949],
+	// The eighth coastal ray meets the filled hillside shoulder. Its first hit was verified by bisection.
+	'coast' => [181.946400631, 97.383072653, 3.978038728, 113.058136124, 2.747950511, null, 55.730226949, 59.465000326],
 	'mountain' => [3.556661567, 71.338958719, 231.08807236, 113.058165181, 12.84570181, null, null, 7.280767374],
 	'canyon' => [30.703922065, 42.54823098, 10.556674898, 113.058185298, null, null, 111.341562416, 13.43411505],
 ];
@@ -1352,6 +1353,17 @@ foreach(['coast','mountain','canyon'] as $preset)
 			terrainNear($world->height($x,$z), $y, 1e-4, "$preset ray $i actually lies on the surface");
 			terrainNear($distance, $expected, 2e-6, "$preset ray $i preserves exhaustive first-hit distance");
 		}
+	}
+	if($preset === 'coast')
+	{
+		$fillKey = $world->roads()[0]['_road']['fillKey'];
+		$loaded = Landscape::load($world->save());
+		terrainCheck($loaded->roads()[0]['_road']['fillKey'] === $fillKey, 'Reload regenerates the same hillside shoulder');
+		terrainCheck($loaded->undo() && !$loaded->roads(), 'Undo removes the road and its shoulder');
+		terrainCheck($loaded->redo() && $loaded->roads()[0]['_road']['fillKey'] === $fillKey, 'Redo restores the same hillside shoulder');
+		[$origin,$direction] = $rays[7];
+		terrainNear($loaded->raycast($origin,$direction,600)['distance'], $exhaustive['coast'][7], 2e-6, 'The restored shoulder is pickable');
+		$loaded->close();
 	}
 	$world->close();
 }
