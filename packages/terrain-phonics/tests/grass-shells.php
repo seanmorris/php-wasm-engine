@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
+
 require dirname(__DIR__, 3) . '/autoload.php';
+
 require dirname(__DIR__) . '/autoload.php';
 
 use TerrainPhonics\GrassShells;
@@ -9,6 +11,12 @@ use TerrainPhonics\TerrainAppearance;
 
 $checks = 0;
 
+/**
+ * Count a passing check or stop at the first failure.
+ * @param bool $valid Whether the check passed.
+ * @param string $message What the check establishes.
+ * @return void Throws when the check fails.
+ */
 function grassCheck(bool $valid, string $message): void
 {
 	global $checks;
@@ -26,11 +34,19 @@ foreach(array_keys(GrassShells::STYLES) as $name)
 	$style = GrassShells::style($name);
 
 	grassCheck(in_array($name, $surfaces, true), "$name is a preset or a surface style");
-	grassCheck($style['height'] > 0. && $style['height'] <= 1.5, "$name grows a strand of sensible height");
-	grassCheck($style['density'] >= 1. && $style['density'] <= 16., "$name packs one to sixteen strands a meter");
-	grassCheck($style['radius'] > 0. && $style['radius'] <= .5, "$name keeps each strand inside its cell");
-	grassCheck($style['root'] > .3 && $style['root'] < 1., "$name darkens the ground between its stalks");
+	grassCheck($style['height'] > 0. && $style['height'] <= 1.5, "$name grows a blade of sensible height");
+	grassCheck($style['density'] >= 1. && $style['density'] <= 24., "$name packs one to twenty-four blades a meter");
 
+	// A blade much wider than its cell would be cut off at the cell's edge.
+	grassCheck(
+		$style['width'] > 0. && $style['width'] * $style['density'] <= .75
+		, "$name keeps each blade inside its cell"
+	);
+
+	grassCheck($style['lean'] >= 0. && $style['lean'] <= 1., "$name leans no further than it is tall");
+	grassCheck($style['root'] > .3 && $style['root'] < 1., "$name darkens the ground between its blades");
+
+	// The blend can at most double the ground's light.
 	grassCheck(
 		count($style['tip']) === 3 && min($style['tip']) >= .8 && max($style['tip']) <= 1.6
 		, "$name brightens its tips by a displayable amount"
@@ -43,43 +59,14 @@ foreach(array_keys(GrassShells::STYLES) as $name)
 
 	grassCheck($style['above'][0] < $style['above'][1], "$name starts above the water before it is full");
 	grassCheck($style['top'] === null || $style['top'][0] < $style['top'][1], "$name thins before its upper limit");
-
-	// A strand that crosses every shell ends at the tip brightness, whatever the shell count.
-	foreach([1, 2] as $quality)
-	{
-		$shells = GrassShells::shells($style, $quality);
-		$gain = GrassShells::gain($style, $shells);
-
-		grassCheck(
-			$shells >= GrassShells::FEWEST && $shells <= GrassShells::MOST && ($shells === GrassShells::MOST || $style[
-				'height'
-			] / $shells <= GrassShells::SLAB[$quality] + 1e-9 || $shells === GrassShells::FEWEST
-			)
-			, "$name gets shells thin enough for quality $quality"
-		);
-
-		foreach($gain as $channel => $factor)
-		grassCheck(
-			abs($style['root'] * $factor ** $shells - $style['tip'][$channel]) < 1e-9 && $factor > 1.
-				&& $factor < 2.
-			, "$name reaches its tip color through $shells shells"
-		);
-	}
-
-	grassCheck(
-		GrassShells::shells($style, 0) === 0 && GrassShells::shells($style, 1) <= GrassShells::shells($style, 2)
-		, "$name draws nothing when off and no fewer shells at high quality"
-	);
 }
 
 grassCheck(GrassShells::style('canyon') === null && GrassShells::style('') === null, 'Bare surfaces grow nothing');
 
 grassCheck(
-	GrassShells::shells(GrassShells::style('rolling-prairie'), 2) > GrassShells::shells(
-		GrassShells::style('chalk-headlands')
-		, 2
-	)
-	, 'Tall grass gets more shells than short turf'
+	GrassShells::steps(0) === 0 && GrassShells::steps(1) > 0 && GrassShells::steps(2) > GrassShells::steps(1)
+	&& GrassShells::steps(9) === 0
+	, 'Quality steps from off upward, and an unknown level draws nothing'
 );
 
 // The radius is the room the finest grid leaves around the eye, up to the reach, and nothing when the room is small.
@@ -90,7 +77,11 @@ grassCheck(
 	, 'An off-center eye uses the nearest edge'
 );
 
-grassCheck(GrassShells::radius([-200., -200., 200., 200.], [0., 5., 0.]) === 56., 'A wide grid is capped at the reach');
+grassCheck(
+	GrassShells::radius([-200., -200., 200., 200.], [0., 5., 0.]) === 120.
+	, 'A wide grid is capped at the reach'
+);
+
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [25., 5., 0.]) === 0., 'An eye near the edge draws nothing');
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [40., 5., 0.]) === 0., 'An eye outside the grid draws nothing');
 
