@@ -1480,6 +1480,12 @@ terrainCheck(!isset($legacy->values()['join']['version']) && $morph->values()['j
 	'Legacy and morphed junctions round trip separately');
 
 $layers = new Landscape(['worldSize'=>256,'heightScale'=>0,'detailAmplitude'=>0]);
+$embankment = new Landscape(['worldSize'=>256,'heightScale'=>0,'detailAmplitude'=>0,'waterLevel'=>-5]);
+$embankment->queue(['type'=>'road','width'=>12,'shoulder'=>2,'points'=>[[0,2,-90],[0,2,90]]]);
+$embankment->commit();
+terrainCheck(!isset($embankment->roads()[0]['_road']['fills']), 'A low embankment on level ground has no uphill bank');
+terrainNear($embankment->height(25,0),0.,1.e-8,'Ground beyond a low embankment stays floodable');
+$embankment->close();
 $road = ['type'=>'road','width'=>12,'shoulder'=>3,'crown'=>0.,'points'=>[[-40,8,0],[40,8,0]]];
 $otherRoad = array_replace($road,['points'=>[[-40,12,40],[40,12,40]]]);
 $layers->queue($road);
