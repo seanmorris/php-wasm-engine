@@ -173,9 +173,21 @@ function frontmatter(title, description, parent, weight = 0, fields = {})
 	return `---\ntitle: ${metadata(title)}\ndisplay-title: ${markdownMetadata(displayTitle)}\ndescription-meta: ${metadata(description)}\n${extra ? extra + '\n' : ''}menus:\n  documentation:\n    parent: ${parent}\n    weight: ${weight}\n---\n`;
 }
 
+/**
+ * Escape dollar signs outside code spans. Pandoc reads the text between two of them as TeX math, so a comment
+ * that names two PHP variables would lose both.
+ */
+function prose(value)
+{
+	return String(value ?? '')
+		.split(/(`[^`]*`)/)
+		.map((part, index) => (index % 2 ? part : part.replaceAll('$', '\\$')))
+		.join('');
+}
+
 function cell(value)
 {
-	return String(value ?? '').replaceAll('|', '\\|').replace(/\s+/g, ' ').trim();
+	return prose(value).replaceAll('|', '\\|').replace(/\s+/g, ' ').trim();
 }
 
 function html(value)
@@ -301,9 +313,9 @@ function phpSignature(method)
 
 function memberDoc(doc)
 {
-	let result = doc.summary ? `${doc.summary}\n` : '';
+	let result = doc.summary ? `${prose(doc.summary)}\n` : '';
 
-	if(doc.description) result += `\n${doc.description}\n`;
+	if(doc.description) result += `\n${prose(doc.description)}\n`;
 
 	return result;
 }
@@ -401,10 +413,10 @@ function phpClassPage(item, aliases, config = null)
 			}
 
 			if(method.name !== '__construct' && method.doc.return)
-				body += `\n**Returns:** ${typeMarkup(method.doc.return.type, item.namespace, slug)} — ${method.doc.return.description}\n`;
+				body += `\n**Returns:** ${typeMarkup(method.doc.return.type, item.namespace, slug)} — ${prose(method.doc.return.description)}\n`;
 
 			if(method.doc.throws.length)
-				body += `\n**Throws:** ${method.doc.throws.map(value => `${typeMarkup(value.type, item.namespace, slug)} — ${value.description}`).join('; ')}\n`;
+				body += `\n**Throws:** ${method.doc.throws.map(value => `${typeMarkup(value.type, item.namespace, slug)} — ${prose(value.description)}`).join('; ')}\n`;
 		}
 	}
 
@@ -437,7 +449,7 @@ function namespacePage(namespace, classes)
 	body += `[PHP API](api.html)\n\n${description}\n\n## Example\n\n\`\`\`php\n${namespaceExamples[namespace]}\n\`\`\`\n\n## Classes\n\n`;
 
 	for(const item of classes)
-		body += `- [${code(item.name)}](${slugClass(item.name)}.html) — ${item.doc.summary}\n`;
+		body += `- [${code(item.name)}](${slugClass(item.name)}.html) — ${prose(item.doc.summary)}\n`;
 
 	return body;
 }
@@ -452,7 +464,7 @@ function gameNamespacePage(namespace, classes, config)
 	body += `These types are declared in ${code(namespace)}.\n\n## Types\n\n`;
 
 	for(const item of classes)
-		body += `- [${code(item.shortName)}](${relativePage(slug, gameClassSlug(item, config))}) — ${item.doc.summary}\n`;
+		body += `- [${code(item.shortName)}](${relativePage(slug, gameClassSlug(item, config))}) — ${prose(item.doc.summary)}\n`;
 
 	return body;
 }
