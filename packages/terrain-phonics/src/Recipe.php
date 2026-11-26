@@ -50,18 +50,34 @@ final class Recipe
 	 */
 	private const REACH = 288230376151711744.0;
 
-	/** Initial parameters used by the Landscape Lab and command-line preview. */
+	/**
+	 * Initial parameters used by the Landscape Lab and command-line preview.
+	 *
+	 * @param string $preset Landscape preset identifier.
+	 * @return array Effective initial settings for the named landscape.
+	 */
 	public static function showcase(string $preset): array
 	{
 		return ['preset' => $preset] + match($preset)
 		{
 			'mountain' => ['heightScale' => 1400.,'baseFrequency' => 1 / 2200],
-			'canyon' => ['heightScale' => 650.,'baseFrequency' => 1 / 4000,'terraceSpacing' => 80.,'waterLevel' => -450.],
+			'canyon' => [
+				'heightScale' => 650.
+				, 'baseFrequency' => 1 / 4000
+				, 'terraceSpacing' => 80.
+				, 'waterLevel' => -450.
+			],
 			default => [],
 		};
 	}
 
-	/** Shape coefficients copied by preset selection and by the legacy recipe loader. */
+	/**
+	 * Shape coefficients copied by preset selection and by the legacy recipe loader.
+	 *
+	 * @param string $preset Landscape preset identifier.
+	 * @param int $version Terrain recipe format version.
+	 * @return array Preset landform coefficients for this recipe version.
+	 */
 	public static function shapeDefaults(string $preset, int $version = 2): array
 	{
 		// A sharp divide is cut by crossing spurs. Lift the outer valley flanks to leave open troughs between divides.
@@ -897,7 +913,14 @@ final class Recipe
 
 		for($i = 0; $i < $values['detailOctaves'] && $amplitude > 0.; $i++)
 		{
-			$this->octaveSteps[] = [$frequency,$amplitude,$values['damping'] * ($i + 1) * ($i + 1),$i * 19.17,$i * 31.29];
+			$this->octaveSteps[] = [
+				$frequency
+				, $amplitude
+				, $values['damping'] * ($i + 1) * ($i + 1)
+				, $i * 19.17
+				, $i * 31.29
+			];
+
 			$frequency *= $values['lacunarity'];
 			$amplitude *= $values['persistence'];
 		}
@@ -913,14 +936,15 @@ final class Recipe
 	public function values(): array { return $this->values; }
 
 	/**
-	 * Evaluate the C2 macro field, including world-space first derivatives.
+	 * Evaluate the C2 macro field, including world-space first derivatives.  A node sampled through the Noise methods
+	 * makes over a hundred calls, and calls are the main cost of PHP in the browser. Each sample here is therefore
+	 * Noise::sample() written out with the same operations in the same order, which returns the same bits. A scalar
+	 * suffixed 0, 1 or 2 holds a sample's value, X derivative or Z derivative. An integer cast stepped down below a
+	 * negative fraction replaces floor().
 	 *
-	 * A node sampled through the Noise methods makes over a hundred calls, and calls are the main cost of PHP
-	 * in the browser. Each sample here is therefore Noise::sample() written out with the same operations in
-	 * the same order, which returns the same bits. A scalar suffixed 0, 1 or 2 holds a sample's value, X
-	 * derivative or Z derivative. An integer cast stepped down below a negative fraction replaces floor().
 	 * @param float $x World X coordinate in meters.
 	 * @param float $z World Z coordinate in meters.
+	 * @param ?array $profile Optional interpolated terrain shape parameters.
 	 * @return array Coarse height and world-space derivatives [height,dx,dz].
 	 */
 	public function coarse(float $x, float $z, ?array $profile = null): array
@@ -936,7 +960,12 @@ final class Recipe
 		return [$h,$a * $dx + $c * $dz,$b * $dx + $d * $dz];
 	}
 
-	/** Pull world coordinates into the rotated seed and stretch the macro field along its bearing. */
+	/**
+	 * Pull world coordinates into the rotated seed and stretch the macro field along its bearing.
+	 *
+	 * @param array $r Normalized terrain recipe.
+	 * @return array Transform coefficients for the domain and directional terrain features.
+	 */
 	public static function axes(array $r): array
 	{
 		$t = deg2rad($r['domainRotation']);
@@ -956,6 +985,12 @@ final class Recipe
 		$p = ($r['ridgeStretch'] - 1) * ($cx * $x + $cz * $z);
 		// Store identical coefficients in the PHP evaluator and the binary32 shader uniforms.
 
+		/**
+		 * Round the transform coefficient to the shader's float precision.
+		 *
+		 * @param float $n Transform coefficient.
+		 * @return float Single-precision value.
+		 */
 		$float = static fn(float $n): float => unpack('g', pack('g', $n))[1];
 
 		return [
@@ -965,7 +1000,14 @@ final class Recipe
 		];
 	}
 
-	/** Evaluate at coordinates already translated into the seeded field. */
+	/**
+	 * Evaluate at coordinates already translated into the seeded field.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param ?array $profile Optional interpolated terrain shape parameters.
+	 * @return array Macro elevation and its horizontal derivatives.
+	 */
 	private function coarseAt(float $x, float $z, ?array $profile): array
 	{
 		$r = $this->values;
@@ -1296,7 +1338,10 @@ final class Recipe
 				// Noise::fade() written out, as is every fade below.
 				$fade = $channel * $channel * $channel * ($channel * ($channel * 6 - 15) + 10);
 				$strength = $r['bedding'] * $r['terraceStrength'] * (1 - .80 * $fade);
-				$ds = -$r['bedding'] * $r['terraceStrength'] * .80 * 30 * $channel ** 2 * ($channel - 1) ** 2 / .62 * $ef;
+				$ds = -$r['bedding'] * $r['terraceStrength'] * .80 * 30 * $channel ** 2 * (
+					$channel - 1
+				) ** 2 / .62 * $ef;
+
 				$strengthX = $ds * ($erosion1 * $j0 + $erosion2 * $j2);
 				$strengthZ = $ds * ($erosion1 * $j1 + $erosion2 * $j3);
 			}
@@ -1363,12 +1408,13 @@ final class Recipe
 	}
 
 	/**
-	 * Sample finite smooth detail, gating every octave from the independent coarse guide.
+	 * Sample finite smooth detail, gating every octave from the independent coarse guide.  The octave loop uses
+	 * precomputed coefficients and writes Noise::value() out in place, for the reason given on coarse(). The
+	 * operations keep their order, so every height keeps its bits.
 	 *
-	 * The octave loop uses precomputed coefficients and writes Noise::value() out in place, for the reason
-	 * given on coarse(). The operations keep their order, so every height keeps its bits.
 	 * @param float $x World X coordinate in meters.
 	 * @param float $z World Z coordinate in meters.
+	 * @param ?array $profile Optional interpolated terrain shape parameters.
 	 * @return float Final procedural lattice height in meters.
 	 */
 	public function height(float $x, float $z, ?array $profile = null): float
@@ -1444,7 +1490,15 @@ final class Recipe
 		return $height;
 	}
 
-	/** Four overlapping cell-local groove trains follow the coarse fall line without seams at cell edges. */
+	/**
+	 * Four overlapping cell-local groove trains follow the coarse fall line without seams at cell edges.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param float $dx Macro height derivative along X.
+	 * @param float $dz Macro height derivative along Z.
+	 * @return float Change in elevation from the local groove field.
+	 */
 	private function gullyCut(float $x, float $z, float $dx, float $dz): float
 	{
 		$grade = sqrt($dx * $dx + $dz * $dz);
@@ -1478,7 +1532,9 @@ final class Recipe
 
 	/**
 	 * Bound every procedural node in a world rectangle, including warp, terraces and gated detail.
+	 *
 	 * @param array $box Horizontal bounds [minX,minZ,maxX,maxZ], including any sample halo.
+	 * @param ?array $profileRange Bounds on the interpolated shape parameters across the region.
 	 * @return array Conservative node height interval in meters.
 	 */
 	public function regionalBounds(array $box, ?array $profileRange = null): array
@@ -1493,8 +1549,17 @@ final class Recipe
 		{
 			[$a,$b,$c,$d] = $this->axes['macro'];
 			[$u,$v] = $this->axes['rotation'];
-			$detailBox = [$u * $x + $v * $z,$u * $z - $v * $x,abs($u) * $rx + abs($v) * $rz,abs($v) * $rx + abs($u) * $rz];
-			[$x,$z,$rx,$rz] = [$a * $x + $b * $z,$c * $x + $d * $z,abs($a) * $rx + abs($b) * $rz,abs($c) * $rx + abs($d) * $rz];
+			$detailBox = [
+				$u * $x + $v * $z,$u * $z - $v * $x
+				, abs($u) * $rx + abs($v) * $rz
+				, abs($v) * $rx + abs($u) * $rz
+			];
+
+			[$x,$z,$rx,$rz] = [
+				$a * $x + $b * $z,$c * $x + $d * $z
+				, abs($a) * $rx + abs($b) * $rz
+				, abs($c) * $rx + abs($d) * $rz
+			];
 		}
 
 		$wx = $x;
@@ -1576,7 +1641,8 @@ final class Recipe
 			$wallHi = max(0.0, min(1.0, ($absMax - $startLo) / $widthLo));
 			$lo += $r['wallHeight'] * Noise::fade($wallLo);
 			$hi += $r['wallHeight'] * Noise::fade($wallHi);
-			$gradient += $r['wallHeight'] * ($wallHi === 0.0 || $wallLo === 1.0 ? 0 : 1.875 / $widthLo) * $da + .15 * $db;
+			$gradient += $r['wallHeight'] * ($wallHi === 0.0 || $wallLo === 1.0 ? 0 : 1.875 / $widthLo
+			) * $da + .15 * $db;
 		}
 
 		$lo *= $r['heightScale'];
@@ -1628,7 +1694,12 @@ final class Recipe
 
 		for($i = 0; $i < $r['detailOctaves'] && $amp > 0; $i++)
 		{
-			[$n,$m] = $this->noise->envelope($x * $f + 91.73 + $i * 19.17, $z * $f - 23.49 - $i * 31.29, $rx * $f, $rz * $f);
+			[$n,$m] = $this->noise->envelope(
+				$x * $f + 91.73 + $i * 19.17
+				, $z * $f - 23.49 - $i * 31.29
+				, $rx * $f
+				, $rz * $f
+			);
 
 			if($this->detailShape != 0.)
 			{
@@ -1654,6 +1725,8 @@ final class Recipe
 
 	/**
 	 * Conservative node extrema include the maximum possible gradient-noise magnitude.
+	 *
+	 * @param ?float $ridgeRoundness Ridge-rounding coefficient used for the bound.
 	 * @return array Conservative lower and upper node heights.
 	 */
 	public function bounds(?float $ridgeRoundness = null): array

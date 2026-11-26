@@ -17,6 +17,13 @@ final class AtmosphereLayers
 	];
 	public readonly array $rows, $bands, $colors, $uniforms;
 
+	/**
+	 * Validate the layer definitions and pack enabled density and color uniforms.
+	 *
+	 * @param array $rows Atmospheric band definitions in display order.
+	 * @param float $ceiling Maximum atmosphere altitude in meters.
+	 * @return void No value.
+	 */
 	public function __construct(array $rows = [], float $ceiling = 80000.)
 	{
 		if(!array_is_list($rows) || count($rows) > self::LIMIT)
@@ -70,7 +77,15 @@ final class AtmosphereLayers
 		$this->uniforms = ['airLayerCount' => count($bands)] + $uniforms;
 	}
 
-	/** Positive ray interval inside a sphere. Factored roots retain meter precision near the surface. */
+	/**
+	 * Positive ray interval inside a sphere. Factored roots retain meter precision near the surface.
+	 *
+	 * @param float $planet Planet radius in meters.
+	 * @param float $eye Observer altitude above the planet's surface in meters.
+	 * @param float $projection Signed projection of the eye radius onto the viewing ray.
+	 * @param float $height Render target height in pixels.
+	 * @return array Entry and exit distances along the forward ray.
+	 */
 	private static function sphere(float $planet, float $eye, float $projection, float $height): array
 	{
 		$delta = ($height - $eye) * (2 * $planet + $height + $eye);
@@ -84,7 +99,14 @@ final class AtmosphereLayers
 		return $projection >= 0 ? [0., max(0., $delta / $q)] : [max(0., -$delta / $q), $q];
 	}
 
-	/** Outer and inner sphere intervals. A grazing ray can traverse the same shell twice. */
+	/**
+	 * Outer and inner sphere intervals. A grazing ray can traverse the same shell twice.
+	 *
+	 * @param float $planet Planet radius in meters.
+	 * @param float $eye Observer altitude above the planet's surface in meters.
+	 * @param float $mu Cosine of the angle between the ray and the local vertical.
+	 * @return array Shell intersections and coefficients for each active density profile.
+	 */
 	public function spans(float $planet, float $eye, float $mu): array
 	{
 		$projection = ($planet + $eye) * $mu;
@@ -105,8 +127,15 @@ final class AtmosphereLayers
 		return $result;
 	}
 
-	/** Integrated density over a segment entirely in the layer. The parabolic profile 6h(1-h)
-	 * fades to zero at each boundary and keeps the authored mean density through the column. */
+	/**
+	 * Integrated density over a segment entirely in the layer. The parabolic profile 6h(1-h) fades to zero at each
+	 * boundary and keeps the authored mean density through the column.
+	 *
+	 * @param array $profile Quadratic density-profile coefficients for the intersected layer.
+	 * @param float $start Near end of the ray interval.
+	 * @param float $end Far end of the interval.
+	 * @return float Integrated column density along the ray segment.
+	 */
 	public static function column(array $profile, float $start, float $end): float
 	{
 		if($end <= $start) return 0.;
@@ -122,6 +151,13 @@ final class AtmosphereLayers
 		return ($end - $start) * 6 * max(0., $mean * (1 - $mean) - $b * $b / 3 - 4 * $c * $c / 45);
 	}
 
+	/**
+	 * Accumulate optical depth over the parts of the viewing ray inside active layers.
+	 *
+	 * @param array $spans Intersections with active atmospheric density layers.
+	 * @param float $distance Length along the ray in meters.
+	 * @return float Integrated extinction up to the specified distance.
+	 */
 	public function opticalDepth(array $spans, float $distance): float
 	{
 		$depth = 0.;

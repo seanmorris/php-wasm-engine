@@ -7,6 +7,14 @@ final class Starfield
 {
 	public const DEFAULTS = ['starBrightness' => 100., 'starTwinkle' => 0., 'shootingStars' => 0.];
 
+	/**
+	 * Validate brightness, twinkle strength and meteor frequency.
+	 *
+	 * @param float $brightness Star brightness as a percentage of the default.
+	 * @param float $twinkle Star brightness variation in percent.
+	 * @param float $perMinute Mean shooting-star frequency per minute.
+	 * @return void No value.
+	 */
 	public function __construct(
 		public readonly float $brightness = 100.
 		, public readonly float $twinkle = 0.
@@ -17,6 +25,12 @@ final class Starfield
 		throw new \InvalidArgumentException('Star field control outside its range.');
 	}
 
+	/**
+	 * Fade stars in as the sun descends through twilight.
+	 *
+	 * @param float $sunY Vertical component of the solar direction.
+	 * @return float Normalized star visibility at the given solar elevation.
+	 */
 	public function visibility(float $sunY): float
 	{
 		if($this->brightness <= 0.) return 0.;
@@ -28,7 +42,12 @@ final class Starfield
 		return $t * $t * (3. - 2. * $t);
 	}
 
-	/** At most one meteor in each time slot, with a stable offset, duration and path for that slot. */
+	/**
+	 * At most one meteor in each time slot, with a stable offset, duration and path for that slot.
+	 *
+	 * @param float $time Simulation time in seconds.
+	 * @return ?array Active meteor slot and progress data, or null between streaks.
+	 */
 	public function meteor(float $time): ?array
 	{
 		if($this->perMinute <= 0. || $time < 0.) return null;

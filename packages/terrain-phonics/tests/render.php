@@ -3020,9 +3020,10 @@ $driver->update(1 / 60, $eye, [-101.5,10000.]);
 $reverse = $driver->stats();
 
 renderCheck(
-	$reverse['visibleCoverage'][0][1] > $front + 22. && $reverse['visibleCoverage'][0][1] < $eye->position[2] && $reverse[
+	$reverse['visibleCoverage'][0][1] > $front + 22. && $reverse['visibleCoverage'][0][1] < $eye->position[2]
+		&& $reverse[
 		'heightTexelsWritten'
-	] - $ahead['heightTexelsWritten'] < (76 + 5) ** 2
+		] - $ahead['heightTexelsWritten'] < (76 + 5) ** 2
 	, 'Reversing keeps the eye covered and updates strips rather than refilling the near level'
 );
 
@@ -3057,7 +3058,7 @@ $first = $driver->stats();
 
 renderCheck(
 	$first['cameraSpacing'] === 1. && $first['heightTexelsWritten'] < 100000
-	, "The first fork frame resolves the pavement within the overview and small grids ({$first['heightTexelsWritten']} texels)."
+	, "The first fork frame resolves pavement on the overview and small grids ({$first['heightTexelsWritten']} texels)."
 );
 
 [$west,$north,$width,$step] = $first['visibleCoverage'][3];
@@ -3259,7 +3260,12 @@ $renderFields = static function() use ($scene, $eye) {
 $initial = $renderFields();
 renderCheck($initial === 256 ** 2 && $renderFields() === $initial, 'A stationary fork fills its material fields once');
 $eye->position[0] = 1.;
-renderCheck($renderFields() === $initial + 16 * 256, 'Crossing zero fills only the entering strip of the world texture');
+
+renderCheck(
+	$renderFields() === $initial + 16 * 256
+	, 'Crossing zero fills only the entering strip of the world texture'
+);
+
 $eye->position[0] = 5000.;
 $written = $renderFields();
 renderCheck($written === 2 * $initial + 16 * 256, 'Teleporting repopulates the resident window');
@@ -3284,7 +3290,12 @@ $recipe = $fork->recipe();
 $recipe['join']['destinations'][0]['seed'] = 'changed-seed';
 $reseeded = new Landscape($recipe);
 $scene->setLandscape($reseeded);
-renderCheck($renderFields() === 2 * $initial, 'A destination seed change invalidates cached noise at the same location');
+
+renderCheck(
+	$renderFields() === 2 * $initial
+	, 'A destination seed change invalidates cached noise at the same location'
+);
+
 $solo = new Landscape(['preset' => 'mountain']);
 $scene->setLandscape($solo);
 renderCheck($renderFields() === 0, 'A single landscape releases the journey field cache');

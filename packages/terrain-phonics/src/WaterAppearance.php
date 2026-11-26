@@ -17,7 +17,12 @@ final class WaterAppearance
 	public readonly array $settings;
 	private readonly array $linearColor;
 
-	/** Color is sRGB. Fog density is per meter. The other controls are fractions. */
+	/**
+	 * Color is sRGB. Fog density is per meter. The other controls are fractions.
+	 *
+	 * @param array $options Water color and optical controls.
+	 * @return void No value.
+	 */
 	public function __construct(array $options = [])
 	{
 		$settings = self::DEFAULTS;
@@ -55,13 +60,22 @@ final class WaterAppearance
 		$this->linearColor = $rgb;
 	}
 
-	/** Shared fragment functions for water and submerged opaque materials. */
+	/**
+	 * Shared fragment functions for water and submerged opaque materials.
+	 *
+	 * @return string GLSL functions for water optics.
+	 */
 	public static function shaderSource(): string
 	{
 		return file_get_contents(dirname(__DIR__) . '/shaders/water-optics.glsl');
 	}
 
-	/** Bind linear tint and optical coefficients to the active program. */
+	/**
+	 * Bind linear tint and optical coefficients to the active program.
+	 *
+	 * @param Program $program Active GPU program receiving the bindings.
+	 * @return void No value.
+	 */
 	public function bind(Program $program): void
 	{
 		glUniform3f($program->location('uWaterTint'), ...$this->linearColor);

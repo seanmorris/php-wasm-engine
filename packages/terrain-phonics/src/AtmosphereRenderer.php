@@ -108,7 +108,11 @@ final class AtmosphereRenderer
 			) . "\n" . file_get_contents($root . 'atmosphere-aerial.glsl');
 	}
 
-	/** Shared blue fill for opaque scene materials, evaluated before exposure and tone mapping. */
+	/**
+	 * Shared blue fill for opaque scene materials, evaluated before exposure and tone mapping.
+	 *
+	 * @return string GLSL used for night illumination.
+	 */
 	public static function nightLightingSource(): string
 	{
 		return file_get_contents(dirname(__DIR__) . '/shaders/night-light.glsl');

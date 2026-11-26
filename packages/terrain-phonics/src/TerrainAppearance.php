@@ -1063,7 +1063,12 @@ final class TerrainAppearance
 	 */
 	public function uniforms(): array { return $this->uniforms; }
 
-	/** Bind the five final paint inks in terrain material-ID order. */
+	/**
+	 * Bind the five final paint inks in terrain material-ID order.
+	 *
+	 * @param Program $program Active GPU program receiving the bindings.
+	 * @return void No value.
+	 */
 	public function bindPaint(Program $program): void
 	{
 		$colors = [];

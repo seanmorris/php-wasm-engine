@@ -92,7 +92,11 @@ final class Landscape implements TerrainSurface
 		return $roads;
 	}
 
-	/** Portable active roads keyed by their position in the terrain edit order. */
+	/**
+	 * Portable active roads keyed by their position in the terrain edit order.
+	 *
+	 * @return array Active road edits keyed by their position in the edit log.
+	 */
 	public function roadRecords(): array
 	{
 		$records = [];
@@ -102,7 +106,12 @@ final class Landscape implements TerrainSurface
 		return $records;
 	}
 
-	/** Build a snapshot for rendering with selected road layers hidden. Reuse the prepared spline samples. */
+	/**
+	 * Build a snapshot for rendering with selected road layers hidden. Reuse the prepared spline samples.
+	 *
+	 * @param array $ids Road edit identifiers to hide.
+	 * @return self Independent view with the specified road edits hidden.
+	 */
 	public function previewWithoutRoads(array $ids): self
 	{
 		$removals = [];
@@ -145,7 +154,11 @@ final class Landscape implements TerrainSurface
 		return new EditIndex($extent, $boxes);
 	}
 
-	/** Conservative footprints of active edits that can change elevation, shared until the next commit. */
+	/**
+	 * Conservative footprints of active edits that can change elevation, shared until the next commit.
+	 *
+	 * @return EditIndex Spatial index covering edits capable of changing elevation.
+	 */
 	public function heightEditIndex(): EditIndex
 	{
 		if($this->heightEdits !== null) return $this->heightEdits;
@@ -292,7 +305,8 @@ final class Landscape implements TerrainSurface
 	 * @param float $x World horizontal X coordinate in meters.
 	 * @param float $z World horizontal Z coordinate in meters.
 	 * @param array|null $centerOffset Optional offset in meters from the nearest point on a graded pavement centerline.
-	 * @param array|null $mark Optional signed lateral distance, distance along the spline and road half-width, in meters.
+	 * @param array|null $mark Optional signed lateral distance, distance along the spline and road half-width,
+	 * in meters.
 	 * @return string|null Most recent covering material, or null for recipe shading.
 	 */
 	public function material(float $x, float $z, ?array &$centerOffset = null, ?array &$mark = null): ?string
@@ -304,7 +318,13 @@ final class Landscape implements TerrainSurface
 		return Edits::material($x, $z, $this->operations);
 	}
 
-	/** Encoded paint sample for areas where later brush edits supersede GPU road grading. */
+	/**
+	 * Encoded paint sample for areas where later brush edits supersede GPU road grading.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @return string Material and road-marking bytes for this sample.
+	 */
 	public function paintTexel(float $x, float $z): string
 	{
 		$material = $this->material($x, $z, $offset, $mark);
@@ -324,7 +344,12 @@ final class Landscape implements TerrainSurface
 		}
 	}
 
-	/** Stage only a fully prepared edit. Dropping the generator leaves the pending batch untouched. */
+	/**
+	 * Stage only a fully prepared edit. Dropping the generator leaves the pending batch untouched.
+	 *
+	 * @param array $operation Terrain edit to prepare or apply.
+	 * @return \Generator Yields during preparation before staging the normalized operation.
+	 */
 	public function queueSteps(array $operation): \Generator
 	{
 		$this->open();
@@ -425,7 +450,8 @@ final class Landscape implements TerrainSurface
 
 	/**
 	 * Return the conservative dirty rectangle relative to another committed surface. Null means the recipe changed
-	 * globally; an empty array means identical edits. Include overlapping downstream smoothing and the reconstruction's two-node halo.
+	 * globally; an empty array means identical edits. Include overlapping downstream smoothing and the
+	 * reconstruction's two-node halo.
 	 * @param self $other Committed surface used as the comparison baseline.
 	 * @return array|null Dirty rectangle, empty array for no change, or null for a changed recipe.
 	 */
@@ -491,7 +517,11 @@ final class Landscape implements TerrainSurface
 		];
 	}
 
-	/** Start an independent editing transaction, sharing immutable road samples and history by copy-on-write. */
+	/**
+	 * Start an independent editing transaction, sharing immutable road samples and history by copy-on-write.
+	 *
+	 * @return self Independent editable snapshot of the committed landscape.
+	 */
 	public function fork(): self
 	{
 		$this->open();
@@ -1502,6 +1532,12 @@ final class Landscape implements TerrainSurface
 		$this->tiles = $tiles;
 	}
 
+	/**
+	 * Replace the committed edits and invalidate the derived spatial indexes.
+	 *
+	 * @param array $operations Committed edits in application order.
+	 * @return void No value.
+	 */
 	private function setOperations(array $operations): void
 	{
 		$this->slots = RoadMarkings::connect($operations);
@@ -1531,7 +1567,13 @@ final class Landscape implements TerrainSurface
 		return $result;
 	}
 
-	/** Resolve replacements at the original position so later brushes retain their effect. */
+	/**
+	 * Resolve replacements at the original position so later brushes retain their effect.
+	 *
+	 * @param array $operations Committed edits in application order.
+	 * @param array $batch Edits to apply in their original order.
+	 * @return array Operations remaining after the edit batch has been applied.
+	 */
 	private static function replay(array $operations, array $batch): array
 	{
 		foreach($batch as $edit)

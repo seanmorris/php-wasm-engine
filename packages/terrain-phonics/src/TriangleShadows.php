@@ -14,6 +14,11 @@ final class TriangleShadows
 	private array $key = [], $direction = [], $grid = [];
 	public int $generation = 0;
 
+	/**
+	 * Create the resources used to cache terrain visibility to the sun.
+	 *
+	 * @return void No value.
+	 */
 	public function __construct()
 	{
 		$root = dirname(__DIR__) . '/shaders/';
@@ -48,9 +53,28 @@ final class TriangleShadows
 		}
 	}
 
+	/**
+	 * Force the next update to recompute cached terrain shadows.
+	 *
+	 * @return void No value.
+	 */
 	public function invalidate(): void { $this->key = []; }
 
-	/** The caster is a complete toroidal clipmap level. Both passes read only its resident interior. */
+	/**
+	 * The caster is a complete toroidal clipmap level. Both passes read only its resident interior.
+	 *
+	 * @param array $level Resident grid record with its size and textures.
+	 * @param int $span Width of the grid at this level.
+	 * @param array $eye World-space camera position.
+	 * @param array $sun Normalized direction toward the sun.
+	 * @param int $overview Texture handles for the coarse terrain overview.
+	 * @param float $extent Width of the landscape in world units.
+	 * @param bool $packed Whether elevation texels use the packed fallback encoding.
+	 * @param float $playHalf Half-width of the playable area.
+	 * @param int $revision Committed landscape edit revision.
+	 * @param int $vao Vertex array for the generation pass.
+	 * @return void No value.
+	 */
 	public function update(
 		array $level
 		, int $span
@@ -76,9 +100,10 @@ final class TriangleShadows
 		$key = [$grid,$step,$reach,$extent,$playHalf,$level['textures'][0],$overview,$revision];
 
 		// Allow at most 0.1 degree of drift while the clock runs.
-		if($key === $this->key && $sun[0] * $this->direction[0] + $sun[1] * $this->direction[1] + $sun[2] * $this->direction[
+		if($key === $this->key && $sun[0] * $this->direction[0] + $sun[1] * $this->direction[1] + $sun[2] * $this
+			->direction[
 			2
-		] >= TerrainShadows::SUN_COSINE
+			] >= TerrainShadows::SUN_COSINE
 		)
 		return;
 
@@ -139,6 +164,12 @@ final class TriangleShadows
 		$this->generation++;
 	}
 
+	/**
+	 * Bind the cached solar visibility for terrain shading.
+	 *
+	 * @param Program $program Active GPU program receiving the bindings.
+	 * @return void No value.
+	 */
 	public function bind(Program $program): void
 	{
 		glUniform3f($program->location('uShadowGrid'), ...($this->key ? $this->grid : [0.,0.,0.]));
@@ -147,6 +178,11 @@ final class TriangleShadows
 		glUniform1i($program->location('uShadowTriangles'), 9);
 	}
 
+	/**
+	 * Release the shadow textures and rendering programs.
+	 *
+	 * @return void No value.
+	 */
 	public function close(): void
 	{
 		if(isset($this->vertices)) $this->vertices->close();

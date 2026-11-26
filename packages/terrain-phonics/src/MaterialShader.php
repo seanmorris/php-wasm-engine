@@ -46,7 +46,15 @@ final class MaterialShader
 		, 'blocks' => 'blockTilt'
 	];
 
-	/** A joined view uses the same layer evaluators with a separate uniform-block record per region. */
+	/**
+	 * A joined view uses the same layer evaluators with a separate uniform-block record per region.
+	 *
+	 * @param string $source Terrain fragment shader template to specialize.
+	 * @param SurfaceLayers|array $stack Ordered surface layers to evaluate.
+	 * @param bool $chart Select the material evaluator for the overhead chart.
+	 * @param bool $clipmap Enable sampling from resident terrain grids.
+	 * @return string Terrain fragment shader source with the requested layer evaluators.
+	 */
 	public static function assemble(
 		string $source
 		, SurfaceLayers|array $stack
@@ -165,6 +173,12 @@ final class MaterialShader
 		);
 	}
 
+	/**
+	 * Collect the procedural patterns needed by the material stack.
+	 *
+	 * @param SurfaceLayers $surface Material stack whose patterns are needed.
+	 * @return array Shader features required by the active layers.
+	 */
 	private static function patternFlags(SurfaceLayers $surface): array
 	{
 		$flags = [];
@@ -258,6 +272,14 @@ final class MaterialShader
 		return implode("\n", $glsl);
 	}
 
+	/**
+	 * Generate the GLSL evaluator for an ordered material stack.
+	 *
+	 * @param SurfaceLayers $stack Ordered surface layers to evaluate.
+	 * @param bool $chart Select the material evaluator for the overhead chart.
+	 * @param string $name Name of the generated GLSL function.
+	 * @return string GLSL function implementing the stack.
+	 */
 	private static function compose(SurfaceLayers $stack, bool $chart, string $name = 'materialSurface'): string
 	{
 		$fields = false;

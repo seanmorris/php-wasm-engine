@@ -614,7 +614,14 @@ final class SurfaceLayers
 			, 'mask' => $mask
 			, 'strength' => $strength
 		];
-		$rows[] = ['id' => 'shore','name' => 'Sandy shore','field' => 'sand','mask' => 'shore','color' => $s['sandColor']];
+		$rows[] = [
+			'id' => 'shore'
+			, 'name' => 'Sandy shore'
+			, 'field' => 'sand'
+			, 'mask' => 'shore'
+			, 'color' => $s['sandColor']
+		];
+
 		$rows[] = ['id' => 'snow','name' => 'Snow','field' => 'snow','mask' => 'snow','color' => $s['snowColor']];
 
 		return new self($rows, array_intersect_key($s, array_flip(self::FIELD_KEYS)));
@@ -783,7 +790,8 @@ final class SurfaceLayers
 
 	/**
 	 * Build the moor: heather flowering in patches, straw grass in the hollows below a wavering line, rust bracken on
-	 * the moderate flanks, dark peat banks with moss at the lochans' edges, and lichened granite where the tors steepen.
+	 * the moderate flanks, dark peat banks with moss at the lochans' edges, and lichened granite where the tors
+	 * steepen.
 	 * @param array $s Validated appearance settings.
 	 * @return array Material rows from the bottom up.
 	 */

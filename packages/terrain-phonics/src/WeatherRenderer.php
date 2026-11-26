@@ -11,14 +11,33 @@ final class WeatherRenderer
 	private \WeakMap $enabled;
 	private bool $active = false;
 
+	/**
+	 * Initialize the per-program weather binding cache.
+	 *
+	 * @return void No value.
+	 */
 	public function __construct() { $this->enabled = new \WeakMap; }
 
 	private ?Program $clouds = null, $particles = null;
 	private array $deck = [], $offset = [], $ground = [], $controls = [];
 	private float $time = 0., $sea = 0.;
 
+	/**
+	 * Disable weather drawing for the current view.
+	 *
+	 * @return void No value.
+	 */
 	public function clear(): void { $this->active = false; }
 
+	/**
+	 * Sample the cloud deck, wind and surface conditions for this frame.
+	 *
+	 * @param Weather $weather Weather controls and accumulated surface state.
+	 * @param float $time Simulation time in seconds.
+	 * @param float $sea Water surface elevation in meters.
+	 * @param float $sunY Vertical component of the normalized sun direction.
+	 * @return void No value.
+	 */
 	public function prepare(Weather $weather, float $time, float $sea, float $sunY): void
 	{
 		$this->controls = $c = $weather->controls();
@@ -30,7 +49,10 @@ final class WeatherRenderer
 		if(!$this->active) return;
 
 		$this->offset = $weather->offset($time);
-		$this->deck = [$c['coverage'] * .01,$sea + $c['altitude'] * .3048,$c['shadow'] * .01,min(1., max(0., ($sunY + .12) / .34))];
+		$this->deck = [
+			$c['coverage'] * .01,$sea + $c['altitude'] * .3048,$c['shadow'] * .01
+			, min(1., max(0., ($sunY + .12) / .34))
+		];
 
 		if(!$this->texture && $c['coverage'] > 0)
 		{
@@ -57,6 +79,12 @@ final class WeatherRenderer
 		}
 	}
 
+	/**
+	 * Upload active weather uniforms to a landscape shader.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @return void No value.
+	 */
 	public function bind(Program $p): void
 	{
 		if(!$this->active)
@@ -85,6 +113,15 @@ final class WeatherRenderer
 		glActiveTexture(GL_TEXTURE0);
 	}
 
+	/**
+	 * Draw the cloud deck and camera-relative precipitation.
+	 *
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @param float $exposure Scene exposure for the rendered weather.
+	 * @return void No value.
+	 */
 	public function draw(Camera $camera, int $width, int $height, float $exposure): void
 	{
 		if(!$this->active) return;
@@ -143,6 +180,11 @@ final class WeatherRenderer
 		glDepthMask(true);
 	}
 
+	/**
+	 * Release the weather shaders, geometry and cloud-noise texture.
+	 *
+	 * @return void No value.
+	 */
 	public function close(): void
 	{
 		$this->clouds?->close();

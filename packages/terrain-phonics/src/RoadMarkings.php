@@ -7,7 +7,12 @@ final class RoadMarkings
 {
 	public const DASH_METERS = 3.048;
 
-	/** Derive the visible paint paths from committed control points, independent of edit order. */
+	/**
+	 * Derive the visible paint paths from committed control points, independent of edit order.
+	 *
+	 * @param array $operations Committed edits in application order.
+	 * @return array Road operations with their junction and dash-continuity metadata.
+	 */
 	public static function connect(array $operations): array
 	{
 		$starts = $ends = $incident = $next = $previous = $remaining = [];
@@ -194,7 +199,13 @@ final class RoadMarkings
 		return $operations;
 	}
 
-	/** Assign interpolation channels and lateral signs from the topology of the visible roads. */
+	/**
+	 * Assign interpolation channels and lateral signs from the topology of the visible roads.
+	 *
+	 * @param array $bearings Endpoint directions grouped by junction.
+	 * @param array $keys Stable identifiers for the participating road arms.
+	 * @return array Interpolation channel and lateral sign assignments.
+	 */
 	private static function stripeRoles(array $bearings, array $keys): array
 	{
 		asort($keys);
@@ -262,7 +273,14 @@ final class RoadMarkings
 		return $roles;
 	}
 
-	/** Snap the phase reversal to a real sample so every projected segment stays linear. */
+	/**
+	 * Snap the phase reversal to a real sample so every projected segment stays linear.
+	 *
+	 * @param array $operations Committed edits in application order.
+	 * @param array $offsets Per-road start distances along the connected path.
+	 * @param float $middle Target distance along the connected path.
+	 * @return float Distance along the path at the selected sample.
+	 */
 	private static function middleSample(array $operations, array $offsets, float $middle): float
 	{
 		foreach($offsets as $id => $offset)
@@ -288,7 +306,18 @@ final class RoadMarkings
 		return 0.;
 	}
 
-	/** Neighboring segments that can beat the shared endpoint as the nearest projection inside its cap. */
+	/**
+	 * Neighboring segments that can beat the shared endpoint as the nearest projection inside its cap.
+	 *
+	 * @param array $segments Segments meeting at the junction.
+	 * @param array $road Prepared road geometry.
+	 * @param int $end Whether the segment meets the query at its far endpoint.
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param float $reach Maximum distance at which endpoints influence one another.
+	 * @param bool $open Endpoint connectivity used when selecting continuations.
+	 * @return bool Whether the neighboring segments can continue the marking.
+	 */
 	private static function continuation(
 		array &$segments
 		, array $road
@@ -324,7 +353,13 @@ final class RoadMarkings
 		return true;
 	}
 
-	/** Distance used to encode dash phase at a sample, including wraparound of a closed lap. */
+	/**
+	 * Distance used to encode dash phase at a sample, including wraparound of a closed lap.
+	 *
+	 * @param array $road Prepared road geometry.
+	 * @param int $i Index of the selected sample.
+	 * @return float Longitudinal coordinate for sampling the stripe pattern.
+	 */
 	public static function station(array $road, int $i): float
 	{
 		$s = $road['stations'][$i];

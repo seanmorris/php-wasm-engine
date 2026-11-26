@@ -194,7 +194,10 @@ final class Camera
 			$px = $a * ($x + ($a > 0 ? $size : 0));
 			$py = $b * ($b > 0 ? $high : $low);
 			$pz = $c * ($z + ($c > 0 ? $depth : 0));
-			$slack = 1e-5 * (($px < 0 ? -$px : $px) + ($py < 0 ? -$py : $py) + ($pz < 0 ? -$pz : $pz) + ($d < 0 ? -$d : $d));
+			$slack = 1e-5 * (($px < 0 ? -$px : $px) + ($py < 0 ? -$py : $py) + ($pz < 0 ? -$pz : $pz) + ($d < 0
+				? -$d
+				: $d
+			));
 
 			if($px + $py + $pz + $d < -$roundoff - $slack) return $first;
 		}
@@ -204,7 +207,10 @@ final class Camera
 			$px = $a * ($x + ($a > 0 ? $size : 0));
 			$py = $b * ($b > 0 ? $high : $low);
 			$pz = $c * ($z + ($c > 0 ? $depth : 0));
-			$slack = 1e-5 * (($px < 0 ? -$px : $px) + ($py < 0 ? -$py : $py) + ($pz < 0 ? -$pz : $pz) + ($d < 0 ? -$d : $d));
+			$slack = 1e-5 * (($px < 0 ? -$px : $px) + ($py < 0 ? -$py : $py) + ($pz < 0 ? -$pz : $pz) + ($d < 0
+				? -$d
+				: $d
+			));
 
 			if($px + $py + $pz + $d < -$roundoff - $slack) return $i;
 		}

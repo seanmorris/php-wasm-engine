@@ -16,6 +16,11 @@ final class MaterialFieldCache
 	private ?array $origin = null;
 	public int $texelsWritten = 0;
 
+	/**
+	 * Allocate the render target and shader for cached material noise.
+	 *
+	 * @return void No value.
+	 */
 	public function __construct()
 	{
 		$root = dirname(__DIR__) . '/shaders/';
@@ -62,6 +67,14 @@ final class MaterialFieldCache
 		}
 	}
 
+	/**
+	 * Refresh material fields when the camera exposes a new area or the materials change.
+	 *
+	 * @param array $eye World-space camera position.
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @param int $vao Vertex array for the generation pass.
+	 * @return void No value.
+	 */
 	public function update(array $eye, array $materials, int $vao): void
 	{
 		$snap = self::STEP * self::SNAP;
@@ -117,6 +130,12 @@ final class MaterialFieldCache
 		$this->origin = $origin;
 	}
 
+	/**
+	 * Bind the material-field texture and world-to-texture transform.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @return void No value.
+	 */
 	public function bind(Program $p): void
 	{
 		glActiveTexture(GL_TEXTURE0 + 12);
@@ -132,6 +151,11 @@ final class MaterialFieldCache
 		);
 	}
 
+	/**
+	 * Release the cache texture, framebuffer and program.
+	 *
+	 * @return void No value.
+	 */
 	public function close(): void
 	{
 		if($this->framebuffer) glDeleteFramebuffers(1, $this->framebuffer);

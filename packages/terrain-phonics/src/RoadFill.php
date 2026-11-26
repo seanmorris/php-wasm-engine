@@ -7,6 +7,14 @@ final class RoadFill
 {
 	public const CROSS_FALL = .08;
 
+	/**
+	 * Find shoulder pockets beside a mountain face and prepare their height corrections.
+	 *
+	 * @param array $road Prepared road geometry.
+	 * @param callable $height Function returning natural terrain height at world X and Z.
+	 * @param float $water Elevation of the water surface in meters.
+	 * @return \Generator Yields during the survey and returns the prepared road geometry.
+	 */
 	public static function prepare(array $road, callable $height, float $water): \Generator
 	{
 		$half = $road['half'];
@@ -103,12 +111,28 @@ final class RoadFill
 		return $road;
 	}
 
+	/**
+	 * Enumerate grid cells intersected by a road-fill rectangle.
+	 *
+	 * @param array $box Horizontal bounds in minimum and maximum X and Z order.
+	 * @param float $size Spatial indexing cell width in meters.
+	 * @return \Generator Generator of X and Z cell coordinate pairs.
+	 */
 	public static function cells(array $box, float $size): \Generator
 	{
 		for($x = (int)floor($box[0] / $size); $x <= (int)floor($box[2] / $size); $x++)
 		for($z = (int)floor($box[1] / $size); $z <= (int)floor($box[3] / $size); $z++) yield [$x,$z];
 	}
 
+	/**
+	 * Apply the fill under the road shoulder at the sample point.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param float $ground Terrain elevation before applying shoulder fill.
+	 * @param array $road Prepared road geometry.
+	 * @return float Ground elevation including the applicable fills.
+	 */
 	public static function height(float $x, float $z, float $ground, array $road): float
 	{
 		$key = (int)floor($x / $road['gridSize']) . ',' . (int)floor($z / $road['gridSize']);
@@ -121,7 +145,12 @@ final class RoadFill
 			$dz = $z - $sz;
 			$across = $dx * $nx + $dz * $nz;
 			$along = $dz * $nx - $dx * $nz;
-			$t = max(0., min(1., ($across - $half) / $apron, ($end + $apron - $across) / $apron, 1.5 - abs($along) / $apron));
+
+			$t = max(
+				0.
+				, min(1., ($across - $half) / $apron, ($end + $apron - $across) / $apron, 1.5 - abs($along) / $apron)
+			);
+
 			$surface = $edge + $grade * $along - self::CROSS_FALL * ($across - $half);
 			$result = max($result, $ground + ($surface - $ground) * $t * $t * (3. - 2. * $t));
 		}

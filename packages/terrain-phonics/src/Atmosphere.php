@@ -118,7 +118,12 @@ final class Atmosphere
 		$this->setLayers($layers);
 	}
 
-	/** Replace the authored aerosol shells together. Only a change to extinction invalidates sunlight. */
+	/**
+	 * Replace the authored aerosol shells together. Only a change to extinction invalidates sunlight.
+	 *
+	 * @param array $rows Number of grid rows to cover.
+	 * @return void No value.
+	 */
 	public function setLayers(array $rows): void
 	{
 		$next = new AtmosphereLayers($rows, $this->parameters['atmosphereHeight']);
@@ -137,6 +142,11 @@ final class Atmosphere
 		$this->air = $next;
 	}
 
+	/**
+	 * Read the atmospheric layer definitions, including disabled layers.
+	 *
+	 * @return array Ordered authored layer records.
+	 */
 	public function layers(): array { return $this->air->rows; }
 
 	/**
@@ -285,7 +295,12 @@ final class Atmosphere
 		$this->parameters['exposure'] = $exposure;
 	}
 
-	/** Set the artistic night illumination without rebuilding solar scattering or extinction textures. */
+	/**
+	 * Set the artistic night illumination without rebuilding solar scattering or extinction textures.
+	 *
+	 * @param float $strength Requested night illumination strength.
+	 * @return void No value.
+	 */
 	public function setNightGlow(float $strength): void
 	{
 		if(!is_finite($strength) || $strength < 0)
@@ -314,12 +329,23 @@ final class Atmosphere
 		];
 	}
 
+	/**
+	 * Evaluate the night sky at the current solar elevation.
+	 *
+	 * @return float Visibility multiplier for the star field.
+	 */
 	public function starVisibility(): float
 	{
 		return $this->stars->visibility($this->parameters['sunDirection'][1]);
 	}
 
-	/** Repaint the last frame of a meteor as well as each visible animated frame. */
+	/**
+	 * Repaint the last frame of a meteor as well as each visible animated frame.
+	 *
+	 * @param float $time Simulation time in seconds.
+	 * @param float $previous Simulation time of the previous frame in seconds.
+	 * @return bool Whether the sky can change between these two frames.
+	 */
 	public function starsMoving(float $time, float $previous): bool
 	{
 		if($time === $previous || ($this->stars->twinkle <= 0. && $this->stars->perMinute <= 0.)) return false;
@@ -484,6 +510,16 @@ final class Atmosphere
 		return $this->traceTransmission($altitude, $cosZenith, $samples, $airTransmission);
 	}
 
+	/**
+	 * Integrate the light reaching the eye from one direction through the atmosphere.
+	 *
+	 * @param float $altitude Height above sea level in meters.
+	 * @param float $cosZenith Cosine of the ray angle from local vertical.
+	 * @param int $samples Number of ray integration steps.
+	 * @param float $airTransmission Receives the transmittance of the authored aerosol layers.
+	 * @param bool $layers Include authored layer extinction in the returned RGB.
+	 * @return array RGB transmission along the ray, zero where the planet blocks it.
+	 */
 	private function traceTransmission(
 		float $altitude
 		, float $cosZenith
@@ -534,7 +570,8 @@ final class Atmosphere
 	 * @param int $samples Optical-depth samples per texel, between eight and 256.
 	 * @return array Width/height, RGB float data, RGBA32F little-endian bytes, RGBA8 bytes, and generation.
 	 * RGB is clear air only. The shaders add the authored layers exactly (terrainAirDepth in atmosphere.glsl): the
-	 * texture's 16 or so altitude rows sit hundreds of meters apart near the ground, too coarse for sub-kilometer layers.
+	 * texture's 16 or so altitude rows sit hundreds of meters apart near the ground, too coarse for sub-
+	 * kilometer layers.
 	 * Alpha still carries transmission through the authored layers.
 	 * Texel X encodes sign(mu)*sqrt(abs(mu)); texel Y encodes sqrt(altitude/atmosphereHeight).
 	 */
@@ -716,8 +753,10 @@ final class Atmosphere
 
 	/**
 	 * Convert molecular/aerosol optical lengths into channel transmittances.
+	 *
 	 * @param float $rayleigh Integrated molecular density in meters.
 	 * @param float $mie Integrated aerosol density in meters.
+	 * @param float $airDepth Integrated extinction from the authored atmosphere layers.
 	 * @return array Three Beer-Lambert transmittances.
 	 */
 	private function attenuation(float $rayleigh, float $mie, float $airDepth = 0.): array
@@ -785,7 +824,12 @@ final class Atmosphere
 		return [$this->samplingAltitude($altitude),max(-1.0, min(1.0, $mu))];
 	}
 
-	/** Clear air uses sea-level density in depressions. Active aerosol shells use true scene height. */
+	/**
+	 * Clear air uses sea-level density in depressions. Active aerosol shells use true scene height.
+	 *
+	 * @param float $altitude Height above sea level in meters.
+	 * @return float Elevation to use for the transmission lookup in meters.
+	 */
 	public function samplingAltitude(float $altitude): float
 	{
 		$ceiling = $this->parameters['atmosphereHeight'];

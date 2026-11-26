@@ -9,6 +9,12 @@ final class JoinedTerrain
 	private const EDGE_REACH = 256.;
 	private array $profiles = [], $profileRange = [], $fields = [], $origins, $offsets = [], $parameters;
 
+	/**
+	 * Prepare neighboring terrain recipes and align their elevations to a shared sea level.
+	 *
+	 * @param array $source Source recipe and the join description containing the destination recipes.
+	 * @return void No value.
+	 */
 	public function __construct(array $source)
 	{
 		$join = $source['join'];
@@ -72,6 +78,13 @@ final class JoinedTerrain
 		$this->parameters = $r;
 	}
 
+	/**
+	 * Position the source and destination landscapes around the connecting region.
+	 *
+	 * @param int $span Width of each participating landscape in meters.
+	 * @param int $destinations Number of outgoing landscapes.
+	 * @return array Local coordinate origins for the participating landscapes.
+	 */
 	public static function origins(int $span, int $destinations): array
 	{
 		$center = ($span + self::GAP) / 2;
@@ -81,8 +94,19 @@ final class JoinedTerrain
 			: [[-$center,0.],[$center,-$center],[$center,$center]];
 	}
 
+	/**
+	 * Read the normalized joint landscape definition.
+	 *
+	 * @return array Parameters needed to rebuild this joined landscape.
+	 */
 	public function values(): array { return $this->parameters; }
 
+	/**
+	 * Ease the transition between the facing landscape edges.
+	 *
+	 * @param float $axis Position along the transition axis.
+	 * @return float Blend weight along the connector.
+	 */
 	private static function blend(float $axis): float
 	{
 		$t = $axis / self::GAP + .5;
@@ -90,6 +114,15 @@ final class JoinedTerrain
 		return $t * $t * $t * ($t * ($t * 6. - 15.) + 10.);
 	}
 
+	/**
+	 * Evaluate one landscape in its local coordinates with the shared elevation offset.
+	 *
+	 * @param int $index Index of the terrain recipe to sample.
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param ?array $profile Optional interpolated terrain shape parameters.
+	 * @return float Terrain elevation in the joined world.
+	 */
 	private function at(int $index, float $x, float $z, ?array $profile = null): float
 	{
 		[$cx,$cz] = $this->origins[$index];
@@ -104,8 +137,14 @@ final class JoinedTerrain
 		return $this->fields[$index]->height($x - $cx, $z - $cz, $profile) + $this->offsets[$index];
 	}
 
-	/** Carry the facing edge's contours into the connector. The derivative is one
-	 * at the boundary, then falls smoothly so distant, unrelated cliffs do not enter the fork. */
+	/**
+	 * Carry the facing edge's contours into the connector. The derivative is one at the boundary, then falls smoothly
+	 * so distant, unrelated cliffs do not enter the fork.
+	 *
+	 * @param float $axis Position along the transition axis.
+	 * @param int $side Sign of the edge being extended.
+	 * @return float Coordinate used to sample the extended edge.
+	 */
 	private static function extendEdge(float $axis, int $side): float
 	{
 		$distance = .5 * self::GAP - $side * $axis;
@@ -115,6 +154,13 @@ final class JoinedTerrain
 		return $side * (.5 * self::GAP - self::EDGE_REACH * $distance / (self::EDGE_REACH + $distance));
 	}
 
+	/**
+	 * Sample the continuous terrain through the source, fork and destinations.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @return float World elevation in meters.
+	 */
 	public function height(float $x, float $z): float
 	{
 		$edge = self::GAP / 2;
@@ -155,10 +201,27 @@ final class JoinedTerrain
 		return $west + self::blend($x) * ($east - $west);
 	}
 
+	/**
+	 * Bound elevations inside a horizontal rectangle of the joined world.
+	 *
+	 * @param array $box Horizontal bounds in minimum and maximum X and Z order.
+	 * @return array Conservative minimum and maximum elevation.
+	 */
 	public function regionalBounds(array $box): array { return $this->interval($box); }
 
+	/**
+	 * Bound elevations across all participating landscapes.
+	 *
+	 * @return array Conservative minimum and maximum elevation for the whole join.
+	 */
 	public function bounds(): array { return $this->interval(null); }
 
+	/**
+	 * Combine the elevation intervals of the contributing regions.
+	 *
+	 * @param ?array $box Optional region for the bound, or null to include the whole join.
+	 * @return array Minimum and maximum elevation including the sea-level offsets.
+	 */
 	private function interval(?array $box): array
 	{
 		$low = INF;

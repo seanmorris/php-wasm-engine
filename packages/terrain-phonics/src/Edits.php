@@ -9,7 +9,9 @@ final class Edits
 
 	/**
 	 * Normalize one serializable edit and rebuild its bounded road acceleration data.
+	 *
 	 * @param array $operation Validated edit record, including derived road data when applicable.
+	 * @param Recipe|JoinedTerrain|null $terrain Underlying terrain used to fit the road.
 	 * @return array Validated operation with bounded derived acceleration data.
 	 */
 	public static function normalize(array $operation, Recipe|JoinedTerrain|null $terrain = null): array
@@ -23,7 +25,13 @@ final class Edits
 		return $work->getReturn();
 	}
 
-	/** The same operation, with scheduling points while a long spline and its footprint are prepared. */
+	/**
+	 * The same operation, with scheduling points while a long spline and its footprint are prepared.
+	 *
+	 * @param array $operation Terrain edit to prepare or apply.
+	 * @param Recipe|JoinedTerrain|null $terrain Underlying terrain used to fit the road.
+	 * @return \Generator Yields during preparation and returns the normalized edit.
+	 */
 	public static function normalizeSteps(array $operation, Recipe|JoinedTerrain|null $terrain = null): \Generator
 	{
 		$type = $operation['type'] ?? null;
@@ -93,7 +101,13 @@ final class Edits
 		return [$operation['x'] - $r, $operation['z'] - $r, $operation['x'] + $r, $operation['z'] + $r];
 	}
 
-	/** Index road strips along the spline so a diagonal road never paints its entire bounding rectangle. */
+	/**
+	 * Index road strips along the spline so a diagonal road never paints its entire bounding rectangle.
+	 *
+	 * @param array $operation Terrain edit to prepare or apply.
+	 * @param float $minimumCell Minimum spatial indexing cell width.
+	 * @return array Rectangles covering the modified terrain.
+	 */
 	public static function footprints(array $operation, float $minimumCell): array
 	{
 		if($operation['type'] !== 'road') return [self::bounds($operation)];
@@ -192,9 +206,12 @@ final class Edits
 
 	/**
 	 * Return the most recent material covering the query, including explicit erasure.
+	 *
 	 * @param float $x World X coordinate in meters.
 	 * @param float $z World Z coordinate in meters.
 	 * @param array $operations Committed edits in application order.
+	 * @param ?array $centerOffset Receives the displacement from the projected road centerline.
+	 * @param ?array $mark Road marking projection and distance data.
 	 * @return ?string Painted material identifier, or null for procedural classification.
 	 */
 	public static function material(
@@ -282,7 +299,13 @@ final class Edits
 		return null;
 	}
 
-	/** Break projection ties consistently when overlapping arms are reordered. */
+	/**
+	 * Break projection ties consistently when overlapping arms are reordered.
+	 *
+	 * @param array $candidate Marking projection being considered.
+	 * @param array $current Previously selected marking projection.
+	 * @return bool Whether the candidate projection takes precedence.
+	 */
 	private static function nearerMark(array $candidate, array $current): bool
 	{
 		$distance = abs($candidate[0]) / $candidate[2];
@@ -371,23 +394,53 @@ final class Edits
 		return $value;
 	}
 
-	/** Cubic handles relative to a control point. Automatic handles reproduce the uniform Catmull-Rom curve. */
+	/**
+	 * Cubic handles relative to a control point. Automatic handles reproduce the uniform Catmull-Rom curve.
+	 *
+	 * @param array $points Road control points in world coordinates.
+	 * @param array $handles Explicit incoming and outgoing offsets by control point.
+	 * @param int $i Index of the knot whose handles are requested.
+	 * @return array Incoming and outgoing offsets from the selected road knot.
+	 */
 	public static function roadHandles(array $points, array $handles, int $i): array
 	{
 		$prev = $points[max(0, $i - 1)];
 		$next = $points[min(count($points) - 1, $i + 1)];
-		$out = array_map(static fn($a, $b) => ($b - $a) / 6., $prev, $next);
+
+		$out = array_map(
+			/**
+			 * Form the tangent component for an automatic spline handle.
+			 *
+			 * @param float $a Component of the previous knot.
+			 * @param float $b Component of the next knot.
+			 * @return float One sixth of the difference between neighboring knots.
+			 */
+			static fn($a, $b) => ($b - $a) / 6.
+			, $prev
+			, $next
+		);
 
 		return [
-			'in' => $handles[$i]['in'] ?? array_map(static fn($x) => -$x, $out)
+			'in' => $handles[$i]['in'] ?? array_map(
+				/**
+				 * Reflect the outgoing spline handle across its knot.
+				 *
+				 * @param float $x Outgoing handle component.
+				 * @return float Matching incoming handle component.
+				 */
+				static fn($x) => -$x
+				, $out
+			)
 			, 'out' => $handles[$i]['out'] ?? $out
 		];
 	}
 
 	/**
-	 * Sample the cubic centerline into overlapping smooth local road planes. Compact kernels avoid
-	 * nearest-segment changes at bends, ends and junctions.
+	 * Sample the cubic centerline into overlapping smooth local road planes. Compact kernels avoid nearest-segment
+	 * changes at bends, ends and junctions.
+	 *
 	 * @param array $operation Validated edit record, including derived road data when applicable.
+	 * @param Recipe|JoinedTerrain|null $terrain Underlying terrain used to fit the road.
 	 * @return array Normalized road and bounded spatially indexed spline samples.
 	 */
 	private static function road(array $operation, Recipe|JoinedTerrain|null $terrain): \Generator
@@ -420,7 +473,16 @@ final class Edits
 			if(!is_array($banks) || !array_is_list($banks) || count($banks) !== count($points))
 			throw new \InvalidArgumentException('A banked road requires one cross slope per control point');
 
-			$banks = array_map(static fn($bank): float => self::number($bank, 'road bank', -.35, .35), $banks);
+			$banks = array_map(
+				/**
+				 * Validate the cross-slope at one road sample.
+				 *
+				 * @param mixed $bank Submitted bank.
+				 * @return float Validated bank value.
+				 */
+				static fn($bank): float => self::number($bank, 'road bank', -.35, .35)
+				, $banks
+			);
 		}
 
 		$handles = $operation['handles'] ?? [];
@@ -440,7 +502,16 @@ final class Edits
 				if(!is_array($vector) || !array_is_list($vector) || count($vector) !== 3)
 				throw new \InvalidArgumentException('Road handles must be [dx, dy, dz] in meters.');
 
-				$handles[$i][$side] = array_map(static fn($v) => self::number($v, 'handle offset', -1e6, 1e6), $vector);
+				$handles[$i][$side] = array_map(
+					/**
+					 * Validate a component of a relative spline handle.
+					 *
+					 * @param mixed $v Submitted coordinate offset.
+					 * @return float Finite handle offset in the permitted range.
+					 */
+					static fn($v) => self::number($v, 'handle offset', -1e6, 1e6)
+					, $vector
+				);
 			}
 		}
 
@@ -465,7 +536,9 @@ final class Edits
 		$samples = [];
 		$totalChord = 0.;
 
-		foreach($points as $i => $p) if($i) $totalChord += hypot($p[0] - $points[$i - 1][0], $p[2] - $points[$i - 1][2]);
+		foreach($points as $i => $p)
+		if($i)
+		$totalChord += hypot($p[0] - $points[$i - 1][0], $p[2] - $points[$i - 1][2]);
 		$chunked = $totalChord / $step > 2048.;
 
 		for($i = 0; $i < count($points) - 1; $i++)
@@ -595,7 +668,17 @@ final class Edits
 			$grid["$gx,$gz"][] = $index;
 		}
 
-		$geometry = compact('samples', 'stations', 'grid', 'gridSize', 'markReach', 'radius', 'half', 'bounds', 'range');
+		$geometry = compact(
+			'samples'
+			, 'stations'
+			, 'grid'
+			, 'gridSize'
+			, 'markReach'
+			, 'radius'
+			, 'half'
+			, 'bounds'
+			, 'range'
+		);
 
 		if($terrain !== null)
 		$geometry = yield from RoadFill::prepare($geometry, $terrain->height(...), $terrain->values()['waterLevel']);
@@ -678,7 +761,14 @@ final class Edits
 		return $sum > 0 ? [(1 - $outside) * ($coverage / $sum), $target / $sum] : [0.0, 0.0];
 	}
 
-	/** Test the width of the prepared road splines, independently of shoulder grading and later paint. */
+	/**
+	 * Test the width of the prepared road splines, independently of shoulder grading and later paint.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param array $roads Road records in terrain edit order.
+	 * @return bool Whether the point lies on pavement.
+	 */
 	public static function onRoad(float $x, float $z, array $roads): bool
 	{
 		foreach($roads as $operation)
@@ -692,6 +782,15 @@ final class Edits
 		return false;
 	}
 
+	/**
+	 * Project a point onto the nearest indexed road segment.
+	 *
+	 * @param float $x Horizontal X coordinate.
+	 * @param float $z Horizontal Z coordinate.
+	 * @param array $road Prepared road geometry.
+	 * @param ?array $mark Road marking projection and distance data.
+	 * @return ?array Horizontal displacement from the projected centerline or null outside the indexed segments.
+	 */
 	private static function centerOffset(float $x, float $z, array $road, ?array &$mark = null): ?array
 	{
 		$r = $road['gridSize'];

@@ -969,8 +969,7 @@ foreach([false,true] as $reverseOrder)
 	foreach([-7.,-5.65,0.,5.65,7.] as $z)
 	terrainCheck(
 		$split->paintTexel($x, $z) === $whole->paintTexel($x, $z)
-		, "Center dashes, shoulder stripes and outer clipping continue through the section join at $x
-			, $z"
+		, "Dashes, shoulder stripes and outer clipping continue through the section join at $x,$z"
 	);
 	$restoredSplit = Landscape::load($split->save());
 	terrainCheck($restoredSplit->paintTexel(-3, 0) === $whole->paintTexel(-3, 0), 'Loading rebuilds joined pavement');
@@ -1091,7 +1090,12 @@ foreach($network->roads() as $id => $op)
 			$z = $az + ($bz - $az) * $k / $steps;
 			$texel = $network->paintTexel($x, $z);
 			$code = (ord($texel[1]) << 16) | (ord($texel[2]) << 8) | ord($texel[3]);
-			terrainCheck(ord($texel[0]) === 5 && ($code >> 12) === 2048, "Arm $id retains its physical center at $x,$z");
+
+			terrainCheck(
+				ord($texel[0]) === 5 && ($code >> 12) === 2048
+				, "Arm $id retains its physical center at $x,$z"
+			);
+
 			$dash = ($code & 63) < 32;
 
 			if($previous !== $dash)
@@ -1256,7 +1260,11 @@ foreach([12.,32.] as $pavementWidth)
 		$longest = max($longest, hypot($samples[$i][0] - $samples[$i - 1][0], $samples[$i][2] - $samples[$i - 1][2]));
 	}
 
-	terrainCheck($longest <= min(7., $pavementWidth / 4.) + 1.e-8, 'Station spacing respects curvature and pavement width');
+	terrainCheck(
+		$longest <= min(7., $pavementWidth / 4.) + 1.e-8
+		, 'Station spacing respects curvature and pavement width'
+	);
+
 	$copy = Landscape::load($highway->save());
 
 	terrainCheck(
@@ -1298,7 +1306,15 @@ terrainReject(
 );
 
 $feathered = new Landscape($flatRecipe);
-$feathered->queue(['type' => 'road','points' => [[-60,8,0],[0,8,0],[60,8,0]],'width' => 8,'shoulder' => 4,'endBlend' => 36]);
+
+$feathered->queue([
+	'type' => 'road'
+	, 'points' => [[-60,8,0],[0,8,0],[60,8,0]]
+	, 'width' => 8
+	, 'shoulder' => 4
+	, 'endBlend' => 36
+]);
+
 $feathered->commit();
 
 foreach([-1,1] as $end)
@@ -1908,7 +1924,13 @@ foreach($legacyHeights as $name => $heights)
 }
 
 // Stretch/rotation must transform gradients and bounds as well as the height used by wheels and picks.
-$axes = ['domainRotation' => -31.,'ridgeBearing' => 51.,'ridgeStretch' => 4.5,'coastBearing' => 84.,'coastWidth' => 1500.];
+$axes = [
+	'domainRotation' => -31.
+	, 'ridgeBearing' => 51.
+	, 'ridgeStretch' => 4.5
+	, 'coastBearing' => 84.
+	, 'coastWidth' => 1500.
+];
 
 foreach(['coast','painted-badlands','canyon'] as $preset)
 foreach([-.85,.75] as $shape)

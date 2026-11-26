@@ -183,7 +183,8 @@ final class Scene
 	 * @param Water $water Shared analytic water model.
 	 * @param Atmosphere $atmosphere Shared atmosphere parameters and numerical lookup data.
 	 * @param bool $useClipmap Use GPU elevation textures. Pass false for the PHP patch renderer.
-	 * @param bool $retainJourneyBinding The caller reserves uniform-buffer binding zero for terrain scenes between draws.
+	 * @param bool $retainJourneyBinding The caller reserves uniform-buffer binding zero for terrain scenes
+	 * between draws.
 	 * @return void Initializes bounded preparation and graphics resources.
 	 */
 	public function __construct(
@@ -205,7 +206,12 @@ final class Scene
 		$this->create();
 	}
 
-	/** Each endpoint keeps its own material stack, seed, and local elevation datum. */
+	/**
+	 * Each endpoint keeps its own material stack, seed, and local elevation datum.
+	 *
+	 * @param ?SurfaceLayers $westPalette Surface stack for the journey origin.
+	 * @return array Material bindings for the source and any destinations.
+	 */
 	private function regionalMaterials(?SurfaceLayers $westPalette = null): array
 	{
 		$r = $this->landscape->recipe();
@@ -221,6 +227,13 @@ final class Scene
 		return [$west,...$this->destinations];
 	}
 
+	/**
+	 * Prepare the layer stacks and coordinate origins for the destination terrains.
+	 *
+	 * @param array $recipe Landscape recipe including its seed and shape settings.
+	 * @param array $origins World coordinate origin of each landscape.
+	 * @return array Material bindings for each destination.
+	 */
 	private static function destinationMaterials(array $recipe, array $origins): array
 	{
 		$materials = [];
@@ -3056,6 +3069,8 @@ final class Scene
 	}
 
 	/**
+	 * Check whether the last view drew any water.
+	 *
 	 * @return bool Whether the previous view submitted water that can change with time.
 	 */
 	public function showsWater(): bool { return $this->waterDraws > 0; }
@@ -3151,13 +3166,27 @@ final class Scene
 		];
 	}
 
-	/** Link both lighting variants and the minimap before replacing a committed surface. */
+	/**
+	 * Link both lighting variants and the minimap before replacing a committed surface.
+	 *
+	 * @param SurfaceLayers $stack Ordered surface layers to evaluate.
+	 * @return void No value.
+	 */
 	public function prepareMaterial(SurfaceLayers $stack): void
 	{
 		$this->preparePrograms($this->regionalMaterials($stack), $this->sampleMaterials);
 	}
 
-	/** Capture this view's ridge relief on the same triangles, including committed edits and LOD morphing. */
+	/**
+	 * Capture this view's ridge relief on the same triangles, including committed edits and LOD morphing.
+	 *
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @param array $groups Visible clipmap strips from the culling pass.
+	 * @return void No value.
+	 */
 	private function drawRibField(Camera $camera, int $width, int $height, array $materials, array $groups): void
 	{
 		glActiveTexture(GL_TEXTURE0 + 11);
@@ -3186,7 +3215,16 @@ final class Scene
 		glBindTexture(GL_TEXTURE_2D, $this->ribTarget->texture());
 	}
 
-	/** Capture unlit pigment and relief from the same edited clipmap triangles used by the display pass. */
+	/**
+	 * Capture unlit pigment and relief from the same edited clipmap triangles used by the display pass.
+	 *
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @param array $groups Visible clipmap strips from the culling pass.
+	 * @return void No value.
+	 */
 	private function drawSurfaceSamples(Camera $camera, int $width, int $height, array $materials, array $groups): void
 	{
 		$w = intdiv($width + 1, 2);
@@ -3217,6 +3255,13 @@ final class Scene
 		}
 	}
 
+	/**
+	 * Prepare shader variants before drawing with a new combination of materials.
+	 *
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @param bool $sampleMaterials Use the screen-space cache of terrain material samples.
+	 * @return string Cache key for the compiled program set.
+	 */
 	private function preparePrograms(array $materials, bool $sampleMaterials): string
 	{
 		$stacks = array_column($materials, 0);
@@ -3323,6 +3368,13 @@ final class Scene
 		return $key;
 	}
 
+	/**
+	 * Select the linked terrain shaders for the active material combination.
+	 *
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @param bool $sampleMaterials Use the screen-space cache of terrain material samples.
+	 * @return void No value.
+	 */
 	private function selectMaterials(array $materials, bool $sampleMaterials = true): void
 	{
 		if($materials === $this->selectedMaterials && $this->sampleMaterials === $sampleMaterials) return;
@@ -3360,6 +3412,13 @@ final class Scene
 		$this->litDrawn['ground'] = false;
 	}
 
+	/**
+	 * Upload each source landscape's palette for the journey blend.
+	 *
+	 * @param Program $program Active GPU program receiving the bindings.
+	 * @param array $materials Bindings for the contributing landscape palettes.
+	 * @return void No value.
+	 */
 	private function bindJourney(Program $program, array $materials): void
 	{
 		if($materials !== $this->uploadedMaterials)
@@ -3393,6 +3452,11 @@ final class Scene
 		glUniform1i($program->location('uBlendProfile'), (int)(($materials[0][1]['join']['version'] ?? 1) >= 2));
 	}
 
+	/**
+	 * Choose the authored surface stack or build the recipe default.
+	 *
+	 * @return SurfaceLayers Surface layers used by this landscape.
+	 */
 	private function palette(): SurfaceLayers
 	{
 		if($this->layers) return $this->layers;
@@ -3406,6 +3470,21 @@ final class Scene
 		return $this->defaultLayers;
 	}
 
+	/**
+	 * Draw a heading-up terrain chart from the resident clipmap.
+	 *
+	 * @param array $xz World-space X and Z at the center of the chart.
+	 * @param float $bearing Chart rotation in radians.
+	 * @param bool $wide Use the wider map view.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @param array $waterColor Linear RGB used for water in the map.
+	 * @param ?int $size Side length of the requested grid.
+	 * @param ?float $localSpan Optional local map coverage in meters.
+	 * @param bool $circular Clip the map to a circular boundary.
+	 * @param ?float $fixedSpan Optional fixed map width in meters.
+	 * @return ?float Width in world meters or null when no chart was drawn.
+	 */
 	public function drawChart(
 		array $xz
 		, float $bearing
@@ -3450,7 +3529,16 @@ final class Scene
 		);
 	}
 
-	/** Draw one full, north-up road-editor map of a draft recipe without switching the playing landscape. */
+	/**
+	 * Draw one full, north-up road-editor map of a draft recipe without switching the playing landscape.
+	 *
+	 * @param Landscape $draft Landscape to survey for the editor map.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @param int $size Side length of the requested grid.
+	 * @param array $waterColor Linear RGB used for water in the map.
+	 * @return ?float World width of the preview or null if the chart could not be drawn.
+	 */
 	public function drawRecipeChart(Landscape $draft, int $width, int $height, int $size, array $waterColor): ?float
 	{
 		$r = $draft->recipe();
@@ -3508,6 +3596,11 @@ final class Scene
 		);
 	}
 
+	/**
+	 * Release the independent GPU cache used by the editor preview.
+	 *
+	 * @return void No value.
+	 */
 	private function closeRecipeChart(): void
 	{
 		$this->recipeChart?->close();
@@ -3517,6 +3610,11 @@ final class Scene
 		$this->recipeChartPrograms = [];
 	}
 
+	/**
+	 * Recreate rendering state after the graphics context is restored.
+	 *
+	 * @return void No value.
+	 */
 	public function restore(): void
 	{
 		if($this->closed) return;

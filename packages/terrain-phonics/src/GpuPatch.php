@@ -15,9 +15,10 @@ final class GpuPatch
 
 	/**
 	 * Retain and upload one patch with matching parent-height and normal attributes.
+	 *
 	 * @param string $vertices Packed eleven-float vertex records, including parent normal.
-	 * @param int|null $sharedIndex Optional scene-owned element buffer.
 	 * @param string $indices Packed unsigned-short triangle indices.
+	 * @param int|null $sharedIndex Optional scene-owned element buffer.
 	 * @return void Uploads the retained mesh data.
 	 */
 	public function __construct(private string $vertices, private string $indices, ?int $sharedIndex = null)

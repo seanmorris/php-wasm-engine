@@ -128,6 +128,8 @@ final class Water implements WaterSurface
 	public function level(): float { return $this->level; }
 
 	/**
+	 * Bound the vertical displacement of the water surface.
+	 *
 	 * @return array Conservative height interval for the displaced mesh including every wake.
 	 */
 	public function heightRange(): array

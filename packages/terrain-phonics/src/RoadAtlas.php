@@ -8,10 +8,13 @@ final class RoadAtlas
 	public const MATERIALS = ['rock', 'grass', 'sand', 'snow', 'road'];
 
 	/**
-	 * Pack normalized road operations in application order. All pointers address RGBA texels. Each sample stores
-	 * the high parts of X and Z, height and tangent X; tangent Z, grade, bank and opacity; the low parts of X and Z and the segment vector; then the dash phase, phase increment, end flags and optional continuation table address.
+	 * Pack normalized road operations in application order. All pointers address RGBA texels. Each sample stores the
+	 * high parts of X and Z, height and tangent X; tangent Z, grade, bank and opacity; the low parts of X and Z and
+	 * the segment vector; then the dash phase, phase increment, end flags and optional continuation table address.
+	 *
 	 * @param array $roads Committed splines with their derived sample planes.
 	 * @param float $extent Width of the editable square in meters.
+	 * @param array $cache Reusable encoded overlays indexed by road geometry.
 	 * @return array Float texture bytes, dimensions and spatial directory coordinates.
 	 */
 	public static function build(array $roads, float $extent, array &$cache = []): array
@@ -110,7 +113,12 @@ final class RoadAtlas
 		];
 	}
 
-	/** Cache each road's grade, paint and dash data with tile references relative to its own first texel. */
+	/**
+	 * Cache each road's grade, paint and dash data with tile references relative to its own first texel.
+	 *
+	 * @param array $op Normalized road edit to encode.
+	 * @return string Packed segment, paint, grading and continuation data.
+	 */
 	private static function overlay(array $op): string
 	{
 		$data = '';
@@ -180,6 +188,16 @@ final class RoadAtlas
 		return $pointers ? $data . pack('g4', $pointers[0] ?? 0, $pointers[1] ?? 0, 0, 0) . $extra : $data;
 	}
 
+	/**
+	 * Find the atlas tiles touched by prepared road segments and shoulder fills.
+	 *
+	 * @param array $road Prepared road geometry.
+	 * @param float $cell Tile spacing in world units.
+	 * @param int $minTile First tile coordinate in the atlas.
+	 * @param int $maxTile Last tile coordinate in the atlas.
+	 * @param int $blocksAcross Number of atlas blocks across one row.
+	 * @return array Tile coverage for indexing the road overlay.
+	 */
 	private static function coverageTiles(
 		array $road
 		, float $cell
@@ -226,7 +244,12 @@ final class RoadAtlas
 	// Sixteen pairs of 10-foot dashes and gaps, interpolated as an angle across wraparound.
 	public const MARK_CYCLE = 16 * 2 * RoadMarkings::DASH_METERS;
 
-	/** Pack lateral position in half-widths and cyclic distance along the road into 24 exact bits. */
+	/**
+	 * Pack lateral position in half-widths and cyclic distance along the road into 24 exact bits.
+	 *
+	 * @param array $mark Road marking projection and distance data.
+	 * @return int Packed marking bits for the atlas texel.
+	 */
 	public static function markCode(array $mark): int
 	{
 		[$cross,$station] = $mark;
@@ -242,6 +265,13 @@ final class RoadAtlas
 		return ($lateral << 12) | (($role >> 1) << 10) | $phase;
 	}
 
+	/**
+	 * Encode a road or painted material and its marking into one texel.
+	 *
+	 * @param ?string $material Paint material identifier.
+	 * @param ?array $mark Road marking projection and distance data.
+	 * @return string Packed material and marking bytes.
+	 */
 	public static function paintTexel(?string $material, ?array $mark): string
 	{
 		$id = array_search($material, self::MATERIALS, true);

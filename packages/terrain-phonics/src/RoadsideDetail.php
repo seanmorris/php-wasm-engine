@@ -9,6 +9,12 @@ final class RoadsideDetail
 	private const TILE = 8;
 	private array $segments = [], $buckets = [], $tiles = [];
 
+	/**
+	 * Index the road segments used to extend terrain detail beside the pavement.
+	 *
+	 * @param array $roads Road records in terrain edit order.
+	 * @return void No value.
+	 */
 	public function __construct(array $roads)
 	{
 		foreach($roads as $road)
@@ -46,6 +52,13 @@ final class RoadsideDetail
 		}
 	}
 
+	/**
+	 * Rasterize road coverage for one cached tile.
+	 *
+	 * @param int $x Horizontal X coordinate.
+	 * @param int $z Horizontal Z coordinate.
+	 * @return string Packed coverage bytes for the tile.
+	 */
 	private function tile(int $x, int $z): string
 	{
 		$bytes = str_repeat("\0", self::TILE ** 2);
@@ -82,7 +95,13 @@ final class RoadsideDetail
 		return $bytes;
 	}
 
-	/** The window moves in 64 m increments and includes an interpolation border on every side. */
+	/**
+	 * The window moves in 64 m increments and includes an interpolation border on every side.
+	 *
+	 * @param array $focus World position around which road detail is needed.
+	 * @param float $radius World radius around the focus point.
+	 * @return array Snapped mask origin and width in cells.
+	 */
 	public static function window(array $focus, float $radius): array
 	{
 		$pad = (int)ceil($radius / self::CELL) + 2;
@@ -92,7 +111,12 @@ final class RoadsideDetail
 		return [$x,$z,4 * (int)ceil((2 * $pad + 5) / 4)];
 	}
 
-	/** Single-channel texture and conservative world bounds of its bilinear support. */
+	/**
+	 * Single-channel texture and conservative world bounds of its bilinear support.
+	 *
+	 * @param array $window Snapped road-coverage grid bounds.
+	 * @return array Coverage texture bytes and world bounds of the active road mask.
+	 */
 	public function sampleWindow(array $window): array
 	{
 		[$x,$z,$size] = $window;

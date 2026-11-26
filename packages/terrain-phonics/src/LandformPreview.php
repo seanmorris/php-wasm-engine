@@ -10,6 +10,14 @@ final class LandformPreview
 	private array $heights = [];
 	private string $pixels = '';
 
+	/**
+	 * Set up the coarse survey grid for a terrain recipe.
+	 *
+	 * @param array $recipe Landscape recipe including its seed and shape settings.
+	 * @param float $water Elevation of the water surface in meters.
+	 * @param int $size Number of samples across the survey grid.
+	 * @return void No value.
+	 */
 	public function __construct(array $recipe, public readonly float $water, public readonly int $size = 64)
 	{
 		if($size < 16 || $size > 256 || !is_finite($water))
@@ -19,7 +27,11 @@ final class LandformPreview
 		$this->span = $this->field->values()['worldSize'];
 	}
 
-	/** Yield between short groups of samples. The caller owns scheduling and cancellation. */
+	/**
+	 * Yield between short groups of samples. The caller owns scheduling and cancellation.
+	 *
+	 * @return \Generator Yields between sample groups and returns the elevation survey.
+	 */
 	public function survey(): \Generator
 	{
 		$n = $this->size;
@@ -104,7 +116,9 @@ final class LandformPreview
 
 				for($k = $left; $k < $right; $k++)
 				{
-					$merged[] = $j === $right || ($i < $mid && $ranked[$i] <= $ranked[$j]) ? $ranked[$i++] : $ranked[$j++];
+					$merged[] = $j === $right || ($i < $mid && $ranked[$i] <= $ranked[$j])
+						? $ranked[$i++]
+						: $ranked[$j++];
 
 					if(($k & 127) === 127) yield;
 				}
@@ -133,7 +147,14 @@ final class LandformPreview
 		];
 	}
 
-	/** Render a perspective thumbnail from the same grid and the game's real camera rays. */
+	/**
+	 * Render a perspective thumbnail from the same grid and the game's real camera rays.
+	 *
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @return string Packed RGB image bytes in scanline order.
+	 */
 	public function oblique(Camera $camera, int $width = 256, int $height = 144): string
 	{
 		$n = $this->size;
@@ -149,7 +170,10 @@ final class LandformPreview
 
 			for($j = 0; $j < $n; $j++)
 			for($i = 0; $i < $n; $i++)
-			$grid[] = $this->field->height($cx + ($i + .5 - $n / 2) * $side / $n, $cz + ($j + .5 - $n / 2) * $side / $n);
+			$grid[] = $this->field->height(
+				$cx + ($i + .5 - $n / 2) * $side / $n
+				, $cz + ($j + .5 - $n / 2) * $side / $n
+			);
 			$levels[] = [$side,$cx,$cz,$grid];
 		}
 
@@ -210,10 +234,21 @@ final class LandformPreview
 				{
 					$sx = ((1 - $v) * ($b - $a) + $v * ($d - $c)) / $cell;
 					$sz = ((1 - $u) * ($c - $a) + $u * ($d - $b)) / $cell;
-					$light = max(.18, min(1., .25 + .75 * (.62 + .6 * $sx + .5 * $sz) / sqrt(1 + $sx * $sx + $sz * $sz)));
+
+					$light = max(
+						.18
+						, min(1., .25 + .75 * (.62 + .6 * $sx + .5 * $sz) / sqrt(1 + $sx * $sx + $sz * $sz))
+					);
+
 					$tint = max(.5, min(1., .63 + .37 * ($h - $min) / $relief));
+
 					$pixel = $h > $this->water
-						? pack('C3', (int)(218 * $light * $tint), (int)(215 * $light * $tint), (int)(175 * $light * $tint))
+						? pack(
+							'C3'
+							, (int)(218 * $light * $tint)
+							, (int)(215 * $light * $tint)
+							, (int)(175 * $light * $tint)
+						)
 						: "\x43\x80\xa8";
 
 					break;
@@ -228,7 +263,11 @@ final class LandformPreview
 		return $rgb;
 	}
 
-	/** Score views of dry relief in a fan, sampling only the completed survey grid. Angles are degrees. */
+	/**
+	 * Score views of dry relief in a fan, sampling only the completed survey grid. Angles are degrees.
+	 *
+	 * @return \Generator Yields while evaluating viewpoints and returns the chosen camera pose.
+	 */
 	public function findView(): \Generator
 	{
 		$n = $this->size;

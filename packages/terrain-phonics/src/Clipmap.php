@@ -40,6 +40,12 @@ final class Clipmap
 	private array $shadowReceiverRange = [0.,0.];
 	private ?array $dirtyRegion = null;
 
+	/**
+	 * Mark the elevation cache stale after an edit.
+	 *
+	 * @param ?array $region Affected rectangle in world coordinates or null for the full landscape.
+	 * @return void No value.
+	 */
 	public function invalidate(?array $region = null): void
 	{
 		$this->dirtyRegion = $region;
@@ -59,6 +65,11 @@ final class Clipmap
 	public bool $pending = true;
 	public int $texels = 0, $uploads = 0;
 
+	/**
+	 * Create the generator program and GPU objects shared by the clipmap levels.
+	 *
+	 * @return void No value.
+	 */
 	public function __construct()
 	{
 		$this->generator = self::elevationProgram(false);
@@ -68,6 +79,13 @@ final class Clipmap
 		glGenTextures(1, $this->permutation);
 	}
 
+	/**
+	 * Compile the elevation pass with the features used by the landscape.
+	 *
+	 * @param bool $joined Enable terrain transitions between landscapes.
+	 * @param int $features Enabled procedural shape features.
+	 * @return Program Linked height generation program.
+	 */
 	private static function elevationProgram(bool $joined, int $features = 0): Program
 	{
 		$root = dirname(__DIR__) . '/shaders/';
@@ -86,6 +104,12 @@ final class Clipmap
 		return new Program(file_get_contents($root . 'shadows.vert'), $fragment);
 	}
 
+	/**
+	 * Bind a clipmap texture and configure its sampling parameters.
+	 *
+	 * @param int $id GPU texture handle.
+	 * @return void No value.
+	 */
 	private static function texture(int $id): void
 	{
 		glBindTexture(GL_TEXTURE_2D, $id);
@@ -95,6 +119,12 @@ final class Clipmap
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 
+	/**
+	 * Allocate the textures for one elevation grid.
+	 *
+	 * @param int $n Side length of each texture in texels.
+	 * @return array Texture handles, initial origin and storage size.
+	 */
 	private function allocate(int $n): array
 	{
 		$ids = [];
@@ -117,6 +147,12 @@ final class Clipmap
 		return ['textures' => $ids,'n' => $n,'origin' => null];
 	}
 
+	/**
+	 * Prepare the GPU generator and noise data for the active landscape.
+	 *
+	 * @param Landscape $land Landscape supplying elevation and committed edits.
+	 * @return void No value.
+	 */
 	private function generate(Landscape $land): void
 	{
 		if($this->chartDetail) $this->chartDetail['origin'] = null;
@@ -213,9 +249,21 @@ final class Clipmap
 		);
 	}
 
+	/**
+	 * Upload the shape parameters for one source landscape.
+	 *
+	 * @param array $r Normalized terrain recipe.
+	 * @param string $suffix Uniform suffix for the selected region.
+	 * @return void No value.
+	 */
 	private function uploadForm(array $r, string $suffix): void
 	{
 		$p = $this->generator;
+		/** Read one component of a form uniform.
+		 * @param string $key Recipe field name.
+		 * @return float|int Configured shape coefficient.
+		 */
+		$fieldValue = static fn($key) => $r[$key];
 
 		foreach([
 			'uShape' => ['baseBias','rolling','directionalRise','ridgeHeight']
@@ -224,7 +272,7 @@ final class Clipmap
 			, 'uRock' => ['secondary','terraceSpacing','terraceStrength','bedding']
 			, 'uDetail' => ['detailAmplitude','persistence','lacunarity','damping']
 		] as $uniform => $fields)
-		glUniform4f($p->location($uniform . $suffix), ...array_map(static fn($key) => $r[$key], $fields));
+		glUniform4f($p->location($uniform . $suffix), ...array_map($fieldValue, $fields));
 
 		// Optional uniforms use the same name in both variants, with an array index only on a join.
 		$slot = $suffix ?: 'Set';
@@ -244,6 +292,12 @@ final class Clipmap
 		if($this->formFeatures & self::GULLY_CUT)
 		glUniform2f($p->location('uGully' . $slot), $r['gullyDepth'], $r['gullySpacing']);
 
+		/**
+		 * Measure the precision lost when a coordinate is stored in a shader float.
+		 *
+		 * @param float $f Double-precision coordinate.
+		 * @return float Residual beyond the single-precision representation.
+		 */
 		$residual = static fn(float $f): float => $f - unpack('g', pack('g', $f))[1];
 		$x = $r['noiseOffsetX'];
 		$z = $r['noiseOffsetZ'];
@@ -345,7 +399,18 @@ final class Clipmap
 		);
 	}
 
-	/** Left/right strips plus top/bottom strips over the shared X interval. Half-open integer rectangles. */
+	/**
+	 * Left/right strips plus top/bottom strips over the shared X interval. Half-open integer rectangles.
+	 *
+	 * @param int $x First column of the new rectangle.
+	 * @param int $z First row of the new rectangle.
+	 * @param int $n Number of cells across the grid.
+	 * @param ?array $old Previous grid origin, when available.
+	 * @param ?int $oldSize Previous number of covered columns.
+	 * @param ?int $rows Number of grid rows to cover.
+	 * @param ?int $oldRows Previous number of covered rows.
+	 * @return array Half-open rectangles of newly exposed grid cells.
+	 */
 	public static function exposed(
 		int $x
 		, int $z
@@ -382,6 +447,16 @@ final class Clipmap
 		return $rects;
 	}
 
+	/**
+	 * Render newly exposed rectangles into a level and schedule their edit overlays.
+	 *
+	 * @param array $level Resident grid record with its size and textures.
+	 * @param array $rects Half-open rectangles of cells to update.
+	 * @param float $step World-space distance between grid samples.
+	 * @param float $offset World-space grid offset.
+	 * @param int $key Level identifier for the pending work.
+	 * @return void No value.
+	 */
 	private function fill(array $level, array $rects, float $step, float $offset, int $key): void
 	{
 		if(!$rects) return;
@@ -413,7 +488,13 @@ final class Clipmap
 		}
 	}
 
-	/** Split world-cell rectangles at texture boundaries, keeping both logical and physical origins. */
+	/**
+	 * Split world-cell rectangles at texture boundaries, keeping both logical and physical origins.
+	 *
+	 * @param array $rects Half-open rectangles of cells to update.
+	 * @param int $n Number of cells across the grid.
+	 * @return \Generator World coordinates, texture coordinates, width and height of each contiguous write.
+	 */
 	public static function wrapped(array $rects, int $n): \Generator
 	{
 		foreach($rects as [$x0,$z0,$x1,$z1])
@@ -604,12 +685,25 @@ final class Clipmap
 		}
 	}
 
+	/**
+	 * Delete the textures owned by a level.
+	 *
+	 * @param array $level Grid record holding the texture handles to release.
+	 * @return void No value.
+	 */
 	private static function release(array $level): void
 	{
 		if($level) glDeleteTextures(2, $level['textures']);
 	}
 
-	/** Grid widths, from the near field to the horizon, in cells of their own level. */
+	/**
+	 * Grid widths, from the near field to the horizon, in cells of their own level.
+	 *
+	 * @param array $recipe Landscape recipe including its seed and shape settings.
+	 * @param float $quality Configured detail multiplier.
+	 * @param bool $focused Whether the fine rings lead the camera.
+	 * @return array Active grid widths in order from finest to coarsest.
+	 */
 	public static function spans(array $recipe, float $quality, bool $focused = false): array
 	{
 		$base = $quality < .75 ? 24 : ($quality > 1.5 ? 120 : 56);
@@ -654,17 +748,35 @@ final class Clipmap
 		return $spans;
 	}
 
-	/** Width guaranteed around the eye even when the fine grid leads at its maximum offset. */
+	/**
+	 * Width guaranteed around the eye even when the fine grid leads at its maximum offset.
+	 *
+	 * @param int $span Width of the grid at this level.
+	 * @param bool $focused Whether the fine rings lead the camera.
+	 * @return int Width in cells remaining centered on the camera.
+	 */
 	private static function centeredSpan(int $span, bool $focused): int
 	{
 		return $focused ? $span - 2 * (int)ceil($span * self::LEAD_FRACTION) : $span;
 	}
 
+	/**
+	 * Calculate the width of the blend into the next coarser level.
+	 *
+	 * @param int $span Width of the grid at this level.
+	 * @return float Transition width in cells.
+	 */
 	public static function transition(int $span): float
 	{
 		return max(2., min(20., $span * .1, $span / 4 - 4));
 	}
 
+	/**
+	 * Size the wrapping texture for a level.
+	 *
+	 * @param int $span Width of the grid at this level.
+	 * @return int Texture side length in texels.
+	 */
 	private static function storageSize(int $span): int
 	{
 		$size = 1;
@@ -674,14 +786,30 @@ final class Clipmap
 		return $size;
 	}
 
-	/** Maximum roadside extension in cells. The four driving rings share the same world-space mask. */
+	/**
+	 * Maximum roadside extension in cells. The four driving rings share the same world-space mask.
+	 *
+	 * @param int $span Width of the grid at this level.
+	 * @param float $step World-space distance between grid samples.
+	 * @return int Maximum extension in cells on either side.
+	 */
 	public static function roadsidePad(int $span, float $step): int
 	{
 		return $step > 8. ? 0 : 2 * (int)floor(min($span / 2, 48., 384. / $step) / 2);
 	}
 
-	/** Grow the fine draw rectangle only into road coverage and the parent's unmorphed interior.
-	 * All four edges lie on the parent lattice, including west and south of the world origin.
+	/**
+	 * Grow the fine draw rectangle only into road coverage and the parent's unmorphed interior. All four edges lie on
+	 * the parent lattice, including west and south of the world origin.
+	 *
+	 * @param array $origin Origin used to position this grid or palette.
+	 * @param int $span Width of the grid at this level.
+	 * @param int $pad Permitted extension in cells.
+	 * @param float $step World-space distance between grid samples.
+	 * @param array $bounds Horizontal limits of the affected area.
+	 * @param array $eye World-space camera position.
+	 * @param float $parentRadius Unmorphed interior radius of the parent ring.
+	 * @return ?array Extended grid bounds or null when the road misses this level.
 	 */
 	public static function roadsideRect(
 		array $origin
@@ -696,20 +824,52 @@ final class Clipmap
 		$z = $origin[1] + self::HALO;
 		$r = $x + $span;
 		$b = $z + $span;
-		[$l,$t,$rr,$bb] = array_map(static fn($v) => $v / $step, $bounds);
+
+		[$l,$t,$rr,$bb] = array_map(
+			/**
+			 * Convert a world bound to level cell coordinates.
+			 *
+			 * @param float $v World coordinate.
+			 * @return float Coordinate measured in level cells.
+			 */
+			static fn($v) => $v / $step
+			, $bounds
+		);
 
 		if($l > $r + $pad || $rr < $x - $pad || $t > $b + $pad || $bb < $z - $pad) return null;
 
-		$west = min($x, max($x - $pad, 2 * (int)floor($l / 2) - 2, 2 * (int)ceil(($eye[0] / $step - $parentRadius) / 2)));
-		$north = min($z, max($z - $pad, 2 * (int)floor($t / 2) - 2, 2 * (int)ceil(($eye[2] / $step - $parentRadius) / 2)));
-		$east = max($r, min($r + $pad, 2 * (int)ceil($rr / 2) + 2, 2 * (int)floor(($eye[0] / $step + $parentRadius) / 2)));
-		$south = max($b, min($b + $pad, 2 * (int)ceil($bb / 2) + 2, 2 * (int)floor(($eye[2] / $step + $parentRadius) / 2)));
+		$west = min(
+			$x
+			, max($x - $pad, 2 * (int)floor($l / 2) - 2, 2 * (int)ceil(($eye[0] / $step - $parentRadius) / 2))
+		);
+
+		$north = min(
+			$z
+			, max($z - $pad, 2 * (int)floor($t / 2) - 2, 2 * (int)ceil(($eye[2] / $step - $parentRadius) / 2))
+		);
+
+		$east = max(
+			$r
+			, min($r + $pad, 2 * (int)ceil($rr / 2) + 2, 2 * (int)floor(($eye[0] / $step + $parentRadius) / 2))
+		);
+
+		$south = max(
+			$b
+			, min($b + $pad, 2 * (int)ceil($bb / 2) + 2, 2 * (int)floor(($eye[2] / $step + $parentRadius) / 2))
+		);
 
 		// A short road can end inside the ordinary rectangle while its bank still crosses the morph strip.
 		return [$west,$north,$east,$south];
 	}
 
-	/** A cold view of a fork needs enough samples to distinguish its two shoulders. */
+	/**
+	 * A cold view of a fork needs enough samples to distinguish its two shoulders.
+	 *
+	 * @param array $roads Road records in terrain edit order.
+	 * @param Landscape $land Landscape supplying elevation and committed edits.
+	 * @param array $eye World-space camera position.
+	 * @return bool Whether the eye is close enough to a junction to warm its finer rings.
+	 */
 	private function enteringFork(array $roads, Landscape $land, array $eye): bool
 	{
 		if(!$roads) return false;
@@ -740,14 +900,24 @@ final class Clipmap
 
 			foreach([0,array_key_last($points)] as $end => $i)
 			{
-				if(($caps & (1 << $end)) && hypot($points[$i][0] - $eye[0], $points[$i][2] - $eye[2]) <= 512.) return true;
+				if(($caps & (1 << $end)) && hypot($points[$i][0] - $eye[0], $points[$i][2] - $eye[2]) <= 512.)
+				return true;
 			}
 		}
 
 		return false;
 	}
 
-	/** Refresh only cells newly exposed to the camera or changed by committed edits. */
+	/**
+	 * Refresh only cells newly exposed to the camera or changed by committed edits.
+	 *
+	 * @param Landscape $land Landscape supplying elevation and committed edits.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param float $quality Terrain detail setting.
+	 * @param ?float $deadline Latest wall-clock time allocated to this update.
+	 * @param ?array $detailFocus Optional driving focus for positioning finer grid levels.
+	 * @return bool Whether this update changed the visible terrain.
+	 */
 	public function update(
 		Landscape $land
 		, Camera $camera
@@ -781,7 +951,8 @@ final class Clipmap
 			}
 		}
 		elseif($this->source !== $land) $this->growingForkRing = null;
-		elseif($this->growingForkRing !== null) $this->growingForkRing = min($this->growingForkRing - 1, count($spans) - 1);
+		elseif($this->growingForkRing !== null)
+		$this->growingForkRing = min($this->growingForkRing - 1, count($spans) - 1);
 
 		// A small, centered footprint at every spacing keeps the branches connected on the
 		// first frame. Grow one ring per update, outside in, preserving its stitched parent.
@@ -958,7 +1129,16 @@ final class Clipmap
 				}
 
 				$this->paintQueue = array_values(
-					array_filter($this->paintQueue, static fn($entry) => $entry[0] < 0 || !empty($resident[$entry[0]]))
+					array_filter(
+						$this->paintQueue
+						, /**
+						 * Keep queued work for overview and resident grid levels.
+						 *
+						 * @param array $entry Queued paint work item.
+						 * @return bool Whether this entry can still update a resident texture.
+						 */
+						static fn($entry) => $entry[0] < 0 || !empty($resident[$entry[0]])
+					)
 				);
 
 				$this->levels = $resident;
@@ -1004,10 +1184,17 @@ final class Clipmap
 			// The finest level surrounds the camera, so its edits come first; the overview goes last.
 			usort(
 				$this->paintQueue
-				, static fn(array $a, array $b) => ($a[0] < 0 ? PHP_INT_MAX : $a[0]) <=> ($b[0] < 0
+				, /**
+					 * Order pending paint work by level priority.
+					 *
+					 * @param array $a First queued job.
+					 * @param array $b Second queued job.
+					 * @return int Relative ordering of the two jobs.
+					 */
+				static fn(array $a, array $b) => ($a[0] < 0 ? PHP_INT_MAX : $a[0]) <=> ($b[0] < 0
 					? PHP_INT_MAX
 					: $b[
-					0
+				0
 					]
 				)
 			);
@@ -1027,6 +1214,20 @@ final class Clipmap
 		return $changed || $gridChanged || $firstLevel !== $nextLevel || !$this->pending;
 	}
 
+	/**
+	 * Move a level to its current origin and refill its exposed or invalidated cells.
+	 *
+	 * @param array $level Resident grid record with its size and textures.
+	 * @param array $origin World-cell origin of the new region.
+	 * @param float $step World-space distance between grid samples.
+	 * @param float $offset World offset applied when converting cells to sampling positions.
+	 * @param bool $changed Whether the stored landscape revision changed.
+	 * @param ?array $region Changed world bounds, or null to refresh the full area.
+	 * @param int $key Level identifier for the pending work.
+	 * @param int $cells Number of grid columns to cover.
+	 * @param ?int $rows Number of grid rows to cover.
+	 * @return void No value.
+	 */
 	private function refresh(
 		array &$level
 		, array $origin
@@ -1069,6 +1270,11 @@ final class Clipmap
 		$this->fill($level, $rects, $step, $offset, $key);
 	}
 
+	/**
+	 * Bind the elevation framebuffer and configure the generator draw.
+	 *
+	 * @return mixed Previous framebuffer binding to restore after generation.
+	 */
 	private function beginElevation(): mixed
 	{
 		$previous = glGetIntegerv(GL_FRAMEBUFFER_BINDING);
@@ -1084,6 +1290,14 @@ final class Clipmap
 		return $previous;
 	}
 
+	/**
+	 * Update the coarse elevation and paint textures covering the entire landscape.
+	 *
+	 * @param float $half Half-width of the landscape in meters.
+	 * @param bool $changed Whether terrain content has changed since the previous update.
+	 * @param ?array $region Changed world bounds, or null to refresh the full area.
+	 * @return void No value.
+	 */
 	private function refreshOverview(float $half, bool $changed, ?array $region): void
 	{
 		if(!$this->overview || $changed)
@@ -1094,7 +1308,12 @@ final class Clipmap
 		}
 	}
 
-	/** Populate an unedited recipe's north-up chart without allocating camera rings or road meshes. */
+	/**
+	 * Populate an unedited recipe's north-up chart without allocating camera rings or road meshes.
+	 *
+	 * @param Landscape $land Landscape supplying elevation and committed edits.
+	 * @return void No value.
+	 */
 	public function prepareOverview(Landscape $land): void
 	{
 		if($land->revision() !== 0) throw new \InvalidArgumentException('A recipe overview requires unedited terrain.');
@@ -1117,9 +1336,21 @@ final class Clipmap
 		}
 	}
 
+	/**
+	 * Read the texture handles for the full-landscape overview.
+	 *
+	 * @return array Overview texture handles or zero handles before allocation.
+	 */
 	public function overview(): array {return $this->overview['textures'] ?? [0,0];}
 
-	/** Use the finest resident caster grid spanning at least 1.2 km, including terrain behind the camera. */
+	/**
+	 * Use the finest resident caster grid spanning at least 1.2 km, including terrain behind the camera.
+	 *
+	 * @param array $eye World-space camera position.
+	 * @param array $sun Normalized direction toward the sun.
+	 * @param int $revision Committed landscape edit revision.
+	 * @return void No value.
+	 */
 	public function updateShadows(array $eye, array $sun, int $revision): void
 	{
 		if($sun[1] > 0 && $this->overview)
@@ -1157,6 +1388,12 @@ final class Clipmap
 		$this->shadows?->invalidate();
 	}
 
+	/**
+	 * Bind cached terrain shadow data to a receiving program.
+	 *
+	 * @param Program $program Active GPU program receiving the bindings.
+	 * @return void No value.
+	 */
 	public function bindShadows(Program $program): void
 	{
 		glUniform2f($program->location('uShadowReceiverRange'), ...$this->shadowReceiverRange);
@@ -1165,14 +1402,32 @@ final class Clipmap
 		else glUniform3f($program->location('uShadowGrid'), 0, 0, 0);
 	}
 
+	/**
+	 * Check the active elevation texture representation.
+	 *
+	 * @return bool Whether the generator uses packed elevation samples.
+	 */
 	public function packed(): bool {return $this->packed === true;}
 
-	/** Vertex helpers shared by terrain and overlays drawn on its triangles. */
+	/**
+	 * Vertex helpers shared by terrain and overlays drawn on its triangles.
+	 *
+	 * @return string Shared GLSL vertex sampling functions.
+	 */
 	public static function gridShader(): string
 	{
 		return file_get_contents(dirname(__DIR__) . '/shaders/clip-grid.glsl');
 	}
 
+	/**
+	 * Bind one level and its parent so the shader can stitch their elevations.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param int $index Index of the selected level.
+	 * @param array $level Resident grid record with its size and textures.
+	 * @return void No value.
+	 */
 	private function bindGrid(Program $p, Camera $camera, int $index, array $level): void
 	{
 		[$ox,$oz] = $level['origin'];
@@ -1188,7 +1443,13 @@ final class Clipmap
 			[$x,$z,$right,$bottom] = $flank;
 			glUniform2i($p->location('uRingMax'), $right, $bottom);
 			[$ox,$oz,$n] = $this->roadsideWindows[$index];
-			glUniform3f($p->location('uRoadsideUV'), (.5 - $ox) / $n, (.5 - $oz) / $n, 1. / ($n * RoadsideDetail::CELL));
+
+			glUniform3f(
+				$p->location('uRoadsideUV')
+				, (.5 - $ox) / $n
+				, (.5 - $oz) / $n
+				, 1. / ($n * RoadsideDetail::CELL)
+			);
 
 			glUniform3f(
 				$p->location('uParentSafe')
@@ -1257,8 +1518,13 @@ final class Clipmap
 	}
 
 	/**
-	 * Redraw a rectangle on the finest resident terrain grid using the active overlay program.
-	 * Bounds are [minX, minZ, maxX, maxZ] in meters. An uncovered rectangle is left to the caller.
+	 * Redraw a rectangle on the finest resident terrain grid using the active overlay program. Bounds are [minX, minZ,
+	 * maxX, maxZ] in meters. An uncovered rectangle is left to the caller.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param array $bounds Horizontal limits of the affected area.
+	 * @return bool Whether the requested patch was drawn.
 	 */
 	public function drawGroundPatch(Program $p, Camera $camera, array $bounds): bool
 	{
@@ -1297,7 +1563,17 @@ final class Clipmap
 		return true;
 	}
 
-	/** Draw a solid inner grid and rectangular strips around each finer level. */
+	/**
+	 * Draw a solid inner grid and rectangular strips around each finer level.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param array $planes Camera frustum planes.
+	 * @param array $vertical Conservative terrain elevation interval for culling.
+	 * @param bool $water Elevation of the water surface in meters.
+	 * @param int $materialRegion Restrict drawing to this journey material region.
+	 * @return int Number of terrain draw calls submitted.
+	 */
 	public function draw(
 		Program $p
 		, Camera $camera
@@ -1313,7 +1589,16 @@ final class Clipmap
 		);
 	}
 
-	/** Cull once when multiple ground passes draw the same stitched geometry. */
+	/**
+	 * Cull once when multiple ground passes draw the same stitched geometry.
+	 *
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param array $planes Camera frustum planes.
+	 * @param array $vertical Elevation interval for terrain culling.
+	 * @param bool $water Elevation of the water surface in meters.
+	 * @param int $materialRegion Restrict drawing to this journey material region.
+	 * @return array Visible draw strips grouped by clipmap level.
+	 */
 	public function visibleGroups(
 		Camera $camera
 		, array $planes
@@ -1465,6 +1750,14 @@ final class Clipmap
 		return $groups;
 	}
 
+	/**
+	 * Submit the previously culled terrain strips for this program.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param array $groups Visible clipmap strips from the culling pass.
+	 * @return int Number of submitted draws.
+	 */
 	public function drawGroups(Program $p, Camera $camera, array $groups): int
 	{
 		$count = 0;
@@ -1492,7 +1785,15 @@ final class Clipmap
 		return $count;
 	}
 
-	/** World meters across the heading-up, vehicle-centered chart. */
+	/**
+	 * World meters across the heading-up, vehicle-centered chart.
+	 *
+	 * @param float $extent Width of the landscape in world units.
+	 * @param array $position Center of the chart in world coordinates.
+	 * @param float $bearing Chart rotation in radians.
+	 * @param bool $wide Use the wider map view.
+	 * @return float World width of the vehicle chart in meters.
+	 */
 	public static function chartSpan(float $extent, array $position, float $bearing, bool $wide): float
 	{
 		// At the middle of the world, even a 45° chart fits at this scale.
@@ -1510,7 +1811,15 @@ final class Clipmap
 		return max(min($zoomedOut, 1.5 * $local), min($zoomedOut, $fits));
 	}
 
-	/** Sample a zoomed editor view on its own lattice when the driving camera is elsewhere. */
+	/**
+	 * Sample a zoomed editor view on its own lattice when the driving camera is elsewhere.
+	 *
+	 * @param array $center World-space center of the requested chart.
+	 * @param float $span Width of the grid at this level.
+	 * @param array $resident Grid level already available for sampling.
+	 * @param int $cells Number of grid columns to cover.
+	 * @return array Selected grid and number of cells across the map.
+	 */
 	private function editorLevel(array $center, float $span, array $resident, int $cells): array
 	{
 		$n = 128;
@@ -1550,7 +1859,16 @@ final class Clipmap
 
 			if($refill)
 			$this->paintQueue = array_values(
-				array_filter($this->paintQueue, static fn($entry) => $entry[0] !== self::CHART_DETAIL)
+				array_filter(
+					$this->paintQueue
+					, /**
+					 * Retain paint jobs unrelated to the superseded chart detail.
+					 *
+					 * @param array $entry Queued paint work item.
+					 * @return bool Whether the job still applies.
+					 */
+					static fn($entry) => $entry[0] !== self::CHART_DETAIL
+				)
 			);
 
 			$this->refresh($this->chartDetail, $base, $step, 0., $refill, null, self::CHART_DETAIL, $n);
@@ -1565,7 +1883,30 @@ final class Clipmap
 		return [$this->chartDetail,$n];
 	}
 
-	/** Return the drawn span for overlays that need the same world-to-chart scale. */
+	/**
+	 * Return the drawn span for overlays that need the same world-to-chart scale.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param array $position Center of the chart in world coordinates.
+	 * @param float $bearing Chart rotation in radians.
+	 * @param bool $wide Use the wider map view.
+	 * @param int $w Render target width in pixels.
+	 * @param int $h Render target height in pixels.
+	 * @param float $water Elevation of the water surface in meters.
+	 * @param array $waterColor Linear RGB used for water in the map.
+	 * @param SurfaceLayers $layers Ordered material layers.
+	 * @param TerrainAppearance $appearance Surface colors and material defaults for this landscape.
+	 * @param ?int $size Side length of the requested grid.
+	 * @param ?float $localView Optional local map coverage in meters.
+	 * @param bool $circular Clip the map to a circular boundary.
+	 * @param ?float $fixedSpan Optional fixed map width in meters.
+	 * @param int $regions Number of material regions being drawn.
+	 * @param int $regionIndex Index of the material region being drawn.
+	 * @param array $origin Origin used to position this grid or palette.
+	 * @param ?string $seed Seed for the procedural material field.
+	 * @param bool $sharedPalette Use palette uniforms already bound by the scene.
+	 * @return ?float Width of the rendered chart in meters, or null if unavailable.
+	 */
 	public function chart(
 		Program $p
 		, array $position
@@ -1691,15 +2032,37 @@ final class Clipmap
 		return $span;
 	}
 
+	/**
+	 * Upload the seeded origin used to sample material fields.
+	 *
+	 * @param Program $p Active GPU program receiving terrain uniforms.
+	 * @param ?string $seed Seed for the procedural material field.
+	 * @return void No value.
+	 */
 	public function paletteOrigin(Program $p, ?string $seed = null): void
 	{
 		$seed = crc32($seed ?? (string)$this->recipe['seed']);
 		glUniform2f($p->location('uPaletteOffset'), $seed & 65535, ($seed >> 16) & 65535);
 	}
 
+	/**
+	 * Read clipmap coverage and workload counters.
+	 *
+	 * @return array Current residency, generation and drawing statistics.
+	 */
 	public function stats(): array
 	{
-		$live = array_filter($this->levels, static fn(array $level) => isset($level['origin']));
+		$live = array_filter(
+			$this->levels
+			, /**
+			 * Select the levels which have a resident grid origin.
+			 *
+			 * @param array $level Clipmap level state.
+			 * @return bool Whether the level has been positioned.
+			 */
+			static fn(array $level) => isset($level['origin'])
+		);
+
 		$spacing = $live ? reset($live)['step'] : null;
 		$texels = ($this->overview['n'] ?? 0) ** 2 + ($this->chartDetail['n'] ?? 0) ** 2;
 
@@ -1712,7 +2075,10 @@ final class Clipmap
 			$step = $level['step'];
 
 			if(isset($this->roadsideRects[$index]))
-			$roadside[$index] = array_map(static fn($v) => $v * $step, $this->roadsideRects[$index]);
+			{
+				$roadside[$index] = [];
+				foreach($this->roadsideRects[$index] as $bound) $roadside[$index][] = $bound * $step;
+			}
 
 			$coverage[] = [$left * $step, $front * $step, $this->spans[$index] * $step, $step];
 		}
@@ -1734,13 +2100,27 @@ final class Clipmap
 			, 'roadTextureBytes' => $this->roadBytes
 			, 'meshBytes' => 0
 			, 'terrainTextureBytes' => 256 + $this->roadBytes + array_sum(
-				array_map(static fn($size) => $size ** 2, $this->roadsideSizes)
+				array_map(
+					/**
+					 * Count the cells in one square roadside allocation.
+					 *
+					 * @param int $size Side length in cells.
+					 * @return int Area in cells.
+					 */
+					static fn($size) => $size ** 2
+					, $this->roadsideSizes
+				)
 			) + ($this->packed ? 8 : 20) * $texels
 			, 'proceduralVertexBytes' => 0
 			, 'packedHeight' => $this->packed
 		];
 	}
 
+	/**
+	 * Release the programs, framebuffers, textures and geometry owned by the clipmap.
+	 *
+	 * @return void No value.
+	 */
 	public function close(): void
 	{
 		foreach($this->roadsideTextures as $texture) glDeleteTextures(1, $texture);

@@ -270,9 +270,21 @@ final class Watercraft
 		return $height;
 	}
 
+	/**
+	 * Read the rotational velocities and wake clock for replay resumption.
+	 *
+	 * @return array Pitch velocity, roll velocity and wake clock in simulation order.
+	 */
 	public function angularMotion(): array { return [$this->pitchVelocity,$this->rollVelocity,$this->wakeClock]; }
 
-	/** Set the hull pose and momentum at a simulation boundary. */
+	/**
+	 * Set the hull pose and momentum at a simulation boundary.
+	 *
+	 * @param array $pose Recorded hull position and orientation.
+	 * @param array $velocity Recorded linear velocity.
+	 * @param array $angular Pitch and roll velocities and saved wake clock.
+	 * @return void No value.
+	 */
 	public function resume(array $pose, array $velocity, array $angular): void
 	{
 		foreach(['x','y','z','yaw','roll','pitch'] as $key) $this->$key = $pose[$key];
