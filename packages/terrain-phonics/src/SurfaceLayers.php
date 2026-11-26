@@ -116,15 +116,28 @@ final class SurfaceLayers
 		, 'talusAmount','stainAmount','lichenAmount'
 	];
 
+	/**
+	 * Validate an ordered material stack and pack it for the shaders.
+	 *
+	 * @param array $layers One to sixteen material rows from the bottom up; each overrides DEFAULTS.
+	 * @param array $fields Shared appearance settings named in FIELD_KEYS, and noise scales.
+	 * @param array $bounce Linear red, green and blue of the light the ground reflects, each from 0 to 1.
+	 * @return void No value.
+	 */
 	public function __construct(array $layers, array $fields = [], public readonly array $bounce = [0.,0.,0.])
 	{
 		if(!array_is_list($layers) || !$layers || count($layers) > self::LIMIT)
 		throw new \InvalidArgumentException('A surface needs one to sixteen material layers.');
 
-		if(!array_is_list($bounce) || count($bounce) !== 3 || array_filter(
-			$bounce
-			, static fn($n) => (!is_float($n) && !is_int($n)) || !is_finite($n) || $n < 0 || $n > 1
-		))
+		/**
+		 * Whether a color channel is anything but a finite number from 0 to 1.
+		 *
+		 * @param mixed $n Channel to test.
+		 * @return bool True for an invalid channel.
+		 */
+		$invalid = static fn($n) => (!is_float($n) && !is_int($n)) || !is_finite($n) || $n < 0 || $n > 1;
+
+		if(!array_is_list($bounce) || count($bounce) !== 3 || array_filter($bounce, $invalid))
 		throw new \InvalidArgumentException('Invalid reflected light color.');
 
 		$keys = array_flip(self::FIELD_KEYS);
@@ -292,12 +305,23 @@ final class SurfaceLayers
 			: ($reflective ? 'reflective/' : '') . json_encode($structure, JSON_THROW_ON_ERROR);
 	}
 
-	/** Whether the advanced shader needs an elevation or grade mask for this row. */
+	/**
+	 * Whether the advanced shader needs an elevation or grade mask for this row.
+	 *
+	 * @param int $index Row position from the bottom of the stack.
+	 * @return bool True when a height, a slope or a repeating period limits the row.
+	 */
 	public function restricted(int $index): bool
 	{
 		return self::hasRange($this->layers[$index]);
 	}
 
+	/**
+	 * Whether a height, a slope or a repeating period limits a row.
+	 *
+	 * @param array $row Normalized material row.
+	 * @return bool True when any of those limits differs from its unrestricted default.
+	 */
 	private static function hasRange(array $row): bool
 	{
 		return $row['low'] > -1e6 || $row['high'] < 1e6 || $row['slopeLow'] != 0. || $row['slopeHigh'] != 1. || $row[
@@ -305,7 +329,12 @@ final class SurfaceLayers
 		] != 0.;
 	}
 
-	/** Preview the stack with selected contributions hidden. Children still receive their authored parent masks. */
+	/**
+	 * Preview the stack with selected contributions hidden. Children still receive their authored parent masks.
+	 *
+	 * @param array $layerIds Ids of the rows to hide.
+	 * @return self A copy whose hidden rows contribute nothing.
+	 */
 	public function previewWithout(array $layerIds): self
 	{
 		$view = clone $this;
@@ -316,10 +345,19 @@ final class SurfaceLayers
 		return $view;
 	}
 
-	/** A repeating section covers a full period. 1 continues the section and 2 closes it. */
+	/**
+	 * A repeating section covers a full period. 1 continues the section and 2 closes it.
+	 *
+	 * @param int $index Row position from the bottom of the stack.
+	 * @return int 0 outside a repeating section, 1 where it continues and 2 where it closes.
+	 */
 	public function section(int $index): int { return (int)$this->modes[4 * $index + 3]; }
 
-	/** Blend a complete, contiguous section of sibling beds together at each contact. */
+	/**
+	 * Blend a complete, contiguous section of sibling beds together at each contact.
+	 *
+	 * @return void No value.
+	 */
 	private function markRepeatingSections(): void
 	{
 		$fields = array_flip([
@@ -369,6 +407,13 @@ final class SurfaceLayers
 		}
 	}
 
+	/**
+	 * Build the material stack a landscape starts with.
+	 *
+	 * @param array $r Landscape recipe. Its preset and shape numbers choose and place the rows.
+	 * @param TerrainAppearance $appearance Validated colors and blend settings for the rows.
+	 * @return self The preset's material stack with its shared fields.
+	 */
 	public static function landscape(array $r, TerrainAppearance $appearance): self
 	{
 		$s = $appearance->settings;
@@ -561,7 +606,12 @@ final class SurfaceLayers
 		return new self($rows, $fields, $style === 'canyon' ? $appearance->canyonColors()['bounce'] : [0.,0.,0.]);
 	}
 
-	/** Every field is available to other recipes. A material can also use a different field's coverage. */
+	/**
+	 * Every field is available to other recipes. A material can also use a different field's coverage.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return self Mountain material stack with its shared fields.
+	 */
 	private static function ridges(array $s): self
 	{
 		$rows = [];
@@ -627,9 +677,26 @@ final class SurfaceLayers
 		return new self($rows, array_intersect_key($s, array_flip(self::FIELD_KEYS)));
 	}
 
+	/**
+	 * Describe a stipple pattern in a darker shade of a color.
+	 *
+	 * @param string $color Base color as #rrggbb.
+	 * @param float $shade Multiplier applied to each linear channel for the pattern color.
+	 * @param float $amount Pattern strength.
+	 * @param float $size Pattern scale.
+	 * @return array Pattern settings to merge into a material row.
+	 */
 	private static function stipple(string $color, float $shade, float $amount = 1., float $size = 1.6): array
 	{
-		$darker = array_map(static fn(float $channel): float => $shade * $channel, TerrainAppearance::linear($color));
+
+		/**
+		 * Darken one channel of the base color.
+		 *
+		 * @param float $channel Linear channel from 0 to 1.
+		 * @return float Shaded channel.
+		 */
+		$darken = static fn(float $channel): float => $shade * $channel;
+		$darker = array_map($darken, TerrainAppearance::linear($color));
 
 		return [
 			'pattern' => 'stipple'
@@ -640,7 +707,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Translate a start/end slope blend into a layer's full-coverage threshold and fade. */
+	/**
+	 * Translate a start/end slope blend into a layer's full-coverage threshold and fade.
+	 *
+	 * @param array $settings Validated appearance settings with rockSlopeStart and rockSlopeEnd.
+	 * @return array The row's slopeLow and slopeFade.
+	 */
 	private static function exposedRock(array $settings): array
 	{
 		return [
@@ -649,19 +721,37 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Encode a linear color as an sRGB hex string.
+	 *
+	 * @param array $linear Linear red, green and blue, each from 0 to 1.
+	 * @return string Color as #rrggbb.
+	 */
 	private static function hex(array $linear): string
 	{
-		$channels = array_map(static function(float $value): int {
+
+		/**
+		 * Encode one linear channel as an sRGB byte.
+		 *
+		 * @param float $value Linear channel from 0 to 1.
+		 * @return int Channel from 0 to 255.
+		 */
+		$encode = static function(float $value): int {
 			$srgb = $value <= .0031308 ? 12.92 * $value : 1.055 * $value ** (1 / 2.4) - .055;
 
 			return (int)round(255 * $srgb);
-		}, $linear
-		);
+		};
 
-		return sprintf('#%02x%02x%02x', ...$channels);
+		return sprintf('#%02x%02x%02x', ...array_map($encode, $linear));
 	}
 
-	/** Grassland on the valley floor, broken vegetation and weathered stone on its steeper sides. */
+	/**
+	 * Grassland on the valley floor, broken vegetation and weathered stone on its steeper sides.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @param float $floor Height of the valley floor in meters.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function limestoneLayers(array $s, float $floor): array
 	{
 		$grass = $s['grassColor'];
@@ -726,6 +816,15 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Scale a color's linear channels, clamping each at full brightness.
+	 *
+	 * @param string $color Base color as #rrggbb.
+	 * @param float $red Multiplier for the red channel.
+	 * @param float $green Multiplier for the green channel.
+	 * @param float $blue Multiplier for the blue channel.
+	 * @return string Tinted color as #rrggbb.
+	 */
 	private static function tint(string $color, float $red, float $green, float $blue): string
 	{
 		$base = TerrainAppearance::linear($color);
@@ -733,6 +832,13 @@ final class SurfaceLayers
 		return self::hex([min(1., $red * $base[0]), min(1., $green * $base[1]), min(1., $blue * $base[2])]);
 	}
 
+	/**
+	 * Build the basalt fjords' rows: moss heath, scree, basalt faces, lava beds, seep stains, tidal gravel and
+	 * summit snow.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function fjordLayers(array $s): array
 	{
 		$grass = $s['grassColor'];
@@ -860,7 +966,13 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Dry salt follows the basin floor. Only the wet margin follows the water when it rises. */
+	/**
+	 * Dry salt follows the basin floor. Only the wet margin follows the water when it rises.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @param array $recipe Landscape recipe. Its base bias and height scale give the basin floor.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function saltLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('salt-pans');
@@ -936,7 +1048,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Dark clinker on the apron, pockets of ash and lichen, and rusty cinders on the cone flanks. */
+	/**
+	 * Dark clinker on the apron, pockets of ash and lichen, and rusty cinders on the cone flanks.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function cinderLayers(array $s): array
 	{
 		return [
@@ -995,6 +1112,13 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the prairie's rows: tallgrass, green swales, cured grass and butte outcrops.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @param array $recipe Landscape recipe. Its base bias and height scale give the height of the plain.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function prairieLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('rolling-prairie');
@@ -1039,6 +1163,12 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the river valley's rows: flood meadow, alluvial terraces, wet silt and gravel bars.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function riverLayers(array $s): array
 	{
 		return [
@@ -1092,6 +1222,12 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the wooded foothills' rows: glades, fern slopes, woodland canopy and spur outcrops.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function foothillLayers(array $s): array
 	{
 		return [
@@ -1126,6 +1262,13 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the high desert steppe's rows: gravel apron, sagebrush, dry washes and rim rock.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @param array $recipe Landscape recipe. Its base bias and height scale give the height of the apron.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function steppeLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('high-desert-steppe');
@@ -1171,6 +1314,13 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the Alaska Range's rows: tussock tundra, outwash gravel, moraine talus, schist headwalls and firn
+	 * snowfields.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function alaskaLayers(array $s): array
 	{
 		return [
@@ -1231,6 +1381,12 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the chalk headlands' rows: downland turf, chalk faces, flint nodules, wet chalk and shingle beach.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function chalkLayers(array $s): array
 	{
 		return [
@@ -1294,7 +1450,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Forest holds every ledge of the towers. Rain streaks the bare limestone, and the tide cuts a dark notch. */
+	/**
+	 * Forest holds every ledge of the towers. Rain streaks the bare limestone, and the tide cuts a dark notch.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function karstLayers(array $s): array
 	{
 		$rock = $s['rockColor'];
@@ -1378,6 +1539,9 @@ final class SurfaceLayers
 	/**
 	 * Rainforest fills the floor to the foot of the walls and scrub covers the summits above the treeline. The walls'
 	 * joints and algae streaks are drawn tens of meters wide so they still read from the next table.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function tepuiLayers(array $s): array
 	{
@@ -1462,6 +1626,9 @@ final class SurfaceLayers
 	 * Fern and forest cover what holds soil. Moss mottles the fluted cliffs, and red earth shows where the steepest
 	 * faces slip. The flutes are 60 m apart, so they need a strong relief to tilt the light as much as the badland
 	 * rills do.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function emeraldLayers(array $s): array
 	{
@@ -1544,6 +1711,9 @@ final class SurfaceLayers
 	 * Harvest fields hold the flat valley floors. Stands of rust and gold crowns cover every slope, and dark hemlock
 	 * tints them green in patches. The patches are hundreds of meters across, the scale at which fall color reads
 	 * from the next fold. Sandstone breaks through where the crests steepen.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function autumnLayers(array $s): array
 	{
@@ -1600,6 +1770,9 @@ final class SurfaceLayers
 	 * Moss and olive heath hold the gentle ground. Black basalt scree covers the slopes, streaked down the fall
 	 * line and tilted into flutes. Black sand lines the shore, yellow lyme grass binds it, and snow lies in the
 	 * high gullies.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function blackSandLayers(array $s): array
 	{
@@ -1669,6 +1842,9 @@ final class SurfaceLayers
 	 * sky. Grassy earth bunds repeat with the 3.5 m terrace steps as height bands. Noise varies their thickness and
 	 * line, and they draw only where the ground steps, so they read as hand-built edges rather than contour lines.
 	 * Forest crowns the hills and fills the ravines too steep to terrace.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function riceLayers(array $s): array
 	{
@@ -1741,6 +1917,9 @@ final class SurfaceLayers
 	/**
 	 * Lichen heath covers the open ground under dark spruce. Pinkish granite breaks out on the steeper faces and the
 	 * knob crowns, and yellow-green sedge bog rings every lake.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
 	 */
 	private static function borealLayers(array $s): array
 	{
@@ -1801,7 +1980,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Rippled sand floors the corridors. The clay hulls streak down their flanks and pale toward their caps. */
+	/**
+	 * Rippled sand floors the corridors. The clay hulls streak down their flanks and pale toward their caps.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function yardangLayers(array $s): array
 	{
 		return [
@@ -1840,7 +2024,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Red sand darkens on slip faces and ripples on gentle ground. Gravel floors the flats; the beach is wet. */
+	/**
+	 * Red sand darkens on slip faces and ripples on gentle ground. Gravel floors the flats; the beach is wet.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function namibLayers(array $s): array
 	{
 		$sand = $s['sandColor'];
@@ -1892,7 +2081,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Dry grass holds the flat washes with bare clay between its tufts. Rills cut down every steeper slope. */
+	/**
+	 * Dry grass holds the flat washes with bare clay between its tufts. Rills cut down every steeper slope.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function badlandLayers(array $s): array
 	{
 		return [
@@ -1911,7 +2105,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Debris and blue ice show through where the wind or slope leaves little snow. */
+	/**
+	 * Debris and blue ice show through where the wind or slope leaves little snow.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function arcticLayers(array $s): array
 	{
 		$ice = $s['rockBandColor'];
@@ -1976,7 +2175,12 @@ final class SurfaceLayers
 		];
 	}
 
-	/** The seabed grades into sand flats and scrub as it rises through the waterline. */
+	/**
+	 * The seabed grades into sand flats and scrub as it rises through the waterline.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function lagoonLayers(array $s): array
 	{
 		$sand = $s['sandColor'];
@@ -2061,6 +2265,13 @@ final class SurfaceLayers
 		];
 	}
 
+	/**
+	 * Build the amber dunes' rows: dune sand, slip faces, crest sand, wind ripples, desert pavement and salt crust.
+	 *
+	 * @param array $s Validated appearance settings.
+	 * @param array $recipe Landscape recipe. Its base bias and height scale give the height of the crests.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function duneLayers(array $s, array $recipe): array
 	{
 		$sand = $s['sandColor'];
@@ -2126,7 +2337,13 @@ final class SurfaceLayers
 		];
 	}
 
-	/** Recover all seven exposed beds from the same dipping contacts as the elevation field. */
+	/**
+	 * Recover all seven exposed beds from the same dipping contacts as the elevation field.
+	 *
+	 * @param array $recipe Landscape recipe. Its terrace spacing sets the thickness of the beds.
+	 * @param TerrainAppearance $appearance Validated canyon colors and band settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function canyonLayers(array $recipe, TerrainAppearance $appearance): array
 	{
 		$settings = $appearance->settings;
@@ -2147,13 +2364,26 @@ final class SurfaceLayers
 
 		$rock = self::exposedRock($settings);
 
+		/**
+		 * Move a channel of the beds' average color toward one bed's color by the band contrast.
+		 *
+		 * @param float $base Channel of the average color.
+		 * @param float $bed Channel of the bed's own color.
+		 * @return float Channel of the bed as drawn.
+		 */
+		$toward = static fn(float $base, float $bed): float => $base + $contrast * ($bed - $base);
+
+		/**
+		 * Darken a channel of a bed's color for its bedding lines.
+		 *
+		 * @param float $channel Linear channel from 0 to 1.
+		 * @return float Darkened channel.
+		 */
+		$lined = static fn(float $channel): float => .42 * $channel;
+
 		foreach(['rust', 'shale', 'ledge', 'sandstone', 'redBeds', 'sandstone', 'cap'] as $i => $name)
 		{
-			$color = array_map(
-				static fn(float $base, float $bed) => $base + $contrast * ($bed - $base)
-				, $average
-				, $palette[$name]
-			);
+			$color = array_map($toward, $average, $palette[$name]);
 
 			$rows[] = [
 				'color' => self::hex($color)
@@ -2165,7 +2395,7 @@ final class SurfaceLayers
 				, 'noise' => .014 * $spacing
 				, 'scale' => 72.
 				, 'pattern' => 'bedded'
-				, 'patternColor' => self::hex(array_map(static fn(float $channel) => .42 * $channel, $color))
+				, 'patternColor' => self::hex(array_map($lined, $color))
 				, 'patternScale' => 33.
 				, 'patternStretch' => 4.5
 				, 'patternAmount' => .64
@@ -2175,19 +2405,42 @@ final class SurfaceLayers
 		return $rows;
 	}
 
-	/** Version-one terrain has horizontal sediment bands and its own soil and rock controls. */
+	/**
+	 * Version-one terrain has horizontal sediment bands and its own soil and rock controls.
+	 *
+	 * @param array $settings Validated appearance settings.
+	 * @return array Material rows from the bottom up.
+	 */
 	private static function earlyCanyonLayers(array $settings): array
 	{
 		$spacing = $settings['bandSpacing'];
 		$contrast = $settings['bandContrast'];
 		$rock = TerrainAppearance::linear($settings['rockColor']);
 		$light = TerrainAppearance::linear($settings['rockBandColor']);
-		$mean = array_map(static fn(float $a, float $b) => .5 * ($a + $b), $rock, $light);
+
+		/**
+		 * Average a channel of the two strata colors.
+		 *
+		 * @param float $a Channel of the dark strata.
+		 * @param float $b Channel of the light strata.
+		 * @return float Mean channel.
+		 */
+		$average = static fn(float $a, float $b): float => .5 * ($a + $b);
+
+		/**
+		 * Move a channel of the mean color toward one stratum's color by the band contrast.
+		 *
+		 * @param float $a Channel of the mean color.
+		 * @param float $b Channel of the stratum's own color.
+		 * @return float Channel of the stratum as drawn.
+		 */
+		$toward = static fn(float $a, float $b): float => $a + $contrast * ($b - $a);
+		$mean = array_map($average, $rock, $light);
 		$rows = [['color' => $settings['soilColor']]];
 
 		foreach([$light, $rock] as $i => $color)
 		{
-			$blend = array_map(static fn(float $a, float $b) => $a + $contrast * ($b - $a), $mean, $color);
+			$blend = array_map($toward, $mean, $color);
 			$rows[] = [
 				'color' => self::hex($blend)
 				, 'period' => $spacing
@@ -2200,7 +2453,13 @@ final class SurfaceLayers
 		return $rows;
 	}
 
-	/** Pack the matching std140 JourneyPalette in journey-palette.glsl, padding every array entry to a vec4. */
+	/**
+	 * Pack the matching std140 JourneyPalette in journey-palette.glsl, padding every array entry to a vec4.
+	 *
+	 * @param array $form Recipe of the palette's landscape. Its seed, damping and slope scale are packed.
+	 * @param array $origin The landscape's X offset, its height shift to the shared water level and its Z offset.
+	 * @return string Packed little-endian floats for the uniform block.
+	 */
 	public function journeyBlock(array $form, array $origin): string
 	{
 		$f = $this->fieldUniforms;
@@ -2243,6 +2502,12 @@ final class SurfaceLayers
 		return pack('g*', ...$values);
 	}
 
+	/**
+	 * Upload the shared fields and every row of the stack to a program.
+	 *
+	 * @param Program $p Active GPU program receiving the uniforms.
+	 * @return void No value.
+	 */
 	public function bind(Program $p): void
 	{
 		foreach($this->fieldUniforms as $name => $values)

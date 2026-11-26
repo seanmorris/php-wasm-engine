@@ -172,7 +172,7 @@
     "src/Scene.php": "sha256-11lOqj67tUMwYogr8FR+9aKCA6RloIke6bUINh+V/18=",
     "src/SpotLights.php": "sha256-+aExKRCw1lbElFRPRQTWEcNomzTKV5I1XmXYjDMd3F0=",
     "src/Starfield.php": "sha256-yrNA9TgYMPCyeNFtimW6/QL2mccUC6Ayavvm+ra38y4=",
-    "src/SurfaceLayers.php": "sha256-NGQWqTII4qbUb89qCMMuv4ekPiX7CBTeLue6ZlADYIw=",
+    "src/SurfaceLayers.php": "sha256-hLxFvDRCvlC6EZsaHBi9RLe0/iZTrFo9sBnuP9mQ6Bg=",
     "src/SurfaceSampleBuffer.php": "sha256-+WPHVwcl9GVAMoQzYyDm3DSmMoZImEDKHVa5/8xJzoo=",
     "src/TerrainAppearance.php": "sha256-GMn5Wk1GFyyTLvmi6R9SYnobN4V+pP11hqoir+AHHV8=",
     "src/TerrainShadows.php": "sha256-OByz8W1ZR4EAL+XD1X0uNcnF5bAVAYEPMpyIfCcepac=",
