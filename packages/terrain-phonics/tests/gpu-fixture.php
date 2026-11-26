@@ -52,7 +52,9 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 		$samples[] = [
 			'position' => [$x,$z]
 			, 'time' => $time
-			, 'packets' => $draw['frameWakes'], 'jets' => $draw['jetVelocities'], 'bounds' => $draw['wakeBounds']
+			, 'packets' => $draw['frameWakes']
+			, 'jets' => $draw['jetVelocities']
+			, 'bounds' => $draw['wakeBounds']
 			, 'expected' => [$sample['height'],$sample['dx'],$sample['dz'],$sample['velocity'],...$sample['normal']]
 		];
 	}
@@ -61,23 +63,61 @@ foreach(['flat' => new Water(3.5),'waves' => new Water(-2.25, $waves),'wakes' =>
 }
 
 // Exercise the emitted PHP shader beside the standalone appearance reference on identical sample faces.
-$ridge = static fn(TerrainAppearance $appearance) => TerrainPhonics\SurfaceLayers::landscape(['preset'=>'mountain'],$appearance);
+
+$ridge = static fn(TerrainAppearance $appearance) => TerrainPhonics\SurfaceLayers::landscape([
+	'preset' => 'mountain'
+], $appearance
+);
+
 $referenceAppearance = static function(TerrainAppearance $appearance) use ($ridge): array {
-	$granite = array_column($ridge($appearance)->layers,null,'id')['granite-slabs'];
-	return $appearance->uniforms() + ['uGranitePigments[0]'=>[
-		...TerrainAppearance::linear($granite['color']), ...TerrainAppearance::linear($granite['patternColor']),
-	]];
+	$granite = array_column($ridge($appearance)->layers, null, 'id')['granite-slabs'];
+
+	return $appearance->uniforms() + [
+		'uGranitePigments[0]' => [
+			...TerrainAppearance::linear($granite['color'])
+			, ...TerrainAppearance::linear($granite['patternColor'])
+		]
+	];
 };
+
 $bands = [];
-foreach([1, 2, 3, 8] as $sharpness) $bands[] = $referenceAppearance(new TerrainAppearance(['bandSharpness' => $sharpness]));
-$shader = TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$ridge(new TerrainAppearance));
-$finish = new TerrainPhonics\SurfaceLayers([['color'=>'#262626','reflectivity'=>1.], ['color'=>'#262626','opacity'=>0.]]);
+
+foreach([1, 2, 3, 8] as $sharpness)
+$bands[] = $referenceAppearance(new TerrainAppearance([
+	'bandSharpness' => $sharpness
+]));
+
+$shader = TerrainPhonics\MaterialShader::assemble(
+	file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag')
+	, $ridge(new TerrainAppearance)
+);
+
+$finish = new TerrainPhonics\SurfaceLayers([
+	[
+		'color' => '#262626'
+		, 'reflectivity' => 1.
+	]
+	, [
+		'color' => '#262626'
+		, 'opacity' => 0.
+	]
+]);
+
 $stackInputs = static function($stack): array {
-	$inputs = ['uLayerCount'=>[count($stack->layers)],'uMaterialBounce'=>$stack->bounce];
+	$inputs = ['uLayerCount' => [count($stack->layers)],'uMaterialBounce' => $stack->bounce];
 	$inspect = new ReflectionClass($stack);
-	foreach(['colors'=>'Color','ranges'=>'Range','blends'=>'Blend','modes'=>'Mode','effects'=>'Effect',
-		'patterns'=>'Pattern','patternColors'=>'PatternColor'] as $key=>$name)
-		$inputs['uLayer'.$name.'[0]'] = $inspect->getProperty($key)->getValue($stack);
+
+	foreach([
+		'colors' => 'Color'
+		, 'ranges' => 'Range'
+		, 'blends' => 'Blend'
+		, 'modes' => 'Mode'
+		, 'effects' => 'Effect'
+		, 'patterns' => 'Pattern'
+		, 'patternColors' => 'PatternColor'
+	] as $key => $name)
+	$inputs['uLayer' . $name . '[0]'] = $inspect->getProperty($key)->getValue($stack);
+
 	return $inputs + $inspect->getProperty('fieldUniforms')->getValue($stack);
 };
 
@@ -87,16 +127,23 @@ $mountainAmounts = [];
 foreach([['talus', .2, [0, .5]], ['stain', .7, [0, .3]]] as [$material, $slope, $amounts])
 foreach($amounts as $amount)
 {
-	$cases = []; $stacks = [];
+	$cases = [];
+	$stacks = [];
 
 	foreach(['#ff00ff', '#00ff00'] as $color)
 	{
-		$appearance = new TerrainAppearance([$material.'Amount'=>$amount,$material.'Color'=>$color]);
+		$appearance = new TerrainAppearance([$material . 'Amount' => $amount,$material . 'Color' => $color]);
 		$cases[] = $referenceAppearance($appearance);
 		$stacks[] = $stackInputs($ridge($appearance));
 	}
 
-	$mountainAmounts[] = ['material'=>$material,'slope'=>$slope,'amount'=>$amount,'cases'=>$cases,'stacks'=>$stacks];
+	$mountainAmounts[] = [
+		'material' => $material
+		, 'slope' => $slope
+		, 'amount' => $amount
+		, 'cases' => $cases
+		, 'stacks' => $stacks
+	];
 }
 
 /**
@@ -116,15 +163,26 @@ $spots = static function(array ...$lights): array {
 $knee = TerrainPhonics\SpotLights::KNEE;
 $perCandela = TerrainPhonics\SpotLights::LUX * TerrainPhonics\SpotLights::NIGHT_GAIN;
 $intensity = 4 * $knee * (exp(4 / $knee) - 1) / $perCandela;
-$overhead = ['position' => [0,2,0],'direction' => [0,-1,0],'color' => [1,1,1],'intensity' => $intensity,'range' => 100
-	,'inner' => .2,'outer' => .4];
+$overhead = [
+	'position' => [0,2,0]
+	, 'direction' => [0,-1,0]
+	, 'color' => [1,1,1]
+	, 'intensity' => $intensity
+	, 'range' => 100
+	, 'inner' => .2
+	, 'outer' => .4
+];
+
 $band = acos((cos(.2) + cos(.4)) / 2);
+
 $spotCases = [
-	'none' => $spots(), 'overhead' => $spots($overhead)
+	'none' => $spots()
+	, 'overhead' => $spots($overhead)
 	, 'higher' => $spots(['position' => [0,4,0],'intensity' => 4 * $intensity] + $overhead)
 	// Twice as far at 45 degrees: eight times the squared distance and half the square root of two of the cosine.
-	, 'oblique' => $spots(['position' => [2,2,0],'direction' => [-1,-1,0],'intensity' => sqrt(8) * $intensity]
-		+ $overhead)
+	, 'oblique' => $spots(
+		['position' => [2,2,0],'direction' => [-1,-1,0],'intensity' => sqrt(8) * $intensity] + $overhead
+	)
 	, 'pair' => $spots(...array_fill(0, 2, ['intensity' => $intensity / 2] + $overhead))
 	// Without the knee this would turn both surfaces white.
 	, 'glare' => $spots(['intensity' => 64 * $intensity] + $overhead)
@@ -142,12 +200,24 @@ $spotCases = [
 
 // A 900 m layer at 10 per km: the texture's rows near the ground sit 356 m apart, so lighting through it must come from
 // the shaders' exact layer depth, not from the texture.
-$fog = new Atmosphere(['layers' => [['name' => 'Fog', 'enabled' => true, 'bottom' => 0., 'top' => 900., 'density' => 10.,
-	'color' => '#ffffff']]]);
+$fog = new Atmosphere([
+	'layers' => [
+		[
+			'name' => 'Fog'
+			, 'enabled' => true
+			, 'bottom' => 0.
+			, 'top' => 900.
+			, 'density' => 10.
+			, 'color' => '#ffffff'
+		]
+	]
+]);
+
 $thinLayer = ['band' => [0., 900., .01], 'samples' => []];
+
 foreach([200., 600., 880., 920., 1200.] as $height)
-	foreach([sin(deg2rad(35)), 1.] as $mu)
-		$thinLayer['samples'][] = [$height, $mu, $fog->transmittance($height, $mu)];
+foreach([sin(deg2rad(35)), 1.] as $mu)
+$thinLayer['samples'][] = [$height, $mu, $fog->transmittance($height, $mu)];
 
 // Isolate the material inputs to lighting so the fork weights have an independent linear RGB reference.
 $probe = <<<'GLSL'
@@ -169,29 +239,57 @@ void main() {
 	color.a=finish.x;
 }
 GLSL;
+
 $stacks = $blocks = $journey = [];
-foreach(['#ff0000','#00ff00','#0000ff'] as $i=>$color) {
+
+foreach(['#ff0000','#00ff00','#0000ff'] as $i => $color)
+{
 	// At world height 10 the second region has local height 2. Water-relative height stays 10 in all three.
-	$layers = match($i) {
-		0 => [['color'=>$color]],
-		1 => [['color'=>'#000000'],['color'=>$color,'high'=>3.,'fade'=>.1,'reflectivity'=>.8]],
-		2 => [['color'=>'#000000'],['color'=>$color,'datum'=>'water','low'=>9.,'fade'=>.1]],
+	$layers = match($i)
+	{
+		0 => [['color' => $color]],
+		1 => [['color' => '#000000'],['color' => $color,'high' => 3.,'fade' => .1,'reflectivity' => .8]],
+		2 => [['color' => '#000000'],['color' => $color,'datum' => 'water','low' => 9.,'fade' => .1]],
 	};
-	$stack = new TerrainPhonics\SurfaceLayers($layers,['macroVariation'=>0.]);
+
+	$stack = new TerrainPhonics\SurfaceLayers($layers, ['macroVariation' => 0.]);
 	$stacks[] = $stack;
-	$blocks[] = $stack->journeyBlock(['seed'=>$i,'damping'=>1.,'slopeScale'=>1.],[$i*32.,$i*8.,0.]);
-	if($i>0) $journey[] = ['shader'=>TerrainPhonics\MaterialShader::assemble($probe,$stacks), 'block'=>base64_encode(implode('',$blocks))];
+	$blocks[] = $stack->journeyBlock(['seed' => $i,'damping' => 1.,'slopeScale' => 1.], [$i * 32.,$i * 8.,0.]);
+
+	if($i > 0)
+	$journey[] = [
+		'shader' => TerrainPhonics\MaterialShader::assemble($probe, $stacks)
+		, 'block' => base64_encode(implode('', $blocks))
+	];
 }
 
 echo json_encode([
-	'thinLayer' => $thinLayer, 'journey'=>$journey,
-	'tiltShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),
-		new TerrainPhonics\SurfaceLayers([['color'=>'#557755'],['channel'=>'both','pattern'=>'fall-line','relief'=>'rib-tilt','strength'=>24.]])),
-	'chartShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/chart.frag'),
-		new TerrainPhonics\SurfaceLayers([['color'=>'#ff0000']]),chart:true),
-	'ridgeShader'=>$shader, 'spotLights' => $spotCases
-	, 'finishShader'=>TerrainPhonics\MaterialShader::assemble(file_get_contents(dirname(__DIR__).'/shaders/terrain.frag'),$finish)
-	, 'finishInputs'=>$stackInputs($finish)
+	'thinLayer' => $thinLayer
+	, 'journey' => $journey
+	, 'tiltShader' => TerrainPhonics\MaterialShader::assemble(
+		file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag')
+		, new TerrainPhonics\SurfaceLayers([
+			['color' => '#557755']
+			, [
+				'channel' => 'both'
+				, 'pattern' => 'fall-line'
+				, 'relief' => 'rib-tilt'
+				, 'strength' => 24.
+			]
+		])
+	)
+	, 'chartShader' => TerrainPhonics\MaterialShader::assemble(
+		file_get_contents(dirname(__DIR__) . '/shaders/chart.frag')
+		, new TerrainPhonics\SurfaceLayers([['color' => '#ff0000']])
+		, chart:true
+	)
+	, 'ridgeShader' => $shader
+	, 'spotLights' => $spotCases
+	, 'finishShader' => TerrainPhonics\MaterialShader::assemble(
+		file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag')
+		, $finish
+	)
+	, 'finishInputs' => $stackInputs($finish)
 	, 'lampFreeSpotLights' => TerrainPhonics\SpotLights::shaderSource(false)
 	, 'uniforms' => $atmosphere->uniforms()
 	, 'nightAmbient' => (new Atmosphere(['sunDirection' => [0,-1,0]]))->uniforms()['nightAmbient']

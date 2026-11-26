@@ -90,6 +90,7 @@ $rejects = static function(array $options, string $name) use ($expect): void {
 };
 
 $srgb = static fn(float $linear): float => $linear <= .0031308 ? 12.92 * $linear : 1.055 * $linear ** (1 / 2.4) - .055;
+
 $close = static function(array $a, array $b, float $tolerance = 1e-12): bool {
 	foreach($a as $i => $value) if(abs($value - $b[$i]) > $tolerance) return false;
 
@@ -157,10 +158,12 @@ $expect(
 $expect($close($uniforms['uCanyonBounce'], [.158, .102, .052]), 'canyon bounce light equals the default palette\'s');
 $expect($uniforms['uBanding'] === [.12, 1.0, 1.0], 'default bands have the old phase per meter and profile');
 $expect($uniforms['uSlopeBlend'] === [.08, .38, .25, .65], 'default slope blends are the old constants');
+
 $expect(
 	$uniforms['uHeightBlend'] === [3.0, 18.0, -110.0, -30.0]
 	, 'default sand heights are the old ones and alpine rock starts 110 m below the snowline'
 );
+
 $expect($uniforms['uSnowline'] === [340.0, 65.0], 'default snowline and transition are the old constants');
 $expect($uniforms['uMacroVariation'] === [1.0], 'default variation keeps the old strength');
 
@@ -173,11 +176,13 @@ $expect(
 );
 
 $expect($uniforms['uMountainZones'] === [-150.0, -90.0], 'default treeline and tundra lie below the snowline');
+
 $expect(
 	TerrainAppearance::DEFAULTS['treeline'] < TerrainAppearance::DEFAULTS['alpineStart']
 		&& TerrainAppearance::DEFAULTS['alpineStart'] < TerrainAppearance::DEFAULTS['tundraStart']
 	, 'default alpine rock starts between the treeline and the tundra'
 );
+
 $expect($uniforms['uMountainAmounts'] === [.5, .3, .5], 'default talus, stain and lichen amounts upload in order');
 $expect($defaults->settings === TerrainAppearance::DEFAULTS, 'no options give the defaults');
 
@@ -201,7 +206,10 @@ foreach(TerrainAppearance::DEFAULTS as $name => $value)
 }
 
 // Each uniform is declared in the terrain shader with the type its values fill.
-$source = file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag') . file_get_contents(__DIR__.'/uniform-material.glsl');
+$source = file_get_contents(dirname(__DIR__) . '/shaders/terrain.frag') . file_get_contents(
+	__DIR__ . '/uniform-material.glsl'
+);
+
 preg_match_all('/^uniform (float|vec2|vec3|vec4) ([^;]+);/m', $source, $declarations, PREG_SET_ORDER);
 $declared = [];
 
@@ -213,7 +221,7 @@ foreach(explode(',', $names) as $declaration)
 	$declared[isset($match[2]) ? $match[1] . '[0]' : $match[1]] = $size * (int)($match[2] ?? 1);
 }
 
-foreach(array_diff_key($uniforms,['uCanyonBounce'=>true]) as $name => $values)
+foreach(array_diff_key($uniforms, ['uCanyonBounce' => true]) as $name => $values)
 $expect(($declared[$name] ?? null) === count($values), "terrain.frag declares $name with the size it receives");
 
 // Validation: colors must be six-digit hex strings and numbers must be finite integers or floats.
@@ -238,10 +246,7 @@ $expect(TerrainAppearance::linear('#000000') === [0.0, 0.0, 0.0], 'black is zero
 $expect(TerrainAppearance::linear('#ffffff') === [1.0, 1.0, 1.0], 'white is one');
 $expect($close(TerrainAppearance::linear('#808080'), array_fill(0, 3, .21586050011389926)), 'mid gray');
 $expect($close(TerrainAppearance::linear('#0a0000'), [10 / 255 / 12.92, 0.0, 0.0]), 'dark values use the linear toe');
-$expect(
-	$close(TerrainAppearance::linear('#ff8000'), [1.0, .21586050011389926, 0.0])
-	, 'channels are red, green, blue'
-);
+$expect($close(TerrainAppearance::linear('#ff8000'), [1.0, .21586050011389926, 0.0]), 'channels are red, green, blue');
 
 // linear() is public, so it checks its argument like the constructor does instead of returning a short or zero list.
 $expect(TerrainAppearance::linear('#C0FFEE') === TerrainAppearance::linear('#c0ffee'), 'linear() accepts upper case');
@@ -264,22 +269,44 @@ foreach(['#abc', 'c0ffee', '#gggggg', '', "#c0ffee\n"] as $hex)
 
 // Out-of-range values clamp to the documented range.
 $clamped = [
-	['bandSpacing', 1, 5.0], ['bandSpacing', 1e9, 1000.0], ['bandContrast', -1, 0.0], ['bandContrast', 2, 1.0],
-	['bandSharpness', 0, 1.0], ['bandSharpness', 100, 8.0], ['rockSlopeStart', -1, 0.0], ['rockSlopeEnd', 5, 1.0],
-	['beachHeight', -1e6, -100.0], ['beachHeight', 1e6, 500.0], ['beachWidth', 0, .5], ['beachWidth', 1e6, 500.0],
-	['snowline', -1e6, -1000.0], ['snowline', 1e6, 5000.0], ['snowTransition', 0, 1.0],
-	['snowTransition', 1e6, 1000.0], ['alpineStart', -1e6, -2000.0], ['alpineEnd', 10, 0.0],
-	['snowSlopeStart', -1, 0.0], ['snowSlopeEnd', 2, 1.0], ['macroVariation', -1, 0.0], ['macroVariation', 9, 3.0],
-
-	['treeline', -1e6, -2000.0], ['treeline', 5, -1.0], ['tundraStart', 5, 0.0], ['talusAmount', -1, 0.0],
-	['talusAmount', 2, 1.0], ['stainAmount', -1, 0.0], ['stainAmount', 2, 1.0], ['lichenAmount', -1, 0.0],
-	['lichenAmount', 2, 1.0],
+	['bandSpacing', 1, 5.0]
+	, ['bandSpacing', 1e9, 1000.0]
+	, ['bandContrast', -1, 0.0]
+	, ['bandContrast', 2, 1.0]
+	, ['bandSharpness', 0, 1.0]
+	, ['bandSharpness', 100, 8.0]
+	, ['rockSlopeStart', -1, 0.0]
+	, ['rockSlopeEnd', 5, 1.0]
+	, ['beachHeight', -1e6, -100.0]
+	, ['beachHeight', 1e6, 500.0]
+	, ['beachWidth', 0, .5]
+	, ['beachWidth', 1e6, 500.0]
+	, ['snowline', -1e6, -1000.0]
+	, ['snowline', 1e6, 5000.0]
+	, ['snowTransition', 0, 1.0]
+	, ['snowTransition', 1e6, 1000.0]
+	, ['alpineStart', -1e6, -2000.0]
+	, ['alpineEnd', 10, 0.0]
+	, ['snowSlopeStart', -1, 0.0]
+	, ['snowSlopeEnd', 2, 1.0]
+	, ['macroVariation', -1, 0.0]
+	, ['macroVariation', 9, 3.0]
+	, ['treeline', -1e6, -2000.0]
+	, ['treeline', 5, -1.0]
+	, ['tundraStart', 5, 0.0]
+	, ['talusAmount', -1, 0.0]
+	, ['talusAmount', 2, 1.0]
+	, ['stainAmount', -1, 0.0]
+	, ['stainAmount', 2, 1.0]
+	, ['lichenAmount', -1, 0.0]
+	, ['lichenAmount', 2, 1.0]
 ];
 
 foreach($clamped as [$name, $value, $result])
 $expect((new TerrainAppearance([$name => $value]))->settings[$name] === $result, "$name $value clamps to $result");
 
 // Each blend keeps its start below its end.
+
 $order = static fn(array $options): array => array_intersect_key(
 	(new TerrainAppearance($options))->settings
 	, array_flip(array_keys($options))
@@ -367,6 +394,7 @@ foreach($uniforms as $name => $values)
 {
 	$function = [1 => 'glUniform1f', 2 => 'glUniform2f', 3 => 'glUniform3f', 4 => 'glUniform4f'][count($values)]
 		?? 'glUniform3fv';
+
 	$sent = $function === 'glUniform3fv' ? [count($values) / 3, $values] : $values;
 	$expect($uploads[$name] === [$function, $sent], "bind uploads $name with $function");
 }
@@ -376,28 +404,50 @@ $expect($uploads['uMountainColors[0]'][1][0] === 6, 'the mountain palette upload
 
 // A changed appearance changes what bind() uploads, and the derived canyon shades follow their sources.
 $changed = new TerrainAppearance([
-	'snowColor' => '#ff0000', 'bandSpacing' => 100, 'bandContrast' => .5, 'bandSharpness' => 4,
-	'rockSlopeStart' => .2, 'rockSlopeEnd' => .25, 'beachHeight' => -2, 'beachWidth' => 6, 'snowline' => 200,
-	'snowTransition' => 20, 'alpineStart' => -60, 'alpineEnd' => -10, 'macroVariation' => 2,
-	'canyonCapColor' => '#ffffff', 'canyonRustColor' => '#000000', 'stainColor' => '#00ff00', 'treeline' => -300,
-	'tundraStart' => -20, 'talusAmount' => .25, 'stainAmount' => 1, 'lichenAmount' => 0,
+	'snowColor' => '#ff0000'
+	, 'bandSpacing' => 100
+	, 'bandContrast' => .5
+	, 'bandSharpness' => 4
+	, 'rockSlopeStart' => .2
+	, 'rockSlopeEnd' => .25
+	, 'beachHeight' => -2
+	, 'beachWidth' => 6
+	, 'snowline' => 200
+	, 'snowTransition' => 20
+	, 'alpineStart' => -60
+	, 'alpineEnd' => -10
+	, 'macroVariation' => 2
+	, 'canyonCapColor' => '#ffffff'
+	, 'canyonRustColor' => '#000000'
+	, 'stainColor' => '#00ff00'
+	, 'treeline' => -300
+	, 'tundraStart' => -20
+	, 'talusAmount' => .25
+	, 'stainAmount' => 1
+	, 'lichenAmount' => 0
 ]);
+
 $changed->bind($program);
 $after = $GLOBALS['appearanceGl']['uploads'];
 
 // The grass color did not change, so it uploads the same values as before.
 $expected = [
-	'uSnowColor' => ['glUniform3f', [1.0, 0.0, 0.0]], 'uBanding' => ['glUniform3f', [2 * M_PI / 100, .5, 4.0]],
-	'uSlopeBlend' => ['glUniform4f', [.2, .25, .25, .65]], 'uHeightBlend' => ['glUniform4f', [-2.0, 4.0, -60.0, -10.0]],
-	'uSnowline' => ['glUniform2f', [200.0, 20.0]], 'uMacroVariation' => ['glUniform1f', [2.0]],
-	'uMountainZones' => ['glUniform2f', [-300.0, -20.0]], 'uMountainAmounts' => ['glUniform3f', [.25, 1.0, 0.0]],
-	'uGrassColor' => $uploads['uGrassColor'],
+	'uSnowColor' => ['glUniform3f', [1.0, 0.0, 0.0]]
+	, 'uBanding' => ['glUniform3f', [2 * M_PI / 100, .5, 4.0]]
+	, 'uSlopeBlend' => ['glUniform4f', [.2, .25, .25, .65]]
+	, 'uHeightBlend' => ['glUniform4f', [-2.0, 4.0, -60.0, -10.0]]
+	, 'uSnowline' => ['glUniform2f', [200.0, 20.0]]
+	, 'uMacroVariation' => ['glUniform1f', [2.0]]
+	, 'uMountainZones' => ['glUniform2f', [-300.0, -20.0]]
+	, 'uMountainAmounts' => ['glUniform3f', [.25, 1.0, 0.0]]
+	, 'uGrassColor' => $uploads['uGrassColor']
 ];
 
 foreach($expected as $name => $upload) $expect($after[$name] === $upload, "the changed appearance uploads $name");
 
 $mountain = $after['uMountainColors[0]'][1];
 $expect($mountain[0] === 6 && array_slice($mountain[1], 12, 3) === [0.0, 1.0, 0.0], 'a changed stain color uploads');
+
 $expect(
 	array_slice($mountain[1], 0, 12) === array_slice($uploads['uMountainColors[0]'][1][1], 0, 12)
 	, 'the other mountain colors stay as they were'
@@ -405,6 +455,7 @@ $expect(
 
 $palette = $after['uCanyonColors[0]'][1][1];
 $cap = TerrainAppearance::linear(TerrainAppearance::DEFAULTS['canyonCapColor']);
+
 $expect(
 	$close(array_slice($palette, 6, 3), [.42 / $cap[0], .32 / $cap[1], .19 / $cap[2]])
 	, 'ledges keep their ratio to a white cap rock'
@@ -412,6 +463,7 @@ $expect(
 
 $expect(array_slice($palette, 0, 3) === [0.0, 0.0, 0.0], 'a black rust uploads');
 $expect(array_slice($palette, 12, 3) === [0.0, 0.0, 0.0], 'red beds follow a black rust');
+
 $expect(
 	array_slice($palette, 18, 6) !== array_slice($uniforms['uCanyonColors[0]'], 18, 6)
 	&& $after['uCanyonBounce'] !== $uploads['uCanyonBounce']
@@ -444,19 +496,38 @@ $used = [];
 
 foreach(TerrainAppearance::USES as $style => $keys)
 {
-	$expect($keys === array_values(array_intersect($panelOrder, $keys)) && count($keys) === count(array_unique($keys)),
-		"USES lists $style's settings once each in GROUPS order");
+	$expect(
+		$keys === array_values(array_intersect($panelOrder, $keys)) && count($keys) === count(array_unique($keys))
+		, "USES lists $style's settings once each in GROUPS order"
+	);
+
 	$used = array_merge($used, $keys);
 }
 
-$expect(array_diff(array_keys(TerrainAppearance::DEFAULTS), $used) === [], 'Every setting is read by at least one style');
-$expect(TerrainAppearance::style(['preset' => 'coast', 'version' => 2]) === 'coast'
-	&& TerrainAppearance::style(['preset' => 'mountain', 'version' => 2]) === 'mountain'
-	&& TerrainAppearance::style(['preset' => 'canyon', 'version' => 2]) === 'canyon'
-	&& TerrainAppearance::style(['preset' => 'canyon', 'version' => 1]) === 'canyon-v1'
-	&& TerrainAppearance::style([]) === 'coast', 'style() names each recipe as Scene draws it');
-$expect(!in_array('rockBandColor', TerrainAppearance::USES['mountain'], true)
-	&& in_array('graniteColor', TerrainAppearance::USES['mountain'], true)
-	&& !in_array('graniteColor', TerrainAppearance::USES['coast'], true), 'Mountains read granite, not the coast strata');
+$expect(
+	array_diff(array_keys(TerrainAppearance::DEFAULTS), $used) === []
+	, 'Every setting is read by at least one style'
+);
+
+$expect(
+	TerrainAppearance::style(['preset' => 'coast', 'version' => 2]) === 'coast' && TerrainAppearance::style([
+		'preset' => 'mountain'
+		, 'version' => 2
+	]) === 'mountain' && TerrainAppearance::style([
+		'preset' => 'canyon'
+		, 'version' => 2
+	]) === 'canyon' && TerrainAppearance::style(['preset' => 'canyon', 'version' => 1]) === 'canyon-v1'
+		&& TerrainAppearance::style([]) === 'coast'
+	, 'style() names each recipe as Scene draws it'
+);
+
+$expect(
+	!in_array('rockBandColor', TerrainAppearance::USES['mountain'], true) && in_array(
+		'graniteColor'
+		, TerrainAppearance::USES['mountain']
+		, true
+	) && !in_array('graniteColor', TerrainAppearance::USES['coast'], true)
+	, 'Mountains read granite, not the coast strata'
+);
 
 echo "Terrain appearance: $checks checks passed.\n";

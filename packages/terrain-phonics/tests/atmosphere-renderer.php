@@ -152,7 +152,12 @@ namespace
 
 	$model->transmittanceLut(8, 4, 8);
 	$expect($cache->update(10, 99), 'first update populates both maps');
-	$expect($cache->stats()['generations'] === [1,1] && SkyCalls::$draws === 3, 'two sky passes and one joint aerial integration');
+
+	$expect(
+		$cache->stats()['generations'] === [1,1] && SkyCalls::$draws === 3
+		, 'two sky passes and one joint aerial integration'
+	);
+
 	$expect($cache->stats()['aerialGeneration'] === 1, 'first update also builds the eye aerial atlas');
 	$expect(SkyCalls::$framebuffer === 73, 'cache update restores the caller framebuffer');
 	$cache->bind($consumer);
@@ -198,17 +203,29 @@ namespace
 	SkyCalls::$failDraw = false;
 	$cache->update(30, 100, 2);
 	$expect($cache->stats()['generations'] === [6,5], 'failed altitude is regenerated on the next explicit update');
-	$model->setLayers([['color'=>'#ff8844']]);
-	$transmission = $model->transmittanceLut(8,4,8)['generation'];
-	$expect($cache->update(30,100,2) && $uniform('uAirLayerCount') == 1,
-		'The render targets receive the active atmosphere layer.');
-	$model->setLayers([['color'=>'#4488ff']]);
-	$expect($model->transmittanceLut(8,4,8)['generation'] === $transmission && $cache->update(30,100,2),
-		'A tint change redraws scattering from the existing extinction texture.');
-	$expect(!$cache->update(30,100,2),'Unchanged colored air reuses the sky, reflection and aerial caches.');
-	$cache->update(-990*.3048,100,-450.);
-	$expect($cache->stats()['altitudes'] === [-302.,-450.] && !$cache->update(-301.8,100,-450.),
-		'The camera and reflected sky retain their own below-sea-level height and reuse a settled cache.');
+	$model->setLayers([['color' => '#ff8844']]);
+	$transmission = $model->transmittanceLut(8, 4, 8)['generation'];
+
+	$expect(
+		$cache->update(30, 100, 2) && $uniform('uAirLayerCount') == 1
+		, 'The render targets receive the active atmosphere layer.'
+	);
+
+	$model->setLayers([['color' => '#4488ff']]);
+
+	$expect(
+		$model->transmittanceLut(8, 4, 8)['generation'] === $transmission && $cache->update(30, 100, 2)
+		, 'A tint change redraws scattering from the existing extinction texture.'
+	);
+
+	$expect(!$cache->update(30, 100, 2), 'Unchanged colored air reuses the sky, reflection and aerial caches.');
+	$cache->update(-990 * .3048, 100, -450.);
+
+	$expect(
+		$cache->stats()['altitudes'] === [-302.,-450.] && !$cache->update(-301.8, 100, -450.)
+		, 'The camera and reflected sky retain their own below-sea-level height and reuse a settled cache.'
+	);
+
 	$cache->close();
 	$cache->close();
 	$cache->restore();

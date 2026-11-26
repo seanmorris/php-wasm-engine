@@ -82,7 +82,12 @@ function glDeleteVertexArrays(int $n, array $ids): void{terrainGlDelete('vaos', 
 
 function glGenTextures(int $n, mixed &$ids): void{terrainGlNames('textures', $n, $ids);}
 
-function glDeleteTextures(int $n, array $ids): void{if($n!==count($ids)) throw new ValueError('Invalid texture handle count'); terrainGlDelete('textures', $ids);}
+function glDeleteTextures(int $n, array $ids): void
+{
+	if($n !== count($ids)) throw new ValueError('Invalid texture handle count');
+
+	terrainGlDelete('textures', $ids);
+}
 
 function glGenFramebuffers(int $n, mixed &$ids): void{terrainGlNames('framebuffers', $n, $ids);}
 
@@ -170,7 +175,9 @@ function glUniform3f(int $location, float ...$values): void{terrainGlUniform($lo
 function glUniform4f(int $location, float ...$values): void{terrainGlUniform($location, $values);}
 
 function glUniform3fv(int $location, int $count, array $values): void{terrainGlUniform($location, [$count, $values]);}
+
 function glUniform2fv(...$args): void{}
+
 function glUniform4fv(...$args): void{if(isset($GLOBALS['terrainGlCalls'])) $GLOBALS['terrainGlCalls'][] = $args;}
 
 function glUniformMatrix4fv(...$args): void{}
@@ -181,7 +188,7 @@ function glBindVertexArray(...$args): void{}
 
 function glBindBuffer(...$args): void{}
 
-function glBindBufferBase(int $target,int $index,int $buffer): void
+function glBindBufferBase(int $target, int $index, int $buffer): void
 {
 	$GLOBALS['terrainGl']['indexedBindings'][] = [$target,$index,$buffer];
 }
@@ -195,6 +202,7 @@ function glVertexAttribPointer(...$args): void{}
 function glBindTexture(...$args): void{$GLOBALS['boundTexture'] = $args[1] ?? 0;}
 
 function glTexParameteri(...$args): void{}
+
 function glGenerateMipmap(...$args): void{}
 
 function glTexImage2D(...$args): void{}
@@ -210,6 +218,7 @@ function glDepthFunc(int $function): void {}
 function glDepthMask(...$args): void{}
 
 function glDrawBuffers(...$args): void{}
+
 /**
  * Count a draw, and record the program in use while a test collects them.
  * @return void Updates the draw count and terrainGlDraws.
@@ -222,6 +231,7 @@ function terrainGlDraw(): void
 }
 
 function glDrawElements(...$args): void{terrainGlDraw();}
+
 function glDrawArrays(...$args): void{terrainGlDraw();}
 
 use TerrainPhonics\Atmosphere;
@@ -333,39 +343,50 @@ function renderLevelUnder(Scene $scene, Camera $camera): int
 // Every topology must cover the whole square once, with exactly the endpoints
 // the neighboring patch draws. A collinear triangle can still cut a vertical
 // sliver into a folded surface, so only repeated-index degenerates are allowed.
-$cells = 4; $stride = $cells + 1;
+$cells = 4;
+$stride = $cells + 1;
 $regular = GpuPatch::indices($cells);
 $patterns = GpuPatch::stitchPatterns($cells, $regular);
-renderCheck(strlen($patterns) === 16*strlen($regular), 'each edge mask addresses one complete index stream');
+renderCheck(strlen($patterns) === 16 * strlen($regular), 'each edge mask addresses one complete index stream');
+
 for($mask = 0; $mask < 16; $mask++)
 {
-	$indices = array_values(unpack('v*', substr($patterns, $mask*strlen($regular), strlen($regular))));
-	$edges = []; $area = 0;
+	$indices = array_values(unpack('v*', substr($patterns, $mask * strlen($regular), strlen($regular))));
+	$edges = [];
+	$area = 0;
+
 	foreach(array_chunk($indices, 3) as [$a,$b,$c])
 	{
 		if($a === $b || $a === $c || $b === $c) continue;
-		$twiceArea = (intdiv($b,$stride)-intdiv($a,$stride))*($c%$stride-$a%$stride)
-			- ($b%$stride-$a%$stride)*(intdiv($c,$stride)-intdiv($a,$stride));
+
+		$twiceArea = (intdiv($b, $stride) - intdiv($a, $stride)) * ($c % $stride - $a % $stride)
+			- ($b % $stride - $a % $stride) * (intdiv($c, $stride) - intdiv($a, $stride));
+
 		renderCheck($twiceArea > 0, 'stitched triangles retain winding at corners');
 		$area += $twiceArea;
+
 		foreach([[$a,$b],[$b,$c],[$c,$a]] as [$i,$j])
 		{
-			$key = min($i,$j) . ':' . max($i,$j);
+			$key = min($i, $j) . ':' . max($i, $j);
 			$edges[$key] = ($edges[$key] ?? 0) + 1;
 		}
 	}
-	renderCheck($area === 2*$cells*$cells, 'stitched grid covers its entire footprint');
-	foreach([[0,$stride],[$cells,$stride],[0,1],[$cells*$stride,1]] as $side => [$start,$along])
+
+	renderCheck($area === 2 * $cells * $cells, 'stitched grid covers its entire footprint');
+
+	foreach([[0,$stride],[$cells,$stride],[0,1],[$cells * $stride,1]] as $side => [$start,$along])
 	{
 		$step = ($mask & (1 << $side)) ? 2 : 1;
+
 		for($pos = 0; $pos < $cells; $pos += $step)
 		{
-			$a = $start + $along*$pos;
-			$key = $a . ':' . ($a+$along*$step);
+			$a = $start + $along * $pos;
+			$key = $a . ':' . ($a + $along * $step);
 			renderCheck(($edges[$key] ?? 0) === 1, 'perimeter matches neighboring edge tessellation');
 			unset($edges[$key]);
 		}
 	}
+
 	foreach($edges as $count) renderCheck($count === 2, 'interior grid edges have exactly two incident triangles');
 }
 
@@ -411,28 +432,49 @@ $view = new Camera;
 $view->position = [30,24,15];
 $view->pitch = 0;
 $upright = $view->basis();
-foreach([M_PI/2, M_PI, -M_PI/3] as $roll)
+
+foreach([M_PI / 2, M_PI, -M_PI / 3] as $roll)
 {
 	$view->roll = $roll;
 	[$forward,$right,$up] = $view->basis();
 	renderCheck($forward === $upright[0], 'bank preserves viewing direction');
-	renderCheck(abs($right[1]-sin($roll)) < 1e-12 && abs($up[1]-cos($roll)) < 1e-12, 'bank rotates screen right and up');
-	$ray = $view->ray(.85,.30,16/9);
-	$m = $view->viewProjection(1600,900);
-	$project = static fn(int $row): float => $ray[0]*$m[$row]+$ray[1]*$m[$row+4]+$ray[2]*$m[$row+8];
-	renderCheck(abs($project(0)/$project(3)-.7) < 1e-9 && abs($project(1)/$project(3)-.4) < 1e-9,
-		'rotated picking ray projects to its screen position');
+
+	renderCheck(
+		abs($right[1] - sin($roll)) < 1e-12 && abs($up[1] - cos($roll)) < 1e-12
+		, 'bank rotates screen right and up'
+	);
+
+	$ray = $view->ray(.85, .30, 16 / 9);
+	$m = $view->viewProjection(1600, 900);
+
+	$project = static fn(int $row): float => $ray[0] * $m[$row] + $ray[1] * $m[$row + 4] + $ray[2] * $m[$row + 8];
+
+	renderCheck(
+		abs($project(0) / $project(3) - .7) < 1e-9 && abs($project(1) / $project(3) - .4) < 1e-9
+		, 'rotated picking ray projects to its screen position'
+	);
 }
+
 $view->roll = 0.0;
+
 foreach([[1920,1080],[640,900]] as [$width,$height])
 {
-	$planes = $view->clipPlanes($width,$height);
+	$planes = $view->clipPlanes($width, $height);
 	$front = ['x' => 27,'z' => -30,'size' => 8];
-	renderCheck(Camera::inView($planes,$view->position,$front,20,30), 'box in front of the camera survives culling');
+
+	renderCheck(
+		Camera::inView($planes, $view->position, $front, 20, 30)
+		, 'box in front of the camera survives culling'
+	);
+
 	$front['z'] = 40;
-	renderCheck(!Camera::inView($planes,$view->position,$front,20,30), 'box behind the camera is culled');
+	renderCheck(!Camera::inView($planes, $view->position, $front, 20, 30), 'box behind the camera is culled');
 	$front['z'] = 12;
-	renderCheck(Camera::inView($planes,$view->position,$front,20,30), 'box crossing the near plane remains visible');
+
+	renderCheck(
+		Camera::inView($planes, $view->position, $front, 20, 30)
+		, 'box crossing the near plane remains visible'
+	);
 }
 
 // Given clip planes, the selector tests padded bounds itself. It must refine exactly the nodes a predicate
@@ -652,22 +694,28 @@ try
 }
 
 // The patch mesh carries the same stripe coordinates as the clipmap in its 44-byte vertex layout.
-$markedRoad = new Landscape(['worldSize'=>128,'spacing'=>1,'heightScale'=>0,'detailAmplitude'=>0]);
-$markedRoad->queue(['type'=>'road','points'=>[[-48,0,0],[48,0,0]],'width'=>12,'shoulder'=>2]);
+$markedRoad = new Landscape(['worldSize' => 128,'spacing' => 1,'heightScale' => 0,'detailAmplitude' => 0]);
+$markedRoad->queue(['type' => 'road','points' => [[-48,0,0],[48,0,0]],'width' => 12,'shoulder' => 2]);
 $markedRoad->commit();
 $markedScene = new Scene($markedRoad, new Water, new Atmosphere, useClipmap:false);
 $markedScene->budgetMs = 1000;
 $markedScene->update(.1, new Camera);
-$rootBytes = renderGet(renderGet($markedScene,'patches')['0:0:0']['mesh'],'vertices');
+$rootBytes = renderGet(renderGet($markedScene, 'patches')['0:0:0']['mesh'], 'vertices');
+
 foreach([0,4] as $z)
 {
-	$index = (16+intdiv($z,4))*33+16;
-	$material = unpack('f', $rootBytes, $index*44+28)[1];
-	renderCheck($material === (float)-TerrainPhonics\RoadAtlas::markCode([$z,48.,6.]),
-		'The PHP patch records lateral and traveled distance while retaining its material and stride');
+	$index = (16 + intdiv($z, 4)) * 33 + 16;
+	$material = unpack('f', $rootBytes, $index * 44 + 28)[1];
+
+	renderCheck(
+		$material === (float)-TerrainPhonics\RoadAtlas::markCode([$z,48.,6.])
+		, 'The PHP patch records lateral and traveled distance while retaining its material and stride'
+	);
 }
+
 renderCheck(ord($markedScene->surfacePatch('0:0:0')['materials'][544]) === 5, 'Charts see the ordinary road material');
-$markedScene->close(); $markedRoad->close();
+$markedScene->close();
+$markedRoad->close();
 
 $bootstrapSurface = new Landscape;
 $bootstrapScene = new Scene($bootstrapSurface, new Water, new Atmosphere, useClipmap: false);
@@ -870,8 +918,12 @@ for($frame = 0; $frame < 120; $frame++)
 	$previousSelections = renderGet($flightScene, 'selections');
 	$flightScene->update(1 / 60, $flightCamera);
 	$flightStats = $flightScene->stats();
-	renderCheck($flightStats['selections'] - $previousSelections <= 1,
-		'motion and newly resident siblings share one LOD selection per frame after bootstrap');
+
+	renderCheck(
+		$flightStats['selections'] - $previousSelections <= 1
+		, 'motion and newly resident siblings share one LOD selection per frame after bootstrap'
+	);
+
 	$prefetchPeak = max($prefetchPeak, $flightStats['prefetchJobs']);
 
 	renderCheck(
@@ -974,7 +1026,9 @@ $limitedMarks = $limitedLevels = [];
 for($frame = 0; $frame < 121; $frame++)
 {
 	$limitedCamera->position[0] += 5;
+
 	if(renderSelections($limitedScene, 1 / 60, $limitedCamera)) $limitedMarks[] = $frame;
+
 	$limitedLevels[] = renderLevelUnder($limitedScene, $limitedCamera);
 }
 
@@ -1026,6 +1080,7 @@ $marks = [];
 for($frame = 0; $frame < 32; $frame++)
 {
 	$travelCamera->position[0] += 9;
+
 	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
 }
 
@@ -1127,6 +1182,7 @@ $marks = [];
 for($frame = 0; $frame < 36; $frame++)
 {
 	$travelCamera->position[0] += 9;
+
 	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
 }
 
@@ -1140,6 +1196,7 @@ $marks = [];
 for($frame = 0; $frame < 12; $frame++)
 {
 	$travelCamera->position[0] += 9;
+
 	if(renderSelections($travelScene, 1 / 60, $travelCamera)) $marks[] = $frame;
 }
 
@@ -1208,12 +1265,15 @@ $refined = $limited->stats()['visible'];
 for($frame = 0; $frame < 60; $frame++)
 {
 	$twinCamera->position[0] = 1 + (($frame + 1) % 2) / 1000;
+
 	if(renderSelections($free, 1 / 60, $twinCamera)) $freeMarks[] = $frame;
 
 	if(renderSelections($limited, 1 / 60, $twinCamera))
 	{
 		$limitedMarks[] = $frame;
+
 		if($waitingSince !== null) $served[] = $frame - $waitingSince;
+
 		$waitingSince = null;
 	}
 
@@ -1379,6 +1439,7 @@ foreach([0.0, .1] as $interval)
 
 // One step per update. Warm up with a wider slice, then follow single steps while the camera moves.
 [$spreadSurface, $spreadWater, $spread] = renderSpreadScene(40);
+
 // The first update selects twice: once with nothing resident, which requests the root, and once when the root
 // arrives in the same update. Neither may wait for a slice.
 renderCheck(
@@ -1386,6 +1447,7 @@ renderCheck(
 		&& !$spread->stats()['selectionInFlight'] && $spread->stats()['visible'] === 1
 	, 'with nothing drawn every selection runs whole and the root draws in its first update'
 );
+
 renderSettle($spread, $spreadCamera);
 $low = $spreadCamera->position;
 
@@ -1592,14 +1654,23 @@ function renderInterrupt(Scene $scene, Water $water, Camera $camera, string $eve
 	// Each event changes the view or a setting between two updates, as the host would.
 	switch($event)
 	{
-		case 'detail': $scene->quality = 2; break;
-		case 'fov': $camera->fov = 1.2; break;
-		case 'water': $water->setLevel(3); break;
-		case 'waves': $water->setWaveScale(.5); break;
-		case 'viewport': $scene->render($camera, 900, 700, 0); break;
-		case 'jump': $camera->position[0] += 90; break;
-		case 'turn': $camera->yaw += 1.2; break;
-		case 'travel': $camera->position[0] += 2; $camera->yaw += .05; break;
+		case 'detail': $scene->quality = 2;
+			break;
+		case 'fov': $camera->fov = 1.2;
+			break;
+		case 'water': $water->setLevel(3);
+			break;
+		case 'waves': $water->setWaveScale(.5);
+			break;
+		case 'viewport': $scene->render($camera, 900, 700, 0);
+			break;
+		case 'jump': $camera->position[0] += 90;
+			break;
+		case 'turn': $camera->yaw += 1.2;
+			break;
+		case 'travel': $camera->position[0] += 2;
+			$camera->yaw += .05;
+			break;
 
 		case 'restore':
 			// A lost context takes every name with it. This scene owns all that are left at this point.
@@ -1619,8 +1690,12 @@ function renderInterrupt(Scene $scene, Water $water, Camera $camera, string $eve
 }
 
 $events = [
-	'detail' => 'a new detail setting', 'fov' => 'a new field of view', 'water' => 'a new water level'
-	, 'waves' => 'a new wave height', 'viewport' => 'a new viewport', 'jump' => 'a jump of more than 64 m'
+	'detail' => 'a new detail setting'
+	, 'fov' => 'a new field of view'
+	, 'water' => 'a new water level'
+	, 'waves' => 'a new wave height'
+	, 'viewport' => 'a new viewport'
+	, 'jump' => 'a jump of more than 64 m'
 	, 'turn' => 'a turn of more than half the field of view'
 ];
 
@@ -1703,6 +1778,7 @@ renderCheck(
 $forcedSurface->close();
 $forcedSurface = $published;
 $forced->update(1 / 60, $forcedCamera);
+
 renderCheck(
 	$forced->stats()['selections'] === $selections + 1 && $forced->stats()['selectionInFlight']
 	, 'the published edit starts a spread selection in the next update'
@@ -1735,6 +1811,7 @@ renderCheck(
 	!$stats['selectionInFlight'] && $stats['visible'] === 1 && $stats['selectionUpdates'] === 1
 	, 'the replaced landscape selects whole until it draws'
 );
+
 $forced->close();
 $forcedSurface->close();
 $replacement->close();
@@ -1742,7 +1819,8 @@ $replacement->close();
 // While the view keeps moving, the limiter counts its spacing from the start of a selection. A selection that
 // lasts longer than one interval is followed in the next update by another, and a short one waits as before.
 $spacings = [
-	[3, 'a long selection is followed at once by the next'], [1000000000, 'short selections start six frames apart'],
+	[3, 'a long selection is followed at once by the next']
+	, [1000000000, 'short selections start six frames apart']
 ];
 
 foreach($spacings as [$steps, $message])
@@ -1786,6 +1864,7 @@ foreach($spacings as [$steps, $message])
 			&& ($steps === 3 ? max($gaps) <= 1 && min($spacing) > 6 : min($spacing) === 6 && max($spacing) === 6)
 		, $message
 	);
+
 	$limit->close();
 	$limitSurface->close();
 }
@@ -1845,6 +1924,7 @@ renderCheck(
 
 renderSettle($timedWhole, $timedCamera);
 renderSettle($timedTiny, $timedCamera);
+
 renderCheck(
 	!$timedWhole->dirty() && !$timedTiny->dirty() && renderKeys($timedWhole) === renderKeys($timedTiny)
 	, 'a view at rest settles on the cover of the whole scene under a tiny time slice'
@@ -1891,6 +1971,7 @@ foreach([[.1, 7], [0, 3]] as [$interval, $steps])
 
 	renderSettle($free, $twinCamera);
 	renderSettle($spread, $twinCamera);
+
 	renderCheck(
 		!$free->dirty() && !$spread->dirty() && renderKeys($free) === renderKeys($spread)
 		, 'once the trembling view rests, the spread scene settles on the cover of the whole one'
@@ -1915,9 +1996,13 @@ foreach([[.1, 9], [0, 25]] as [$interval, $steps])
 	$restCamera->pitch = -.3;
 
 	$legs = [
-		[[0, 0, 1], .01, null], [[1, 0, 0], -.02, null], [[0, 0, 0], 0, 'quality'], [[-120, 5, -150], .5, null],
-		[[-.5, 0, .5], .03, 'water'], [[0, .3, 0], .0, null],
+		[[0, 0, 1], .01, null]
+		, [[1, 0, 0], -.02, null]
+		, [[0, 0, 0], 0, 'quality']
+		, [[-120, 5, -150], .5, null]
+		, [[-.5, 0, .5], .03, 'water'], [[0, .3, 0], .0, null]
 	];
+
 	$rests = 0;
 
 	foreach($legs as [$step, $turn, $setting])
@@ -1942,6 +2027,7 @@ foreach([[.1, 9], [0, 25]] as [$interval, $steps])
 		renderSettle($free, $restCamera);
 		renderSettle($spread, $restCamera);
 		$rests++;
+
 		renderCheck(
 			!$free->dirty() && !$spread->dirty() && renderKeys($free) === renderKeys($spread)
 			, "rest $rests settles on the cover of the whole scene"
@@ -1995,15 +2081,23 @@ $water->setLevel(0);
 
 // Spot lights validate as a whole list, keep the previous list on a failure, and pack twelve floats each.
 $spotLight = [
-	'position' => [3,2,-4], 'direction' => [0,-3,4], 'color' => [1,.5,.25]
-	, 'intensity' => 20000, 'range' => 50, 'inner' => .1, 'outer' => .3
+	'position' => [3,2,-4]
+	, 'direction' => [0,-3,4]
+	, 'color' => [1,.5,.25]
+	, 'intensity' => 20000
+	, 'range' => 50
+	, 'inner' => .1
+	, 'outer' => .3
 ];
+
 $spotLights = new TerrainPhonics\SpotLights;
 $spotLights->set([$spotLight, ['position' => [0,0,0]] + $spotLight]);
 $invalidSpotLights = [
 	// The shape of the list and of each light.
-	'three lights' => [$spotLight, $spotLight, $spotLight], 'a keyed list' => ['a' => $spotLight]
-	, 'a light that is not an array' => [1], 'a missing key' => [array_diff_key($spotLight, ['range' => 0])]
+	'three lights' => [$spotLight, $spotLight, $spotLight]
+	, 'a keyed list' => ['a' => $spotLight]
+	, 'a light that is not an array' => [1]
+	, 'a missing key' => [array_diff_key($spotLight, ['range' => 0])]
 	, 'an unknown key' => [['unexpected' => [1,1,1]] + $spotLight]
 
 	// Values outside their ranges.
@@ -2175,9 +2269,14 @@ $spotFrame = static function() use ($spotScene, $spotCamera, $spotNames, $spotPr
 	if(isset($spotNames[$call[0]])) $uploads[] = [$spotNames[$call[0]], array_slice($call, 1)];
 
 	$spotDrawn = [
-		array_values(array_unique(array_map(static fn($id) => $ids[$id], array_filter(
-			$GLOBALS['terrainGlDraws'], static fn($id) => isset($ids[$id])
-		))))
+		array_values(
+			array_unique(
+				array_map(
+					static fn($id) => $ids[$id]
+					, array_filter($GLOBALS['terrainGlDraws'], static fn($id) => isset($ids[$id]))
+				)
+			)
+		)
 		, count($GLOBALS['terrainGlDraws'])
 	];
 
@@ -2270,10 +2369,7 @@ renderCheck(
 	, 'a restored scene draws its relinked lit programs once without lights'
 );
 
-renderCheck(
-	$spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram']
-	, 'and then draws lamp-free'
-);
+renderCheck($spotFrame() === [] && $spotDrawn[0] === ['groundProgram','waterProgram'], 'and then draws lamp-free');
 
 $spotScene->setSpotLights([$spotLight]);
 $spotFrame();
@@ -2377,11 +2473,16 @@ renderSet($scene, 'retiring', []);
 // Both positive-length neighbors stitch; a coarser neighbor across a corner alone does not.
 $fractional = new Lod(1000.3, 1);
 $corner = $fractional->node(2, 1, 1);
-renderSet($scene, 'draw', [$corner,$fractional->node(1,1,0),$fractional->node(1,0,1),$fractional->node(1,1,1)]);
+renderSet($scene, 'draw', [$corner,$fractional->node(1, 1, 0),$fractional->node(1, 0, 1),$fractional->node(1, 1, 1)]);
 renderSet($scene, 'neighbors', []);
 renderSet($scene, 'settledBoundaries', []);
 renderSet($scene, 'drawIndex', null);
-renderCheck(renderCall($scene,'boundaryMorph',$corner)[2] === 10, 'stitch right and bottom on a fractional world extent');
+
+renderCheck(
+	renderCall($scene, 'boundaryMorph', $corner)[2] === 10
+	, 'stitch right and bottom on a fractional world extent'
+);
+
 renderSet($scene, 'draw', $oldDraw);
 renderSet($scene, 'neighbors', []);
 renderSet($scene, 'settledBoundaries', []);
@@ -2474,8 +2575,11 @@ $candidate->commit();
 $oldRevision = $scene->stats()['revision'];
 $scene->prepareLandscape($candidate);
 renderCheck($scene->takePreparedLandscape() === null, 'partially prepared edit cannot publish');
-renderCheck($scene->surfacePatch('0:0:0')['heights'][544] === 0.0 && $scene->surfacePatch('99:0:0') === null,
-	'Surface charts see the published grid and reading a missing patch does not start a job');
+
+renderCheck(
+	$scene->surfacePatch('0:0:0')['heights'][544] === 0.0 && $scene->surfacePatch('99:0:0') === null
+	, 'Surface charts see the published grid and reading a missing patch does not start a job'
+);
 
 renderCheck(
 	$scene->stats()['revision'] === $oldRevision && $surface->height(0, 0) === 0.0
@@ -2502,9 +2606,14 @@ renderCheck(
 );
 
 $chart = $scene->surfacePatch('0:0:0');
-renderCheck(count($chart['heights']) === 1089 && $chart['heights'][544] === $candidate->height(0,0)
-	&& ord($chart['materials'][544]) === 5 && ord($chart['materials'][0]) === 0,
-	'Published chart samples carry edited height and road paint in the same row-major grid');
+
+renderCheck(
+	count($chart['heights']) === 1089 && $chart['heights'][544] === $candidate->height(0, 0) && ord($chart['materials'][
+		544
+	]) === 5 && ord($chart['materials'][0]) === 0
+	, 'Published chart samples carry edited height and road paint in the same row-major grid'
+);
+
 renderCheck(renderGet($scene, 'landscape') === $candidate, 'rendering now samples the published physics surface');
 $surface = $candidate;
 
@@ -2600,7 +2709,13 @@ renderCheck(array_sum($resources()) === 0, 'close releases all scene GL ownershi
 
 // The ground program keeps the appearance between frames. A replacement or a relinked program uploads it again.
 $appearanceAtmosphere = new Atmosphere;
-$appearanceScene = new Scene(new Landscape(['preset' => 'mountain', 'worldSize' => 256]), new Water(0), $appearanceAtmosphere, useClipmap: false);
+
+$appearanceScene = new Scene(new Landscape([
+	'preset' => 'mountain'
+	, 'worldSize' => 256
+]), new Water(0), $appearanceAtmosphere, useClipmap: false
+);
+
 $appearanceCamera = new Camera;
 
 /**
@@ -2628,15 +2743,25 @@ $uploads = static function(string $name) use (&$appearanceScene): int {
  * @return void Records one check per uniform.
  */
 $holds = static function(TerrainAppearance $appearance, string $message) use ($sent): void {
-	$inks = array_merge(...array_map(static fn($key)=>TerrainAppearance::linear($appearance->settings[$key]), \TerrainPhonics\SurfaceLayers::INKS));
-	renderCheck($sent('uPaintColor[0]') === [5,$inks],"$message: paint inks");
+	$inks = array_merge(
+		...array_map(
+			static fn($key) => TerrainAppearance::linear($appearance->settings[$key])
+			, \TerrainPhonics\SurfaceLayers::INKS
+		)
+	);
+
+	renderCheck($sent('uPaintColor[0]') === [5,$inks], "$message: paint inks");
+
 	foreach(['uSlopeBlend','uHeightBlend','uSnowline','uMacroVariation','uMountainZones','uMountainAmounts'] as $name)
-		renderCheck($sent($name) === $appearance->uniforms()[$name],"$message: $name");
-	renderCheck($sent('uLayerColor[0]')[0] > 0,"$message: active stack");
+	renderCheck($sent($name) === $appearance->uniforms()[$name], "$message: $name");
+	renderCheck($sent('uLayerColor[0]')[0] > 0, "$message: active stack");
 };
 
 renderCheck(
-	$appearanceScene->appearance->settings === array_replace(TerrainAppearance::DEFAULTS,TerrainAppearance::PRESET_DEFAULTS['mountain'])
+	$appearanceScene->appearance->settings === array_replace(
+		TerrainAppearance::DEFAULTS
+		, TerrainAppearance::PRESET_DEFAULTS['mountain']
+	)
 	, 'a mountain scene starts with the alpine palette'
 );
 
@@ -2645,8 +2770,12 @@ $holds($appearanceScene->appearance, 'the first frame uploads the default appear
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uPaintColor[0]') === 1 && $uploads('uLayerColor[0]') === 1, 'an unchanged appearance stays put');
 renderCheck($uploads('uEye') === 2, 'per-frame uniforms still upload every frame');
-renderCheck($sent('uRockSlopeDamping') === [2. / .45**2] && $uploads('uRockSlopeDamping') === 1,
-	'the rock material receives the recipe damping and slope scale once');
+
+renderCheck(
+	$sent('uRockSlopeDamping') === [2. / .45 ** 2] && $uploads('uRockSlopeDamping') === 1
+	, 'the rock material receives the recipe damping and slope scale once'
+);
+
 renderCheck($uploads('uExposure') === 1 && $uploads('uSunDirection') === 1, 'stationary lighting stays on the GPU');
 $appearanceAtmosphere->setExposure(1.75);
 
@@ -2654,10 +2783,18 @@ $replacement = ['snowColor' => '#ff0000', 'snowline' => 150, 'bandSpacing' => 20
 $appearanceScene->appearance = new TerrainAppearance($replacement);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the next frame uploads a replaced appearance');
-renderCheck($sent('uExposure') === [1.75] && $uploads('uExposure') === 2 && $uploads('uSunDirection') === 1,
-	'changing exposure only resends the affected atmosphere parameter');
-renderCheck(array_slice($sent('uPaintColor[0]')[1],9,3) === [1.,0.,0.] && $sent('uSnowline') === [150.0, 65.0], 'the new values arrive');
-renderCheck(array_slice($sent('uLayerColor[0]')[1],12,3) === [0.0, 1.0, 0.0], 'the new forest color arrives');
+
+renderCheck(
+	$sent('uExposure') === [1.75] && $uploads('uExposure') === 2 && $uploads('uSunDirection') === 1
+	, 'changing exposure only resends the affected atmosphere parameter'
+);
+
+renderCheck(
+	array_slice($sent('uPaintColor[0]')[1], 9, 3) === [1.,0.,0.] && $sent('uSnowline') === [150.0, 65.0]
+	, 'the new values arrive'
+);
+
+renderCheck(array_slice($sent('uLayerColor[0]')[1], 12, 3) === [0.0, 1.0, 0.0], 'the new forest color arrives');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 renderCheck($uploads('uPaintColor[0]') === 2, 'a replaced appearance uploads once');
 
@@ -2667,7 +2804,7 @@ $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $litGround = renderGet($appearanceScene, 'litGroundProgram')->id;
 
 renderCheck(
-	array_slice($GLOBALS['terrainGl']['uniforms'][$litGround]['uPaintColor[0]'][1],9,3) === [1.0, 0.0, 0.0]
+	array_slice($GLOBALS['terrainGl']['uniforms'][$litGround]['uPaintColor[0]'][1], 9, 3) === [1.0, 0.0, 0.0]
 	&& $GLOBALS['terrainGl']['uploads'][$litGround]['uPaintColor[0]'] === 1
 	, 'the lit ground program receives the appearance when it first draws'
 );
@@ -2684,13 +2821,30 @@ renderCheck(
 
 $appearanceScene->setSpotLights([]);
 
-$appearanceScene->setLandscape(new Landscape(['worldSize'=>256, 'damping'=>3., 'slopeScale'=>.5, 'noiseOffsetX'=>124.5, 'noiseOffsetZ'=>-73.25]));
+$appearanceScene->setLandscape(new Landscape([
+	'worldSize' => 256
+	, 'damping' => 3.
+	, 'slopeScale' => .5
+	, 'noiseOffsetX' => 124.5
+	, 'noiseOffsetZ' => -73.25
+]));
+
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
-renderCheck($sent('uMaterialOrigin') === [-124.5,0.,73.25], 'a replacement landscape translates surface patterns with its heights');
+
+renderCheck(
+	$sent('uMaterialOrigin') === [-124.5,0.,73.25]
+	, 'a replacement landscape translates surface patterns with its heights'
+);
+
 renderCheck($sent('uRockSlopeDamping') === [12.], 'a replacement landscape refreshes rock damping on the same shader');
 $appearanceScene->setSpotLights([$spotLight]);
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
-renderCheck($GLOBALS['terrainGl']['uniforms'][$litGround]['uRockSlopeDamping'] === [12.], 'lamps use the new landscape damping too');
+
+renderCheck(
+	$GLOBALS['terrainGl']['uniforms'][$litGround]['uRockSlopeDamping'] === [12.]
+	, 'lamps use the new landscape damping too'
+);
+
 $appearanceScene->setSpotLights([]);
 
 $relinked = renderGet($appearanceScene, 'groundProgram')->id;
@@ -2699,139 +2853,285 @@ renderCheck(renderGet($appearanceScene, 'groundProgram')->id !== $relinked, 'res
 renderCheck($sent('uPaintColor[0]') === null, 'a relinked program starts without the appearance');
 $appearanceScene->render($appearanceCamera, 320, 200, 0);
 $holds($appearanceScene->appearance, 'the frame after restoration uploads the appearance again');
-renderCheck($sent('uExposure') === [1.75] && $uploads('uSunDirection') === 1, 'restoration repopulates atmosphere uniforms');
+
+renderCheck(
+	$sent('uExposure') === [1.75] && $uploads('uSunDirection') === 1
+	, 'restoration repopulates atmosphere uniforms'
+);
+
 $appearanceScene->close();
 
-$fjords = new Landscape(['preset'=>'basalt-fjords', 'worldSize'=>256]);
-$dunes = new Landscape(['preset'=>'amber-dunes', 'worldSize'=>256]);
+$fjords = new Landscape(['preset' => 'basalt-fjords', 'worldSize' => 256]);
+$dunes = new Landscape(['preset' => 'amber-dunes', 'worldSize' => 256]);
 $presetScene = new Scene($fjords, new Water, new Atmosphere, useClipmap: false);
-renderCheck($presetScene->appearance->settings['rockColor'] === TerrainAppearance::PRESET_DEFAULTS['basalt-fjords']['rockColor'],
-	'A scene starts with the palette of its landscape.');
+
+renderCheck(
+	$presetScene->appearance->settings['rockColor'] === TerrainAppearance::PRESET_DEFAULTS['basalt-fjords']['rockColor']
+	, 'A scene starts with the palette of its landscape.'
+);
+
 $presetScene->setLandscape($dunes);
-renderCheck($presetScene->appearance->settings['sandColor'] === TerrainAppearance::PRESET_DEFAULTS['amber-dunes']['sandColor'],
-	'Swapping landscapes also switches the scene-owned palette.');
-$authored = $presetScene->appearance = new TerrainAppearance(['sandColor'=>'#abcabc']);
+
+renderCheck(
+	$presetScene->appearance->settings['sandColor'] === TerrainAppearance::PRESET_DEFAULTS['amber-dunes']['sandColor']
+	, 'Swapping landscapes also switches the scene-owned palette.'
+);
+
+$authored = $presetScene->appearance = new TerrainAppearance(['sandColor' => '#abcabc']);
 $presetScene->setLandscape($fjords);
 renderCheck($presetScene->appearance === $authored, 'Swapping landscapes preserves an application-owned appearance.');
 $presetScene->close();
 
 // Every preset's shading style receives the same appearance uniforms.
 $styles = [
-	[['preset' => 'coast'], 0.0], [['preset' => 'mountain'], 1.0], [['preset' => 'canyon', 'version' => 1], 2.0],
-	[['preset' => 'canyon'], 3.0],
+	[['preset' => 'coast'], 0.0]
+	, [['preset' => 'mountain'], 1.0]
+	, [['preset' => 'canyon', 'version' => 1], 2.0]
+	, [['preset' => 'canyon'], 3.0]
 ];
 
 $styled = ['rockColor' => '#123456', 'canyonCapColor' => '#abcdef', 'graniteColor' => '#fedcba', 'treeline' => -250];
 
 foreach($styles as [$recipe, $style])
 {
-	$appearanceScene = new Scene(new Landscape($recipe + ['worldSize' => 256]), new Water(0), new Atmosphere, useClipmap: false);
+	$appearanceScene = new Scene(new Landscape($recipe + [
+		'worldSize' => 256
+	]), new Water(0), new Atmosphere, useClipmap: false
+	);
+
 	$appearanceScene->appearance = new TerrainAppearance($styled);
 	$appearanceScene->render($appearanceCamera, 320, 200, 0);
-	$expectedStack = \TerrainPhonics\SurfaceLayers::landscape((new \TerrainPhonics\Recipe($recipe))->values(),$appearanceScene->appearance);
-	renderCheck($sent('uLayerColor[0]')[0] === count($expectedStack->layers),"the {$recipe['preset']} recipe binds its layer stack");
+
+	$expectedStack = \TerrainPhonics\SurfaceLayers::landscape(
+		(new \TerrainPhonics\Recipe($recipe))->values()
+		, $appearanceScene->appearance
+	);
+
+	renderCheck(
+		$sent('uLayerColor[0]')[0] === count($expectedStack->layers)
+		, "the {$recipe['preset']} recipe binds its layer stack"
+	);
+
 	$holds($appearanceScene->appearance, "terrain style $style receives the appearance");
 	$appearanceScene->close();
 }
 
 // The clipmap scene the sandbox uses. Edited texels take PHP's heights and ink after the GPU fills a level, and that
 // CPU paint runs within the scene's budget; a budgeted scene must end with the same texels as an unbounded one.
-foreach(['GL_RGBA32F','GL_R8','GL_TRIANGLE_STRIP','GL_RGB','GL_TEXTURE2','GL_COLOR_BUFFER_BIT','GL_DEPTH_BUFFER_BIT',
-	'GL_RGBA16F','GL_HALF_FLOAT','GL_DEPTH_COMPONENT24','GL_DEPTH_ATTACHMENT','GL_RENDERBUFFER','GL_REPEAT','GL_TEXTURE_2D_ARRAY','GL_COLOR_CLEAR_VALUE'] as $i => $name)
-	if(!defined($name)) define($name, 0x9a00 + $i);
-foreach(['glUniform2i','glUniform4i','glUniform3i','glUniform1fv','glUniform1iv','glClear','glClearColor','glReadPixels',
-	'glTexStorage2D','glTexStorage3D','glFramebufferTextureLayer','glClearDepth','glCullFace','glBlendFunc','glScissor','glPixelStorei'] as $name)
-	if(!function_exists($name)) eval("function $name(...\$arguments): void {}");
-if(!function_exists('glDrawArraysInstanced')) { function glDrawArraysInstanced(...$arguments): void { terrainGlDraw(); } }
+foreach([
+	'GL_RGBA32F'
+	, 'GL_R8'
+	, 'GL_TRIANGLE_STRIP'
+	, 'GL_RGB'
+	, 'GL_TEXTURE2'
+	, 'GL_COLOR_BUFFER_BIT'
+	, 'GL_DEPTH_BUFFER_BIT'
+	, 'GL_RGBA16F'
+	, 'GL_HALF_FLOAT'
+	, 'GL_DEPTH_COMPONENT24'
+	, 'GL_DEPTH_ATTACHMENT'
+	, 'GL_RENDERBUFFER'
+	, 'GL_REPEAT'
+	, 'GL_TEXTURE_2D_ARRAY'
+	, 'GL_COLOR_CLEAR_VALUE'
+] as $i => $name)
+if(!defined($name)) define($name, 0x9a00 + $i);
+
+foreach([
+	'glUniform2i'
+	, 'glUniform4i'
+	, 'glUniform3i'
+	, 'glUniform1fv'
+	, 'glUniform1iv'
+	, 'glClear'
+	, 'glClearColor'
+	, 'glReadPixels'
+	, 'glTexStorage2D'
+	, 'glTexStorage3D'
+	, 'glFramebufferTextureLayer'
+	, 'glClearDepth'
+	, 'glCullFace'
+	, 'glBlendFunc'
+	, 'glScissor'
+	, 'glPixelStorei'
+] as $name)
+if(!function_exists($name)) eval("function $name(...\$arguments): void {}");
+
+if(!function_exists('glDrawArraysInstanced'))
+{
+
+	function glDrawArraysInstanced(...$arguments): void { terrainGlDraw(); } }
+
 if(!function_exists('glTexSubImage2D'))
 {
+
 	function glTexSubImage2D(...$arguments): void
 	{
-		$GLOBALS['subImages'][] = [$GLOBALS['boundTexture'] ?? 0, $arguments[2], $arguments[3], $arguments[4], $arguments[5],
-			$arguments[8]];
+		$GLOBALS['subImages'][] = [
+			$GLOBALS['boundTexture'] ?? 0
+			, $arguments[2]
+			, $arguments[3]
+			, $arguments[4]
+			, $arguments[5]
+			, $arguments[8]
+		];
 	}
 }
+
 // A driver can look sideways while the finest ring leads the signed travel direction.
-$land = new Landscape(['preset'=>'canyon','spacing'=>1,'worldSize'=>8192]);
-$driver = new Scene($land,new Water,new Atmosphere,useClipmap:true);
+$land = new Landscape(['preset' => 'canyon','spacing' => 1,'worldSize' => 8192]);
+$driver = new Scene($land, new Water, new Atmosphere, useClipmap:true);
 $eye = new Camera;
 $eye->position = [-101.5,30.,19.5];
-$eye->yaw = M_PI/2;
+$eye->yaw = M_PI / 2;
 $driver->budgetMs = 1e5;
-do { $driver->update(1/60,$eye); } while($driver->stats()['pending']);
+
+do
+{
+	$driver->update(1 / 60, $eye);
+} while($driver->stats()['pending']);
+
 $before = $driver->stats();
-$driver->update(1/60,$eye,[-101.5,-10000.]);
+$driver->update(1 / 60, $eye, [-101.5,-10000.]);
 $ahead = $driver->stats();
-renderCheck($ahead['visible'] === $before['visible'] && !$ahead['pending']
-	&& array_slice($ahead['visibleCoverage'],1) === array_slice($before['visibleCoverage'],1),
-	'Boarding in the canyon preserves its resident horizon and walls');
+
+renderCheck(
+	$ahead['visible'] === $before['visible'] && !$ahead['pending'] && array_slice(
+		$ahead['visibleCoverage']
+		, 1
+	) === array_slice($before['visibleCoverage'], 1)
+	, 'Boarding in the canyon preserves its resident horizon and walls'
+);
+
 [$left,$front,$width,$step] = $ahead['visibleCoverage'][0];
-renderCheck($step === $before['cameraSpacing'] && $width === 76. && $eye->position[2]-$front >= 50.
-	&& $left+16 < $eye->position[0] && $left+$width-16 > $eye->position[0],
-	'The fine road grid reaches ahead of travel and covers both shoulders');
-renderCheck($ahead['heightTexelsWritten']-$before['heightTexelsWritten'] === (76+5)**2,
-	'Boarding fills just the near grid vertices and halo inside the larger texture');
-$driver->update(1/60,$eye,[-101.5,10000.]);
+
+renderCheck(
+	$step === $before['cameraSpacing'] && $width === 76. && $eye->position[2] - $front >= 50. && $left + 16 < $eye
+		->position[0] && $left + $width - 16 > $eye->position[0]
+	, 'The fine road grid reaches ahead of travel and covers both shoulders'
+);
+
+renderCheck(
+	$ahead['heightTexelsWritten'] - $before['heightTexelsWritten'] === (76 + 5) ** 2
+	, 'Boarding fills just the near grid vertices and halo inside the larger texture'
+);
+
+$driver->update(1 / 60, $eye, [-101.5,10000.]);
 $reverse = $driver->stats();
-renderCheck($reverse['visibleCoverage'][0][1] > $front+22. && $reverse['visibleCoverage'][0][1] < $eye->position[2]
-	&& $reverse['heightTexelsWritten']-$ahead['heightTexelsWritten'] < (76+5)**2,
-	'Reversing keeps the eye covered and updates strips rather than refilling the near level');
-$driver->update(1/60,$eye,[-101.5,10000.]);
-renderCheck($driver->stats()['heightTexelsWritten'] === $reverse['heightTexelsWritten'],
-	'A settled focus writes no further elevation texels');
-$driver->update(1/60,$eye);
-renderCheck($driver->stats()['visibleCoverage'] === $before['visibleCoverage'], 'Leaving the car restores camera-centered coverage');
+
+renderCheck(
+	$reverse['visibleCoverage'][0][1] > $front + 22. && $reverse['visibleCoverage'][0][1] < $eye->position[2] && $reverse[
+		'heightTexelsWritten'
+	] - $ahead['heightTexelsWritten'] < (76 + 5) ** 2
+	, 'Reversing keeps the eye covered and updates strips rather than refilling the near level'
+);
+
+$driver->update(1 / 60, $eye, [-101.5,10000.]);
+
+renderCheck(
+	$driver->stats()['heightTexelsWritten'] === $reverse['heightTexelsWritten']
+	, 'A settled focus writes no further elevation texels'
+);
+
+$driver->update(1 / 60, $eye);
+
+renderCheck(
+	$driver->stats()['visibleCoverage'] === $before['visibleCoverage']
+	, 'Leaving the car restores camera-centered coverage'
+);
+
 $driver->close();
 $land->close();
 
 // A close view can arrive before the regular rings have finished loading.
-$land = new Landscape(['preset'=>'rolling-prairie','worldSize'=>32768,'spacing'=>1]);
-foreach ([[[-200,10,0],[0,10,0]],[[0,10,0],[160,10,-60]],[[0,10,0],[160,10,60]]] as $points)
-	$land->queue(['type'=>'road','width'=>28,'points'=>$points]);
+$land = new Landscape(['preset' => 'rolling-prairie','worldSize' => 32768,'spacing' => 1]);
+
+foreach([[[-200,10,0],[0,10,0]],[[0,10,0],[160,10,-60]],[[0,10,0],[160,10,60]]] as $points)
+$land->queue(['type' => 'road','width' => 28,'points' => $points]);
 $land->commit();
-$driver = new Scene($land,new Water,new Atmosphere,useClipmap:true);
+$driver = new Scene($land, new Water, new Atmosphere, useClipmap:true);
 $eye = new Camera;
 $eye->position = [-48.,93.,5.];
-$driver->update(1/60,$eye);
+$driver->update(1 / 60, $eye);
 $first = $driver->stats();
-renderCheck($first['cameraSpacing']===1. && $first['heightTexelsWritten']<100000,
-	"The first fork frame resolves the pavement within the overview and small grids ({$first['heightTexelsWritten']} texels).");
+
+renderCheck(
+	$first['cameraSpacing'] === 1. && $first['heightTexelsWritten'] < 100000
+	, "The first fork frame resolves the pavement within the overview and small grids ({$first['heightTexelsWritten']} texels)."
+);
+
 [$west,$north,$width,$step] = $first['visibleCoverage'][3];
-renderCheck($step===8. && $west+$width>=128. && $north<=-60. && $north+$width>=60.,
-	'Both separating arms are covered on approach, including the road ahead of the finest ring.');
-for($i=0; $driver->stats()['pending'] && $i<100; $i++) $driver->update(1/60,$eye);
+
+renderCheck(
+	$step === 8. && $west + $width >= 128. && $north <= -60. && $north + $width >= 60.
+	, 'Both separating arms are covered on approach, including the road ahead of the finest ring.'
+);
+
+for($i = 0; $driver->stats()['pending'] && $i < 100; $i++) $driver->update(1 / 60, $eye);
 renderCheck(!$driver->stats()['pending'], 'The small fork rings grow to normal coverage and settle.');
 $eye->position = [8000.,90.,5000.];
-do { $driver->update(1/60,$eye); } while ($driver->stats()['pending']);
+
+do
+{
+	$driver->update(1 / 60, $eye);
+} while($driver->stats()['pending']);
+
 $before = $driver->stats();
-$chartAtFork = static fn() => $driver->drawChart([0.,0.],0.,false,500,350,[0.,0.,1.],300,fixedSpan:200.);
+
+$chartAtFork = static fn() => $driver->drawChart([0.,0.], 0., false, 500, 350, [0.,0.,1.], 300, fixedSpan:200.);
 $chartAtFork();
 $after = $driver->stats();
 $local = $GLOBALS['terrainGl']['uniforms'][$GLOBALS['terrainGl']['program']]['uLocal'];
-renderCheck($local[2]===2. && $local[0]<=-100. && $local[0]+($local[3]-1)*$local[2]>=100.
-	&& $after['heightTexelsWritten']-$before['heightTexelsWritten']===128**2 && $before['visibleCoverage']===$after['visibleCoverage'],
-	'The road editor samples its remote fork at two meters without moving the driving grids.');
+
+renderCheck(
+	$local[2] === 2. && $local[0] <= -100. && $local[0] + ($local[3] - 1) * $local[2] >= 100. && $after[
+		'heightTexelsWritten'
+	] - $before['heightTexelsWritten'] === 128 ** 2 && $before['visibleCoverage'] === $after[
+		'visibleCoverage'
+	]
+	, 'The road editor samples its remote fork at two meters without moving the driving grids.'
+);
+
 $chartAtFork();
-renderCheck($driver->stats()['heightTexelsWritten']===$after['heightTexelsWritten'],'Reopening the same view reuses its terrain samples.');
-$land->queue(['type'=>'material','material'=>'sand','x'=>0,'z'=>0,'radius'=>6]);
+
+renderCheck(
+	$driver->stats()['heightTexelsWritten'] === $after['heightTexelsWritten']
+	, 'Reopening the same view reuses its terrain samples.'
+);
+
+$land->queue(['type' => 'material','material' => 'sand','x' => 0,'z' => 0,'radius' => 6]);
 $land->commit();
-$driver->update(1/60,$eye);
+$driver->update(1 / 60, $eye);
 $chartAtFork();
 $inkTexture = $GLOBALS['boundTexture'];
 $GLOBALS['subImages'] = [];
-do { $driver->update(1/60,$eye); } while ($driver->stats()['pending']);
+
+do
+{
+	$driver->update(1 / 60, $eye);
+} while($driver->stats()['pending']);
+
 $centerInk = null;
-foreach ($GLOBALS['subImages'] as [$texture,$x,$z,,,$bytes])
-	if ($texture===$inkTexture && $x===0 && $z===0) $centerInk = ord($bytes[0]);
-renderCheck($centerInk===3,'A later sand brush replaces the asphalt in the zoomed editor texture.');
+
+foreach($GLOBALS['subImages'] as [$texture,$x,$z,,,$bytes])
+if($texture === $inkTexture && $x === 0 && $z === 0) $centerInk = ord($bytes[0]);
+renderCheck($centerInk === 3, 'A later sand brush replaces the asphalt in the zoomed editor texture.');
 $driver->close();
 $land->close();
 
 $paintRun = static function(float $budgetMs): array {
 	$land = new Landscape(['preset' => 'coast']);
+
 	for($i = 0; $i < 30; $i++)
-		$land->queue(['type' => $i % 2 ? 'flatten' : 'material', 'x' => -300 + 20*$i, 'z' => 0, 'radius' => 18,
-			'amount' => .8, 'material' => 'sand', 'height' => 5]);
+	$land->queue([
+		'type' => $i % 2 ? 'flatten' : 'material'
+		, 'x' => -300 + 20 * $i
+		, 'z' => 0
+		, 'radius' => 18
+		, 'amount' => .8
+		, 'material' => 'sand'
+		, 'height' => 5
+	]);
 	$land->commit();
 	$GLOBALS['subImages'] = [];
 	$base = $GLOBALS['terrainGl']['next'];
@@ -2843,96 +3143,154 @@ $paintRun = static function(float $budgetMs): array {
 	$camera->pitch = -.1;
 	$updates = 0;
 	$mostTexels = $backgroundSlices = 0;
+
 	do
 	{
 		$before = count($GLOBALS['subImages']);
-		$redraw = $scene->update(1/60, $camera);
+		$redraw = $scene->update(1 / 60, $camera);
 		$texels = 0;
+
 		foreach(array_slice($GLOBALS['subImages'], $before) as [, , , $w, $h]) $texels += $w * $h;
+
 		if($texels && !$redraw) $backgroundSlices++;
+
 		$mostTexels = max($mostTexels, $texels / 2); // Each painted rectangle uploads heights and ink.
 		$updates++;
 	}
 	while(($scene->stats()['pending'] ?? 0) > 0 && $updates < 50000);
-	renderCheck(($scene->stats()['pending'] ?? 0) === 0, "A clipmap scene with a {$budgetMs} ms budget finishes painting its edits");
+
+	renderCheck(
+		($scene->stats()['pending'] ?? 0) === 0
+		, "A clipmap scene with a {$budgetMs} ms budget finishes painting its edits"
+	);
+
 	// The last value written to each texel, by texture in allocation order.
 	$final = [];
+
 	foreach($GLOBALS['subImages'] as [$texture, $x, $y, $w, $h, $bytes])
 	{
 		$size = intdiv(strlen($bytes), $w * $h);
+
 		for($j = 0; $j < $h; $j++)
 		for($i = 0; $i < $w; $i++)
-			$final[($texture - $base) . ':' . ($x + $i) . ':' . ($y + $j)] = substr($bytes, ($j * $w + $i) * $size, $size);
+		$final[($texture - $base) . ':' . ($x + $i) . ':' . ($y + $j)] = substr($bytes, ($j * $w + $i) * $size, $size);
 	}
+
 	ksort($final);
-	if($budgetMs < 1.) renderCheck($backgroundSlices > 0, 'Stationary paint slices finish in the background between redraws');
+
+	if($budgetMs < 1.)
+	renderCheck($backgroundSlices > 0, 'Stationary paint slices finish in the background between redraws');
+
 	$scene->close();
 	$land->close();
+
 	return [$final, $updates, $mostTexels];
 };
+
 [$unbounded, , ] = $paintRun(1e6);
 [$budgeted, $budgetedUpdates, $mostTexels] = $paintRun(.25);
 renderCheck(count($unbounded) > 1000, 'The edited coast paints more than a thousand texels from PHP');
 renderCheck($budgeted === $unbounded, 'A 0.25 ms budget ends with exactly the texels an unbounded paint leaves');
-renderCheck($budgetedUpdates > 10 && $mostTexels <= 64,
-	"The budgeted paint spreads over $budgetedUpdates updates, at most $mostTexels texels in one");
+
+renderCheck(
+	$budgetedUpdates > 10 && $mostTexels <= 64
+	, "The budgeted paint spreads over $budgetedUpdates updates, at most $mostTexels texels in one"
+);
 
 // The sandbox's live and replay scenes share binding zero. Other hosts can share it with their own GL code.
-$journey = new Landscape(['preset'=>'rolling-prairie','join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon']]]]);
-$live = new Scene($journey,new Water,new Atmosphere,retainJourneyBinding:true);
-$replay = new Scene($journey,new Water,new Atmosphere,retainJourneyBinding:true);
-$shared = new Scene($journey,new Water,new Atmosphere);
-$chart = static fn(Scene $scene) => $scene->drawChart([0.,0.],0.,false,320,200,[0.,0.,1.]);
+$journey = new Landscape([
+	'preset' => 'rolling-prairie'
+	, 'join' => ['span' => 16384,'destinations' => [['preset' => 'canyon']]]
+]);
+
+$live = new Scene($journey, new Water, new Atmosphere, retainJourneyBinding:true);
+$replay = new Scene($journey, new Water, new Atmosphere, retainJourneyBinding:true);
+$shared = new Scene($journey, new Water, new Atmosphere);
+
+$chart = static fn(Scene $scene) => $scene->drawChart([0.,0.], 0., false, 320, 200, [0.,0.,1.]);
 $GLOBALS['terrainGl']['indexedBindings'] = [];
+
 foreach([$live,$live,$replay,$replay,$live,$shared,$shared,$live,$live] as $scene) $chart($scene);
-$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'],2);
+$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'], 2);
 [$liveBuffer,$replayBuffer,,$sharedBuffer] = $bindings;
 $sceneBuffers = [$liveBuffer,$replayBuffer,$sharedBuffer];
-renderCheck(count(array_unique($sceneBuffers))===3 && $bindings===[$liveBuffer,$replayBuffer,$liveBuffer,$sharedBuffer,$sharedBuffer,$liveBuffer],
-	'Retained palettes bind only on scene switches. Shared bindings are reasserted on each draw.');
+
+renderCheck(
+	count(array_unique($sceneBuffers)) === 3 && $bindings === [
+		$liveBuffer
+		, $replayBuffer
+		, $liveBuffer
+		, $sharedBuffer
+		, $sharedBuffer,$liveBuffer
+	]
+	, 'Retained palettes bind only on scene switches. Shared bindings are reasserted on each draw.'
+);
+
 $live->restore();
 $chart($live);
 $chart($live);
-$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'],2);
-renderCheck(count($bindings)===7 && !in_array(end($bindings),$sceneBuffers,true),'Context restoration binds the replacement palette once.');
+$bindings = array_column($GLOBALS['terrainGl']['indexedBindings'], 2);
+
+renderCheck(
+	count($bindings) === 7 && !in_array(end($bindings), $sceneBuffers, true)
+	, 'Context restoration binds the replacement palette once.'
+);
+
 foreach([$shared,$replay,$live] as $scene) $scene->close();
 $journey->close();
 
 // The persistent fields are independent of elevation, paint and roads. Only entering new cells needs draws.
-$fork = new Landscape(['preset'=>'rolling-prairie','join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon'],['preset'=>'mountain']]]]);
-$scene = new Scene($fork,new Water,new Atmosphere);
+$fork = new Landscape([
+	'preset' => 'rolling-prairie'
+	, 'join' => ['span' => 16384,'destinations' => [['preset' => 'canyon'],['preset' => 'mountain']]]
+]);
+
+$scene = new Scene($fork, new Water, new Atmosphere);
 $eye = new Camera;
 $eye->position = [-1.,60.,-1.];
-$renderFields = static function() use ($scene,$eye) {
-	$scene->update(1/60,$eye);
-	$scene->render($eye,320,200,0.);
+
+$renderFields = static function() use ($scene, $eye) {
+	$scene->update(1 / 60, $eye);
+	$scene->render($eye, 320, 200, 0.);
+
 	return $scene->stats()['materialFieldTexels'];
 };
+
 $initial = $renderFields();
-renderCheck($initial === 256**2 && $renderFields() === $initial,'A stationary fork fills its material fields once');
+renderCheck($initial === 256 ** 2 && $renderFields() === $initial, 'A stationary fork fills its material fields once');
 $eye->position[0] = 1.;
-renderCheck($renderFields() === $initial+16*256,'Crossing zero fills only the entering strip of the world texture');
+renderCheck($renderFields() === $initial + 16 * 256, 'Crossing zero fills only the entering strip of the world texture');
 $eye->position[0] = 5000.;
 $written = $renderFields();
-renderCheck($written === 2*$initial+16*256,'Teleporting repopulates the resident window');
-foreach([['type'=>'raise','x'=>5000,'z'=>0,'radius'=>20,'amount'=>5],
-	['type'=>'material','x'=>5000,'z'=>0,'radius'=>12,'material'=>'sand'],
-	['type'=>'road','points'=>[[4980,40,0],[5020,40,0]],'width'=>8,'shoulder'=>2]] as $operation) {
-	$fork->queue($operation); $fork->commit();
-	renderCheck($renderFields() === $written,'Edits update geometry and ink without rebaking position-only noise');
+renderCheck($written === 2 * $initial + 16 * 256, 'Teleporting repopulates the resident window');
+
+foreach([
+	['type' => 'raise','x' => 5000,'z' => 0,'radius' => 20,'amount' => 5]
+	, ['type' => 'material','x' => 5000,'z' => 0,'radius' => 12,'material' => 'sand']
+	, ['type' => 'road','points' => [[4980,40,0],[5020,40,0]],'width' => 8,'shoulder' => 2]
+] as $operation)
+{
+	$fork->queue($operation);
+	$fork->commit();
+	renderCheck($renderFields() === $written, 'Edits update geometry and ink without rebaking position-only noise');
 }
-$fork->undo(); $fork->redo();
-renderCheck($renderFields() === $written,'Undo and redo preserve position-only noise');
+
+$fork->undo();
+$fork->redo();
+renderCheck($renderFields() === $written, 'Undo and redo preserve position-only noise');
 $scene->restore();
-renderCheck($renderFields() === $initial,'The displayed fork rebuilds its fields on a restored context');
+renderCheck($renderFields() === $initial, 'The displayed fork rebuilds its fields on a restored context');
 $recipe = $fork->recipe();
 $recipe['join']['destinations'][0]['seed'] = 'changed-seed';
 $reseeded = new Landscape($recipe);
 $scene->setLandscape($reseeded);
-renderCheck($renderFields() === 2*$initial,'A destination seed change invalidates cached noise at the same location');
-$solo = new Landscape(['preset'=>'mountain']);
+renderCheck($renderFields() === 2 * $initial, 'A destination seed change invalidates cached noise at the same location');
+$solo = new Landscape(['preset' => 'mountain']);
 $scene->setLandscape($solo);
-renderCheck($renderFields() === 0,'A single landscape releases the journey field cache');
-$scene->close(); $solo->close(); $reseeded->close(); $fork->close();
+renderCheck($renderFields() === 0, 'A single landscape releases the journey field cache');
+$scene->close();
+$solo->close();
+$reseeded->close();
+$fork->close();
 
 echo "Terrain renderer: $checks checks passed.\n";

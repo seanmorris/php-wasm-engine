@@ -71,7 +71,7 @@ final class AtmosphereRenderer
 
 			$this->targets[] = new RenderTarget(
 				$azimuths * $distances
-				, $latitudes+1
+				, $latitudes + 1
 				, GL_LINEAR
 				, false
 				, 'Aerial extinction'
@@ -79,7 +79,7 @@ final class AtmosphereRenderer
 
 			$this->targets[] = new RenderTarget(
 				$azimuths * $distances
-				, $latitudes+1
+				, $latitudes + 1
 				, GL_LINEAR
 				, false
 				, 'Aerial radiance'
@@ -103,9 +103,9 @@ final class AtmosphereRenderer
 
 		return "#define skyRadiance terrainUncachedSkyRadiance\n#define terrainAtmosphere terrainUncachedAtmosphere\n"
 			. file_get_contents($root . 'atmosphere.glsl') . "\n#undef skyRadiance\n#undef terrainAtmosphere\n"
-			. self::nightLightingSource() . "\n" . file_get_contents($root . 'atmosphere-cache.glsl') . "\n" . file_get_contents(
-				$root . 'atmosphere-aerial.glsl'
-			);
+			. self::nightLightingSource() . "\n" . file_get_contents(
+				$root . 'atmosphere-cache.glsl'
+			) . "\n" . file_get_contents($root . 'atmosphere-aerial.glsl');
 	}
 
 	/** Shared blue fill for opaque scene materials, evaluated before exposure and tone mapping. */
@@ -184,6 +184,7 @@ final class AtmosphereRenderer
 			glUniform1f($this->aerialProgram->location('uAerialCacheAltitude'), $this->altitudes[0]);
 
 			$this->targets[2]->bind();
+
 			try
 			{
 				$second = GL_COLOR_ATTACHMENT0 + 1;

@@ -111,47 +111,103 @@ $solar = new Atmosphere($vacuum);
 $expect($solar->uniforms()['angularRadius'] === .00935, 'The default solar radius is twice the original radius.');
 $inside = $solar->sky([sin(.008),cos(.008),0.])[0];
 $outside = $solar->sky([sin(.011),cos(.011),0.])[0];
-$expect($inside > 1000 && $outside === 0. && abs($inside * 2*M_PI*(1-cos(.00935))-20.) < 1e-8,
-	'The enlarged disk ends at its angular radius and retains the integrated solar irradiance.');
 
-$mist = ['bottom'=>100.,'top'=>120.,'density'=>5.,'color'=>'#ff0000'];
-$upper = ['bottom'=>105.,'top'=>130.,'density'=>2.,'color'=>'#0000ff'];
-$air = new Atmosphere($vacuum + ['layers'=>[$mist,$upper]]);
+$expect(
+	$inside > 1000 && $outside === 0. && abs($inside * 2 * M_PI * (1 - cos(.00935)) - 20.) < 1e-8
+	, 'The enlarged disk ends at its angular radius and retains the integrated solar irradiance.'
+);
+
+$mist = ['bottom' => 100.,'top' => 120.,'density' => 5.,'color' => '#ff0000'];
+$upper = ['bottom' => 105.,'top' => 130.,'density' => 2.,'color' => '#0000ff'];
+$air = new Atmosphere($vacuum + ['layers' => [$mist,$upper]]);
+
 foreach([[0., .15], [110., .0948], [120., .0176], [130., 0.]] as [$eye,$tau])
-	$expect(abs($air->transmittance($eye,1,8)[0]-exp(-$tau)) < 1e-7,
-		'Vertical sunlight integrates the tapered density of thin and overlapping shells.');
-$horizonDistance = sqrt((120.-110.)*(2.*6371000+110.+120.));
-$air->setLayers([['density'=>.05]+$mist]);
+$expect(
+	abs($air->transmittance($eye, 1, 8)[0] - exp(-$tau)) < 1e-7
+	, 'Vertical sunlight integrates the tapered density of thin and overlapping shells.'
+);
+$horizonDistance = sqrt((120. - 110.) * (2. * 6371000 + 110. + 120.));
+$air->setLayers([['density' => .05] + $mist]);
 // Numerical reference along a curved, grazing ray, independent of the renderer's polynomial integral.
 $column = 0.;
-for($i=0; $i<2000; $i++) {
-	$d = ($i+.5)*$horizonDistance/2000;
-	$h = (hypot(6371000+110.,$d)-6371000-100.)/20.;
-	$column += 6*$h*(1-$h)*$horizonDistance/2000;
+
+for($i = 0; $i < 2000; $i++)
+{
+	$d = ($i + .5) * $horizonDistance / 2000;
+	$h = (hypot(6371000 + 110., $d) - 6371000 - 100.) / 20.;
+	$column += 6 * $h * (1 - $h) * $horizonDistance / 2000;
 }
-$expect(abs($air->transmittance(110.,0.,8)[0]-exp(-.00005*$column)) < 1e-6,
-	'The tapered horizontal column follows the curvature of its layer.');
-$below = new Atmosphere($vacuum + ['layers'=>[['bottom'=>-500.,'top'=>-100.,'density'=>1.]]]);
+
+$expect(
+	abs($air->transmittance(110., 0., 8)[0] - exp(-.00005 * $column)) < 1e-6
+	, 'The tapered horizontal column follows the curvature of its layer.'
+);
+
+$below = new Atmosphere($vacuum + ['layers' => [['bottom' => -500.,'top' => -100.,'density' => 1.]]]);
+
 foreach([[-600.,.4],[-500.,.4],[-300.,.2],[-100.,0.],[0.,0.]] as [$eye,$depth])
-	$expect(abs($below->transmittance($eye,1.,8)[0]-exp(-$depth)) < 2e-6,'Sunlight includes only the haze above the signed sample height.');
-$expect($air->transmittance(130.,1.) === [1.,1.,1.], 'Looking up above the mist leaves the ray clear.');
+$expect(
+	abs($below->transmittance($eye, 1., 8)[0] - exp(-$depth)) < 2e-6
+	, 'Sunlight includes only the haze above the signed sample height.'
+);
+$expect($air->transmittance(130., 1.) === [1.,1.,1.], 'Looking up above the mist leaves the ray clear.');
 $air->setLayers([$mist]);
 $air->setSun([1.,.6,0.]);
-$c = $air->sky([0.,1.,0.],0.,8);
+$c = $air->sky([0.,1.,0.], 0., 8);
 $expect($c[0] > .01 && $c[1] === 0. && $c[2] === 0., 'A 20-meter band between regular samples scatters its own color.');
-$generation = $air->transmittanceLut(8,4,8)['generation'];
+$generation = $air->transmittanceLut(8, 4, 8)['generation'];
 $mist['color'] = '#0000ff';
 $air->setLayers([$mist]);
-$c = $air->sky([0.,1.,0.],0.,8);
-$expect($air->transmittanceLut(8,4,8)['generation'] === $generation && $c[0] === 0. && $c[2] > .01,
-	'Recoloring changes sky radiance and reuses the direct-light texture.');
-$air->setLayers([['enabled'=>false]+$mist]);
-$expect($air->transmittanceLut(8,4,8)['generation'] > $generation && $air->transmittance(0.,1.) === [1.,1.,1.]
-	&& $air->layers()[0]['color'] === '#0000ff', 'Hiding a layer restores clear air and keeps its authored values.');
-foreach([[['top'=>0]], [['density'=>-1]], [['density'=>INF]], [['color'=>'orange']], array_fill(0,7,[])] as $invalid) {
+$c = $air->sky([0.,1.,0.], 0., 8);
+
+$expect(
+	$air->transmittanceLut(8, 4, 8)['generation'] === $generation && $c[0] === 0. && $c[2] > .01
+	, 'Recoloring changes sky radiance and reuses the direct-light texture.'
+);
+
+$air->setLayers([['enabled' => false] + $mist]);
+
+$expect(
+	$air->transmittanceLut(8, 4, 8)['generation'] > $generation && $air->transmittance(0., 1.) === [1.,1.,1.] && $air
+		->layers()[0]['color'] === '#0000ff'
+	, 'Hiding a layer restores clear air and keeps its authored values.'
+);
+
+foreach([
+	[
+		[
+			'top' => 0
+		]
+	]
+	, [
+		[
+			'density' => -1
+		]
+	]
+	, [
+		[
+			'density' => INF
+		]
+	]
+	, [
+		[
+			'color' => 'orange'
+		]
+	]
+	, array_fill(0, 7, [])
+] as $invalid)
+{
 	$before = $air->layers();
-	try { $air->setLayers($invalid); $expect(false,'Invalid atmosphere layers should fail'); }
-	catch(InvalidArgumentException) { $expect($before === $air->layers(),'Invalid layer edits preserve the previous atmosphere.'); }
+
+	try
+	{
+		$air->setLayers($invalid);
+		$expect(false, 'Invalid atmosphere layers should fail');
+	}
+	catch(InvalidArgumentException)
+	{
+		$expect($before === $air->layers(), 'Invalid layer edits preserve the previous atmosphere.');
+	}
 }
 
 // The sky's diffuse light on terrain comes from the model's own sky.
@@ -367,25 +423,40 @@ catch(InvalidArgumentException)
 
 $sky = new Atmosphere;
 $sky->setSun([1.,.04,0.]);
-$expect($sky->starVisibility()===0., 'Default field waits until sunset');
-$sky->stars = new TerrainPhonics\Starfield(200.,100.,0.);
-$expect($sky->starVisibility()>0. && $sky->uniforms()['nightVisibility']===0., 'Brighter stars appear before sunset while the ground stays daylit');
-$expect($sky->starsMoving(10.,9.) && !$sky->starsMoving(10.,10.), 'Visible twinkle uses simulation time');
+$expect($sky->starVisibility() === 0., 'Default field waits until sunset');
+$sky->stars = new TerrainPhonics\Starfield(200., 100., 0.);
+
+$expect(
+	$sky->starVisibility() > 0. && $sky->uniforms()['nightVisibility'] === 0.
+	, 'Brighter stars appear before sunset while the ground stays daylit'
+);
+
+$expect($sky->starsMoving(10., 9.) && !$sky->starsMoving(10., 10.), 'Visible twinkle uses simulation time');
 $sky->setSun([0.,1.,0.]);
-$expect(!$sky->starsMoving(10.,9.), 'A daylight view sleeps');
+$expect(!$sky->starsMoving(10., 9.), 'A daylight view sleeps');
 $sky->setSun([1.,-.25,0.]);
-$sky->stars = new TerrainPhonics\Starfield(0.,0.,6.);
-$starts=[];
-$previous=null;
-for($tick=0;$tick<6000;$tick++) {
-	$t=$tick*.01;
-	$event=$sky->stars->meteor($t);
-	if($event && !$previous) $starts[]=$event[0];
-	if(!$event && $previous) $expect($sky->starsMoving($t,$t-.01), 'Last visible meteor frame is erased');
-	$previous=$event;
+$sky->stars = new TerrainPhonics\Starfield(0., 0., 6.);
+$starts = [];
+$previous = null;
+
+for($tick = 0; $tick < 6000; $tick++)
+{
+	$t = $tick * .01;
+	$event = $sky->stars->meteor($t);
+
+	if($event && !$previous) $starts[] = $event[0];
+
+	if(!$event && $previous) $expect($sky->starsMoving($t, $t - .01), 'Last visible meteor frame is erased');
+
+	$previous = $event;
 }
-$expect($starts===range(0,5) && $sky->starVisibility()===0., 'Six meteors per minute independent of ordinary star brightness');
+
+$expect(
+	$starts === range(0, 5) && $sky->starVisibility() === 0.
+	, 'Six meteors per minute independent of ordinary star brightness'
+);
+
 $sky->stars = new TerrainPhonics\Starfield;
-$expect($sky->stars->meteor(1.)===null && !$sky->starsMoving(12.,11.), 'Default sky is steady between frames');
+$expect($sky->stars->meteor(1.) === null && !$sky->starsMoving(12., 11.), 'Default sky is steady between frames');
 
 echo "Atmosphere: {$checks} checks passed\n";

@@ -43,23 +43,38 @@ function terrainReject(callable $action, string $message): void
 }
 
 $noise = new Noise('terrain-tests');
+
 foreach(Recipe::PRESETS as $preset)
 {
-	$original = new Recipe(['preset'=>$preset]);
-	$shifted = new Recipe(['preset'=>$preset, 'noiseOffsetX'=>4051.125, 'noiseOffsetZ'=>-712.75]);
+	$original = new Recipe(['preset' => $preset]);
+	$shifted = new Recipe(['preset' => $preset, 'noiseOffsetX' => 4051.125, 'noiseOffsetZ' => -712.75]);
 	$r = $original->values();
 	terrainCheck($r['noiseOffsetX'] === 0.0 && $r['noiseOffsetZ'] === 0.0, 'Legacy presets default to zero offsets');
+
 	foreach([[0,0],[-23.5,77.125],[16384,-16384]] as [$x,$z])
 	{
-		$u = $x + 4051.125; $v = $z - 712.75;
-		terrainCheck($shifted->coarse($x,$z) === $original->coarse($u,$v), 'Macro height and derivatives translate together');
-		terrainCheck($shifted->height($x,$z) === $original->height($u,$v), 'Fine terrain translates with the macro field');
-		terrainCheck($shifted->regionalBounds([$x,$z,$x+8,$z+8]) === $original->regionalBounds([$u,$v,$u+8,$v+8]),
-			'Ray queries bound the translated field');
+		$u = $x + 4051.125;
+		$v = $z - 712.75;
+
+		terrainCheck(
+			$shifted->coarse($x, $z) === $original->coarse($u, $v)
+			, 'Macro height and derivatives translate together'
+		);
+
+		terrainCheck(
+			$shifted->height($x, $z) === $original->height($u, $v)
+			, 'Fine terrain translates with the macro field'
+		);
+
+		terrainCheck(
+			$shifted->regionalBounds([$x,$z,$x + 8,$z + 8]) === $original->regionalBounds([$u,$v,$u + 8,$v + 8])
+			, 'Ray queries bound the translated field'
+		);
 	}
 }
-terrainReject(fn()=>new Recipe(['noiseOffsetX'=>INF]), 'Non-finite noise offset rejected');
-terrainReject(fn()=>new Recipe(['noiseOffsetZ'=>-65000]), 'Out-of-range noise offset rejected');
+
+terrainReject(fn() => new Recipe(['noiseOffsetX' => INF]), 'Non-finite noise offset rejected');
+terrainReject(fn() => new Recipe(['noiseOffsetZ' => -65000]), 'Out-of-range noise offset rejected');
 
 $same = new Noise('terrain-tests');
 $other = new Noise('different');
@@ -278,72 +293,99 @@ foreach([.18, .92, 1.0] as $strength)
 foreach([-2, 0, 2] as $cycle)
 foreach(CanyonBeds::CONTACTS as $contact)
 {
-	$h = ($contact + 10*$cycle)*80;
-	[$height,$slope] = CanyonBeds::shape($h,80,$strength);
-	terrainNear($height,$h,1e-10,'stratal shelves stay at their material contact over multiple cycles');
-	terrainNear($slope,1-$strength,1e-10,'the two beds meet with a continuous shelf slope');
+	$h = ($contact + 10 * $cycle) * 80;
+	[$height,$slope] = CanyonBeds::shape($h, 80, $strength);
+	terrainNear($height, $h, 1e-10, 'stratal shelves stay at their material contact over multiple cycles');
+	terrainNear($slope, 1 - $strength, 1e-10, 'the two beds meet with a continuous shelf slope');
 }
 
-$section = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80]);
+$section = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1 / 4000,'terraceSpacing' => 80]);
 $cliffs = $shelves = 0;
 $spans = [];
+
 for($x = 80; $x <= 330; $x += 2)
 {
-	[$h,$dx,$dz] = $section->coarse($x,2000);
-	$incline = hypot($dx,$dz);
-	$bed = ($h - $x*CanyonBeds::DIP[0] - 2000*CanyonBeds::DIP[1])/80;
+	[$h,$dx,$dz] = $section->coarse($x, 2000);
+	$incline = hypot($dx, $dz);
+	$bed = ($h - $x * CanyonBeds::DIP[0] - 2000 * CanyonBeds::DIP[1]) / 80;
+
 	if($incline > 8) $cliffs++;
+
 	if($incline < .8 && $bed > -2.2 && $bed < 2.25)
 	{
 		foreach(CanyonBeds::CONTACTS as $contact)
-			if(abs($bed - $contact) < .09) $shelves++;
+		if(abs($bed - $contact) < .09) $shelves++;
 	}
+
 	foreach([[1,0,$dx],[0,1,$dz]] as [$ax,$az,$derivative])
 	{
 		$step = .0001;
-		$finite = ($section->coarse($x+$step*$ax,2000+$step*$az)[0]
-			- $section->coarse($x-$step*$ax,2000-$step*$az)[0])/(2*$step);
-		terrainNear($derivative,$finite,2e-6,'eroded canyon differentiates the retreat, bed strength and dip');
+		$finite = ($section->coarse($x + $step * $ax, 2000 + $step * $az)[0]
+			- $section->coarse($x - $step * $ax, 2000 - $step * $az)[0]
+		) / (2 * $step);
+
+		terrainNear($derivative, $finite, 2e-6, 'eroded canyon differentiates the retreat, bed strength and dip');
 	}
-	[$lo,$hi] = $section->regionalBounds([$x-1,1999,$x+1,2001]);
+
+	[$lo,$hi] = $section->regionalBounds([$x - 1,1999,$x + 1,2001]);
 	$spans[] = $hi - $lo;
-	foreach([[$x-1,1999],[$x,2000],[$x+1,2001]] as [$wx,$wz])
+
+	foreach([[$x - 1,1999],[$x,2000],[$x + 1,2001]] as [$wx,$wz])
 	{
-		$actual = $section->height($wx,$wz);
-		terrainCheck($actual >= $lo && $actual <= $hi,'canyon picking bounds enclose channel and shelf relief');
+		$actual = $section->height($wx, $wz);
+		terrainCheck($actual >= $lo && $actual <= $hi, 'canyon picking bounds enclose channel and shelf relief');
 	}
 }
-terrainCheck($cliffs >= 3 && $shelves >= 3, 'the sandbox section has steep faces and traversable shelves at bed contacts');
+
+terrainCheck(
+	$cliffs >= 3 && $shelves >= 3
+	, 'the sandbox section has steep faces and traversable shelves at bed contacts'
+);
+
 sort($spans);
 // Bounding erosion strength by its whole range, not by the gullies in the box, makes this median 31.9 m.
 terrainCheck($spans[63] < 26, 'canyon bounds follow the local erosion strength: median span ' . $spans[63]);
 
 // Without detail noise to hide an error, the bedded section must still enclose every height in a small box.
-$bare = new Recipe(['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80,
-	'detailAmplitude' => 0]);
+$bare = new Recipe([
+	'preset' => 'canyon'
+	, 'heightScale' => 650
+	, 'baseFrequency' => 1 / 4000
+	, 'terraceSpacing' => 80
+	, 'detailAmplitude' => 0
+]);
+
 $escaped = 0;
+
 for($i = 0; $i < 400; $i++)
 {
 	$x = 61.7 * $i - 12000;
 	$z = 9000 - 47.3 * $i;
 	$size = 1 + $i % 6;
-	[$lo,$hi] = $bare->regionalBounds([$x,$z,$x+$size,$z+$size]);
+	[$lo,$hi] = $bare->regionalBounds([$x,$z,$x + $size,$z + $size]);
+
 	for($j = 0; $j < 16; $j++)
 	{
 		$actual = $bare->height($x + $size * ($j % 4) / 3, $z + $size * intdiv($j, 4) / 3);
+
 		if($actual < $lo || $actual > $hi) $escaped++;
 	}
 }
+
 terrainCheck($escaped === 0, "bare canyon bounds enclose the bedded section: $escaped of 6400 heights escaped");
 
-$savedCanyon = new Landscape(['preset'=>'canyon','terraceSpacing'=>80]);
+$savedCanyon = new Landscape(['preset' => 'canyon','terraceSpacing' => 80]);
 $document = json_decode($savedCanyon->save(), true, flags: JSON_THROW_ON_ERROR);
 terrainCheck($document['recipe']['version'] === 2, 'new canyon records its bedded recipe');
 $reloaded = Landscape::load(json_encode($document, JSON_THROW_ON_ERROR));
-terrainNear($savedCanyon->height(182,3000),$reloaded->height(182,3000),0,'new canyon replays exactly');
+terrainNear($savedCanyon->height(182, 3000), $reloaded->height(182, 3000), 0, 'new canyon replays exactly');
 unset($document['recipe']['version']);
 $legacy = Landscape::load(json_encode($document, JSON_THROW_ON_ERROR));
-terrainCheck($legacy->recipe()['version'] === 1, 'older documents without a recipe version reopen on the original surface');
+
+terrainCheck(
+	$legacy->recipe()['version'] === 1
+	, 'older documents without a recipe version reopen on the original surface'
+);
 
 $roughWall = new Recipe(['preset' => 'canyon', 'detailOctaves' => 1, 'damping' => 0]);
 $dampedWall = new Recipe(['preset' => 'canyon', 'detailOctaves' => 1]);
@@ -433,6 +475,7 @@ function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
 	$f = $r['baseFrequency'];
 	$layered = $r['preset'] === 'canyon' && $r['version'] === 2
 		&& $r['terraceSpacing'] > 0 && $r['terraceStrength'] > 0;
+
 	$wallStart = .055;
 	$wallWidth = .006;
 
@@ -442,7 +485,7 @@ function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
 		$wallWidth += .105 * $r['terraceStrength'];
 	}
 
-	$datum = $layered ? CanyonBeds::DIP[0]*$x + CanyonBeds::DIP[1]*$z : 0;
+	$datum = $layered ? CanyonBeds::DIP[0] * $x + CanyonBeds::DIP[1] * $z : 0;
 	$jacobian = [1.0,0.0,0.0,1.0];
 
 	if($r['warpAmplitude'] > 0)
@@ -477,26 +520,26 @@ function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
 
 		if($layered)
 		{
-			$ef = 22*$f;
-			$erosion = $noise->sample($x*$ef+43.7, $z*$ef-81.3);
-			$retreat = .029*$r['terraceStrength'];
-			$distance -= $retreat*$erosion[0];
-			$erosionX = $retreat*$erosion[1]*$ef;
-			$erosionZ = $retreat*$erosion[2]*$ef;
+			$ef = 22 * $f;
+			$erosion = $noise->sample($x * $ef + 43.7, $z * $ef - 81.3);
+			$retreat = .029 * $r['terraceStrength'];
+			$distance -= $retreat * $erosion[0];
+			$erosionX = $retreat * $erosion[1] * $ef;
+			$erosionZ = $retreat * $erosion[2] * $ef;
 
-			$channel = max(0.0,min(1.0,($erosion[0]+.13)/.62));
-			$strength = $r['terraceStrength']*(1-.80*Noise::fade($channel));
-			$ds = -$r['terraceStrength']*.80*30*$channel**2*($channel-1)**2/.62*$ef;
-			$strengthX = $ds*($erosion[1]*$jacobian[0]+$erosion[2]*$jacobian[2]);
-			$strengthZ = $ds*($erosion[1]*$jacobian[1]+$erosion[2]*$jacobian[3]);
+			$channel = max(0.0, min(1.0, ($erosion[0] + .13) / .62));
+			$strength = $r['terraceStrength'] * (1 - .80 * Noise::fade($channel));
+			$ds = -$r['terraceStrength'] * .80 * 30 * $channel ** 2 * ($channel - 1) ** 2 / .62 * $ef;
+			$strengthX = $ds * ($erosion[1] * $jacobian[0] + $erosion[2] * $jacobian[2]);
+			$strengthZ = $ds * ($erosion[1] * $jacobian[1] + $erosion[2] * $jacobian[3]);
 		}
 
 		$wall = max(0.0, min(1.0, $distance / $wallWidth));
 		$value = -.55 + Noise::fade($wall) + .15 * $b[0];
 		$factor = 30 * $wall * $wall * ($wall - 1) ** 2 / $wallWidth;
 
-		$dx = $sign*$factor*$a[1]*$f - $factor*$erosionX + .3*$b[1]*$f;
-		$dz = $sign*$factor*$a[2]*$f - $factor*$erosionZ + .3*$b[2]*$f;
+		$dx = $sign * $factor * $a[1] * $f - $factor * $erosionX + .3 * $b[1] * $f;
+		$dz = $sign * $factor * $a[2] * $f - $factor * $erosionZ + .3 * $b[2] * $f;
 	}
 	else
 	{
@@ -518,8 +561,8 @@ function terrainRecipeByCalls(array $r, Noise $noise, float $x, float $z): array
 		[$relative,$factor,$displacement] = terrainBedsByCalls($height - $datum, $r['terraceSpacing'], $strength);
 		$height = $relative + $datum;
 
-		$dx = $factor * $dx + (1 - $factor) * CanyonBeds::DIP[0] + $displacement*$strengthX;
-		$dz = $factor * $dz + (1 - $factor) * CanyonBeds::DIP[1] + $displacement*$strengthZ;
+		$dx = $factor * $dx + (1 - $factor) * CanyonBeds::DIP[0] + $displacement * $strengthX;
+		$dz = $factor * $dz + (1 - $factor) * CanyonBeds::DIP[1] + $displacement * $strengthZ;
 	}
 	elseif($r['terraceSpacing'] > 0 && $r['terraceStrength'] > 0)
 	{
@@ -565,7 +608,9 @@ $expandedForms = [
 	, 'mountain' => ['preset' => 'mountain', 'heightScale' => 1400, 'baseFrequency' => 1 / 2200]
 
 	, 'bedded canyon' => [
-		'preset' => 'canyon', 'heightScale' => 650, 'baseFrequency' => 1 / 4000
+		'preset' => 'canyon'
+		, 'heightScale' => 650
+		, 'baseFrequency' => 1 / 4000
 		, 'terraceSpacing' => 80
 	]
 
@@ -735,12 +780,17 @@ terrainCheck($edited->sample(0, 0)['material'] === null, 'material erasure survi
 $edited->queue(['type' => 'smooth','x' => 0,'z' => 0,'radius' => 8,'amount' => 1]);
 $edited->commit();
 terrainCheck(is_finite($edited->height(0, 0)), 'smoothing evaluates previous stage without recursion cycles');
-$smoothedHeight = $edited->height(.3,-.8);
+$smoothedHeight = $edited->height(.3, -.8);
 $smoothedCopy = Landscape::load($edited->save());
 $smoothedFork = $smoothedCopy->fork();
-terrainCheck($smoothedCopy->height(.3,-.8) === $smoothedHeight && $smoothedFork->height(.3,-.8) === $smoothedHeight,
-	'Saved and forked terrain preserves neighbor evaluation for smoothing.');
-$smoothedCopy->close(); $smoothedFork->close();
+
+terrainCheck(
+	$smoothedCopy->height(.3, -.8) === $smoothedHeight && $smoothedFork->height(.3, -.8) === $smoothedHeight
+	, 'Saved and forked terrain preserves neighbor evaluation for smoothing.'
+);
+
+$smoothedCopy->close();
+$smoothedFork->close();
 
 $edited->queue(['type' => 'crater','x' => 20,'z' => 20,'radius' => 5,'amount' => 7]);
 $edited->commit();
@@ -812,258 +862,475 @@ terrainCheck($road->sample(.3, 3.7) === $roadReloaded->sample(.3, 3.7), 'road ac
 terrainCheck(!str_contains($road->save(), '_road'), 'persistent roads omit derived spatial indexes');
 
 // A long spline remains one record. Abandoning a partial preparation cannot expose half a road.
-$long = new Landscape(['worldSize'=>32768,'heightScale'=>0.,'detailAmplitude'=>0.]);
-$highway = ['type'=>'road','points'=>[[-12000,8,0],[0,12,80],[12000,8,0]],'width'=>9.,'shoulder'=>2.];
+$long = new Landscape(['worldSize' => 32768,'heightScale' => 0.,'detailAmplitude' => 0.]);
+$highway = ['type' => 'road','points' => [[-12000,8,0],[0,12,80],[12000,8,0]],'width' => 9.,'shoulder' => 2.];
 $abandoned = $long->queueSteps($highway);
-$abandoned->valid(); unset($abandoned);
-terrainCheck(!$long->commit() && !$long->roads(),'An interrupted road leaves no staged fragments');
+$abandoned->valid();
+unset($abandoned);
+terrainCheck(!$long->commit() && !$long->roads(), 'An interrupted road leaves no staged fragments');
 $other = $long->fork();
 $stale = $other->queueSteps($highway);
 $stale->valid();
-$other->queue(['type'=>'raise','x'=>0,'z'=>0,'radius'=>8,'amount'=>1]);
+$other->queue(['type' => 'raise','x' => 0,'z' => 0,'radius' => 8,'amount' => 1]);
 $other->commit();
-try { iterator_count($stale); terrainCheck(false,'An old road job cannot stage into a new revision'); }
-catch(LogicException $error) { terrainCheck(!$other->commit() && !$other->roads(),'Concurrent publication leaves the road job unstaged'); }
+
+try
+{
+	iterator_count($stale);
+	terrainCheck(false, 'An old road job cannot stage into a new revision');
+}
+catch(LogicException $error)
+{
+	terrainCheck(!$other->commit() && !$other->roads(), 'Concurrent publication leaves the road job unstaged');
+}
+
 $other->close();
 $building = $long->queueSteps($highway);
-terrainCheck(iterator_count($building)>20 && $long->commit(),'Long road yields across many preparation slices');
-terrainCheck(count($long->roads()[0]['_road']['samples'])>4096 && count($long->roadRecords())===1,
-	'More than 4096 samples belong to the same editable spline');
-$long->queue(['type'=>'road','points'=>[[-80,0,8000],[80,0,8000]],'width'=>8.]); $long->commit();
-$cache = [];
-$firstAtlas = TerrainPhonics\RoadAtlas::build($long->roads(),32768.,$cache);
-$copyRoad = $long->fork();
-$copyRoad->queue(['replaceAt'=>1,'crown'=>.3]+$copyRoad->roadRecords()[1]); $copyRoad->commit();
-$secondAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(),32768.,$cache);
-terrainCheck($firstAtlas['rebuilt']===2 && $secondAtlas['rebuilt']===1 && count($cache)===2,
-	'Changing one road reuses the other overlay');
-$plainAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(),32768.);
-terrainCheck($secondAtlas['bytes']===$plainAtlas['bytes'],'Cached overlays compose exactly like a cold build');
-$copyRoad->queue(['replaceAt'=>0,'crown'=>.4]+$highway); $copyRoad->commit();
-terrainCheck($long->changedRegion($copyRoad)[3]>8000,'Multiple changes include both footprints');
-$single = $long->fork(); $single->queue(['replaceAt'=>0,'crown'=>.2]+$highway); $single->commit();
-terrainCheck($long->changedRegion($single)[3]<200,'An untouched later road retains its painted terrain tiles');
-$single->undo(); $single->redo();
-$reloadedLong = Landscape::load($single->save());
-terrainCheck($single->roadRecords()===$reloadedLong->roadRecords() && $single->paintTexel(0,80)===$reloadedLong->paintTexel(0,80),
-	'One undo, redo and save round trip preserve the complete long road and its stripe');
-$single->close(); $reloadedLong->close(); $copyRoad->close(); $long->close();
-unset($firstAtlas,$secondAtlas,$plainAtlas,$cache);
+terrainCheck(iterator_count($building) > 20 && $long->commit(), 'Long road yields across many preparation slices');
 
-$zeroRoad = ['type'=>'road','points'=>[[-46,1,-32],[0,1,35]],
-	'handles'=>[['out'=>[3.5,-0.0,4.]],null]];
+terrainCheck(
+	count($long->roads()[0]['_road']['samples']) > 4096 && count($long->roadRecords()) === 1
+	, 'More than 4096 samples belong to the same editable spline'
+);
+
+$long->queue(['type' => 'road','points' => [[-80,0,8000],[80,0,8000]],'width' => 8.]);
+$long->commit();
+$cache = [];
+$firstAtlas = TerrainPhonics\RoadAtlas::build($long->roads(), 32768., $cache);
+$copyRoad = $long->fork();
+$copyRoad->queue(['replaceAt' => 1,'crown' => .3] + $copyRoad->roadRecords()[1]);
+$copyRoad->commit();
+$secondAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(), 32768., $cache);
+
+terrainCheck(
+	$firstAtlas['rebuilt'] === 2 && $secondAtlas['rebuilt'] === 1 && count($cache) === 2
+	, 'Changing one road reuses the other overlay'
+);
+
+$plainAtlas = TerrainPhonics\RoadAtlas::build($copyRoad->roads(), 32768.);
+terrainCheck($secondAtlas['bytes'] === $plainAtlas['bytes'], 'Cached overlays compose exactly like a cold build');
+$copyRoad->queue(['replaceAt' => 0,'crown' => .4] + $highway);
+$copyRoad->commit();
+terrainCheck($long->changedRegion($copyRoad)[3] > 8000, 'Multiple changes include both footprints');
+$single = $long->fork();
+$single->queue(['replaceAt' => 0,'crown' => .2] + $highway);
+$single->commit();
+terrainCheck($long->changedRegion($single)[3] < 200, 'An untouched later road retains its painted terrain tiles');
+$single->undo();
+$single->redo();
+$reloadedLong = Landscape::load($single->save());
+
+terrainCheck(
+	$single->roadRecords() === $reloadedLong->roadRecords() && $single->paintTexel(0, 80) === $reloadedLong->paintTexel(
+		0
+		, 80
+	)
+	, 'One undo, redo and save round trip preserve the complete long road and its stripe'
+);
+
+$single->close();
+$reloadedLong->close();
+$copyRoad->close();
+$long->close();
+unset($firstAtlas, $secondAtlas, $plainAtlas, $cache);
+
+$zeroRoad = [
+	'type' => 'road'
+	, 'points' => [[-46,1,-32],[0,1,35]]
+	, 'handles' => [['out' => [3.5,-0.0,4.]],null]
+];
+
 $zeroCache = [];
 $minus = TerrainPhonics\Edits::normalize($zeroRoad);
-TerrainPhonics\RoadAtlas::build([$minus],256.,$zeroCache);
+TerrainPhonics\RoadAtlas::build([$minus], 256., $zeroCache);
 $zeroRoad['handles'][0]['out'][1] = 0;
 $plus = TerrainPhonics\Edits::normalize($zeroRoad);
-terrainCheck(TerrainPhonics\RoadAtlas::build([$plus],256.,$zeroCache)['rebuilt']===0,
-	'JSON round trips that discard a handle’s negative zero retain its painted overlay');
+
+terrainCheck(
+	TerrainPhonics\RoadAtlas::build([$plus], 256., $zeroCache)['rebuilt'] === 0
+	, 'JSON round trips that discard a handle’s negative zero retain its painted overlay'
+);
 
 // Splitting a painted straightaway into editable sections must produce exactly the same ink.
-$section = ['type'=>'road','width'=>12.,'shoulder'=>8.];
+$section = ['type' => 'road','width' => 12.,'shoulder' => 8.];
 $whole = new Landscape($flatRecipe);
-$whole->queue($section+['points'=>[[-48,0,0],[48,0,0]]]); $whole->commit();
-foreach([false,true] as $reverseOrder) {
+$whole->queue($section + ['points' => [[-48,0,0],[48,0,0]]]);
+$whole->commit();
+
+foreach([false,true] as $reverseOrder)
+{
 	$parts = [[[-48,0,0],[0,0,0]],[[0,0,0],[48,0,0]]];
 	$split = new Landscape($flatRecipe);
-	foreach($reverseOrder ? array_reverse($parts) : $parts as $points) $split->queue($section+compact('points'));
+
+	foreach($reverseOrder ? array_reverse($parts) : $parts as $points) $split->queue($section + compact('points'));
 	$split->commit();
-	foreach(range(-11,11) as $x) foreach([-7.,-5.65,0.,5.65,7.] as $z)
-		terrainCheck($split->paintTexel($x,$z) === $whole->paintTexel($x,$z),
-			"Center dashes, shoulder stripes and outer clipping continue through the section join at $x,$z");
+
+	foreach(range(-11, 11) as $x)
+	foreach([-7.,-5.65,0.,5.65,7.] as $z)
+	terrainCheck(
+		$split->paintTexel($x, $z) === $whole->paintTexel($x, $z)
+		, "Center dashes, shoulder stripes and outer clipping continue through the section join at $x
+			, $z"
+	);
 	$restoredSplit = Landscape::load($split->save());
-	terrainCheck($restoredSplit->paintTexel(-3,0) === $whole->paintTexel(-3,0),'Loading rebuilds joined pavement');
+	terrainCheck($restoredSplit->paintTexel(-3, 0) === $whole->paintTexel(-3, 0), 'Loading rebuilds joined pavement');
 	$restoredSplit->close();
-	$split->queue(['type'=>'material','x'=>0,'z'=>0,'radius'=>4,'material'=>'road']); $split->commit();
-	terrainCheck($split->paintTexel(0,0) === pack('C4',5,0,0,0),'Brush paint still covers a joined centerline');
-	$split->undo(); $split->undo(); $split->redo();
-	terrainCheck($split->paintTexel(3,0) === $whole->paintTexel(3,0),'Redo restores connected sections');
+	$split->queue(['type' => 'material','x' => 0,'z' => 0,'radius' => 4,'material' => 'road']);
+	$split->commit();
+	terrainCheck($split->paintTexel(0, 0) === pack('C4', 5, 0, 0, 0), 'Brush paint still covers a joined centerline');
+	$split->undo();
+	$split->undo();
+	$split->redo();
+	terrainCheck($split->paintTexel(3, 0) === $whole->paintTexel(3, 0), 'Redo restores connected sections');
 	$split->close();
 }
+
 // The later grading shoulder used to clip the neighboring pavement at a shallow fork.
-$arms=[
-	[[-160,0,0],[0,0,0]],
-	[[0,0,0],[40,0,-4],[80,0,-16],[160,0,-56]],
-	[[0,0,0],[40,0,4],[80,0,16],[160,0,56]],
+$arms = [
+	[[-160,0,0],[0,0,0]]
+	, [[0,0,0],[40,0,-4],[80,0,-16],[160,0,-56]]
+	, [[0,0,0],[40,0,4],[80,0,16],[160,0,56]]
 ];
-$floors=[];
-foreach([[0,1,2],[2,1,0]] as $order) {
-	$fork=new Landscape(['worldSize'=>512,'heightScale'=>0,'detailAmplitude'=>0]);
-	foreach($order as $id) $fork->queue(['type'=>'road','width'=>$id===2 ? 24 : 28,
-		'shoulder'=>18,'stationSpacing'=>7,'points'=>$arms[$id]]);
+
+$floors = [];
+
+foreach([[0,1,2],[2,1,0]] as $order)
+{
+	$fork = new Landscape(['worldSize' => 512,'heightScale' => 0,'detailAmplitude' => 0]);
+
+	foreach($order as $id)
+	$fork->queue([
+		'type' => 'road'
+		, 'width' => $id === 2 ? 24 : 28
+		, 'shoulder' => 18
+		, 'stationSpacing' => 7
+		, 'points' => $arms[$id]
+	]);
 	$fork->commit();
-	$roads=$fork->roads(); $ink='';
-	for($x=-36;$x<=128;$x+=2) for($z=-48;$z<=48;$z+=2) {
-		$tex=$fork->paintTexel($x,$z);
-		$ink.=$tex;
-		$code=(ord($tex[1])<<16)|(ord($tex[2])<<8)|ord($tex[3]);
-		$d=abs(($code>>12)-2048)/1024.;
-		$paved=ord($tex[0])===5 && (!$code || $d<=1.);
-		if(abs($d-1.)>.001) terrainCheck($paved===TerrainPhonics\Edits::onRoad($x,$z,$roads),
-			"Fork pavement follows the combined road widths at $x,$z");
+	$roads = $fork->roads();
+	$ink = '';
+
+	for($x = -36; $x <= 128; $x += 2)
+	for($z = -48; $z <= 48; $z += 2)
+	{
+		$tex = $fork->paintTexel($x, $z);
+		$ink .= $tex;
+		$code = (ord($tex[1]) << 16) | (ord($tex[2]) << 8) | ord($tex[3]);
+		$d = abs(($code >> 12) - 2048) / 1024.;
+		$paved = ord($tex[0]) === 5 && (!$code || $d <= 1.);
+
+		if(abs($d - 1.) > .001)
+		terrainCheck(
+			$paved === TerrainPhonics\Edits::onRoad($x, $z, $roads)
+			, "Fork pavement follows the combined road widths at $x,$z"
+		);
 	}
-	$floors[]=$ink;
-	$fork->queue(['type'=>'material','material'=>'grass','radius'=>10,'x'=>10,'z'=>0]); $fork->commit();
-	terrainCheck($fork->paintTexel(10,0)===pack('C4',2,0,0,0),'A later paint brush covers the shared junction');
+
+	$floors[] = $ink;
+	$fork->queue(['type' => 'material','material' => 'grass','radius' => 10,'x' => 10,'z' => 0]);
+	$fork->commit();
+	terrainCheck($fork->paintTexel(10, 0) === pack('C4', 2, 0, 0, 0), 'A later paint brush covers the shared junction');
 	$fork->undo();
-	$restoredFork=Landscape::load($fork->save());
-	terrainCheck($fork->paintTexel(10,0)===$restoredFork->paintTexel(10,0),'Saved forks rebuild the same union');
+	$restoredFork = Landscape::load($fork->save());
+	terrainCheck($fork->paintTexel(10, 0) === $restoredFork->paintTexel(10, 0), 'Saved forks rebuild the same union');
 	$restoredFork->close();
 	$fork->close();
 }
-terrainCheck($floors[0]===$floors[1],'Reordering the three arms preserves their outline and paint');
+
+terrainCheck($floors[0] === $floors[1], 'Reordering the three arms preserves their outline and paint');
 
 // Two arms split at one node and rejoin at another. Reverse one arm so
 // neither the edit order nor the direction of its control points defines the dash.
-$junctionRoads=[
-	[[-100,0,0],[0,0,0]],
-	[[0,0,0],[40,0,-8],[80,0,-28],[140,0,-8],[180,0,0]],
-	[[180,0,0],[140,0,8],[80,0,28],[40,0,8],[0,0,0]],
-	[[180,0,0],[250,0,0]]
+$junctionRoads = [
+	[[-100,0,0],[0,0,0]]
+	, [[0,0,0],[40,0,-8],[80,0,-28],[140,0,-8],[180,0,0]]
+	, [[180,0,0],[140,0,8],[80,0,28],[40,0,8],[0,0,0]]
+	, [[180,0,0],[250,0,0]]
 ];
-$network=new Landscape(['worldSize'=>512,'heightScale'=>0,'detailAmplitude'=>0]);
-foreach($junctionRoads as $points) $network->queue($section+compact('points'));
+
+$network = new Landscape(['worldSize' => 512,'heightScale' => 0,'detailAmplitude' => 0]);
+
+foreach($junctionRoads as $points) $network->queue($section + compact('points'));
 $network->commit();
-foreach($network->roads() as $id=>$op) {
-	$r=$op['_road'];
-	$last=array_key_last($r['samples']);
-	foreach([0,$last] as $i) {
-		[$x,,$z]=$r['samples'][$i];
-		if($x!==0. && $x!==180.) continue;
-		terrainNear(TerrainPhonics\RoadMarkings::station($r,$i),TerrainPhonics\RoadMarkings::DASH_METERS/2,
-			1e-8,"Arm $id shares a dash midpoint at the junction at $x");
+
+foreach($network->roads() as $id => $op)
+{
+	$r = $op['_road'];
+	$last = array_key_last($r['samples']);
+
+	foreach([0,$last] as $i)
+	{
+		[$x,,$z] = $r['samples'][$i];
+
+		if($x !== 0. && $x !== 180.) continue;
+
+		terrainNear(
+			TerrainPhonics\RoadMarkings::station($r, $i)
+			, TerrainPhonics\RoadMarkings::DASH_METERS / 2
+			, 1e-8
+			, "Arm $id shares a dash midpoint at the junction at $x"
+		);
 	}
+
 	// Sample the baked paint along each physical centerline, through both
 	// junction aprons. A missing phase produces a long unbroken dash or gap.
-	$previous=null; $run=0.; $changes=0;
-	for($i=1;$i<=$last;$i++) {
-		[$ax,,$az]=$r['samples'][$i-1]; [$bx,,$bz]=$r['samples'][$i];
-		$length=hypot($bx-$ax,$bz-$az); $steps=max(1,(int)ceil($length/.25));
-		for($k=0;$k<$steps;$k++) {
-			$x=$ax+($bx-$ax)*$k/$steps; $z=$az+($bz-$az)*$k/$steps;
-			$texel=$network->paintTexel($x,$z);
-			$code=(ord($texel[1])<<16)|(ord($texel[2])<<8)|ord($texel[3]);
-			terrainCheck(ord($texel[0])===5 && ($code>>12)===2048,"Arm $id retains its physical center at $x,$z");
-			$dash=($code&63)<32;
-			if($previous!==$dash) { $run=0.; $previous=$dash; $changes++; }
-			$run+=$length/$steps;
-			terrainCheck($run<3.6,"Arm $id has a long dash or gap at $x,$z");
+	$previous = null;
+	$run = 0.;
+	$changes = 0;
+
+	for($i = 1; $i <= $last; $i++)
+	{
+		[$ax,,$az] = $r['samples'][$i - 1];
+		[$bx,,$bz] = $r['samples'][$i];
+		$length = hypot($bx - $ax, $bz - $az);
+		$steps = max(1, (int)ceil($length / .25));
+
+		for($k = 0; $k < $steps; $k++)
+		{
+			$x = $ax + ($bx - $ax) * $k / $steps;
+			$z = $az + ($bz - $az) * $k / $steps;
+			$texel = $network->paintTexel($x, $z);
+			$code = (ord($texel[1]) << 16) | (ord($texel[2]) << 8) | ord($texel[3]);
+			terrainCheck(ord($texel[0]) === 5 && ($code >> 12) === 2048, "Arm $id retains its physical center at $x,$z");
+			$dash = ($code & 63) < 32;
+
+			if($previous !== $dash)
+			{
+				$run = 0.;
+				$previous = $dash;
+				$changes++;
+			}
+
+			$run += $length / $steps;
+			terrainCheck($run < 3.6, "Arm $id has a long dash or gap at $x,$z");
 		}
 	}
-	terrainCheck($changes>15,"Dashes alternate along arm $id");
+
+	terrainCheck($changes > 15, "Dashes alternate along arm $id");
 }
+
 $network->close();
 // Detaching an endpoint invalidates its former neighbor, including cached cap ink.
 $split = new Landscape($flatRecipe);
-foreach($parts as $points) $split->queue($section+compact('points'));
+
+foreach($parts as $points) $split->queue($section + compact('points'));
 $split->commit();
 $detached = $split->fork();
-$detached->queue(['replaceAt'=>1,'points'=>[[0,0,35],[48,0,35]]]+$section); $detached->commit();
-terrainCheck($detached->paintTexel(3,0) === pack('C4',5,0,0,0) && $split->paintTexel(3,0) === $whole->paintTexel(3,0),
-	'Detaching a road restores its open cap while the source landscape retains the join');
+$detached->queue(['replaceAt' => 1,'points' => [[0,0,35],[48,0,35]]] + $section);
+$detached->commit();
+
+terrainCheck(
+	$detached->paintTexel(3, 0) === pack('C4', 5, 0, 0, 0) && $split->paintTexel(3, 0) === $whole->paintTexel(3, 0)
+	, 'Detaching a road restores its open cap while the source landscape retains the join'
+);
+
 $cache = [];
-TerrainPhonics\RoadAtlas::build($split->roads(),256.,$cache);
-terrainCheck(TerrainPhonics\RoadAtlas::build($detached->roads(),256.,$cache)['bytes'] ===
-	TerrainPhonics\RoadAtlas::build($detached->roads(),256.)['bytes'],'A cached former neighbor drops its continuation');
-$detached->close(); $split->close();
+TerrainPhonics\RoadAtlas::build($split->roads(), 256., $cache);
+
+terrainCheck(
+	TerrainPhonics\RoadAtlas::build($detached->roads(), 256., $cache)['bytes'] === TerrainPhonics\RoadAtlas::build(
+		$detached->roads()
+		, 256.
+	)['bytes']
+	, 'A cached former neighbor drops its continuation'
+);
+
+$detached->close();
+$split->close();
 $whole->close();
 
 // Regrading a saved road moves its original footprint and keeps subsequent paint above it.
 $routes = new Landscape($flatRecipe);
-$line = ['type'=>'road', 'points'=>[[-32,6,0],[32,6,0]], 'width'=>12, 'shoulder'=>2];
+$line = ['type' => 'road', 'points' => [[-32,6,0],[32,6,0]], 'width' => 12, 'shoulder' => 2];
 $routes->queue($line);
 $routes->commit();
-terrainCheck(json_decode($routes->save(),true)['version'] === 1, 'Automatic roads keep the original file format');
-foreach([[0.,0.,32.],[2.,2.,34.],[8.,-2.,40.]] as [$x,$z,$along]) {
-	$routes->material($x,$z,$offset,$mark);
-	terrainNear($offset[1],$z,1e-9,'Center offset stays in world axes');
-	terrainNear($mark[0],$z,1e-9,'Marking measures signed distance across the road');
-	terrainNear($mark[1],$along,1e-8,'Marking measures distance from the start through successive spline samples');
-	terrainNear($mark[2],6.,1e-9,'Marking carries the authored half-width to locate both edge stripes');
+terrainCheck(json_decode($routes->save(), true)['version'] === 1, 'Automatic roads keep the original file format');
+
+foreach([[0.,0.,32.],[2.,2.,34.],[8.,-2.,40.]] as [$x,$z,$along])
+{
+	$routes->material($x, $z, $offset, $mark);
+	terrainNear($offset[1], $z, 1e-9, 'Center offset stays in world axes');
+	terrainNear($mark[0], $z, 1e-9, 'Marking measures signed distance across the road');
+	terrainNear($mark[1], $along, 1e-8, 'Marking measures distance from the start through successive spline samples');
+	terrainNear($mark[2], 6., 1e-9, 'Marking carries the authored half-width to locate both edge stripes');
 	$code = TerrainPhonics\RoadAtlas::markCode([$z,$along,6.]);
-	terrainCheck($routes->paintTexel($x,$z) === pack('C4',5,$code>>16,($code>>8)&255,$code&255),
-		'Paint atlas carries the same dash phase as the patch mesh');
+
+	terrainCheck(
+		$routes->paintTexel($x, $z) === pack('C4', 5, $code >> 16, ($code >> 8) & 255, $code & 255)
+		, 'Paint atlas carries the same dash phase as the patch mesh'
+	);
 }
+
 // The outer vertices of an edge triangle need coordinates while their material stays procedural.
-terrainCheck($routes->material(0.,9.,$offset,$mark) === null && $offset === null && $mark[0] === 9.,
-	'Edge interpolation does not widen the pavement or mark the material as painted');
-terrainCheck($routes->paintTexel(0.,16.) === pack('C4',0,0,0,0),'Bare ground beyond the road keeps an empty ink texel');
-terrainCheck($routes->paintTexel(34.,0.) === pack('C4',5,0,0,0),'The stripe stops at the last control point');
-$routes->queue(['type'=>'material','x'=>0,'z'=>18,'radius'=>3,'material'=>'road']);
+terrainCheck(
+	$routes->material(0., 9., $offset, $mark) === null && $offset === null && $mark[0] === 9.
+	, 'Edge interpolation does not widen the pavement or mark the material as painted'
+);
+
+terrainCheck(
+	$routes->paintTexel(0., 16.) === pack('C4', 0, 0, 0, 0)
+	, 'Bare ground beyond the road keeps an empty ink texel'
+);
+
+terrainCheck($routes->paintTexel(34., 0.) === pack('C4', 5, 0, 0, 0), 'The stripe stops at the last control point');
+$routes->queue(['type' => 'material','x' => 0,'z' => 18,'radius' => 3,'material' => 'road']);
 $routes->commit();
-$revised = ['points'=>[[-32,8,0],[32,8,0]], 'handles'=>[['out'=>[16,0,24]],['in'=>[-16,0,24]]],
-	'banks'=>[.12,-.12],'endBlend'=>3.,'replaceAt'=>0] + $line;
+$revised = [
+	'points' => [[-32,8,0],[32,8,0]]
+	, 'handles' => [['out' => [16,0,24]],['in' => [-16,0,24]]]
+	, 'banks' => [.12,-.12]
+	, 'endBlend' => 3.
+	, 'replaceAt' => 0
+] + $line;
+
 $routes->queue($revised);
 $routes->commit();
-terrainCheck(count($routes->roadRecords()) === 1 && $routes->material(0,0) === null, 'Moving a curve clears its old footprint');
-terrainNear($routes->height(0,0),0.,1e-9,'Old elevation is restored after moving a road');
-terrainNear($routes->height(0,18),8.,.10,'Both horizontal handles control the new grade');
-terrainCheck($routes->paintTexel(0,18) === pack('C4',5,0,0,0),'Solid paint applied after a road covers the stripe');
-terrainReject(fn()=>$routes->queue(['replaceAt'=>1]+$line),'A replacement cannot overwrite a later paint edit');
-terrainReject(fn()=>$routes->queue(['replaceAt'=>3]+$line),'A replacement cannot create a missing road');
-terrainReject(fn()=>$routes->queue(['handles'=>[['out'=>[0,1]]]]+$line),'Road handle dimensions and count are validated');
+
+terrainCheck(
+	count($routes->roadRecords()) === 1 && $routes->material(0, 0) === null
+	, 'Moving a curve clears its old footprint'
+);
+
+terrainNear($routes->height(0, 0), 0., 1e-9, 'Old elevation is restored after moving a road');
+terrainNear($routes->height(0, 18), 8., .10, 'Both horizontal handles control the new grade');
+
+terrainCheck(
+	$routes->paintTexel(0, 18) === pack('C4', 5, 0, 0, 0)
+	, 'Solid paint applied after a road covers the stripe'
+);
+
+terrainReject(fn() => $routes->queue(['replaceAt' => 1] + $line), 'A replacement cannot overwrite a later paint edit');
+terrainReject(fn() => $routes->queue(['replaceAt' => 3] + $line), 'A replacement cannot create a missing road');
+
+terrainReject(fn() => $routes->queue([
+	'handles' => [['out' => [0,1]]]
+] + $line
+), 'Road handle dimensions and count are validated'
+);
+
 $routes->undo();
 $oldFile = $routes->save();
-terrainCheck(json_decode($oldFile,true)['version'] === 2, 'Redo history retains explicit handles in version 2');
+terrainCheck(json_decode($oldFile, true)['version'] === 2, 'Redo history retains explicit handles in version 2');
 $restored = Landscape::load($oldFile);
-terrainCheck($restored->material(0,0) === 'road' && !isset($restored->roadRecords()[0]['handles']), 'Undo restores the automatic curve after reload');
+
+terrainCheck(
+	$restored->material(0, 0) === 'road' && !isset($restored->roadRecords()[0]['handles'])
+	, 'Undo restores the automatic curve after reload'
+);
+
 $restored->redo();
 $record = $restored->roadRecords()[0];
-terrainCheck(isset($record['handles'][1]['in']) && $record['banks'] === [.12,-.12] && $record['endBlend'] === 3.
-	&& !isset($record['replaceAt']), 'Redo restores handles, bank and feathering in the same effective slot');
-terrainCheck($restored->paintTexel(0,18) === pack('C4',5,0,0,0), 'Later solid paint still covers the restored curve');
-$restored->close(); $routes->close();
 
-foreach([12.,32.] as $pavementWidth) {
+terrainCheck(
+	isset($record['handles'][1]['in']) && $record['banks'] === [
+		.12,-.12
+	] && $record['endBlend'] === 3. && !isset($record['replaceAt'])
+	, 'Redo restores handles, bank and feathering in the same effective slot'
+);
+
+terrainCheck(
+	$restored->paintTexel(0, 18) === pack('C4', 5, 0, 0, 0)
+	, 'Later solid paint still covers the restored curve'
+);
+
+$restored->close();
+$routes->close();
+
+foreach([12.,32.] as $pavementWidth)
+{
 	$highway = new Landscape($flatRecipe);
-	$record = ['type'=>'road','width'=>$pavementWidth,'stationSpacing'=>7.,
-		'points'=>[[-64,2,-24],[0,4,24],[64,3,-24]]];
+	$record = [
+		'type' => 'road'
+		, 'width' => $pavementWidth
+		, 'stationSpacing' => 7.
+		, 'points' => [[-64,2,-24],[0,4,24],[64,3,-24]]
+	];
+
 	$highway->queue($record);
 	$highway->commit();
 	$samples = $highway->roads()[0]['_road']['samples'];
 	$longest = 0.;
-	for($i=1; $i<count($samples); $i++) {
-		$longest = max($longest,hypot($samples[$i][0]-$samples[$i-1][0],$samples[$i][2]-$samples[$i-1][2]));
+
+	for($i = 1; $i < count($samples); $i++)
+	{
+		$longest = max($longest, hypot($samples[$i][0] - $samples[$i - 1][0], $samples[$i][2] - $samples[$i - 1][2]));
 	}
-	terrainCheck($longest <= min(7.,$pavementWidth/4.)+1.e-8,'Station spacing respects curvature and pavement width');
+
+	terrainCheck($longest <= min(7., $pavementWidth / 4.) + 1.e-8, 'Station spacing respects curvature and pavement width');
 	$copy = Landscape::load($highway->save());
-	terrainCheck($copy->roadRecords()[0]['stationSpacing'] === 7. && $copy->roads()[0]['_road']['samples'] === $samples,
-		'Wide highway sampling survives save and reload');
-	terrainReject(fn() => $highway->queue(['stationSpacing'=>9.]+$record),'Road station spacing must be bounded');
-	$copy->close(); $highway->close();
+
+	terrainCheck(
+		$copy->roadRecords()[0]['stationSpacing'] === 7. && $copy->roads()[0]['_road']['samples'] === $samples
+		, 'Wide highway sampling survives save and reload'
+	);
+
+	terrainReject(fn() => $highway->queue(['stationSpacing' => 9.] + $record), 'Road station spacing must be bounded');
+	$copy->close();
+	$highway->close();
 }
 
 $banked = new Landscape($flatRecipe);
-$banked->queue(['type'=>'road','points'=>[[-24,5,0],[0,5,0],[24,5,0]],
-	'banks'=>[.15,.15,.15],'width'=>16,'shoulder'=>5]);
+
+$banked->queue([
+	'type' => 'road'
+	, 'points' => [[-24,5,0],[0,5,0],[24,5,0]]
+	, 'banks' => [.15,.15,.15]
+	, 'width' => 16
+	, 'shoulder' => 5
+]);
+
 $banked->commit();
-terrainNear($banked->height(0,4)-$banked->height(0,-4),1.2,1e-8,
-	'road bank raises one side across the graded width');
-terrainNear($banked->height(0,15),0.,0.,'road bank blends into the existing embankment');
+
+terrainNear(
+	$banked->height(0, 4) - $banked->height(0, -4)
+	, 1.2
+	, 1e-8
+	, 'road bank raises one side across the graded width'
+);
+
+terrainNear($banked->height(0, 15), 0., 0., 'road bank blends into the existing embankment');
 $bankedCopy = Landscape::load($banked->save());
-terrainNear($bankedCopy->height(0,4),$banked->height(0,4),0.,'road cross slope survives save and reload');
-terrainReject(fn() => $banked->queue(['type'=>'road','points'=>[[0,1,0],[24,1,0]],'banks'=>[.2]]),
-	'a banked road needs one cross slope per control point');
+terrainNear($bankedCopy->height(0, 4), $banked->height(0, 4), 0., 'road cross slope survives save and reload');
+
+terrainReject(
+	fn() => $banked->queue(['type' => 'road','points' => [[0,1,0],[24,1,0]],'banks' => [.2]])
+	, 'a banked road needs one cross slope per control point'
+);
+
 $feathered = new Landscape($flatRecipe);
-$feathered->queue(['type'=>'road','points'=>[[-60,8,0],[0,8,0],[60,8,0]],'width'=>8,'shoulder'=>4,'endBlend'=>36]);
+$feathered->queue(['type' => 'road','points' => [[-60,8,0],[0,8,0],[60,8,0]],'width' => 8,'shoulder' => 4,'endBlend' => 36]);
 $feathered->commit();
+
 foreach([-1,1] as $end)
 {
-	$outer = $feathered->height($end*54,0);
-	$inner = $feathered->height($end*36,0);
+	$outer = $feathered->height($end * 54, 0);
+	$inner = $feathered->height($end * 36, 0);
 	terrainCheck($outer > 0 && $outer < 2 && $inner > 4 && $inner < 8, 'Both caps gradually hand over the height');
-	terrainCheck($feathered->material($end*54,0) !== 'road' && $feathered->material($end*36,0) === 'road',
-		'Road paint follows the same end blend as its grade');
+
+	terrainCheck(
+		$feathered->material($end * 54, 0) !== 'road' && $feathered->material($end * 36, 0) === 'road'
+		, 'Road paint follows the same end blend as its grade'
+	);
 }
-terrainNear($feathered->height(0,0),8.,1e-9,'A feathered road still reaches its full height in the middle');
-terrainNear(Landscape::load($feathered->save())->height(54,0),$feathered->height(54,0),0.,'End blends survive reload');
+
+terrainNear($feathered->height(0, 0), 8., 1e-9, 'A feathered road still reaches its full height in the middle');
+
+terrainNear(
+	Landscape::load($feathered->save())->height(54, 0)
+	, $feathered->height(54, 0)
+	, 0.
+	, 'End blends survive reload'
+);
+
 $diagonal = new Landscape($flatRecipe);
-$diagonal->queue(['type'=>'road','points'=>[[-50,5,-50],[50,5,50]],'width'=>8,'shoulder'=>7]);
+$diagonal->queue(['type' => 'road','points' => [[-50,5,-50],[50,5,50]],'width' => 8,'shoulder' => 7]);
 $diagonal->commit();
 $strip = $diagonal->editIndex();
-terrainCheck($strip->intersect([-5,-5,5,5]) !== [] && $strip->intersect([-48,44,-44,48]) === [],
-	'road texture updates follow the strip and skip empty corners of its rectangle');
+
+terrainCheck(
+	$strip->intersect([-5,-5,5,5]) !== [] && $strip->intersect([-48,44,-44,48]) === []
+	, 'road texture updates follow the strip and skip empty corners of its rectangle'
+);
 
 $pinned = new Landscape($flatRecipe);
 $token = $pinned->pin([0,0,3,3]);
@@ -1319,14 +1586,25 @@ terrainReject(fn() => new Recipe(['terraceStrength' => 1.1]), 'terraces reject s
 // then solves each segment using the cell containing its midpoint.
 $exhaustive = [
 	// The eighth coastal ray meets the filled hillside shoulder. Its first hit was verified by bisection.
-	'coast' => [181.946400631, 97.383072653, 3.978038728, 113.058136124, 2.747950511, null, 55.730226949, 59.465000326],
-	'mountain' => [3.556661567, 71.338958719, 231.08807236, 113.058165181, 12.84570181, null, null, 7.280767374],
-	'canyon' => [30.703922065, 42.54823098, 10.556674898, 113.058185298, null, null, 111.341562416, 13.43411505],
+	'coast' => [181.946400631, 97.383072653, 3.978038728, 113.058136124, 2.747950511, null, 55.730226949, 59.465000326]
+	, 'mountain' => [3.556661567, 71.338958719, 231.08807236, 113.058165181, 12.84570181, null, null, 7.280767374]
+	, 'canyon' => [30.703922065, 42.54823098, 10.556674898, 113.058185298, null, null, 111.341562416, 13.43411505]
 ];
+
 foreach(['coast','mountain','canyon'] as $preset)
 {
-	$world = new Landscape(['version' => 1,'preset' => $preset,'worldSize' => 512,'spacing' => 1.25,'seed' => 'pick-regression',
-		'heightScale' => 130,'baseFrequency' => .006,'warpAmplitude' => 75,'terraceSpacing' => 6]);
+	$world = new Landscape([
+		'version' => 1
+		, 'preset' => $preset
+		, 'worldSize' => 512
+		, 'spacing' => 1.25
+		, 'seed' => 'pick-regression'
+		, 'heightScale' => 130
+		, 'baseFrequency' => .006
+		, 'warpAmplitude' => 75
+		, 'terraceSpacing' => 6
+	]);
+
 	$world->queue(['type' => 'raise','x' => -12,'z' => 0,'amount' => 65,'radius' => 8]);
 	$world->queue(['type' => 'lower','x' => 35,'z' => 0,'amount' => 25,'radius' => 20]);
 	$world->queue(['type' => 'flatten','x' => 2,'z' => 5,'height' => 3,'radius' => 6]);
@@ -1335,36 +1613,57 @@ foreach(['coast','mountain','canyon'] as $preset)
 	$world->queue(['type' => 'smooth','x' => -6,'z' => -5,'amount' => .9,'radius' => 24]);
 	$world->commit();
 	$rays = [
-		[[-220,40,-6],[1,-.15,.025]], [[210,32,9],[-1,-.18,-.035]],
-		[[-200,6,2],[1,0,0]], [[-12,120,0],[0,-1,0]],
-		[[-4,3,5],[.01,1,-.001]], [[200,200,200],[1,.1,.1]],
-		[[-300,30,0],[1,-.125,0]], [[12,21,40],[-.5,-.3,-1]]
+		[[-220,40,-6],[1,-.15,.025]], [[210,32,9],[-1,-.18,-.035]]
+		, [[-200,6,2],[1,0,0]], [[-12,120,0],[0,-1,0]]
+		, [[-4,3,5],[.01,1,-.001]], [[200,200,200],[1,.1,.1]]
+		, [[-300,30,0],[1,-.125,0]], [[12,21,40],[-.5,-.3,-1]]
 	];
+
 	foreach($rays as $i => [$origin,$direction])
 	{
 		$hit = $world->raycast($origin, $direction, 600);
 		$distance = $hit['distance'] ?? null;
 		$expected = $exhaustive[$preset][$i];
+
 		if($expected === null) terrainCheck($distance === null, "$preset ray $i matches exhaustive miss");
 		else
 		{
 			terrainCheck($distance !== null, "$preset ray $i finds the first intersection");
 			[$x,$y,$z] = $hit['position'];
-			terrainNear($world->height($x,$z), $y, 1e-4, "$preset ray $i actually lies on the surface");
+			terrainNear($world->height($x, $z), $y, 1e-4, "$preset ray $i actually lies on the surface");
 			terrainNear($distance, $expected, 2e-6, "$preset ray $i preserves exhaustive first-hit distance");
 		}
 	}
+
 	if($preset === 'coast')
 	{
 		$fillKey = $world->roads()[0]['_road']['fillKey'];
 		$loaded = Landscape::load($world->save());
-		terrainCheck($loaded->roads()[0]['_road']['fillKey'] === $fillKey, 'Reload regenerates the same hillside shoulder');
+
+		terrainCheck(
+			$loaded->roads()[0]['_road']['fillKey'] === $fillKey
+			, 'Reload regenerates the same hillside shoulder'
+		);
+
 		terrainCheck($loaded->undo() && !$loaded->roads(), 'Undo removes the road and its shoulder');
-		terrainCheck($loaded->redo() && $loaded->roads()[0]['_road']['fillKey'] === $fillKey, 'Redo restores the same hillside shoulder');
+
+		terrainCheck(
+			$loaded->redo() && $loaded->roads()[0]['_road']['fillKey'] === $fillKey
+			, 'Redo restores the same hillside shoulder'
+		);
+
 		[$origin,$direction] = $rays[7];
-		terrainNear($loaded->raycast($origin,$direction,600)['distance'], $exhaustive['coast'][7], 2e-6, 'The restored shoulder is pickable');
+
+		terrainNear(
+			$loaded->raycast($origin, $direction, 600)['distance']
+			, $exhaustive['coast'][7]
+			, 2e-6
+			, 'The restored shoulder is pickable'
+		);
+
 		$loaded->close();
 	}
+
 	$world->close();
 }
 
@@ -1373,15 +1672,20 @@ $camera = new TerrainPhonics\Camera;
 $camera->position = [3600,300,1800];
 $camera->yaw = .7;
 $camera->pitch = -.35;
-$hit = $coast->raycast($camera->position, $camera->ray(.5, .5, 640/368), 6000);
-terrainCheck($hit !== null && $coast->stats()['generated'] < 200, 'cold coast pick avoids generating the approach corridor');
+$hit = $coast->raycast($camera->position, $camera->ray(.5, .5, 640 / 368), 6000);
+
+terrainCheck(
+	$hit !== null && $coast->stats()['generated'] < 200
+	, 'cold coast pick avoids generating the approach corridor'
+);
+
 $coast->close();
 
 // A caller that follows a moving point skips exact samples while the point stays above its block.
 $sandboxWorlds = [
 	['preset' => 'coast']
-	, ['preset' => 'mountain','heightScale' => 1400,'baseFrequency' => 1/2200]
-	, ['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1/4000,'terraceSpacing' => 80,'spacing' => 1.25]
+	, ['preset' => 'mountain','heightScale' => 1400,'baseFrequency' => 1 / 2200]
+	, ['preset' => 'canyon','heightScale' => 650,'baseFrequency' => 1 / 4000,'terraceSpacing' => 80,'spacing' => 1.25]
 ];
 
 foreach($sandboxWorlds as $recipe)
@@ -1389,6 +1693,7 @@ foreach($sandboxWorlds as $recipe)
 	$world = new Landscape($recipe);
 	$spacing = $world->recipe()['spacing'];
 	$blocks = [];
+
 	foreach([1, 2, 16, 128] as $cells)
 	for($i = 0; $i < 5; $i++)
 	{
@@ -1396,36 +1701,48 @@ foreach($sandboxWorlds as $recipe)
 		$z = 4000.7 - 1377.9 * $i;
 		$blocks[] = [$x, $z, $cells, $world->localBounds($x, $z, $cells)];
 	}
+
 	terrainCheck($world->stats()['generated'] === 0, 'block bounds generate no lattice nodes');
 	$enclosed = $aligned = 0;
+
 	foreach($blocks as [$x, $z, $cells, $block])
 	{
 		$width = $cells * $spacing;
 		$aligned += (int)($block['minX'] <= $x && $x < $block['maxX'] && $block['minZ'] <= $z && $z < $block['maxZ']
 			&& $block['maxX'] - $block['minX'] === $width && $block['maxZ'] - $block['minZ'] === $width
-			&& fmod($block['minX'], $width) === 0.0 && fmod($block['minZ'], $width) === 0.0);
+			&& fmod($block['minX'], $width) === 0.0 && fmod($block['minZ'], $width) === 0.0
+		);
+
 		// The lower edges belong to the block. The upper edges belong to its neighbors.
 		foreach([[0,0],[0,.999],[.999,0],[.999,.999],[.5,.5],[.37,.81]] as [$u,$v])
 		{
 			$height = $world->height($block['minX'] + $u * $width, $block['minZ'] + $v * $width);
 			$enclosed += (int)($height >= $block['minY'] && $height <= $block['maxY']);
 		}
+
 		$enclosed += (int)($world->height($x, $z) <= $block['maxY']);
 	}
+
 	terrainCheck($aligned === 20, "block bounds name the aligned block around the point: $aligned of 20");
 	terrainCheck($enclosed === 140, "block bounds enclose the reconstructed surface: $enclosed of 140");
+
 	terrainCheck(
 		$blocks[0][3]['maxY'] < $world->bounds()['maxY'] - 100
 		, 'a one-cell block bounds far below the global maximum'
 	);
+
 	[$x, $z] = [$blocks[5][0], $blocks[5][1]];
 	$before = $world->localBounds($x, $z, 2);
 	$far = $world->localBounds($x + 500, $z, 2);
 	$world->queue(['type' => 'raise','x' => $x,'z' => $z,'radius' => 30,'amount' => 250]);
 	$world->commit();
 	$after = $world->localBounds($x, $z, 2);
-	terrainCheck($after['maxY'] >= $world->height($x, $z) && $world->height($x, $z) > $before['maxY'],
-		'block bounds rise with an edit that lifts the surface past the old bound');
+
+	terrainCheck(
+		$after['maxY'] >= $world->height($x, $z) && $world->height($x, $z) > $before['maxY']
+		, 'block bounds rise with an edit that lifts the surface past the old bound'
+	);
+
 	terrainCheck($world->localBounds($x + 500, $z, 2) === $far, 'an edit leaves distant block bounds unchanged');
 	$refusals = [[$x, 0, 'an empty block'], [1e9, 4, 'a point outside the world'], [$x, 4, 'a closed landscape']];
 
@@ -1449,124 +1766,195 @@ foreach($sandboxWorlds as $recipe)
 
 // Tile cache keys hold rows and columns within Landscape::TILE_REACH of the origin. A 65.5 km world with a 1 m tile
 // edge would put its edge tiles past that, and two tiles would share a key, so such a recipe is refused.
-terrainReject(static fn() => new Recipe(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 4]),
-	'A world whose edge tiles pass the key range is refused');
+terrainReject(
+	static fn() => new Recipe(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 4])
+	, 'A world whose edge tiles pass the key range is refused'
+);
+
 $wide = new Landscape(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 8, 'preset' => 'mountain']);
 $fresh = new Landscape(['worldSize' => 65536, 'spacing' => .25, 'tileSize' => 8, 'preset' => 'mountain']);
 $far = $wide->height(30000, 0);
 $back = $wide->height(-10000, 1);
 terrainNear($back, $fresh->height(-10000, 1), 0.0, 'Far tiles on a fine 65.5 km world keep their own heights');
 terrainNear($far, $fresh->height(30000, 0), 0.0, 'The tile read first still answers for itself');
-$wide->close(); $fresh->close();
+$wide->close();
+$fresh->close();
 
 // A saved legacy join keeps the original endpoint-height blend. A new fork morphs
 // the profiles and extends the facing edges, retaining the same standalone landscapes.
-$source = ['preset'=>'canyon','join'=>['span'=>32768,'destinations'=>[['preset'=>'mountain'],['preset'=>'coast']]]];
-$legacy = new TerrainPhonics\JoinedTerrain($source);
-$source['join']['version']=2;
-$morph = new TerrainPhonics\JoinedTerrain($source);
-$difference=0.;
-foreach([-2050.,-2048.,-2047.,-680.,0.,1040.,2047.,2048.,3300.] as $x)
-foreach([-2800.,-2048.,775.,2047.,2048.,2600.] as $z) {
-	$height=$morph->height($x,$z);
-	[$lo,$hi]=$morph->regionalBounds([$x-2.,$z-2.,$x+2.,$z+2.]);
-	terrainCheck($height>=$lo && $height<=$hi,'Joined local extrema enclose the shaped and stretched terrain');
-	if($x<=-2048. || ($x>=2048. && abs($z)>=2048.))
-		terrainNear($height,$legacy->height($x,$z),0.,'Exact endpoint landscape and water datum');
-	else $difference=max($difference,abs($height-$legacy->height($x,$z)));
-}
-terrainCheck($difference>1.,'The connector changes the landform before road edits');
-terrainCheck(!isset($legacy->values()['join']['version']) && $morph->values()['join']['version']===2,
-	'Legacy and morphed junctions round trip separately');
+$source = [
+	'preset' => 'canyon'
+	, 'join' => ['span' => 32768,'destinations' => [['preset' => 'mountain'],['preset' => 'coast']]]
+];
 
-$layers = new Landscape(['worldSize'=>256,'heightScale'=>0,'detailAmplitude'=>0]);
-$embankment = new Landscape(['worldSize'=>256,'heightScale'=>0,'detailAmplitude'=>0,'waterLevel'=>-5]);
-$embankment->queue(['type'=>'road','width'=>12,'shoulder'=>2,'points'=>[[0,2,-90],[0,2,90]]]);
+$legacy = new TerrainPhonics\JoinedTerrain($source);
+$source['join']['version'] = 2;
+$morph = new TerrainPhonics\JoinedTerrain($source);
+$difference = 0.;
+
+foreach([-2050.,-2048.,-2047.,-680.,0.,1040.,2047.,2048.,3300.] as $x)
+foreach([-2800.,-2048.,775.,2047.,2048.,2600.] as $z)
+{
+	$height = $morph->height($x, $z);
+	[$lo,$hi] = $morph->regionalBounds([$x - 2.,$z - 2.,$x + 2.,$z + 2.]);
+	terrainCheck($height >= $lo && $height <= $hi, 'Joined local extrema enclose the shaped and stretched terrain');
+
+	if($x <= -2048. || ($x >= 2048. && abs($z) >= 2048.))
+	terrainNear($height, $legacy->height($x, $z), 0., 'Exact endpoint landscape and water datum');
+	else $difference = max($difference, abs($height - $legacy->height($x, $z)));
+}
+
+terrainCheck($difference > 1., 'The connector changes the landform before road edits');
+
+terrainCheck(
+	!isset($legacy->values()['join']['version']) && $morph->values()['join']['version'] === 2
+	, 'Legacy and morphed junctions round trip separately'
+);
+
+$layers = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0]);
+$embankment = new Landscape(['worldSize' => 256,'heightScale' => 0,'detailAmplitude' => 0,'waterLevel' => -5]);
+$embankment->queue(['type' => 'road','width' => 12,'shoulder' => 2,'points' => [[0,2,-90],[0,2,90]]]);
 $embankment->commit();
 terrainCheck(!isset($embankment->roads()[0]['_road']['fills']), 'A low embankment on level ground has no uphill bank');
-terrainNear($embankment->height(25,0),0.,1.e-8,'Ground beyond a low embankment stays floodable');
+terrainNear($embankment->height(25, 0), 0., 1.e-8, 'Ground beyond a low embankment stays floodable');
 $embankment->close();
-$road = ['type'=>'road','width'=>12,'shoulder'=>3,'crown'=>0.,'points'=>[[-40,8,0],[40,8,0]]];
-$otherRoad = array_replace($road,['points'=>[[-40,12,40],[40,12,40]]]);
+$road = ['type' => 'road','width' => 12,'shoulder' => 3,'crown' => 0.,'points' => [[-40,8,0],[40,8,0]]];
+$otherRoad = array_replace($road, ['points' => [[-40,12,40],[40,12,40]]]);
 $layers->queue($road);
-$layers->queue(['type'=>'raise','x'=>0,'z'=>0,'radius'=>4,'amount'=>2]);
+$layers->queue(['type' => 'raise','x' => 0,'z' => 0,'radius' => 4,'amount' => 2]);
 $layers->queue($otherRoad);
 $layers->commit();
-$before = $layers->height(0,0);
+$before = $layers->height(0, 0);
 $preview = $layers->previewWithoutRoads([0]);
-terrainNear($preview->height(0,0),2.,1e-8,'Hiding a road uncovers the ground and later brush');
-terrainCheck($preview->material(0,0) === null && $layers->material(0,0) === 'road','Preview affects only its own road paint');
-terrainCheck($preview->changedRegion($layers)[3] < 40., 'Hiding a road only invalidates its footprint and dependent edits');
-$layers->queue(['type'=>'delete-road','id'=>0]);
+terrainNear($preview->height(0, 0), 2., 1e-8, 'Hiding a road uncovers the ground and later brush');
+
+terrainCheck(
+	$preview->material(0, 0) === null && $layers->material(0, 0) === 'road'
+	, 'Preview affects only its own road paint'
+);
+
+terrainCheck(
+	$preview->changedRegion($layers)[3] < 40.
+	, 'Hiding a road only invalidates its footprint and dependent edits'
+);
+
+$layers->queue(['type' => 'delete-road','id' => 0]);
 $layers->commit();
-terrainCheck(array_keys($layers->roadRecords()) === [2] && $layers->height(0,0) === $preview->height(0,0),
-	'Deletion keeps the later road ID and brush');
+
+terrainCheck(
+	array_keys($layers->roadRecords()) === [2] && $layers->height(0, 0) === $preview->height(0, 0)
+	, 'Deletion keeps the later road ID and brush'
+);
+
 $loaded = Landscape::load($layers->save());
-terrainCheck($loaded->undo() && $loaded->height(0,0) === $before && $loaded->redo(), 'Saved deletion can be undone and redone');
-$loaded->queue($otherRoad + ['replaceAt'=>2]);
+
+terrainCheck(
+	$loaded->undo() && $loaded->height(0, 0) === $before && $loaded->redo()
+	, 'Saved deletion can be undone and redone'
+);
+
+$loaded->queue($otherRoad + ['replaceAt' => 2]);
 $loaded->commit();
-terrainReject(fn()=>$loaded->queue(['type'=>'delete-road','id'=>1]), 'A brush cannot be deleted as a road');
-terrainReject(fn()=>$loaded->queue(['type'=>'delete-road','id'=>0]), 'Deleting a missing road leaves the edit log intact');
+terrainReject(fn() => $loaded->queue(['type' => 'delete-road','id' => 1]), 'A brush cannot be deleted as a road');
+
+terrainReject(fn() => $loaded->queue([
+	'type' => 'delete-road'
+	, 'id' => 0
+]), 'Deleting a missing road leaves the edit log intact'
+);
+
 terrainCheck(array_keys($loaded->roadRecords()) === [2], 'Replacements use stable IDs after reloading the deletion');
-$loaded->queue(['type'=>'delete-road','id'=>2]);
+$loaded->queue(['type' => 'delete-road','id' => 2]);
 $loaded->queue($road);
 $loaded->commit();
-terrainCheck(array_keys(Landscape::load($loaded->save())->roadRecords()) === [3],
-	'Adding a road after deleting the last road allocates a fresh ID that replays identically');
+
+terrainCheck(
+	array_keys(Landscape::load($loaded->save())->roadRecords()) === [3]
+	, 'Adding a road after deleting the last road allocates a fresh ID that replays identically'
+);
 
 // Heights recorded before adding authoring controls. Exercise omitted defaults across all shipped presets.
 $legacyHeights = [
-	'coast'=>[-38.23803448,-49.91558900,141.11966404],
-	'mountain'=>[371.74917166,455.63556597,358.50408326],
-	'canyon'=>[247.26189275,-332.27696223,287.76837217],
-	'limestone'=>[0.70198865,0.39307288,0.52777968],
-	'basalt-fjords'=>[-6.99136233,498.89373709,589.74457774],
-	'amber-dunes'=>[198.53705013,199.70767134,78.12019943],
-	'arctic-meltwater'=>[10.03606249,-34.71656913,113.19068123],
-	'tidal-lagoon'=>[-4.38494876,3.36603900,0.32035925],
-	'red-mesas'=>[4.53275653,-10.56153320,326.80004768],
-	'heather-moor'=>[78.74351141,0.03973762,50.23302399],
-	'salt-pans'=>[6.70812628,2.39512256,4.67175715],
-	'cinder-highlands'=>[303.10486896,220.43987117,402.12177735],
-	'rolling-prairie'=>[115.67654276,71.35151141,112.28088188],
-	'river-valley'=>[-3.00900233,-5.77290726,-4.97682181],
-	'wooded-foothills'=>[475.53617606,308.50414190,511.53433764],
-	'high-desert-steppe'=>[798.39181417,715.77358355,1041.47871226],
-	'alaska-range'=>[1613.65429611,696.14073860,418.55885062],
-	'chalk-headlands'=>[6.01290373,-32.64734754,20.76211254],
-	'karst-bay'=>[274.09293957,8.26025884,-1.67068568],
-	'tepui-highlands'=>[10.78883130,9.89478766,-27.03460828],
-	'painted-badlands'=>[-12.04243843,-23.13049653,-43.50089214],
-	'emerald-ridges'=>[248.44172021,-395.75585848,388.16607701],
+	'coast' => [-38.23803448,-49.91558900,141.11966404]
+	, 'mountain' => [371.74917166,455.63556597,358.50408326]
+	, 'canyon' => [247.26189275,-332.27696223,287.76837217]
+	, 'limestone' => [0.70198865,0.39307288,0.52777968]
+	, 'basalt-fjords' => [-6.99136233,498.89373709,589.74457774]
+	, 'amber-dunes' => [198.53705013,199.70767134,78.12019943]
+	, 'arctic-meltwater' => [10.03606249,-34.71656913,113.19068123]
+	, 'tidal-lagoon' => [-4.38494876,3.36603900,0.32035925]
+	, 'red-mesas' => [4.53275653,-10.56153320,326.80004768]
+	, 'heather-moor' => [78.74351141,0.03973762,50.23302399]
+	, 'salt-pans' => [6.70812628,2.39512256,4.67175715]
+	, 'cinder-highlands' => [303.10486896,220.43987117,402.12177735]
+	, 'rolling-prairie' => [115.67654276,71.35151141,112.28088188]
+	, 'river-valley' => [-3.00900233,-5.77290726,-4.97682181]
+	, 'wooded-foothills' => [475.53617606,308.50414190,511.53433764]
+	, 'high-desert-steppe' => [798.39181417,715.77358355,1041.47871226]
+	, 'alaska-range' => [1613.65429611,696.14073860,418.55885062]
+	, 'chalk-headlands' => [6.01290373,-32.64734754,20.76211254]
+	, 'karst-bay' => [274.09293957,8.26025884,-1.67068568]
+	, 'tepui-highlands' => [10.78883130,9.89478766,-27.03460828]
+	, 'painted-badlands' => [-12.04243843,-23.13049653,-43.50089214]
+	, 'emerald-ridges' => [248.44172021,-395.75585848,388.16607701]
 ];
-foreach($legacyHeights as $name=>$heights) {
+
+foreach($legacyHeights as $name => $heights)
+{
 	$form = new Recipe(Recipe::showcase($name));
-	foreach([[735,-517],[-1058,900],[12517,-13752]] as $i=>$point)
-		terrainNear($form->height(...$point),$heights[$i],1e-7,"Legacy $name sample $i");
+
+	foreach([[735,-517],[-1058,900],[12517,-13752]] as $i => $point)
+	terrainNear($form->height(...$point), $heights[$i], 1e-7, "Legacy $name sample $i");
 }
 
 // Stretch/rotation must transform gradients and bounds as well as the height used by wheels and picks.
-$axes=['domainRotation'=>-31.,'ridgeBearing'=>51.,'ridgeStretch'=>4.5,'coastBearing'=>84.,'coastWidth'=>1500.];
-foreach(['coast','painted-badlands','canyon'] as $preset) foreach([-.85,.75] as $shape) {
-	$r=new Recipe($axes+['preset'=>$preset,'detailShape'=>$shape,'gullyDepth'=>3.5,'gullySpacing'=>96.]);
-	$dry=new Recipe(['gullyDepth'=>0.]+$r->values());
-	for($i=0;$i<61;$i++) {
-		$x=$i*449-16384; $z=($i*941)%30503-12001;
-		[$h,$dx,$dz]=$r->coarse($x,$z);
-		terrainNear($dx,($r->coarse($x+.005,$z)[0]-$r->coarse($x-.005,$z)[0])/.01,.001,'World X gradient');
-		terrainNear($dz,($r->coarse($x,$z+.005)[0]-$r->coarse($x,$z-.005)[0])/.01,.001,'World Z gradient');
-		[$lo,$hi]=$r->regionalBounds([$x-1,$z-1,$x+2,$z+2]);
-		$value=$r->height($x,$z);
-		terrainCheck($value>=$lo && $value<=$hi,'Authored height within local bounds');
-		$cut=$dry->height($x,$z)-$value;
-		terrainCheck($cut>=-1e-9 && $cut<=3.5+1e-9,'Gully depth bounded at every point');
+$axes = ['domainRotation' => -31.,'ridgeBearing' => 51.,'ridgeStretch' => 4.5,'coastBearing' => 84.,'coastWidth' => 1500.];
+
+foreach(['coast','painted-badlands','canyon'] as $preset)
+foreach([-.85,.75] as $shape)
+{
+	$r = new Recipe($axes + ['preset' => $preset,'detailShape' => $shape,'gullyDepth' => 3.5,'gullySpacing' => 96.]);
+	$dry = new Recipe(['gullyDepth' => 0.] + $r->values());
+
+	for($i = 0; $i < 61; $i++)
+	{
+		$x = $i * 449 - 16384;
+		$z = ($i * 941) % 30503 - 12001;
+		[$h,$dx,$dz] = $r->coarse($x, $z);
+		terrainNear($dx, ($r->coarse($x + .005, $z)[0] - $r->coarse($x - .005, $z)[0]) / .01, .001, 'World X gradient');
+		terrainNear($dz, ($r->coarse($x, $z + .005)[0] - $r->coarse($x, $z - .005)[0]) / .01, .001, 'World Z gradient');
+		[$lo,$hi] = $r->regionalBounds([$x - 1,$z - 1,$x + 2,$z + 2]);
+		$value = $r->height($x, $z);
+		terrainCheck($value >= $lo && $value <= $hi, 'Authored height within local bounds');
+		$cut = $dry->height($x, $z) - $value;
+		terrainCheck($cut >= -1e-9 && $cut <= 3.5 + 1e-9, 'Gully depth bounded at every point');
 	}
 }
-$coast=['preset'=>'coast','rolling'=>0.,'secondary'=>0.,'detailAmplitude'=>0.,'warpAmplitude'=>0.];
-$plain=new Recipe($coast); $rotated=new Recipe(['ridgeStretch'=>8.,'ridgeBearing'=>33.]+$coast);
-terrainNear($plain->height(3600,-1500),$rotated->height(3600,-1500),.001,'Stretch preserves independent coastal reach');
-$survey=new TerrainPhonics\LandformPreview(['heightScale'=>0.,'detailAmplitude'=>0.],-1.,16);
-$job=$survey->survey(); foreach($job as $_) {} $rows=$job->getReturn();
-terrainCheck($rows['land']==1 && $rows['steep']==0 && $rows['crestSpacing']===null,'Flat dry survey');
-terrainCheck(array_sum($rows['bins'])===256 && strlen(base64_decode($rows['rgb']))===768,'Every sampled cell plotted and counted');
+
+$coast = ['preset' => 'coast','rolling' => 0.,'secondary' => 0.,'detailAmplitude' => 0.,'warpAmplitude' => 0.];
+$plain = new Recipe($coast);
+$rotated = new Recipe(['ridgeStretch' => 8.,'ridgeBearing' => 33.] + $coast);
+
+terrainNear(
+	$plain->height(3600, -1500)
+	, $rotated->height(3600, -1500)
+	, .001
+	, 'Stretch preserves independent coastal reach'
+);
+
+$survey = new TerrainPhonics\LandformPreview(['heightScale' => 0.,'detailAmplitude' => 0.], -1., 16);
+$job = $survey->survey();
+
+foreach($job as $_)
+{
+}
+
+$rows = $job->getReturn();
+terrainCheck($rows['land'] == 1 && $rows['steep'] == 0 && $rows['crestSpacing'] === null, 'Flat dry survey');
+
+terrainCheck(
+	array_sum($rows['bins']) === 256 && strlen(base64_decode($rows['rgb'])) === 768
+	, 'Every sampled cell plotted and counted'
+);
+
 echo "Terrain surface: $checks checks passed.\n";

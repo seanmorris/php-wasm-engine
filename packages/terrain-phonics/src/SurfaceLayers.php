@@ -8,16 +8,60 @@ use Phonics\Render\Program;
 final class SurfaceLayers
 {
 	public const LIMIT = 16;
-	public const MASKS = ['all','shrubs','tundra','lowland','trees','scree','blocks','slabs','stains','lichen','joints','gullies','crowns','facet-cover','block-cover','crown-cover','shore','snow'];
-	public const FIELDS = ['plain','meadow','shrubs','tundra','lowland','crowns','talus','blocks','joints','slab-tone','lichen','sand','snow'];
+	public const MASKS = [
+		'all'
+		, 'shrubs'
+		, 'tundra'
+		, 'lowland'
+		, 'trees'
+		, 'scree'
+		, 'blocks'
+		, 'slabs'
+		, 'stains'
+		, 'lichen'
+		, 'joints'
+		, 'gullies','crowns','facet-cover','block-cover','crown-cover','shore','snow'
+	];
+	public const FIELDS = [
+		'plain'
+		, 'meadow'
+		, 'shrubs'
+		, 'tundra'
+		, 'lowland'
+		, 'crowns'
+		, 'talus'
+		, 'blocks'
+		, 'joints'
+		, 'slab-tone'
+		, 'lichen','sand','snow'
+	];
 	public const RELIEF = ['none','pattern','ribs','facets','crowns','blocks','rib-tilt'];
 	public const CHANNELS = ['color','relief','both'];
-	public const PATTERNS = ['none', 'mottle', 'streaks', 'gravel', 'bedded', 'stipple', 'fractal', 'veins', 'ripples', 'jointed', 'contacts', 'fractures', 'fall-line'];
+	public const PATTERNS = [
+		'none'
+		, 'mottle'
+		, 'streaks'
+		, 'gravel'
+		, 'bedded'
+		, 'stipple'
+		, 'fractal'
+		, 'veins'
+		, 'ripples'
+		, 'jointed', 'contacts', 'fractures', 'fall-line'
+	];
 	public const DEFAULTS = [
-		'id' => '', 'name' => '', 'mask' => 'all', 'field' => 'plain',
-		'channel' => 'color', 'relief' => 'none', 'strength' => 1., 'flatten' => 0., 'opacity' => 1.,
-		'reflectivity' => 0., 'roughness' => .35,
-		'color' => '#807355'
+		'id' => ''
+		, 'name' => ''
+		, 'mask' => 'all'
+		, 'field' => 'plain'
+		, 'channel' => 'color'
+		, 'relief' => 'none'
+		, 'strength' => 1.
+		, 'flatten' => 0.
+		, 'opacity' => 1.
+		, 'reflectivity' => 0.
+		, 'roughness' => .35
+		, 'color' => '#807355'
 		, 'low' => -1000000.
 		, 'high' => 1000000.
 		, 'fade' => 10.
@@ -44,39 +88,74 @@ final class SurfaceLayers
 	public readonly array $fields;
 	private array $fieldUniforms;
 	public const INKS = ['rockColor','grassColor','sandColor','snowColor','roadColor'];
-	public const SCALES = ['gullySize'=>[48.,1.,512.], 'blockSize'=>[3.,.25,64.],
-		'jointWidth'=>[13.,.5,128.], 'jointHeight'=>[23.,.5,256.]];
+	public const SCALES = [
+		'gullySize' => [48.,1.,512.]
+		, 'blockSize' => [3.,.25,64.]
+		, 'jointWidth' => [13.,.5,128.]
+		, 'jointHeight' => [23.,.5,256.]
+	];
 	/**
 	 * Gully spacing in meters for presets whose rib relief needs its own scale. Badland rills sit a few meters apart
 	 * on slopes tens of meters high; the flutes of the emerald ridges run down walls hundreds of meters high.
 	 */
 	private const PRESET_GULLIES = ['painted-badlands' => 14., 'emerald-ridges' => 60., 'black-sand-coast' => 40.];
-	public const FIELD_KEYS = ['rockSlopeStart','rockSlopeEnd','beachHeight','beachWidth','snowline','snowTransition',
-		'alpineStart','alpineEnd','snowSlopeStart','snowSlopeEnd','macroVariation','treeline','tundraStart',
-		'talusAmount','stainAmount','lichenAmount'];
+	public const FIELD_KEYS = [
+		'rockSlopeStart'
+		, 'rockSlopeEnd'
+		, 'beachHeight'
+		, 'beachWidth'
+		, 'snowline'
+		, 'snowTransition'
+		, 'alpineStart'
+		, 'alpineEnd'
+		, 'snowSlopeStart'
+		, 'snowSlopeEnd'
+		, 'macroVariation'
+		, 'treeline'
+		, 'tundraStart'
+		, 'talusAmount','stainAmount','lichenAmount'
+	];
 
 	public function __construct(array $layers, array $fields = [], public readonly array $bounce = [0.,0.,0.])
 	{
 		if(!array_is_list($layers) || !$layers || count($layers) > self::LIMIT)
 		throw new \InvalidArgumentException('A surface needs one to sixteen material layers.');
 
-		if(!array_is_list($bounce) || count($bounce) !== 3 || array_filter($bounce, static fn($n) =>
-			(!is_float($n) && !is_int($n)) || !is_finite($n) || $n < 0 || $n > 1))
-			throw new \InvalidArgumentException('Invalid reflected light color.');
+		if(!array_is_list($bounce) || count($bounce) !== 3 || array_filter(
+			$bounce
+			, static fn($n) => (!is_float($n) && !is_int($n)) || !is_finite($n) || $n < 0 || $n > 1
+		))
+		throw new \InvalidArgumentException('Invalid reflected light color.');
+
 		$keys = array_flip(self::FIELD_KEYS);
-		if(array_diff_key($fields,$keys,self::SCALES)) throw new \InvalidArgumentException('Unknown shared material field.');
+
+		if(array_diff_key($fields, $keys, self::SCALES))
+		throw new \InvalidArgumentException('Unknown shared material field.');
+
 		$appearance = new TerrainAppearance($fields);
 		$scales = [];
-		foreach(self::SCALES as $key=>[$default,$min,$max]) {
+
+		foreach(self::SCALES as $key => [$default,$min,$max])
+		{
 			$value = $fields[$key] ?? $default;
+
 			if((!is_float($value) && !is_int($value)) || !is_finite($value) || $value < $min || $value > $max)
-				throw new \InvalidArgumentException('Invalid material field scale.');
+			throw new \InvalidArgumentException('Invalid material field scale.');
+
 			$scales[$key] = (float)$value;
 		}
-		$this->fields = array_intersect_key($appearance->settings,$keys) + $scales;
-		$this->fieldUniforms = array_intersect_key($appearance->uniforms(),array_flip([
-			'uSlopeBlend','uHeightBlend','uSnowline','uMacroVariation','uMountainZones','uMountainAmounts',
-		])) + ['uFieldScale'=>array_values($scales)];
+
+		$this->fields = array_intersect_key($appearance->settings, $keys) + $scales;
+
+		$this->fieldUniforms = array_intersect_key($appearance->uniforms(), array_flip([
+			'uSlopeBlend'
+			, 'uHeightBlend'
+			, 'uSnowline'
+			, 'uMacroVariation'
+			, 'uMountainZones'
+			, 'uMountainAmounts'
+		])) + ['uFieldScale' => array_values($scales)];
+
 		$rows = [];
 		$ids = [];
 		$structure = [];
@@ -89,22 +168,45 @@ final class SurfaceLayers
 
 			$row += ['patternColor' => $row['color'] ?? self::DEFAULTS['color']] + self::DEFAULTS;
 
-			$row['id'] = $row['id'] === '' ? 'layer-'.($i+1) : $row['id'];
-			$row['name'] = $row['name'] === '' ? 'Layer '.($i+1) : $row['name'];
-			if(!is_string($row['id']) || !preg_match('/^[a-z][a-z0-9-]{0,63}$/D',$row['id']) || isset($ids[$row['id']])
-				|| !is_string($row['name']) || trim($row['name']) === '' || strlen($row['name']) > 96)
+			$row['id'] = $row['id'] === '' ? 'layer-' . ($i + 1) : $row['id'];
+			$row['name'] = $row['name'] === '' ? 'Layer ' . ($i + 1) : $row['name'];
+
+			if(!is_string($row['id']) || !preg_match('/^[a-z][a-z0-9-]{0,63}$/D', $row['id']) || isset($ids[$row['id']])
+				|| !is_string($row['name']) || trim($row['name']) === '' || strlen($row['name']) > 96
+			)
 			throw new \InvalidArgumentException('Choose a unique layer ID and a short name.');
+
 			if(is_string($row['parent']) && !is_numeric($row['parent']))
-				$row['parent'] = $ids[$row['parent']] ?? -2;
+			$row['parent'] = $ids[$row['parent']] ?? -2;
+
 			$ids[$row['id']] = $i;
-			foreach(['field'=>self::FIELDS,'mask'=>self::MASKS,'relief'=>self::RELIEF,'channel'=>self::CHANNELS] as $key=>$choices)
-				if(!in_array($row[$key],$choices,true)) throw new \InvalidArgumentException('Unknown material '.$key.'.');
+
+			foreach([
+				'field' => self::FIELDS
+				, 'mask' => self::MASKS
+				, 'relief' => self::RELIEF
+				, 'channel' => self::CHANNELS
+			] as $key => $choices)
+			if(!in_array($row[$key], $choices, true))
+			throw new \InvalidArgumentException('Unknown material ' . $key . '.');
+
 			if($i === 0 && $row['channel'] === 'relief')
-				throw new \InvalidArgumentException('The base layer must supply a color.');
-			foreach(['strength' => 32., 'flatten' => 1., 'opacity' => 1., 'reflectivity' => 1., 'roughness' => 1.] as $key=>$limit)
+			throw new \InvalidArgumentException('The base layer must supply a color.');
+
+			foreach([
+				'strength' => 32.
+				, 'flatten' => 1.
+				, 'opacity' => 1.
+				, 'reflectivity' => 1.
+				, 'roughness' => 1.
+			] as $key => $limit)
 			{
-				if(!is_numeric($row[$key]) || !is_finite((float)$row[$key]) || $row[$key] < ($key === 'strength' ? -32. : 0.) || $row[$key] > $limit)
-					throw new \InvalidArgumentException('Invalid material '.$key.'.');
+				if(!is_numeric($row[$key]) || !is_finite(
+					(float)$row[$key]
+				) || $row[$key] < ($key === 'strength' ? -32. : 0.) || $row[$key] > $limit
+				)
+				throw new \InvalidArgumentException('Invalid material ' . $key . '.');
+
 				$row[$key] = (float)$row[$key];
 			}
 
@@ -139,10 +241,13 @@ final class SurfaceLayers
 
 			if($pattern === false || $row['patternAmount'] < 0 || $row['patternAmount'] > 1
 				|| $row['patternScale'] < .05 || $row['patternScale'] > 10000
-				|| $row['patternStretch'] < .25 || $row['patternStretch'] > 64)
+				|| $row['patternStretch'] < .25 || $row['patternStretch'] > 64
+			)
 			throw new \InvalidArgumentException('Invalid color pattern, amount, scale, or vertical stretch.');
 
-			if($datum === false || $row['parent'] < -1 || $row['parent'] >= $i || floor($row['parent']) !== $row['parent']
+			if($datum === false || $row['parent'] < -1 || $row['parent'] >= $i || floor(
+				$row['parent']
+			) !== $row['parent']
 				|| $row['low'] > $row['high'] || $row['slopeLow'] > $row['slopeHigh'] || $row['slopeLow'] < 0
 				|| $row['slopeHigh'] > 1 || $row['fade'] < 0 || $row['slopeFade'] < 0 || $row['noise'] < 0
 				|| $row['scale'] < .001 || $row['scale'] > 1e8 || $row['period'] < 0 || $row['period'] > 1e8
@@ -150,13 +255,13 @@ final class SurfaceLayers
 			throw new \InvalidArgumentException('Invalid layer bounds, noise, or parent.');
 
 			$row['parent'] = (int)$row['parent'];
-			$rows[] = array_replace(self::DEFAULTS,$row);
+			$rows[] = array_replace(self::DEFAULTS, $row);
 			$structure[] = [$row['mask'], $row['field'], $row['channel'], $row['relief'], $row['pattern']];
 			$reflective = $reflective || ($row['channel'] !== 'relief' && $row['reflectivity'] > 0.);
 			// Premultiply the roughness by coating coverage so opaque snow can cleanly cover reflective ice.
-			array_push($this->finishes, $row['reflectivity'], $row['reflectivity']*$row['roughness']**2);
+			array_push($this->finishes, $row['reflectivity'], $row['reflectivity'] * $row['roughness'] ** 2);
 			$strength = $row['relief'] === 'rib-tilt' ? tan(deg2rad($row['strength'])) : $row['strength'];
-			array_push($this->effects,$strength,$row['flatten'],$row['opacity'], 1.);
+			array_push($this->effects, $strength, $row['flatten'], $row['opacity'], 1.);
 			array_push($this->colors, ...TerrainAppearance::linear($row['color']));
 			array_push($this->ranges, $row['low'], $row['high'], $row['slopeLow'], $row['slopeHigh']);
 			array_push($this->blends, $row['fade'], $row['slopeFade'], $row['noise'], $row['scale']);
@@ -167,16 +272,24 @@ final class SurfaceLayers
 
 		$this->reflective = $reflective;
 		$ordinary = !$reflective;
-		foreach($rows as $row) if($row['mask'] !== 'all' || $row['field'] !== 'plain' || $row['channel'] !== 'color') $ordinary = false;
-		$patterns = array_values(array_unique(array_column($rows,'pattern')));
+
+		foreach($rows as $row)
+		if($row['mask'] !== 'all' || $row['field'] !== 'plain' || $row['channel'] !== 'color')
+		$ordinary = false;
+		$patterns = array_values(array_unique(array_column($rows, 'pattern')));
 		sort($patterns);
 		$this->layers = $rows;
 		$this->markRepeatingSections();
-		if(!$ordinary) foreach($rows as $i=>$row) {
+
+		if(!$ordinary)
+		foreach($rows as $i => $row)
+		{
 			$structure[$i][] = [$this->restricted($i),$row['parent'],$this->section($i)];
 		}
-		$this->structure = $ordinary ? 'color/'.implode('/',$patterns)
-			: ($reflective ? 'reflective/' : '').json_encode($structure, JSON_THROW_ON_ERROR);
+
+		$this->structure = $ordinary
+			? 'color/' . implode('/', $patterns)
+			: ($reflective ? 'reflective/' : '') . json_encode($structure, JSON_THROW_ON_ERROR);
 	}
 
 	/** Whether the advanced shader needs an elevation or grade mask for this row. */
@@ -187,38 +300,63 @@ final class SurfaceLayers
 
 	private static function hasRange(array $row): bool
 	{
-		return $row['low'] > -1e6 || $row['high'] < 1e6 || $row['slopeLow'] != 0. || $row['slopeHigh'] != 1. || $row['period'] != 0.;
+		return $row['low'] > -1e6 || $row['high'] < 1e6 || $row['slopeLow'] != 0. || $row['slopeHigh'] != 1. || $row[
+			'period'
+		] != 0.;
 	}
 
 	/** Preview the stack with selected contributions hidden. Children still receive their authored parent masks. */
 	public function previewWithout(array $layerIds): self
 	{
 		$view = clone $this;
-		foreach($this->layers as $i=>$row)
-			$view->effects[4*$i+3] = in_array($row['id'],$layerIds,true) ? -1. : (float)!self::hasRange($row);
+
+		foreach($this->layers as $i => $row)
+		$view->effects[4 * $i + 3] = in_array($row['id'], $layerIds, true) ? -1. : (float)!self::hasRange($row);
+
 		return $view;
 	}
 
 	/** A repeating section covers a full period. 1 continues the section and 2 closes it. */
-	public function section(int $index): int { return (int)$this->modes[4*$index+3]; }
+	public function section(int $index): int { return (int)$this->modes[4 * $index + 3]; }
 
 	/** Blend a complete, contiguous section of sibling beds together at each contact. */
 	private function markRepeatingSections(): void
 	{
-		$fields = array_flip(['datum', 'period', 'parent', 'noise', 'scale', 'slopeLow', 'slopeHigh', 'slopeFade', 'channel', 'field', 'mask', 'opacity', 'flatten']);
+		$fields = array_flip([
+			'datum'
+			, 'period'
+			, 'parent'
+			, 'noise'
+			, 'scale'
+			, 'slopeLow'
+			, 'slopeHigh'
+			, 'slopeFade'
+			, 'channel'
+			, 'field'
+			, 'mask', 'opacity', 'flatten'
+		]);
+
 		$count = count($this->layers);
+
 		for($first = 1; $first < $count; $first = $next)
 		{
 			$start = $this->layers[$first];
 			$next = $first + 1;
-			if($start['period'] <= 0 || $start['channel'] !== 'color' || $start['field'] !== 'plain' || $start['mask'] !== 'all' || $start['flatten'] != 0.) continue;
+
+			if($start['period'] <= 0 || $start['channel'] !== 'color' || $start['field'] !== 'plain' || $start[
+				'mask'
+			] !== 'all' || $start['flatten'] != 0.
+			)
+			continue;
 
 			$mask = array_intersect_key($start, $fields);
 			$precision = $start['period'] * 1e-7;
 			$end = $start['high'];
+
 			while($next < $count)
 			{
 				$layer = $this->layers[$next];
+
 				if(abs($layer['low'] - $end) > $precision || array_intersect_key($layer, $fields) != $mask) break;
 
 				$end = $layer['high'];
@@ -227,7 +365,7 @@ final class SurfaceLayers
 
 			if($next - $first < 2 || abs($end - $start['low'] - $start['period']) > $precision) continue;
 
-			for($i = $first; $i < $next; ++$i) $this->modes[4*$i + 3] = $i + 1 === $next ? 2 : 1;
+			for($i = $first; $i < $next; ++$i) $this->modes[4 * $i + 3] = $i + 1 === $next ? 2 : 1;
 		}
 	}
 
@@ -236,22 +374,25 @@ final class SurfaceLayers
 		$s = $appearance->settings;
 		$style = ($r['preset'] ?? '') === 'limestone' ? 'limestone' : TerrainAppearance::style($r);
 		$canyon = str_starts_with($style, 'canyon');
+
 		if($style === 'mountain') return self::ridges($s);
-		$rows = match($style) {
-			'canyon' => self::canyonLayers($r,$appearance),
+
+		$rows = match($style)
+		{
+			'canyon' => self::canyonLayers($r, $appearance),
 			'canyon-v1' => self::earlyCanyonLayers($s),
-			'limestone' => self::limestoneLayers($s,($r['baseBias'] ?? 0.) * ($r['heightScale'] ?? 0.)),
+			'limestone' => self::limestoneLayers($s, ($r['baseBias'] ?? 0.) * ($r['heightScale'] ?? 0.)),
 			'basalt-fjords' => self::fjordLayers($s),
-			'amber-dunes' => self::duneLayers($s,$r),
+			'amber-dunes' => self::duneLayers($s, $r),
 			'arctic-meltwater' => self::arcticLayers($s),
 			'tidal-lagoon' => self::lagoonLayers($s),
 			'heather-moor' => self::moorLayers($s),
-			'salt-pans' => self::saltLayers($s,$r),
+			'salt-pans' => self::saltLayers($s, $r),
 			'cinder-highlands' => self::cinderLayers($s),
-			'rolling-prairie' => self::prairieLayers($s,$r),
+			'rolling-prairie' => self::prairieLayers($s, $r),
 			'river-valley' => self::riverLayers($s),
 			'wooded-foothills' => self::foothillLayers($s),
-			'high-desert-steppe' => self::steppeLayers($s,$r),
+			'high-desert-steppe' => self::steppeLayers($s, $r),
 			'alaska-range' => self::alaskaLayers($s),
 			'chalk-headlands' => self::chalkLayers($s),
 			'karst-bay' => self::karstLayers($s),
@@ -263,8 +404,9 @@ final class SurfaceLayers
 			'yardang-desert' => self::yardangLayers($s),
 			'rice-terraces' => self::riceLayers($s),
 			'boreal-lakes' => self::borealLayers($s),
-			default => [['color'=>$s['grassColor']]],
+			default => [['color' => $s['grassColor']]],
 		};
+
 		if($style === 'coast')
 		{
 			$rock = $s['rockColor'];
@@ -273,10 +415,19 @@ final class SurfaceLayers
 		}
 
 		$standardShore = in_array($style, ['coast','limestone','basalt-fjords','canyon','canyon-v1'], true);
-		if($standardShore) {
-			$shore = ['color' => $s['sandColor'],'high' => $s['beachHeight'],'datum' => 'water','fade' => $s['beachWidth']]
+
+		if($standardShore)
+		{
+			$shore = [
+				'color' => $s['sandColor']
+				, 'high' => $s['beachHeight']
+				, 'datum' => 'water'
+				, 'fade' => $s['beachWidth']
+			]
 				+ self::stipple($s['sandColor'], .80, .55, .70);
-			if($style === 'basalt-fjords') $shore += ['slopeHigh'=>.10,'slopeFade'=>.08];
+
+			if($style === 'basalt-fjords') $shore += ['slopeHigh' => .10,'slopeFade' => .08];
+
 			$rows[] = $shore;
 		}
 
@@ -292,15 +443,42 @@ final class SurfaceLayers
 
 		// Badlands draw the canyon beds, then dry grass in the washes and rills down every bare slope.
 		$badlands = ($r['preset'] ?? '') === 'painted-badlands';
+
 		if($badlands) array_push($rows, ...self::badlandLayers($s));
 
-		$names = match($style) {
-			'canyon' => ['Canyon dust','Rust beds','Shale','Ledge','Lower sandstone','Red beds','Upper sandstone','Cap rock','Sand'],
+		$names = match($style)
+		{
+			'canyon' => [
+				'Canyon dust'
+				, 'Rust beds'
+				, 'Shale'
+				, 'Ledge'
+				, 'Lower sandstone'
+				, 'Red beds'
+				, 'Upper sandstone'
+				, 'Cap rock','Sand'
+			],
 			'canyon-v1' => ['Soil','Light strata','Dark strata','Sand'],
 			'limestone' => ['Grassland','Valley grass','Outcrops','Limestone','Mineral veins','Sand','Snow'],
-			'basalt-fjords' => ['Moss heath','Scree','Basalt faces','Lava beds','Seep stains','Tidal gravel','Summit snow'],
+			'basalt-fjords' => [
+				'Moss heath'
+				, 'Scree'
+				, 'Basalt faces'
+				, 'Lava beds'
+				, 'Seep stains'
+				, 'Tidal gravel'
+				, 'Summit snow'
+			],
 			'arctic-meltwater' => ['Moraine gravel','Glacier ice','Rock outcrops','Wind-packed snow','Snow ripples'],
-			'tidal-lagoon' => ['Reef floor','Shoal sand','Seagrass beds','Shell beach','Salt grass','Cay scrub','Sand ripples'],
+			'tidal-lagoon' => [
+				'Reef floor'
+				, 'Shoal sand'
+				, 'Seagrass beds'
+				, 'Shell beach'
+				, 'Salt grass'
+				, 'Cay scrub'
+				, 'Sand ripples'
+			],
 			'amber-dunes' => ['Dune sand','Slip faces','Crest sand','Wind ripples','Desert pavement','Salt crust'],
 			'heather-moor' => ['Heather','Moor grass','Bracken','Peat banks','Granite tors'],
 			'salt-pans' => ['Alluvial fans','Rim outcrops','Lake clay','Salt crust','Silt stains','Brine margin'],
@@ -350,18 +528,36 @@ final class SurfaceLayers
 			],
 			default => ['Grass','Exposed rock','Sand','Snow'],
 		};
+
 		if($badlands) array_push($names, 'Wash grass', 'Rills');
-		foreach($rows as $i=>&$row) {
+
+		foreach($rows as $i => &$row)
+		{
 			$row['name'] = $names[$i];
-			$row['id'] = strtolower(str_replace(' ','-',$names[$i]));
+			$row['id'] = strtolower(str_replace(' ', '-', $names[$i]));
 		}
+
 		unset($row);
-		if($style === 'coast') $rows[] = ['id'=>'coastal-bands','name'=>'Coastal bands','color'=>$s['rockBandColor'],
-			'parent'=>'exposed-rock','pattern'=>'bedded','period'=>$s['bandSpacing'],'low'=>0.,'high'=>.45*$s['bandSpacing'],
-			'fade'=>.08*$s['bandSpacing'],'opacity'=>0.];
+
+		if($style === 'coast')
+		$rows[] = [
+			'id' => 'coastal-bands'
+			, 'name' => 'Coastal bands'
+			, 'color' => $s['rockBandColor']
+			, 'parent' => 'exposed-rock'
+			, 'pattern' => 'bedded'
+			, 'period' => $s['bandSpacing']
+			, 'low' => 0.
+			, 'high' => .45 * $s['bandSpacing']
+			, 'fade' => .08 * $s['bandSpacing']
+			, 'opacity' => 0.
+		];
+
 		$fields = array_intersect_key($s, array_flip(self::FIELD_KEYS));
 		$preset = $r['preset'] ?? '';
+
 		if(isset(self::PRESET_GULLIES[$preset])) $fields['gullySize'] = self::PRESET_GULLIES[$preset];
+
 		return new self($rows, $fields, $style === 'canyon' ? $appearance->canyonColors()['bounce'] : [0.,0.,0.]);
 	}
 
@@ -369,47 +565,81 @@ final class SurfaceLayers
 	private static function ridges(array $s): self
 	{
 		$rows = [];
+
 		foreach([
-			['Meadow','meadow','all','meadow'], ['Shrubs','meadow','shrubs','shrubs'],
-			['Tundra','tundra','tundra','tundra'], ['Valley grass','grass','lowland','lowland'],
-			['Forest','forest','trees','crowns'], ['Talus fans','talus','scree','talus'],
-			['Block fields','talus','blocks','blocks'], ['Granite slabs','granite','slabs','joints'],
-			['Iron stains','stain','stains','joints'],
-		] as [$name,$color,$mask,$field]) {
-			$row = ['name'=>$name,'id'=>strtolower(str_replace(' ','-',$name)),'color'=>$s[$color.'Color'],
-				'mask'=>$mask,'field'=>$field];
+			['Meadow','meadow','all','meadow'], ['Shrubs','meadow','shrubs','shrubs']
+			, ['Tundra','tundra','tundra','tundra']
+			, ['Valley grass','grass','lowland','lowland']
+			, ['Forest','forest','trees','crowns']
+			, ['Talus fans','talus','scree','talus']
+			, ['Block fields','talus','blocks','blocks']
+			, ['Granite slabs','granite','slabs','joints']
+			, ['Iron stains','stain','stains','joints']
+		] as [$name,$color,$mask,$field])
+		{
+			$row = [
+				'name' => $name
+				, 'id' => strtolower(str_replace(' ', '-', $name))
+				, 'color' => $s[$color . 'Color']
+				, 'mask' => $mask
+				, 'field' => $field
+			];
+
 			if($field === 'shrubs') $row['patternColor'] = $s['forestColor'];
-			if($mask === 'slabs') {
-				$row['color'] = self::tint($s['graniteColor'],.70,.50,.39);
-				$row += ['pattern'=>'jointed','patternColor'=>self::tint($s['graniteColor'],1.84,1.88,1.88),
-					'patternAmount'=>1.,'patternScale'=>self::SCALES['jointWidth'][0],
-					'patternStretch'=>self::SCALES['jointHeight'][0]/self::SCALES['jointWidth'][0]];
+
+			if($mask === 'slabs')
+			{
+				$row['color'] = self::tint($s['graniteColor'], .70, .50, .39);
+				$row += [
+					'pattern' => 'jointed'
+					, 'patternColor' => self::tint($s['graniteColor'], 1.84, 1.88, 1.88)
+					, 'patternAmount' => 1.
+					, 'patternScale' => self::SCALES['jointWidth'][0]
+					, 'patternStretch' => self::SCALES['jointHeight'][0] / self::SCALES['jointWidth'][0]
+				];
 			}
+
 			$rows[] = $row;
 		}
+
 		foreach([
-			['Facets','facet-cover',1.], ['Blocks','block-cover',1.],
-			['Crowns','crown-cover',1.], ['Ribs','all',.5],
+			['Facets','facet-cover',1.], ['Blocks','block-cover',1.]
+			, ['Crowns','crown-cover',1.], ['Ribs','all',.5]
 		] as [$name,$mask,$strength])
-			$rows[] = ['id'=>'relief-'.strtolower($name),'name'=>$name.' relief','channel'=>'relief','relief'=>strtolower($name),
-				'mask'=>$mask,'strength'=>$strength];
-		$rows[] = ['id'=>'shore','name'=>'Sandy shore','field'=>'sand','mask'=>'shore','color'=>$s['sandColor']];
-		$rows[] = ['id'=>'snow','name'=>'Snow','field'=>'snow','mask'=>'snow','color'=>$s['snowColor']];
-		return new self($rows,array_intersect_key($s,array_flip(self::FIELD_KEYS)));
+		$rows[] = [
+			'id' => 'relief-' . strtolower($name)
+			, 'name' => $name . ' relief'
+			, 'channel' => 'relief'
+			, 'relief' => strtolower($name)
+			, 'mask' => $mask
+			, 'strength' => $strength
+		];
+		$rows[] = ['id' => 'shore','name' => 'Sandy shore','field' => 'sand','mask' => 'shore','color' => $s['sandColor']];
+		$rows[] = ['id' => 'snow','name' => 'Snow','field' => 'snow','mask' => 'snow','color' => $s['snowColor']];
+
+		return new self($rows, array_intersect_key($s, array_flip(self::FIELD_KEYS)));
 	}
 
 	private static function stipple(string $color, float $shade, float $amount = 1., float $size = 1.6): array
 	{
-		$darker = array_map(static fn(float $channel): float => $shade*$channel, TerrainAppearance::linear($color));
+		$darker = array_map(static fn(float $channel): float => $shade * $channel, TerrainAppearance::linear($color));
 
-		return ['pattern'=>'stipple', 'patternColor'=>self::hex($darker), 'patternAmount'=>$amount,
-			'patternScale'=>$size, 'patternStretch'=>1.];
+		return [
+			'pattern' => 'stipple'
+			, 'patternColor' => self::hex($darker)
+			, 'patternAmount' => $amount
+			, 'patternScale' => $size
+			, 'patternStretch' => 1.
+		];
 	}
 
 	/** Translate a start/end slope blend into a layer's full-coverage threshold and fade. */
 	private static function exposedRock(array $settings): array
 	{
-		return ['slopeLow' => $settings['rockSlopeEnd'], 'slopeFade' => $settings['rockSlopeEnd'] - $settings['rockSlopeStart']];
+		return [
+			'slopeLow' => $settings['rockSlopeEnd']
+			, 'slopeFade' => $settings['rockSlopeEnd'] - $settings['rockSlopeStart']
+		];
 	}
 
 	private static function hex(array $linear): string
@@ -418,7 +648,8 @@ final class SurfaceLayers
 			$srgb = $value <= .0031308 ? 12.92 * $value : 1.055 * $value ** (1 / 2.4) - .055;
 
 			return (int)round(255 * $srgb);
-		}, $linear);
+		}, $linear
+		);
 
 		return sprintf('#%02x%02x%02x', ...$channels);
 	}
@@ -432,28 +663,66 @@ final class SurfaceLayers
 		$dryGrass = self::tint($grass, 1.14, 1.01, .93);
 		$weathering = self::tint($rock, .25, .30, .33);
 		$exposure = self::exposedRock($s);
+
 		return [
-			['color' => $grass, 'pattern' => 'fractal', 'patternColor' => $deepGrass,
-				'patternScale' => 69., 'patternAmount' => 1.],
+			[
+				'color' => $grass
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $deepGrass
+				, 'patternScale' => 69.
+				, 'patternAmount' => 1.
+			],
 			// Fine grass gives way to darker vegetation at different heights along the feet of the peaks.
-			['color' => $dryGrass, 'high' => $floor - 9., 'fade' => 62., 'noise' => 60., 'scale' => 49.,
-				'pattern' => 'fractal', 'patternColor' => $deepGrass, 'patternScale' => 5.5, 'patternAmount' => .83],
+			[
+				'color' => $dryGrass
+				, 'high' => $floor - 9.
+				, 'fade' => 62.
+				, 'noise' => 60.
+				, 'scale' => 49.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $deepGrass
+				, 'patternScale' => 5.5
+				, 'patternAmount' => .83
+			],
 			// Small outcrops among the darker vegetation break up the boundary between the grass and the cliffs.
-			['color' => $deepGrass, 'slopeLow' => $s['rockSlopeStart'], 'slopeFade' => $exposure['slopeFade'] * .30,
-				'slopeHigh' => $s['rockSlopeEnd'], 'pattern' => 'fractal', 'patternColor' => $rock,
-				'patternScale' => 26., 'patternStretch' => 1.4, 'patternAmount' => .58],
-			['color' => $rock, 'pattern' => 'fractal', 'patternColor' => $weathering,
-				'patternScale' => 94., 'patternStretch' => 2.2, 'patternAmount' => .95] + $exposure,
+			[
+				'color' => $deepGrass
+				, 'slopeLow' => $s['rockSlopeStart']
+				, 'slopeFade' => $exposure['slopeFade'] * .30
+				, 'slopeHigh' => $s['rockSlopeEnd']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $rock
+				, 'patternScale' => 26.
+				, 'patternStretch' => 1.4
+				, 'patternAmount' => .58
+			]
+			, [
+				'color' => $rock
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $weathering
+				, 'patternScale' => 94.
+				, 'patternStretch' => 2.2
+				, 'patternAmount' => .95
+			] + $exposure,
 			// A second, finer pattern gives exposed faces long mineral stains.
-			['color' => $s['rockBandColor'], 'parent' => 3, 'slopeLow' => 1., 'slopeFade' => .85,
-				'pattern' => 'veins', 'patternColor' => $weathering, 'patternScale' => 26.,
-				'patternStretch' => 5.2, 'patternAmount' => .86],
+			[
+				'color' => $s['rockBandColor']
+				, 'parent' => 3
+				, 'slopeLow' => 1.
+				, 'slopeFade' => .85
+				, 'pattern' => 'veins'
+				, 'patternColor' => $weathering
+				, 'patternScale' => 26.
+				, 'patternStretch' => 5.2
+				, 'patternAmount' => .86
+			]
 		];
 	}
 
 	private static function tint(string $color, float $red, float $green, float $blue): string
 	{
 		$base = TerrainAppearance::linear($color);
+
 		return self::hex([min(1., $red * $base[0]), min(1., $green * $base[1]), min(1., $blue * $base[2])]);
 	}
 
@@ -462,20 +731,53 @@ final class SurfaceLayers
 		$grass = $s['grassColor'];
 		$rock = $s['rockColor'];
 		$exposed = self::exposedRock($s);
+
 		return [
-			['color'=>$grass, 'pattern'=>'fractal', 'patternColor'=>self::tint($grass,.44,.52,.40),
-				'patternScale'=>49., 'patternAmount'=>.84],
-			['color'=>$s['soilColor'], 'slopeLow'=>$s['rockSlopeStart']+.29*$exposed['slopeFade'],
-				'slopeFade'=>.34*$exposed['slopeFade'], 'opacity'=>.64,
-				'pattern'=>'stipple', 'patternColor'=>$rock, 'patternScale'=>2.2, 'patternAmount'=>.8],
-			['color'=>$rock, 'pattern'=>'jointed', 'patternColor'=>$s['rockBandColor'], 'patternAmount'=>.95,
-				'patternScale'=>14., 'patternStretch'=>2.7] + $exposed,
-			['color'=>self::tint($rock,1.38,1.32,1.24), 'parent'=>2, 'opacity'=>.45,
-				'pattern'=>'contacts', 'patternColor'=>self::tint($s['soilColor'],.87,.61,.57),
-				'patternAmount'=>1., 'patternScale'=>84., 'patternStretch'=>.30],
-			['color'=>self::tint($s['rockBandColor'],.65,.68,.68), 'parent'=>2, 'opacity'=>.34,
-				'pattern'=>'veins', 'patternColor'=>self::tint($rock,.42,.47,.50),
-				'patternAmount'=>.89, 'patternScale'=>45., 'patternStretch'=>3.3],
+			[
+				'color' => $grass
+				, 'pattern' => 'fractal'
+				, 'patternColor' => self::tint($grass, .44, .52, .40)
+				, 'patternScale' => 49.
+				, 'patternAmount' => .84
+			]
+			, [
+				'color' => $s['soilColor']
+				, 'slopeLow' => $s['rockSlopeStart'] + .29 * $exposed['slopeFade']
+				, 'slopeFade' => .34 * $exposed['slopeFade']
+				, 'opacity' => .64
+				, 'pattern' => 'stipple'
+				, 'patternColor' => $rock
+				, 'patternScale' => 2.2
+				, 'patternAmount' => .8
+			]
+			, [
+				'color' => $rock
+				, 'pattern' => 'jointed'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternAmount' => .95
+				, 'patternScale' => 14.
+				, 'patternStretch' => 2.7
+			] + $exposed
+			, [
+				'color' => self::tint($rock, 1.38, 1.32, 1.24)
+				, 'parent' => 2
+				, 'opacity' => .45
+				, 'pattern' => 'contacts'
+				, 'patternColor' => self::tint($s['soilColor'], .87, .61, .57)
+				, 'patternAmount' => 1.
+				, 'patternScale' => 84.
+				, 'patternStretch' => .30
+			]
+			, [
+				'color' => self::tint($s['rockBandColor'], .65, .68, .68)
+				, 'parent' => 2
+				, 'opacity' => .34
+				, 'pattern' => 'veins'
+				, 'patternColor' => self::tint($rock, .42, .47, .50)
+				, 'patternAmount' => .89
+				, 'patternScale' => 45.
+				, 'patternStretch' => 3.3
+			]
 		];
 	}
 
@@ -554,22 +856,75 @@ final class SurfaceLayers
 	private static function saltLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('salt-pans');
-		$floor = $recipe['baseBias']*$recipe['heightScale'];
+		$floor = $recipe['baseBias'] * $recipe['heightScale'];
+
 		return [
-			['color'=>$s['sandColor'], 'pattern'=>'fractal', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>72., 'patternAmount'=>.74, 'patternStretch'=>1.25],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>3., 'patternAmount'=>.52],
-			['color'=>$s['soilColor'], 'high'=>$floor+12., 'fade'=>10., 'noise'=>4., 'scale'=>62.,
-				'pattern'=>'fractal', 'patternColor'=>$s['sandColor'], 'patternScale'=>52., 'patternAmount'=>.68],
-			['color'=>$s['snowColor'], 'high'=>$floor+3., 'fade'=>3.5, 'noise'=>2.8, 'scale'=>68.,
-				'slopeHigh'=>.002, 'slopeFade'=>.004, 'pattern'=>'fractures', 'patternColor'=>$s['soilColor'],
-				'patternScale'=>2.5, 'patternStretch'=>.35, 'patternAmount'=>.83],
-			['parent'=>'salt-crust', 'color'=>$s['snowColor'], 'pattern'=>'fractal', 'patternColor'=>$s['sandColor'],
-				'patternScale'=>36., 'patternStretch'=>1., 'patternAmount'=>.86, 'opacity'=>.38],
-			['color'=>self::tint($s['soilColor'],.76,.85,.86), 'datum'=>'water', 'high'=>.30, 'fade'=>.95,
-				'noise'=>.45, 'scale'=>32., 'slopeHigh'=>.009, 'slopeFade'=>.016, 'reflectivity'=>.25,
-				'roughness'=>.37, 'pattern'=>'fractal', 'patternColor'=>$s['sandColor'], 'patternScale'=>7., 'patternAmount'=>.42],
+			[
+				'color' => $s['sandColor']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 72.
+				, 'patternAmount' => .74
+				, 'patternStretch' => 1.25
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 3.
+				, 'patternAmount' => .52
+			]
+			, [
+				'color' => $s['soilColor']
+				, 'high' => $floor + 12.
+				, 'fade' => 10.
+				, 'noise' => 4.
+				, 'scale' => 62.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['sandColor']
+				, 'patternScale' => 52.
+				, 'patternAmount' => .68
+			]
+			, [
+				'color' => $s['snowColor']
+				, 'high' => $floor + 3.
+				, 'fade' => 3.5
+				, 'noise' => 2.8
+				, 'scale' => 68.
+				, 'slopeHigh' => .002
+				, 'slopeFade' => .004
+				, 'pattern' => 'fractures'
+				, 'patternColor' => $s['soilColor']
+				, 'patternScale' => 2.5
+				, 'patternStretch' => .35
+				, 'patternAmount' => .83
+			]
+			, [
+				'parent' => 'salt-crust'
+				, 'color' => $s['snowColor']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['sandColor']
+				, 'patternScale' => 36.
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .86
+				, 'opacity' => .38
+			]
+			, [
+				'color' => self::tint($s['soilColor'], .76, .85, .86)
+				, 'datum' => 'water'
+				, 'high' => .30
+				, 'fade' => .95
+				, 'noise' => .45
+				, 'scale' => 32.
+				, 'slopeHigh' => .009
+				, 'slopeFade' => .016
+				, 'reflectivity' => .25
+				, 'roughness' => .37
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['sandColor']
+				, 'patternScale' => 7.
+				, 'patternAmount' => .42
+			]
 		];
 	}
 
@@ -577,117 +932,357 @@ final class SurfaceLayers
 	private static function cinderLayers(array $s): array
 	{
 		return [
-			['color'=>$s['rockColor'], 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>1.4, 'patternStretch'=>1., 'patternAmount'=>.90],
-			['color'=>$s['grassColor'], 'high'=>130., 'fade'=>35., 'noise'=>170., 'scale'=>105.,
-				'slopeHigh'=>.012, 'slopeFade'=>.024, 'opacity'=>.45, 'pattern'=>'fractal',
-				'patternColor'=>$s['rockColor'], 'patternScale'=>6., 'patternAmount'=>.85],
-			['color'=>$s['sandColor'], 'high'=>152., 'fade'=>48., 'noise'=>135., 'scale'=>84.,
-				'slopeHigh'=>.028, 'slopeFade'=>.038, 'opacity'=>.36] + self::stipple($s['sandColor'],.61,.58,.85),
-			['color'=>$s['soilColor'], 'low'=>190., 'fade'=>90., 'noise'=>77., 'scale'=>140.,
-				'pattern'=>'fractal', 'patternColor'=>$s['rockBandColor'], 'patternScale'=>43., 'patternAmount'=>.78],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'jointed', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>6., 'patternStretch'=>1.45, 'patternAmount'=>.61, 'opacity'=>.85],
+			[
+				'color' => $s['rockColor']
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 1.4
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .90
+			]
+			, [
+				'color' => $s['grassColor']
+				, 'high' => 130.
+				, 'fade' => 35.
+				, 'noise' => 170.
+				, 'scale' => 105.
+				, 'slopeHigh' => .012
+				, 'slopeFade' => .024
+				, 'opacity' => .45
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['rockColor']
+				, 'patternScale' => 6.
+				, 'patternAmount' => .85
+			]
+			, [
+				'color' => $s['sandColor']
+				, 'high' => 152.
+				, 'fade' => 48.
+				, 'noise' => 135.
+				, 'scale' => 84.
+				, 'slopeHigh' => .028
+				, 'slopeFade' => .038
+				, 'opacity' => .36
+			] + self::stipple($s['sandColor'], .61, .58, .85)
+			, [
+				'color' => $s['soilColor']
+				, 'low' => 190.
+				, 'fade' => 90.
+				, 'noise' => 77.
+				, 'scale' => 140.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 43.
+				, 'patternAmount' => .78
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'jointed'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 6.
+				, 'patternStretch' => 1.45
+				, 'patternAmount' => .61
+				, 'opacity' => .85
+			]
 		];
 	}
 
 	private static function prairieLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('rolling-prairie');
-		$plain = $recipe['heightScale']*$recipe['baseBias'];
+		$plain = $recipe['heightScale'] * $recipe['baseBias'];
+
 		return [
-			['color'=>$s['grassColor'], 'field'=>'meadow', 'pattern'=>'fractal', 'patternColor'=>$s['sandColor'],
-				'patternAmount'=>.46, 'patternScale'=>45.],
-			['color'=>$s['meadowColor'], 'high'=>$plain-8., 'fade'=>20., 'noise'=>16., 'scale'=>240.,
-				'field'=>'meadow'] + self::stipple($s['meadowColor'],.83,.38),
-			['color'=>$s['sandColor'], 'low'=>$plain+14., 'fade'=>27., 'noise'=>26., 'scale'=>170.,
-				'opacity'=>.62, 'pattern'=>'fractal', 'patternColor'=>$s['grassColor'], 'patternAmount'=>.52, 'patternScale'=>13.],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'jointed',
-				'patternColor'=>$s['rockBandColor'], 'patternAmount'=>.48, 'patternScale'=>3.],
+			[
+				'color' => $s['grassColor']
+				, 'field' => 'meadow'
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['sandColor']
+				, 'patternAmount' => .46
+				, 'patternScale' => 45.
+			]
+			, [
+				'color' => $s['meadowColor']
+				, 'high' => $plain - 8.
+				, 'fade' => 20.
+				, 'noise' => 16.
+				, 'scale' => 240.
+				, 'field' => 'meadow'
+			] + self::stipple($s['meadowColor'], .83, .38)
+			, [
+				'color' => $s['sandColor']
+				, 'low' => $plain + 14.
+				, 'fade' => 27.
+				, 'noise' => 26.
+				, 'scale' => 170.
+				, 'opacity' => .62
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['grassColor']
+				, 'patternAmount' => .52
+				, 'patternScale' => 13.
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'jointed'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternAmount' => .48
+				, 'patternScale' => 3.
+			]
 		];
 	}
 
 	private static function riverLayers(array $s): array
 	{
 		return [
-			['color'=>$s['grassColor'], 'field'=>'meadow', 'pattern'=>'fractal', 'patternColor'=>$s['meadowColor'],
-				'patternAmount'=>.68, 'patternScale'=>27.],
-			['color'=>$s['meadowColor'], 'datum'=>'water', 'low'=>6., 'high'=>34., 'fade'=>8., 'noise'=>4.,
-				'scale'=>95., 'field'=>'meadow'] + self::stipple($s['meadowColor'],.80,.4),
-			['color'=>$s['soilColor'], 'datum'=>'water', 'high'=>$s['beachHeight'], 'fade'=>$s['beachWidth'],
-				'noise'=>.6, 'scale'=>28., 'pattern'=>'fractal', 'patternColor'=>$s['rockColor'], 'patternAmount'=>.42,
-				'patternScale'=>4., 'roughness'=>.55, 'reflectivity'=>.12],
-			['color'=>$s['sandColor'], 'datum'=>'water', 'low'=>-.7, 'high'=>3., 'fade'=>1.5, 'noise'=>1.4,
-				'scale'=>43., 'slopeHigh'=>.013, 'slopeFade'=>.02, 'pattern'=>'gravel',
-				'patternColor'=>$s['rockColor'], 'patternScale'=>1.2, 'patternAmount'=>.82],
+			[
+				'color' => $s['grassColor']
+				, 'field' => 'meadow'
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['meadowColor']
+				, 'patternAmount' => .68
+				, 'patternScale' => 27.
+			]
+			, [
+				'color' => $s['meadowColor']
+				, 'datum' => 'water'
+				, 'low' => 6.
+				, 'high' => 34.
+				, 'fade' => 8.
+				, 'noise' => 4.
+				, 'scale' => 95.
+				, 'field' => 'meadow'
+			] + self::stipple($s['meadowColor'], .80, .4)
+			, [
+				'color' => $s['soilColor']
+				, 'datum' => 'water'
+				, 'high' => $s['beachHeight']
+				, 'fade' => $s['beachWidth']
+				, 'noise' => .6
+				, 'scale' => 28.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['rockColor']
+				, 'patternAmount' => .42
+				, 'patternScale' => 4.
+				, 'roughness' => .55
+				, 'reflectivity' => .12
+			]
+			, [
+				'color' => $s['sandColor']
+				, 'datum' => 'water'
+				, 'low' => -.7
+				, 'high' => 3.
+				, 'fade' => 1.5
+				, 'noise' => 1.4
+				, 'scale' => 43.
+				, 'slopeHigh' => .013
+				, 'slopeFade' => .02
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockColor']
+				, 'patternScale' => 1.2
+				, 'patternAmount' => .82
+			]
 		];
 	}
 
 	private static function foothillLayers(array $s): array
 	{
 		return [
-			['color'=>$s['grassColor'], 'field'=>'meadow', 'pattern'=>'fractal', 'patternColor'=>$s['meadowColor'],
-				'patternAmount'=>.54, 'patternScale'=>30.],
-			['mask'=>'shrubs', 'field'=>'shrubs', 'color'=>$s['meadowColor'], 'patternColor'=>$s['soilColor']],
-			['mask'=>'trees', 'field'=>'crowns', 'channel'=>'both', 'relief'=>'crowns', 'strength'=>.48,
-				'color'=>$s['forestColor'], 'pattern'=>'fractal', 'patternColor'=>$s['meadowColor'],
-				'patternScale'=>29., 'patternAmount'=>.34],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'jointed',
-				'patternColor'=>$s['rockBandColor'], 'patternScale'=>3.2, 'patternAmount'=>.68],
+			[
+				'color' => $s['grassColor']
+				, 'field' => 'meadow'
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['meadowColor']
+				, 'patternAmount' => .54
+				, 'patternScale' => 30.
+			]
+			, ['mask' => 'shrubs', 'field' => 'shrubs', 'color' => $s['meadowColor'], 'patternColor' => $s['soilColor']]
+			, [
+				'mask' => 'trees'
+				, 'field' => 'crowns'
+				, 'channel' => 'both'
+				, 'relief' => 'crowns'
+				, 'strength' => .48
+				, 'color' => $s['forestColor']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['meadowColor']
+				, 'patternScale' => 29.
+				, 'patternAmount' => .34
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'jointed'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 3.2
+				, 'patternAmount' => .68
+			]
 		];
 	}
 
 	private static function steppeLayers(array $s, array $recipe): array
 	{
 		$recipe += Recipe::shapeDefaults('high-desert-steppe');
-		$apron = $recipe['heightScale']*$recipe['baseBias'];
+		$apron = $recipe['heightScale'] * $recipe['baseBias'];
+
 		return [
-			['color'=>$s['soilColor'], 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternAmount'=>.65, 'patternScale'=>1.7],
-			['color'=>$s['grassColor'], 'mask'=>'shrubs', 'field'=>'shrubs', 'patternColor'=>$s['soilColor'],
-				'slopeHigh'=>.038, 'slopeFade'=>.045],
-			['color'=>$s['sandColor'], 'high'=>$apron+10., 'fade'=>32., 'slopeHigh'=>.004, 'slopeFade'=>.009,
-				'noise'=>16., 'scale'=>180., 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternAmount'=>.59, 'patternScale'=>1.2],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'fractures', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>3.5, 'patternStretch'=>1.2, 'patternAmount'=>.64],
+			[
+				'color' => $s['soilColor']
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternAmount' => .65
+				, 'patternScale' => 1.7
+			]
+			, [
+				'color' => $s['grassColor']
+				, 'mask' => 'shrubs'
+				, 'field' => 'shrubs'
+				, 'patternColor' => $s['soilColor']
+				, 'slopeHigh' => .038
+				, 'slopeFade' => .045
+			]
+			, [
+				'color' => $s['sandColor']
+				, 'high' => $apron + 10.
+				, 'fade' => 32.
+				, 'slopeHigh' => .004
+				, 'slopeFade' => .009
+				, 'noise' => 16.
+				, 'scale' => 180.
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternAmount' => .59
+				, 'patternScale' => 1.2
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'fractures'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 3.5
+				, 'patternStretch' => 1.2
+				, 'patternAmount' => .64
+			]
 		];
 	}
 
 	private static function alaskaLayers(array $s): array
 	{
 		return [
-			['color'=>$s['grassColor'], 'pattern'=>'fractal', 'patternColor'=>$s['meadowColor'],
-				'patternScale'=>36., 'patternStretch'=>1.4, 'patternAmount'=>.78],
-			['color'=>$s['sandColor'], 'high'=>.43*$s['snowline'], 'fade'=>45., 'noise'=>65., 'scale'=>170.,
-				'slopeHigh'=>.012, 'slopeFade'=>.028, 'pattern'=>'gravel', 'patternColor'=>$s['talusColor'],
-				'patternScale'=>1.4, 'patternAmount'=>.8],
-			['color'=>$s['talusColor'], 'low'=>.65*$s['snowline'], 'fade'=>105., 'noise'=>95., 'scale'=>210.,
-				'pattern'=>'gravel', 'patternColor'=>$s['rockColor'], 'patternScale'=>3., 'patternAmount'=>.64],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'jointed', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>6., 'patternStretch'=>1.8, 'patternAmount'=>.76],
-			['color'=>$s['snowColor'], 'low'=>$s['snowline'], 'fade'=>$s['snowTransition'], 'noise'=>195., 'scale'=>180.,
-				'slopeHigh'=>$s['snowSlopeStart'], 'slopeFade'=>$s['snowSlopeEnd']-$s['snowSlopeStart'],
-				'pattern'=>'fractal', 'patternColor'=>self::tint($s['snowColor'],.71,.81,.90),
-				'patternScale'=>26., 'patternStretch'=>1.7, 'patternAmount'=>.62],
+			[
+				'color' => $s['grassColor']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['meadowColor']
+				, 'patternScale' => 36.
+				, 'patternStretch' => 1.4
+				, 'patternAmount' => .78
+			]
+			, [
+				'color' => $s['sandColor']
+				, 'high' => .43 * $s['snowline']
+				, 'fade' => 45.
+				, 'noise' => 65.
+				, 'scale' => 170.
+				, 'slopeHigh' => .012
+				, 'slopeFade' => .028
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['talusColor']
+				, 'patternScale' => 1.4
+				, 'patternAmount' => .8
+			]
+			, [
+				'color' => $s['talusColor']
+				, 'low' => .65 * $s['snowline']
+				, 'fade' => 105.
+				, 'noise' => 95.
+				, 'scale' => 210.
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockColor']
+				, 'patternScale' => 3.
+				, 'patternAmount' => .64
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'jointed'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 6.
+				, 'patternStretch' => 1.8
+				, 'patternAmount' => .76
+			]
+			, [
+				'color' => $s['snowColor']
+				, 'low' => $s['snowline']
+				, 'fade' => $s['snowTransition']
+				, 'noise' => 195.
+				, 'scale' => 180.
+				, 'slopeHigh' => $s['snowSlopeStart']
+				, 'slopeFade' => $s['snowSlopeEnd'] - $s['snowSlopeStart']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => self::tint($s['snowColor'], .71, .81, .90)
+				, 'patternScale' => 26.
+				, 'patternStretch' => 1.7
+				, 'patternAmount' => .62
+			]
 		];
 	}
 
 	private static function chalkLayers(array $s): array
 	{
 		return [
-			['color'=>$s['grassColor'], 'field'=>'meadow', 'pattern'=>'fractal', 'patternColor'=>$s['meadowColor'],
-				'patternScale'=>30., 'patternStretch'=>1.4, 'patternAmount'=>.68],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'fractures', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>4.2, 'patternStretch'=>1.6, 'patternAmount'=>.42],
-			['parent'=>'chalk-faces', 'color'=>$s['rockColor'], 'period'=>15.24, 'low'=>3., 'high'=>4.2, 'fade'=>.7,
-				'noise'=>3.4, 'scale'=>44., 'opacity'=>.5, 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>.85, 'patternAmount'=>1.],
-			['color'=>$s['soilColor'], 'datum'=>'water', 'high'=>$s['beachHeight'], 'fade'=>$s['beachWidth'],
-				'noise'=>.65, 'scale'=>32., 'roughness'=>.55, 'reflectivity'=>.13],
-			['color'=>$s['sandColor'], 'datum'=>'water', 'low'=>-1.2, 'high'=>$s['beachHeight']+1.5,
-				'fade'=>$s['beachWidth'], 'noise'=>1.2, 'scale'=>47., 'slopeHigh'=>.024, 'slopeFade'=>.034,
-				'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'], 'patternScale'=>.70, 'patternAmount'=>.9],
+			[
+				'color' => $s['grassColor']
+				, 'field' => 'meadow'
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['meadowColor']
+				, 'patternScale' => 30.
+				, 'patternStretch' => 1.4
+				, 'patternAmount' => .68
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'fractures'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 4.2
+				, 'patternStretch' => 1.6
+				, 'patternAmount' => .42
+			]
+			, [
+				'parent' => 'chalk-faces'
+				, 'color' => $s['rockColor']
+				, 'period' => 15.24
+				, 'low' => 3.
+				, 'high' => 4.2
+				, 'fade' => .7
+				, 'noise' => 3.4
+				, 'scale' => 44.
+				, 'opacity' => .5
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => .85
+				, 'patternAmount' => 1.
+			]
+			, [
+				'color' => $s['soilColor']
+				, 'datum' => 'water'
+				, 'high' => $s['beachHeight']
+				, 'fade' => $s['beachWidth']
+				, 'noise' => .65
+				, 'scale' => 32.
+				, 'roughness' => .55
+				, 'reflectivity' => .13
+			]
+			, [
+				'color' => $s['sandColor']
+				, 'datum' => 'water'
+				, 'low' => -1.2
+				, 'high' => $s['beachHeight'] + 1.5
+				, 'fade' => $s['beachWidth']
+				, 'noise' => 1.2
+				, 'scale' => 47.
+				, 'slopeHigh' => .024
+				, 'slopeFade' => .034
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => .70
+				, 'patternAmount' => .9
+			]
 		];
 	}
 
@@ -1313,21 +1908,63 @@ final class SurfaceLayers
 	{
 		$ice = $s['rockBandColor'];
 		$snow = $s['snowColor'];
+
 		return [
-			['color'=>$s['soilColor'], 'pattern'=>'gravel', 'patternColor'=>$s['sandColor'],
-				'patternScale'=>1.3, 'patternStretch'=>1., 'patternAmount'=>.85],
-			['color'=>$ice, 'low'=>8., 'fade'=>14., 'datum'=>'water', 'noise'=>21., 'scale'=>85.,
-				'reflectivity'=>1., 'roughness'=>.28,
-				'pattern'=>'fractures', 'patternColor'=>self::tint($ice,2.15,1.80,1.55),
-				'patternScale'=>24., 'patternStretch'=>1.7, 'patternAmount'=>.83],
-			self::exposedRock($s) + ['color'=>$s['rockColor'], 'pattern'=>'fractal', 'patternColor'=>$s['soilColor'],
-				'patternScale'=>24., 'patternStretch'=>1.5, 'patternAmount'=>.72],
-			['color'=>$snow, 'low'=>$s['snowline'], 'fade'=>$s['snowTransition'], 'noise'=>29., 'scale'=>105.,
-				'slopeHigh'=>$s['snowSlopeStart'], 'slopeFade'=>$s['snowSlopeEnd']-$s['snowSlopeStart'],
-				'pattern'=>'fractal', 'patternColor'=>self::tint($snow,.74,.84,.89),
-				'patternScale'=>17., 'patternStretch'=>1.6, 'patternAmount'=>.55],
-			['parent'=>3, 'channel'=>'relief', 'relief'=>'pattern', 'strength'=>.028,
-				'pattern'=>'ripples', 'patternScale'=>1.6, 'patternStretch'=>1., 'patternAmount'=>.80],
+			[
+				'color' => $s['soilColor']
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['sandColor']
+				, 'patternScale' => 1.3
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .85
+			]
+			, [
+				'color' => $ice
+				, 'low' => 8.
+				, 'fade' => 14.
+				, 'datum' => 'water'
+				, 'noise' => 21.
+				, 'scale' => 85.
+				, 'reflectivity' => 1.
+				, 'roughness' => .28
+				, 'pattern' => 'fractures'
+				, 'patternColor' => self::tint($ice, 2.15, 1.80, 1.55)
+				, 'patternScale' => 24.
+				, 'patternStretch' => 1.7
+				, 'patternAmount' => .83
+			]
+			, self::exposedRock($s) + [
+				'color' => $s['rockColor']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['soilColor']
+				, 'patternScale' => 24.
+				, 'patternStretch' => 1.5
+				, 'patternAmount' => .72
+			]
+			, [
+				'color' => $snow
+				, 'low' => $s['snowline']
+				, 'fade' => $s['snowTransition']
+				, 'noise' => 29.
+				, 'scale' => 105.
+				, 'slopeHigh' => $s['snowSlopeStart']
+				, 'slopeFade' => $s['snowSlopeEnd'] - $s['snowSlopeStart']
+				, 'pattern' => 'fractal'
+				, 'patternColor' => self::tint($snow, .74, .84, .89)
+				, 'patternScale' => 17.
+				, 'patternStretch' => 1.6
+				, 'patternAmount' => .55
+			]
+			, [
+				'parent' => 3
+				, 'channel' => 'relief'
+				, 'relief' => 'pattern'
+				, 'strength' => .028
+				, 'pattern' => 'ripples'
+				, 'patternScale' => 1.6
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .80
+			]
 		];
 	}
 
@@ -1335,24 +1972,84 @@ final class SurfaceLayers
 	private static function lagoonLayers(array $s): array
 	{
 		$sand = $s['sandColor'];
+
 		return [
-			['color'=>$s['rockColor'], 'pattern'=>'gravel', 'patternColor'=>$s['rockBandColor'],
-				'patternScale'=>4.5, 'patternStretch'=>1., 'patternAmount'=>.82],
-			['color'=>self::tint($sand,.60,.74,.74), 'datum'=>'water', 'low'=>-8., 'fade'=>5.,
-				'noise'=>3., 'scale'=>55.] + self::stipple($sand,.51,.65,1.1),
-			['color'=>self::tint($sand,.67,.78,.72), 'datum'=>'water', 'low'=>-8., 'high'=>-2.,
-				'fade'=>1.7, 'noise'=>3.3, 'scale'=>36., 'pattern'=>'fractal', 'patternColor'=>$s['soilColor'],
-				'patternScale'=>23., 'patternStretch'=>1.2, 'patternAmount'=>.89],
-			['color'=>$sand, 'datum'=>'water', 'low'=>$s['beachHeight'], 'fade'=>$s['beachWidth'], 'noise'=>.6, 'scale'=>28.]
-				+ self::stipple($sand,.78,.61,.9),
-			['color'=>self::tint($sand,.48,.60,.40), 'datum'=>'water', 'low'=>$s['beachHeight']+.55*$s['beachWidth'],
-				'fade'=>.55*$s['beachWidth'], 'noise'=>1.7, 'scale'=>42., 'pattern'=>'fractal',
-				'patternColor'=>$s['grassColor'], 'patternScale'=>4.2, 'patternAmount'=>.78],
-			['color'=>$s['grassColor'], 'datum'=>'water', 'low'=>$s['beachHeight']+1.35*$s['beachWidth'],
-				'fade'=>.70*$s['beachWidth'], 'noise'=>3.0, 'scale'=>54., 'pattern'=>'fractal',
-				'patternColor'=>self::tint($s['grassColor'],.62,.73,.72), 'patternAmount'=>.92, 'patternScale'=>8.5],
-			['parent'=>1, 'datum'=>'water', 'high'=>.7, 'fade'=>.7, 'channel'=>'relief', 'relief'=>'pattern',
-				'strength'=>.023, 'pattern'=>'ripples', 'patternScale'=>.64, 'patternStretch'=>1., 'patternAmount'=>.72],
+			[
+				'color' => $s['rockColor']
+				, 'pattern' => 'gravel'
+				, 'patternColor' => $s['rockBandColor']
+				, 'patternScale' => 4.5
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .82
+			]
+			, [
+				'color' => self::tint($sand, .60, .74, .74)
+				, 'datum' => 'water'
+				, 'low' => -8.
+				, 'fade' => 5.
+				, 'noise' => 3.
+				, 'scale' => 55.
+			] + self::stipple($sand, .51, .65, 1.1)
+			, [
+				'color' => self::tint($sand, .67, .78, .72)
+				, 'datum' => 'water'
+				, 'low' => -8.
+				, 'high' => -2.
+				, 'fade' => 1.7
+				, 'noise' => 3.3
+				, 'scale' => 36.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['soilColor']
+				, 'patternScale' => 23.
+				, 'patternStretch' => 1.2
+				, 'patternAmount' => .89
+			]
+			, [
+				'color' => $sand
+				, 'datum' => 'water'
+				, 'low' => $s['beachHeight']
+				, 'fade' => $s['beachWidth']
+				, 'noise' => .6
+				, 'scale' => 28.
+			]
+				+ self::stipple($sand, .78, .61, .9)
+			, [
+				'color' => self::tint($sand, .48, .60, .40)
+				, 'datum' => 'water'
+				, 'low' => $s['beachHeight'] + .55 * $s['beachWidth']
+				, 'fade' => .55 * $s['beachWidth']
+				, 'noise' => 1.7
+				, 'scale' => 42.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['grassColor']
+				, 'patternScale' => 4.2
+				, 'patternAmount' => .78
+			]
+			, [
+				'color' => $s['grassColor']
+				, 'datum' => 'water'
+				, 'low' => $s['beachHeight'] + 1.35 * $s['beachWidth']
+				, 'fade' => .70 * $s['beachWidth']
+				, 'noise' => 3.0
+				, 'scale' => 54.
+				, 'pattern' => 'fractal'
+				, 'patternColor' => self::tint($s['grassColor'], .62, .73, .72)
+				, 'patternAmount' => .92
+				, 'patternScale' => 8.5
+			]
+			, [
+				'parent' => 1
+				, 'datum' => 'water'
+				, 'high' => .7
+				, 'fade' => .7
+				, 'channel' => 'relief'
+				, 'relief' => 'pattern'
+				, 'strength' => .023
+				, 'pattern' => 'ripples'
+				, 'patternScale' => .64
+				, 'patternStretch' => 1.
+				, 'patternAmount' => .72
+			]
 		];
 	}
 
@@ -1360,19 +2057,64 @@ final class SurfaceLayers
 	{
 		$sand = $s['sandColor'];
 		$height = $recipe['heightScale'] ?? Recipe::shapeDefaults('amber-dunes')['heightScale'];
-		$crest = ($recipe['baseBias'] ?? Recipe::shapeDefaults('amber-dunes')['baseBias'])*$height;
+		$crest = ($recipe['baseBias'] ?? Recipe::shapeDefaults('amber-dunes')['baseBias']) * $height;
+
 		return [
-			['color'=>$sand, 'pattern'=>'fractal', 'patternColor'=>$s['soilColor'], 'patternScale'=>85., 'patternAmount'=>.32],
-			['color'=>$s['soilColor'], 'slopeLow'=>.105, 'slopeFade'=>.067, 'opacity'=>.52,
-				'pattern'=>'fractal', 'patternColor'=>$sand, 'patternScale'=>34., 'patternAmount'=>.40],
-			['color'=>self::tint($sand,1.13,1.21,1.24), 'low'=>$crest-.12*$height, 'fade'=>.08*$height,
-				'noise'=>.027*$height, 'scale'=>72.] + self::stipple($sand,.86,.40,1.1),
-			['channel'=>'relief', 'relief'=>'pattern', 'strength'=>.028, 'pattern'=>'ripples', 'patternAmount'=>1.,
-				'patternScale'=>.78, 'patternStretch'=>1., 'slopeHigh'=>.065, 'slopeFade'=>.045],
-			['color'=>$s['rockColor'], 'high'=>$crest-.49*$height, 'fade'=>.10*$height, 'noise'=>.035*$height,
-				'scale'=>90., 'slopeHigh'=>.030, 'slopeFade'=>.035, 'flatten'=>1.] + self::stipple($s['soilColor'],.90,.65,.65),
-			['color'=>$s['rockBandColor'], 'high'=>$crest-.61*$height, 'fade'=>.045*$height, 'noise'=>.019*$height,
-				'scale'=>44., 'slopeHigh'=>.009, 'slopeFade'=>.018, 'flatten'=>1.] + self::stipple($s['rockBandColor'],.79,.65,1.4),
+			[
+				'color' => $sand
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $s['soilColor']
+				, 'patternScale' => 85.
+				, 'patternAmount' => .32
+			]
+			, [
+				'color' => $s['soilColor']
+				, 'slopeLow' => .105
+				, 'slopeFade' => .067
+				, 'opacity' => .52
+				, 'pattern' => 'fractal'
+				, 'patternColor' => $sand
+				, 'patternScale' => 34.
+				, 'patternAmount' => .40
+			]
+			, [
+				'color' => self::tint($sand, 1.13, 1.21, 1.24)
+				, 'low' => $crest - .12 * $height
+				, 'fade' => .08 * $height
+				, 'noise' => .027 * $height
+				, 'scale' => 72.
+			] + self::stipple($sand, .86, .40, 1.1)
+			, [
+				'channel' => 'relief'
+				, 'relief' => 'pattern'
+				, 'strength' => .028
+				, 'pattern' => 'ripples'
+				, 'patternAmount' => 1.
+				, 'patternScale' => .78
+				, 'patternStretch' => 1.
+				, 'slopeHigh' => .065
+				, 'slopeFade' => .045
+			]
+			, [
+				'color' => $s['rockColor']
+				, 'high' => $crest - .49 * $height
+				, 'fade' => .10 * $height
+				, 'noise' => .035 * $height
+				, 'scale' => 90.
+				, 'slopeHigh' => .030
+				, 'slopeFade' => .035
+				, 'flatten' => 1.
+			] + self::stipple($s['soilColor'], .90, .65, .65)
+			, [
+				'color' => $s['rockBandColor']
+				, 'high' => $crest - .61 * $height
+				, 'fade' => .045 * $height
+				, 'noise' => .019 * $height
+				, 'scale' => 44.
+				, 'slopeHigh' => .009
+				, 'slopeFade' => .018
+				, 'flatten' => 1.
+			] + self::stipple($s['rockBandColor'], .79, .65, 1.4)
 		];
 	}
 
@@ -1387,32 +2129,38 @@ final class SurfaceLayers
 		$contrast = $settings['bandContrast'];
 		$rows = [
 			[
-				'color' => self::hex($palette['dust']), 'pattern' => 'mottle',
-				'patternColor' => self::hex($palette['cap']), 'patternScale' => 61., 'patternAmount' => .24,
-			],
+				'color' => self::hex($palette['dust'])
+				, 'pattern' => 'mottle'
+				, 'patternColor' => self::hex($palette['cap'])
+				, 'patternScale' => 61.
+				, 'patternAmount' => .24
+			]
 		];
 
 		$rock = self::exposedRock($settings);
+
 		foreach(['rust', 'shale', 'ledge', 'sandstone', 'redBeds', 'sandstone', 'cap'] as $i => $name)
 		{
 			$color = array_map(
-				static fn(float $base, float $bed) => $base + $contrast * ($bed - $base),
-				$average, $palette[$name]
+				static fn(float $base, float $bed) => $base + $contrast * ($bed - $base)
+				, $average
+				, $palette[$name]
 			);
+
 			$rows[] = [
-				'color' => self::hex($color),
-				'datum' => 'beds',
-				'period' => ($contacts[7] - $contacts[0]) * $spacing,
-				'low' => ($contacts[$i] - $contacts[0]) * $spacing,
-				'high' => ($contacts[$i + 1] - $contacts[0]) * $spacing,
-				'fade' => .055 * $spacing / $settings['bandSharpness'],
-				'noise' => .014 * $spacing,
-				'scale' => 72.,
-				'pattern' => 'bedded',
-				'patternColor' => self::hex(array_map(static fn(float $channel) => .42 * $channel, $color)),
-				'patternScale' => 33.,
-				'patternStretch' => 4.5,
-				'patternAmount' => .64,
+				'color' => self::hex($color)
+				, 'datum' => 'beds'
+				, 'period' => ($contacts[7] - $contacts[0]) * $spacing
+				, 'low' => ($contacts[$i] - $contacts[0]) * $spacing
+				, 'high' => ($contacts[$i + 1] - $contacts[0]) * $spacing
+				, 'fade' => .055 * $spacing / $settings['bandSharpness']
+				, 'noise' => .014 * $spacing
+				, 'scale' => 72.
+				, 'pattern' => 'bedded'
+				, 'patternColor' => self::hex(array_map(static fn(float $channel) => .42 * $channel, $color))
+				, 'patternScale' => 33.
+				, 'patternStretch' => 4.5
+				, 'patternAmount' => .64
 			] + $rock;
 		}
 
@@ -1428,15 +2176,16 @@ final class SurfaceLayers
 		$light = TerrainAppearance::linear($settings['rockBandColor']);
 		$mean = array_map(static fn(float $a, float $b) => .5 * ($a + $b), $rock, $light);
 		$rows = [['color' => $settings['soilColor']]];
+
 		foreach([$light, $rock] as $i => $color)
 		{
 			$blend = array_map(static fn(float $a, float $b) => $a + $contrast * ($b - $a), $mean, $color);
 			$rows[] = [
-				'color' => self::hex($blend),
-				'period' => $spacing,
-				'low' => .5 * ($i + 1) * $spacing,
-				'high' => .5 * ($i + 2) * $spacing,
-				'fade' => .16 * $spacing / $settings['bandSharpness'],
+				'color' => self::hex($blend)
+				, 'period' => $spacing
+				, 'low' => .5 * ($i + 1) * $spacing
+				, 'high' => .5 * ($i + 2) * $spacing
+				, 'fade' => .16 * $spacing / $settings['bandSharpness']
 			] + self::exposedRock($settings);
 		}
 
@@ -1448,28 +2197,57 @@ final class SurfaceLayers
 	{
 		$f = $this->fieldUniforms;
 		$seed = crc32((string)$form['seed']);
-		$values = [...$origin,$f['uMacroVariation'][0], ...$f['uSlopeBlend'], ...$f['uHeightBlend'],
-			...$f['uSnowline'], ...$f['uMountainZones'], ...$f['uMountainAmounts'],$form['damping']/$form['slopeScale']**2,
-			...$f['uFieldScale'], $seed & 65535,($seed >> 16) & 65535,count($this->layers),0., ...$this->bounce,0.];
-		foreach([[$this->colors,3],[$this->ranges,4],[$this->blends,4],[$this->modes,4],[$this->effects,4],
-			[$this->finishes,2],[$this->patterns,4],[$this->patternColors,3]] as [$array,$components]) {
+		$values = [
+			...$origin
+			, $f['uMacroVariation'][0]
+			, ...$f['uSlopeBlend']
+			, ...$f['uHeightBlend']
+			, ...$f['uSnowline']
+			, ...$f['uMountainZones']
+			, ...$f['uMountainAmounts']
+			, $form['damping'] / $form['slopeScale'] ** 2
+			, ...$f['uFieldScale']
+			, $seed & 65535
+			, ($seed >> 16) & 65535
+			, count($this->layers)
+			, 0.
+			, ...$this->bounce
+			, 0.
+		];
+
+		foreach([
+			[$this->colors,3]
+			, [$this->ranges,4]
+			, [$this->blends,4]
+			, [$this->modes,4]
+			, [$this->effects,4]
+			, [$this->finishes,2]
+			, [$this->patterns,4]
+			, [$this->patternColors,3]
+		] as [$array,$components])
+		{
 			$padded = [];
-			foreach(array_chunk($array,$components) as $row) array_push($padded,...array_pad($row,4,0.));
-			array_push($values,...array_pad($padded,self::LIMIT*4,0.));
+
+			foreach(array_chunk($array, $components) as $row) array_push($padded, ...array_pad($row, 4, 0.));
+			array_push($values, ...array_pad($padded, self::LIMIT * 4, 0.));
 		}
-		return pack('g*',...$values);
+
+		return pack('g*', ...$values);
 	}
 
 	public function bind(Program $p): void
 	{
-		foreach($this->fieldUniforms as $name=>$values) {
+		foreach($this->fieldUniforms as $name => $values)
+		{
 			$location = $p->location($name);
-			match(count($values)) {
-				1=>glUniform1f($location,...$values), 2=>glUniform2f($location,...$values),
-				3=>glUniform3f($location,...$values), 4=>glUniform4f($location,...$values),
+			match(count($values))
+			{
+				1 => glUniform1f($location, ...$values), 2 => glUniform2f($location, ...$values),
+				3 => glUniform3f($location, ...$values), 4 => glUniform4f($location, ...$values),
 			};
 		}
-		glUniform3f($p->location('uMaterialBounce'),...$this->bounce);
+
+		glUniform3f($p->location('uMaterialBounce'), ...$this->bounce);
 		$n = count($this->layers);
 		glUniform1i($p->location('uLayerCount'), $n);
 		glUniform3fv($p->location('uLayerColor[0]'), $n, $this->colors);
@@ -1477,7 +2255,9 @@ final class SurfaceLayers
 		glUniform4fv($p->location('uLayerBlend[0]'), $n, $this->blends);
 		glUniform4fv($p->location('uLayerMode[0]'), $n, $this->modes);
 		glUniform4fv($p->location('uLayerEffect[0]'), $n, $this->effects);
+
 		if($this->reflective) glUniform2fv($p->location('uLayerFinish[0]'), $n, $this->finishes);
+
 		glUniform4fv($p->location('uLayerPattern[0]'), $n, $this->patterns);
 		glUniform3fv($p->location('uLayerPatternColor[0]'), $n, $this->patternColors);
 	}
