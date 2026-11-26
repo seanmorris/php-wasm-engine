@@ -83,68 +83,96 @@ const indexedContexts = new WeakSet();
  */
 export function cacheIndexQueries(gl, canvas)
 {
-	if (typeof gl.createVertexArray !== 'function' || indexedContexts.has(gl)) return;
+	if(typeof gl.createVertexArray !== 'function' || indexedContexts.has(gl)) return;
+
 	indexedContexts.add(gl);
 	const defaultVao = {};
 	let active, known, bindings, sizes;
+
 	const reset = () => {
 		active = undefined;
 		known = new WeakSet();
 		bindings = new WeakMap();
 		sizes = new WeakMap();
 	};
+
 	reset();
 	canvas?.addEventListener?.('webglcontextlost', reset);
 	canvas?.addEventListener?.('webglcontextrestored', reset);
+
 	const wrap = (name, required, fn) => {
 		const original = gl[name].bind(gl);
+
 		gl[name] = (...args) => args.length < required ? original(...args) : fn(original, ...args);
 	};
+
 	wrap('createVertexArray', 0, create => {
 		const vao = create();
-		if (vao) known.add(vao);
+
+		if(vao) known.add(vao);
+
 		return vao;
 	});
+
 	wrap('bindVertexArray', 1, (bind, vao) => {
 		bind(vao);
 		active = vao === null ? defaultVao : known.has(vao) ? vao : undefined;
 	});
+
 	wrap('deleteVertexArray', 1, (remove, vao) => {
 		remove(vao);
-		if (active === vao) active = undefined;
+
+		if(active === vao) active = undefined;
+
 		known.delete(vao);
 	});
+
 	wrap('bindBuffer', 2, (bind, target, buffer) => {
 		bind(target, buffer);
-		if (target !== gl.ARRAY_BUFFER) {
-			if (active) bindings.delete(active);
+
+		if(target !== gl.ARRAY_BUFFER)
+		{
+			if(active) bindings.delete(active);
 			else bindings = new WeakMap();
 		}
 	});
+
 	wrap('deleteBuffer', 1, (remove, buffer) => {
 		remove(buffer);
 		bindings = new WeakMap();
 		sizes.delete(buffer);
 	});
+
 	wrap('bufferData', 2, (allocate, ...args) => {
 		// Streaming vertex uploads cannot resize an element buffer. For other
 		// targets, re-read the actual size, including after a failed allocation.
-		if (args[0] !== gl.ARRAY_BUFFER) sizes = new WeakMap();
+		if(args[0] !== gl.ARRAY_BUFFER) sizes = new WeakMap();
+
 		return allocate(...args);
 	});
+
 	wrap('getParameter', 1, (query, parameter) => {
-		if (parameter !== gl.ELEMENT_ARRAY_BUFFER_BINDING || !active || gl.isContextLost()) return query(parameter);
-		if (bindings.has(active)) return bindings.get(active);
+		if(parameter !== gl.ELEMENT_ARRAY_BUFFER_BINDING || !active || gl.isContextLost()) return query(parameter);
+
+		if(bindings.has(active)) return bindings.get(active);
+
 		const buffer = query(parameter);
 		bindings.set(active, buffer);
+
 		return buffer;
 	});
+
 	wrap('getBufferParameter', 2, (query, target, parameter) => {
 		const buffer = target === gl.ELEMENT_ARRAY_BUFFER && parameter === gl.BUFFER_SIZE && bindings.get(active);
-		if (!buffer || gl.isContextLost()) return query(target, parameter);
-		if (sizes.has(buffer)) return sizes.get(buffer);
+
+		if(!buffer || gl.isContextLost()) return query(target, parameter);
+
+		if(sizes.has(buffer)) return sizes.get(buffer);
+
 		const size = query(target, parameter);
-		if (typeof size === 'number') sizes.set(buffer, size);
+
+		if(typeof size === 'number') sizes.set(buffer, size);
+
 		return size;
 	});
 }

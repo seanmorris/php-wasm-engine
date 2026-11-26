@@ -76,25 +76,52 @@ test('element queries follow VAO bindings, storage changes and context restorati
 	let active = null, bindingReads = 0, sizeReads = 0;
 	const otherTargets = new Map();
 	const gl = {
-		ARRAY_BUFFER: 34962, ELEMENT_ARRAY_BUFFER: 34963, ELEMENT_ARRAY_BUFFER_BINDING: 34965, BUFFER_SIZE: 34660,
-		createVertexArray() { return {}; },
-		bindVertexArray(vao) { if(!arguments.length) throw new TypeError(); active = vao; },
-		deleteVertexArray(vao) { if(active === vao) active = null; bindings.delete(vao); },
-		bindBuffer(target, buffer) {
+		ARRAY_BUFFER: 34962
+		, ELEMENT_ARRAY_BUFFER: 34963
+		, ELEMENT_ARRAY_BUFFER_BINDING: 34965
+		, BUFFER_SIZE: 34660
+
+
+		, createVertexArray() { return {}; }
+
+
+		, bindVertexArray(vao) { if(!arguments.length) throw new TypeError(); active = vao; }
+
+
+		, deleteVertexArray(vao) { if(active === vao) active = null; bindings.delete(vao); }
+
+
+		, bindBuffer(target, buffer) {
 			if(buffer?.invalid) return;
+
 			if(Number(target) === 34963) bindings.set(active, buffer);
 			else otherTargets.set(target, buffer);
-		},
-		bufferData(target, size) { sizes.set(target === 34963 ? bindings.get(active) : otherTargets.get(target), size); },
-		deleteBuffer(buffer) { if(bindings.get(active) === buffer) bindings.delete(active); },
-		getParameter() { bindingReads++; return bindings.get(active) ?? null; },
-		getBufferParameter() { sizeReads++; return sizes.get(bindings.get(active)); },
-		isContextLost() { return false; }
+		}
+
+
+		, bufferData(target, size) {
+			sizes.set(target === 34963 ? bindings.get(active) : otherTargets.get(target), size);
+		}
+
+
+		, deleteBuffer(buffer) { if(bindings.get(active) === buffer) bindings.delete(active); }
+
+
+		, getParameter() { bindingReads++; return bindings.get(active) ?? null; }
+
+
+		, getBufferParameter() { sizeReads++; return sizes.get(bindings.get(active)); }
+
+
+		, isContextLost() { return false; }
 	};
+
 	cacheIndexQueries(gl, canvas);
 	cacheIndexQueries(gl, canvas);
 	const a = gl.createVertexArray(), b = gl.createVertexArray(), buffer = {};
+
 	const binding = () => gl.getParameter(gl.ELEMENT_ARRAY_BUFFER_BINDING);
+
 	const size = () => gl.getBufferParameter(gl.ELEMENT_ARRAY_BUFFER, gl.BUFFER_SIZE);
 	gl.bindVertexArray(a);
 	gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
@@ -119,7 +146,7 @@ test('element queries follow VAO bindings, storage changes and context restorati
 	assert.equal(sizeReads, 2);
 	gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, 48, 0);
 	assert.equal(size(), 48);
-	gl.bindBuffer('34963', {invalid:true});
+	gl.bindBuffer('34963', {invalid: true});
 	assert.equal(binding(), buffer);
 	assert.equal(bindingReads, 4);
 	assert.throws(() => gl.bindVertexArray(), TypeError);

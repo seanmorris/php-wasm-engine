@@ -210,18 +210,31 @@ try
 
 		const settings = options(args), directory = path.resolve(settings.directory ?? '.');
 
-		if(command === 'terrain') {
+		if(command === 'terrain')
+		{
 			if(settings.directory !== 'preview') throw Error('Use phonics terrain preview.');
+
 			const terrain = '@seanmorris/terrain-phonics/phonics.json';
 			let root;
-			try { root = path.dirname(createRequire(path.resolve('package.json')).resolve(terrain)); }
-			catch {
-				root = fileURLToPath(new URL('../packages/terrain-phonics/',import.meta.url));
-				await fs.access(path.join(root,'autoload.php')).catch(() => { throw Error('Install @seanmorris/terrain-phonics to use terrain preview.'); });
+
+			try
+			{
+				root = path.dirname(createRequire(path.resolve('package.json')).resolve(terrain));
 			}
-			const runner = fileURLToPath(new URL('../cli/terrain-preview.php',import.meta.url));
-			const child = spawnSync('php',[runner,root,JSON.stringify(settings)],{stdio:'inherit'});
+			catch
+			{
+				root = fileURLToPath(new URL('../packages/terrain-phonics/', import.meta.url));
+
+				await fs.access(path.join(root, 'autoload.php')).catch(
+					() => { throw Error('Install @seanmorris/terrain-phonics to use terrain preview.'); }
+				);
+			}
+
+			const runner = fileURLToPath(new URL('../cli/terrain-preview.php', import.meta.url));
+			const child = spawnSync('php', [runner,root,JSON.stringify(settings)], {stdio: 'inherit'});
+
 			if(child.error) throw child.error;
+
 			process.exitCode = child.status ?? 1;
 		}
 		else if(command === 'manifest' || (command === 'init' && !settings.directory))

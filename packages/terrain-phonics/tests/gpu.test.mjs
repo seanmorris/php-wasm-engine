@@ -41,10 +41,15 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 	const shaders = Object.fromEntries(names.map(name => [name
 		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
 	]));
-	shaders['terrain.frag'] = shaders['terrain.frag'].replace('// REGIONS', shaders['joined-material.glsl']).replace('// LAYERS', shaders['surface-layers.glsl'])
+
+	const uniformMaterial = readFileSync(new URL('./uniform-material.glsl', import.meta.url), 'utf8')
+		.replace('// RELIEF FIELDS', shaders['material-fields.glsl']);
+
+	shaders['terrain.frag'] = shaders['terrain.frag']
+		.replace('// REGIONS', shaders['joined-material.glsl'])
+		.replace('// LAYERS', shaders['surface-layers.glsl'])
 		.replace('// MATERIAL NOISE', shaders['material-noise.glsl'])
-		.replace('// MATERIAL STACK',readFileSync(new URL('./uniform-material.glsl',import.meta.url),'utf8')
-			.replace('// RELIEF FIELDS',shaders['material-fields.glsl']));
+		.replace('// MATERIAL STACK', uniformMaterial);
 
 	const browser = await chromium.launch({
 		executablePath: process.env.CHROMIUM ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined)
@@ -122,8 +127,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 
 			const appearance = (linked, uniforms) => {
-				const ink=['uRockColor','uGrassColor','uSandColor','uSnowColor','uRoadColor'].flatMap(key=>uniforms[key]);
-				gl.uniform3fv(gl.getUniformLocation(linked,'uPaintColor[0]'),ink);
+				const ink = ['uRockColor','uGrassColor','uSandColor','uSnowColor','uRoadColor'].flatMap(
+					key => uniforms[key]
+				);
+
+				gl.uniform3fv(gl.getUniformLocation(linked, 'uPaintColor[0]'), ink);
+
 				for(const [name, values] of Object.entries(uniforms))
 				{
 					const location = gl.getUniformLocation(linked, name);
@@ -135,13 +144,16 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 
 			const stackUniforms = (linked, inputs) => {
-				for(const [name,values] of Object.entries(inputs)) {
-					const loc=gl.getUniformLocation(linked,name);
-					if(name==='uLayerCount') gl.uniform1i(loc,values[0]);
-					else if(values.length===1) gl.uniform1f(loc,values[0]);
-					else {
-						const width=name.endsWith('[0]') ? (name.includes('Color') ? 3 : 4) : values.length;
-						gl[`uniform${width}fv`](loc,values);
+				for(const [name,values] of Object.entries(inputs))
+				{
+					const loc = gl.getUniformLocation(linked, name);
+
+					if(name==='uLayerCount') gl.uniform1i(loc, values[0]);
+					else if(values.length===1) gl.uniform1f(loc, values[0]);
+					else
+					{
+						const width = name.endsWith('[0]') ? (name.includes('Color') ? 3 : 4) : values.length;
+						gl[`uniform${width}fv`](loc, values);
 					}
 				}
 			};
@@ -178,7 +190,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				const bytes = new Uint8Array(4);
 				gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
 
-				return Array.from(bytes).slice(0,channels);
+				return Array.from(bytes).slice(0, channels);
 			};
 
 			const vertex = shaders['atmosphere-cache.vert'];
@@ -207,27 +219,33 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vec3 t, light;
 					terrainIntegrateAtmosphere(vec3(0.,uTestUp,0.),uTestEye,uTestDistance,true,t,light);
 					color = vec4(t.r,light.r,light.b,1.);
-				}`);
+				}`
+			);
+
 			parameters(bands);
-			texture(7,1,1,new Uint8Array([255,255,255,255]));
-			const at = key => gl.getUniformLocation(bands,key);
-			gl.uniform1i(at('uTransmittance'),7);
-			gl.uniform2f(at('uTransmittanceSize'),1,1);
-			gl.uniform3f(at('uRayleigh'),0,0,0);
-			gl.uniform1f(at('uMie'),0);
-			gl.uniform1f(at('uSunIntensity'),4*Math.PI);
-			gl.uniform1f(at('uAirLayerCount'),2);
-			gl.uniform3f(at('uAirBand[0]'),100,120,.005);
-			gl.uniform3f(at('uAirBand[1]'),105,130,.002);
-			gl.uniform3f(at('uAirColor[0]'),1,0,0);
-			gl.uniform3f(at('uAirColor[1]'),0,0,1);
-			// An overhead sun keeps the reference simple; sunlight reaching each sample is dimmed by the layers above it.
-			gl.uniform3f(at('uSunDirection'),0,1,0);
+			texture(7, 1, 1, new Uint8Array([255,255,255,255]));
+
+			const at = key => gl.getUniformLocation(bands, key);
+			gl.uniform1i(at('uTransmittance'), 7);
+			gl.uniform2f(at('uTransmittanceSize'), 1, 1);
+			gl.uniform3f(at('uRayleigh'), 0, 0, 0);
+			gl.uniform1f(at('uMie'), 0);
+			gl.uniform1f(at('uSunIntensity'), 4*Math.PI);
+			gl.uniform1f(at('uAirLayerCount'), 2);
+			gl.uniform3f(at('uAirBand[0]'), 100, 120, .005);
+			gl.uniform3f(at('uAirBand[1]'), 105, 130, .002);
+			gl.uniform3f(at('uAirColor[0]'), 1, 0, 0);
+			gl.uniform3f(at('uAirColor[1]'), 0, 0, 1);
+			// An overhead sun keeps the reference simple. Sunlight reaching each sample is dimmed by the
+			// layers above it.
+			gl.uniform3f(at('uSunDirection'), 0, 1, 0);
 			const bandSamples = [];
-			for(const [eye,up,distance] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]]) {
-				gl.uniform1f(at('uTestEye'),eye);
-				gl.uniform1f(at('uTestUp'),up);
-				gl.uniform1f(at('uTestDistance'),distance);
+
+			for(const [eye,up,distance] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]])
+			{
+				gl.uniform1f(at('uTestEye'), eye);
+				gl.uniform1f(at('uTestUp'), up);
+				gl.uniform1f(at('uTestDistance'), distance);
 				bandSamples.push(pixel());
 			}
 
@@ -235,13 +253,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// texture's altitude rows, so the shaders must add it exactly.
 			const thin = program(vertex, `${header}${shaders['atmosphere.glsl']}
 				uniform float uTestAltitude, uTestMu; out vec4 color;
-				void main() { color = vec4(terrainTransmittance(uTestAltitude, uTestMu), 1.); }`);
+				void main() { color = vec4(terrainTransmittance(uTestAltitude, uTestMu), 1.); }`
+			);
+
 			parameters(thin);
-			gl.uniform1f(gl.getUniformLocation(thin,'uAirLayerCount'),1);
-			gl.uniform3fv(gl.getUniformLocation(thin,'uAirBand[0]'),data.thinLayer.band);
+			gl.uniform1f(gl.getUniformLocation(thin, 'uAirLayerCount'), 1);
+			gl.uniform3fv(gl.getUniformLocation(thin, 'uAirBand[0]'), data.thinLayer.band);
+
 			const thinLayerSamples = data.thinLayer.samples.map(([altitude, mu]) => {
-				gl.uniform1f(gl.getUniformLocation(thin,'uTestAltitude'),altitude);
-				gl.uniform1f(gl.getUniformLocation(thin,'uTestMu'),mu);
+				gl.uniform1f(gl.getUniformLocation(thin, 'uTestAltitude'), altitude);
+				gl.uniform1f(gl.getUniformLocation(thin, 'uTestMu'), mu);
+
 				return pixel();
 			});
 
@@ -281,35 +303,41 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Sample at the centers of the actual cache texels. This isolates storage error from interpolation.
 			let twilightError = 0;
-			target(7,256,128);
-			for(const degrees of [-5,-4,-3,-2]) {
+			target(7, 256, 128);
+
+			for(const degrees of [-5,-4,-3,-2])
+			{
 				const angle = degrees*Math.PI/180;
 				const sun = [0,Math.sin(angle),-Math.cos(angle)];
-				gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
-				gl.viewport(0,0,256,128);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+				gl.viewport(0, 0, 256, 128);
 				gl.useProgram(skyCache);
-				gl.uniform3fv(gl.getUniformLocation(skyCache,'uSunDirection'),sun);
-				gl.uniform1f(gl.getUniformLocation(skyCache,'uSkyCacheAltitude'),100);
-				gl.drawArrays(gl.TRIANGLES,0,3);
-				gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+				gl.uniform3fv(gl.getUniformLocation(skyCache, 'uSunDirection'), sun);
+				gl.uniform1f(gl.getUniformLocation(skyCache, 'uSkyCacheAltitude'), 100);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.useProgram(skySample);
-				gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheEye'),7);
-				gl.uniform1f(gl.getUniformLocation(skySample,'uTestAltitude'),100);
-				gl.uniform3fv(gl.getUniformLocation(skySample,'uSunDirection'),sun);
-				for(const x of [16,47,90,143,195]) for(const y of [68,79,96,113]) {
+				gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheEye'), 7);
+				gl.uniform1f(gl.getUniformLocation(skySample, 'uTestAltitude'), 100);
+				gl.uniform3fv(gl.getUniformLocation(skySample, 'uSunDirection'), sun);
+
+				for(const x of [16,47,90,143,195])
+				for(const y of [68,79,96,113])
+				{
 					const lon = ((x+.5)/256-.5)*2*Math.PI;
 					const lat = (((y+.5)/128)*2-1)**2*Math.PI/2;
 					const ray = [Math.cos(lon)*Math.cos(lat),Math.sin(lat),Math.sin(lon)*Math.cos(lat)];
-					gl.uniform3fv(gl.getUniformLocation(skySample,'uTestRay'),ray);
-					gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheReady'),0);
+					gl.uniform3fv(gl.getUniformLocation(skySample, 'uTestRay'), ray);
+					gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheReady'), 0);
 					const direct = pixel();
-					gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheReady'),1);
+					gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheReady'), 1);
 					const cached = pixel();
-					twilightError = Math.max(twilightError,...direct.map((c,i)=>Math.abs(c-cached[i])));
+					twilightError = Math.max(twilightError, ...direct.map((c, i) => Math.abs(c-cached[i])));
 				}
 			}
-			gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheEye'),2);
-			gl.uniform3fv(gl.getUniformLocation(skySample,'uSunDirection'),data.uniforms.sunDirection);
+
+			gl.uniform1i(gl.getUniformLocation(skySample, 'uSkyCacheEye'), 2);
+			gl.uniform3fv(gl.getUniformLocation(skySample, 'uSunDirection'), data.uniforms.sunDirection);
 
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
@@ -319,11 +347,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, radiance, 0);
 				gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 				parameters(aerialCache);
-				if(band) {
-					gl.uniform1f(gl.getUniformLocation(aerialCache,'uAirLayerCount'),1);
-					gl.uniform3fv(gl.getUniformLocation(aerialCache,'uAirBand[0]'),band);
-					gl.uniform3f(gl.getUniformLocation(aerialCache,'uAirColor[0]'),.7,.55,.4);
+
+				if(band)
+				{
+					gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAirLayerCount'), 1);
+					gl.uniform3fv(gl.getUniformLocation(aerialCache, 'uAirBand[0]'), band);
+					gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAirColor[0]'), .7, .55, .4);
 				}
+
 				gl.uniform3f(gl.getUniformLocation(aerialCache, 'uAerialCacheGrid'), 32, 16, 16);
 				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheMaxDistance'), 90000);
 				gl.uniform1f(gl.getUniformLocation(aerialCache, 'uAerialCacheAltitude'), altitude);
@@ -333,27 +364,33 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			};
+
 			buildAerialCache(100);
 
-			const solar = program(vertex,header+data.source+`
+			const solar = program(vertex, header+data.source + `
 				uniform float altitude; uniform bool useTable; out vec4 color;
 				void main() {
 					vec3 direct=useTable ? terrainCachedSunlight(altitude) : terrainSunlight(altitude);
 					color=vec4(terrainToneMap(direct*.15),1.);
-				}`);
+				}`
+			);
+
 			parameters(solar);
-			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheTransmittance'),4);
-			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheRadiance'),5);
-			gl.uniform3f(gl.getUniformLocation(solar,'uAerialCacheGrid'),32,16,16);
-			gl.uniform1f(gl.getUniformLocation(solar,'uAerialCacheAltitude'),100);
-			gl.uniform1i(gl.getUniformLocation(solar,'uAerialCacheReady'),1);
-			for(const height of [-157,-155.75,-4,.5,76.25,100,349.99,355.5,5200]) {
-				gl.uniform1f(gl.getUniformLocation(solar,'altitude'),height);
-				gl.uniform1i(gl.getUniformLocation(solar,'useTable'),0);
-				const direct=pixel();
-				gl.uniform1i(gl.getUniformLocation(solar,'useTable'),1);
-				if(pixel().some((v,i)=>Math.abs(v-direct[i])>1))
-					throw Error('Solar table differs from the analytic light at '+height);
+			gl.uniform1i(gl.getUniformLocation(solar, 'uAerialCacheTransmittance'), 4);
+			gl.uniform1i(gl.getUniformLocation(solar, 'uAerialCacheRadiance'), 5);
+			gl.uniform3f(gl.getUniformLocation(solar, 'uAerialCacheGrid'), 32, 16, 16);
+			gl.uniform1f(gl.getUniformLocation(solar, 'uAerialCacheAltitude'), 100);
+			gl.uniform1i(gl.getUniformLocation(solar, 'uAerialCacheReady'), 1);
+
+			for(const height of [-157,-155.75,-4,.5,76.25,100,349.99,355.5,5200])
+			{
+				gl.uniform1f(gl.getUniformLocation(solar, 'altitude'), height);
+				gl.uniform1i(gl.getUniformLocation(solar, 'useTable'), 0);
+				const direct = pixel();
+				gl.uniform1i(gl.getUniformLocation(solar, 'useTable'), 1);
+
+				if(pixel().some((v, i) => Math.abs(v-direct[i])>1))
+					throw Error('Solar table differs from the analytic light at ' + height);
 			}
 
 			const aerialSample = program(vertex, `${header}${data.source}
@@ -394,40 +431,51 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uAerialCacheAltitude'), 0);
 			gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestAltitude'), -380);
 			const canyonHaze = [];
+
 			for(const ready of [0,1])
 			{
 				gl.uniform1i(gl.getUniformLocation(aerialSample, 'uAerialCacheReady'), ready);
 				const colors = [];
+
 				for(const [elevation,distance] of [[-.001,0],[-.001,4000],[.001,4000]])
 				{
-					gl.uniform3f(gl.getUniformLocation(aerialSample, 'uTestRay'), 1,elevation,0);
+					gl.uniform3f(gl.getUniformLocation(aerialSample, 'uTestRay'), 1, elevation, 0);
 					gl.uniform1f(gl.getUniformLocation(aerialSample, 'uTestDistance'), distance);
 					colors.push(pixel());
 				}
+
 				canyonHaze.push(colors);
 			}
 
 			// A wall spanning eye level at -990 ft. Compare the same wall through clear air,
 			// a sea-level layer above it, and canyon dust that fills the sightline.
 			const dustViews = [];
-			for(const bottom of [null,0,-600]) {
+
+			for(const bottom of [null,0,-600])
+			{
 				const band = bottom===null ? null : [bottom,620,.038/1000];
 				const bucket = band ? -302 : 0;
-				buildAerialCache(bucket,band);
+				buildAerialCache(bucket, band);
 				gl.useProgram(aerialSample);
-				const u = name => gl.getUniformLocation(aerialSample,name);
-				gl.uniform1f(u('uAerialCacheAltitude'),bucket);
-				gl.uniform1f(u('uTestAltitude'),-990*.3048);
-				gl.uniform1f(u('uAirLayerCount'),band ? 1 : 0);
-				if(band) {
-					gl.uniform3fv(u('uAirBand[0]'),band);
-					gl.uniform3f(u('uAirColor[0]'),.7,.55,.4);
+
+				const u = name => gl.getUniformLocation(aerialSample, name);
+				gl.uniform1f(u('uAerialCacheAltitude'), bucket);
+				gl.uniform1f(u('uTestAltitude'), -990*.3048);
+				gl.uniform1f(u('uAirLayerCount'), band ? 1 : 0);
+
+				if(band)
+				{
+					gl.uniform3fv(u('uAirBand[0]'), band);
+					gl.uniform3f(u('uAirColor[0]'), .7, .55, .4);
 				}
+
 				dustViews.push([0,1].map(ready => {
-					gl.uniform1i(u('uAerialCacheReady'),ready);
+					gl.uniform1i(u('uAerialCacheReady'), ready);
+
 					return [[-.001,0],[-.001,500],[-.001,4000],[.001,4000]].map(([slope,distance]) => {
-						gl.uniform3f(u('uTestRay'),1,slope,0);
-						gl.uniform1f(u('uTestDistance'),distance);
+						gl.uniform3f(u('uTestRay'), 1, slope, 0);
+						gl.uniform1f(u('uTestDistance'), distance);
+
 						return pixel();
 					});
 				}));
@@ -482,12 +530,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					gl.uniform2fv(gl.getUniformLocation(waterProgram, 'uTestPosition'), sample.position);
 					gl.uniform1f(gl.getUniformLocation(waterProgram, 'uTestTime'), sample.time);
 					gl.uniform1i(gl.getUniformLocation(waterProgram, 'uFrameWakeCount'), sample.packets.length);
+
 					if(sample.packets.length)
 					{
 						gl.uniform4fv(gl.getUniformLocation(waterProgram, 'uFrameWakes[0]'), sample.packets.flat());
 						gl.uniform2fv(gl.getUniformLocation(waterProgram, 'uJetVelocities[0]'), sample.jets.flat());
 						gl.uniform4fv(gl.getUniformLocation(waterProgram, 'uWakeBounds'), sample.bounds);
 					}
+
 					gl.beginTransformFeedback(gl.POINTS);
 					gl.drawArrays(gl.POINTS, 0, 1);
 					gl.endTransformFeedback();
@@ -532,7 +582,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.uniform1i(gl.getUniformLocation(shadowProgram, 'uTerrainHeights'), 1);
 				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowExtent'), 2048);
 				gl.uniform1f(gl.getUniformLocation(shadowProgram, 'uTerrainShadowSize'), 256);
-				gl.uniform2f(gl.getUniformLocation(shadowProgram, 'uShadowHeightRange'), -400,800);
+				gl.uniform2f(gl.getUniformLocation(shadowProgram, 'uShadowHeightRange'), -400, 800);
 
 				gl.uniform3fv(
 					gl.getUniformLocation(shadowProgram, 'uShadowSunDirection')
@@ -551,8 +601,10 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 				shadowResults.push({name, visibility});
 			}
+
 			// Two faces in the same shadow texel can fall on opposite sides of the projected rim.
 			const mountainShadow = shaders['terrain.frag'].split('float mountainShadow')[1].split('#ifdef')[0];
+
 			const receiver = program(vertex, header + `
 				uniform highp sampler2D uTerrainShadowMap;
 				uniform vec3 uEye;
@@ -564,21 +616,24 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				const vec2 uShadowHeightRange=vec2(-400.,800.);
 				out vec4 color;
 				float mountainShadow` + mountainShadow + `
-				void main(){color=vec4(vec3(mountainShadow(vec3(-508.,gl_FragCoord.x < 1. ? 0. : 48.,4.))),1.);}`);
-			target(7,2,1);
+				void main(){color=vec4(vec3(mountainShadow(vec3(-508.,gl_FragCoord.x < 1. ? 0. : 48.,4.))),1.);}`
+			);
+
+			target(7, 2, 1);
 			gl.useProgram(receiver);
-			gl.uniform1i(gl.getUniformLocation(receiver,'uTerrainShadowMap'),6);
-			gl.uniform3f(gl.getUniformLocation(receiver,'uEye'),-508,100,4);
-			gl.drawArrays(gl.TRIANGLES,0,3);
+			gl.uniform1i(gl.getUniformLocation(receiver, 'uTerrainShadowMap'), 6);
+			gl.uniform3f(gl.getUniformLocation(receiver, 'uEye'), -508, 100, 4);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			const ledges = new Uint8Array(8);
-			gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,ledges);
-			shadowResults.push({name:'ledges',visibility:[ledges[0],ledges[4]]});
+			gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, ledges);
+			shadowResults.push({name: 'ledges',visibility: [ledges[0],ledges[4]]});
+
 			for(const [name,distance] of [['transition',200],['distant',400]])
 			{
-				gl.uniform3f(gl.getUniformLocation(receiver,'uEye'),-508+distance,100,4);
-				gl.drawArrays(gl.TRIANGLES,0,3);
-				gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,ledges);
-				shadowResults.push({name,visibility:[ledges[0],ledges[4]]});
+				gl.uniform3f(gl.getUniformLocation(receiver, 'uEye'), -508+distance, 100, 4);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, ledges);
+				shadowResults.push({name,visibility: [ledges[0],ledges[4]]});
 			}
 
 			// A wall only one meter thick crosses the interior of an eight-meter terrain triangle.
@@ -586,6 +641,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const adaptive = program(shaders['shadows.vert'], shaders['triangle-shadows.frag']);
 			const adaptiveResults = [];
 			const sampleFunction = shaders['terrain.frag'].split('float localSunlight')[1].split('#endif')[0];
+
 			const sampleTriangle = program(vertex, header + `
 				uniform highp sampler2D uShadowTriangles;
 				uniform vec3 uEye;
@@ -597,64 +653,100 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vec2 samples[6] = vec2[6](vec2(1),vec2(7,.2),vec2(8./3.),vec2(4,2),vec2(6,1.99),vec2(6,2.01));
 					int i = int(gl_FragCoord.x);
 					color = vec4(localSunlight(samples[i],i == 3 ? 10. : .01,1.),0.,0.,1.);
-				}`);
-			const local = name => gl.getUniformLocation(adaptive,name);
+				}`
+			);
+
+			const local = name => gl.getUniformLocation(adaptive, name);
+
 			for(const packed of [false,true])
-			for(const stripe of [false,true]) {
+			for(const stripe of [false,true])
+			{
 				const field = new Float32Array(64*64).fill(-350);
-				for(let z = 0; z < 64; z++) {
+
+				for(let z = 0; z < 64; z++)
+				{
 					if(!stripe || z === 2 || z === 3) field[z*64+(stripe ? 8 : 10)] += stripe ? 12 : 6;
 				}
-				texture(10,64,64,null);
-				if(packed) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,64,64,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(field.buffer));
-				else gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,64,64,0,gl.RED,gl.FLOAT,field);
+
+				texture(10, 64, 64, null);
+
+				if(packed)
+				gl.texImage2D(
+					gl.TEXTURE_2D
+					, 0
+					, gl.RGBA8
+					, 64
+					, 64
+					, 0
+					, gl.RGBA
+					, gl.UNSIGNED_BYTE
+					, new Uint8Array(field.buffer)
+				);
+				else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 64, 64, 0, gl.RED, gl.FLOAT, field);
+
 				// Keep the far field below every sun ray.
 				const distant = new Float32Array(4).fill(-1000);
-				texture(11,2,2,null);
-				if(packed) gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,2,2,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(distant.buffer));
-				else gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,2,2,0,gl.RED,gl.FLOAT,distant);
+				texture(11, 2, 2, null);
+
+				if(packed)
+				gl.texImage2D(
+					gl.TEXTURE_2D
+					, 0
+					, gl.RGBA8
+					, 2
+					, 2
+					, 0
+					, gl.RGBA
+					, gl.UNSIGNED_BYTE
+					, new Uint8Array(distant.buffer)
+				);
+				else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, 2, 2, 0, gl.RED, gl.FLOAT, distant);
+
 				gl.useProgram(adaptive);
-				gl.uniform1i(local('uCaster'),10);
-				gl.uniform1i(local('uOverview'),11);
-				gl.uniform1i(local('uPacked'),+packed);
-				gl.uniform1f(local('uCasterStep'),1);
-				gl.uniform1f(local('uReach'),24);
-				gl.uniform1f(local('uExtent'),64);
-				gl.uniform3f(local('uSun'),Math.SQRT1_2,Math.SQRT1_2,0);
-				gl.uniform3f(local('uShadowGrid'),-64,-64,8);
-				target(12,17,17);
-				gl.uniform1i(local('uVertices'),10);
-				gl.uniform1i(local('uRefine'),0);
-				gl.drawArrays(gl.TRIANGLES,0,3);
-				target(13,32,16);
-				gl.uniform1i(local('uVertices'),12);
-				gl.uniform1i(local('uRefine'),1);
-				gl.drawArrays(gl.TRIANGLES,0,3);
+				gl.uniform1i(local('uCaster'), 10);
+				gl.uniform1i(local('uOverview'), 11);
+				gl.uniform1i(local('uPacked'), +packed);
+				gl.uniform1f(local('uCasterStep'), 1);
+				gl.uniform1f(local('uReach'), 24);
+				gl.uniform1f(local('uExtent'), 64);
+				gl.uniform3f(local('uSun'), Math.SQRT1_2, Math.SQRT1_2, 0);
+				gl.uniform3f(local('uShadowGrid'), -64, -64, 8);
+				target(12, 17, 17);
+				gl.uniform1i(local('uVertices'), 10);
+				gl.uniform1i(local('uRefine'), 0);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
+				target(13, 32, 16);
+				gl.uniform1i(local('uVertices'), 12);
+				gl.uniform1i(local('uRefine'), 1);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const pixel = new Uint8Array(4);
-				gl.readPixels(16,8,1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
-				target(14,6,1);
+				gl.readPixels(16, 8, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+				target(14, 6, 1);
 				gl.useProgram(sampleTriangle);
-				gl.uniform1i(gl.getUniformLocation(sampleTriangle,'uShadowTriangles'),13);
-				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uShadowGrid'),-64,-64,8);
-				gl.drawArrays(gl.TRIANGLES,0,3);
+				gl.uniform1i(gl.getUniformLocation(sampleTriangle, 'uShadowTriangles'), 13);
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle, 'uShadowGrid'), -64, -64, 8);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const rendered = new Uint8Array(24);
-				gl.readPixels(0,0,6,1,gl.RGBA,gl.UNSIGNED_BYTE,rendered);
-				adaptiveResults.push({record:[...pixel], pixels:[...rendered.filter((_,i)=>i%4===0)]});
+				gl.readPixels(0, 0, 6, 1, gl.RGBA, gl.UNSIGNED_BYTE, rendered);
+				adaptiveResults.push({record: [...pixel], pixels: [...rendered.filter((_, i) => i%4===0)]});
 			}
+
 			// A shadowed point in the blend region stays at the same shade when the cache
 			// snaps eight cells, even if the eye crosses the boundary by only a millimeter.
-			texture(13,128,64,new Uint8Array(128*64*4));
-			target(14,6,1);
+			texture(13, 128, 64, new Uint8Array(128*64*4));
+			target(14, 6, 1);
 			gl.useProgram(sampleTriangle);
+
 			for(const [eye,left] of [[-20.001,-56],[-19.999,-48]])
 			{
-				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uEye'),eye,0,0);
-				gl.uniform3f(gl.getUniformLocation(sampleTriangle,'uShadowGrid'),left,-32,1);
-				gl.drawArrays(gl.TRIANGLES,0,3);
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle, 'uEye'), eye, 0, 0);
+				gl.uniform3f(gl.getUniformLocation(sampleTriangle, 'uShadowGrid'), left, -32, 1);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const pixels = new Uint8Array(8);
-				gl.readPixels(0,0,2,1,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-				shadowResults.push({name:'snap '+left,visibility:[pixels[0],pixels[4]]});
+				gl.readPixels(0, 0, 2, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+				shadowResults.push({name: 'snap ' + left,visibility: [pixels[0],pixels[4]]});
 			}
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// Actual surface fragments must receive zero radiance when their only light source has zero irradiance.
@@ -681,7 +773,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				// The compiler drops a uniform the shader stops reading, and uploads to it then do nothing.
 				if(name === 'terrain')
 				{
-					inactiveAppearance = ['uPaintColor[0]','uSnowline','uSlopeBlend','uMountainAmounts','uMountainColors[0]']
+					inactiveAppearance = ['uPaintColor[0]'
+						, 'uSnowline'
+						, 'uSlopeBlend'
+						, 'uMountainAmounts'
+						, 'uMountainColors[0]'
+					]
 						.filter(uniform => gl.getUniformLocation(surface, uniform) === null);
 				}
 
@@ -780,7 +877,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(gl.getUniformLocation(amountProgram, 'uTerrainStyle'), 1);
 			gl.uniform3f(gl.getUniformLocation(amountProgram, 'uEye'), 0, 3000, 0);
 			target(7, 256, 64);
-			gl.deleteProgram(program(amountVertex,data.tiltShader.replace('// ATMOSPHERE',data.source)));
+			gl.deleteProgram(program(amountVertex, data.tiltShader.replace('// ATMOSPHERE', data.source)));
 			const authoredProgram = program(amountVertex, data.ridgeShader.replace('// ATMOSPHERE', data.source));
 			const mountainAmounts = [];
 
@@ -800,15 +897,19 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 				// Both programs see the same position, normal, lighting and material parameters.
 				parameters(authoredProgram);
-				gl.uniform3f(gl.getUniformLocation(authoredProgram,'uEye'),0,3000,0);
-				gl.uniform1f(gl.getUniformLocation(authoredProgram,'uFaceSlope'),slope);
-				let maxError=0;
-				for(const [index,inputs] of stacks.entries()) {
-					stackUniforms(authoredProgram,inputs);
-					gl.drawArrays(gl.TRIANGLES,0,3);
-					const pixels=new Uint8Array(256*64*4);
-					gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
-					for(let i=0;i<pixels.length;i++) maxError=Math.max(maxError,Math.abs(pixels[i]-images[index][i]));
+				gl.uniform3f(gl.getUniformLocation(authoredProgram, 'uEye'), 0, 3000, 0);
+				gl.uniform1f(gl.getUniformLocation(authoredProgram, 'uFaceSlope'), slope);
+				let maxError = 0;
+
+				for(const [index,inputs] of stacks.entries())
+				{
+					stackUniforms(authoredProgram, inputs);
+					gl.drawArrays(gl.TRIANGLES, 0, 3);
+					const pixels = new Uint8Array(256*64*4);
+					gl.readPixels(0, 0, 256, 64, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+					for(let i = 0; i<pixels.length; i++)
+					maxError = Math.max(maxError, Math.abs(pixels[i]-images[index][i]));
 				}
 
 				// A patch in either color differs by far more than 8 steps, while a mix of talus into granite at a
@@ -827,6 +928,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				uniform vec4 uSlopeBlend,uHeightBlend;
 				uniform vec2 uSnowline,uMountainZones;
 				uniform vec3 uMountainAmounts;`;
+
 			const rockProbe = program(vertex, fieldSource + `
 				uniform float uShift,uAspect,uOblique;
 				out vec4 color;
@@ -842,67 +944,101 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					float snowline=uSnowline.x+25.*macro, stipple=0.;
 					${shaders['material-fields.glsl']}
 					color=vec4(.5*blocks*boulders,scree,.6*tone,.5+2.*blockTilt.z);
-				}`);
+				}`
+			);
+
 			gl.useProgram(rockProbe);
 			appearance(rockProbe, data.appearance);
-			function rockSample(shift, aspect, oblique = 0) {
-				gl.uniform1f(gl.getUniformLocation(rockProbe,'uShift'),shift);
-				gl.uniform1f(gl.getUniformLocation(rockProbe,'uAspect'),aspect);
-				gl.uniform1f(gl.getUniformLocation(rockProbe,'uOblique'),oblique);
-				gl.drawArrays(gl.TRIANGLES,0,3);
+
+			function rockSample(shift, aspect, oblique = 0)
+			{
+				gl.uniform1f(gl.getUniformLocation(rockProbe, 'uShift'), shift);
+				gl.uniform1f(gl.getUniformLocation(rockProbe, 'uAspect'), aspect);
+				gl.uniform1f(gl.getUniformLocation(rockProbe, 'uOblique'), oblique);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const pixels = new Uint8Array(256*64*4);
-				gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+				gl.readPixels(0, 0, 256, 64, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
 				return pixels;
 			}
-			const left = rockSample(-.006,-.002), right = rockSample(.006,-.002), otherAspect = rockSample(-.006,.002);
+
+			const left = rockSample(-.006, -.002);
+			const right = rockSample(.006, -.002);
+			const otherAspect = rockSample(-.006, .002);
+
 			// Foreshorten the view about the middle row. Its world points, normals,
 			// and filter width stay fixed while the neighboring pixels move.
-			const oblique = rockSample(-.006,-.002,2);
+			const oblique = rockSample(-.006, -.002, 2);
 			const stone = [], screeValues = [], reliefValues = [], edgeJumps = [], aspectJumps = [];
 			let centerSum = 0, edgeSum = 0, reliefJump = 0;
-			for(let y=0;y<64;y++) for(let x=0;x<256;x++) {
-				const i=4*(y*256+x);
+
+			for(let y = 0; y<64; y++)
+			for(let x = 0; x<256; x++)
+			{
+				const i = 4*(y*256+x);
 				stone.push(left[i]);
 				screeValues.push(left[i+1]);
 				reliefValues.push(left[i+3]);
-				if(y===32) reliefJump=Math.max(reliefJump,Math.abs(left[i+3]-oblique[i+3]));
+
+				if(y===32) reliefJump = Math.max(reliefJump, Math.abs(left[i+3]-oblique[i+3]));
+
 				if(x%8===0) edgeJumps.push(Math.abs(left[i+1]-right[i+1]));
-				if(y%8===4 && x%8===4) centerSum+=left[i];
-				if(y%8===4 && x%8===0) edgeSum+=left[i];
+
+				if(y%8===4 && x%8===4) centerSum += left[i];
+
+				if(y%8===4 && x%8===0) edgeSum += left[i];
+
 				aspectJumps.push(Math.abs(left[i+2]-otherAspect[i+2]));
 			}
-			const percentile = (values,p) => values.sort((a,b)=>a-b)[Math.floor(p*values.length)];
+
+			const percentile = (values, p) => values.sort((a, b) => a-b)[Math.floor(p*values.length)];
 			const rockDetail = {
-				centerEdge: Math.abs(centerSum-edgeSum)/(32*8), edgeJump: percentile(edgeJumps,.95),
-				aspectJump: percentile(aspectJumps,.95), toneRange: percentile(stone,.95)-percentile(stone,.05),
-				screeRange: percentile(screeValues,.95)-percentile(screeValues,.05), reliefJump,
-				reliefRange: percentile(reliefValues,.95)-percentile(reliefValues,.05),
+				centerEdge: Math.abs(centerSum-edgeSum)/(32*8)
+				, edgeJump: percentile(edgeJumps, .95)
+				, aspectJump: percentile(aspectJumps, .95)
+				, toneRange: percentile(stone, .95)-percentile(stone, .05)
+				, screeRange: percentile(screeValues, .95)-percentile(screeValues, .05)
+				, reliefJump
+				, reliefRange: percentile(reliefValues, .95)-percentile(reliefValues, .05)
 			};
 
 			// Sample one exposed face at walking distance, far beyond the coarsest
 			// pigment, with half-sized slabs, and finally with the pattern turned off.
-			const pigmentProbe = program(vertex,header + shaders['surface-layers.glsl'] + `
+			const pigmentProbe = program(vertex, header + shaders['surface-layers.glsl'] + `
 				out vec4 color;
 				void main() {
 					vec3 pos=vec3(-1200.,100.+gl_FragCoord.y*.34,1600.+gl_FragCoord.x*.34);
 					vec3 n=vec3(1.,0.,0.);
 					color=vec4(layerPatternWeight(0,pos,n,.04,0.,0.),layerPatternWeight(0,pos,n,80.,0.,0.),
 						layerPatternWeight(1,pos,n,.04,0.,0.),layerPatternWeight(2,pos,n,.04,0.,0.));
-				}`);
+				}`
+			);
+
 			gl.useProgram(pigmentProbe);
-			gl.uniform4fv(gl.getUniformLocation(pigmentProbe,'uLayerPattern[0]'),[
-				9,1,13,23/13, 9,1,6.5,23/13, 9,0,13,23/13,
+
+			gl.uniform4fv(gl.getUniformLocation(pigmentProbe, 'uLayerPattern[0]'), [
+				9,1,13,23/13, 9,1,6.5,23/13, 9,0,13,23/13
 			]);
-			gl.drawArrays(gl.TRIANGLES,0,3);
-			const pigments=new Uint8Array(256*64*4);
-			gl.readPixels(0,0,256,64,gl.RGBA,gl.UNSIGNED_BYTE,pigments);
-			const near=[], far=[], resized=[], off=[];
-			for(let i=0;i<pigments.length;i+=4) {
-				near.push(pigments[i]); far.push(pigments[i+1]);
-				resized.push(Math.abs(pigments[i]-pigments[i+2])); off.push(pigments[i+3]);
+
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			const pigments = new Uint8Array(256*64*4);
+			gl.readPixels(0, 0, 256, 64, gl.RGBA, gl.UNSIGNED_BYTE, pigments);
+			const near = [], far = [], resized = [], off = [];
+
+			for(let i = 0; i<pigments.length; i += 4)
+			{
+				near.push(pigments[i]);
+				far.push(pigments[i+1]);
+				resized.push(Math.abs(pigments[i]-pigments[i+2]));
+				off.push(pigments[i+3]);
 			}
-			const granitePigment = {localRange:percentile(near,.95)-percentile(near,.05),
-				distantRange:Math.max(...far)-Math.min(...far),resizedDelta:percentile(resized,.75),off:Math.max(...off)};
+
+			const granitePigment = {
+				localRange: percentile(near, .95)-percentile(near, .05)
+				, distantRange: Math.max(...far)-Math.min(...far)
+				, resizedDelta: percentile(resized, .75)
+				, off: Math.max(...off)
+			};
 
 			// Across a 512 m hillside, compare the forest, bare rock and scree cover of
 			// one distant pixel with the mean of the finer samples at the same location.
@@ -929,42 +1065,66 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					color=vec4(trees,bare,scree,min(1.,length(lift)));
 					if(uInspect==1) color=vec4(length(lift-normal*dot(normal,lift)),2.*length(facet),3.*length(blockTilt),.5*jointTint.r);
 					if(uInspect==2) color=vec4(.5+gully,.5+rill,0.,1.);
-				}`);
+				}`
+			);
+
 			gl.useProgram(hillside);
-			appearance(hillside,data.appearance);
+			appearance(hillside, data.appearance);
 			const fieldScale = gl.getUniformLocation(hillside, 'uFieldScale');
 			const faceStep = gl.getUniformLocation(hillside, 'uFaceStep');
 			gl.uniform2f(faceStep, .62, 1);
 			gl.uniform4f(fieldScale, 48, 3, 13, 23);
-			function hillsidePixels(meters, width = 512/meters, height = 128/meters) {
+
+			function hillsidePixels(meters, width = 512/meters, height = 128/meters)
+			{
 				gl.uniform1f(gl.getUniformLocation(hillside, 'uMeters'), meters);
 				gl.viewport(0, 0, width, height);
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				const pixels = new Uint8Array(4*width*height);
 				gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
 				return pixels;
 			}
+
 			const hillsideCover = [];
-			for(const seed of [[0,0], [0x4567,0x1234]]) {
+
+			for(const seed of [[0,0], [0x4567,0x1234]])
+			{
 				gl.uniform2fv(gl.getUniformLocation(hillside, 'uPaletteOffset'), seed);
 				const reference = hillsidePixels(2);
-				for(const meters of [4, 8, 16, 32]) {
+
+				for(const meters of [4, 8, 16, 32])
+				{
 					const coarse = hillsidePixels(meters), width = 512/meters, factor = meters/2;
-					for(const [channel, material] of ['forest','rock','scree'].entries()) {
+
+					for(const [channel, material] of ['forest','rock','scree'].entries())
+					{
 						const errors = [], levels = [];
-						for(let y=0; y<128/meters; y++) for(let x=0; x<width; x++) {
+
+						for(let y = 0; y<128/meters; y++)
+						for(let x = 0; x<width; x++)
+						{
 							let sum = 0;
-							for(let j=0; j<factor; j++) for(let i=0; i<factor; i++)
+
+							for(let j = 0; j<factor; j++)
+							for(let i = 0; i<factor; i++)
 								sum += reference[4*((factor*y+j)*256+factor*x+i)+channel];
 							const cover = coarse[4*(width*y+x)+channel];
 							levels.push(cover);
 							errors.push(Math.abs(cover - sum/(factor*factor)));
 						}
-						hillsideCover.push({seed, meters, material, p95Error: percentile(errors,.95),
-							range: percentile(levels,.95)-percentile(levels,.05)});
+
+						hillsideCover.push({
+							seed
+							, meters
+							, material
+							, p95Error: percentile(errors, .95)
+							, range: percentile(levels, .95)-percentile(levels, .05)
+						});
 					}
 				}
 			}
+
 			gl.uniform4f(fieldScale, 1, 3, 13, 23);
 			const unresolvedRibs = hillsidePixels(8).filter((_, i) => i%4 === 3);
 			const maxUnresolvedTilt = Math.max(...unresolvedRibs);
@@ -973,46 +1133,68 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1i(inspect, 1);
 			const rockDamping = gl.getUniformLocation(hillside, 'uRockSlopeDamping');
 			const slopeRelief = [];
-			for(const degrees of [0,30,50,72,90]) {
+
+			for(const degrees of [0,30,50,72,90])
+			{
 				const angle = degrees*Math.PI/180;
 				gl.uniform2f(faceStep, Math.sin(angle), Math.cos(angle));
+
 				const sample = damping => {
 					gl.uniform1f(rockDamping, damping/.45**2);
-					return hillsidePixels(.25,128,64);
+
+					return hillsidePixels(.25, 128, 64);
 				};
+
 				const full = sample(0), damped = sample(2), strong = sample(20);
+
 				const totals = pixels => [0,1,2].map(channel => {
 					let sum = 0;
-					for(let i=channel; i<pixels.length; i+=4) sum+=pixels[i];
+
+					for(let i = channel; i<pixels.length; i += 4) sum += pixels[i];
+
 					return sum;
 				});
-				const sameTint = full.every((v,i) => i%4 !== 3 || v === damped[i] && v === strong[i]);
-				slopeRelief.push({degrees,full:totals(full),damped:totals(damped),strong:totals(strong),sameTint});
+
+				const sameTint = full.every((v, i) => i%4 !== 3 || v === damped[i] && v === strong[i]);
+				slopeRelief.push({degrees,full: totals(full),damped: totals(damped),strong: totals(strong),sameTint});
 			}
+
 			// The two image axes span equal distances across and down the face.
 			// Turning the face in the world should turn the drainage with it.
 			const drainage = [];
 			gl.uniform1i(inspect, 2);
-			for(const seed of [[0,0], [0x4567,0x1234]]) {
+
+			for(const seed of [[0,0], [0x4567,0x1234]])
+			{
 				gl.uniform2fv(gl.getUniformLocation(hillside, 'uPaletteOffset'), seed);
-				for(const degrees of [30,55]) for(const bearing of [0,.73,2.32]) {
+
+				for(const degrees of [30,55])
+				for(const bearing of [0,.73,2.32])
+				{
 					const angle = degrees*Math.PI/180;
 					gl.uniform2f(faceStep, Math.sin(angle), Math.cos(angle));
 					gl.uniform1f(gl.getUniformLocation(hillside, 'uBearing'), bearing);
 					const width = 256, height = 64, step = 2;
-					const pixels = hillsidePixels(2,width,height);
-					for(const [channel,field] of ['gully','rill'].entries()) {
+					const pixels = hillsidePixels(2, width, height);
+
+					for(const [channel,field] of ['gully','rill'].entries())
+					{
 						let across = 0, downhill = 0;
-						for(let y=0; y<height-step; y++) for(let x=0; x<width-step; x++) {
+
+						for(let y = 0; y<height-step; y++)
+						for(let x = 0; x<width-step; x++)
+						{
 							const i = 4*(y*width+x)+channel;
 							across += Math.abs(pixels[i+4*step]-pixels[i]);
 							downhill += Math.abs(pixels[i+4*width*step]-pixels[i]);
 						}
+
 						const count = (width-step)*(height-step);
-						drainage.push({field,seed,degrees,bearing,across:across/count,downhill:downhill/count});
+						drainage.push({field,seed,degrees,bearing,across: across/count,downhill: downhill/count});
 					}
 				}
 			}
+
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
 			// View one face from several directions under a known sky, then cover it with paint, snow or water.
@@ -1037,146 +1219,192 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 					vSplinePaint=uRoad*weight;
 					vRoadMark=vec4(abs(offsetA)+abs(uOtherArm.x),weight*phase,weight); vPaint0=vec3(0.); vPaint1=vec3(0.,uRoad,0.); gl_Position=vec4(2.*p-1.,0.,1.);
 				}`;
-			const ice = program(iceVertex,data.finishShader.replace('// ATMOSPHERE',data.source));
+
+			const ice = program(iceVertex, data.finishShader.replace('// ATMOSPHERE', data.source));
 			parameters(ice);
-			stackUniforms(ice,data.finishInputs);
-			const iceLoc = name => gl.getUniformLocation(ice,name);
-			gl.uniform2f(iceLoc('uPixelSpan'),.1,.1);
-			gl.uniform1f(iceLoc('uDashAngle'),.098175);
+			stackUniforms(ice, data.finishInputs);
+
+			const iceLoc = name => gl.getUniformLocation(ice, name);
+			gl.uniform2f(iceLoc('uPixelSpan'), .1, .1);
+			gl.uniform1f(iceLoc('uDashAngle'), .098175);
 			// Known blue sky in the shared-exponent format (linear radiance about 0.95, 1.14, 1.57).
-			texture(14,1,1,new Uint8Array([176,193,226,65]));
-			gl.uniform1i(iceLoc('uSkyCacheReady'),1);
-			gl.uniform2f(iceLoc('uSkyCacheSize'),1,1);
-			gl.uniform1i(iceLoc('uSkyCacheEye'),14);
-			gl.uniform1i(iceLoc('uSkyCacheWater'),14);
-			gl.uniform3f(iceLoc('uNightAmbient'),0,0,0);
-			gl.uniform3f(iceLoc('uEye'),0,11,0);
-			gl.uniform1f(iceLoc('uSunIntensity'),0);
-			const sampleIce = (view,strength=1,roughness=0) => {
-				gl.uniform3fv(iceLoc('uView'),view);
-				gl.uniform2fv(iceLoc('uLayerFinish[0]'),[strength,strength*roughness**2,0,0]);
+			texture(14, 1, 1, new Uint8Array([176,193,226,65]));
+			gl.uniform1i(iceLoc('uSkyCacheReady'), 1);
+			gl.uniform2f(iceLoc('uSkyCacheSize'), 1, 1);
+			gl.uniform1i(iceLoc('uSkyCacheEye'), 14);
+			gl.uniform1i(iceLoc('uSkyCacheWater'), 14);
+			gl.uniform3f(iceLoc('uNightAmbient'), 0, 0, 0);
+			gl.uniform3f(iceLoc('uEye'), 0, 11, 0);
+			gl.uniform1f(iceLoc('uSunIntensity'), 0);
+
+			const sampleIce = (view, strength = 1, roughness = 0) => {
+				gl.uniform3fv(iceLoc('uView'), view);
+				gl.uniform2fv(iceLoc('uLayerFinish[0]'), [strength,strength*roughness**2,0,0]);
+
 				return pixel()[0];
 			};
-			const iceSunY=.4, iceSunZ=Math.sqrt(1-iceSunY**2);
-			const mirror=[0,iceSunY,-iceSunZ];
-			const iceSamples={normal:sampleIce([0,1,0]), grazing:sampleIce([Math.sqrt(.99),.1,0])};
-			gl.uniform3f(iceLoc('uSunDirection'),0,iceSunY,iceSunZ);
-			gl.uniform1f(iceLoc('uSunIntensity'),5);
-			iceSamples.glint=sampleIce(mirror);
-			iceSamples.frost=sampleIce(mirror,1,.85);
-			iceSamples.turned=sampleIce([iceSunZ,iceSunY,0]);
-			const offDisc=[Math.sin(.19)*iceSunZ,iceSunY,-Math.cos(.19)*iceSunZ];
-			iceSamples.shoulder=[sampleIce(offDisc),sampleIce(offDisc,1,.38)];
-			gl.uniform1i(iceLoc('uTerrainShadowReady'),1);
-			gl.uniform1f(iceLoc('uTerrainShadowExtent'),32);
-			gl.uniform2f(iceLoc('uShadowHeightRange'),100,0);
-			iceSamples.shaded=sampleIce(mirror);
-			gl.uniform1i(iceLoc('uTerrainShadowReady'),0);
-			gl.uniform1f(iceLoc('uRoad'),1);
-			iceSamples.road=[sampleIce(mirror),sampleIce(mirror,0)];
-			gl.uniform1f(iceLoc('uMark'),1);
-			gl.uniform1f(iceLoc('uLateral'),1.3);
-			iceSamples.gradedShoulder=sampleIce(mirror);
-			gl.uniform1f(iceLoc('uMark'),0);
-			gl.uniform1f(iceLoc('uGrade'),6);
-			iceSamples.wall=sampleIce(mirror);
-			gl.uniform1f(iceLoc('uRoad'),0);
-			iceSamples.bareWall=sampleIce(mirror);
-			gl.uniform1f(iceLoc('uGrade'),0);
-			gl.uniform1f(iceLoc('uWaterLevel'),15);
-			iceSamples.submerged=[sampleIce(mirror),sampleIce(mirror,0)];
-			gl.uniform1f(iceLoc('uWaterLevel'),0);
-			gl.uniform4f(iceLoc('uLayerEffect[1]'),1,0,1,1);
-			iceSamples.covered=[sampleIce(mirror),sampleIce(mirror,0)];
+
+			const iceSunY = .4, iceSunZ = Math.sqrt(1-iceSunY**2);
+			const mirror = [0,iceSunY,-iceSunZ];
+			const iceSamples = {normal: sampleIce([0,1,0]), grazing: sampleIce([Math.sqrt(.99),.1,0])};
+			gl.uniform3f(iceLoc('uSunDirection'), 0, iceSunY, iceSunZ);
+			gl.uniform1f(iceLoc('uSunIntensity'), 5);
+			iceSamples.glint = sampleIce(mirror);
+			iceSamples.frost = sampleIce(mirror, 1, .85);
+			iceSamples.turned = sampleIce([iceSunZ,iceSunY,0]);
+			const offDisc = [Math.sin(.19)*iceSunZ,iceSunY,-Math.cos(.19)*iceSunZ];
+			iceSamples.shoulder = [sampleIce(offDisc),sampleIce(offDisc, 1, .38)];
+			gl.uniform1i(iceLoc('uTerrainShadowReady'), 1);
+			gl.uniform1f(iceLoc('uTerrainShadowExtent'), 32);
+			gl.uniform2f(iceLoc('uShadowHeightRange'), 100, 0);
+			iceSamples.shaded = sampleIce(mirror);
+			gl.uniform1i(iceLoc('uTerrainShadowReady'), 0);
+			gl.uniform1f(iceLoc('uRoad'), 1);
+			iceSamples.road = [sampleIce(mirror),sampleIce(mirror, 0)];
+			gl.uniform1f(iceLoc('uMark'), 1);
+			gl.uniform1f(iceLoc('uLateral'), 1.3);
+			iceSamples.gradedShoulder = sampleIce(mirror);
+			gl.uniform1f(iceLoc('uMark'), 0);
+			gl.uniform1f(iceLoc('uGrade'), 6);
+			iceSamples.wall = sampleIce(mirror);
+			gl.uniform1f(iceLoc('uRoad'), 0);
+			iceSamples.bareWall = sampleIce(mirror);
+			gl.uniform1f(iceLoc('uGrade'), 0);
+			gl.uniform1f(iceLoc('uWaterLevel'), 15);
+			iceSamples.submerged = [sampleIce(mirror),sampleIce(mirror, 0)];
+			gl.uniform1f(iceLoc('uWaterLevel'), 0);
+			gl.uniform4f(iceLoc('uLayerEffect[1]'), 1, 0, 1, 1);
+			iceSamples.covered = [sampleIce(mirror),sampleIce(mirror, 0)];
 
 			// Isolate the nighttime dash and shoulder emissions on the same face.
-			gl.uniform1f(iceLoc('uSunIntensity'),0);
-			gl.uniform3f(iceLoc('uSkyAmbient'),0,0,0);
-			gl.uniform3f(iceLoc('uSunDirection'),0,-1,0);
-			gl.uniform1f(iceLoc('uRoad'),1);
-			gl.uniform1f(iceLoc('uMark'),1);
+			gl.uniform1f(iceLoc('uSunIntensity'), 0);
+			gl.uniform3f(iceLoc('uSkyAmbient'), 0, 0, 0);
+			gl.uniform3f(iceLoc('uSunDirection'), 0, -1, 0);
+			gl.uniform1f(iceLoc('uRoad'), 1);
+			gl.uniform1f(iceLoc('uMark'), 1);
 			const stripeCuts = [];
-			for(const lateral of [0,.95625]) {
-				gl.uniform1f(iceLoc('uLateral'),lateral);
+
+			for(const lateral of [0,.95625])
+			{
+				gl.uniform1f(iceLoc('uLateral'), lateral);
+
 				stripeCuts.push([0,.35,2.4,6,-6].map(grade => {
-					gl.uniform1f(iceLoc('uGrade'),grade);
-					return sampleIce(mirror,0);
+					gl.uniform1f(iceLoc('uGrade'), grade);
+
+					return sampleIce(mirror, 0);
 				}));
 			}
 
 			// Equal and opposite offsets from different arms must never paint a center dash in the median.
-			gl.uniform1f(iceLoc('uGrade'),0);
-			gl.uniform1f(iceLoc('uMark'),.7);
-			gl.uniform1f(iceLoc('uLateral'),-.12/.7);
-			gl.uniform2f(iceLoc('uOtherArm'),.12,.3);
-			const junctionInk=sampleIce(mirror,0);
-			gl.uniform2f(iceLoc('uOtherArm'),0,0);
-			gl.uniform1f(iceLoc('uMark'),1);
+			gl.uniform1f(iceLoc('uGrade'), 0);
+			gl.uniform1f(iceLoc('uMark'), .7);
+			gl.uniform1f(iceLoc('uLateral'), -.12/.7);
+			gl.uniform2f(iceLoc('uOtherArm'), .12, .3);
+			const junctionInk = sampleIce(mirror, 0);
+			gl.uniform2f(iceLoc('uOtherArm'), 0, 0);
+			gl.uniform1f(iceLoc('uMark'), 1);
 			// Move a driver's elongated pixel along the same dash, then across the stripe.
-			gl.uniform1f(iceLoc('uGrade'),0);
+			gl.uniform1f(iceLoc('uGrade'), 0);
+
 			const dashSweep = (along, across, offset = 0) => {
-				gl.uniform2f(iceLoc('uPixelSpan'),along,across);
-				gl.uniform1f(iceLoc('uLateral'),offset/8);
+				gl.uniform2f(iceLoc('uPixelSpan'), along, across);
+				gl.uniform1f(iceLoc('uLateral'), offset/8);
+
 				return [.25,.5,.75,.99].map(phase => {
-					gl.uniform1f(iceLoc('uDashAngle'),phase*(2*Math.PI/16));
-					return sampleIce(mirror,0);
+					gl.uniform1f(iceLoc('uDashAngle'), phase*(2*Math.PI/16));
+
+					return sampleIce(mirror, 0);
 				});
 			};
-			const dashPixels = {near:dashSweep(.2,.1), cycle:dashSweep(6.096,.1), several:dashSweep(18,.1),
-				subpixel:dashSweep(12,.8), beside:dashSweep(12,.8,.65), across:dashSweep(.2,6.096)};
+
+			const dashPixels = {
+				near: dashSweep(.2, .1)
+				, cycle: dashSweep(6.096, .1)
+				, several: dashSweep(18, .1)
+				, subpixel: dashSweep(12, .8)
+				, beside: dashSweep(12, .8, .65)
+				, across: dashSweep(.2, 6.096)
+			};
 
 			// Sample the edges of both kinds of paint at the origin and out on Salt Pan Endurance.
 			const paintEdges = [[0,0],[-4939.65,-10514.84],[12400,25700]].map(origin => {
-				gl.uniform2fv(iceLoc('uWorldOrigin'),origin);
-				gl.uniform2f(iceLoc('uPixelSpan'),.006,.001);
-				gl.uniform1f(iceLoc('uDashAngle'),.25*(2*Math.PI/16));
+				gl.uniform2fv(iceLoc('uWorldOrigin'), origin);
+				gl.uniform2f(iceLoc('uPixelSpan'), .006, .001);
+				gl.uniform1f(iceLoc('uDashAngle'), .25*(2*Math.PI/16));
+
 				return [.20,8.-.35+.12].map(edge => [-.001,0,.001].map(delta => {
-					gl.uniform1f(iceLoc('uLateral'),(edge+delta)/8.);
-					return sampleIce(mirror,0);
+					gl.uniform1f(iceLoc('uLateral'), (edge+delta)/8.);
+
+					return sampleIce(mirror, 0);
 				}));
 			});
 
 			// Draw the real surface over two known opaque colors. Their difference isolates transmission.
-			const surface = program(surfaceVertex, shaders['water.frag'].replace('// ATMOSPHERE', data.source)
-				.replace('// WATER', waterSource));
+			const surface = program(
+				surfaceVertex
+				, shaders['water.frag'].replace('// ATMOSPHERE', data.source).replace('// WATER', waterSource)
+			);
+
 			parameters(surface);
 			gl.uniform3f(gl.getUniformLocation(surface, 'uEye'), 0, 5, 5);
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			const backdropContrast = [];
-			for(const [transparency, reflection, foam, ground, gradient = 0, level = 0] of [
-				[0,0,0,-3], [.5,0,0,-3], [1,0,0,-3], [1,1,0,-3], [1,0,1,-.15], [1,0,1,-3],
+
+			// Each row is transparency, reflection, foam, ground height, then an optional gradient and water level.
+			const waterCases = [
+				[0, 0, 0, -3]
+				, [.5, 0, 0, -3]
+				, [1, 0, 0, -3]
+				, [1, 1, 0, -3]
+				, [1, 0, 1, -.15]
+				, [1, 0, 1, -3]
+
 				// A bright, opaque surface at and just inside the water/terrain intersection.
-				[0,1,1,.01], [0,1,1,0], [0,1,1,-.01], [0,1,1,-.09], [0,1,1,-.2],
-				[0,1,1,-.2,.4],
+				, [0, 1, 1, .01]
+				, [0, 1, 1, 0]
+				, [0, 1, 1, -.01]
+				, [0, 1, 1, -.09]
+				, [0, 1, 1, -.2]
+				, [0, 1, 1, -.2, .4]
+
 				// The analytic wave sample can crest above the displaced triangle between mesh vertices.
-				[0,1,1,0,0,.06]
-			])
+				, [0, 1, 1, 0, 0, .06]
+			];
+
+			for(const [transparency, reflection, foam, ground, gradient = 0, level = 0] of waterCases)
 			{
 				gl.uniform4f(gl.getUniformLocation(surface, 'uWaterOptics'), transparency, reflection, 0, foam);
 				gl.uniform1f(gl.getUniformLocation(surface, 'uTestGround'), ground);
 				gl.uniform1f(gl.getUniformLocation(surface, 'uGroundGradient'), gradient);
 				gl.uniform1f(gl.getUniformLocation(surface, 'uWaterLevel'), level);
 				const reds = [];
+
 				for(const red of [0, 1])
 				{
 					gl.clearColor(red, 0, 0, 1);
 					gl.clear(gl.COLOR_BUFFER_BIT);
 					reds.push(pixel()[0]);
 				}
+
 				backdropContrast.push(reds[1] - reds[0]);
 			}
+
 			gl.disable(gl.BLEND);
+
 			const column = program(vertex, header + shaders['water-optics.glsl'] + `
 				uniform vec3 uOffset; out vec4 color;
-				void main(){ color = vec4(waterColumnLight(vec3(1,0,0), uOffset, 2., 0., 1.), 1.); }`);
+				void main(){ color = vec4(waterColumnLight(vec3(1,0,0), uOffset, 2., 0., 1.), 1.); }`
+			);
+
 			gl.useProgram(column);
 			gl.uniform3f(gl.getUniformLocation(column, 'uWaterTint'), 0, 1, 0);
 			gl.uniform4f(gl.getUniformLocation(column, 'uWaterOptics'), 1, 0, .1, 0);
 			const waterPaths = [];
+
 			for(const [y,z] of [[-1,0], [-3,0], [-12,0], [-12,12]])
 			{
-				gl.uniform3f(gl.getUniformLocation(column,'uOffset'), 0, y, z);
+				gl.uniform3f(gl.getUniformLocation(column, 'uOffset'), 0, y, z);
 				waterPaths.push(pixel());
 			}
 
@@ -1327,9 +1555,14 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			// Exercise the real water vertex shader at all three types of new fine vertices:
 			// horizontal/vertical edges and the parent triangle diagonal, with a wake crossing them.
-			const waterMesh = program(shaders['water.vert'].replace('// WATER', waterSource),
-				header + 'out vec4 c; void main(){c=vec4(1);}', ['vWorld','vGround']);
+			const waterMesh = program(
+				shaders['water.vert'].replace('// WATER', waterSource)
+				, header + 'out vec4 c; void main(){c=vec4(1);}'
+				, ['vWorld','vGround']
+			);
+
 			gl.useProgram(waterMesh);
+
 			const loc = name => gl.getUniformLocation(waterMesh, name);
 			gl.uniform1i(loc('uWaveCount'), 1);
 			gl.uniform4f(loc('uWaveVectors[0]'), 0.8, 0.6, 0.9, 2);
@@ -1343,6 +1576,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, outputBuffer);
 			gl.bufferData(gl.TRANSFORM_FEEDBACK_BUFFER, 16, gl.DYNAMIC_READ);
 			gl.enable(gl.RASTERIZER_DISCARD);
+
 			const sampleMesh = (x, z, step, morph) => {
 				gl.uniform4f(loc('uPatch'), 0, 0, step, morph);
 				gl.beginTransformFeedback(gl.POINTS);
@@ -1350,30 +1584,38 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				gl.endTransformFeedback();
 				const result = new Float32Array(4);
 				gl.getBufferSubData(gl.TRANSFORM_FEEDBACK_BUFFER, 0, result);
+
 				return result;
 			};
+
 			let transitionError = 0;
+
 			for(const time of [0, 1.5, 3.75])
 			{
 				gl.uniform1f(loc('uWaterTime'), time);
+
 				for(const [x,z] of [[11,10],[10,11],[11,11],[10,10]])
 				{
 					const step = 1.953125, ox = x % 2, oz = -(z % 2);
 					const a = sampleMesh((x-ox)/2, (z-oz)/2, step*2, 0);
 					const b = sampleMesh((x+ox)/2, (z+oz)/2, step*2, 0);
 					const fine = sampleMesh(x, z, step, 0);
+
 					for(const morph of [.4,1])
 					{
 						const actual = sampleMesh(x, z, step, morph);
+
 						for(let k = 0; k < 3; k++)
 						{
 							const expected = fine[k]*(1-morph) + .5*(a[k]+b[k])*morph;
 							transitionError = Math.max(transitionError, Math.abs(actual[k]-expected));
 						}
+
 						transitionError = Math.max(transitionError, Math.abs(actual[3]-(-8+5*morph)));
 					}
 				}
 			}
+
 			gl.disable(gl.RASTERIZER_DISCARD);
 			gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
 
@@ -1387,39 +1629,50 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const stars = program(integrate(shaders['stars.vert']), shaders['stars.frag']);
 			target(7, 256, 128);
 			gl.useProgram(stars);
-			gl.uniform1f(gl.getUniformLocation(stars,'uPixelScale'), 1);
-			gl.uniform1f(gl.getUniformLocation(stars,'uStarGain'), 1);
-			gl.uniform1f(gl.getUniformLocation(stars,'uExposure'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uPixelScale'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uStarGain'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uExposure'), 1);
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
+
 			const starField = (visibility, yaw) => {
 				const c = Math.cos(yaw), s = Math.sin(yaw);
-				gl.uniformMatrix4fv(gl.getUniformLocation(stars,'uViewProjection'), false,
-					[c,0,s,s, 0,2,0,0, s,0,-c,-c, 0,0,-.5,0]);
-				gl.uniform1f(gl.getUniformLocation(stars,'uStarVisibility'), visibility);
-				gl.clearColor(0,0,0,1);
+
+				gl.uniformMatrix4fv(
+					gl.getUniformLocation(stars, 'uViewProjection')
+					, false
+					, [c,0,s,s, 0,2,0,0, s,0,-c,-c, 0,0,-.5,0]
+				);
+
+				gl.uniform1f(gl.getUniformLocation(stars, 'uStarVisibility'), visibility);
+				gl.clearColor(0, 0, 0, 1);
 				gl.clear(gl.COLOR_BUFFER_BIT);
 				gl.drawArrays(gl.POINTS, 0, 2400);
 				const pixels = new Uint8Array(256 * 128 * 4);
 				gl.readPixels(0, 0, 256, 128, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-				return pixels.filter((v,i) => i % 4 === 2);
+
+				return pixels.filter((v, i) => i % 4 === 2);
 			};
+
 			const night = starField(1, 0), dusk = starField(.5, 0), day = starField(0, 0);
 			const turned = starField(1, 1.2), returned = starField(1, 0);
-			gl.uniform1f(gl.getUniformLocation(stars,'uTwinkle'),1);
-			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),.45);
-			const twinkling = starField(1,0);
-			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),1.45);
-			const later = starField(1,0);
-			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),.45);
-			const rewound = starField(1,0);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uTwinkle'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uStarTime'), .45);
+			const twinkling = starField(1, 0);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uStarTime'), 1.45);
+			const later = starField(1, 0);
+			gl.uniform1f(gl.getUniformLocation(stars, 'uStarTime'), .45);
+			const rewound = starField(1, 0);
 			const litPixels = night.filter(v => v > 12).length;
 			const starChecks = {
-				litPixels, twinkle: twinkling.some((v,i) => Math.abs(v-later[i])>12),
-				rewind: rewound.every((v,i) => v===twinkling[i]), belowHorizon: night.slice(0, 256*64).some(v => v > 1),
-				fade: dusk.every((v,i) => Math.abs(2*v-night[i]) <= 3),
-				dayDark: day.every(v => v === 0), turned: turned.some((v,i) => Math.abs(v-night[i]) > 30),
-				stable: returned.every((v,i) => v === night[i])
+				litPixels
+				, twinkle: twinkling.some((v, i) => Math.abs(v-later[i])>12)
+				, rewind: rewound.every((v, i) => v===twinkling[i])
+				, belowHorizon: night.slice(0, 256*64).some(v => v > 1)
+				, fade: dusk.every((v, i) => Math.abs(2*v-night[i]) <= 3)
+				, dayDark: day.every(v => v === 0)
+				, turned: turned.some((v, i) => Math.abs(v-night[i]) > 30)
+				, stable: returned.every((v, i) => v === night[i])
 			};
 
 			// Light level ground at the origin, seen from (0, 5, 5), at night with the lamps that PHP packed.
@@ -1500,6 +1753,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			// The overview and the fine grid use the same final, coverage-weighted ink blend.
 			const chart = program(shaders['shadows.vert'], data.chartShader);
 			gl.useProgram(chart);
+
 			const chartLocation = key => gl.getUniformLocation(chart, key);
 			target(7, 1, 1);
 			gl.uniform1i(chartLocation('uLayerCount'), 1);
@@ -1509,163 +1763,227 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			gl.uniform1f(chartLocation('uWaterLevel'), -20);
 			gl.uniform2f(chartLocation('uHeading'), 1, 0);
 			const chartSamples = [], chartCutSamples = [], chartVerge = [];
-			gl.uniform1i(chartLocation('uPacked'),1);
-			gl.uniform3f(chartLocation('uPaintColor[1]'),0,1,0);
-			for(const [n,unit,first] of [[257,0,128],[256,2,0]]) {
+			gl.uniform1i(chartLocation('uPacked'), 1);
+			gl.uniform3f(chartLocation('uPaintColor[1]'), 0, 1, 0);
+
+			for(const [n,unit,first] of [[257,0,128],[256,2,0]])
+			{
 				const heights = new Float32Array(n*n);
 				heights[(first+4)*n+first+1] = 12;
-				texture(unit,n,n,new Uint8Array(heights.buffer));
+				texture(unit, n, n, new Uint8Array(heights.buffer));
 				const inks = new Uint8Array(n*n*4);
-				for(let y=0;y<n;y++) inks[4*(y*n+first)] = 5;
-				for(const y of [first+3,first+4]) {
+
+				for(let y = 0; y<n; y++) inks[4*(y*n+first)] = 5;
+
+				for(const y of [first+3,first+4])
+				{
 					inks[4*(y*n+first+1)] = 5;
 					inks[4*(y*n+first+2)] = 2;
 				}
+
 				// Raw ink also covers the grading shoulder. Only the spline coordinate distinguishes it from pavement.
-				for(let y=first+7;y<=first+9;y++) for(let x=first;x<=first+4;x++) {
-					const i=4*(y*n+x);
-					inks[i]=5;
-					const code=((2048+(x<first+2 ? 512 : 1536))<<12);
-					inks[i+1]=code>>16; inks[i+2]=(code>>8)&255;
+				for(let y = first+7; y<=first+9; y++)
+				for(let x = first; x<=first+4; x++)
+				{
+					const i = 4*(y*n+x);
+					inks[i] = 5;
+					const code = ((2048+(x<first+2 ? 512 : 1536))<<12);
+					inks[i+1] = code>>16;
+					inks[i+2] = (code>>8)&255;
 				}
+
 				// Opposite signed offsets on neighboring arms must preserve the grass median.
-				for(let y=first+11;y<=first+13;y++) for(let k=0;k<4;k++) {
-					const distance=k<2 ? .75 : 1.25;
-					const code=((2048+(k%2 ? 1 : -1)*distance*1024)<<12)|((k%2)<<10);
-					inks.set([5,code>>16,(code>>8)&255,code&255],4*(y*n+first+k));
+				for(let y = first+11; y<=first+13; y++)
+				for(let k = 0; k<4; k++)
+				{
+					const distance = k<2 ? .75 : 1.25;
+					const code = ((2048+(k%2 ? 1 : -1)*distance*1024)<<12)|((k%2)<<10);
+					inks.set([5,code>>16,(code>>8)&255,code&255], 4*(y*n+first+k));
 				}
-				texture(unit+1,n,n,inks);
+
+				texture(unit+1, n, n, inks);
 			}
-			for(const [i,key] of ['uOverview','uMapInk','uFine','uFineInk'].entries()) gl.uniform1i(chartLocation(key),i);
-			for(const localOrigin of [500,-32]) {
-				gl.uniform4f(chartLocation('uLocal'),localOrigin,localOrigin,1,64);
+
+			for(const [i,key] of ['uOverview','uMapInk','uFine','uFineInk'].entries())
+			gl.uniform1i(chartLocation(key), i);
+
+			for(const localOrigin of [500,-32])
+			{
+				gl.uniform4f(chartLocation('uLocal'), localOrigin, localOrigin, 1, 64);
 				const samples = [];
-				for(const x of [-1,-.5,0]) {
-					gl.uniform4f(chartLocation('uChart'),x,0,1,1);
+
+				for(const x of [-1,-.5,0])
+				{
+					gl.uniform4f(chartLocation('uChart'), x, 0, 1, 1);
 					samples.push(pixel());
 				}
+
 				chartSamples.push(samples);
 				const cut = [];
-				for(const [x,z] of [[.2,3.2],[.8,3.8],[1.5,3.8]]) {
-					gl.uniform4f(chartLocation('uChart'),x,z,1,1);
+
+				for(const [x,z] of [[.2,3.2],[.8,3.8],[1.5,3.8]])
+				{
+					gl.uniform4f(chartLocation('uChart'), x, z, 1, 1);
 					cut.push(pixel());
 				}
+
 				chartCutSamples.push(cut);
-				for(const [x,z] of [[.2,8],[2.2,8],[.5,12],[2.5,12]]) {
-					gl.uniform4f(chartLocation('uChart'),x,z,.02,1);
+
+				for(const [x,z] of [[.2,8],[2.2,8],[.5,12],[2.5,12]])
+				{
+					gl.uniform4f(chartLocation('uChart'), x, z, .02, 1);
 					chartVerge.push(pixel());
 				}
 			}
 
 			const journeyColors = [];
-			for(const {shader,block} of data.journey) {
-				const linked = program(shaders['shadows.vert'],shader);
+
+			for(const {shader,block} of data.journey)
+			{
+				const linked = program(shaders['shadows.vert'], shader);
 				gl.useProgram(linked);
-				const bytes = Uint8Array.from(atob(block), c=>c.charCodeAt(0));
-				const index = gl.getUniformBlockIndex(linked,'JourneyPalettes');
-				if(gl.getActiveUniformBlockParameter(linked,index,gl.UNIFORM_BLOCK_DATA_SIZE)!==bytes.length)
+				const bytes = Uint8Array.from(atob(block), c => c.charCodeAt(0));
+				const index = gl.getUniformBlockIndex(linked, 'JourneyPalettes');
+
+				if(gl.getActiveUniformBlockParameter(linked, index, gl.UNIFORM_BLOCK_DATA_SIZE)!==bytes.length)
 					throw Error('PHP and the shader disagree on the journey palette layout');
+
 				const buffer = gl.createBuffer();
-				gl.bindBuffer(gl.UNIFORM_BUFFER,buffer);
-				gl.bufferData(gl.UNIFORM_BUFFER,bytes,gl.STATIC_DRAW);
-				gl.bindBufferBase(gl.UNIFORM_BUFFER,0,buffer);
-				gl.uniform1f(gl.getUniformLocation(linked,'uJoinWidth'),4096);
+				gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
+				gl.bufferData(gl.UNIFORM_BUFFER, bytes, gl.STATIC_DRAW);
+				gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, buffer);
+				gl.uniform1f(gl.getUniformLocation(linked, 'uJoinWidth'), 4096);
 				const colors = [];
-				const points=[[-2048,0],[2048,-2048],[2048,2048],[0,0],[-1024,1024]];
-				for(const enabled of [0,1]) for(const [x,z] of points) {
-					gl.uniform1i(gl.getUniformLocation(linked,'uBlendProfile'),enabled);
-					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),x,10,z);
+				const points = [[-2048,0],[2048,-2048],[2048,2048],[0,0],[-1024,1024]];
+
+				for(const enabled of [0,1])
+				for(const [x,z] of points)
+				{
+					gl.uniform1i(gl.getUniformLocation(linked, 'uBlendProfile'), enabled);
+					gl.uniform3f(gl.getUniformLocation(linked, 'atWorld'), x, 10, z);
 					colors.push(pixel(4));
 				}
-				gl.uniform1i(gl.getUniformLocation(linked,'uBlendProfile'),0);
-				gl.uniform1i(gl.getUniformLocation(linked,'magnifyGreen'),1);
-				for(const t of [.03,.055,.065]) {
-					gl.uniform3f(gl.getUniformLocation(linked,'atWorld'),4096*(t-.5),10,-2048);
+
+				gl.uniform1i(gl.getUniformLocation(linked, 'uBlendProfile'), 0);
+				gl.uniform1i(gl.getUniformLocation(linked, 'magnifyGreen'), 1);
+
+				for(const t of [.03,.055,.065])
+				{
+					gl.uniform3f(gl.getUniformLocation(linked, 'atWorld'), 4096*(t-.5), 10, -2048);
 					colors.push(pixel(4));
 				}
+
 				gl.deleteBuffer(buffer);
 				journeyColors.push(colors);
 			}
 
 			// Compare the four cached fields to direct evaluation on both sides of a physical texture wrap.
-			const library = shaders['surface-layers.glsl']+'\n'+shaders['material-noise.glsl'];
-			const bake = program(shaders['shadows.vert'],shaders['material-cache.frag']
-				.replace('// LAYERS',library).replace('// MATERIAL NOISE',''));
-			const fieldTexture=gl.createTexture(), fieldFbo=gl.createFramebuffer(), size=16;
+			const library = shaders['surface-layers.glsl'] + '\n' + shaders['material-noise.glsl'];
+
+			const bake = program(
+				shaders['shadows.vert']
+				, shaders['material-cache.frag'].replace('// LAYERS', library).replace('// MATERIAL NOISE', '')
+			);
+
+			const fieldTexture = gl.createTexture(), fieldFbo = gl.createFramebuffer(), size = 16;
 			gl.activeTexture(gl.TEXTURE12);
-			gl.bindTexture(gl.TEXTURE_2D_ARRAY,fieldTexture);
-			gl.texStorage3D(gl.TEXTURE_2D_ARRAY,1,gl.RGBA8,size,size,4);
-			gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-			gl.bindFramebuffer(gl.FRAMEBUFFER,fieldFbo);
-			const outputs=[0,1,2,3].map(i=>gl.COLOR_ATTACHMENT0+i);
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, fieldTexture);
+			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, size, size, 4);
+			gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+			gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+			gl.bindFramebuffer(gl.FRAMEBUFFER, fieldFbo);
+			const outputs = [0,1,2,3].map(i => gl.COLOR_ATTACHMENT0+i);
+
 			for(const [i,attachment] of outputs.entries())
-				gl.framebufferTextureLayer(gl.FRAMEBUFFER,attachment,fieldTexture,0,i);
+				gl.framebufferTextureLayer(gl.FRAMEBUFFER, attachment, fieldTexture, 0, i);
 			gl.drawBuffers(outputs);
 			gl.disable(gl.BLEND);
 			gl.disable(gl.DITHER);
 			gl.useProgram(bake);
-			const regions=[[16384,-32,17,4],[-8192,17,65535,73],[175,-16222,99,8]];
-			gl.uniform4fv(gl.getUniformLocation(bake,'uRegions[0]'),regions.flat());
-			gl.uniform1f(gl.getUniformLocation(bake,'uStep'),2);
-			for(const x of [-8,0]) for(const z of [-8,0]) {
-				const u=x&15, v=z&15;
-				gl.viewport(u,v,8,8);
-				gl.uniform2f(gl.getUniformLocation(bake,'uCellOffset'),x-u,z-v);
-				gl.drawArrays(gl.TRIANGLES,0,3);
+			const regions = [[16384,-32,17,4],[-8192,17,65535,73],[175,-16222,99,8]];
+			gl.uniform4fv(gl.getUniformLocation(bake, 'uRegions[0]'), regions.flat());
+			gl.uniform1f(gl.getUniformLocation(bake, 'uStep'), 2);
+
+			for(const x of [-8,0])
+			for(const z of [-8,0])
+			{
+				const u = x&15, v = z&15;
+				gl.viewport(u, v, 8, 8);
+				gl.uniform2f(gl.getUniformLocation(bake, 'uCellOffset'), x-u, z-v);
+				gl.drawArrays(gl.TRIANGLES, 0, 3);
 			}
-			const compare=program(shaders['shadows.vert'],header+library+`
+
+			const compare = program(shaders['shadows.vert'], header+library + `
 				uniform highp sampler2DArray cache; uniform vec2 xz; uniform vec4 region;
 				uniform int slice; uniform bool useCache; out vec4 result;
 				void main() {
 					vec2 p=xz-region.xy;
 					result=useCache ? texture(cache,vec3((xz/2.+.5)/16.,float(slice))) :
 						slice==3 ? .5+.5*scatterBands(xz) : vec4(macroBands(p),.5+.5*grassStand(p,ivec2(region.zw)));
-				}`);
-			target(0,1,1);
+				}`
+			);
+
+			target(0, 1, 1);
 			gl.useProgram(compare);
-			gl.uniform1i(gl.getUniformLocation(compare,'cache'),12);
-			for(const [i,region] of [...regions,regions[0]].entries()) {
-				gl.uniform1i(gl.getUniformLocation(compare,'slice'),i);
-				gl.uniform4fv(gl.getUniformLocation(compare,'region'),region);
-				for(const xy of [[-14,12],[-.5,.5],[1.25,-3.25],[11.7,7.5]]) {
-					gl.uniform2fv(gl.getUniformLocation(compare,'xz'),xy);
-					gl.uniform1i(gl.getUniformLocation(compare,'useCache'),0);
-					const expected=pixel(4);
-					gl.uniform1i(gl.getUniformLocation(compare,'useCache'),1);
-					if(pixel(4).some((byte,j)=>Math.abs(byte-expected[j])>3))
+			gl.uniform1i(gl.getUniformLocation(compare, 'cache'), 12);
+
+			for(const [i,region] of [...regions,regions[0]].entries())
+			{
+				gl.uniform1i(gl.getUniformLocation(compare, 'slice'), i);
+				gl.uniform4fv(gl.getUniformLocation(compare, 'region'), region);
+
+				for(const xy of [[-14,12],[-.5,.5],[1.25,-3.25],[11.7,7.5]])
+				{
+					gl.uniform2fv(gl.getUniformLocation(compare, 'xz'), xy);
+					gl.uniform1i(gl.getUniformLocation(compare, 'useCache'), 0);
+					const expected = pixel(4);
+					gl.uniform1i(gl.getUniformLocation(compare, 'useCache'), 1);
+
+					if(pixel(4).some((byte, j) => Math.abs(byte-expected[j])>3))
 						throw Error(`Cached material field ${i} diverged at ${xy}`);
 				}
 			}
+
 			gl.deleteFramebuffer(fieldFbo);
 			gl.deleteTexture(fieldTexture);
 
 			// The four material taps straddle two surfaces at different depths. The foreground is red
 			// and the background blue. Clearing or painting a tap must affect the very next lookup.
-			const resolve=program(shaders['shadows.vert'],header+'#define READ_SURFACE_SAMPLES\n'+shaders['surface-samples.glsl']+`
+			const resolve = program(
+				shaders['shadows.vert']
+				, header + '#define READ_SURFACE_SAMPLES\n' + shaders['surface-samples.glsl'] + `
 				out vec4 color;
 				void main() {
 					vec3 pigment=vec3(0.,1.,0.), normal=vec3(0.,1.,0.);
 					nativeDepthSlope=vec2(dFdx(gl_FragCoord.w),dFdy(gl_FragCoord.w));
 					bool found=sampleSurface(vec3(0.,1.,0.),pigment,normal);
 					color=vec4(found ? pigment : vec3(0.,1.,0.),1.);
-				}`);
-			target(0,1,1);
+				}`
+			);
+
+			target(0, 1, 1);
 			gl.useProgram(resolve);
-			gl.uniform2f(gl.getUniformLocation(resolve,'uSurfacePixel'),1,1);
-			gl.uniform1i(gl.getUniformLocation(resolve,'uMaterialPigment'),13);
-			gl.uniform1i(gl.getUniformLocation(resolve,'uMaterialNormal'),14);
-			const redDepth=Math.round(65535/17), blueDepth=Math.round(Math.log2(21)*65535/17);
-			const redSample=[180,0,0,redDepth>>8], blueSample=[0,0,180,blueDepth>>8];
-			const up=depth=>[128,128,depth&255,255];
-			texture(13,2,2,Uint8Array.from([...redSample,...blueSample,...redSample,...blueSample]));
-			texture(14,2,2,Uint8Array.from([...up(redDepth),...up(blueDepth),...up(redDepth),...up(blueDepth)]));
-			const edge=pixel();
-			if(edge[0]<250 || edge[1]!==0 || edge[2]!==0) throw Error('Different depths bled across a silhouette: '+edge);
-			texture(14,2,2,new Uint8Array(16));
+			gl.uniform2f(gl.getUniformLocation(resolve, 'uSurfacePixel'), 1, 1);
+			gl.uniform1i(gl.getUniformLocation(resolve, 'uMaterialPigment'), 13);
+			gl.uniform1i(gl.getUniformLocation(resolve, 'uMaterialNormal'), 14);
+			const redDepth = Math.round(65535/17), blueDepth = Math.round(Math.log2(21)*65535/17);
+			const redSample = [180,0,0,redDepth>>8], blueSample = [0,0,180,blueDepth>>8];
+
+			const up = depth => [128,128,depth&255,255];
+			texture(13, 2, 2, Uint8Array.from([...redSample,...blueSample,...redSample,...blueSample]));
+			texture(14, 2, 2, Uint8Array.from([...up(redDepth),...up(blueDepth),...up(redDepth),...up(blueDepth)]));
+			const edge = pixel();
+
+			if(edge[0]<250 || edge[1]!==0 || edge[2]!==0)
+			throw Error('Different depths bled across a silhouette: ' + edge);
+
+			texture(14, 2, 2, new Uint8Array(16));
+
 			if(String(pixel())!=='0,255,0') throw Error('An empty material neighborhood must request the base pigment');
-			texture(13,2,2,Uint8Array.from(Array(4).fill([0,0,180,redDepth>>8]).flat()));
-			texture(14,2,2,Uint8Array.from(Array(4).fill(up(redDepth)).flat()));
+
+			texture(13, 2, 2, Uint8Array.from(Array(4).fill([0,0,180,redDepth>>8]).flat()));
+			texture(14, 2, 2, Uint8Array.from(Array(4).fill(up(redDepth)).flat()));
+
 			if(pixel()[2]<250) throw Error('A replacement surface still shows the previous pigment');
 
 			const error = gl.getError();
@@ -1673,15 +1991,40 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, twilightError, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts, junctionInk, journeyColors
-				, spotResults, dashPixels, paintEdges
-				, aerialResults, canyonHaze, dustViews
-				, waterResults, backdropContrast, waterPaths
-				, shadowResults, adaptiveResults
-				, illuminationResults, iceSamples
+				skyResults
+				, twilightError
+				, bandSamples
+				, thinLayerSamples
+				, transitionError
+				, starChecks
+				, chartSamples
+				, chartCutSamples
+				, chartVerge
+				, stripeCuts
+				, junctionInk
+				, journeyColors
+				, spotResults
+				, dashPixels
+				, paintEdges
+				, aerialResults
+				, canyonHaze
+				, dustViews
+				, waterResults
+				, backdropContrast
+				, waterPaths
+				, shadowResults
+				, adaptiveResults
+				, illuminationResults
+				, iceSamples
 				, bandResults
 				, mountainBands
-				, mountainAmounts, rockDetail, granitePigment, hillsideCover, maxUnresolvedTilt, slopeRelief, drainage
+				, mountainAmounts
+				, rockDetail
+				, granitePigment
+				, hillsideCover
+				, maxUnresolvedTilt
+				, slopeRelief
+				, drainage
 				, inactiveAppearance
 
 				, aliasResults
@@ -1693,60 +2036,141 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 		}, {data, shaders});
 
-		assert.equal(result.junctionInk,0,'A center dash cannot spill sideways across the junction');
-		for(const [level,bank,transition,cliff,reverseCliff] of result.stripeCuts) {
-			assert.ok(level > 5 && bank === level && transition > 0 && transition < bank,
-				`Paint glows on the bank and fades on a steepening slope: ${[level,bank,transition,cliff,reverseCliff]}`);
-			assert.deepEqual([cliff,reverseCliff],[0,0],'Uphill and downhill cut walls have no glowing markings');
+		assert.equal(result.junctionInk, 0, 'A center dash cannot spill sideways across the junction');
+
+		for(const [level,bank,transition,cliff,reverseCliff] of result.stripeCuts)
+		{
+			assert.ok(
+				level > 5 && bank === level && transition > 0 && transition < bank
+				, `Paint glows on the bank and fades on a steepening slope: ${[level
+					, bank
+					, transition
+					, cliff
+					, reverseCliff
+				]}`
+			);
+
+			assert.deepEqual([cliff,reverseCliff], [0,0], 'Uphill and downhill cut walls have no glowing markings');
 		}
+
 		const dash = result.dashPixels;
 		assert.ok(dash.near[0] > 5 && dash.near[2] === 0, 'A resolved dash retains its paint and gap');
-		for(const sweep of [dash.cycle, dash.several, dash.subpixel]) {
-			assert.ok(Math.min(...sweep) > 0 && Math.max(...sweep)-Math.min(...sweep) <= 1,
-				`Unresolved dashes keep a stable mean as the view moves: ${sweep}`);
+
+		for(const sweep of [dash.cycle, dash.several, dash.subpixel])
+		{
+			assert.ok(
+				Math.min(...sweep) > 0 && Math.max(...sweep)-Math.min(...sweep) <= 1
+				, `Unresolved dashes keep a stable mean as the view moves: ${sweep}`
+			);
 		}
-		assert.ok(dash.several[0] < dash.near[0] && dash.subpixel[0] < dash.several[0],
-			'The stripe dims in proportion to the paint inside the pixel');
-		assert.deepEqual(dash.beside,[0,0,0,0], 'The distant centerline stays inside the projected stripe');
+
+		assert.ok(
+			dash.several[0] < dash.near[0] && dash.subpixel[0] < dash.several[0]
+			, 'The stripe dims in proportion to the paint inside the pixel'
+		);
+
+		assert.deepEqual(dash.beside, [0,0,0,0], 'The distant centerline stays inside the projected stripe');
 		const [originEdges,...translatedEdges] = result.paintEdges;
+
 		for(const [inside,edge,outside] of originEdges)
 			assert.ok(inside > edge && edge > outside && outside === 0, 'Subpixel samples resolve the painted edge');
+
 		for(const moved of translatedEdges)
-			assert.deepEqual(moved,originEdges,'World position must not scatter pixels at the centerline or shoulder');
-		assert.ok(dash.across[0] > 0 && dash.across[2] === 0,
-			'A pixel extending across the road still resolves the gap along it');
-		const red=[255,0,0,0], green=[0,255,0,204], blue=[0,0,255,0];
-		for(const [i,expected] of [[red,green,green,[128,128,0,102],[229,26,0,21]],[red,green,blue,[128,64,64,51],[229,3,24,2]]].entries()) {
-			const colors=result.journeyColors[i];
-			assert.deepEqual(colors.slice(5,8),colors.slice(0,3),'Pure landscape materials survive the noisy transition.');
-			assert.ok(colors.slice(8,10).some((pixel,j)=>Math.abs(pixel[0]-colors[3+j][0])>1),
-				'World-space noise varies material coverage inside the connector.');
-			const [trimmed, fading, full] = colors.slice(10).map(pixel=>pixel[1]);
-			assert.equal(trimmed,0,'A negligible second material drops out entirely.');
-			assert.ok(fading>0 && fading<35 && full>55 && full<70,'A growing material eases back to its full weight.');
+			assert.deepEqual(
+				moved
+				, originEdges
+				, 'World position must not scatter pixels at the centerline or shoulder'
+			);
+
+		assert.ok(
+			dash.across[0] > 0 && dash.across[2] === 0
+			, 'A pixel extending across the road still resolves the gap along it'
+		);
+
+		const red = [255,0,0,0], green = [0,255,0,204], blue = [0,0,255,0];
+
+		for(const [i,expected] of [[red,green,green,[128,128,0,102],[229,26,0,21]]
+			, [red,green,blue,[128,64,64,51],[229,3
+				, 24,2
+			]]
+		].entries()
+		){
+			const colors = result.journeyColors[i];
+
+			assert.deepEqual(
+				colors.slice(5, 8)
+				, colors.slice(0, 3)
+				, 'Pure landscape materials survive the noisy transition.'
+			);
+
+			assert.ok(
+				colors.slice(8, 10).some((pixel, j) => Math.abs(pixel[0]-colors[3+j][0])>1)
+				, 'World-space noise varies material coverage inside the connector.'
+			);
+
+			const [trimmed, fading, full] = colors.slice(10).map(pixel => pixel[1]);
+			assert.equal(trimmed, 0, 'A negligible second material drops out entirely.');
+			assert.ok(fading>0 && fading<35 && full>55 && full<70, 'A growing material eases back to its full weight.');
+
 			for(const [j,rgba] of expected.entries())
-				assert.ok(rgba.every((v,k)=>Math.abs(result.journeyColors[i][j][k]-v)<=1),
-					'Regional color and coating weights agree at the endpoints and in the transition: '+JSON.stringify(result.journeyColors[i][j]));
+				assert.ok(
+					rgba.every((v, k) => Math.abs(result.journeyColors[i][j][k]-v)<=1)
+					, 'Regional color and coating weights agree at the endpoints and in the transition: '
+						+ JSON.stringify(result.journeyColors[i][j])
+				);
 		}
-		for(const [i,sample] of result.chartVerge.entries()) {
-			const channel=i%2===0 ? 2 : 0;
-			assert.ok(sample[channel]>240 && sample[2-channel]===0,'The road map respects the authored pavement edge');
+
+		for(const [i,sample] of result.chartVerge.entries())
+		{
+			const channel = i%2===0 ? 2 : 0;
+			assert.ok(sample[channel]>240 && sample[2-channel]===0, 'The road map respects the authored pavement edge');
 		}
-		for(const [level,cliff,mixed] of result.chartCutSamples) {
+
+		for(const [level,cliff,mixed] of result.chartCutSamples)
+		{
 			assert.ok(level[2]>200 && level[0]===0, 'Level half of a road cell stays paved');
 			assert.ok(cliff[0]>180 && cliff[2]===0, 'Steep half exposes the natural material');
-			assert.ok(mixed[0]>100 && mixed[1]>100 && mixed[2]===0, 'Only the pavement fraction of mixed wall paint is removed');
+
+			assert.ok(
+				mixed[0]>100 && mixed[1]>100 && mixed[2]===0
+				, 'Only the pavement fraction of mixed wall paint is removed'
+			);
 		}
+
 		const stars = result.starChecks;
 		const ice = result.iceSamples;
-		assert.equal(ice.gradedShoulder,ice.glint,'The grading shoulder outside the authored width retains its terrain finish');
-		assert.equal(ice.wall,ice.bareWall,'Revealing the cliff also restores its natural surface finish');
-		assert.ok(ice.grazing > ice.normal+40, `Exposed ice reflects more sky at grazing incidence: ${JSON.stringify(ice)}`);
-		assert.ok(ice.glint > ice.turned+40 && ice.glint > ice.frost+40 && ice.glint > ice.shaded+40,
-			'Polished ice catches a sharp, view-dependent solar highlight in sunlight');
-		assert.ok(ice.shoulder[1] > ice.shoulder[0]+10, 'Frost spreads reflected sunlight beyond the polished solar disc');
-		for(const surface of ['road','submerged','covered']) assert.equal(ice[surface][0],ice[surface][1], `${surface} covers the ice reflection`);
-		assert.ok(stars.litPixels > 80 && stars.litPixels < 2500 && !stars.belowHorizon, 'stars sparsely cover the visible sky');
+
+		assert.equal(
+			ice.gradedShoulder
+			, ice.glint
+			, 'The grading shoulder outside the authored width retains its terrain finish'
+		);
+
+		assert.equal(ice.wall, ice.bareWall, 'Revealing the cliff also restores its natural surface finish');
+
+		assert.ok(
+			ice.grazing > ice.normal+40
+			, `Exposed ice reflects more sky at grazing incidence: ${JSON.stringify(ice)}`
+		);
+
+		assert.ok(
+			ice.glint > ice.turned+40 && ice.glint > ice.frost+40 && ice.glint > ice.shaded+40
+			, 'Polished ice catches a sharp, view-dependent solar highlight in sunlight'
+		);
+
+		assert.ok(
+			ice.shoulder[1] > ice.shoulder[0]+10
+			, 'Frost spreads reflected sunlight beyond the polished solar disc'
+		);
+
+		for(const surface of ['road','submerged','covered'])
+		assert.equal(ice[surface][0], ice[surface][1], `${surface} covers the ice reflection`);
+
+		assert.ok(
+			stars.litPixels > 80 && stars.litPixels < 2500 && !stars.belowHorizon
+			, 'stars sparsely cover the visible sky'
+		);
+
 		assert.ok(stars.fade && stars.dayDark, 'stars fade through twilight and vanish by day');
 		assert.ok(stars.twinkle && stars.rewind, 'twinkle varies with simulation time and reproduces when rewound');
 		assert.ok(stars.turned && stars.stable, 'the star field is fixed to viewing directions');
@@ -1802,7 +2226,12 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 		for(const [i, expected] of [0, 128, 255].entries())
 			assert.ok(Math.abs(result.backdropContrast[i] - expected) <= 2, 'surface transmits the selected fraction');
-		assert.ok(result.backdropContrast[3] < 255 && result.backdropContrast[3] > 230, 'reflection overlays a clear surface');
+
+		assert.ok(
+			result.backdropContrast[3] < 255 && result.backdropContrast[3] > 230
+			, 'reflection overlays a clear surface'
+		);
+
 		assert.ok(result.backdropContrast[4] < 200, 'foam remains visible on the wet side of the shoreline');
 		assert.equal(result.backdropContrast[5], 255, 'shore foam leaves deep water clear');
 		const [dry, touching, film, shallow, submerged, distant, crest] = result.backdropContrast.slice(6);
@@ -1812,6 +2241,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.equal(submerged, 0, 'resolved submerged water retains the selected opacity');
 		assert.ok(distant > shallow, 'a pixel spanning the shoreline has a wider transition');
 		assert.equal(crest, 255, 'an optical crest cannot light a dry, intersecting triangle');
+
 		for(const [i, meters] of [0, 1, 10, Math.sqrt(2)*10].entries())
 		{
 			const red = Math.round(255 * Math.exp(-.1 * meters));
@@ -1823,33 +2253,54 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		// sunlight that reaches it, split between the two colors in proportion to their extinction; the overhead sun
 		// is dimmed by the layers above the slice.
 		const bands = [[100,120,.005,0],[105,130,.002,1]];
-		for(const [index,[eye,up,distance]] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]].entries()) {
+
+		for(const [index,[eye,up,distance]] of [[0,1,50],[0,1,110],[0,1,10000],[200,-1,200]].entries())
+		{
 			let transmission = 1;
 			const scattered = [0,0], steps = 20000, slice = distance/steps;
-			for(let i = 0; i < steps; i++) {
+
+			for(let i = 0; i < steps; i++)
+			{
 				const height = eye + up*(i + .5)*slice;
 				const k = [0,0];
 				let above = 0;
-				for(const [bottom,top,extinction,color] of bands) {
-					const h = Math.max(0,Math.min(1,(height-bottom)/(top-bottom)));
+
+				for(const [bottom,top,extinction,color] of bands)
+				{
+					const h = Math.max(0, Math.min(1, (height-bottom)/(top-bottom)));
 					k[color] += extinction*6*h*(1-h);
 					above += extinction*(top-bottom)*(1-3*h*h+2*h*h*h);
 				}
+
 				const after = transmission*Math.exp(-(k[0] + k[1])*slice);
-				if(k[0] + k[1] > 0) for(const c of [0,1])
+
+				if(k[0] + k[1] > 0)
+				for(const c of [0,1])
 					scattered[c] += (transmission - after)*k[c]/(k[0] + k[1])*Math.exp(-above);
+
 				transmission = after;
 			}
-			const expected = [transmission,...scattered].map(value=>Math.round(255*value));
-			assert.ok(result.bandSamples[index].every((v,c)=>Math.abs(v-expected[c])<=1),
-				`Atmosphere path ${index}: GPU ${result.bandSamples[index]}, reference ${expected}`);
+
+			const expected = [transmission,...scattered].map(value => Math.round(255*value));
+
+			assert.ok(
+				result.bandSamples[index].every((v, c) => Math.abs(v-expected[c])<=1)
+				, `Atmosphere path ${index}: GPU ${result.bandSamples[index]}, reference ${expected}`
+			);
 		}
+
 		// Sunlight inside and just above a thin layer matches the exact CPU transmittance. Through the texture alone
 		// it was 0.255 instead of 0.004 at 600 m.
-		for(const [index,[altitude,mu,exact]] of data.thinLayer.samples.entries()) {
-			const expected = exact.map(value=>Math.round(255*value));
-			assert.ok(result.thinLayerSamples[index].every((v,c)=>Math.abs(v-expected[c])<=4),
-				`Thin layer at ${altitude} m, mu ${mu.toFixed(3)}: GPU ${result.thinLayerSamples[index]}, exact ${expected}`);
+		for(const [index,[altitude,mu,exact]] of data.thinLayer.samples.entries())
+		{
+			const expected = exact.map(value => Math.round(255*value));
+
+			assert.ok(
+				result.thinLayerSamples[index].every((v, c) => Math.abs(v-expected[c])<=4)
+				, `Thin layer at ${altitude} m, mu ${mu.toFixed(
+					3
+				)}: GPU ${result.thinLayerSamples[index]}, exact ${expected}`
+			);
 		}
 
 		let skyError = 0, aerialError = 0, waterError = 0;
@@ -1873,18 +2324,33 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 		for(const [clear,below,above] of result.canyonHaze)
 		{
-			assert.ok(Math.max(...below.map((c,i)=>Math.abs(c-clear[i]))) > 8, 'sun haze reaches visible terrain below eye level');
-			assert.ok(below.every((c,i)=>Math.abs(c-above[i]) <= 2), 'sun haze is continuous across the canyon horizon');
+			assert.ok(
+				Math.max(...below.map((c, i) => Math.abs(c-clear[i]))) > 8
+				, 'sun haze reaches visible terrain below eye level'
+			);
+
+			assert.ok(
+				below.every((c, i) => Math.abs(c-above[i]) <= 2)
+				, 'sun haze is continuous across the canyon horizon'
+			);
 		}
 
-		for(const ready of [0,1]) {
-			const delta=(a,b)=>Math.max(...a.map((value,i)=>Math.abs(value-b[i])));
-			const [clear,aloft,filled]=result.dustViews.map(row=>row[ready]);
-			for(const profile of [aloft,filled]) {
-				assert.deepEqual(profile[0],clear[0],'A surface at the camera has no fog');
-				assert.ok(delta(profile[2],profile[3])<=3,'Dust stays continuous across eye level on a visible wall');
+		for(const ready of [0,1])
+		{
+
+			const delta = (a, b) => Math.max(...a.map((value, i) => Math.abs(value-b[i])));
+			const [clear,aloft,filled] = result.dustViews.map(row => row[ready]);
+
+			for(const profile of [aloft,filled])
+			{
+				assert.deepEqual(profile[0], clear[0], 'A surface at the camera has no fog');
+				assert.ok(delta(profile[2], profile[3])<=3, 'Dust stays continuous across eye level on a visible wall');
 			}
-			assert.ok(delta(filled[2],aloft[2])>delta(filled[1],aloft[1])+2,'Dust below sea level increases with the distance to visible terrain');
+
+			assert.ok(
+				delta(filled[2], aloft[2])>delta(filled[1], aloft[1])+2
+				, 'Dust below sea level increases with the distance to visible terrain'
+			);
 		}
 
 		for(const sample of result.waterResults)
@@ -1893,11 +2359,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			waterError = Math.max(waterError, delta);
 			// GLSL uses float32 phase arithmetic; world-edge coordinates need a larger bound than local samples.
 			const tolerance = Math.max(...sample.position.map(Math.abs)) > 10000 ? .003 : .0002;
+
 			for(let i = 0; i < 3; i++)
-				assert.ok(Math.abs(sample.actual[7+i] - sample.expected[i]) <= tolerance, 'prepared wake height and slopes match physics');
+				assert.ok(
+					Math.abs(sample.actual[7+i] - sample.expected[i]) <= tolerance
+					, 'prepared wake height and slopes match physics'
+				);
 			const foam = sample.actual[10];
+
 			if(sample.name === 'wakes' && sample.time === .001 && sample.position.every(value => value === 0))
 				assert.ok(foam > .9, 'fresh propulsion visibly churns the water at the stern');
+
 			if(sample.name !== 'wakes' || sample.time >= 3 || sample.position[0] < -100)
 				assert.equal(foam, 0, 'unpowered, expired and distant water has no jet wash');
 
@@ -1908,34 +2380,71 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		}
 
 		const [wall, stripe, packedWall, packedStripe] = result.adaptiveResults;
-		assert.deepEqual([packedWall, packedStripe], [wall, stripe], 'packed heights produce the same edges as float heights');
+
+		assert.deepEqual(
+			[packedWall, packedStripe]
+			, [wall, stripe]
+			, 'packed heights produce the same edges as float heights'
+		);
+
 		assert.equal(wall.record[0], 3, 'only the second corner lies in shadow');
-		assert.deepEqual(wall.pixels.slice(0,3), [255,0,255], 'the shadow edge cuts across the near triangle');
+		assert.deepEqual(wall.pixels.slice(0, 3), [255,0,255], 'the shadow edge cuts across the near triangle');
 		assert.ok(wall.pixels[3] > 180 && wall.pixels[3] < 211, 'about three quarters of the distant triangle is lit');
 		assert.deepEqual(wall.pixels.slice(4), [0,0], 'the reflected triangle meets the same edge on the diagonal');
 		assert.equal(stripe.record[0], 8, 'the center probe finds the narrow shadow between three lit vertices');
-		assert.deepEqual(stripe.pixels.slice(0,3), [255,255,0], 'only the interior of the near triangle is shaded');
-		assert.ok(stripe.pixels[3] > 204 && stripe.pixels[3] < 255, 'the interior shadow contributes to distant coverage');
+		assert.deepEqual(stripe.pixels.slice(0, 3), [255,255,0], 'only the interior of the near triangle is shaded');
+
+		assert.ok(
+			stripe.pixels[3] > 204 && stripe.pixels[3] < 255
+			, 'the interior shadow contributes to distant coverage'
+		);
+
 		const visibility = Object.fromEntries(result.shadowResults.map(sample => [sample.name, sample.visibility]));
 		assert.deepEqual(visibility.flat, [255, 255], 'a flat plane remains sunlit even at low sun angles');
 		assert.deepEqual(visibility.ridge, [0, 255], 'a broad ridge blocks the down-sun side');
 		assert.deepEqual(visibility.reversed, [255, 0], 'reversing the sun reverses the ridge shadow');
-		assert.deepEqual(visibility['near rim'], [0,255], 'a one-texel rim between the old long ray steps casts a shadow');
-		assert.deepEqual(visibility.ledges, [0,255], 'the true receiver elevation keeps the lower ledge dark and the upper ledge lit');
-		assert.ok(visibility.transition[1] >= 126 && visibility.transition[1] <= 129, 'lighting blends across the mesh detail transition');
-		assert.deepEqual(visibility.distant,[0,0], 'changing a distant triangle elevation does not move its shadow');
+
+		assert.deepEqual(
+			visibility['near rim']
+			, [0,255]
+			, 'a one-texel rim between the old long ray steps casts a shadow'
+		);
+
+		assert.deepEqual(
+			visibility.ledges
+			, [0,255]
+			, 'the true receiver elevation keeps the lower ledge dark and the upper ledge lit'
+		);
+
+		assert.ok(
+			visibility.transition[1] >= 126 && visibility.transition[1] <= 129
+			, 'lighting blends across the mesh detail transition'
+		);
+
+		assert.deepEqual(visibility.distant, [0,0], 'changing a distant triangle elevation does not move its shadow');
 		assert.ok(Math.abs(visibility['snap -56'][0]-128)<=1 && visibility['snap -56'][1]>245);
-		assert.ok(visibility['snap -56'].every((v,i)=> Math.abs(v-visibility['snap -48'][i])<=1), 'recentering the local grid preserves its blend');
+
+		assert.ok(
+			visibility['snap -56'].every((v, i) => Math.abs(v-visibility['snap -48'][i])<=1)
+			, 'recentering the local grid preserves its blend'
+		);
+
 		assert.deepEqual(visibility.night, [0, 0], 'the coarse map contains no direct visibility at night');
 
 		for(const sample of result.illuminationResults)
 		{
 			assert.deepEqual(sample.colors[0], [0, 0, 0], `${sample.name} has no unlit ambient/body/foam emission`);
-			assert.ok(sample.night[2] > sample.night[0] && sample.night[1] > sample.night[0], `${sample.name} receives cool night fill`);
+
+			assert.ok(
+				sample.night[2] > sample.night[0] && sample.night[1] > sample.night[0]
+				, `${sample.name} receives cool night fill`
+			);
+
 			assert.ok(sample.colors[1].some(channel => channel > 0), `${sample.name} receives nonzero daylight`);
 		}
 
-		for(const [land, shoulder, road] of result.chartSamples) {
+		for(const [land, shoulder, road] of result.chartSamples)
+		{
 			assert.ok(land[0]>240 && land[2]===0, 'unpainted minimap uses the natural stack');
 			assert.ok(road[2]>240 && road[0]===0, 'full pavement overrides the natural stack');
 			assert.ok(shoulder[0]>150 && shoulder[2]>150, 'the shoulder blends both materials');
@@ -2011,6 +2520,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		for(const {material, amount, share, maxError} of result.mountainAmounts)
 		{
 			assert.ok(maxError<=1, `Layered ${material} differs from the reference by ${maxError} channel steps`);
+
 			if(amount === 0) assert.equal(share, 0, `${material} shows on ${share} of a face at an amount of 0`);
 			else assert.ok(share > .01, `${material} shows on ${share} of a face at an amount of ${amount}`);
 		}
@@ -2020,43 +2530,70 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		assert.ok(centerEdge < 4, 'stone centers and edges have similar average brightness');
 		assert.ok(edgeJump < 14, 'scree cover varies continuously across the former cell boundaries');
 		assert.ok(aspectJump < 3, 'granite joints continue around the diagonal between upright projections');
-		assert.ok(reliefJump <= 1 && reliefRange > 12, 'scree relief varies across the face and stays stable under a change of view');
+
+		assert.ok(
+			reliefJump <= 1 && reliefRange > 12
+			, 'scree relief varies across the face and stays stable under a change of view'
+		);
+
 		assert.ok(toneRange > 18 && screeRange > 32, 'loose rock keeps both tonal detail and patchy coverage');
 
 		const {localRange,distantRange,resizedDelta,off} = result.granitePigment;
-		assert.ok(localRange > 45 && resizedDelta > 12, 'granite pigment resolves locally and responds to slab spacing');
-		assert.equal(distantRange,0,'unresolved granite pigment converges to the same average across a face');
-		assert.equal(off,0,'zero pattern amount restores the base granite color');
 
-		for(const {seed, meters, material, p95Error, range} of result.hillsideCover) {
+		assert.ok(
+			localRange > 45 && resizedDelta > 12
+			, 'granite pigment resolves locally and responds to slab spacing'
+		);
+
+		assert.equal(distantRange, 0, 'unresolved granite pigment converges to the same average across a face');
+		assert.equal(off, 0, 'zero pattern amount restores the base granite color');
+
+		for(const {seed, meters, material, p95Error, range} of result.hillsideCover)
+		{
 			const label = `${material} at ${meters} m per pixel with seed ${seed}`;
 			assert.ok(p95Error < (meters <= 8 ? 24 : 45), `${label} differs from area coverage by ${p95Error} steps`);
 			assert.ok(range > 32, `${label} still varies across the hillside`);
 		}
+
 		assert.equal(result.maxUnresolvedTilt, 0, 'one-meter ribs leave no lighting grid at eight meters per pixel');
-		for(const {field,seed,degrees,bearing,across,downhill} of result.drainage) {
+
+		for(const {field,seed,degrees,bearing,across,downhill} of result.drainage)
+		{
 			const label = `${field} on a ${degrees}° slope at bearing ${bearing} with seed ${seed}`;
 			assert.ok(across > 2*downhill, `${label} should run downhill (across ${across}, downhill ${downhill})`);
 			assert.ok(downhill > 1, `${label} should still change along its course`);
 		}
+
 		let previous = [1,1,1];
-		for(const {degrees,full,damped,strong,sameTint} of result.slopeRelief) {
+
+		for(const {degrees,full,damped,strong,sameTint} of result.slopeRelief)
+		{
 			assert.ok(sameTint, 'rock tint stays fixed when its lighting relief is damped');
-			if(degrees === 0) {
+
+			if(degrees === 0)
+			{
 				assert.equal(full[0], 0, 'gullies end on level ground');
 				assert.deepEqual(strong, full, 'level rock keeps its full relief');
 				continue;
 			}
-			const ratios = damped.map((value,i) => value/full[i]);
-			for(const [i,name] of ['ribs','facets','blocks'].entries()) {
+
+			const ratios = damped.map((value, i) => value/full[i]);
+
+			for(const [i,name] of ['ribs','facets','blocks'].entries())
+			{
 				assert.ok(full[i] > 0 && ratios[i] < previous[i], `${name} relief fades on the ${degrees} degree face`);
 				assert.ok(strong[i] <= damped[i], `increasing damping smooths ${name}`);
 			}
-			if(degrees === 50) {
+
+			if(degrees === 50)
+			{
 				assert.ok(ratios[0] > .45 && ratios[0] < .9, 'broad ribs retain their form on steep rock');
 				assert.ok(ratios[1] < .5*ratios[0] && ratios[2] < .5*ratios[0], 'fine rock detail softens first');
 			}
-			if(degrees === 90) assert.deepEqual(damped,[0,0,0], 'a vertical face has finite, fully damped rock relief');
+
+			if(degrees === 90)
+			assert.deepEqual(damped, [0,0,0], 'a vertical face has finite, fully damped rock relief');
+
 			previous = ratios;
 		}
 
