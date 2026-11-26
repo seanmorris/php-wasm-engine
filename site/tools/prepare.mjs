@@ -11,12 +11,15 @@ import {addStructuredData} from './structured-data.mjs';
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(site, '..');
 const destination = path.resolve(site, process.env.PAGES_DIR ?? '.cache/pages');
+
+// Repository documents imported as reference chapters on every build.
 const references = [
 	['architecture', 'Architecture', 'docs/architecture.md']
 	, ['input', 'Input & sequences', 'docs/input.md']
 	, ['ui', 'UI, menus & cards', 'docs/ui.md']
 	, ['performance', 'ECS performance', 'docs/ecs-performance.md']
 	, ['random-cards', 'Random streams and card piles', 'docs/random-cards.md']
+	, ['terrain-package', 'Terrain package', 'packages/terrain-phonics/README.md']
 ];
 
 const examples = await loadExamples();

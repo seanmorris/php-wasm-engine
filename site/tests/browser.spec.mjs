@@ -23,6 +23,7 @@ const pages = (await files(new URL('../.cache/pages/', import.meta.url)))
 // Generated symbol pages share one template; the guide, landing, and game chapters are checked at every width.
 const generatedPages = [
 	/^api-phonics-/
+	, /^api-terrain\//
 	, /^games\/[^/]+\/api\//
 	, /^api-js\/(?:classes|functions|types|variables|enums)\//
 ];

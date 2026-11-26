@@ -15,7 +15,21 @@ const generic = ['Completes the operation', 'value used by this operation', 'Res
 const phpTypes = new Map();
 
 const examples = await loadExamples();
-const gamePackages = examples.games.filter(game => game.documentation?.api).map(game => ({
+// Optional engine packages with their own PHP namespace. Each gets a reference beside the core API, generated
+// the same way as a game's.
+const enginePackages = [{
+	directory: path.join(root, 'packages/terrain-phonics')
+	, sourcePrefix: 'packages/terrain-phonics'
+	, slug: 'terrain-phonics'
+	, title: 'Terrain package'
+	, rootNamespace: 'TerrainPhonics'
+	, description: 'Editable landscapes and their roads, water, atmosphere, weather, and the scene that draws them.'
+	, pages: 'api-terrain'
+	, menu: 'api-terrain'
+	, guide: 'The [landscape guide](../terrain.html) introduces the package and the [package reference](../terrain-package.html) covers its settings in full.'
+}];
+
+const exampleGames = examples.games.filter(game => game.documentation?.api).map(game => ({
 	directory: game.directory
 	, sourcePrefix: `games/${game.slug}`
 	, sourceRepository: examples.repository
@@ -24,7 +38,13 @@ const gamePackages = examples.games.filter(game => game.documentation?.api).map(
 	, title: game.title
 	, rootNamespace: game.documentation.api.namespace
 	, description: game.documentation.api.description
+	, pages: `games/${game.slug}/api`
+	, menu: `game-${game.slug}-api`
+	, llms: 'games'
+	, guide: 'Curated game chapters explain the executable modules and browser integration around them.'
 }));
+
+const gamePackages = [...enginePackages, ...exampleGames];
 
 const namespaceInfo = {
 	Phonics: ['Core runtime', 'Frame scheduling, fixed-step simulation, lifecycle, and browser restoration.']
@@ -101,7 +121,7 @@ function gameNamespaceRelative(namespace, config)
 
 function gameNamespaceId(namespace, config)
 {
-	return `game-${config.slug}-api-${gameNamespaceRelative(namespace, config).replaceAll('/', '-')}`;
+	return `${config.menu}-${gameNamespaceRelative(namespace, config).replaceAll('/', '-')}`;
 }
 
 function gameClassSlug(item, config)
@@ -109,14 +129,14 @@ function gameClassSlug(item, config)
 	const relative = item.name.slice(config.rootNamespace.length).replace(/^\\/, '');
 	const parts = relative.split('\\').map(kebab);
 
-	return `games/${config.slug}/api/${parts.join('/')}`;
+	return `${config.pages}/${parts.join('/')}`;
 }
 
 function gameNamespaceSlug(namespace, config)
 {
 	const relative = gameNamespaceRelative(namespace, config);
 
-	return `games/${config.slug}/api/${relative === 'root' ? 'root' : relative + '/index'}`;
+	return `${config.pages}/${relative === 'root' ? 'root' : relative + '/index'}`;
 }
 
 function relativePage(from, to)
@@ -315,7 +335,7 @@ function phpClassPage(item, aliases, config = null)
 		: `api-${item.namespace === 'Phonics' ? 'core' : item.namespace.slice(8).replaceAll('\\', '-').toLowerCase()}`;
 	const namespaceTitle = config ? (item.namespace === config.rootNamespace ? config.title : item.namespace) : namespaceInfo[item.namespace][0];
 	const parent = config ? gameNamespaceId(item.namespace, config) : namespaceId(item.namespace);
-	const apiRoot = config ? `games/${config.slug}/api/index` : 'api';
+	const apiRoot = config ? `${config.pages}/index` : 'api';
 	let body = frontmatter(config ? item.shortName : item.name, item.doc.summary, parent, 0, {
 		'display-title': item.name
 		, 'api-page': true
@@ -324,7 +344,7 @@ function phpClassPage(item, aliases, config = null)
 		, 'api-parent-title': namespaceTitle
 		, 'api-parent-url': relativePage(slug, namespaceSlug)
 		, 'source-url': source
-		, ...(config ? {llms: 'games'} : {})
+		, ...(config?.llms ? {llms: config.llms} : {})
 	});
 	body += `${memberDoc(item.doc)}\n${apiSourceLink(source)}\n\n`;
 	body += `## Declaration\n\n\`\`\`php\n${declaration(item)}\n\`\`\`\n`;
@@ -427,8 +447,8 @@ function gameNamespacePage(namespace, classes, config)
 	const relative = gameNamespaceRelative(namespace, config);
 	const title = relative === 'root' ? `${config.title} root namespace` : namespace;
 	const slug = gameNamespaceSlug(namespace, config);
-	let body = frontmatter(title, `Public types in ${namespace}.`, gameNamespaceId(namespace, config), -100, {llms: 'games'});
-	body += `[${config.title} PHP API](${relativePage(slug, `games/${config.slug}/api/index`)})\n\n`;
+	let body = frontmatter(title, `Public types in ${namespace}.`, gameNamespaceId(namespace, config), -100, config.llms ? {llms: config.llms} : {});
+	body += `[${config.title} PHP API](${relativePage(slug, `${config.pages}/index`)})\n\n`;
 	body += `These types are declared in ${code(namespace)}.\n\n## Types\n\n`;
 
 	for(const item of classes)
@@ -439,15 +459,15 @@ function gameNamespacePage(namespace, classes, config)
 
 function gameApiIndex(data, config)
 {
-	const slug = `games/${config.slug}/api/index`;
+	const slug = `${config.pages}/index`;
 	const rows = data.classes.map(item => {
 		const names = [...item.constants, ...item.properties, ...item.methods].map(value => value.name);
 		return `<li data-api-entry data-api-search="${html([item.name, item.doc.summary, ...names].join(' ').toLowerCase())}"><a href="${relativePage(slug, gameClassSlug(item, config))}"><code>${html(item.name)}</code></a><span>${html(item.doc.summary)}</span><small>${html(names.join(' · '))}</small></li>`;
 	});
-	let body = frontmatter('PHP API', `Every public PHP type in ${config.title}.`, `game-${config.slug}-api`, -100, {
-		'display-title': `${config.title} PHP API`, llms: 'games'
+	let body = frontmatter('PHP API', `Every public PHP type in ${config.title}.`, config.menu, -100, {
+		'display-title': `${config.title} PHP API`, ...(config.llms ? {llms: config.llms} : {})
 	});
-	body += `${config.description}\n\nThe reference includes all public types and signatures from the package's declared ${code('src/')} files. Curated game chapters explain the executable modules and browser integration around them.\n\n`;
+	body += `${config.description}\n\nThe reference includes all public types and signatures from the package's declared ${code('src/')} files. ${config.guide}\n\n`;
 	body += `<div class="api-filter"><label for="api-filter">Filter classes and members</label><input id="api-filter" type="search" autocomplete="off" data-api-filter><p role="status" aria-live="polite" data-api-status></p></div>\n\n`;
 	body += `<ul class="api-index" data-api-index>\n${rows.join('\n')}\n</ul>\n\n## Namespaces\n\n`;
 
@@ -536,7 +556,7 @@ for(const item of data.classes) await write(phpClassPage(item, data.aliases));
 for(const {config, data: packageData} of gameData)
 {
 	await write({
-		slug: `games/${config.slug}/api/index`
+		slug: `${config.pages}/index`
 		, body: gameApiIndex(packageData, config)
 		, outline: `# ${config.title} PHP API — drafting outline\n\nI. Package scope\n    A. ${config.description}\nII. Find a public type\nIII. Browse namespaces\n`
 	});
@@ -554,4 +574,4 @@ for(const {config, data: packageData} of gameData)
 	for(const item of packageData.classes) await write(phpClassPage(item, packageData.aliases, config));
 }
 
-console.log(`Generated ${data.classes.length} core PHP class pages and ${gameData.reduce((count, value) => count + value.data.classes.length, 0)} game PHP class pages.`);
+console.log(`Generated ${data.classes.length} core PHP class pages and ${gameData.reduce((count, value) => count + value.data.classes.length, 0)} package and game PHP class pages.`);

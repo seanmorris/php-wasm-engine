@@ -175,6 +175,18 @@ MENUS:
         parent: api
         weight: 130
         expanded: false
+      - id: api-terrain
+        group: true
+        title: Terrain package
+        parent: api
+        weight: 140
+        expanded: false
+      - id: api-terrain-root
+        group: true
+        title: Landscape, water and sky
+        parent: api-terrain
+        weight: 10
+        expanded: false
       - id: api-js
         group: true
         title: JavaScript API
