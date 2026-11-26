@@ -184,7 +184,22 @@ test('homepage hero introduces Phonics and links every game capture', async({pag
 	await expect(hero.getByRole('link', {name: 'Start the quickstart'})).toHaveAttribute('href', /quickstart\.html$/);
 
 	const captures = hero.getByRole('list', {name: 'Games built with Phonics'}).getByRole('link');
-	await expect(captures).toHaveCount(6);
+	const games = [
+		'terrain-sandbox'
+		, 'doom-phonics'
+		, 'php-noid'
+		, 'sane-phonics'
+		, 'php-tris'
+		, 'php-slalom'
+		, 'php-buster'
+		, 'php-billiards'
+		, 'php-poker'
+	];
+
+	await expect(captures).toHaveCount(games.length);
+
+	expect(await captures.evaluateAll(links => links.map(link => new URL(link.href).pathname.split('/').at(-2))))
+		.toEqual(games);
 
 	for(const capture of await captures.all())
 	{
