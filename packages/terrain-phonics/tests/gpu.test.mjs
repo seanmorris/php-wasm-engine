@@ -1355,6 +1355,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			target(7, 256, 128);
 			gl.useProgram(stars);
 			gl.uniform1f(gl.getUniformLocation(stars,'uPixelScale'), 1);
+			gl.uniform1f(gl.getUniformLocation(stars,'uStarGain'), 1);
 			gl.uniform1f(gl.getUniformLocation(stars,'uExposure'), 1);
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
@@ -1362,7 +1363,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				const c = Math.cos(yaw), s = Math.sin(yaw);
 				gl.uniformMatrix4fv(gl.getUniformLocation(stars,'uViewProjection'), false,
 					[c,0,s,s, 0,2,0,0, s,0,-c,-c, 0,0,-.5,0]);
-				gl.uniform1f(gl.getUniformLocation(stars,'uNightVisibility'), visibility);
+				gl.uniform1f(gl.getUniformLocation(stars,'uStarVisibility'), visibility);
 				gl.clearColor(0,0,0,1);
 				gl.clear(gl.COLOR_BUFFER_BIT);
 				gl.drawArrays(gl.POINTS, 0, 2400);
@@ -1372,9 +1373,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			};
 			const night = starField(1, 0), dusk = starField(.5, 0), day = starField(0, 0);
 			const turned = starField(1, 1.2), returned = starField(1, 0);
+			gl.uniform1f(gl.getUniformLocation(stars,'uTwinkle'),1);
+			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),.45);
+			const twinkling = starField(1,0);
+			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),1.45);
+			const later = starField(1,0);
+			gl.uniform1f(gl.getUniformLocation(stars,'uStarTime'),.45);
+			const rewound = starField(1,0);
 			const litPixels = night.filter(v => v > 12).length;
 			const starChecks = {
-				litPixels, belowHorizon: night.slice(0, 256*64).some(v => v > 1),
+				litPixels, twinkle: twinkling.some((v,i) => Math.abs(v-later[i])>12),
+				rewind: rewound.every((v,i) => v===twinkling[i]), belowHorizon: night.slice(0, 256*64).some(v => v > 1),
 				fade: dusk.every((v,i) => Math.abs(2*v-night[i]) <= 3),
 				dayDark: day.every(v => v === 0), turned: turned.some((v,i) => Math.abs(v-night[i]) > 30),
 				stable: returned.every((v,i) => v === night[i])
@@ -1706,6 +1715,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		for(const surface of ['road','submerged','covered']) assert.equal(ice[surface][0],ice[surface][1], `${surface} covers the ice reflection`);
 		assert.ok(stars.litPixels > 80 && stars.litPixels < 2500 && !stars.belowHorizon, 'stars sparsely cover the visible sky');
 		assert.ok(stars.fade && stars.dayDark, 'stars fade through twilight and vanish by day');
+		assert.ok(stars.twinkle && stars.rewind, 'twinkle varies with simulation time and reproduces when rewound');
 		assert.ok(stars.turned && stars.stable, 'the star field is fixed to viewing directions');
 		assert.ok(result.transitionError < 1e-5, 'waves, wakes and shoreline depths match the morphing mesh');
 

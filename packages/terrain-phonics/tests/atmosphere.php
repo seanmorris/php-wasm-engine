@@ -365,4 +365,27 @@ catch(InvalidArgumentException)
 	$expect(true, 'Haze channels above one fail');
 }
 
+$sky = new Atmosphere;
+$sky->setSun([1.,.04,0.]);
+$expect($sky->starVisibility()===0., 'Default field waits until sunset');
+$sky->stars = new TerrainPhonics\Starfield(200.,100.,0.);
+$expect($sky->starVisibility()>0. && $sky->uniforms()['nightVisibility']===0., 'Brighter stars appear before sunset while the ground stays daylit');
+$expect($sky->starsMoving(10.,9.) && !$sky->starsMoving(10.,10.), 'Visible twinkle uses simulation time');
+$sky->setSun([0.,1.,0.]);
+$expect(!$sky->starsMoving(10.,9.), 'A daylight view sleeps');
+$sky->setSun([1.,-.25,0.]);
+$sky->stars = new TerrainPhonics\Starfield(0.,0.,6.);
+$starts=[];
+$previous=null;
+for($tick=0;$tick<6000;$tick++) {
+	$t=$tick*.01;
+	$event=$sky->stars->meteor($t);
+	if($event && !$previous) $starts[]=$event[0];
+	if(!$event && $previous) $expect($sky->starsMoving($t,$t-.01), 'Last visible meteor frame is erased');
+	$previous=$event;
+}
+$expect($starts===range(0,5) && $sky->starVisibility()===0., 'Six meteors per minute independent of ordinary star brightness');
+$sky->stars = new TerrainPhonics\Starfield;
+$expect($sky->stars->meteor(1.)===null && !$sky->starsMoving(12.,11.), 'Default sky is steady between frames');
+
 echo "Atmosphere: {$checks} checks passed\n";
