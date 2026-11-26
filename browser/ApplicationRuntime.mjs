@@ -150,8 +150,17 @@ export function activate(host)
 			, signal
 		});
 
+		const configuredIce = options.policy?.iceServers ?? options.network?.transport?.iceServers;
 		const lobby = {
-			protocol
+			createTransport: async ({sendSignal, polite = false}) => new WebRtcTransport({
+				...options.network?.transport
+				, signal
+				, sendSignal
+				, polite
+				, iceServers: configuredIce ?? await provider.iceServers?.() ?? []
+				, refreshIceServers: () => configuredIce ?? provider.iceServers?.({refresh: true}) ?? []
+			})
+			, protocol
 			, overlay
 			, open: () => overlay.open()
 			, close: () => overlay.close()
