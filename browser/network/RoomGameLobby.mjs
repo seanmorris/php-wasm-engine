@@ -2351,6 +2351,7 @@ export class EmbeddedRoomLobby
 	{
 		this.protocol = protocol;
 		this.canvas = canvas;
+		this.surface = canvas;
 		this.host = canvas.parentElement;
 		this.disposed = false;
 		this.loginPending = null;
@@ -2600,10 +2601,21 @@ export class EmbeddedRoomLobby
 		return this.phase === 'connecting' ? 'busy' : null;
 	}
 
+	/** Keep a game's HUD, minimap and input listeners with its canvas when it enters a room. */
+	setGameSurface(surface)
+	{
+		if(!surface?.contains(this.canvas) || !surface.parentElement || this.root.classList.contains('is-open'))
+		throw new Error('Choose the game surface before opening the lobby');
+
+		this.host = surface.parentElement;
+		this.surface = surface;
+		this.host.append(this.root);
+	}
+
 	/** Fit the game canvas from stage dimensions rather than its self-changing framebuffer dimensions. */
 	sizeStage()
 	{
-		if(!this.root.classList.contains('has-game')) return;
+		if(this.surface !== this.canvas || !this.root.classList.contains('has-game')) return;
 
 		const {width,height} = this.stage.getBoundingClientRect();
 
@@ -2754,7 +2766,7 @@ export class EmbeddedRoomLobby
 		this.root.classList.remove('is-open', 'has-game');
 		this.restoreCanvasSizing();
 
-		if(this.canvas.parentElement !== this.host) this.host.append(this.canvas);
+		if(this.surface.parentElement !== this.host) this.host.append(this.surface);
 
 		this.protocol.dispatchEvent(event('closed', {}));
 	}
@@ -2901,7 +2913,7 @@ export class EmbeddedRoomLobby
 
 		if(playing)
 		{
-			if(this.canvas.parentElement !== this.stage) this.stage.append(this.canvas);
+			if(this.surface.parentElement !== this.stage) this.stage.append(this.surface);
 
 			this.sizeStage();
 		}
@@ -2909,7 +2921,7 @@ export class EmbeddedRoomLobby
 		{
 			this.restoreCanvasSizing();
 
-			if(this.canvas.parentElement === this.stage) this.host.append(this.canvas);
+			if(this.surface.parentElement === this.stage) this.host.append(this.surface);
 
 			this.resetLeave();
 		}
@@ -3311,7 +3323,7 @@ export class EmbeddedRoomLobby
 		this.titleFlash?.stop();
 		this.closeSeatDialog();
 		this.restoreCanvasSizing();
-		this.host.append(this.canvas);
+		this.host.append(this.surface);
 		this.root.remove();
 		this.releaseRoomStyle();
 		this.releaseTheme();
