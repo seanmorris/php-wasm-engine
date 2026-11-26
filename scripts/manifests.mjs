@@ -282,8 +282,8 @@ definitions.push(
 		, requires: {php: '>=8.1.0'}
 		, php: {autoload: {'TerrainPhonics\\': 'src/'}, bootstrap: ['autoload.php']}
 		, exports: {}
-		, preload: []
-		, directories: ['src', 'shaders', 'browser']
+		, preload: ['textures/cloud-noise.r8']
+		, directories: ['src', 'shaders', 'browser', 'textures']
 		, files: ['autoload.php']
 	}]
 );
