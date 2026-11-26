@@ -279,6 +279,38 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				skyResults.push({altitude, ray, colors});
 			}
 
+			// Sample at the centers of the actual cache texels. This isolates storage error from interpolation.
+			let twilightError = 0;
+			target(7,256,128);
+			for(const degrees of [-5,-4,-3,-2]) {
+				const angle = degrees*Math.PI/180;
+				const sun = [0,Math.sin(angle),-Math.cos(angle)];
+				gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);
+				gl.viewport(0,0,256,128);
+				gl.useProgram(skyCache);
+				gl.uniform3fv(gl.getUniformLocation(skyCache,'uSunDirection'),sun);
+				gl.uniform1f(gl.getUniformLocation(skyCache,'uSkyCacheAltitude'),100);
+				gl.drawArrays(gl.TRIANGLES,0,3);
+				gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+				gl.useProgram(skySample);
+				gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheEye'),7);
+				gl.uniform1f(gl.getUniformLocation(skySample,'uTestAltitude'),100);
+				gl.uniform3fv(gl.getUniformLocation(skySample,'uSunDirection'),sun);
+				for(const x of [16,47,90,143,195]) for(const y of [68,79,96,113]) {
+					const lon = ((x+.5)/256-.5)*2*Math.PI;
+					const lat = (((y+.5)/128)*2-1)**2*Math.PI/2;
+					const ray = [Math.cos(lon)*Math.cos(lat),Math.sin(lat),Math.sin(lon)*Math.cos(lat)];
+					gl.uniform3fv(gl.getUniformLocation(skySample,'uTestRay'),ray);
+					gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheReady'),0);
+					const direct = pixel();
+					gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheReady'),1);
+					const cached = pixel();
+					twilightError = Math.max(twilightError,...direct.map((c,i)=>Math.abs(c-cached[i])));
+				}
+			}
+			gl.uniform1i(gl.getUniformLocation(skySample,'uSkyCacheEye'),2);
+			gl.uniform3fv(gl.getUniformLocation(skySample,'uSunDirection'),data.uniforms.sunDirection);
+
 			const aerialCache = program(vertex, integrate(shaders['atmosphere-aerial.frag']));
 
 			const buildAerialCache = (altitude, band) => {
@@ -1011,7 +1043,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const iceLoc = name => gl.getUniformLocation(ice,name);
 			gl.uniform2f(iceLoc('uPixelSpan'),.1,.1);
 			gl.uniform1f(iceLoc('uDashAngle'),.098175);
-			texture(14,1,1,new Uint8Array([64,68,75,255]));
+			// Known blue sky in the shared-exponent format (linear radiance about 0.95, 1.14, 1.57).
+			texture(14,1,1,new Uint8Array([176,193,226,65]));
 			gl.uniform1i(iceLoc('uSkyCacheReady'),1);
 			gl.uniform2f(iceLoc('uSkyCacheSize'),1,1);
 			gl.uniform1i(iceLoc('uSkyCacheEye'),14);
@@ -1640,7 +1673,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			if(error !== gl.NO_ERROR) throw new Error(`WebGL error: ${error}`);
 
 			return {
-				skyResults, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts, junctionInk, journeyColors
+				skyResults, twilightError, bandSamples, thinLayerSamples, transitionError, starChecks, chartSamples, chartCutSamples, chartVerge, stripeCuts, junctionInk, journeyColors
 				, spotResults, dashPixels, paintEdges
 				, aerialResults, canyonHaze, dustViews
 				, waterResults, backdropContrast, waterPaths
@@ -1820,6 +1853,8 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		}
 
 		let skyError = 0, aerialError = 0, waterError = 0;
+
+		assert.ok(result.twilightError<=1, `Twilight sky cache lost ${result.twilightError} display levels`);
 
 		for(const sample of result.skyResults)
 		{
