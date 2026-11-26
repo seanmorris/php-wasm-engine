@@ -259,6 +259,7 @@ final class Clipmap
 	private function uploadForm(array $r, string $suffix): void
 	{
 		$p = $this->generator;
+
 		/** Read one component of a form uniform.
 		 * @param string $key Recipe field name.
 		 * @return float|int Configured shape coefficient.
@@ -2077,6 +2078,7 @@ final class Clipmap
 			if(isset($this->roadsideRects[$index]))
 			{
 				$roadside[$index] = [];
+
 				foreach($this->roadsideRects[$index] as $bound) $roadside[$index][] = $bound * $step;
 			}
 

@@ -969,7 +969,7 @@ foreach([false,true] as $reverseOrder)
 	foreach([-7.,-5.65,0.,5.65,7.] as $z)
 	terrainCheck(
 		$split->paintTexel($x, $z) === $whole->paintTexel($x, $z)
-		, "Dashes, shoulder stripes and outer clipping continue through the section join at $x,$z"
+		, 'Dashes, shoulder stripes and outer clipping continue through the section join at ' . $x . ',' . $z
 	);
 	$restoredSplit = Landscape::load($split->save());
 	terrainCheck($restoredSplit->paintTexel(-3, 0) === $whole->paintTexel(-3, 0), 'Loading rebuilds joined pavement');
