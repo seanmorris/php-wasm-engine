@@ -19,6 +19,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 		, 'water-functions.glsl'
 		, 'water-optics.glsl'
 		, 'spot-lights.glsl'
+		, 'retroreflection.glsl'
 		, 'shadows.vert'
 		, 'shadows.frag'
 		, 'triangle-shadows.frag'
@@ -41,6 +42,11 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 	const shaders = Object.fromEntries(names.map(name => [name
 		, readFileSync(new URL(`../shaders/${name}`, import.meta.url), 'utf8')
 	]));
+
+	shaders['spot-lights.glsl'] = shaders['spot-lights.glsl'].replace(
+		'// RETROREFLECTION'
+		, shaders['retroreflection.glsl']
+	);
 
 	const uniformMaterial = readFileSync(new URL('./uniform-material.glsl', import.meta.url), 'utf8')
 		.replace('// RELIEF FIELDS', shaders['material-fields.glsl']);
@@ -1326,6 +1332,40 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, across: dashSweep(.2, 6.096)
 			};
 
+			// A lamp beyond its matte range isolates the return from the paint itself.
+			gl.uniform2f(iceLoc('uPixelSpan'), .1, .1);
+			const lampView = [0, 2, 40], distance = Math.hypot(...lampView);
+
+			const sampleMarkings = (count, beamZ, eyeX, eyeZ) => {
+				gl.uniform1i(iceLoc('uSpotLightCount'), count);
+
+				gl.uniform4fv(iceLoc('uSpotLights[0]'), [
+					0, 12, 40, 1/28**2
+					, 0, -2/distance, beamZ/distance, 50
+					, 3000, 3000, 3000, -48
+				]);
+
+				gl.uniform3f(iceLoc('uEye'), eyeX, 12, eyeZ);
+
+				return [[0,.25],[-.95625,.25],[.95625,.25],[0,.75],[.5,.25]].map(([lateral,phase]) => {
+					gl.uniform1f(iceLoc('uLateral'), lateral);
+					gl.uniform1f(iceLoc('uDashAngle'), phase*(2*Math.PI/16));
+					gl.uniform3f(iceLoc('uView'), eyeX, 2, eyeZ);
+
+					return pixel();
+				});
+			};
+
+			const roadReturns = {
+				unlit: sampleMarkings(0, -40, 0, 40)
+				, aligned: sampleMarkings(1, -40, 0, 40)
+				, turned: sampleMarkings(1, 40, 0, 40)
+				, side: sampleMarkings(1, -40, 40, 0)
+			};
+
+			gl.uniform1i(iceLoc('uSpotLightCount'), 0);
+			gl.uniform3f(iceLoc('uEye'), 0, 11, 0);
+
 			// Sample the edges of both kinds of paint at the origin and out on Salt Pan Endurance.
 			const paintEdges = [[0,0],[-4939.65,-10514.84],[12400,25700]].map(origin => {
 				gl.uniform2fv(iceLoc('uWorldOrigin'), origin);
@@ -2005,6 +2045,7 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 				, journeyColors
 				, spotResults
 				, dashPixels
+				, roadReturns
 				, paintEdges
 				, aerialResults
 				, canyonHaze
@@ -2052,6 +2093,17 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 
 			assert.deepEqual([cliff,reverseCliff], [0,0], 'Uphill and downhill cut walls have no glowing markings');
 		}
+
+		const {unlit, aligned, turned, side} = result.roadReturns;
+
+		for(let i = 0; i < 3; i++)
+			assert.ok(aligned[i][0] > unlit[i][0] + 60, `Stripe ${i} returns the beam: ${aligned[i]} vs ${unlit[i]}`);
+		assert.ok(aligned[0][0] > aligned[0][2] + 35, 'The returning center dash stays yellow');
+		assert.deepEqual(aligned[1], aligned[2], 'Both shoulder lines give the same return');
+		assert.ok(Math.max(...aligned[1])-Math.min(...aligned[1]) <= 1, 'The returning shoulders stay white');
+		assert.deepEqual(aligned.slice(3), unlit.slice(3), 'Dash gaps and bare pavement stay dark');
+		assert.deepEqual(turned, unlit, 'A beam pointing away produces no return');
+		assert.deepEqual(side, unlit, 'An observer to the side sees no return');
 
 		const dash = result.dashPixels;
 		assert.ok(dash.near[0] > 5 && dash.near[2] === 0, 'A resolved dash retains its paint and gap');
