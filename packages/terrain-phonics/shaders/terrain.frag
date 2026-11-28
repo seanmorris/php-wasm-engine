@@ -298,10 +298,12 @@ void main()
 	bool underDeck=uDeck.x>0. && uSunDirection.y>.015 && vWorld.y<uDeck.y;
 	if(underDeck) shadow*=1.-deckBlock()*cloudsOnRay(vWorld,uSunDirection).x;
 	float wet=uCraft<.5 && vWorld.y>uWaterLevel ? uGroundCover.x : 0.;
+	vec3 dry=albedo; // the surface's own color before water darkens it
 	if((wet>0. || uGroundCover.y>0.) && uCraft<.5 && vWorld.y>uWaterLevel) {
 		// Pavement holds no more than its limit. The limit eases in across the road's edge with the paint.
 		float snow=min(uGroundCover.y,mix(1.,uRoadSnow,clamp(road,0.,1.)))*smoothstep(.38,.88,n.y);
-		albedo=mix(albedo*(1.-.31*wet),vec3(.82,.88,.93),snow);
+		// Soaked ground and pavement lose 45 percent of the light they scatter.
+		albedo=mix(albedo*(1.-.45*wet),vec3(.82,.88,.93),snow);
 		markingGlow*=1.-snow;
 	}
 	#endif
@@ -322,8 +324,14 @@ void main()
 	vec3 lit = albedo * (ambient + direct * facing * shadow) + markingGlow;
 	#ifdef TERRAIN_WEATHER
 	if(wet>0.) {
-		float glint=max(0.,dot(reflect(-uSunDirection,n),normalize(-vRelative)));
-		lit+=wet*(1.-uGroundCover.y)*(.06*ambient+direct*shadow*facing*.32*pow(glint,36.));
+		vec3 toEye=normalize(-vRelative);
+		float glint=max(0.,dot(reflect(-uSunDirection,n),toEye));
+		// The film of water mirrors a little of the sky, mostly where the eye looks along the surface. It never
+		// gives back more than three fifths of the sky's light the surface lost by getting wet, so wet ground and wet
+		// pavement are darker than dry under even light, however dark they are to begin with. The sun's glint on
+		// the film is separate and can be brighter.
+		vec3 sheen=min(ambient*.14*pow(1.-max(0.,dot(n,toEye)),5.),.27*dry*ambient);
+		lit+=wet*(1.-uGroundCover.y)*(sheen+direct*shadow*facing*.32*pow(glint,36.));
 	}
 	#endif
 	lit += terrainNightMaterial(albedo, mix(lightingNormal,n,painted), uNightAmbient);
