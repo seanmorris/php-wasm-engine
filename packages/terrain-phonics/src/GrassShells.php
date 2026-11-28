@@ -299,6 +299,11 @@ final class GrassShells
 				cover = open*total/kind.w;
 				grows = vOpen*total/kind.w;
 			}
+			// Paint is dressed ground and grows nothing. The terrain blends paint in from a painted corner across a whole
+			// cell, so the grass ends where the paint starts to show and no blade stands on half-painted ground.
+			float unpainted = 1. - smoothstep(.02, .3, 1. - vOpen);
+			cover *= unpainted;
+			grows *= unpainted;
 			float tallest = kind.w;
 			vec3 toEye = vWorld-uEye;
 			float range = length(toEye);

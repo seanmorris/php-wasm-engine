@@ -110,6 +110,11 @@ grassCheck(
 );
 
 grassCheck(
+	str_contains($grassSource, 'smoothstep(.02, .3, 1. - vOpen)')
+	, 'Grass ends where paint starts to show on the ground'
+);
+
+grassCheck(
 	str_contains($grassSource, 'uDots') && str_contains($grassSource, 'dotAt(')
 	, 'The pass draws a dot where a distant blade stands'
 );
