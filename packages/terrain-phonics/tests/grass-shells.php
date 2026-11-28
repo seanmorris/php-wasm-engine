@@ -85,4 +85,102 @@ grassCheck(
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [25., 5., 0.]) === 0., 'An eye near the edge draws nothing');
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [40., 5., 0.]) === 0., 'An eye outside the grid draws nothing');
 
+// Snow hides blades in place. Thinning by the spacing of the lattice moved every blade as the cover changed.
+grassCheck(
+	GrassShells::buried(0.) === 0. && GrassShells::buried(1.) === .9 && GrassShells::buried(4.) === .9
+	&& GrassShells::buried(-1.) === 0.
+	, 'Snow hides up to nine blades in ten'
+);
+
+grassCheck(GrassShells::buried(.25) < GrassShells::buried(.5), 'Deeper snow hides more blades');
+
+$grassSource = (new ReflectionClass(GrassShells::class))->getReflectionConstant('FRAGMENT')->getValue();
+
+grassCheck(str_contains($grassSource, 'uBuried'), 'The blade pass hides snowed-under blades by cell');
+
+// Past the blades, grass is marked with dots, on bare ground and on snow.
+
+// The dots are laid out once. Every block's dot is the dot of the smaller block it keeps, so the dots stay put as the
+// blocks change size.
+$dotTable = GrassShells::dotTable();
+grassCheck(strlen($dotTable) === 4 * 64 * 64 * 16, 'The dot table holds 64 by 64 blocks for each of 16 sizes');
+
+$dotAt = static fn(int $size, int $x, int $y): array => array_values(
+	unpack('C4', substr($dotTable, 4 * ($size * 4096 + ($y & 63) * 64 + ($x & 63)), 4))
+);
+
+$dotDrift = 0.;
+
+for($size = 1; $size < 16; $size++)
+for($y = 0; $y < 64; $y += 5)
+for($x = 0; $x < 64; $x += 5)
+{
+	[$px,$py,$tone,$quarter] = $dotAt($size, $x, $y);
+	[$cx,$cy,$childTone] = $dotAt($size - 1, 2 * $x + ($quarter & 1), 2 * $y + ($quarter >> 1));
+
+	$dotDrift = max(
+		$dotDrift
+		, abs(($px + .5) / 256 - (($quarter & 1) + ($cx + .5) / 256) / 2)
+		, abs(($py + .5) / 256 - (($quarter >> 1) + ($cy + .5) / 256) / 2)
+		, $tone === $childTone ? 0. : 1.
+	);
+}
+
+grassCheck($dotDrift < .002, 'A block and the smaller block it keeps put the dot in the same place');
+
+grassCheck(
+	GrassShells::radius([-500, -500, 500, 500], [0, 0, 0]) === 120.
+		&& GrassShells::radius([-2000, -2000, 2000, 2000], [0, 0, 0], 1200.) === 1200.
+		&& GrassShells::radius([-500, -500, 500, 500], [300, 0, 0], 1200.) === 200.
+	, 'The dots reach as far as the grid leaves room, past the blades'
+);
+
+grassCheck(
+	str_contains($grassSource, 'dressedAt(vWorld.xz + run)') && str_contains($grassSource, 'texelFetch(uInk')
+	, 'The pass reads the paint under the ground each pixel shows'
+);
+
+grassCheck(
+	!str_contains($grassSource, 'vRoad.x/vRoad.w') && str_contains($grassSource, 'dot(abs(vArms')
+	, 'Road arms that meet keep their own distances'
+);
+
+$grassVertex = (new ReflectionClass(GrassShells::class))->getReflectionConstant('VERTEX')->getValue();
+
+grassCheck(
+	str_contains($grassSource, 'if(dot(ray, normalize(vNormal)) >= 0.) discard;')
+		&& str_contains($grassSource, 'passing = above > .5*top + .1;')
+	, 'A ray that leaves the grass again casts no shade, and the surface is never drawn from underneath'
+);
+
+
+grassCheck(
+	str_contains($grassVertex, 'vInked = road.y >= 0. ? 1. : 0.;')
+		&& str_contains($grassSource, 'if(vInked > 0. || dressed > 0.) {')
+	, 'Pixels with no paint at either end of the ray look up none along it'
+);
+
+grassCheck(
+	!str_contains($grassVertex, 'road.y < 4. ? 1. : 0.') && str_contains($grassSource, 'dressedMid')
+	, 'The raised surface does not drop over paint, and each blade is held against the paint at its place'
+);
+
+
+grassCheck(
+	str_contains($grassSource, 'uDots') && str_contains($grassSource, 'dotAt(')
+	, 'The pass draws a dot where a distant blade stands'
+);
+
+grassCheck(
+	str_contains($grassSource, 'uSnowCover') && str_contains($grassSource, 'uGrass')
+	, 'A blade standing in snow keeps the grass color'
+);
+
+$grassDraw = file_get_contents((new ReflectionMethod(GrassShells::class, 'draw'))->getFileName());
+
+grassCheck(
+	!preg_match('/\$style\[\'density\'\]\s*\*/', $grassDraw)
+	, 'Weather never changes the spacing of the blade lattice'
+);
+
 echo "Terrain grass shells: $checks checks passed.\n";
