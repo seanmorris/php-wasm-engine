@@ -526,6 +526,12 @@ if(array_filter($styles)) {
 }
 ```
 
+Grass is placed by its height above the water and by slope, not by what the ground is painted with. A style names the
+surface layers that grow nothing in `bare`, such as Coast's sand, which is painted to 3 meters above the water and
+fades out over the next 15. `GrassShells::clear($style, $layers)` returns the style with its grass starting where
+half of that fade is behind it and full where nine tenths is, so the grass keeps off the layer and follows it when
+the layer is edited or removed.
+
 Each pixel of that surface follows its view ray down through the grass and stops at the first blade it meets. Near
 blades hide far ones, and every pixel is shaded once however tall or dense the grass is. A blade is a hash of its
 world cell: thin, flat, tapering to a point, facing one of four ways and leaning with its neighbors. The ray is split

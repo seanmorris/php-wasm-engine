@@ -183,4 +183,52 @@ grassCheck(
 	, 'Weather never changes the spacing of the blade lattice'
 );
 
+// Grass keeps off the layers a style names as bare, and follows them when they are edited or removed.
+$coast = (new TerrainPhonics\Landscape(['preset' => 'coast']))->recipe();
+$layers = TerrainPhonics\SurfaceLayers::landscape($coast, new TerrainAppearance([]));
+$sand = current(array_filter($layers->layers, static fn(array $row): bool => $row['id'] === 'sand'));
+$cleared = GrassShells::clear(GrassShells::style('coast'), $layers);
+
+grassCheck(
+	$sand !== false && $cleared['above'] === [$sand['high'] + .5 * $sand['fade'], $sand['high'] + .9 * $sand['fade']]
+	, 'Coast grass starts where half the sand has faded and is full where a tenth is left'
+);
+
+grassCheck(
+	$cleared['above'][0] > 10. && GrassShells::style('coast')['above'] === [.5, 2.]
+	, 'The sand reaches well above the grass\'s own start'
+);
+
+$rows = $layers->layers;
+
+foreach($rows as $n => $row) if($row['id'] === 'sand') $rows[$n] = ['high' => 1., 'fade' => 2.] + $row;
+
+$lower = new TerrainPhonics\SurfaceLayers($rows, $layers->fields, $layers->bounce);
+
+grassCheck(
+	GrassShells::clear(GrassShells::style('coast'), $lower)['above'] === [2., 2.8]
+	, 'Lowering the sand lowers the grass'
+);
+
+$none = new TerrainPhonics\SurfaceLayers(
+	array_values(array_filter($rows, static fn(array $row): bool => $row['id'] !== 'sand'))
+	, $layers->fields
+	, $layers->bounce
+);
+
+grassCheck(
+	GrassShells::clear(GrassShells::style('coast'), $none) === GrassShells::style('coast')
+	, 'Without sand the grass keeps its own start'
+);
+
+grassCheck(
+	GrassShells::clear(GrassShells::style('mountain'), $layers) === GrassShells::style('mountain')
+	, 'A style with no bare layers is left alone'
+);
+
+grassCheck(GrassShells::clear(null, $layers) === null, 'Where no grass grows there is nothing to clear');
+
+foreach(GrassShells::STYLES as $name => $style)
+grassCheck(is_array((GrassShells::style($name))['bare']), "The $name style lists its bare layers");
+
 echo "Terrain grass shells: $checks checks passed.\n";
