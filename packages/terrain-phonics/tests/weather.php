@@ -71,4 +71,52 @@ equalWeather($opened->controls()['roadSnow'], 100);
 $kept = new Weather;
 $kept->restore($roads->snapshot(5.), 0.);
 equalWeather($kept->controls()['roadSnow'], 25);
-echo "Weather accumulation, clearing, edits, translation, restore and the road snow limit passed.\n";
+
+// Snow cover can be set outright. The weather goes on from it: snowfall adds to it and clear weather melts it.
+$laid = new Weather;
+$laid->cover(.25, 10.);
+equalWeather($laid->ground(10.)[1], .25);
+equalWeather($laid->ground(10.)[0], 0.);
+$laid->edit(Weather::PRESETS['snow'], 10.);
+equalWeather($laid->ground(25.)[1], .5);
+$laid->cover(1., 25.);
+equalWeather($laid->ground(25.)[1], 1.);
+$laid->edit(Weather::PRESETS['clear'], 25.);
+equalWeather($laid->ground(85.)[1], .5);
+$restored = new Weather;
+$restored->restore($laid->snapshot(85.), 85.);
+equalWeather($restored->ground(85.)[1], .5);
+$laid->cover(0., 85.);
+equalWeather($laid->ground(85.)[1], 0.);
+
+foreach([-.1, 1.1, NAN, INF] as $invalid)
+{
+	try
+	{
+		$laid->cover($invalid, 90.);
+		throw new RuntimeException('Accepted a snow cover of ' . json_encode((string)$invalid));
+	}
+	catch(InvalidArgumentException)
+	{
+	}
+}
+
+// A held ground keeps its snow and wetness whatever the weather, and lets go again when released.
+$held = new Weather;
+equalWeather($held->controls()['hold'], 0);
+$held->cover(.5, 0.);
+$held->edit(['hold' => 1], 0.);
+equalWeather($held->ground(600.)[1], .5);
+$held->edit(Weather::PRESETS['rain'], 600.);
+equalWeather($held->controls()['hold'], 1);
+equalWeather($held->ground(900.), [0., .5]);
+$held->edit(Weather::PRESETS['clear'] + ['hold' => 0], 900.);
+equalWeather($held->ground(930.)[1], .25);
+$before = $held->snapshot(930.);
+unset($before['controls']['hold']);
+equalWeather(Weather::valid($before), true);
+$unheld = new Weather;
+$unheld->restore($before, 930.);
+equalWeather($unheld->controls()['hold'], 0);
+
+echo "Weather accumulation, clearing, edits, translation, restore, the road snow limit, set cover and hold passed.\n";
