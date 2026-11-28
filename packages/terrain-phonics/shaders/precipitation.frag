@@ -16,5 +16,7 @@ void main()
 		color=vec4(mix(vec3(1.),vec3(.84,.9,.97),vFlake.z)*mix(.48,1.,uDay),vAlpha*(core+(1.-core)*glow));
 		return;
 	}
-	color=vec4(vec3(.46,.57,.65)*mix(.48,1.,uDay),vAlpha*(1.-smoothstep(.18,1.,abs(vCorner.x)))*.52);
+	// A streak is soft across its width and fades out toward both ends.
+	float body=(1.-smoothstep(.2,1.,abs(vCorner.x)))*(1.-vCorner.y*vCorner.y);
+	color=vec4(mix(vec3(.82,.88,.94),vec3(.62,.7,.78),vFlake.z)*mix(.48,1.,uDay),vAlpha*body);
 }
