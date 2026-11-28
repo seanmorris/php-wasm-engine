@@ -2913,6 +2913,13 @@ final class Scene
 	}
 
 	/**
+	 * Tell where the nearest lit lightning strike shines from, so a caller's own models can flash with it.
+	 *
+	 * @return ?array The light's X, height and Z in meters and its strength from 0 to 1, or null when none is lit.
+	 */
+	public function bolt(): ?array { return $this->weatherRenderer?->bolt(); }
+
+	/**
 	 * Upload camera, atmosphere and common surface uniforms to one draw program.
 	 * @param Program $program Linked shader program receiving uniforms.
 	 * @param Camera $camera Current viewing camera.

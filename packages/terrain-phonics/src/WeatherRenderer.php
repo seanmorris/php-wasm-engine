@@ -316,6 +316,20 @@ final class WeatherRenderer
 	}
 
 	/**
+	 * Tell where the nearest lit strike shines from, for anything outside the scene that should flash with it.
+	 *
+	 * @return ?array The light's X, height and Z in meters and its strength from 0 to 1, or null when none is lit.
+	 */
+	public function bolt(): ?array
+	{
+		if(!$this->strikes) return null;
+
+		[$top, $land, , $light] = $this->strikes[0];
+
+		return [...self::lamp($top, $land), $light[0]];
+	}
+
+	/**
 	 * Tell how far the land's exposure drops while lightning lights it.
 	 *
 	 * @return float A factor for the exposure of everything but the sky and the cloud: 1 with no flash.
