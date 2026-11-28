@@ -144,14 +144,18 @@ grids. On a journey it takes one style per landscape and blends them where the l
 
 ## Add weather, water, and sky
 
-Assign a `Weather` to the scene for clouds, rain, or snow. The cloud sheet, its shadows on the ground, and
-its reflections in the water all sample the same moving field.
+Assign a `Weather` to the scene for clouds, rain, snow, or lightning. The cloud sheet, its shadows on the
+ground, and its reflections in the water all sample the same moving field.
 
 ```php
 $weather = $scene->weather = new TerrainPhonics\Weather;
 $weather->edit(TerrainPhonics\Weather::PRESETS['rain'], $time);
 $weather->edit(['altitude' => 6000, 'wind' => 20, 'heading' => 90], $time);
 ```
+
+The `storm` preset adds lightning to heavy rain. Each bolt lands on the highest ground near where it leaves
+the cloud and lights the cloud around its top. While it is lit, the land and the rest of the cloud darken
+against it. `strike($x, $z, $time)` calls a single bolt down over a place.
 
 `Water::sample(x, z, time)` returns height, normal, and vertical surface velocity. The shader evaluates the
 same directional waves and bounded wake packets. `Watercraft` uses several contact points with buoyancy,
