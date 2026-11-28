@@ -535,6 +535,11 @@ final class Scene
 				}
 				yield from $clipmap->prepareArrival($land, $camera, $this->quality);
 				yield;
+				// The first cull fills terrain height bounds for the visible blocks of the arriving landscape.
+				$width = max(1, (int)round($this->viewportHeight * $this->viewportAspect));
+				$bounds = $land->bounds();
+				$clipmap->visibleGroups($camera, $camera->clipPlanes($width, $this->viewportHeight), [$bounds['minY'], $bounds['maxY']]);
+				yield;
 				$clipmap->updateShadows($camera->position, $this->atmosphere->uniforms()['sunDirection'], $this->heightTextureRevision + 1);
 			})();
 			// Context restoration or a route change retires the old job even if the caller resumes it.

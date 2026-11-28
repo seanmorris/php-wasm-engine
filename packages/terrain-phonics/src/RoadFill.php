@@ -36,7 +36,7 @@ final class RoadFill
 
 			$next = $s + $spacing;
 
-			if((++$probes & 15) === 0) yield;
+			if((++$probes & 1) === 0) yield;
 
 			if($opacity < .99) continue;
 
