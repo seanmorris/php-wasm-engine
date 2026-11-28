@@ -4,11 +4,18 @@ namespace TerrainPhonics;
 
 use Phonics\Render\Program;
 
-/** One cloud sheet and one bounded particle draw. Both read simulation time and camera-relative coordinates. */
+/**
+ * One cloud sheet, one bounded particle draw, and lightning. All read simulation time and camera-relative
+ * coordinates.
+ */
 final class WeatherRenderer
 {
 	/** Raindrops and snowflakes drawn around the eye at full intensity. */
 	private const DROPS = 98304, FLAKES = 36864;
+	/** Straight pieces in one bolt: 128 in the main channel, ten forks of 32 and fourteen twigs of 16. */
+	private const PIECES = 672;
+	/** Strikes drawn at once. */
+	private const SHOWN = 4;
 
 	private array $texture = [];
 	private \WeakMap $enabled;
@@ -21,7 +28,12 @@ final class WeatherRenderer
 	 */
 	public function __construct() { $this->enabled = new \WeakMap; }
 
-	private ?Program $clouds = null, $particles = null;
+	private ?Program $clouds = null, $particles = null, $bolt = null, $shade = null;
+	/** Strikes lit this frame, nearest first: top, landing point, seed, light, and distance from the eye. */
+	private array $strikes = [];
+	/** Strikes begun in the last two slots, the controls and square they were listed for, and where each landed. */
+	private array $slots = [], $listed = [], $landed = [];
+	private bool $flashed = false;
 	/** Where the eye last was, when, and its velocity from there, which slants the rain. */
 	private array $eye = [], $drift = [0., 0., 0.];
 	private float $seen = 0.;
@@ -33,7 +45,11 @@ final class WeatherRenderer
 	 *
 	 * @return void No value.
 	 */
-	public function clear(): void { $this->active = false; }
+	public function clear(): void
+	{
+		$this->active = false;
+		$this->strikes = [];
+	}
 
 	/**
 	 * Sample the cloud deck, wind and surface conditions for this frame.
@@ -42,15 +58,25 @@ final class WeatherRenderer
 	 * @param float $time Simulation time in seconds.
 	 * @param float $sea Water surface elevation in meters.
 	 * @param float $sunY Vertical component of the normalized sun direction.
+	 * @param ?Landscape $ground Landscape lightning lands on. Without one there is no lightning.
+	 * @param array $eye Eye position in meters.
 	 * @return void No value.
 	 */
-	public function prepare(Weather $weather, float $time, float $sea, float $sunY): void
-	{
+	public function prepare(
+		Weather $weather
+		, float $time
+		, float $sea
+		, float $sunY
+		, ?Landscape $ground = null
+		, array $eye = [0., 0., 0.]
+	): void {
 		$this->controls = $c = $weather->controls();
+
 		$this->time = $time;
 		$this->sea = $sea;
 		$this->ground = $weather->ground($time);
 		$this->active = $c['coverage'] > 0 || ($c['kind'] !== 'none' && $c['intensity'] > 0) || max($this->ground) > 0.;
+		$this->strikes = [];
 
 		if(!$this->active) return;
 
@@ -59,6 +85,9 @@ final class WeatherRenderer
 			$c['coverage'] * .01,$sea + $c['altitude'] * .3048,$c['shadow'] * .01
 			, min(1., max(0., ($sunY + .12) / .34))
 		];
+
+		if($ground !== null && $c['coverage'] > 0 && ($c['lightning'] > 0 || $weather->called()))
+		$this->storm($weather, $ground, $eye);
 
 		if(!$this->texture && $c['coverage'] > 0)
 		{
@@ -83,6 +112,81 @@ final class WeatherRenderer
 			glGenerateMipmap(GL_TEXTURE_2D);
 			glActiveTexture(GL_TEXTURE0);
 		}
+	}
+
+	/**
+	 * Find the strikes lit this frame and the high ground each lands on.
+	 *
+	 * @param Weather $weather Weather controls and accumulated surface state.
+	 * @param Landscape $ground Landscape the strikes land on.
+	 * @param array $eye Eye position in meters.
+	 * @return void No value.
+	 */
+	private function storm(Weather $weather, Landscape $ground, array $eye): void
+	{
+		$slot = (int)floor($this->time / Lightning::SLOT);
+		$listed = [$this->controls, floor($eye[0] / Lightning::SQUARE), floor($eye[2] / Lightning::SQUARE)];
+
+		// The lists hold while the controls and the eye's square stay the same: 162 hashes every two seconds.
+		if($listed !== $this->listed) [$this->listed, $this->slots] = [$listed, []];
+
+		$this->slots = array_intersect_key($this->slots, [$slot - 1 => true, $slot => true]);
+		$rain = $this->controls['kind'] === 'rain' ? $this->controls['intensity'] / 100. : 0.;
+		$life = $this->controls['boltSeconds'];
+		$landed = [];
+		$called = $weather->called();
+
+		foreach([$slot - 1, $slot] as $n) $this->slots[$n] ??= Lightning::begun($weather, $n, $eye[0], $eye[2]);
+
+		foreach([...$this->slots, $called ? [$called] : []] as $list)
+		foreach($list as [$x, $z, $start, $seed])
+		{
+			$id = "$x:$z:$start";
+
+			// A strike keeps the landing point found for it for as long as its slot is listed.
+			if(isset($this->landed[$id])) $landed[$id] = $this->landed[$id];
+
+			if($this->time < $start || $this->time - $start >= $life) continue;
+
+			$land = $landed[$id] ??= Lightning::ground($ground, $x, $z, $this->sea, $this->controls['boltReach']);
+
+			// Ground that reaches the cloud leaves no room for a bolt.
+			if($this->deck[1] - $land[1] < 40.) continue;
+
+			[$main, $forks, $down] = Lightning::glow($this->time - $start, $seed, $life);
+			$far = hypot($land[0] - $eye[0], $land[2] - $eye[2]);
+			// Rain between the eye and a distant strike dims it a little: by an eighth at 13 kilometers in the
+			// heaviest. A bolt stays close to white however far off it is.
+			$clear = .8 + .2 * exp(-$far / (60000. - 48000. * $rain));
+
+			$this->strikes[] = [
+				Lightning::top($x, $z, $land, $this->deck[1])
+				, $land
+				, $seed
+				, [$main * $clear, $forks * $clear, $down]
+				, $far
+			];
+		}
+
+		$this->landed = $landed;
+		// Nearest first, so the strikes that matter most are the ones kept.
+		array_multisort(array_column($this->strikes, 4), $this->strikes);
+		$this->strikes = array_slice($this->strikes, 0, self::SHOWN);
+	}
+
+	/**
+	 * Tell how much of its brightness everything but a lit cloud keeps this frame.
+	 *
+	 * @return float 1 with no lightning lit, down to 1 less the `flashDark` control under a full flash close by.
+	 */
+	private function keep(): float
+	{
+		$sum = 0.;
+
+		// A strike darkens the scene less the farther off it is: half as much at 5 kilometers.
+		foreach($this->strikes as [, , , $light, $far]) $sum += $light[0] / (1. + ($far / 5000.) ** 2);
+
+		return 1. - $this->controls['flashDark'] / 100. * min(1., $sum);
 	}
 
 	/**
@@ -142,6 +246,8 @@ final class WeatherRenderer
 		$matrix = $camera->viewProjection($width, $height);
 		glDepthMask(false);
 
+		if($this->strikes) $this->darken($root);
+
 		if($c['coverage'] > 0)
 		{
 			$p = $this->clouds ??= new Program(
@@ -158,6 +264,25 @@ final class WeatherRenderer
 			glUniformMatrix4fv($p->location('uViewProjection'), 1, false, $matrix);
 			glUniform3f($p->location('uEye'), ...$camera->position);
 			glUniform1f($p->location('uExposure'), $exposure);
+
+			// The sheet darkens with the land and glows around the top of each lit strike. A program that never
+			// flashed needs no reset.
+			if($this->strikes || $this->flashed)
+			{
+				$lost = 1. - $this->keep();
+				$glow = $c['flashGlow'] / 100.;
+				glUniform3f($p->location('uDim'), $lost, $lost, $lost);
+				// The cloud glows a paler shade of the bolt's color.
+				[$red, $green, $blue] = $this->tint();
+				glUniform3f($p->location('uFlashColor'), .6 * $red + .4, .6 * $green + .4, .6 * $blue + .4);
+				glUniform1i($p->location('uFlashes'), count($this->strikes));
+
+				foreach($this->strikes as $n => [$top, , , $light])
+				glUniform3f($p->location("uFlash[$n]"), $top[0], $top[2], $light[0] * $glow);
+
+				$this->flashed = (bool)$this->strikes;
+			}
+
 			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 		}
 
@@ -189,7 +314,98 @@ final class WeatherRenderer
 			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (int)ceil($each * $c['intensity'] / 100));
 		}
 
+		if($this->strikes) $this->bolts($root, $camera, $matrix, $width, $height);
+
 		glDepthMask(true);
+	}
+
+	/**
+	 * Read the bolt's color control.
+	 *
+	 * @return array Red, green and blue as they display, each from 0 to 1.
+	 */
+	private function tint(): array
+	{
+		$color = hexdec(substr($this->controls['boltColor'], 1));
+
+		return [($color >> 16) / 255., ($color >> 8 & 255) / 255., ($color & 255) / 255.];
+	}
+
+	/**
+	 * Darken every pixel that is not sky while lightning is lit, so the land stands dark against the lit cloud.
+	 *
+	 * One triangle covers the screen at the far depth and passes only where something nearer was drawn. Its color
+	 * multiplies what is there.
+	 *
+	 * @param string $root Directory of the package's shaders.
+	 * @return void No value.
+	 */
+	private function darken(string $root): void
+	{
+		$keep = $this->keep();
+
+		$p = $this->shade ??= new Program(
+			file_get_contents($root . 'sky.vert')
+			, "#version 300 es\nprecision highp float;\nuniform vec3 uKeep;\nout vec4 color;\n"
+				. "void main() { color=vec4(uKeep,1.); }\n"
+		);
+
+		$p->use();
+		// The darkened land leans a little blue, as it does by a flash.
+		glUniform3f($p->location('uKeep'), $keep * .92, $keep * .96, min(1., $keep * 1.06));
+		glDepthFunc(GL_GREATER);
+		glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_ONE);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glDepthFunc(GL_LESS);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+	}
+
+	/**
+	 * Draw each lit strike's bolt.
+	 *
+	 * The pass keeps the brightest value written to each pixel instead of adding them, so the pieces of a bolt
+	 * join without seams. Hills in front hide it.
+	 *
+	 * @param string $root Directory of the package's shaders.
+	 * @param Camera $camera Camera defining the viewpoint and projection.
+	 * @param array $matrix Camera-relative view and projection matrix.
+	 * @param int $width Render target width in pixels.
+	 * @param int $height Render target height in pixels.
+	 * @return void No value.
+	 */
+	private function bolts(string $root, Camera $camera, array $matrix, int $width, int $height): void
+	{
+		$p = $this->bolt ??= new Program(
+			file_get_contents($root . 'lightning.vert')
+			, file_get_contents($root . 'lightning.frag')
+		);
+
+		$p->use();
+		$eye = $camera->position;
+		glUniformMatrix4fv($p->location('uViewProjection'), 1, false, $matrix);
+		glUniform3f($p->location('uView'), 2 * tan($camera->fov / 2) / max(1, $height), $width, $height);
+
+		glUniform3f(
+			$p->location('uShape')
+			, $this->controls['boltWidth'] / 100.
+			, $this->controls['boltZigzag'] / 100.
+			, $this->controls['boltForks'] / 100.
+		);
+
+		glUniform3f($p->location('uTint'), ...$this->tint());
+		glBlendEquationSeparate(GL_MAX, GL_FUNC_ADD);
+		glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
+
+		foreach($this->strikes as [$top, $land, $seed, $light])
+		{
+			glUniform3f($p->location('uTop'), $top[0] - $eye[0], $top[1] - $eye[1], $top[2] - $eye[2]);
+			glUniform3f($p->location('uBottom'), $land[0] - $eye[0], $land[1] - $eye[1], $land[2] - $eye[2]);
+			glUniform4f($p->location('uBolt'), $seed, $light[2], $light[0], $light[1]);
+			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, self::PIECES);
+		}
+
+		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	}
 
 	/**
@@ -233,6 +449,8 @@ final class WeatherRenderer
 	{
 		$this->clouds?->close();
 		$this->particles?->close();
+		$this->bolt?->close();
+		$this->shade?->close();
 
 		if($this->texture) glDeleteTextures(1, $this->texture);
 	}

@@ -178,6 +178,8 @@ Cloud altitude is in feet above the water datum. Wind is in mph toward a compass
 
 `cover($snow, $time)` sets the snow lying on the ground outright, from 0 to 1, and `soak($wet, $time)` sets its wetness. The weather goes on from there. Set the `hold` control to 1 to keep the ground's wetness and snow as they are whatever the weather, and to 0 to let them change again.
 
+The `lightning` control, from 0 to 100, sets how often the cloud strikes, and the `storm` preset turns it on with heavy rain. Strikes are a function of the clock and the place, so a replay shows the same storm. Each bolt leaves opaque cloud, lands on the highest ground within about 800 meters and lights the cloud around its top. While it is lit, the land and the rest of the cloud darken against it. `strike($x, $z, $time)` calls a single bolt down over a place. Eight more controls shape a strike: `boltSeconds` (how long it lasts, 0.3 to 2), `flashDark` (how far the land and unlit cloud darken, 0 to 100), `flashGlow` (the glow in the cloud, 0 to 200), `boltWidth`, `boltZigzag` and `boltForks` (percentages of the designed bolt), `boltReach` (how far it may move toward high ground, 0 to 1,500 meters) and `boltColor` (a six-digit hex color). `Lightning::lit($weather, $time, $x, $z)` lists the strikes lit around a viewer, for a game that adds thunder or effects of its own.
+
 For a save, store `snapshot($time)` and call `restore($snapshot, $newTime)` when loading. For rewindable playback, record `snapshot()` on edits and restore that anchor against the original simulation clock. Call `translate($dx, $dz, $time)` when changing a journey’s local coordinate origin.
 
 ### Surface materials

@@ -2590,6 +2590,8 @@ final class Scene
 				, $time
 				, $this->water->level()
 				, $environment['sunDirection'][1]
+				, $this->landscape
+				, $camera->position
 			);
 		} else $this->weatherRenderer?->clear();
 
