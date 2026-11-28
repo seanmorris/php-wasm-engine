@@ -101,6 +101,37 @@ foreach([-.1, 1.1, NAN, INF] as $invalid)
 	}
 }
 
+// Wetness can be set outright too. Rain adds to it, clear weather dries it, and the snow is left as it lies.
+$soaked = new Weather;
+$soaked->cover(.25, 0.);
+$soaked->edit(['hold' => 1], 0.);
+$soaked->soak(.5, 10.);
+equalWeather($soaked->ground(10.), [.5, .25]);
+equalWeather($soaked->ground(400.), [.5, .25]);
+$soaked->cover(0., 400.);
+$soaked->edit(Weather::PRESETS['rain'] + ['hold' => 0], 400.);
+equalWeather($soaked->ground(405.)[0], .75);
+$soaked->soak(1., 405.);
+$soaked->edit(Weather::PRESETS['clear'], 405.);
+equalWeather($soaked->ground(450.)[0], .5);
+$dried = new Weather;
+$dried->restore($soaked->snapshot(450.), 450.);
+equalWeather($dried->ground(450.)[0], .5);
+$soaked->soak(0., 450.);
+equalWeather($soaked->ground(450.)[0], 0.);
+
+foreach([-.1, 1.1, NAN, INF] as $invalid)
+{
+	try
+	{
+		$soaked->soak($invalid, 460.);
+		throw new RuntimeException('Accepted a wetness of ' . json_encode((string)$invalid));
+	}
+	catch(InvalidArgumentException)
+	{
+	}
+}
+
 // A held ground keeps its snow and wetness whatever the weather, and lets go again when released.
 $held = new Weather;
 equalWeather($held->controls()['hold'], 0);
@@ -119,4 +150,4 @@ $unheld = new Weather;
 $unheld->restore($before, 930.);
 equalWeather($unheld->controls()['hold'], 0);
 
-echo "Weather accumulation, clearing, edits, translation, restore, the road snow limit, set cover and hold passed.\n";
+echo "Weather accumulation, clearing, edits, translation, restore, the road snow limit, set cover, set wetness and hold passed.\n";

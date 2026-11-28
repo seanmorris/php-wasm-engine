@@ -218,6 +218,23 @@ final class Weather
 	}
 
 	/**
+	 * Set how wet the ground is, as if the rain had already fallen.
+	 *
+	 * The weather goes on from there: rain and melting snow add to the wetness, and clear weather dries it.
+	 *
+	 * @param float $wet Wetness from 0 to 1.
+	 * @param float $time Simulation time in seconds.
+	 * @return void No value.
+	 */
+	public function soak(float $wet, float $time): void
+	{
+		if(!is_finite($wet) || $wet < 0 || $wet > 1) throw new \InvalidArgumentException('Invalid wetness.');
+
+		$this->anchor($time);
+		$this->wet = $wet;
+	}
+
+	/**
 	 * Adjust the weather origin when moving between landscape coordinate frames.
 	 *
 	 * @param float $x Horizontal offset between landscape origins along X.
