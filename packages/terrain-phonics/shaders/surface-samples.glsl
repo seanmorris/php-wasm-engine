@@ -1,5 +1,6 @@
-// RGBA8 stores companded linear pigment, an octahedral lighting normal, a 16-bit log depth and geometric slope.
-// Sample only this frame's triangles. All lighting, paint coverage and markings use the native display geometry.
+// One RGBA32UI texel holds pigment RGB10, octahedral normal XY8 and log depth16,
+// geometric slope and finish (three bytes), and the capture frame that owns it.
+uniform int uSurfaceFrame;
 vec3 encodePigment(vec3 pigment) { return sqrt(max(pigment,0.)/(1.+max(pigment,0.))); }
 vec3 decodePigment(vec3 encoded) { vec3 p=encoded*encoded; return p/max(vec3(.0001),1.-p); }
 vec2 packSurfaceNormal(vec3 n) {
@@ -20,47 +21,61 @@ uniform vec2 uSourceScale;
 #define fwidth(v) (abs(dFdx(v))+abs(dFdy(v)))
 #endif
 #ifdef READ_SURFACE_SAMPLES
-uniform highp sampler2D uMaterialPigment,uMaterialNormal;
+uniform highp usampler2D uSurfaceData;
+#ifdef NEAR_SURFACE
+uniform float uSurfaceRange;
+#endif
 uniform vec2 uSurfacePixel;
 vec2 nativeDepthSlope;
-bool sampleSurface(vec3 normal,inout vec3 pigment,inout vec3 lighting) {
-	vec2 size=vec2(textureSize(uMaterialPigment,0));
+vec3 sampleColor(uint word) {
+	return vec3(uvec3(word,word>>10,word>>20)&1023u)*(1./1023.);
+}
+vec2 samplePair(uint word) {
+	return vec2(uvec2(word,word>>8)&255u)*(1./255.);
+}
+
+bool sampleSurface(vec3 normal,inout vec3 pigment,inout vec3 lighting,inout vec2 finish) {
+	vec2 size=vec2(textureSize(uSurfaceData,0));
 	vec2 pixel=gl_FragCoord.xy*uSurfacePixel*size-.5;
 	vec2 f=fract(pixel), invScale=1./(uSurfacePixel*size);
 	ivec2 cell=ivec2(floor(pixel)), last=ivec2(size)-1;
-	// Reciprocal depth is affine across the current visible triangle. Predict its log depth at each tap.
+	// Predict the depth on this face at each sample center. A neighboring cliff can have a different depth or grade.
 	float w=gl_FragCoord.w, center=log2(1.+1./w);
 	vec2 depthSlope=(-1.44269504/(w*(1.+w)))*nativeDepthSlope*invScale;
-	vec3 total=vec3(0.); vec2 tilt=vec2(0.);
+	vec3 total=vec3(0.); vec2 tilt=vec2(0.), coating=vec2(0.);
 	float coverage=0.;
-	// At a depth or grade break, interpolate only the samples that belong to this face.
 	for(int y=0;y<2;y++) for(int x=0;x<2;x++) {
-		ivec2 at=clamp(cell+ivec2(x,y),ivec2(0),last);
-		vec4 a=texelFetch(uMaterialPigment,at,0), b=texelFetch(uMaterialNormal,at,0);
+		uvec4 tap=texelFetch(uSurfaceData,clamp(cell+ivec2(x,y),ivec2(0),last),0);
 		float expected=center+dot(vec2(x,y)-f,depthSlope);
-		float logDepth=dot(vec2(a.a,b.b),vec2(65280.,255.))*(17./65535.);
-		float error=abs(logDepth-expected);
-		if(b.a<.001 || error>.0025 || abs(b.a-(1.+254.*normal.y)/255.)>.035) continue;
+		float logDepth=float(tap.g>>16)*(17./65535.);
+		float grade=float(tap.b&255u)*(1./255.);
+		if(tap.a!=uint(uSurfaceFrame) || abs(logDepth-expected)>.0025 || abs(grade-normal.y)>.035) continue;
 		float weight=(x==0?1.-f.x:f.x)*(y==0?1.-f.y:f.y);
-		total+=weight*a.rgb; tilt+=weight*b.rg; coverage+=weight;
+		total+=weight*sampleColor(tap.r);
+		tilt+=weight*samplePair(tap.g);
+		coating+=weight*samplePair(tap.b>>8);
+		coverage+=weight;
 	}
 	if(coverage<.05) {
-		// At a silhouette the matching face can just miss the four central samples.
 		float best=1.e10;
+		uvec4 nearest=uvec4(0u);
 		for(int y=-1;y<=2;y++) for(int x=-1;x<=2;x++) {
-			ivec2 at=clamp(cell+ivec2(x,y),ivec2(0),last);
-			vec4 a=texelFetch(uMaterialPigment,at,0), b=texelFetch(uMaterialNormal,at,0);
-			if(b.a<.001) continue;
+			uvec4 tap=texelFetch(uSurfaceData,clamp(cell+ivec2(x,y),ivec2(0),last),0);
+			if(tap.a!=uint(uSurfaceFrame)) continue;
 			vec2 offset=vec2(x,y)-f;
 			float expected=center+dot(offset,depthSlope);
-			float logDepth=dot(vec2(a.a,b.b),vec2(65280.,255.))*(17./65535.);
-			float cost=abs(logDepth-expected)+.08*abs(b.a-normal.y)+.0001*dot(offset,offset);
-			if(cost<best) { best=cost; total=a.rgb; tilt=b.rg; }
+			float logDepth=float(tap.g>>16)*(17./65535.);
+			float grade=float(tap.b&255u)*(1./255.);
+			float cost=abs(logDepth-expected)+.08*abs(grade-normal.y)+.0001*dot(offset,offset);
+			if(cost<best) {best=cost; nearest=tap;}
 		}
 		if(best==1.e10) return false;
+		total=sampleColor(nearest.r);
+		tilt=samplePair(nearest.g);
+		coating=samplePair(nearest.b>>8);
 		coverage=1.;
 	}
-	pigment=decodePigment(total/coverage); lighting=unpackSurfaceNormal(tilt/coverage);
+	finish=coating/coverage; pigment=decodePigment(total/coverage); lighting=unpackSurfaceNormal(tilt/coverage);
 	return true;
 }
 #endif

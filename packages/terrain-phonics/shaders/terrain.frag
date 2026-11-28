@@ -57,8 +57,7 @@ uniform vec3 uMountainAmounts; // Talus, stain and lichen.
 #endif
 uniform vec3 uSkyAmbient; // The sky's light on level ground over pi, already scaled by the sky-light setting.
 #ifdef WRITE_SURFACE_SAMPLES
-layout(location=0) out vec4 color;
-layout(location=1) out vec4 surfaceNormal;
+layout(location=0) out highp uvec4 surfaceData;
 #else
 out vec4 color;
 #endif
@@ -226,6 +225,10 @@ void main()
 	#ifdef WRITE_SURFACE_SAMPLES
 	// Retain natural material just inside a spline shoulder for its full-resolution edge pixels.
 	if(pavement && vSplinePaint>.99 && outline+4.*dot(abs(outlinePixel),vec2(1.))>=1.) pavement=false;
+	if(pavement) {
+		surfaceData=uvec4(0u);
+		return;
+	}
 	#endif
 	vec3 lightingNormal, bounce;
 	vec2 finish;
@@ -244,10 +247,14 @@ void main()
 	#endif
 	#endif
 	#ifdef WRITE_SURFACE_SAMPLES
-	float depthCode=round(log2(1.+1./gl_FragCoord.w)*(65535./17.));
-	color=vec4(encodePigment(albedo),floor(depthCode/256.)/255.);
-	surfaceNormal=vec4(packSurfaceNormal(lightingNormal),mod(depthCode,256.)/255.,pavement ? 0. : (1.+254.*n.y)/255.);
-	#elif defined(WRITE_RIB_FIELD)
+	uint depth=uint(round(log2(1.+1./gl_FragCoord.w)*(65535./17.)));
+	uvec3 rgb=uvec3(round(encodePigment(albedo)*1023.));
+	uvec2 oct=uvec2(round(packSurfaceNormal(lightingNormal)*255.));
+	uvec2 coat=uvec2(round(clamp(finish,0.,1.)*255.));
+	uint grade=uint(round(clamp(n.y,0.,1.)*255.));
+	surfaceData=uvec4(rgb.r|(rgb.g<<10)|(rgb.b<<20),oct.x|(oct.y<<8)|(depth<<16),
+		grade|(coat.x<<8)|(coat.y<<16),uint(uSurfaceFrame));
+#elif defined(WRITE_RIB_FIELD)
 	// Preserve faint slopes in RGBA8 and reserve one code on either side of the range.
 	color = vec4((128.+126.*ribField/(.02+abs(ribField)))/255.,1.);
 	#else

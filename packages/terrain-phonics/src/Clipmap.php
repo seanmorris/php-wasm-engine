@@ -1784,6 +1784,39 @@ final class Clipmap
 		return $groups;
 	}
 
+	/**
+	 * Split visible strips at lattice cell edges. The padded box includes stitched vertices
+	 * that can move one cell toward a coarser neighbor. Only its interior uses the near shader.
+	 * @return array{array,array} Distant and nearby strips, keyed by clipmap level.
+	 */
+	public function surfaceGroups(array $groups, array $eye, float $radius): array
+	{
+		$far = $near = [];
+		foreach($groups as $level => $strips)
+		{
+			$step = $this->levels[$level]['step'];
+			$x0 = (int)floor(($eye[0] - $radius) / $step) - 1;
+			$x1 = (int)ceil(($eye[0] + $radius) / $step) + 1;
+			$z0 = (int)floor(($eye[2] - $radius) / $step) - 1;
+			$z1 = (int)ceil(($eye[2] + $radius) / $step) + 1;
+			foreach($strips as [$left,$top,$right,$bottom])
+			{
+				$l = max($left, $x0); $r = min($right, $x1);
+				$t = max($top, $z0); $b = min($bottom, $z1);
+				if($l >= $r || $t >= $b) {
+					$far[$level][] = [$left,$top,$right,$bottom];
+					continue;
+				}
+				$near[$level][] = [$l,$t,$r,$b];
+				if($top < $t) $far[$level][] = [$left,$top,$right,$t];
+				if($bottom > $b) $far[$level][] = [$left,$b,$right,$bottom];
+				if($left < $l) $far[$level][] = [$left,$t,$l,$b];
+				if($right > $r) $far[$level][] = [$r,$t,$right,$b];
+			}
+		}
+		return [$far,$near];
+	}
+
 	/** Intersect a world-space decal footprint with the strips actually drawn at each LOD. */
 	public function drawRegion(Program $program,Camera $camera,array $visible,array $bounds): void
 	{

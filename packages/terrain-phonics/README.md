@@ -146,10 +146,12 @@ texture near the camera. Moving the window fills the newly exposed strips. The s
 fields outside the window. Sculpting, painting and grading roads reuse those noise values and draw from the
 current heights, normals and paint. Ridge relief depends on the camera footprint and is evaluated each frame.
 
-At large viewport sizes, a journey with ridge relief can sample surface color and relief at half the
-width and height. The display pass matches those samples to the current depth and slope. Road markings,
-paint, shadows and terrain edges are drawn at full resolution. Detailed quality, reflective surfaces
-and single landscapes use full-resolution material sampling.
+On journeys at standard quality, large viewports shade close terrain at full resolution and distant
+materials at half the width and height. The transition distance scales with viewport height and
+field of view. A short blend keeps cliff details continuous during a drive. The renderer matches
+color, relief and reflectivity samples to the current frame’s depth and slope. Road markings, paint,
+shadows and silhouettes use native resolution throughout. Detailed quality, small viewports and
+single landscapes shade materials at full resolution throughout.
 
 Recipe presets fill in a common set of shape coefficients. These coefficients can combine broad directional
 rise, rounded ridges, canyon walls, rolling relief and terracing. The `limestone` preset uses a 3,050 m

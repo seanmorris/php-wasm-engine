@@ -2932,7 +2932,7 @@ foreach([
 	, 'GL_DEPTH_ATTACHMENT'
 	, 'GL_RENDERBUFFER'
 	, 'GL_REPEAT'
-	, 'GL_TEXTURE_2D_ARRAY'
+	, 'GL_TEXTURE_2D_ARRAY', 'GL_RGBA32UI', 'GL_RGBA_INTEGER', 'GL_UNSIGNED_INT'
 	, 'GL_COLOR_CLEAR_VALUE'
 ] as $i => $name)
 if(!defined($name)) define($name, 0x9a00 + $i);
@@ -2977,6 +2977,24 @@ if(!function_exists('glTexSubImage2D'))
 		];
 	}
 }
+
+// A material capture preserves the caller's target and uses a different stamp for each draw.
+$parent = $GLOBALS['terrainGl']['framebuffer'];
+$samples = new TerrainPhonics\SurfaceSampleBuffer(17, 11);
+$probe = new Phonics\Render\Program('', '');
+$probe->use();
+foreach([1,2] as $stamp) {
+	$samples->begin();
+	$GLOBALS['terrainGlCalls'] = [];
+	$samples->bindFrame($probe);
+	renderCheck($GLOBALS['terrainGlCalls'] === [[$probe->location('uSurfaceFrame'),$stamp]],
+		'Capture and resolve must share a nonzero stamp unique to this frame.');
+	unset($GLOBALS['terrainGlCalls']);
+	$samples->end(33, 21);
+	renderCheck($GLOBALS['terrainGl']['framebuffer'] === $parent, 'Material capture restores its parent framebuffer.');
+}
+$samples->close();
+$probe->close();
 
 // A driver can look sideways while the finest ring leads the signed travel direction.
 $land = new Landscape(['preset' => 'canyon','spacing' => 1,'worldSize' => 8192]);

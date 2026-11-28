@@ -1992,39 +1992,43 @@ test('terrain WebGL2 caches and analytic water agree with their numeric referenc
 			const resolve = program(
 				shaders['shadows.vert']
 				, header + '#define READ_SURFACE_SAMPLES\n' + shaders['surface-samples.glsl'] + `
-				out vec4 color;
+				out vec4 color; uniform bool inspectFinish;
 				void main() {
 					vec3 pigment=vec3(0.,1.,0.), normal=vec3(0.,1.,0.);
 					nativeDepthSlope=vec2(dFdx(gl_FragCoord.w),dFdy(gl_FragCoord.w));
-					bool found=sampleSurface(vec3(0.,1.,0.),pigment,normal);
-					color=vec4(found ? pigment : vec3(0.,1.,0.),1.);
+					vec2 finish=vec2(0.);
+					bool found=sampleSurface(vec3(0.,1.,0.),pigment,normal,finish);
+					color=vec4(found ? (inspectFinish ? vec3(finish,0.) : pigment) : vec3(0.,1.,0.),1.);
 				}`
 			);
 
 			target(0, 1, 1);
 			gl.useProgram(resolve);
 			gl.uniform2f(gl.getUniformLocation(resolve, 'uSurfacePixel'), 1, 1);
-			gl.uniform1i(gl.getUniformLocation(resolve, 'uMaterialPigment'), 13);
-			gl.uniform1i(gl.getUniformLocation(resolve, 'uMaterialNormal'), 14);
-			const redDepth = Math.round(65535/17), blueDepth = Math.round(Math.log2(21)*65535/17);
-			const redSample = [180,0,0,redDepth>>8], blueSample = [0,0,180,blueDepth>>8];
-
-			const up = depth => [128,128,depth&255,255];
-			texture(13, 2, 2, Uint8Array.from([...redSample,...blueSample,...redSample,...blueSample]));
-			texture(14, 2, 2, Uint8Array.from([...up(redDepth),...up(blueDepth),...up(redDepth),...up(blueDepth)]));
+			gl.uniform1i(gl.getUniformLocation(resolve, 'uSurfaceData'), 13);
+			gl.uniform1i(gl.getUniformLocation(resolve, 'uSurfaceFrame'), 1);
+			const samples = gl.createTexture();
+			gl.activeTexture(gl.TEXTURE0 + 13);
+			gl.bindTexture(gl.TEXTURE_2D, samples);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+			const upload = taps => gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32UI, 2, 2, 0,
+				gl.RGBA_INTEGER, gl.UNSIGNED_INT, Uint32Array.from(taps.flat()));
+			const depth = distance => Math.round(Math.log2(1+distance)*65535/17);
+			const red = [723, 0x8080 | (depth(1)<<16), 255 | (32<<8) | (17<<16), 1];
+			const blue = [723<<20, 0x8080 | (depth(20)<<16), 255, 1];
+			upload([red,blue,red,blue]);
 			const edge = pixel();
-
 			if(edge[0]<250 || edge[1]!==0 || edge[2]!==0)
-			throw Error('Different depths bled across a silhouette: ' + edge);
-
-			texture(14, 2, 2, new Uint8Array(16));
-
-			if(String(pixel())!=='0,255,0') throw Error('An empty material neighborhood must request the base pigment');
-
-			texture(13, 2, 2, Uint8Array.from(Array(4).fill([0,0,180,redDepth>>8]).flat()));
-			texture(14, 2, 2, Uint8Array.from(Array(4).fill(up(redDepth)).flat()));
-
+				throw Error('Different depths bled across a silhouette: ' + edge);
+			gl.uniform1i(gl.getUniformLocation(resolve, 'inspectFinish'), 1);
+			if(String(pixel())!=='32,17,0') throw Error('Filtering lost the foreground coating');
+			gl.uniform1i(gl.getUniformLocation(resolve, 'inspectFinish'), 0);
+			gl.uniform1i(gl.getUniformLocation(resolve, 'uSurfaceFrame'), 2);
+			if(String(pixel())!=='0,255,0') throw Error('A previous frame survived the stage change');
+			upload(Array(4).fill([blue[0],red[1],255,2]));
 			if(pixel()[2]<250) throw Error('A replacement surface still shows the previous pigment');
+			gl.deleteTexture(samples);
 
 			const error = gl.getError();
 

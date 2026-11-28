@@ -42,19 +42,37 @@ vec3 journeySurface(vec3 world, vec3 normal, vec3 relative, float footprint, boo
 	finish = vec2(0.);
 	bounce = vec3(0.);
 	#ifdef READ_SURFACE_SAMPLES
-	litNormal = normal;
-	if(!pavement && uCraft<.5 && !sampleSurface(normal,albedo,litNormal)) {
-		// An isolated subpixel tip can miss the source grid completely. Use its own landscapes' base pigment.
-		albedo = weights.x*palettes[0].colors[0]+weights.y*palettes[1].colors[0];
-		#if JOURNEY_REGIONS == 3
-		albedo += weights.z*palettes[2].colors[0];
-		#endif
-	}
 	bounce=weights.x*palettes[0].bounce.rgb+weights.y*palettes[1].bounce.rgb;
 	#if JOURNEY_REGIONS == 3
 	bounce+=weights.z*palettes[2].bounce.rgb;
 	#endif
+	if(pavement) {
+		litNormal=normal;
+		return albedo;
+	}
+	#ifdef NEAR_SURFACE
+	float coarse=smoothstep(.70*uSurfaceRange,uSurfaceRange,length(relative));
 	#else
+	const float coarse=1.;
+	#endif
+	if(coarse>0.) {
+		litNormal=normal;
+		if(uCraft<.5 && !sampleSurface(normal,albedo,litNormal,finish)) {
+			// An isolated subpixel tip can miss the source grid completely. Use its own landscapes' base pigment.
+			albedo = weights.x*palettes[0].colors[0]+weights.y*palettes[1].colors[0];
+			#if JOURNEY_REGIONS == 3
+			albedo += weights.z*palettes[2].colors[0];
+			#endif
+		}
+		if(coarse>=1.) return albedo;
+	}
+	#endif
+	#if !defined(READ_SURFACE_SAMPLES) || defined(NEAR_SURFACE)
+	#ifdef NEAR_SURFACE
+	vec3 cachedColor=albedo, cachedNormal=litNormal;
+	vec2 cachedFinish=finish;
+	albedo=litNormal=bounce=vec3(0.); finish=vec2(0.);
+	#endif
 	// Only the leading landscape at a pixel runs its whole shader, so a seam costs about what one landscape does.
 	// The others add a plain color. Near an even split the runner-up's detail fades in, so that no line shows where
 	// the lead changes hands.
@@ -62,6 +80,13 @@ vec3 journeySurface(vec3 world, vec3 normal, vec3 relative, float footprint, boo
 	vec3 detail = smoothstep(vec3(JOURNEY_DETAIL*lead),vec3(lead),weights);
 	// SAMPLE REGIONS
 	litNormal = pavement ? normal : normalize(litNormal);
+	#ifdef NEAR_SURFACE
+	if(coarse>0.) {
+		albedo=mix(albedo,cachedColor,coarse);
+		litNormal=normalize(mix(litNormal,cachedNormal,coarse));
+		finish=mix(finish,cachedFinish,coarse);
+	}
+	#endif
 	#endif
 	return albedo;
 }

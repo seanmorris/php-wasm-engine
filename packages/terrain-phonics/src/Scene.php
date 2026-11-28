@@ -56,7 +56,7 @@ final class Scene
 	private ?SurfaceSampleBuffer $surfaceSamples = null;
 	/** Visible strips of each terrain grid from the last ground pass, for overlays drawn on the same triangles. */
 	private array $groundGroups = [];
-	private ?Program $surfaceProgram = null;
+	private ?Program $surfaceProgram = null, $nearGround = null, $litNearGround = null;
 	private bool $sampleMaterials = true;
 	private ?MaterialFieldCache $materialFields = null;
 	private ?Landscape $preparing = null;
@@ -2655,7 +2655,7 @@ final class Scene
 		$eye = $camera->position;
 		$this->groundDraws = $this->waterDraws = 0;
 		$groundProgram = $lit || $warm && !$this->litDrawn['ground'] ? $this->litGroundProgram : $this->groundProgram;
-		$groups = [];
+		$groups = $nearGroups = [];
 
 		if($this->clipmap)
 		{
@@ -2674,45 +2674,24 @@ final class Scene
 			$groups = $this->clipmap->visibleGroups($camera, $planes, [$floor,$ceiling]);
 			$this->groundGroups = $groups;
 
-			if($this->surfaceProgram) $this->drawSurfaceSamples($camera, $width, $height, $materials, $groups);
+			if($this->surfaceProgram)
+			{
+				$this->drawSurfaceSamples($camera, $width, $height, $materials, $groups);
+				// At the outer radius a face normal to the view spans about 1.2 cm per pixel.
+				$range = 0.012 * $height / (2. * tan($camera->fov / 2.));
+				[$groups,$nearGroups] = $this->clipmap->surfaceGroups($groups, $eye, $range);
+			}
 			elseif($this->ribProgram) $this->drawRibField($camera, $width, $height, $materials, $groups);
 		}
 
-		$groundProgram->use();
-		$this->materialFields?->bind($groundProgram);
-		$this->surfaceSamples?->bind($groundProgram, $width, $height);
-
-		if($this->ribProgram) glUniform1i($groundProgram->location('uRibField'), 11);
-
-		[$palette,$form] = $materials[0];
-		$joined = count($materials) > 1;
-
-		if($joined) $this->bindJourney($groundProgram, $materials);
-
-		$this->common($groundProgram, $camera, $width, $height, $land);
-		$this->water->appearance->bind($groundProgram);
-
-		$id = spl_object_id($groundProgram);
-		$paint = $this->paint ?? $this->appearance;
-
-		if(($this->boundPaint[$id] ?? null) !== $paint)
+		if($nearGroups)
 		{
-			$paint->bindPaint($groundProgram);
-			$this->boundPaint[$id] = $paint;
+			$near = $groundProgram === $this->litGroundProgram ? $this->litNearGround : $this->nearGround;
+			$this->bindGround($near, $camera, $width, $height, $materials, $land);
+			$this->scalar($near, 'uSurfaceRange', $range);
+			$this->groundDraws += $this->clipmap->drawGroups($near, $camera, $nearGroups);
 		}
-
-		if(!$joined && ($this->layerBinding[$id] ?? null) !== $palette)
-		{
-			$palette->bind($groundProgram);
-			$seed = crc32((string)$form['seed']);
-			glUniform3f($groundProgram->location('uMaterialOrigin'), ...$materials[0][2]);
-			glUniform2f($groundProgram->location('uPaletteOffset'), $seed & 65535, ($seed >> 16) & 65535);
-			$this->scalar($groundProgram, 'uRockSlopeDamping', $form['damping'] / $form['slopeScale'] ** 2);
-			$this->layerBinding[$id] = $palette;
-		}
-
-		$this->vector($groundProgram, 'uCraftRotation', [0,0,0]);
-		$this->scalar($groundProgram, 'uCraft', 0);
+		$this->bindGround($groundProgram, $camera, $width, $height, $materials, $land);
 
 		$lastBoundary = null;
 		$uPatch = $groundProgram->location('uPatch');
@@ -2919,6 +2898,46 @@ final class Scene
 	 */
 	public function bolt(): ?array { return $this->weatherRenderer?->bolt(); }
 
+	/** Bind the shared lighting, edit and material state for a terrain strip batch. */
+	private function bindGround(Program $groundProgram, Camera $camera, int $width, int $height, array $materials, array $land): void
+	{
+		$groundProgram->use();
+		$this->materialFields?->bind($groundProgram);
+		$this->surfaceSamples?->bind($groundProgram, $width, $height);
+
+		if($this->ribProgram) glUniform1i($groundProgram->location('uRibField'), 11);
+
+		[$palette,$form] = $materials[0];
+		$joined = count($materials) > 1;
+
+		if($joined) $this->bindJourney($groundProgram, $materials);
+
+		$this->common($groundProgram, $camera, $width, $height, $land);
+		$this->water->appearance->bind($groundProgram);
+
+		$id = spl_object_id($groundProgram);
+		$paint = $this->paint ?? $this->appearance;
+
+		if(($this->boundPaint[$id] ?? null) !== $paint)
+		{
+			$paint->bindPaint($groundProgram);
+			$this->boundPaint[$id] = $paint;
+		}
+
+		if(!$joined && ($this->layerBinding[$id] ?? null) !== $palette)
+		{
+			$palette->bind($groundProgram);
+			$seed = crc32((string)$form['seed']);
+			glUniform3f($groundProgram->location('uMaterialOrigin'), ...$materials[0][2]);
+			glUniform2f($groundProgram->location('uPaletteOffset'), $seed & 65535, ($seed >> 16) & 65535);
+			$this->scalar($groundProgram, 'uRockSlopeDamping', $form['damping'] / $form['slopeScale'] ** 2);
+			$this->layerBinding[$id] = $palette;
+		}
+
+		$this->vector($groundProgram, 'uCraftRotation', [0,0,0]);
+		$this->scalar($groundProgram, 'uCraft', 0);
+	}
+
 	/**
 	 * Upload camera, atmosphere and common surface uniforms to one draw program.
 	 * @param Program $program Linked shader program receiving uniforms.
@@ -2966,10 +2985,11 @@ final class Scene
 
 		if($program !== $this->skyProgram) $this->scalar($program, 'uWaterLevel', $this->water->level());
 
-		if($program === $this->litGroundProgram || $program === $this->litWaterProgram)
+		if($program === $this->litGroundProgram || $program === $this->litNearGround || $program === $this->litWaterProgram)
 		$this->spotLights?->bind($program, $environment['nightVisibility']);
 
-		if($program === $this->groundProgram || $program === $this->litGroundProgram)
+		if($program === $this->groundProgram || $program === $this->litGroundProgram
+			|| $program === $this->nearGround || $program === $this->litNearGround)
 		{
 			$this->terrainShadows->bind($program);
 			$this->clipmap?->bindShadows($program);
@@ -3309,6 +3329,7 @@ final class Scene
 		{
 			$p = $this->surfaceProgram;
 			$p->use();
+			$this->surfaceSamples->bindFrame($p);
 			$this->materialFields->bind($p);
 			$this->bindJourney($p, $materials);
 			$this->vector($p, 'uEye', $camera->position);
@@ -3345,11 +3366,7 @@ final class Scene
 			}
 		}
 
-		$sampled = $sampleMaterials && $ribRegion !== null && !in_array(
-			true
-			, array_column($stacks, 'reflective')
-			, true
-		);
+		$sampled = $sampleMaterials && $joinedClipmap;
 
 		$key = count($stacks) === 1
 			? $stacks[0]->structure
@@ -3386,6 +3403,13 @@ final class Scene
 				, str_replace('// SPOT LIGHTS', SpotLights::shaderSource($lamps), $ground)
 			);
 
+			if($sampled) {
+				$near = str_replace('// MATERIAL PASSES', "#define NEAR_SURFACE\n" . $read, $source);
+				foreach([false,true] as $lamps) {
+					$set[$lamps ? 'nearLit' : 'near'] = new Program($this->groundVertexSource,
+						str_replace('// SPOT LIGHTS', SpotLights::shaderSource($lamps), $near));
+				}
+			}
 			if($this->useClipmap)
 			{
 				$root = dirname(__DIR__) . '/shaders/';
@@ -3457,6 +3481,8 @@ final class Scene
 		$this->chartProgram = $this->materialPrograms[$key][2] ?? null;
 		$this->ribProgram = $this->materialPrograms[$key]['ribs'] ?? null;
 		$this->surfaceProgram = $this->materialPrograms[$key]['samples'] ?? null;
+		$this->nearGround = $this->materialPrograms[$key]['near'] ?? null;
+		$this->litNearGround = $this->materialPrograms[$key]['nearLit'] ?? null;
 
 		if(!$this->surfaceProgram)
 		{

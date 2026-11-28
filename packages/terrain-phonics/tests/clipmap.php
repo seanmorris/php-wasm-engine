@@ -850,6 +850,25 @@ $type = new ReflectionClass(Clipmap::class);
 $overlay = $type->newInstanceWithoutConstructor();
 $levels = $type->getProperty('levels');
 $levels->setValue($overlay, [['step'=>2.], ['step'=>4.]]);
+// The near/far split must cover exactly the visible cells, including negative coordinates and sparse levels.
+foreach([[0.,0.,0.], [-7.5,20.,4.1], [100.,0.,100.]] as $eye) {
+	$groups = [1=>[[-5,-4,1,2],[1,-4,8,2]]];
+	[$far,$near] = $overlay->surfaceGroups($groups,$eye,6.);
+	$cells = [];
+	foreach([$far,$near] as $kind=>$batch) foreach($batch as $level=>$strips) {
+		check($level===1, 'Splitting must preserve a sparse level index.');
+		foreach($strips as [$left,$top,$right,$bottom]) {
+			for($z=$top;$z<$bottom;$z++) for($x=$left;$x<$right;$x++) {
+				check(!isset($cells["$x,$z"]), 'LOD strips must never overlap.');
+				$close = $x>=floor(($eye[0]-6.)/4.)-1 && $x<ceil(($eye[0]+6.)/4.)+1
+					&& $z>=floor(($eye[2]-6.)/4.)-1 && $z<ceil(($eye[2]+6.)/4.)+1;
+				check($kind===(int)$close, 'Every cell must select its own side of the padded transition.');
+				$cells["$x,$z"] = true;
+			}
+		}
+	}
+	check(count($cells)===13*6, 'Material resolution must never cut a hole in the mesh.');
+}
 $plan = $type->getMethod('overlayGroups');
 $visible = [[[-8,-2,0,2]], [[0,-2,8,2]]];
 $regions = ['west'=>[-12.,-4.,-4.,0.], 'east'=>[8.,0.,12.,4.]];
