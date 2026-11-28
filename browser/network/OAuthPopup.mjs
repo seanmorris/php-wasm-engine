@@ -181,7 +181,7 @@ const waitForCallback = ({windowRef, popup, id, channel, signal, timeout}) => ne
 
 	const onAbort = () => finish(
 		reject
-		, signal.reason ?? failure('oauth_popup_cancelled', 'Matrix sign-in was cancelled')
+		, signal.reason ?? failure('oauth_popup_cancelled', 'Matrix sign-in was canceled')
 	);
 
 	windowRef.addEventListener('message', onMessage);
@@ -198,7 +198,7 @@ const waitForCallback = ({windowRef, popup, id, channel, signal, timeout}) => ne
 			closedChecks = popup.closed ? closedChecks + 1 : 0;
 
 			if(closedChecks >= 2)
-		finish(reject, failure('oauth_popup_closed', 'Matrix sign-in was cancelled'));
+		finish(reject, failure('oauth_popup_closed', 'Matrix sign-in was canceled'));
 		}, 250
 		);
 
@@ -250,7 +250,7 @@ export async function authorizeWithPopup(
 
 		signal?.throwIfAborted();
 
-		if(popup.closed) throw failure('oauth_popup_closed', 'Matrix sign-in was cancelled');
+		if(popup.closed) throw failure('oauth_popup_closed', 'Matrix sign-in was canceled');
 
 		try
 		{

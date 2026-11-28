@@ -337,7 +337,7 @@ final class ReplicationSession
 	 * @param int $entity Locally owned, network-bound entity.
 	 * @return ?OwnerCorrection The correction, or null on the host, before a snapshot that acknowledges a local
 	 * command, when this snapshot was already taken for the entity, when the entity or its owned records are
-	 * absent, or when the retained commands no longer reach back to the acknowledgement.
+	 * absent, or when the retained commands no longer reach back to the acknowledgment.
 	 */
 	public function correction(int $entity): ?OwnerCorrection
 	{
@@ -440,7 +440,7 @@ final class ReplicationSession
 	/**
 	 * Accept a guest's redundant input commands on the host.
 	 *
-	 * @param array<string,mixed> $payload Input packet fields with commands and an optional snapshot acknowledgement.
+	 * @param array<string,mixed> $payload Input packet fields with commands and an optional snapshot acknowledgment.
 	 * @return void Records a usable snapshot baseline and queues validated commands for the remote slot.
 	 */
 	private function receiveInput(array $payload): void

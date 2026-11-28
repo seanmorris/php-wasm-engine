@@ -100,6 +100,7 @@ jobs:
       - uses: ./.github/actions/setup-docs
       - run: npm run setup:runtime
       - run: npm run test:cli:browser
+      - run: npm run test:terrain:gpu
       - name: Measure PHP-Noid collisions in PHP-WASM
         run: node scripts/bench-php-noid-browser.mjs > "$RUNNER_TEMP/php-noid-collisions.json"
       - name: Measure PHPTris board phases in PHP-WASM

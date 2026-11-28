@@ -29,7 +29,7 @@ export class ResourceNegotiator
 	/** World descriptor used to configure this operation. */
 	world;
 
-	/** Cancellable resource scope owned by this operation. */
+	/** Cancelable resource scope owned by this operation. */
 	scope;
 
 	/** Abort signal that cancels asynchronous work owned here. */

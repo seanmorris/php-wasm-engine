@@ -45,7 +45,7 @@ final class SnapshotBuilder
 	 * @param SnapshotSequence $sequence Command or snapshot sequence used as a boundary.
 	 * @param SimulationTick $tick Simulation tick associated with the command, event, or snapshot.
 	 * @param ?SnapshotSequence $baseline Prior snapshot sequence used to encode a delta, or null for a full snapshot.
-	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgements.
+	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgments.
 	 * @return WorldSnapshot Encoded components or an authoritative world snapshot.
 	 */
 	public function capture(

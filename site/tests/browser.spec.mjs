@@ -23,6 +23,7 @@ const pages = (await files(new URL('../.cache/pages/', import.meta.url)))
 // Generated symbol pages share one template; the guide, landing, and game chapters are checked at every width.
 const generatedPages = [
 	/^api-phonics-/
+	, /^api-terrain\//
 	, /^games\/[^/]+\/api\//
 	, /^api-js\/(?:classes|functions|types|variables|enums)\//
 ];
@@ -183,7 +184,22 @@ test('homepage hero introduces Phonics and links every game capture', async({pag
 	await expect(hero.getByRole('link', {name: 'Start the quickstart'})).toHaveAttribute('href', /quickstart\.html$/);
 
 	const captures = hero.getByRole('list', {name: 'Games built with Phonics'}).getByRole('link');
-	await expect(captures).toHaveCount(6);
+	const games = [
+		'terrain-sandbox'
+		, 'doom-phonics'
+		, 'php-noid'
+		, 'sane-phonics'
+		, 'php-tris'
+		, 'php-slalom'
+		, 'php-buster'
+		, 'php-billiards'
+		, 'php-poker'
+	];
+
+	await expect(captures).toHaveCount(games.length);
+
+	expect(await captures.evaluateAll(links => links.map(link => new URL(link.href).pathname.split('/').at(-2))))
+		.toEqual(games);
 
 	for(const capture of await captures.all())
 	{
@@ -655,8 +671,8 @@ test('game selector uses gameplay captures and mounts a game only on activation'
 	await page.goto('/games/');
 	await expect(page).toHaveURL(/\/games\/$/);
 	await expect(page.locator('h1')).toHaveText('Games');
-	await expect(page.locator('.game-selector li')).toHaveCount(9);
-	await expect(page.locator('.game-selector img')).toHaveCount(9);
+	await expect(page.locator('.game-selector li')).toHaveCount(10);
+	await expect(page.locator('.game-selector img')).toHaveCount(10);
 	await expect(page.locator('.game-selector img').first()).toHaveCSS('color', 'rgb(244, 247, 251)');
 	expect(wasm).toEqual([]);
 

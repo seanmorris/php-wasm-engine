@@ -21,12 +21,31 @@ require_once $root . '/autoload.php';
 
 $manifest = json_decode(file_get_contents($packageRoot . '/phonics.json'), true, flags: JSON_THROW_ON_ERROR);
 
-foreach($manifest['php']['bootstrap'] ?? [] as $bootstrap)
+/** Load local package bootstraps before reflecting defaults that reference dependency classes. */
+function apiBootstrap(string $directory, array $manifest, array &$loaded): void
 {
-	$path = $packageRoot . '/' . $bootstrap;
+	if(isset($loaded[$directory])) return;
+	$loaded[$directory] = true;
 
-	if(is_file($path)) require_once $path;
+	foreach(array_replace($manifest['dependencies'] ?? [], $manifest['application']['dependencies'] ?? []) as $dependency)
+	{
+		$url = is_string($dependency) ? $dependency : $dependency['url'];
+		if(preg_match('~^[a-z][a-z0-9+.-]*:~i', $url)) continue;
+		$file = realpath($directory . '/' . $url);
+		if($file === false) throw new RuntimeException("Missing documentation dependency $url in $directory");
+
+		apiBootstrap(dirname($file), json_decode(file_get_contents($file), true, flags: JSON_THROW_ON_ERROR), $loaded);
+	}
+
+	foreach($manifest['php']['bootstrap'] ?? [] as $bootstrap)
+	{
+		$path = $directory . '/' . $bootstrap;
+		if(is_file($path)) require_once $path;
+	}
 }
+
+$loaded = [];
+apiBootstrap($packageRoot, $manifest, $loaded);
 
 /** Parse the small PHPDoc vocabulary used by the framework and game packages. */
 function apiDoc(string|false $comment): array

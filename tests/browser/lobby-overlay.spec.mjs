@@ -20,7 +20,7 @@ const openLobby = async(page, {signedIn = true} = {}) => {
 			homeserver = 'https://matrix.org';
 			room = '#lobby:matrix.org';
 			sent = [];
-			cancelled = [];
+			canceled = [];
 
 			profile() { return {id: ME, displayName: 'Sean'}; }
 
@@ -38,7 +38,7 @@ const openLobby = async(page, {signedIn = true} = {}) => {
 
 			async respond() {}
 
-			async cancel(id) { this.cancelled.push(id); }
+			async cancel(id) { this.canceled.push(id); }
 
 			async chat(text)
 			{
@@ -172,5 +172,5 @@ test('a sent invite can be withdrawn from its waiting card', async({page}) => {
 	await lobby.getByRole('button', {name: 'Cancel invite'}).click();
 	await expect(lobby.locator('.phonics-lobby-status')).toHaveAttribute('data-state', 'available');
 	await expect(lobby.getByRole('button', {name: 'Invite Alice W.'})).toBeEnabled();
-	expect(await page.evaluate(() => provider.cancelled)).toEqual(['out-1']);
+	expect(await page.evaluate(() => provider.canceled)).toEqual(['out-1']);
 });

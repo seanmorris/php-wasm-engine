@@ -106,7 +106,7 @@ export class AssetLoader
 		const entry = this.files.get(path);
 		await entry.promise;
 
-		if(entry.state !== true) throw Error(entry.state || 'Asset request was cancelled');
+		if(entry.state !== true) throw Error(entry.state || 'Asset request was canceled');
 	}
 
 	/**

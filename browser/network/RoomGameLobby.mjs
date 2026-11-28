@@ -81,7 +81,7 @@ const stepLate = (session, game, item) => {
 	return !Number.isSafeInteger(item.origin_server_ts) || item.origin_server_ts >= session.clockSince + timeout;
 };
 
-/** Restart the step deadline from an accepted step's server timestamp; clocks never run backwards. */
+/** Restart the step deadline from an accepted step's server timestamp; clocks never run backward. */
 const advanceClock = (session, item) => {
 	if(!Number.isSafeInteger(item.origin_server_ts)) return;
 
@@ -232,7 +232,7 @@ const validOffer = (content, game) => content?.v === PROTOCOL_VERSION && content
  * Durable, deterministic two-player room protocol.
  *
  * Matrix supplies identity, persistence, ordering metadata, and chat. The protocol supplies explicit action
- * sequence numbers, commit/reveal seeding, state acknowledgements, resumable checkpoints, and conflict freezing.
+ * sequence numbers, commit/reveal seeding, state acknowledgments, resumable checkpoints, and conflict freezing.
  */
 export class RoomGameProtocol extends EventTarget
 {
@@ -853,7 +853,7 @@ export class RoomGameProtocol extends EventTarget
 	/**
 	 * Leave the selected table: resign an unfinished seat, or cancel a table that has not been seated yet.
 	 *
-	 * Cancelling matters because the host's client seats the first joiner automatically; an abandoned open table
+	 * Canceling matters because the host's client seats the first joiner automatically; an abandoned open table
 	 * would otherwise stay joinable and could seat a host who already left.
 	 */
 	async leave()
@@ -969,7 +969,7 @@ export class RoomGameProtocol extends EventTarget
 		throw new Error('The game supplied an invalid action settlement boundary');
 
 		// The application bridge can observe the durable action before it receives the
-		// acknowledgement for its local outbox entry. Treat that exact retry as success.
+		// acknowledgment for its local outbox entry. Treat that exact retry as success.
 		if(previous?.actor === me && previous.pre_hash === preHash
 			&& stable(previous.action) === stable(action)
 			&& (!batched || previous.batch_end === settle)
@@ -2081,7 +2081,7 @@ export class RoomGameProtocol extends EventTarget
 		});
 	}
 
-	/** Reconcile matching player acknowledgements for one action sequence. */
+	/** Reconcile matching player acknowledgments for one action sequence. */
 	async settle(session, player, content)
 	{
 		const values = session.settles.get(content.sequence);
@@ -2761,7 +2761,7 @@ export class EmbeddedRoomLobby
 
 	/**
 	 * Open a table, or challenge one person, after the host picks its house rules. Games that publish a settings
-	 * form get a launcher-style dialog; cancelling it posts nothing. Games without one open with no settings.
+	 * form get a launcher-style dialog; canceling it posts nothing. Games without one open with no settings.
 	 */
 	async openTable(target = null)
 	{

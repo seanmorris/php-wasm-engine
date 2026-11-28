@@ -22,7 +22,7 @@ export class RegionButtons
 	/**
 	 * Mirror regions into a container.
 	 * @param {HTMLElement} container Positioned element covering the canvas; `pointer-events` pass through it.
-	 * @param {object} options Behaviour.
+	 * @param {object} options Behavior.
 	 * @param {AbortSignal} options.signal Removes the listeners when it aborts.
 	 * @param {function(string): void} options.onPress Runs with a region's id when its button is activated.
 	 * @param {function(string, boolean): void} [options.onHold] Runs when a `hold` region's button is first

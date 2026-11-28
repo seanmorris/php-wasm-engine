@@ -275,6 +275,19 @@ for(const [directory, definition] of definitions)
 	}
 }
 
+// Terrain is a library; the sandbox owns its executable application.
+definitions.push(
+	['packages/terrain-phonics', {
+		name: '@seanmorris/terrain-phonics'
+		, requires: {php: '>=8.1.0'}
+		, php: {autoload: {'TerrainPhonics\\': 'src/'}, bootstrap: ['autoload.php']}
+		, exports: {}
+		, preload: ['textures/cloud-noise.r8']
+		, directories: ['src', 'shaders', 'textures']
+		, files: ['autoload.php']
+	}]
+);
+
 for(const [directory, definition] of definitions)
 {
 	const base = path.join(root, directory);
@@ -286,7 +299,12 @@ for(const [directory, definition] of definitions)
 
 	Object.assign(
 		manifest
-		, {schemaVersion: 1, version: '0.1.0', requires: {phonics: '^0.1.0', php: '>=8.0.0'}, dependencies: {}}
+		, {
+			schemaVersion: 1
+			, version: '0.1.0'
+			, requires: {phonics: '^0.1.0', php: '>=8.0.0', ...manifest.requires}
+			, dependencies: {}
+		}
 	);
 
 	manifest.php.files = production.filter(file => file.endsWith('.php'));

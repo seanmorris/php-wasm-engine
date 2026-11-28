@@ -213,7 +213,7 @@ export class SessionAssets
 				const entry = this.entries.get(this.source(reference));
 				await entry.promise;
 
-				if(entry.state !== true) throw new Error(entry.state ?? 'Cancelled resource');
+				if(entry.state !== true) throw new Error(entry.state ?? 'Canceled resource');
 			}
 			, progress: () => ({
 				total: owned.size

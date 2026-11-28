@@ -11,6 +11,10 @@ hero:
     - label: Play the games
       href: games/
   shots:
+    - label: Landscape Sandbox
+      href: games/terrain-sandbox/
+      src: images/games/hero/terrain-sandbox.webp
+      alt: Limestone towers rising from a bay in Landscape Sandbox
     - label: Doom-Phonics
       href: games/doom-phonics/
       src: images/games/hero/doom-phonics.webp
@@ -35,6 +39,14 @@ hero:
       href: games/php-buster/
       src: images/games/hero/php-buster.webp
       alt: PHP Buster gameplay
+    - label: PHP Billiards
+      href: games/php-billiards/
+      src: images/games/hero/php-billiards.webp
+      alt: PHP Billiards gameplay
+    - label: PHP Poker
+      href: games/php-poker/
+      src: images/games/hero/php-poker.webp
+      alt: PHP Poker gameplay
 llms: start
 menus:
   documentation:

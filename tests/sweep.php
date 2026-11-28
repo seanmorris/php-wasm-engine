@@ -143,7 +143,7 @@ test('Sweep::box agrees with Doom\'s expanded-box test, acceptance window and no
 	}
 
 	check($compared === count($positions) ** 2 * count($motions) ** 2, 'every grid case was compared');
-	// Centres away from the origin exercise the (centre - extent - x) arithmetic as Doom writes it.
+	// Centers away from the origin exercise the (center - extent - x) arithmetic as Doom writes it.
 	$offOrigin = [[100.5, -33.25, -7.0, 2.5, 120.0, -30.0, 36.0], [-3.0, 8.0, 12.0, 12.0, 60.0, 61.0, 50.0]];
 
 	foreach($offOrigin as [$x, $y, $dx, $dy, $cx, $cy, $e])

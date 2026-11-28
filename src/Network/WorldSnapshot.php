@@ -19,8 +19,8 @@ final class WorldSnapshot implements \JsonSerializable
 	 * @param ?SnapshotSequence $baseline Prior snapshot sequence used to encode a delta, or null for a full snapshot.
 	 * @param array<int,array<string,mixed>> $entities Replicated records keyed by positive network entity ID.
 	 * @param list<int> $despawned Network entity IDs removed by this snapshot.
-	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgements.
-	 * @return void Stores the snapshot after validating entity IDs, despawns, acknowledgements and JSON encoding.
+	 * @param array<int,int> $acknowledged Player-slot keyed command acknowledgments.
+	 * @return void Stores the snapshot after validating entity IDs, despawns, acknowledgments and JSON encoding.
 	 */
 	public function __construct(
 		/** Command or snapshot sequence used as a boundary. */
@@ -33,7 +33,7 @@ final class WorldSnapshot implements \JsonSerializable
 		public array $entities
 		, /** Network entity IDs removed by this snapshot. */
 		public array $despawned = []
-		, /** Player-slot keyed command acknowledgements. */
+		, /** Player-slot keyed command acknowledgments. */
 		public array $acknowledged = []
 	){
 		foreach($entities as $id => $record)
@@ -54,7 +54,7 @@ final class WorldSnapshot implements \JsonSerializable
 	/**
 	 * Restore a world snapshot from transport-safe fields.
 	 *
-	 * @param array $value Transport fields for sequence, tick, baseline, entities, despawns, and acknowledgements.
+	 * @param array $value Transport fields for sequence, tick, baseline, entities, despawns, and acknowledgments.
 	 * @return self A validated value restored from serialized fields.
 	 */
 	public static function fromArray(array $value): self

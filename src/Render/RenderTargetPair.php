@@ -19,7 +19,7 @@ final class RenderTargetPair
 	 *
 	 * @param int $width Positive width in pixels.
 	 * @param int $height Positive height in pixels.
-	 * @param int $filter Texture filter for sampling either colour texture: GL_NEAREST or GL_LINEAR.
+	 * @param int $filter Texture filter for sampling either color texture: GL_NEAREST or GL_LINEAR.
 	 * @param bool $depth Whether each target carries a 24-bit depth renderbuffer.
 	 * @param string $label Name used in the error raised when a framebuffer is incomplete.
 	 * @return void Creates both targets, or releases what was made and rethrows on failure.
@@ -48,7 +48,7 @@ final class RenderTargetPair
 	}
 
 	/**
-	 * The colour texture of one slot.
+	 * The color texture of one slot.
 	 *
 	 * @param int $slot Zero or one.
 	 * @return int GL texture name, or zero once closed.

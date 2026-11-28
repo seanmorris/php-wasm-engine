@@ -54,7 +54,7 @@ final class CardSequence
 	}
 
 	/**
-	 * Begin or replay the sequence, cancelling an unfinished visit first.
+	 * Begin or replay the sequence, canceling an unfinished visit first.
 	 *
 	 * @return void Enters the first card and requires release before an input press can skip it.
 	 */

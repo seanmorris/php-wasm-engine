@@ -22,7 +22,7 @@
     "build:docs": "webpack --mode production && node scripts/build-docs.mjs && npm run build:site",
     "setup:runtime": "node scripts/runtime.mjs",
     "build:manifests": "node scripts/manifests.mjs",
-    "test:packages": "node --test tests/packages/*.test.mjs && php packages/php-noid/tests/run.php && php tests/core-phonics.php && php tests/world-runtime.php && php tests/tiled-composition.php && php tests/scope-lifecycle.php && php tests/network.php && php tests/network-timing.php && php packages/php-tris/tests/run.php && php packages/php-tris/tests/composition.php && php packages/php-slalom/tests/run.php && php packages/php-buster/tests/run.php && php packages/doom-phonics/tests/run.php",
+    "test:packages": "node --test tests/packages/*.test.mjs && php packages/php-noid/tests/run.php && php tests/core-phonics.php && php tests/world-runtime.php && php tests/tiled-composition.php && php tests/scope-lifecycle.php && php tests/network.php && php tests/network-timing.php && php packages/php-tris/tests/run.php && php packages/php-tris/tests/composition.php && php packages/php-slalom/tests/run.php && php packages/php-buster/tests/run.php && php packages/doom-phonics/tests/run.php && npm run test:terrain",
     "test:artifacts": "node scripts/check-artifacts.mjs",
     "test:editor": "node --test packages/tiled-phonics/tests/*.test.mjs",
     "generate": "php packages/sane-phonics/examples/generate-assets.php && node packages/php-noid/generate-stages.mjs && node packages/php-tris/generate.mjs && npm run build:manifests",
@@ -37,7 +37,9 @@
     "test:cli:browser": "PHONICS_CLI_BROWSER=1 node --test tests/cli.test.mjs",
     "bench:php-tris": "php packages/php-tris/benchmarks/board.php",
     "bench:php-tris:browser": "node scripts/bench-php-tris-browser.mjs",
-    "build:applications": "node scripts/applications.mjs"
+    "build:applications": "node scripts/applications.mjs",
+    "test:terrain": "php packages/terrain-phonics/tests/surface.php && php packages/terrain-phonics/tests/water.php && php packages/terrain-phonics/tests/appearance.php && php packages/terrain-phonics/tests/atmosphere.php && php packages/terrain-phonics/tests/weather.php && php packages/terrain-phonics/tests/lightning.php && php packages/terrain-phonics/tests/render.php && php packages/terrain-phonics/tests/atmosphere-renderer.php && php packages/terrain-phonics/tests/shadows.php && php packages/terrain-phonics/tests/grass-shells.php && php packages/terrain-phonics/tests/clipmap.php",
+    "test:terrain:gpu": "node --test packages/terrain-phonics/tests/gpu.test.mjs packages/terrain-phonics/tests/elevation.test.mjs"
   },
   "devDependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
@@ -67,7 +69,8 @@
     "packages/php-slalom",
     "packages/php-buster",
     "packages/doom-phonics",
-    "packages/phonics-matrix"
+    "packages/phonics-matrix",
+    "packages/terrain-phonics"
   ],
   "exports": {
     ".": "./browser/Phonics.mjs",

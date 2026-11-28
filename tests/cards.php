@@ -95,8 +95,8 @@ test('card callbacks run once on completion, cancellation, and replay', function
 		, duration: .5
 		, fadeOut: 0
 		, onEnter: function(Card $card) use (&$events) { $events[] = 'enter:' . $card->id; }
-		, onLeave: function(Card $card, bool $cancelled) use (&$events) {
-			$events[] = $cancelled ? 'cancel' : 'leave';
+		, onLeave: function(Card $card, bool $canceled) use (&$events) {
+			$events[] = $canceled ? 'cancel' : 'leave';
 		}
 	);
 

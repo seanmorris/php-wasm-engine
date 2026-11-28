@@ -3,9 +3,9 @@ declare(strict_types=1);
 namespace Phonics\Network;
 
 /**
- * Bounded command history used for redundant sends, acknowledgement, and replay.
+ * Bounded command history used for redundant sends, acknowledgment, and replay.
  *
- * Commands remain available for redundant delivery and reconciliation until acknowledgement removes the
+ * Commands remain available for redundant delivery and reconciliation until acknowledgment removes the
  * corresponding sequence prefix.
  */
 final class InputHistory
@@ -83,7 +83,7 @@ final class InputHistory
 	 * Select commands newer than an acknowledged sequence.
 	 *
 	 * @param CommandSequence $sequence Command or snapshot sequence used as a boundary.
-	 * @return list<InputCommand> Commands newer than the given acknowledgement.
+	 * @return list<InputCommand> Commands newer than the given acknowledgment.
 	 */
 	public function after(CommandSequence $sequence): array
 	{
@@ -92,7 +92,7 @@ final class InputHistory
 		 * Keep commands newer than the acknowledged sequence.
 		 *
 		 * @param InputCommand $command Retained command.
-		 * @return bool True when the command follows the acknowledgement.
+		 * @return bool True when the command follows the acknowledgment.
 		 */
 		$isNewer = static fn(InputCommand $command): bool => $command->sequence->value() > $sequence->value();
 

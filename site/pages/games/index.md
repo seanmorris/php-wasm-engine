@@ -20,6 +20,7 @@ Each game owns its maps, assets, factories, systems, rendering choices, and life
 <li><a href="php-billiards/"><img src="../images/games/php-billiards.png" width="1280" height="720" loading="lazy" decoding="async" alt="PHP Billiards gameplay"><strong>PHP Billiards</strong><span>A direct 3D practice table with deterministic PHP physics.</span></a></li>
 <li><a href="phlappy-phant/"><img src="../images/games/phlappy-phant.png" width="1280" height="720" loading="lazy" decoding="async" alt="Phlappy Phant gameplay"><strong>Phlappy Phant</strong><span>A flap-and-dodge homage with a painted day cycle and a hidden perfect player.</span></a></li>
 <li><a href="rpsc/"><img src="../images/games/rpsc.png" width="1280" height="720" loading="lazy" decoding="async" alt="RPSC gameplay"><strong>RPSC</strong><span>Rock Paper Scissors Checkers: hidden armies, against the computer or online.</span></a></li>
+<li><a href="terrain-sandbox/"><img src="../images/games/terrain-sandbox.png" width="1280" height="720" loading="lazy" decoding="async" alt="Landscape Sandbox terrain"><strong>Landscape Sandbox</strong><span>Editable 3D landscapes, roads, water, and a scattering sky.</span></a></li>
 </ul>
 
 Use these builds as working examples of the [package contract](../packages.html). Examples that compose a world can also be opened through the [generic preview](../preview/).

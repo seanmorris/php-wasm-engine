@@ -1,5 +1,5 @@
 /**
- * Canonical URLs identify shared bytes; scopes own cancellable references, not cache paths.
+ * Canonical URLs identify shared bytes; scopes own cancelable references, not cache paths.
  *
  * Concurrent consumers share one fetch and immutable byte result, while scope handles track cancellation and
  * release independently from the canonical cache entry.
@@ -31,7 +31,7 @@ export class ResourceStore
 	}
 
 	/**
-	 * Create a cancellable ownership scope over shared requests.
+	 * Create a cancelable ownership scope over shared requests.
 	 * @param {AbortSignal} [signal] Host signal that closes the scope.
 	 * @returns {{read: function(string, object=): Promise<Uint8Array>, release: function(string): void,
 	 * close: function(): void}} Scoped reader and explicit ownership controls.
@@ -129,7 +129,7 @@ export class ResourceStore
 
 				let abort;
 
-				const cancelled = new Promise((_, reject) => {
+				const canceled = new Promise((_, reject) => {
 
 					abort = () => reject(signal.reason);
 					signal?.addEventListener('abort', abort, {once: true});
@@ -137,7 +137,7 @@ export class ResourceStore
 
 				try
 				{
-					const bytes = await Promise.race([entry.promise, cancelled]);
+					const bytes = await Promise.race([entry.promise, canceled]);
 					signal?.throwIfAborted();
 
 					if(closed) throw new Error('Resource scope is closed');

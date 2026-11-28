@@ -93,7 +93,7 @@ Several services preserve that identity as resources move between storage format
 
 | Service | Responsibility |
 | --- | --- |
-| `ResourceStore` | Share requests for the same canonical URL, verify SHA-256 integrity, retry when asked, and count owners through cancellable scopes. |
+| `ResourceStore` | Share requests for the same canonical URL, verify SHA-256 integrity, retry when asked, and count owners through cancelable scopes. |
 | `ArchiveResources` | Map public declaring URLs to archive members while preserving external relative references and query identity. |
 | `SessionAssets` | Materialize assets needed by native SDL or browser consumers. PHP can read packaged files directly through `phar://`. |
 | `Resource::native()` | Supply a filesystem path to native APIs that cannot open PHP streams. |

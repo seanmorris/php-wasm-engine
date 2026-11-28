@@ -30,7 +30,7 @@ final class Card
 	 * @param bool $skippable Whether user or scripted activation may dismiss the card.
 	 * @param callable():bool|null $ready Optional polled loading gate; timers wait for true.
 	 * @param callable(Card):void|null $onEnter Hook for starting application work or audio.
-	 * @param callable(Card,bool):void|null $onLeave Cleanup hook; second argument means cancelled.
+	 * @param callable(Card,bool):void|null $onLeave Cleanup hook; second argument means canceled.
 	 * @param string|null $align Left, center, or right; null inherits the renderer's alignment.
 	 * @return void Stores validated timing and callbacks for CardSequence.
 	 */

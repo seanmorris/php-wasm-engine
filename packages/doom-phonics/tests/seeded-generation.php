@@ -556,7 +556,7 @@ $packed['upper.0']['architectural'] = $packed['ground.0']['architectural'];
 
 verifyWad(
 	(bool)SeededLevel::overlaps($packed)
-	, 'architectural overlap checks catch conflicting storeys even when WAD packing is disjoint'
+	, 'architectural overlap checks catch conflicting stories even when WAD packing is disjoint'
 );
 
 foreach([1,17] as $rooms)

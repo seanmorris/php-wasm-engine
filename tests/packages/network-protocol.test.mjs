@@ -33,7 +33,7 @@ test('binary protocol round trips bounded headers and JSON payloads', () => {
 	);
 });
 
-test('sequence windows reject duplicates and values older than their acknowledgement window', () => {
+test('sequence windows reject duplicates and values older than their acknowledgment window', () => {
 	const window = new SequenceWindow;
 
 	assert.equal(window.accept(100), true);

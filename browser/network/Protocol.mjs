@@ -57,7 +57,7 @@ const bytes = value => {
  * @param {number} [header.sequence] Unsigned 32-bit packet sequence; defaults to 0.
  * @param {number} [header.tick] Unsigned 32-bit simulation tick; defaults to 0.
  * @param {number} [header.ack] Unsigned 32-bit latest acknowledged sequence; defaults to 0.
- * @param {number} [header.ackBits] Unsigned 32-bit acknowledgement bitfield; defaults to 0.
+ * @param {number} [header.ackBits] Unsigned 32-bit acknowledgment bitfield; defaults to 0.
  * @param {number} [header.schema] Unsigned 16-bit payload schema; defaults to 1.
  * @param {Uint8Array|ArrayBuffer|string} [header.payload] Payload bytes or UTF-8 text; defaults to empty.
  * @param {object} [options] Encoding limits.
@@ -114,7 +114,7 @@ export function encodePacket(
  * @param {object} [options] Decoding limits.
  * @param {number} [options.maximumBytes] Largest payload accepted; defaults to 1 MiB.
  * @returns {Readonly<object>} Frozen header fields, version, and a copied payload.
- * @throws {NetworkError} When the packet is truncated, mislabelled, oversized, or of an unknown family.
+ * @throws {NetworkError} When the packet is truncated, mislabeled, oversized, or of an unknown family.
  */
 export function decodePacket(value, {maximumBytes = 1024 * 1024} = {})
 {
@@ -187,9 +187,9 @@ export function decodeJsonPayload(packet)
 }
 
 /**
- * Track a 32-packet acknowledgement window and reject stale duplicate sequences.
+ * Track a 32-packet acknowledgment window and reject stale duplicate sequences.
  *
- * It tracks the newest unsigned sequence plus a compact acknowledgement mask, accepting bounded reordering
+ * It tracks the newest unsigned sequence plus a compact acknowledgment mask, accepting bounded reordering
  * while rejecting duplicates and stale traffic.
  */
 export class SequenceWindow

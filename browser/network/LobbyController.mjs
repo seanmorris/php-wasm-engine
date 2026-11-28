@@ -446,7 +446,7 @@ export class LobbyController extends EventTarget
 	/** Cancel the active private invitation and return to ordinary lobby discovery. */
 	async cancelInviteLink()
 	{
-		this.joinAttempt?.abort(new NetworkError('invite_cancelled', 'Invitation cancelled'));
+		this.joinAttempt?.abort(new NetworkError('invite_cancelled', 'Invitation canceled'));
 		const cleanup = this.provider.cancelInviteLink?.();
 		this.outgoing = null;
 
@@ -874,7 +874,7 @@ export class LobbyController extends EventTarget
 
 	/**
 	 * Forward a signal to the matching transport, or queue up to 128 signals until it exists.
-	 * @param {{from: string, payload: object}} detail Sender and session-tagged signalling payload.
+	 * @param {{from: string, payload: object}} detail Sender and session-tagged signaling payload.
 	 * @returns {Promise<void>}
 	 */
 	async receiveSignal(detail)

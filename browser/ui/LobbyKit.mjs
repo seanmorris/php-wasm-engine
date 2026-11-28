@@ -73,7 +73,7 @@ export const localpart = id => String(id ?? '').replace(/^@/, '').split(':')[0] 
 /**
  * Stable, legible avatar tint for an identifier.
  * @param {string} id Identifier to hash.
- * @returns {string} CSS colour.
+ * @returns {string} CSS color.
  */
 export const avatarColor = id => {
 	let hash = 0;
@@ -297,7 +297,7 @@ export class ChatLog
 	 * Build an empty log.
 	 * @param {object} options Log behavior.
 	 * @param {DisplayNames} options.names Directory used to label senders.
-	 * @param {function(): (string|null)} options.self Returns the local identifier, labelled "You".
+	 * @param {function(): (string|null)} options.self Returns the local identifier, labeled "You".
 	 * @param {string} [options.label] Accessible name of the log.
 	 * @param {string} [options.empty] Text shown before the first entry.
 	 * @param {number} [options.limit] Entries kept before the oldest are trimmed.

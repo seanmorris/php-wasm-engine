@@ -258,7 +258,7 @@ verifyNetworkTiming(
 	, 'host accepts the first rebased peer command while redundant stale input remains harmless'
 );
 
-// An acknowledgement can arrive after a newer local command was sampled. Re-applying that
+// An acknowledgment can arrive after a newer local command was sampled. Re-applying that
 // history entry here would replace the live device state without replaying the simulation.
 $hostSession->afterStep($hostWorld, 1 / 35);
 $guestSession->beforeStep($guestWorld, 1 / 35);
@@ -268,7 +268,7 @@ $guestSession->beforeStep($guestWorld, 1 / 35);
 
 verifyNetworkTiming(
 	count(array_filter($guestApplied, static fn(array $value): bool => $value[2])) === 0
-	, 'snapshot acknowledgement does not overwrite current input with stale command history'
+	, 'snapshot acknowledgment does not overwrite current input with stale command history'
 );
 
 $futureValidator = new CommandValidator;

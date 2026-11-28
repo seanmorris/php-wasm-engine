@@ -83,7 +83,7 @@ export function packagePath(path)
  */
 export class PackageGraph
 {
-	/** Cancellable resource scope owned by this operation. */
+	/** Cancelable resource scope owned by this operation. */
 	scope;
 
 	/** Origins from which executable package code may be loaded. */
@@ -115,7 +115,7 @@ export class PackageGraph
 
 
 	/**
-	 * Create an empty graph bound to one cancellable resource scope.
+	 * Create an empty graph bound to one cancelable resource scope.
 	 * @param {object} scope ResourceStore scope providing read().
 	 * @param {object} [options] Host policy and runtime capability values.
 	 * @param {Iterable<string>} [options.codeOrigins] Origins allowed to supply executable files.
@@ -385,7 +385,7 @@ export class PackageGraph
 	 * @param {object} entry Resolved game, module, component, or factory export.
 	 * @param {string[]} [chain] Internal export chain used for cycle diagnostics.
 	 * @param {Set<string>} [done] Export identities already activated.
-	 * @returns {Promise<void>} Appends dependencies before dependants in active.
+	 * @returns {Promise<void>} Appends dependencies before dependents in active.
 	 * @throws {Error} For module cycles or references to non-module prerequisites.
 	 */
 	async activateGraph(entry, chain = [], done = this.activated)
