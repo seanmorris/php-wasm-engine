@@ -1359,6 +1359,19 @@ final class Clipmap
 	{
 		if($land->revision() !== 0) throw new \InvalidArgumentException('A recipe overview requires unedited terrain.');
 
+		$this->drawRecipe($land, false);
+	}
+
+	/** Exercise the elevation shader on four offscreen texels and reserve the shadow targets. */
+	public function prepareGraphics(Landscape $land): \Generator
+	{
+		$this->drawRecipe($land, true);
+		yield;
+		$this->shadows ??= new TriangleShadows;
+	}
+
+	private function drawRecipe(Landscape $land, bool $probe): void
+	{
 		$previous = $this->beginElevation();
 
 		try
@@ -1369,7 +1382,16 @@ final class Clipmap
 			glBindTexture(GL_TEXTURE_2D, $this->permutation[0]);
 			glUniform1i($this->generator->location('uRoadAtlas'), 2);
 			glActiveTexture(GL_TEXTURE0);
-			$this->refreshOverview($land->recipe()['worldSize'] / 2, true, null);
+			if($probe) {
+				$target = $this->allocate(2);
+				try {
+					$this->refresh($target, [0,0], $land->recipe()['spacing'], 0., true, null, -1, 2);
+				} finally {
+					self::release($target);
+				}
+			} else {
+				$this->refreshOverview($land->recipe()['worldSize'] / 2, true, null);
+			}
 			$this->paintQueue = [];
 		} finally
 		{

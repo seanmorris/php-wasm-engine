@@ -36,6 +36,9 @@ final class Scene
 	private TerrainShadows $terrainShadows;
 	private Lod $lod;
 	private ?Clipmap $clipmap = null, $arrivalClipmap = null;
+	private array $forkGraphics = [];
+	private ?\Generator $forkPreparation = null;
+	private int $forkGeneration = 0;
 	public ?SurfaceLayers $layers = null;
 	public ?TerrainAppearance $paint = null;
 	private array $boundPaint = [];
@@ -508,27 +511,106 @@ final class Scene
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 33, 33, 0, GL_RED, GL_FLOAT, pack('f*', ...$heights));
 	}
 
+	private static function arrivalMaterials(array $recipe): array
+	{
+		$appearance = new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS[$recipe['preset']] ?? []);
+		$origin = [-$recipe['noiseOffsetX'], 0., -$recipe['noiseOffsetZ']];
+		$materials = [[SurfaceLayers::landscape($recipe, $appearance), $recipe, $origin]];
+		if(isset($recipe['join'])) {
+			$origins = JoinedTerrain::origins($recipe['join']['span'], count($recipe['join']['destinations']));
+			$materials[0][2][0] += $origins[0][0];
+			array_push($materials, ...self::destinationMaterials($recipe, $origins));
+		}
+		return $materials;
+	}
+
+	private static function forkKey(array $recipe): string
+	{
+		return hash('sha256', serialize($recipe));
+	}
+
+	/** Prepare the next stage on each reachable arm before the car chooses one. */
+	public function prepareFork(array $recipes): \Generator
+	{
+		if(count($recipes) > 2) throw new \InvalidArgumentException('A fork supports up to two exits.');
+		if(!$this->clipmap || $this->closed) return;
+		$this->clearFork();
+		$generation = $this->forkGeneration;
+		$this->forkPreparation = $this->prepareBranches($recipes);
+		$complete = false;
+		try {
+			while($this->forkPreparation->valid()) {
+				yield;
+				if($generation !== $this->forkGeneration) return;
+				$this->forkPreparation->next();
+			}
+			$complete = true;
+		} finally {
+			if($generation === $this->forkGeneration) {
+				if($complete) $this->forkPreparation = null;
+				else $this->clearFork();
+			}
+		}
+	}
+
+	private function prepareBranches(array $recipes): \Generator
+	{
+		foreach($recipes as $recipe) {
+			$land = new Landscape($recipe);
+			$clipmap = $fields = null;
+			try {
+				$recipe = $land->recipe();
+				$key = self::forkKey($recipe);
+				if(isset($this->forkGraphics[$key])) continue;
+				$materials = self::arrivalMaterials($recipe);
+				yield from $this->prepareProgramSteps($materials, $this->sampleMaterials);
+				yield;
+				$clipmap = new Clipmap;
+				yield;
+				yield from $clipmap->prepareGraphics($land);
+				if(count($materials) > 1) {
+					yield;
+					$fields = new MaterialFieldCache;
+				}
+				$this->forkGraphics[$key] = [$clipmap, $fields];
+				$clipmap = $fields = null;
+			} finally {
+				$clipmap?->close();
+				$fields?->close();
+				$land->close();
+			}
+			yield;
+		}
+	}
+
+	private function clearFork(): void
+	{
+		$this->forkGeneration++;
+		$this->forkPreparation = null;
+		foreach($this->forkGraphics as [$clipmap, $fields]) {
+			$clipmap->close();
+			$fields?->close();
+		}
+		$this->forkGraphics = [];
+	}
+
 	/** Warm one candidate without replacing the renderable or physical landscape. */
 	public function prepareArrival(Landscape $land, Camera $camera): \Generator
 	{
 		if(!$this->clipmap || $this->closed) return;
 		$this->discardArrival();
-		$clipmap = $this->arrivalClipmap = new Clipmap;
+		$recipe = $land->recipe();
+		$key = self::forkKey($recipe);
+		[$clipmap, $this->arrivalFields] = $this->forkGraphics[$key] ?? [new Clipmap, null];
+		unset($this->forkGraphics[$key]);
+		$this->arrivalClipmap = $clipmap;
 		$complete = false;
 		try {
-			$recipe = $land->recipe();
-			$appearance = new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS[$recipe['preset']] ?? []);
-			$origin = [-$recipe['noiseOffsetX'], 0., -$recipe['noiseOffsetZ']];
-			$materials = [[SurfaceLayers::landscape($recipe, $appearance), $recipe, $origin]];
-			if(isset($recipe['join'])) {
-				$origins = JoinedTerrain::origins($recipe['join']['span'], count($recipe['join']['destinations']));
-				$materials[0][2][0] += $origins[0][0];
-				array_push($materials, ...self::destinationMaterials($recipe, $origins));
-			}
+			$materials = self::arrivalMaterials($recipe);
 			$work = (function() use($materials, $clipmap, $land, $camera) {
 				yield from $this->prepareProgramSteps($materials, $this->sampleMaterials);
 				if(count($materials) > 1) {
-					$this->arrivalFields = new MaterialFieldCache;
+					$this->arrivalFields ??= new MaterialFieldCache;
 					yield;
 					$this->arrivalFields->update($camera->position, $materials, $this->vao[0]);
 					yield;
@@ -569,6 +651,7 @@ final class Scene
 	 */
 	public function setLandscape(Landscape $landscape): void
 	{
+		if(!isset($landscape->recipe()['join'])) $this->clearFork();
 		$this->clearPatches();
 		if($this->arrivalClipmap?->preparedFor($landscape)) {
 			$this->clipmap->close();
@@ -3672,7 +3755,8 @@ final class Scene
 		if(!$this->clipmap) return null;
 
 		$materials = $this->regionalMaterials();
-		$this->selectMaterials($materials);
+		// The chart shader is shared by both render modes. Keep the terrain viewport's selection.
+		$this->selectMaterials($materials, $this->sampleMaterials);
 		$joined = count($materials) > 1;
 
 		if($joined)
@@ -3794,6 +3878,7 @@ final class Scene
 		// The meshes are rebuilt in place, so a selection in flight would still be right. It is dropped anyway,
 		// like every selection whose surroundings were replaced, and its replacement is spread like any other.
 		$this->abandonSelection();
+		$this->clearFork();
 		$this->discardArrival();
 		$this->closeRecipeChart();
 		$this->ribTarget?->restore();
@@ -3886,6 +3971,7 @@ final class Scene
 		if($this->closed) return;
 
 		$this->closed = true;
+		$this->clearFork();
 		$this->discardArrival();
 		$this->closeRecipeChart();
 		$this->clearPatches();

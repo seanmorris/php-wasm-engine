@@ -117,6 +117,7 @@ function glViewport(...$args): void{}
 
 function glCreateProgram():int
 {
+	$GLOBALS['terrainProgramCreations'] = ($GLOBALS['terrainProgramCreations'] ?? 0) + 1;
 	$ids = [];
 	terrainGlNames('programs', 1, $ids);
 
@@ -3104,7 +3105,33 @@ renderCheck(renderGet($drive, 'clipmap') !== $old && renderGet($drive, 'arrivalC
 	'A committed edit invalidates the staged revision before it can be displayed.');
 $fork = new Landscape(['preset'=>'rolling-prairie','noiseOffsetX'=>14.,'noiseOffsetZ'=>-27.,
 	'join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon']]]]);
+$other = ['preset'=>'limestone','join'=>['span'=>16384,'destinations'=>[['preset'=>'coast']]]];
+$partial = $drive->prepareFork([$other]);
+$partial->current();
+$partial->next();
+$drive->restore();
+$partial->next();
+renderCheck(!$partial->valid() && !renderGet($drive, 'forkGraphics'), 'Restoring the context retires unfinished fork graphics.');
+$partial = $drive->prepareFork([$other, $fork->recipe()]);
+while($partial->valid() && !renderGet($drive,'forkGraphics')) $partial->next();
+unset($partial);
+renderCheck(!renderGet($drive,'forkGraphics'), 'Cancelling a fork also releases its already finished arm.');
+foreach($drive->prepareFork([$other, $fork->recipe()]) as $_) {}
+$branches = array_values(renderGet($drive, 'forkGraphics'));
+renderCheck(count($branches) === 2 && renderGet($drive, 'landscape') === $departure
+	&& $branches[1][1]->texelsWritten === 0 && $branches[1][0]->stats()['heightTexelsWritten'] === 4,
+	'Both fork arms own resources. Only four elevation probe texels were drawn before choosing a camera.');
+$fork->queue(['type'=>'road','width'=>24,'points'=>[[-96,1,-32],[128,2,32]]]);
+$fork->commit();
+$links = $GLOBALS['terrainProgramCreations'];
 foreach($drive->prepareArrival($fork, $eye) as $_) {}
+renderCheck(renderGet($drive,'arrivalClipmap') === $branches[1][0] && renderGet($drive,'arrivalFields') === $branches[1][1]
+	&& count(renderGet($drive,'forkGraphics')) === 1 && $GLOBALS['terrainProgramCreations'] === $links
+	&& $branches[1][0]->stats()['roadTextureBytes'] > 0,
+	'The second arm prepares edited terrain at the actual eye without compiling another program.');
+foreach($drive->prepareFork([]) as $_) {}
+renderCheck(!renderGet($drive,'forkGraphics') && renderGet($drive,'arrivalClipmap') === $branches[1][0],
+	'Releasing the unused arm preserves the incoming clipmap.');
 $fields = renderGet($drive, 'arrivalFields');
 $written = $fields->texelsWritten;
 $drive->setLandscape($fork);
@@ -3112,6 +3139,11 @@ $drive->update(1/60, $eye);
 $drive->render($eye, 1280, 720, 0.);
 renderCheck(renderGet($drive, 'materialFields') === $fields && $written > 0 && $fields->texelsWritten === $written,
 	'The first joined draw uses the staged material noise at the actual regional origin.');
+$drive->render($eye, 640, 360, 0.);
+$programs = $GLOBALS['terrainProgramCreations'];
+$drive->drawChart([0.,0.], 0., false, 640, 360, [0.,0.,1.]);
+renderCheck(!renderGet($drive,'sampleMaterials') && $GLOBALS['terrainProgramCreations'] === $programs,
+	'The minimap keeps the driving viewport shader variant on a small screen.');
 $fork->close();
 $drive->close();
 $departure->close();
