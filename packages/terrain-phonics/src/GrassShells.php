@@ -221,6 +221,8 @@ final class GrassShells
 		uniform highp sampler2D uInk; // this grid's paint and road codes, one texel for each cell
 		uniform int uTextureMask; // wraps a cell onto its texel
 		uniform float uGridStep; // meters across a cell of this grid
+		uniform highp sampler2D uElevations; // this grid's ground heights, one texel for each cell
+		uniform bool uPacked; // whether a height is packed into the texel's four bytes
 		// REGIONS
 		out vec4 color;
 		uint bladeHash(ivec2 c) {
@@ -273,6 +275,23 @@ final class GrassShells
 		// does, so the pass and the ground agree on what is paved where roads meet.
 		float roadAt(vec2 offset) {
 			return dot(abs(vArms + vArmsX*offset.x + vArmsZ*offset.y), vec4(1.))/vRoadWeight;
+		}
+		// The ground's height at a point, blended from the four grid corners around it.
+		float cornerHeight(ivec2 cell) {
+			vec4 t = texelFetch(uElevations, cell & ivec2(uTextureMask), 0);
+			if(!uPacked) return t.r;
+			uvec4 b = uvec4(t*255. + .5);
+			return uintBitsToFloat(b.x | (b.y<<8) | (b.z<<16) | (b.w<<24));
+		}
+		float groundAt(vec2 point) {
+			vec2 at = point/uGridStep;
+			ivec2 corner = ivec2(floor(at));
+			vec2 part = at - vec2(corner);
+			return mix(
+				mix(cornerHeight(corner), cornerHeight(corner + ivec2(1, 0)), part.x)
+				, mix(cornerHeight(corner + ivec2(0, 1)), cornerHeight(corner + ivec2(1, 1)), part.x)
+				, part.y
+			);
 		}
 		// How much of the ground at a point is dressed, as the terrain draws it there: paint, and pavement within a
 		// road's half-width. The terrain blends the paint of the grid corners around a point, so this reads the same
@@ -345,6 +364,9 @@ final class GrassShells
 			vec3 toEye = vWorld-uEye;
 			float range = length(toEye);
 			vec3 ray = toEye/range;
+			// The surface is only ever entered from above. Where the ground falls away faster than the line of sight, the
+			// ray comes back out through it from underneath, and that crossing draws nothing.
+			if(dot(ray, normalize(vNormal)) >= 0.) discard;
 			// The pass multiplies what the terrain drew, and under snow that is the snow's white. A blade keeps the grass's
 			// color instead: it is scaled by how far the snow lifted the ground's color from the landscape's grass color.
 			float snowed = uSnowCover*smoothstep(.38, .88, normal.y);
@@ -380,8 +402,14 @@ final class GrassShells
 			// The pass multiplies the ground the pixel shows, so a blade in front of pavement or paint would only darken
 			// it. The shade between the blades ends with them.
 			float dressed = dressedAt(vWorld.xz + run);
-			if(dressed > .3) discard;
-			float verge = 1. - smoothstep(0., .3, dressed);
+			// The walk assumes the ground continues as it lies under this pixel's surface point. Where it falls away
+			// instead, the ray passes through blade tops and leaves the grass again, to enter it once more further on.
+			// Such a pixel shows blades, but the shade belongs to the ground the ray finally reaches, and the pass
+			// applies it there. Casting it here as well would darken that ground twice.
+			float above = vWorld.y + ray.y*length(run)/max(length(ray.xz), 1e-4) - groundAt(vWorld.xz + run);
+			bool passing = above > .5*top + .1;
+			if(!passing && dressed > .3) discard;
+			float verge = passing ? 0. : 1. - smoothstep(0., .3, dressed);
 			// No blade is rooted in paint. The ray may pass over paint on its way to open ground, so the paint is also
 			// read where the walk starts and halfway along it, and each blade is held against the paint at its place.
 			float dressedIn = dressedAt(vWorld.xz + run*(1. - min(tallest*cover, top)/top));
