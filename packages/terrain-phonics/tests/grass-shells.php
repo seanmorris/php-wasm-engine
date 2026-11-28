@@ -123,10 +123,16 @@ $grassVertex = (new ReflectionClass(GrassShells::class))->getReflectionConstant(
 
 grassCheck(
 	str_contains($grassSource, 'if(dot(ray, normalize(vNormal)) >= 0.) discard;')
-		&& str_contains($grassSource, 'bool passing = above > .5*top + .1;')
+		&& str_contains($grassSource, 'passing = above > .5*top + .1;')
 	, 'A ray that leaves the grass again casts no shade, and the surface is never drawn from underneath'
 );
 
+
+grassCheck(
+	str_contains($grassVertex, 'vInked = road.y >= 0. ? 1. : 0.;')
+		&& str_contains($grassSource, 'if(vInked > 0. || dressed > 0.) {')
+	, 'Pixels with no paint at either end of the ray look up none along it'
+);
 
 grassCheck(
 	!str_contains($grassVertex, 'road.y < 4. ? 1. : 0.') && str_contains($grassSource, 'dressedMid')

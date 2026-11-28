@@ -147,6 +147,7 @@ final class GrassShells
 		out vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
 		out vec4 vArmsX, vArmsZ; // how those distances change per meter along X and Z, times the weight
 		out float vRoadWeight; // whether this corner is a road cell
+		out float vInked; // whether this corner is painted or a road cell
 		// A road cell's signed distance from its centerline in half-widths and the arm it belongs to, as the terrain
 		// shader reads them. The arm is -1 away from roads and 4 on other painted ground.
 		vec2 roadCell(ivec2 cell) {
@@ -170,6 +171,7 @@ final class GrassShells
 			// cells stay open here and the fragment ends the grass at the pavement's edge.
 			vec2 road = roadCell(cell);
 			bool marked = road.y >= 0. && road.y < 4.;
+			vInked = road.y >= 0. ? 1. : 0.;
 			// Each arm of a junction keeps its own distance. Blended into one, the distances from two centerlines
 			// would cancel where the arms meet and read as pavement.
 			vArms = vArmsX = vArmsZ = vec4(0.);
@@ -210,6 +212,7 @@ final class GrassShells
 		in vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
 		in vec4 vArmsX, vArmsZ; // how those distances change per meter along X and Z, times the weight
 		in float vRoadWeight; // how much of this pixel's ground is road cells
+		in float vInked; // above zero where a corner of this pixel's surface is painted or a road cell
 		uniform vec3 uEye;
 		uniform float uWaterLevel;
 		uniform vec2 uView; // radians per pixel, seconds
@@ -247,13 +250,13 @@ final class GrassShells
 			int whole = min(int(fine), 14);
 			float rising = min(fine - float(whole), 1.);
 			float scale = exp2(-float(whole));
-			// The dot is placed to a sixty-fourth of its block, which is finer than a pixel.
-			int down = min(whole, 6);
+			// The dot is placed to a thirty-second of its block, which is about a pixel.
+			int down = min(whole, 5);
 			float unit = exp2(float(whole - down))/cells; // meters across the part of the block that holds the dot
 			vec2 g = mat2(.8,.6,-.6,.8)*ground*cells;
 			vec2 deep = mat2(.8,.6,-.6,.8)*ahead*(pixel/slope)*cells; // the ground one pixel spans in depth, in cells
 			// A pixel looks along several blocks at this angle. It samples its depth at points under a block apart.
-			int last = clamp(int(ceil(1.25*length(deep)*scale)), 1, 5);
+			int last = clamp(int(ceil(length(deep)*scale)), 1, 3);
 			float best = 0.;
 			for(int n = 0; n <= last; n++) {
 				ivec2 block = ivec2(floor((g + deep*(float(n)/float(last) - .5))*scale));
@@ -406,14 +409,23 @@ final class GrassShells
 			// instead, the ray passes through blade tops and leaves the grass again, to enter it once more further on.
 			// Such a pixel shows blades, but the shade belongs to the ground the ray finally reaches, and the pass
 			// applies it there. Casting it here as well would darken that ground twice.
-			float above = vWorld.y + ray.y*length(run)/max(length(ray.xz), 1e-4) - groundAt(vWorld.xz + run);
-			bool passing = above > .5*top + .1;
+			// A ray that comes down steeply reaches the ground before any bank could drop away from it.
+			bool passing = false;
+			if(dot(ray, normal) > -.3) {
+				float above = vWorld.y + ray.y*length(run)/max(length(ray.xz), 1e-4) - groundAt(vWorld.xz + run);
+				passing = above > .5*top + .1;
+			}
 			if(!passing && dressed > .3) discard;
 			float verge = passing ? 0. : 1. - smoothstep(0., .3, dressed);
 			// No blade is rooted in paint. The ray may pass over paint on its way to open ground, so the paint is also
 			// read where the walk starts and halfway along it, and each blade is held against the paint at its place.
-			float dressedIn = dressedAt(vWorld.xz + run*(1. - min(tallest*cover, top)/top));
-			float dressedMid = dressedAt(vWorld.xz + run*(1. - .5*min(tallest*cover, top)/top));
+			// Most ground has no paint near it. Where neither the surface point nor the ground point touches any, the
+			// short way between them is taken to be clear, and nothing more is looked up.
+			float dressedIn = 0., dressedMid = 0.;
+			if(vInked > 0. || dressed > 0.) {
+				dressedIn = dressedAt(vWorld.xz + run*(1. - min(tallest*cover, top)/top));
+				dressedMid = dressedAt(vWorld.xz + run*(1. - .5*min(tallest*cover, top)/top));
+			}
 			vec2 enter = vWorld.xz + run*(1. - start/top);
 			run *= start/top;
 			// Neighbors lean the same way and bend more toward the tip. Gusts push the tips further.
