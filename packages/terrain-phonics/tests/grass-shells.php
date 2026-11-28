@@ -119,10 +119,13 @@ grassCheck(
 	, 'Road arms that meet keep their own distances'
 );
 
+$grassVertex = (new ReflectionClass(GrassShells::class))->getReflectionConstant('VERTEX')->getValue();
+
 grassCheck(
-	str_contains($grassSource, 'smoothstep(.02, .3, 1. - vOpen)')
-	, 'Grass ends where paint starts to show on the ground'
+	!str_contains($grassVertex, 'road.y < 4. ? 1. : 0.') && str_contains($grassSource, 'dressedMid')
+	, 'The raised surface does not drop over paint, and each blade is held against the paint at its place'
 );
+
 
 grassCheck(
 	str_contains($grassSource, 'uDots') && str_contains($grassSource, 'dotAt(')

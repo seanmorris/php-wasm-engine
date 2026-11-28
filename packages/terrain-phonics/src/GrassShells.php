@@ -142,7 +142,6 @@ final class GrassShells
 		out vec3 vWorld;
 		out vec3 vNormal;
 		out float vCover;
-		out float vOpen;
 		out float vGround;
 		out float vTop;
 		out vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
@@ -182,9 +181,10 @@ final class GrassShells
 				vArmsZ[arm] = roadStep(road, cell, ivec2(0, 1))/uGridStep;
 				vRoadWeight = 1.;
 			}
-			float cover = road.y < 4. ? 1. : 0.;
-			vOpen = cover;
-			cover *= 1. - smoothstep(uReach.y, uReach.x, distance(xz, uEye.xz));
+			// The surface stays at blade height over paint and pavement. What grows there is decided for each pixel and
+			// each blade from the ground's own paint. A surface that dropped to the ground over paint and rose again
+			// beyond it could cross one line of sight twice, and the pass would be applied twice there.
+			float cover = 1. - smoothstep(uReach.y, uReach.x, distance(xz, uEye.xz));
 			// The tallest blade here. Where landscapes meet, each adds its share.
 			vec3 weight = regionWeights(xz);
 			float grown = 0.;
@@ -205,7 +205,6 @@ final class GrassShells
 		in vec3 vWorld;
 		in vec3 vNormal;
 		in float vCover;
-		in float vOpen; // whether grass may grow here, before the taper toward the blades' radius
 		in float vGround;
 		in float vTop;
 		in vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
@@ -314,7 +313,6 @@ final class GrassShells
 				grass = uGrass[0];
 				grows = heightBand(0, vGround)*(1. - smoothstep(shade.y, shade.z, steep));
 				cover = open*grows;
-				grows *= vOpen;
 			} else {
 				// Where landscapes meet, their grasses merge. Each gives its height, shape and color in proportion to
 				// how much of it grows here.
@@ -341,13 +339,8 @@ final class GrassShells
 				tip /= total;
 				grass /= total;
 				cover = open*total/kind.w;
-				grows = vOpen*total/kind.w;
+				grows = total/kind.w;
 			}
-			// Paint is dressed ground and grows nothing. The terrain blends paint in from a painted corner across a whole
-			// cell, so the grass ends where the paint starts to show and no blade stands on half-painted ground.
-			float unpainted = 1. - smoothstep(.02, .3, 1. - vOpen);
-			cover *= unpainted;
-			grows *= unpainted;
 			float tallest = kind.w;
 			vec3 toEye = vWorld-uEye;
 			float range = length(toEye);
@@ -389,6 +382,10 @@ final class GrassShells
 			float dressed = dressedAt(vWorld.xz + run);
 			if(dressed > .3) discard;
 			float verge = 1. - smoothstep(0., .3, dressed);
+			// No blade is rooted in paint. The ray may pass over paint on its way to open ground, so the paint is also
+			// read where the walk starts and halfway along it, and each blade is held against the paint at its place.
+			float dressedIn = dressedAt(vWorld.xz + run*(1. - min(tallest*cover, top)/top));
+			float dressedMid = dressedAt(vWorld.xz + run*(1. - .5*min(tallest*cover, top)/top));
 			vec2 enter = vWorld.xz + run*(1. - start/top);
 			run *= start/top;
 			// Neighbors lean the same way and bend more toward the tip. Gusts push the tips further.
@@ -428,6 +425,7 @@ final class GrassShells
 				// Snow hides whole blades where they stand. Each cell's turn is fixed, so no blade moves as the cover changes.
 				if(float((h*0x9E3779B1u)>>22)/1023. < uBuried) tall = 0.;
 				if(roadside) tall *= smoothstep(1.03, 1.14, roadAt(middle - vWorld.xz));
+				tall *= 1. - smoothstep(.05, .3, s < .5 ? mix(dressedIn, dressedMid, 2.*s) : mix(dressedMid, dressed, 2.*s - 1.));
 				if(h1 < tall) {
 					vec2 jitter = vec2(float((h>>10) & 1023u), float((h>>20) & 1023u))/1023. - .5;
 					// From the blade's foot to the middle of the segment, worked out inside the cell: world coordinates are
