@@ -343,8 +343,9 @@ final class WeatherRenderer
 	{
 		$sum = 0.;
 
-		// A strike darkens the scene less the farther off it is: half as much at 5 kilometers.
-		foreach($this->strikes as [, , , $light, $far]) $sum += $light[0] / (1. + ($far / 5000.) ** 2);
+		// A strike darkens the scene less the farther off it is: half as much at 5 kilometers. The darkening
+		// follows the square of the strike's light, so it lifts as the bolt fades from view and not after it.
+		foreach($this->strikes as [, , , $light, $far]) $sum += $light[0] ** 2 / (1. + ($far / 5000.) ** 2);
 
 		return 1. - $this->controls['flashDark'] / 100. * min(1., $sum);
 	}
@@ -566,7 +567,9 @@ final class WeatherRenderer
 		{
 			glUniform3f($p->location('uTop'), $top[0] - $eye[0], $top[1] - $eye[1], $top[2] - $eye[2]);
 			glUniform3f($p->location('uBottom'), $land[0] - $eye[0], $land[1] - $eye[1], $land[2] - $eye[2]);
-			glUniform4f($p->location('uBolt'), $seed, $light[2], $light[0], $light[1]);
+			// The bolt is drawn at the square root of its light. It keeps the brightest value at each pixel, so at
+			// its plain light it would drop out of sight against the cloud while it was still lighting the scene.
+			glUniform4f($p->location('uBolt'), $seed, $light[2], sqrt($light[0]), sqrt($light[1]));
 			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, self::PIECES);
 		}
 

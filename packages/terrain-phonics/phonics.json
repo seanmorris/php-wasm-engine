@@ -193,7 +193,7 @@
     "src/WaterSurface.php": "sha256-+DUw7TxoxoITBkKuESNbgpTnAv/1yHWzvjEXHCp4wR8=",
     "src/Watercraft.php": "sha256-IiQdz2+IfnYgz8gavhI7roZ8Z58+ForWcXB8TjnrS08=",
     "src/Weather.php": "sha256-C3jVp5jh3mp6tL4v2hYuVK3ljSCRIjZHuWYFg+zT8L0=",
-    "src/WeatherRenderer.php": "sha256-n3F/K5k1GtxfwrEnFcp92zt3UN0uYCcglZ1ww0ABBuM=",
+    "src/WeatherRenderer.php": "sha256-WHFzrV2esIyBIpp/QzKur3XBmxnMIjD7rSppULOSnBE=",
     "shaders/atmosphere-aerial.frag": "sha256-f+YX+IlUfuxaNfEJ73jO9oHiUOvkbex9q71GlB3kPw4=",
     "shaders/atmosphere-aerial.glsl": "sha256-rXEcaWUrpA5SsprSjl+OhYdGujVKlMzpZ4oCL5BhVLs=",
     "shaders/atmosphere-cache.frag": "sha256-Wrv2L/9lf1k4MenhxLSiFlFrAVlGxNpES4DR59qGpZA=",
