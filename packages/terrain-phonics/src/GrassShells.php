@@ -197,6 +197,8 @@ final class GrassShells
 		uniform float uWaterLevel;
 		uniform vec2 uView; // radians per pixel, seconds
 		uniform int uSteps;
+		uniform float uBuried; // share of the blades that snow hides
+		uniform float uSnowCover; // snow cover on level ground, as the terrain pass draws it
 		// REGIONS
 		out vec4 color;
 		uint bladeHash(ivec2 c) {
@@ -210,12 +212,13 @@ final class GrassShells
 			float open = vCover;
 			vec4 kind; // cells per meter, half width at the foot, lean as a share of height, tallest blade
 			vec4 shade; // light left between the blades, slope where grass thins and ends, tip sway
-			vec3 tip;
+			vec3 tip, grass;
 			float cover;
 			if(uRegions < 2) {
 				kind = uBlades[0];
 				shade = uShades[0];
 				tip = uTips[0];
+				grass = uGrass[0];
 				cover = open*heightBand(0, vGround)*(1. - smoothstep(shade.y, shade.z, steep));
 			} else {
 				// Where landscapes meet, their grasses merge. Each gives its height, shape and color in proportion to
@@ -225,6 +228,7 @@ final class GrassShells
 				kind = vec4(0.);
 				shade = vec4(0.);
 				tip = vec3(0.);
+				grass = vec3(0.);
 				for(int r = 0; r < uRegions; r++) {
 					vec4 blades = uBlades[r], tones = uShades[r];
 					float share = weight[r]*blades.w*heightBand(r, vGround)*(1. - smoothstep(tones.y, tones.z, steep));
@@ -232,6 +236,7 @@ final class GrassShells
 					kind.yzw += share*blades.yzw;
 					shade.xw += share*tones.xw;
 					tip += share*uTips[r];
+					grass += share*uGrass[r];
 					// A lattice cannot blend, so it comes from whichever grass there is more of.
 					if(share > most) { most = share; kind.x = blades.x; }
 				}
@@ -239,6 +244,7 @@ final class GrassShells
 				kind.yzw /= total;
 				shade.xw /= total;
 				tip /= total;
+				grass /= total;
 				cover = open*total/kind.w;
 			}
 			float tallest = kind.w;
@@ -271,10 +277,18 @@ final class GrassShells
 			vec2 lean = vec2(cos(turn), sin(turn))*kind.z + vec2(.8,.6)*shade.w*gust/max(tallest, .05);
 			// A blade is never drawn narrower than most of a pixel, so distant grass keeps its cover without shimmering.
 			float halfWidth = max(kind.y, .7*range*uView.x);
+			// A blade widened to stay most of a pixel covers more ground than it has. It is made fainter in proportion,
+			// so distant grass keeps its true weight on the ground's color and single pixels do not flicker as the eye moves.
+			float seen = min(1., kind.y/max(.7*range*uView.x, 1e-6));
 			// Start each ray at a different depth. Neighboring pixels then find a blade at different heights, which joins
 			// it into one stroke instead of a piece per segment.
 			float offset = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(.06711056,.00583715))));
-			vec3 light = vec3(mix(1., shade.x, cover));
+			// The pass multiplies what the terrain drew, and under snow that is the snow's white. A blade keeps the grass's
+			// color instead: it is scaled by how far the snow lifted the ground's color from the landscape's grass color.
+			// The snow between the blades is not shaded by them.
+			float snowed = uSnowCover*smoothstep(.38, .88, normal.y);
+			vec3 standing = grass/mix(grass, vec3(.82,.88,.93), snowed);
+			vec3 light = vec3(mix(1., shade.x, cover*(1. - snowed)));
 			// Beyond a few tens of meters a blade is a pixel wide, and a few segments find as much as many do up close.
 			int count = max(3, int(float(uSteps)*(1. - .65*smoothstep(12., 45., range)) + .5));
 			float steps = float(count);
@@ -294,6 +308,8 @@ final class GrassShells
 				uint h = bladeHash(ivec2(base));
 				// Grass starts just past the pavement's edge and reaches its height a little further out.
 				float tall = full*(.4 + .6*float(h & 1023u)/1023.);
+				// Snow hides whole blades where they stand. Each cell's turn is fixed, so no blade moves as the cover changes.
+				if(float((h*0x9E3779B1u)>>22)/1023. < uBuried) tall = 0.;
 				if(roadside) tall *= smoothstep(1.03, 1.14, abs(lateral + dot(grade, middle - vWorld.xz)));
 				if(h1 < tall) {
 					vec2 jitter = vec2(float((h>>10) & 1023u), float((h>>20) & 1023u))/1023. - .5;
@@ -323,7 +339,7 @@ final class GrassShells
 						float rise = height*tall/max(tallest, .05);
 						vec3 blade = mix(vec3(.9*shade.x), 1.29*tip, rise)*(.66 + .68*float((h>>5) & 255u)/255.);
 						if((h & 15u) == 0u) blade *= vec3(1.2, 1.08, .75);
-						light = mix(light, blade, min(1., cover*4.));
+						light = mix(light, blade*standing, min(1., cover*4.)*seen);
 						break;
 					}
 				}
@@ -342,6 +358,7 @@ final class GrassShells
 		uniform vec4 uBlades[3]; // cells per meter, half width at the foot, lean as a share of height, tallest blade
 		uniform vec4 uShades[3]; // light left between the blades, slope where grass thins and ends, tip sway in meters
 		uniform vec3 uTips[3]; // brightness of a full-height blade's tip against the bare ground, per channel
+		uniform vec3 uGrass[3]; // the scene's grass color, which a blade keeps above the snow
 		// Each landscape's share of a point, as the terrain blends them: west, then northeast, then southeast.
 		vec3 regionWeights(vec2 world) {
 			if(uRegions < 2) return vec3(1., 0., 0.);
@@ -366,6 +383,21 @@ final class GrassShells
 	public static function style(string $style): ?array
 	{
 		return isset(self::STYLES[$style]) ? self::STYLES[$style] + self::DEFAULTS : null;
+	}
+
+	/**
+	 * Work out the share of blades that a snow cover hides.
+	 *
+	 * The blades it hides are picked cell by cell, so each one goes and returns where it stands. The spacing of the
+	 * blades must not follow the snow: the lattice is laid out from the world's origin, and changing its spacing
+	 * slides every blade across the ground.
+	 *
+	 * @param float $snow Snow cover from 0 to 1.
+	 * @return float Share of blades hidden, from 0 to 0.9.
+	 */
+	public static function buried(float $snow): float
+	{
+		return .9 * max(0., min(1., $snow));
 	}
 
 	/**
@@ -457,8 +489,12 @@ final class GrassShells
 		glUniform1i($p->location('uRegions'), count($styles));
 		glUniform1f($p->location('uJoinWidth'), JoinedTerrain::GAP);
 
-		// Grass no taller than the eye allows: a surface above the eye would hide the blades under it.
 		$snow = $scene->weather?->ground($time)[1] ?? 0.;
+		glUniform1f($p->location('uBuried'), self::buried($snow));
+		glUniform1f($p->location('uSnowCover'), $snow);
+		$grass = TerrainAppearance::linear($scene->appearance->settings['grassColor']);
+
+		// Grass no taller than the eye allows: a surface above the eye would hide the blades under it.
 		$headroom = self::HEADROOM * max(0., $clearance);
 
 		foreach($styles as $index => $style)
@@ -470,7 +506,7 @@ final class GrassShells
 
 			glUniform4f(
 				$p->location("uBlades[$index]")
-				, $style['density'] * (1. - .9 * $snow)
+				, $style['density']
 				, .5 * $style['width']
 				, $style['lean']
 				, min($style['height']
@@ -487,6 +523,7 @@ final class GrassShells
 			);
 
 			glUniform3f($p->location("uTips[$index]"), ...$style['tip']);
+			glUniform3f($p->location("uGrass[$index]"), max(.01, $grass[0]), max(.01, $grass[1]), max(.01, $grass[2]));
 		}
 
 		// Twice the product of what is there and what the pass writes. Alpha is left alone.

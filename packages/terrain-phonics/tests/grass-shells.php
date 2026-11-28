@@ -85,4 +85,29 @@ grassCheck(
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [25., 5., 0.]) === 0., 'An eye near the edge draws nothing');
 grassCheck(GrassShells::radius([-28., -28., 28., 28.], [40., 5., 0.]) === 0., 'An eye outside the grid draws nothing');
 
+// Snow hides blades in place. Thinning by the spacing of the lattice moved every blade as the cover changed.
+grassCheck(
+	GrassShells::buried(0.) === 0. && GrassShells::buried(1.) === .9 && GrassShells::buried(4.) === .9
+	&& GrassShells::buried(-1.) === 0.
+	, 'Snow hides up to nine blades in ten'
+);
+
+grassCheck(GrassShells::buried(.25) < GrassShells::buried(.5), 'Deeper snow hides more blades');
+
+$grassSource = (new ReflectionClass(GrassShells::class))->getReflectionConstant('FRAGMENT')->getValue();
+
+grassCheck(str_contains($grassSource, 'uBuried'), 'The blade pass hides snowed-under blades by cell');
+
+grassCheck(
+	str_contains($grassSource, 'uSnowCover') && str_contains($grassSource, 'uGrass')
+	, 'A blade standing in snow keeps the grass color'
+);
+
+$grassDraw = file_get_contents((new ReflectionMethod(GrassShells::class, 'draw'))->getFileName());
+
+grassCheck(
+	!preg_match('/\$style\[\'density\'\]\s*\*/', $grassDraw)
+	, 'Weather never changes the spacing of the blade lattice'
+);
+
 echo "Terrain grass shells: $checks checks passed.\n";

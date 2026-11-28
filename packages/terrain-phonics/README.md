@@ -174,7 +174,7 @@ $weather->edit(TerrainPhonics\Weather::PRESETS['rain'], $time);
 $weather->edit(['altitude' => 6000, 'wind' => 20, 'heading' => 90], $time);
 ```
 
-Cloud altitude is in feet above the water datum. Wind is in mph toward a compass heading. Coverage, shadow strength, and precipitation intensity are percentages. The cloud sheet, projected shadows, and water reflections sample the same moving, mipmapped noise texture. Rain and snow use up to 1,536 nearby GPU instances. Ground cover affects shading and grass visibility.
+Cloud altitude is in feet above the water datum. Wind is in mph toward a compass heading. Coverage, shadow strength, and precipitation intensity are percentages. The cloud sheet, projected shadows, and water reflections sample the same moving, mipmapped noise texture. Rain and snow use up to 1,536 nearby GPU instances. Ground cover affects shading, and snow hides a share of the standing grass blade by blade.
 
 For a save, store `snapshot($time)` and call `restore($snapshot, $newTime)` when loading. For rewindable playback, record `snapshot()` on edits and restore that anchor against the original simulation clock. Call `translate($dx, $dz, $time)` when changing a journey’s local coordinate origin.
 
