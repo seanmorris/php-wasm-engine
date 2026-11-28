@@ -2782,6 +2782,11 @@ final class Scene
 		glDepthMask(false);
 		$this->skyProgram->use();
 		$this->common($this->skyProgram, $camera, $width, $height, $environment);
+
+		// Under a heavy cloud deck the strip of open sky at the horizon dims most of the way with the haze.
+		if($this->weatherRenderer)
+		$this->scalar($this->skyProgram, 'uSkyDim', .7 * (1. - $this->weatherRenderer->air()));
+
 		glBindVertexArray($this->vao[0]);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		$stars = $this->atmosphere->stars;

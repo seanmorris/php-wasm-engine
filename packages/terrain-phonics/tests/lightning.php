@@ -56,7 +56,10 @@ for($slot = 0; $slot < 400; $slot++)
 			, 'A seed fits the 24 bits a shader keeps exactly'
 		);
 
-		expectLightning(Lightning::clouded($x, $z, $storm->offset($start), .96), 'A strike leaves opaque cloud');
+		expectLightning(
+			Lightning::clouded($x, $z, $storm->offset($start), $storm->controls()['coverage'] / 100.)
+			, 'A strike leaves opaque cloud'
+		);
 	}
 }
 
@@ -397,7 +400,7 @@ $added = [
 	, 'boltZigzag'
 	, 'boltForks'
 	, 'boltReach', 'boltColor'
-	, 'cloudLight'
+	, 'cloudLight', 'stormDark'
 ];
 
 foreach($added as $key) unset($old['controls'][$key]);
@@ -418,7 +421,13 @@ expectLightning(
 	, 'Old weather returns half the stopped sunlight as even light'
 );
 
+expectLightning($restored->controls()['stormDark'] === 0, 'Old weather is a mild overcast, with no storm darkness');
+expectLightning(Weather::PRESETS['storm']['stormDark'] === 65, 'The storm preset opens dark');
+
 foreach(['clear', 'cloudy', 'rain', 'snow'] as $preset)
-expectLightning(Weather::PRESETS[$preset]['lightning'] === 0, "Choosing $preset ends the storm");
+{
+	expectLightning(Weather::PRESETS[$preset]['lightning'] === 0, "Choosing $preset ends the storm");
+	expectLightning(Weather::PRESETS[$preset]['stormDark'] === 0, "Choosing $preset lifts the storm's darkness");
+}
 
 echo "Lightning: $checks checks passed.\n";

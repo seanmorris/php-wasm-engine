@@ -312,9 +312,10 @@ void main()
 	#ifdef TERRAIN_WEATHER
 	if(underDeck) {
 		// The sunlight the deck stops comes down again as even light from the whole sky: a little whiter than the
-		// beam, and stronger on level ground than on a wall. The open sky's own fill is halved where cloud hides it.
+		// beam, and stronger on level ground than on a wall. The open sky's own fill is halved where cloud hides it,
+		// and a heavy deck hides the rest.
 		vec3 level=direct*uSunDirection.y;
-		ambient*=1.-.5*uDeck.x*deckBlock();
+		ambient*=1.-(.5+.5*uStormDark)*uDeck.x*deckBlock();
 		ambient+=mix(level,vec3(dot(level,vec3(1./3.))),.5)*deckGlow()*(.4+.6*max(0.,n.y));
 	}
 	#endif
@@ -335,7 +336,14 @@ void main()
 	#endif
 	lit = waterColumnLight(lit, vRelative, uEye.y, uWaterLevel,
 		vec3(illumination) + uNightAmbient + terrainSpotWaterColumn(uEye, vWorld, uWaterLevel));
+	#ifdef TERRAIN_WEATHER
+	// Under a heavy deck the air between the eye and the ground has less light to scatter, so the haze dims.
+	// Scaling the ground's light up and the result down by the same factor dims the haze alone.
+	float air = underDeck ? deckAir() : 1.;
+	vec3 aerial = air * terrainAtmosphere(normalize(vRelative), uEye.y, length(vRelative), lit / air);
+	#else
 	vec3 aerial = terrainAtmosphere(normalize(vRelative), uEye.y, length(vRelative), lit);
+	#endif
 	color = vec4(terrainToneMap(aerial),alpha);
 	#endif
 }
