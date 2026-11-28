@@ -40,4 +40,35 @@ equalWeather(Weather::valid(array_replace($saved, ['offset' => [INF,2]])), false
 $bad = $saved;
 $bad['controls']['kind'] = 'hail';
 equalWeather(Weather::valid($bad), false);
-echo "Weather accumulation, clearing, edits, translation and restore passed.\n";
+
+// Roads can be kept clearer than the ground. The limit is a setting, so presets leave it alone.
+$roads = new Weather;
+equalWeather($roads->controls()['roadSnow'], 100);
+$roads->edit(['roadSnow' => 25], 0.);
+$roads->edit(Weather::PRESETS['snow'], 0.);
+equalWeather($roads->controls()['roadSnow'], 25);
+equalWeather($roads->controls()['kind'], 'snow');
+
+foreach([-1, 101, '50', NAN] as $invalid)
+{
+	try
+	{
+		$roads->edit(['roadSnow' => $invalid], 1.);
+		throw new RuntimeException('Accepted a road snow limit of ' . json_encode($invalid));
+	}
+	catch(InvalidArgumentException)
+	{
+	}
+}
+
+// A state saved before the limit existed opens with no limit.
+$earlier = $roads->snapshot(5.);
+unset($earlier['controls']['roadSnow']);
+equalWeather(Weather::valid($earlier), true);
+$opened = new Weather;
+$opened->restore($earlier, 0.);
+equalWeather($opened->controls()['roadSnow'], 100);
+$kept = new Weather;
+$kept->restore($roads->snapshot(5.), 0.);
+equalWeather($kept->controls()['roadSnow'], 25);
+echo "Weather accumulation, clearing, edits, translation, restore and the road snow limit passed.\n";

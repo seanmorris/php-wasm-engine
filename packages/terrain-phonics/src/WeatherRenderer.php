@@ -103,6 +103,7 @@ final class WeatherRenderer
 		$this->enabled[$p] = true;
 		glUniform4f($p->location('uDeck'), ...$this->deck);
 		glUniform2f($p->location('uGroundCover'), ...$this->ground);
+		glUniform1f($p->location('uRoadSnow'), $this->controls['roadSnow'] / 100.);
 
 		if($this->deck[0] <= 0.) return;
 

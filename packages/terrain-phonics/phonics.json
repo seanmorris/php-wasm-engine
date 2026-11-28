@@ -182,8 +182,8 @@
     "src/WaterAppearance.php": "sha256-kwnbdmojqSvm/+nSnpm2WnFUqyGrlnL82OzYienpo0M=",
     "src/WaterSurface.php": "sha256-+DUw7TxoxoITBkKuESNbgpTnAv/1yHWzvjEXHCp4wR8=",
     "src/Watercraft.php": "sha256-IiQdz2+IfnYgz8gavhI7roZ8Z58+ForWcXB8TjnrS08=",
-    "src/Weather.php": "sha256-lMHvsekloxt77bzrUZwdrT/ytNwNJMHpTMRPTRuQSLA=",
-    "src/WeatherRenderer.php": "sha256-AIbrTwGBPi+ucZITRoSsKdw5ba6SPzCK1WZ8OR2MId8=",
+    "src/Weather.php": "sha256-XyPdf4Ut/M4ut/lSgbsp9b5kXIiL47ahRTPY62eYpo8=",
+    "src/WeatherRenderer.php": "sha256-y7jS+ey05z+r785XdoJeGtwxx/dMHSr/XgKmwqX92XA=",
     "shaders/atmosphere-aerial.frag": "sha256-f+YX+IlUfuxaNfEJ73jO9oHiUOvkbex9q71GlB3kPw4=",
     "shaders/atmosphere-aerial.glsl": "sha256-rXEcaWUrpA5SsprSjl+OhYdGujVKlMzpZ4oCL5BhVLs=",
     "shaders/atmosphere-cache.frag": "sha256-Wrv2L/9lf1k4MenhxLSiFlFrAVlGxNpES4DR59qGpZA=",
@@ -214,14 +214,14 @@
     "shaders/stars.vert": "sha256-/2A/Glm/cQf8H87l27W9y3IAIpvWWgDK83PyxyN98w0=",
     "shaders/surface-layers.glsl": "sha256-yjC3GbylnYCTaxh7PktKv+QtSvEURz9KAuf9EJ42jx0=",
     "shaders/surface-samples.glsl": "sha256-iVH1BZxVAmAyzvsHAitHokVagNNuPQo5oKe+evVTQ/Q=",
-    "shaders/terrain.frag": "sha256-1PE45XZ/owha5Li0gfOQ8yBehNbMXXYLQa4Nizj3Hgo=",
+    "shaders/terrain.frag": "sha256-dFMrCIL1sbBhSd9KX18oCMlV8NbeJtec/128WI5pS2o=",
     "shaders/terrain.vert": "sha256-seqmMQqCOL/d7SQWbNPGlzqdll+1Tccn22fqXPSlDq8=",
     "shaders/triangle-shadows.frag": "sha256-/v45KRO08ZNSxt0qXqmBPZqE2zzoK3t/H2UlVBgQv3c=",
     "shaders/water-functions.glsl": "sha256-5ZmtI2UbPYyvsEufMkX7E1LCbcEjjVyKfWIPwDkRuPo=",
     "shaders/water-optics.glsl": "sha256-42MQ3XCXTgheD6xu2mcRMl3qMBtrK+DGHpx2cIyuPts=",
     "shaders/water.frag": "sha256-2m209qcJ39oAN1aY3kPOxY6h/GSp1B/I6lKmh38/U4o=",
     "shaders/water.vert": "sha256-eJ3adiIHgTVT/F2O/nB7wfqwnC71a6u9LugTVh8jmzs=",
-    "shaders/weather.glsl": "sha256-tGNOc4l19BvrTJ5Z+/OpfhVkSAAgxoVEZg8q8BhYmAc=",
+    "shaders/weather.glsl": "sha256-vKsgDYvx8lLatADamj3sMDpUW02CCFXms6bzU1vDJ+Y=",
     "textures/cloud-noise.r8": "sha256-Eko16789FESS13qMxJRtsRxHukcrWq9R8EuJAsbqPR8="
   }
 }

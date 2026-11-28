@@ -13,6 +13,7 @@ final class Weather
 		, 'heading' => 90
 		, 'kind' => 'none'
 		, 'intensity' => 0
+		, 'roadSnow' => 100
 	];
 	public const PRESETS = [
 		'clear' => ['coverage' => 0,'kind' => 'none','intensity' => 0]
@@ -27,7 +28,10 @@ final class Weather
 		, 'wind' => [0,150]
 		, 'heading' => [0,360]
 		, 'intensity' => [0,100]
+		, 'roadSnow' => [0,100]
 	];
+	/** Controls a saved state may leave out, having been saved before they existed. */
+	private const LATER = ['roadSnow' => true];
 	private array $controls = self::DEFAULTS;
 	private float $start = 0., $wet = 0., $snow = 0., $x = 0., $z = 0.;
 
@@ -122,7 +126,9 @@ final class Weather
 	 */
 	public static function valid(mixed $s): bool
 	{
-		if(!is_array($s) || !is_array($s['controls'] ?? null) || array_diff_key(self::DEFAULTS, $s['controls']))
+		if(!is_array($s) || !is_array($s['controls'] ?? null)
+			|| array_diff_key(self::DEFAULTS, $s['controls'], self::LATER)
+		)
 		return false;
 
 		try { self::checked($s['controls']); } catch(\InvalidArgumentException) { return false; }
@@ -150,7 +156,7 @@ final class Weather
 	{
 		if(!self::valid($s)) throw new \InvalidArgumentException('Invalid saved weather.');
 
-		$this->controls = $s['controls'];
+		$this->controls = $s['controls'] + self::DEFAULTS;
 		$this->start = $time ?? $s['time'];
 		[$this->wet,$this->snow] = $s['ground'];
 		[$this->x,$this->z] = $s['offset'];
