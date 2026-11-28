@@ -2593,6 +2593,7 @@ final class Scene
 				, $this->landscape
 				, $camera->position
 				, $environment['exposure']
+				, $camera->basis()[0]
 			);
 		} else $this->weatherRenderer?->clear();
 

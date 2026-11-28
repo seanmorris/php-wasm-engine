@@ -33,7 +33,10 @@ final class WeatherRenderer
 	}
 
 	private ?Program $clouds = null, $particles = null, $bolt = null, $shade = null;
-	/** Strikes lit this frame, nearest first: top, landing point, seed, light, and distance from the eye. */
+	/**
+	 * Strikes lit this frame, nearest first: top, landing point, seed, light, distance from the eye, name, and how
+	 * far the bolt is in front of the eye, from 0 behind or beside it to 1 in view.
+	 */
 	private array $strikes = [];
 	/** Strikes begun in the last two slots, the controls and square they were listed for, and where each landed. */
 	private array $slots = [], $listed = [], $landed = [];
@@ -80,6 +83,7 @@ final class WeatherRenderer
 	 * @param ?Landscape $ground Landscape lightning lands on. Without one there is no lightning.
 	 * @param array $eye Eye position in meters.
 	 * @param float $exposure The scene's exposure, which a flash's light on the land is set against.
+	 * @param array $forward The unit direction the eye looks in. A strike darkens the scene only when in front of it.
 	 * @return void No value.
 	 */
 	public function prepare(
@@ -90,6 +94,7 @@ final class WeatherRenderer
 		, ?Landscape $ground = null
 		, array $eye = [0., 0., 0.]
 		, float $exposure = 1.
+		, array $forward = [0., 0., -1.]
 	): void {
 		$this->controls = $c = $weather->controls();
 
@@ -109,7 +114,7 @@ final class WeatherRenderer
 		];
 
 		if($ground !== null && $c['coverage'] > 0 && ($c['lightning'] > 0 || $weather->called()))
-		$this->storm($weather, $ground, $eye);
+		$this->storm($weather, $ground, $eye, $forward);
 
 		if(!$this->texture && $c['coverage'] > 0)
 		{
@@ -142,9 +147,10 @@ final class WeatherRenderer
 	 * @param Weather $weather Weather controls and accumulated surface state.
 	 * @param Landscape $ground Landscape the strikes land on.
 	 * @param array $eye Eye position in meters.
+	 * @param array $forward The unit direction the eye looks in.
 	 * @return void No value.
 	 */
-	private function storm(Weather $weather, Landscape $ground, array $eye): void
+	private function storm(Weather $weather, Landscape $ground, array $eye, array $forward): void
 	{
 		$slot = (int)floor($this->time / Lightning::SLOT);
 		$listed = [$this->controls, floor($eye[0] / Lightning::SQUARE), floor($eye[2] / Lightning::SQUARE)];
@@ -197,14 +203,27 @@ final class WeatherRenderer
 			// Rain between the eye and a distant strike dims it a little: by an eighth at 13 kilometers in the
 			// heaviest. A bolt stays close to white however far off it is.
 			$clear = .8 + .2 * exp(-$far / (60000. - 48000. * $rain));
+			$top = Lightning::top($x, $z, $land, $this->deck[1]);
+			// How squarely the middle of the bolt lies ahead of the eye: fully in view within 50 degrees of where
+			// the eye looks, and not at all past 80 degrees.
+			$to = [
+				($top[0] + $land[0]) / 2. - $eye[0]
+				, ($top[1] + $land[1]) / 2. - $eye[1]
+				, ($top[2] + $land[2]) / 2. - $eye[2]
+			];
+
+			$away = sqrt($to[0] ** 2 + $to[1] ** 2 + $to[2] ** 2);
+			$ahead = ($to[0] * $forward[0] + $to[1] * $forward[1] + $to[2] * $forward[2]) / max(1., $away);
+			$ahead = min(1., max(0., ($ahead - .17) / .47));
 
 			$this->strikes[] = [
-				Lightning::top($x, $z, $land, $this->deck[1])
+				$top
 				, $land
 				, $seed
 				, [$main * $clear, $forks * $clear, $down]
 				, $far
 				, $id
+				, $ahead * $ahead * (3. - 2. * $ahead)
 			];
 		}
 
@@ -344,8 +363,10 @@ final class WeatherRenderer
 		$sum = 0.;
 
 		// A strike darkens the scene less the farther off it is: half as much at 5 kilometers. The darkening
-		// follows the square of the strike's light, so it lifts as the bolt fades from view and not after it.
-		foreach($this->strikes as [, , , $light, $far]) $sum += $light[0] ** 2 / (1. + ($far / 5000.) ** 2);
+		// follows the square of the strike's light, so it lifts as the bolt fades from view and not after it,
+		// and a strike beside or behind the eye, whose bolt is not on the screen, does not darken at all.
+		foreach($this->strikes as [, , , $light, $far, , $ahead])
+		$sum += $ahead * $light[0] ** 2 / (1. + ($far / 5000.) ** 2);
 
 		return 1. - $this->controls['flashDark'] / 100. * min(1., $sum);
 	}
@@ -510,7 +531,8 @@ final class WeatherRenderer
 		// The share of the darkening that the flash's own light has taken over is left to the land's exposure.
 		$keep = 1. - (1. - $this->keep()) * (1. - $this->controls['flashLight'] / 100.);
 
-		if($keep >= 1.) return;
+		// Less than a five-hundredth of darkening cannot be seen and is not worth a pass over the screen.
+		if($keep > .998) return;
 
 		$p = $this->shade ??= new Program(
 			file_get_contents($root . 'sky.vert')
@@ -519,8 +541,17 @@ final class WeatherRenderer
 		);
 
 		$p->use();
-		// The darkened land leans a little blue, as it does by a flash.
-		glUniform3f($p->location('uKeep'), $keep * .92, $keep * .96, min(1., $keep * 1.06));
+		// The darkened land leans a little blue, as it does by a flash. The lean grows with the darkening, to its
+		// full amount once the land has lost three tenths of its brightness, and is gone when the darkening is.
+		$lean = min(1., (1. - $keep) / .3);
+
+		glUniform3f(
+			$p->location('uKeep')
+			, $keep * (1. - .08 * $lean)
+			, $keep * (1. - .04 * $lean)
+			, min(1., $keep * (1. + .06 * $lean))
+		);
+
 		glDepthFunc(GL_GREATER);
 		glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_ONE);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
