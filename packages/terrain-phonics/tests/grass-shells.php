@@ -98,6 +98,22 @@ $grassSource = (new ReflectionClass(GrassShells::class))->getReflectionConstant(
 
 grassCheck(str_contains($grassSource, 'uBuried'), 'The blade pass hides snowed-under blades by cell');
 
+// Past the blades, grass standing in snow is marked with dots. They need snow, and they reach past the blades.
+grassCheck(GrassShells::dotted(0.) === 0. && GrassShells::dotted(.1) === 0., 'Bare ground has no distant dots');
+grassCheck(GrassShells::dotted(.5) > 0. && GrassShells::dotted(1.) <= 1., 'Snow marks distant grass with dots');
+
+grassCheck(
+	GrassShells::radius([-500, -500, 500, 500], [0, 0, 0]) === 120.
+		&& GrassShells::radius([-2000, -2000, 2000, 2000], [0, 0, 0], 1200.) === 1200.
+		&& GrassShells::radius([-500, -500, 500, 500], [300, 0, 0], 1200.) === 200.
+	, 'The dots reach as far as the grid leaves room, past the blades'
+);
+
+grassCheck(
+	str_contains($grassSource, 'uDots') && str_contains($grassSource, 'dotAt(')
+	, 'The pass draws a dot where a distant blade stands'
+);
+
 grassCheck(
 	str_contains($grassSource, 'uSnowCover') && str_contains($grassSource, 'uGrass')
 	, 'A blade standing in snow keeps the grass color'

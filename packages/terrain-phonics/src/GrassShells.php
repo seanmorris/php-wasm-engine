@@ -35,6 +35,10 @@ final class GrassShells
 	private const MINIMUM = 6.;
 	/** Most terrain grids the grass is drawn on, counted from the finest. Each reaches twice as far as the last. */
 	private const GRIDS = 4;
+	/** Farthest that grass standing in snow is marked with dots, in meters, and the most grids that takes. */
+	private const FAR = 1200., FAR_GRIDS = 7;
+	/** Snow cover from which the dots are drawn, and how strongly a dot shows. */
+	private const DOTS_FROM = .15, DOT = .45;
 	/** Tallest the grass is drawn, as a share of the eye's height above the ground, so the eye stays above it. */
 	private const HEADROOM = .8;
 	/**
@@ -138,6 +142,7 @@ final class GrassShells
 		out vec3 vWorld;
 		out vec3 vNormal;
 		out float vCover;
+		out float vOpen;
 		out float vGround;
 		out float vTop;
 		out vec4 vRoad;
@@ -169,6 +174,7 @@ final class GrassShells
 				vRoad = vec4(road.x, roadStep(road, cell, ivec2(1, 0))/uGridStep, roadStep(road, cell, ivec2(0, 1))/uGridStep, 1.);
 			}
 			float cover = road.y < 4. ? 1. : 0.;
+			vOpen = cover;
 			cover *= 1. - smoothstep(uReach.y, uReach.x, distance(xz, uEye.xz));
 			// The tallest blade here. Where landscapes meet, each adds its share.
 			vec3 weight = regionWeights(xz);
@@ -190,6 +196,7 @@ final class GrassShells
 		in vec3 vWorld;
 		in vec3 vNormal;
 		in float vCover;
+		in float vOpen; // whether grass may grow here, before the taper toward the blades' radius
 		in float vGround;
 		in float vTop;
 		in vec4 vRoad; // signed distance from a road's centerline in half-widths, its change per meter along X and Z, weight
@@ -199,12 +206,54 @@ final class GrassShells
 		uniform int uSteps;
 		uniform float uBuried; // share of the blades that snow hides
 		uniform float uSnowCover; // snow cover on level ground, as the terrain pass draws it
+		uniform vec2 uReach; // radius the blades are drawn to, radius at which they start to taper
+		uniform vec2 uDots; // radius to which grass standing in snow is marked with dots, how strongly a dot shows
 		// REGIONS
 		out vec4 color;
 		uint bladeHash(ivec2 c) {
 			uint h = uint(c.x)*0x9E3779B1u ^ uint(c.y)*0x85EBCA77u;
 			h ^= h>>15; h *= 0x2C1B3C6Du; h ^= h>>12;
 			return h;
+		}
+		// Which of a block's four parts holds the blade that stands for the block. A block of four cells is level 1, a
+		// block of sixteen level 2, and so on up.
+		ivec2 choice(ivec2 block, int level) {
+			uint h = uint(block.x)*0x9E3779B1u ^ uint(block.y)*0x85EBCA77u ^ uint(level)*0xC2B2AE3Du;
+			h ^= h>>15; h *= 0x2C1B3C6Du; h ^= h>>13;
+			return ivec2(int(h>>7) & 1, int(h>>19) & 1);
+		}
+		// Whether this pixel holds a dot. Past the blades, grass standing in snow is marked by one dot for each block of
+		// cells, a single pixel at a fixed place in the block. It does not move. The blocks grow with distance so that
+		// about one pixel in fourteen holds a dot, as many as the blades mark where they end. Each block's dot is also
+		// the dot of one of the four blocks it divides into, so coming closer adds dots between the ones already
+		// showing and moves none.
+		float dotAt(vec2 ground, vec2 ahead, float pixel, float slope, float cells) {
+			float fine = max(log2(pixel*sqrt(14./slope)*cells), 1.);
+			int whole = min(int(fine), 14);
+			float rising = min(fine - float(whole), 1.);
+			float scale = exp2(-float(whole));
+			// The dot is placed to a sixty-fourth of its block, which is finer than a pixel.
+			int down = min(whole, 6);
+			float unit = exp2(float(whole - down))/cells; // meters across the part of the block that holds the dot
+			vec2 g = mat2(.8,.6,-.6,.8)*ground*cells;
+			vec2 deep = mat2(.8,.6,-.6,.8)*ahead*(pixel/slope)*cells; // the ground one pixel spans in depth, in cells
+			// A pixel looks along several blocks at this angle. It samples its depth at points under a block apart.
+			int last = clamp(int(ceil(1.25*length(deep)*scale)), 1, 5);
+			float best = 0.;
+			for(int n = 0; n <= last; n++) {
+				ivec2 block = ivec2(floor((g + deep*(float(n)/float(last) - .5))*scale));
+				ivec2 part = block;
+				for(int l = 0; l < down; l++) part = part*2 + choice(part, whole - l);
+				uint h = bladeHash(part + (whole - down)*7919);
+				vec2 jitter = vec2(float((h>>10) & 1023u), float((h>>20) & 1023u))/1023. - .5;
+				vec2 off = (mat2(.8,-.6,.6,.8)*(vec2(part) + .5 + .7*jitter))*unit - ground;
+				// Where the dot lies from this pixel's middle, in pixels across and up the screen.
+				vec2 at = vec2(dot(off, vec2(-ahead.y, ahead.x)), dot(off, ahead)*slope)/pixel;
+				// A block that is not the one its parent block keeps fades out as the blocks grow to the parent's size.
+				bool kept = block - (block>>1)*2 == choice(block>>1, whole + 1);
+				best = max(best, step(max(abs(at.x), abs(at.y)), .5)*(kept ? 1. : 1. - rising));
+			}
+			return best;
 		}
 		void main() {
 			vec3 normal = normalize(vNormal);
@@ -213,13 +262,15 @@ final class GrassShells
 			vec4 kind; // cells per meter, half width at the foot, lean as a share of height, tallest blade
 			vec4 shade; // light left between the blades, slope where grass thins and ends, tip sway
 			vec3 tip, grass;
-			float cover;
+			float cover, grows; // how fully grass grows here, with and without the taper toward the blades' radius
 			if(uRegions < 2) {
 				kind = uBlades[0];
 				shade = uShades[0];
 				tip = uTips[0];
 				grass = uGrass[0];
-				cover = open*heightBand(0, vGround)*(1. - smoothstep(shade.y, shade.z, steep));
+				grows = heightBand(0, vGround)*(1. - smoothstep(shade.y, shade.z, steep));
+				cover = open*grows;
+				grows *= vOpen;
 			} else {
 				// Where landscapes meet, their grasses merge. Each gives its height, shape and color in proportion to
 				// how much of it grows here.
@@ -246,9 +297,34 @@ final class GrassShells
 				tip /= total;
 				grass /= total;
 				cover = open*total/kind.w;
+				grows = vOpen*total/kind.w;
 			}
 			float tallest = kind.w;
-			if(tallest <= 0. || cover <= .01) discard;
+			vec3 toEye = vWorld-uEye;
+			float range = length(toEye);
+			vec3 ray = toEye/range;
+			// The pass multiplies what the terrain drew, and under snow that is the snow's white. A blade keeps the grass's
+			// color instead: it is scaled by how far the snow lifted the ground's color from the landscape's grass color.
+			float snowed = uSnowCover*smoothstep(.38, .88, normal.y);
+			vec3 standing = grass/mix(grass, vec3(.82,.88,.93), snowed);
+			// Past the blades, grass standing in snow shows as dots. They fade in where the blades shrink away, and grow
+			// paler from there to their own radius.
+			float speck = 0.;
+			float outward = distance(vWorld.xz, uEye.xz); // meters from the eye along the ground
+			float marked = tallest <= 0. ? 0. : uDots.y*smoothstep(.15, .5, snowed)*min(1., grows*4.)
+				*smoothstep(.5*(uReach.x + uReach.y), uReach.x, outward)*(1. - smoothstep(uReach.x, uDots.x, outward));
+			if(marked > .004) {
+				float slope = max(-dot(ray, normal), .01); // sine of the angle between the line of sight and the ground
+				vec2 under = vWorld.xz + ray.xz*(max(vTop, 0.)*normal.y/max(slope, .05));
+				speck = marked*dotAt(under, normalize(ray.xz + vec2(1e-6, 0.)), range*uView.x, slope, kind.x);
+			}
+			vec3 dotTone = mix(vec3(.9*shade.x), 1.29*tip, .8)*standing;
+			if(tallest <= 0. || cover <= .01) {
+				// No blades here. A dot is drawn on its own, though not on pavement.
+				if(speck <= .004 || (vRoad.w > .0001 && abs(vRoad.x/vRoad.w) < 1.1)) discard;
+				color = vec4(.5*min(mix(vec3(1.), dotTone, speck), vec3(2.)), 1.);
+				return;
+			}
 			// Grass grows in clumps a few meters across.
 			float clump = .75 + .25*sin(vWorld.x*.83 + 1.7*sin(vWorld.z*.61))*sin(vWorld.z*.97 + 1.3*sin(vWorld.x*.53));
 			float top = max(vTop, .01); // height of this surface above the ground
@@ -256,9 +332,6 @@ final class GrassShells
 			// segments above short grass and leave the rest to chance.
 			float start = min(tallest*cover, top);
 			float full = start*clump; // tallest blade here
-			vec3 toEye = vWorld-uEye;
-			float range = length(toEye);
-			vec3 ray = toEye/range;
 			// The ray's run across the ground from this surface down to the slope under it: first to the blade tops,
 			// then through the grass.
 			vec2 run = ray.xz*(top*normal.y/max(-dot(ray, normal), .05));
@@ -283,11 +356,7 @@ final class GrassShells
 			// Start each ray at a different depth. Neighboring pixels then find a blade at different heights, which joins
 			// it into one stroke instead of a piece per segment.
 			float offset = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(.06711056,.00583715))));
-			// The pass multiplies what the terrain drew, and under snow that is the snow's white. A blade keeps the grass's
-			// color instead: it is scaled by how far the snow lifted the ground's color from the landscape's grass color.
 			// The snow between the blades is not shaded by them.
-			float snowed = uSnowCover*smoothstep(.38, .88, normal.y);
-			vec3 standing = grass/mix(grass, vec3(.82,.88,.93), snowed);
 			vec3 light = vec3(mix(1., shade.x, cover*(1. - snowed)));
 			// Beyond a few tens of meters a blade is a pixel wide, and a few segments find as much as many do up close.
 			int count = max(3, int(float(uSteps)*(1. - .65*smoothstep(12., 45., range)) + .5));
@@ -346,6 +415,7 @@ final class GrassShells
 				h0 = h1;
 				at0 = at1;
 			}
+			light = mix(light, dotTone, speck);
 			// The blend doubles the product, so one half leaves the ground as it was.
 			color = vec4(.5*min(light, vec3(2.)), 1.);
 		}
@@ -401,15 +471,26 @@ final class GrassShells
 	}
 
 	/**
+	 * Work out how strongly grass standing in snow is marked with dots beyond the distance where blades are drawn.
+	 * @param float $snow Snow cover from 0 to 1.
+	 * @return float Strength of a dot from 0 to 1, zero when the cover is too thin for dots.
+	 */
+	public static function dotted(float $snow): float
+	{
+		return $snow > self::DOTS_FROM ? self::DOT : 0.;
+	}
+
+	/**
 	 * Work out how far from the eye the grass can be drawn inside the terrain's finest grid.
 	 * @param array $window Minimum X and Z, then maximum X and Z, of the grid in meters.
 	 * @param array $eye Eye position.
+	 * @param float $reach Farthest radius wanted, in meters.
 	 * @return float Radius in meters, zero when the grid leaves too little room around the eye.
 	 */
-	public static function radius(array $window, array $eye): float
+	public static function radius(array $window, array $eye, float $reach = self::REACH): float
 	{
 		$room = min($eye[0] - $window[0], $window[2] - $eye[0], $eye[2] - $window[1], $window[3] - $eye[2]);
-		$radius = min(self::REACH, $room);
+		$radius = min($reach, $room);
 
 		return $radius >= self::MINIMUM ? $radius : 0.;
 	}
@@ -453,18 +534,24 @@ final class GrassShells
 
 		if($steps < 1 || $clearance > self::CEILING || !array_filter($styles)) return false;
 
-		// Draw on as many grids as it takes to reach the full distance, or as many as are resident.
+		// Draw on as many grids as it takes to reach the full distance, or as many as are resident. Grass standing in
+		// snow is marked with dots beyond the blades, which takes further grids.
 		$eye = $camera->position;
+		$snow = $scene->weather?->ground($time)[1] ?? 0.;
+		$dots = self::dotted($snow);
+		$limit = $dots > 0 ? self::FAR : self::REACH;
 		$radius = 0.;
+		$far = 0.;
 		$grids = 0;
 
-		while($grids < self::GRIDS && $radius < self::REACH)
+		while($grids < ($dots > 0 ? self::FAR_GRIDS : self::GRIDS) && $far < $limit)
 		{
 			$window = $scene->groundPatchWindow($grids);
 
 			if($window === null) break;
 
 			$radius = max($radius, self::radius($window, $eye));
+			$far = max($far, self::radius($window, $eye, $limit));
 			$grids++;
 		}
 
@@ -489,7 +576,7 @@ final class GrassShells
 		glUniform1i($p->location('uRegions'), count($styles));
 		glUniform1f($p->location('uJoinWidth'), JoinedTerrain::GAP);
 
-		$snow = $scene->weather?->ground($time)[1] ?? 0.;
+		glUniform2f($p->location('uDots'), max($far, $radius), $dots);
 		glUniform1f($p->location('uBuried'), self::buried($snow));
 		glUniform1f($p->location('uSnowCover'), $snow);
 		$grass = TerrainAppearance::linear($scene->appearance->settings['grassColor']);
