@@ -7,6 +7,9 @@ use Phonics\Render\Program;
 /** One cloud sheet and one bounded particle draw. Both read simulation time and camera-relative coordinates. */
 final class WeatherRenderer
 {
+	/** Raindrops and snowflakes drawn around the eye at full intensity. */
+	private const DROPS = 1536, FLAKES = 36864;
+
 	private array $texture = [];
 	private \WeakMap $enabled;
 	private bool $active = false;
@@ -175,7 +178,11 @@ final class WeatherRenderer
 			glUniform2f($p->location('uWind'), $speed * sin($angle), -$speed * cos($angle));
 			glUniform2f($p->location('uHeightBand'), $this->sea, $this->deck[1]);
 			glUniform1f($p->location('uDay'), $this->deck[3]);
-			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (int)ceil(15.36 * $c['intensity']));
+			glUniform2f($p->location('uView'), 2 * tan($camera->fov / 2) / max(1, $height), $height);
+
+			// Snow fills eight times the volume rain does, with three times as many flakes in each cubic meter.
+			$each = $c['kind'] === 'snow' ? self::FLAKES : self::DROPS;
+			glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, (int)ceil($each * $c['intensity'] / 100));
 		}
 
 		glDepthMask(true);
