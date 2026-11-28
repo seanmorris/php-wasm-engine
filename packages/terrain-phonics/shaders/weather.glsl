@@ -4,6 +4,19 @@ uniform sampler2D uCloudNoise;
 uniform vec4 uDeck; // coverage, height above world zero, shadow strength, daylight
 uniform vec2 uWeatherOffset, uGroundCover;
 uniform float uRoadSnow; // the most snow that may lie on pavement, as a share of full cover
+uniform float uCloudLight; // the share of the sunlight the deck stops that comes down again as even light
+// How much of the sun's beam the deck stops where it stands between a place and the sun. Up to about half cover that
+// is the shadow strength. As the deck closes over it rises to all of the beam, so under a closed deck no light
+// arrives from the sun's direction and nothing casts a sun shadow.
+float deckBlock()
+{
+	return mix(uDeck.z,1.,smoothstep(.55,.95,uDeck.x));
+}
+// The stopped sunlight that comes down again from the whole deck, as a share of the sun's light on level ground.
+float deckGlow()
+{
+	return uDeck.x*deckBlock()*uCloudLight;
+}
 // Where a lit lightning strike shines from, in meters, and the distance at which it is half as bright.
 uniform vec4 uBoltAt;
 uniform vec3 uBoltLight; // its color and strength, or zero while no strike lights the land

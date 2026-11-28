@@ -192,8 +192,8 @@
     "src/WaterAppearance.php": "sha256-kwnbdmojqSvm/+nSnpm2WnFUqyGrlnL82OzYienpo0M=",
     "src/WaterSurface.php": "sha256-+DUw7TxoxoITBkKuESNbgpTnAv/1yHWzvjEXHCp4wR8=",
     "src/Watercraft.php": "sha256-IiQdz2+IfnYgz8gavhI7roZ8Z58+ForWcXB8TjnrS08=",
-    "src/Weather.php": "sha256-C3jVp5jh3mp6tL4v2hYuVK3ljSCRIjZHuWYFg+zT8L0=",
-    "src/WeatherRenderer.php": "sha256-WHFzrV2esIyBIpp/QzKur3XBmxnMIjD7rSppULOSnBE=",
+    "src/Weather.php": "sha256-+TBsbP3K24ifZYy6zzCLg/cmjkvqkrpkImELITq4Mgg=",
+    "src/WeatherRenderer.php": "sha256-DNj1MNKYNHBXRsMe+LPeN6zqLxSprzNemZPKMRucAWI=",
     "shaders/atmosphere-aerial.frag": "sha256-f+YX+IlUfuxaNfEJ73jO9oHiUOvkbex9q71GlB3kPw4=",
     "shaders/atmosphere-aerial.glsl": "sha256-rXEcaWUrpA5SsprSjl+OhYdGujVKlMzpZ4oCL5BhVLs=",
     "shaders/atmosphere-cache.frag": "sha256-Wrv2L/9lf1k4MenhxLSiFlFrAVlGxNpES4DR59qGpZA=",
@@ -227,14 +227,14 @@
     "shaders/stars.vert": "sha256-/2A/Glm/cQf8H87l27W9y3IAIpvWWgDK83PyxyN98w0=",
     "shaders/surface-layers.glsl": "sha256-yjC3GbylnYCTaxh7PktKv+QtSvEURz9KAuf9EJ42jx0=",
     "shaders/surface-samples.glsl": "sha256-iVH1BZxVAmAyzvsHAitHokVagNNuPQo5oKe+evVTQ/Q=",
-    "shaders/terrain.frag": "sha256-HemK5d2qfy27gyhjXNyXxcbKuv77qMPGStSK1LWIPU0=",
+    "shaders/terrain.frag": "sha256-pQRj1gICrJdHFa34zuvm1PhmOst4ly7QLrRLsPj4ZFg=",
     "shaders/terrain.vert": "sha256-seqmMQqCOL/d7SQWbNPGlzqdll+1Tccn22fqXPSlDq8=",
     "shaders/triangle-shadows.frag": "sha256-/v45KRO08ZNSxt0qXqmBPZqE2zzoK3t/H2UlVBgQv3c=",
     "shaders/water-functions.glsl": "sha256-5ZmtI2UbPYyvsEufMkX7E1LCbcEjjVyKfWIPwDkRuPo=",
     "shaders/water-optics.glsl": "sha256-42MQ3XCXTgheD6xu2mcRMl3qMBtrK+DGHpx2cIyuPts=",
-    "shaders/water.frag": "sha256-2m209qcJ39oAN1aY3kPOxY6h/GSp1B/I6lKmh38/U4o=",
+    "shaders/water.frag": "sha256-SgLkweQUG76mAyatpJY2yhVEO/t/Mdfr7RLGbF0wpYY=",
     "shaders/water.vert": "sha256-eJ3adiIHgTVT/F2O/nB7wfqwnC71a6u9LugTVh8jmzs=",
-    "shaders/weather.glsl": "sha256-+c9RCy4kVNc0RJTISjUvFfeib6scIOKPURuhszWRcus=",
+    "shaders/weather.glsl": "sha256-HqKAvpAA/iKz0Ia6f1HWYlyxmLa67s+rl6Pe6KPGPxo=",
     "textures/cloud-noise.r8": "sha256-Eko16789FESS13qMxJRtsRxHukcrWq9R8EuJAsbqPR8="
   }
 }

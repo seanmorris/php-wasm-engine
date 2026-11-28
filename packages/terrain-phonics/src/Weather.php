@@ -9,6 +9,7 @@ final class Weather
 		'coverage' => 0
 		, 'altitude' => 3500
 		, 'shadow' => 45
+		, 'cloudLight' => 50
 		, 'wind' => 12
 		, 'heading' => 90
 		, 'kind' => 'none'
@@ -37,6 +38,7 @@ final class Weather
 		'coverage' => [0,100]
 		, 'altitude' => [100,30000]
 		, 'shadow' => [0,100]
+		, 'cloudLight' => [0,100]
 		, 'wind' => [0,150]
 		, 'heading' => [0,360]
 		, 'intensity' => [0,100]
@@ -56,6 +58,7 @@ final class Weather
 	private const LATER = [
 		'roadSnow' => true
 		, 'hold' => true
+		, 'cloudLight' => true
 		, 'lightning' => true
 		, 'boltSeconds' => true
 		, 'flashDark' => true

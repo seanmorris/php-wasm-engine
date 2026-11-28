@@ -397,6 +397,7 @@ $added = [
 	, 'boltZigzag'
 	, 'boltForks'
 	, 'boltReach', 'boltColor'
+	, 'cloudLight'
 ];
 
 foreach($added as $key) unset($old['controls'][$key]);
@@ -411,6 +412,11 @@ expectLightning(
 );
 
 expectLightning(Weather::DEFAULTS['flashLight'] === 0, 'The flash lights the land only when asked to');
+
+expectLightning(
+	$restored->controls()['cloudLight'] === 50
+	, 'Old weather returns half the stopped sunlight as even light'
+);
 
 foreach(['clear', 'cloudy', 'rain', 'snow'] as $preset)
 expectLightning(Weather::PRESETS[$preset]['lightning'] === 0, "Choosing $preset ends the storm");
