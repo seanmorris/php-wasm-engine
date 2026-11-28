@@ -845,4 +845,26 @@ check(
 	, 'The wider playable canyon uses the same visible clipmap layout.'
 );
 
+// Exercise clipping without a GL context. Padded draw cells can overlap, but each fragment owns one decal.
+$type = new ReflectionClass(Clipmap::class);
+$overlay = $type->newInstanceWithoutConstructor();
+$levels = $type->getProperty('levels');
+$levels->setValue($overlay, [['step'=>2.], ['step'=>4.]]);
+$plan = $type->getMethod('overlayGroups');
+$visible = [[[-8,-2,0,2]], [[0,-2,8,2]]];
+$regions = ['west'=>[-12.,-4.,-4.,0.], 'east'=>[8.,0.,12.,4.]];
+$expected = [[[-7,-2,-1,1,'west']], [[1,-1,4,2,'east']]];
+foreach([1,2] as $pass) {
+	check($expected === $plan->invoke($overlay, $visible, $regions), 'Cold and warm decal plans clip at each LOD.');
+}
+$visible[0] = [[0,-2,8,2]];
+$expected[0] = [[3,-1,7,2,'east']];
+check($expected === $plan->invoke($overlay, $visible, $regions), 'Scrolling only the fine grid updates its draw cells.');
+$levels->setValue($overlay, [['step'=>4.], ['step'=>4.]]);
+$expected[0] = $expected[1];
+check($expected === $plan->invoke($overlay, $visible, $regions), 'Changing the grid spacing invalidates cell coordinates.');
+check([] === $plan->invoke($overlay, $visible, ['far'=>[100.,100.,102.,102.]]), 'Moving the decal invalidates both LODs.');
+check([] === $plan->invoke($overlay, $visible, ['touch'=>[-8.,-4.,-4.,0.]]), 'Only touching the outer padded edge draws nothing.');
+check([1=>$expected[1]] === $plan->invoke($overlay, [1=>$visible[1]], $regions), 'A hidden grid cannot replay cached strips.');
+
 echo "Clipmap and expanded terrain recipe checks passed.\n";
