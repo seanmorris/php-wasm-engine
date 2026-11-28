@@ -34,11 +34,13 @@ final class GrassShells
 	/** Smallest radius worth drawing, in meters. */
 	private const MINIMUM = 6.;
 	/** Most terrain grids the grass is drawn on, counted from the finest. Each reaches twice as far as the last. */
-	private const GRIDS = 4;
-	/** Farthest that grass standing in snow is marked with dots, in meters, and the most grids that takes. */
-	private const FAR = 1200., FAR_GRIDS = 7;
-	/** Snow cover from which the dots are drawn, and how strongly a dot shows. */
-	private const DOTS_FROM = .15, DOT = .45;
+	private const GRIDS = 7;
+	/** Farthest that distant grass is marked with dots, in meters. */
+	private const FAR = 1200.;
+	/** How strongly a dot shows on snow. */
+	private const DOT = .45;
+	/** How strongly a dot shows on bare ground, as a share of its strength on snow. */
+	private const DRY_DOT = .65;
 	/** Tallest the grass is drawn, as a share of the eye's height above the ground, so the eye stays above it. */
 	private const HEADROOM = .8;
 	/**
@@ -220,10 +222,13 @@ final class GrassShells
 		uniform float uBuried; // share of the blades that snow hides
 		uniform float uSnowCover; // snow cover on level ground, as the terrain pass draws it
 		uniform vec2 uReach; // radius the blades are drawn to, radius at which they start to taper
-		uniform vec2 uDots; // radius to which grass standing in snow is marked with dots, how strongly a dot shows
+		// Radius to which distant grass is marked with dots, how strongly a dot shows on snow, and its strength on bare
+		// ground as a share of that.
+		uniform vec3 uDots;
 		uniform highp sampler2D uInk; // this grid's paint and road codes, one texel for each cell
 		uniform int uTextureMask; // wraps a cell onto its texel
 		uniform float uGridStep; // meters across a cell of this grid
+		uniform highp sampler2D uDotTable; // 64 by 64 blocks for each of 16 block sizes, stacked: see dotTable()
 		uniform highp sampler2D uElevations; // this grid's ground heights, one texel for each cell
 		uniform bool uPacked; // whether a height is packed into the texel's four bytes
 		// REGIONS
@@ -233,45 +238,36 @@ final class GrassShells
 			h ^= h>>15; h *= 0x2C1B3C6Du; h ^= h>>12;
 			return h;
 		}
-		// Which of a block's four parts holds the blade that stands for the block. A block of four cells is level 1, a
-		// block of sixteen level 2, and so on up.
-		ivec2 choice(ivec2 block, int level) {
-			uint h = uint(block.x)*0x9E3779B1u ^ uint(block.y)*0x85EBCA77u ^ uint(level)*0xC2B2AE3Du;
-			h ^= h>>15; h *= 0x2C1B3C6Du; h ^= h>>13;
-			return ivec2(int(h>>7) & 1, int(h>>19) & 1);
-		}
 		// Whether this pixel holds a dot. Past the blades, grass standing in snow is marked by one dot for each block of
 		// cells, a single pixel at a fixed place in the block. It does not move. The blocks grow with distance so that
 		// about one pixel in fourteen holds a dot, as many as the blades mark where they end. Each block's dot is also
 		// the dot of one of the four blocks it divides into, so coming closer adds dots between the ones already
 		// showing and moves none.
-		float dotAt(vec2 ground, vec2 ahead, float pixel, float slope, float cells) {
+		vec2 dotAt(vec2 ground, vec2 ahead, float pixel, float slope, float cells) {
 			float fine = max(log2(pixel*sqrt(14./slope)*cells), 1.);
 			int whole = min(int(fine), 14);
 			float rising = min(fine - float(whole), 1.);
 			float scale = exp2(-float(whole));
-			// The dot is placed to a thirty-second of its block, which is about a pixel.
-			int down = min(whole, 5);
-			float unit = exp2(float(whole - down))/cells; // meters across the part of the block that holds the dot
 			vec2 g = mat2(.8,.6,-.6,.8)*ground*cells;
 			vec2 deep = mat2(.8,.6,-.6,.8)*ahead*(pixel/slope)*cells; // the ground one pixel spans in depth, in cells
-			// A pixel looks along several blocks at this angle. It samples its depth at points under a block apart.
+			// A pixel looks along several blocks at this angle. It samples its depth at points about a block apart.
 			int last = clamp(int(ceil(length(deep)*scale)), 1, 3);
-			float best = 0.;
+			float best = 0., tone = 0.;
 			for(int n = 0; n <= last; n++) {
 				ivec2 block = ivec2(floor((g + deep*(float(n)/float(last) - .5))*scale));
-				ivec2 part = block;
-				for(int l = 0; l < down; l++) part = part*2 + choice(part, whole - l);
-				uint h = bladeHash(part + (whole - down)*7919);
-				vec2 jitter = vec2(float((h>>10) & 1023u), float((h>>20) & 1023u))/1023. - .5;
-				vec2 off = (mat2(.8,-.6,.6,.8)*(vec2(part) + .5 + .7*jitter))*unit - ground;
+				// Where the dot sits in its block was worked out once and is read from the table, as is the quarter of
+				// the parent block that keeps its dot.
+				vec4 own = texelFetch(uDotTable, ivec2(block.x & 63, (block.y & 63) + 64*whole), 0);
+				int keeps = int(texelFetch(uDotTable, ivec2((block.x>>1) & 63, ((block.y>>1) & 63) + 64*whole + 64), 0).a*255. + .5);
+				vec2 off = (mat2(.8,-.6,.6,.8)*(vec2(block) + (own.xy*255. + .5)/256.))/(scale*cells) - ground;
 				// Where the dot lies from this pixel's middle, in pixels across and up the screen.
 				vec2 at = vec2(dot(off, vec2(-ahead.y, ahead.x)), dot(off, ahead)*slope)/pixel;
 				// A block that is not the one its parent block keeps fades out as the blocks grow to the parent's size.
-				bool kept = block - (block>>1)*2 == choice(block>>1, whole + 1);
-				best = max(best, step(max(abs(at.x), abs(at.y)), .5)*(kept ? 1. : 1. - rising));
+				bool kept = (block.x & 1) == (keeps & 1) && (block.y & 1) == (keeps>>1);
+				float shows = step(max(abs(at.x), abs(at.y)), .5)*(kept ? 1. : 1. - rising);
+				if(shows > best) { best = shows; tone = own.b; }
 			}
-			return best;
+			return vec2(best, tone); // how much of a dot the pixel shows, and a number from 0 to 1 that is the dot's own
 		}
 		// Distance from a road's centerline in half-widths, a few meters from this pixel's surface point. Pavement ends
 		// one half-width out. Each arm's distance is blended on its own and the arms are then added, as the terrain
@@ -378,12 +374,16 @@ final class GrassShells
 			// paler from there to their own radius.
 			float speck = 0.;
 			float outward = distance(vWorld.xz, uEye.xz); // meters from the eye along the ground
-			float marked = tallest <= 0. ? 0. : uDots.y*smoothstep(.15, .5, snowed)*min(1., grows*4.)
+			float snowy = smoothstep(.15, .5, snowed);
+			float marked = tallest <= 0. ? 0. : uDots.y*mix(uDots.z, 1., snowy)*min(1., grows*4.)
 				*smoothstep(.5*(uReach.x + uReach.y), uReach.x, outward)*(1. - smoothstep(uReach.x, uDots.x, outward));
 			float slope = max(-dot(ray, normal), .01); // sine of the angle between the line of sight and the ground
 			vec2 under = vWorld.xz + ray.xz*(max(vTop, 0.)*normal.y/max(slope, .05)); // the ground this pixel shows
-			if(marked > .004) speck = marked*dotAt(under, normalize(ray.xz + vec2(1e-6, 0.)), range*uView.x, slope, kind.x);
-			vec3 dotTone = mix(vec3(.9*shade.x), 1.29*tip, .8)*standing;
+			vec2 spot = marked > .004 ? dotAt(under, normalize(ray.xz + vec2(1e-6, 0.)), range*uView.x, slope, kind.x) : vec2(0.);
+			speck = marked*spot.x;
+			// On snow every dot is a dark tip. On bare ground a dot is a blade somewhere between its shaded foot and its
+			// lit tip, so distant grass is speckled light and dark like the grass nearer by.
+			vec3 dotTone = mix(vec3(.9*shade.x), 1.29*tip, mix(spot.y, .8, snowy))*standing;
 			if(tallest <= 0. || cover <= .01) {
 				// No blades here. A dot is drawn on its own, though not on pavement.
 				if(speck <= .004 || dressedAt(under) > .1) discard;
@@ -530,6 +530,8 @@ final class GrassShells
 		}
 		GLSL;
 	private ?Program $program = null;
+	/** The texture that holds the distant dots' layout, once made. */
+	private array $dots = [];
 
 	/**
 	 * Look up how grass grows on a surface style.
@@ -557,13 +559,55 @@ final class GrassShells
 	}
 
 	/**
-	 * Work out how strongly grass standing in snow is marked with dots beyond the distance where blades are drawn.
-	 * @param float $snow Snow cover from 0 to 1.
-	 * @return float Strength of a dot from 0 to 1, zero when the cover is too thin for dots.
+	 * Lay out the distant dots once: where each block's dot sits, for every size of block.
+	 *
+	 * A block is a square of lattice cells, and each size has blocks four times the area of the size below. Every
+	 * block has one dot, and that dot is the dot of one of the four smaller blocks it divides into. So as the eye
+	 * comes closer and the pass turns to smaller blocks, the dots already showing stay where they are and others
+	 * appear between them. The layout repeats every 64 blocks.
+	 *
+	 * @return string 64 by 1024 texels of four bytes: where the dot sits across and along its block, its tone, and
+	 * which quarter of the block holds it, for 16 sizes of block stacked from the smallest.
 	 */
-	public static function dotted(float $snow): float
+	public static function dotTable(): string
 	{
-		return $snow > self::DOTS_FROM ? self::DOT : 0.;
+		static $table = null;
+
+		if($table !== null) return $table;
+
+		$table = '';
+		$below = [];
+
+		for($size = 0; $size < 16; $size++)
+		{
+			$here = [];
+
+			for($y = 0; $y < 64; $y++)
+			for($x = 0; $x < 64; $x++)
+			{
+				$h = crc32("grass dots $size $x $y");
+
+				if($size === 0) $here[] = [($h & 255) + .5, (($h >> 8) & 255) + .5, ($h >> 16) & 255, 0];
+				else
+				{
+					$quarter = ($h >> 24) & 3;
+					$child = $below[((2 * $y + ($quarter >> 1)) & 63) * 64 + ((2 * $x + ($quarter & 1)) & 63)];
+
+					$here[] = [
+						128 * ($quarter & 1) + $child[0] / 2
+						, 128 * ($quarter >> 1) + $child[1] / 2
+						, $child[2]
+						, $quarter
+					];
+				}
+			}
+
+			foreach($here as $dot) $table .= pack('C4', (int)$dot[0], (int)$dot[1], $dot[2], $dot[3]);
+
+			$below = $here;
+		}
+
+		return $table;
 	}
 
 	/**
@@ -620,24 +664,22 @@ final class GrassShells
 
 		if($steps < 1 || $clearance > self::CEILING || !array_filter($styles)) return false;
 
-		// Draw on as many grids as it takes to reach the full distance, or as many as are resident. Grass standing in
-		// snow is marked with dots beyond the blades, which takes further grids.
+		// Draw on as many grids as it takes to reach the full distance, or as many as are resident. Blades reach a
+		// short way. Beyond them the grass is marked with dots, which takes further grids.
 		$eye = $camera->position;
 		$snow = $scene->weather?->ground($time)[1] ?? 0.;
-		$dots = self::dotted($snow);
-		$limit = $dots > 0 ? self::FAR : self::REACH;
 		$radius = 0.;
 		$far = 0.;
 		$grids = 0;
 
-		while($grids < ($dots > 0 ? self::FAR_GRIDS : self::GRIDS) && $far < $limit)
+		while($grids < self::GRIDS && $far < self::FAR)
 		{
 			$window = $scene->groundPatchWindow($grids);
 
 			if($window === null) break;
 
 			$radius = max($radius, self::radius($window, $eye));
-			$far = max($far, self::radius($window, $eye, $limit));
+			$far = max($far, self::radius($window, $eye, self::FAR));
 			$grids++;
 		}
 
@@ -662,7 +704,21 @@ final class GrassShells
 		glUniform1i($p->location('uRegions'), count($styles));
 		glUniform1f($p->location('uJoinWidth'), JoinedTerrain::GAP);
 
-		glUniform2f($p->location('uDots'), max($far, $radius), $dots);
+		glUniform3f($p->location('uDots'), max($far, $radius), self::DOT, self::DRY_DOT);
+		glActiveTexture(GL_TEXTURE0 + 6);
+
+		if(!$this->dots)
+		{
+			glGenTextures(1, $this->dots);
+			glBindTexture(GL_TEXTURE_2D, $this->dots[0]);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 64, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, self::dotTable());
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		}
+
+		glBindTexture(GL_TEXTURE_2D, $this->dots[0]);
+		glUniform1i($p->location('uDotTable'), 6);
+		glActiveTexture(GL_TEXTURE0);
 		glUniform1f($p->location('uBuried'), self::buried($snow));
 		glUniform1f($p->location('uSnowCover'), $snow);
 		$grass = TerrainAppearance::linear($scene->appearance->settings['grassColor']);
@@ -716,12 +772,16 @@ final class GrassShells
 	}
 
 	/**
-	 * Release the program.
+	 * Release the program and the dots' texture.
 	 * @return void Leaves the next draw to compile it again.
 	 */
 	public function close(): void
 	{
 		$this->program?->close();
 		$this->program = null;
+
+		if($this->dots) glDeleteTextures(1, $this->dots);
+
+		$this->dots = [];
 	}
 }

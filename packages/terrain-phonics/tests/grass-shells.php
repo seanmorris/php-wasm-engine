@@ -98,9 +98,35 @@ $grassSource = (new ReflectionClass(GrassShells::class))->getReflectionConstant(
 
 grassCheck(str_contains($grassSource, 'uBuried'), 'The blade pass hides snowed-under blades by cell');
 
-// Past the blades, grass standing in snow is marked with dots. They need snow, and they reach past the blades.
-grassCheck(GrassShells::dotted(0.) === 0. && GrassShells::dotted(.1) === 0., 'Bare ground has no distant dots');
-grassCheck(GrassShells::dotted(.5) > 0. && GrassShells::dotted(1.) <= 1., 'Snow marks distant grass with dots');
+// Past the blades, grass is marked with dots, on bare ground and on snow.
+
+// The dots are laid out once. Every block's dot is the dot of the smaller block it keeps, so the dots stay put as the
+// blocks change size.
+$dotTable = GrassShells::dotTable();
+grassCheck(strlen($dotTable) === 4 * 64 * 64 * 16, 'The dot table holds 64 by 64 blocks for each of 16 sizes');
+
+$dotAt = static fn(int $size, int $x, int $y): array => array_values(
+	unpack('C4', substr($dotTable, 4 * ($size * 4096 + ($y & 63) * 64 + ($x & 63)), 4))
+);
+
+$dotDrift = 0.;
+
+for($size = 1; $size < 16; $size++)
+for($y = 0; $y < 64; $y += 5)
+for($x = 0; $x < 64; $x += 5)
+{
+	[$px,$py,$tone,$quarter] = $dotAt($size, $x, $y);
+	[$cx,$cy,$childTone] = $dotAt($size - 1, 2 * $x + ($quarter & 1), 2 * $y + ($quarter >> 1));
+
+	$dotDrift = max(
+		$dotDrift
+		, abs(($px + .5) / 256 - (($quarter & 1) + ($cx + .5) / 256) / 2)
+		, abs(($py + .5) / 256 - (($quarter >> 1) + ($cy + .5) / 256) / 2)
+		, $tone === $childTone ? 0. : 1.
+	);
+}
+
+grassCheck($dotDrift < .002, 'A block and the smaller block it keeps put the dot in the same place');
 
 grassCheck(
 	GrassShells::radius([-500, -500, 500, 500], [0, 0, 0]) === 120.
