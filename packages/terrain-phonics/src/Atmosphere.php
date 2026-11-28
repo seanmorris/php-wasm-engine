@@ -583,6 +583,39 @@ final class Atmosphere
 		$key = $width . ':' . $height . ':' . $samples;
 
 		if($this->lut !== null && $this->lutKey === $key) return $this->lut;
+		$work = $this->buildLut($width, $height, $samples);
+		foreach($work as $_) {}
+		return $this->lut;
+	}
+
+	/** Prepare a private optical snapshot in short turns; live controls remain independently editable. */
+	public function prepareOptics(float $sunElevation): \Generator
+	{
+		$sky = clone $this;
+		if(!$sky->lut || $sky->lutKey !== '64:16:24') yield from $sky->buildLut(64, 16, 24);
+		$low = (int)floor($sunElevation);
+		$sky->skyFillAt($low);
+		yield;
+		$sky->skyFillAt($low + 1);
+		return $sky;
+	}
+
+	/** Reuse only matching scattering physics. The observer's current sun angle still selects the sky light. */
+	public function usePreparedOptics(self $sky): void
+	{
+		$display = array_flip(['sunDirection','exposure','nightGlow','skyLight']);
+		if(!$sky->lut || $this->air->bands !== $sky->air->bands || $this->air->colors !== $sky->air->colors
+			|| array_diff_key($this->parameters, $display) !== array_diff_key($sky->parameters, $display)) return;
+		if(!$this->lut || $this->lutKey !== $sky->lutKey) {
+			$this->lut = $sky->lut;
+			$this->lutKey = $sky->lutKey;
+			$this->lut['generation'] = ++$this->lutGeneration;
+		}
+		$this->skyFill += $sky->skyFill;
+	}
+
+	private function buildLut(int $width, int $height, int $samples): \Generator
+	{
 
 		$data = [];
 		$bytes = $rgba8 = '';
@@ -590,6 +623,7 @@ final class Atmosphere
 		for($y = 0; $y < $height; $y++)
 		for($x = 0; $x < $width; $x++)
 		{
+			if(($x & 15) === 0) yield;
 			$altitude = ($y / ($height - 1)) ** 2 * $this->parameters['atmosphereHeight'];
 			$u = 2 * $x / ($width - 1) - 1;
 			$airTransmission = 1.;
@@ -602,7 +636,7 @@ final class Atmosphere
 			$rgba8 .= chr((int)round(255 * $airTransmission));
 		}
 
-		$this->lutKey = $key;
+		$this->lutKey = $width . ':' . $height . ':' . $samples;
 		$this->lutGeneration++;
 		$this->lut = compact('width', 'height', 'data', 'bytes', 'rgba8') + ['generation' => $this->lutGeneration];
 

@@ -19,6 +19,14 @@ final class RoadAtlas
 	 */
 	public static function build(array $roads, float $extent, array &$cache = []): array
 	{
+		$work = self::buildSteps($roads, $extent, $cache);
+		foreach($work as $_) {}
+		return $work->getReturn();
+	}
+
+	/** Cooperatively pack the same atlas for an approaching landscape, with no partial cache publication. */
+	public static function buildSteps(array $roads, float $extent, array &$cache = []): \Generator
+	{
 		// A sample reaches at most nine tiles. Only occupied 8-by-8 tile blocks need leaves.
 		$cell = 64.;
 
@@ -45,17 +53,15 @@ final class RoadAtlas
 				, serialize([Edits::serialize($op),$op['_road']['fillKey'] ?? null,$op['_road']['ink'] ?? null])
 			);
 
-			if(!isset($cache[$key]) && !isset($used[$key]))
-			{
-				$cache[$key] = ['bytes' => self::overlay($op)];
+			$overlay = $used[$key] ?? $cache[$key] ?? null;
+			if($overlay === null) {
+				$overlay = ['bytes' => (yield from self::overlay($op))];
 				$rebuilt++;
 			}
 
-			$overlay = $used[$key] ?? $cache[$key];
-
 			if(($overlay['grid'] ?? null) !== [$cell,$minTile,$maxTile])
 			{
-				$overlay['tiles'] = self::coverageTiles($op['_road'], $cell, $minTile, $maxTile, $blocksAcross);
+				$overlay['tiles'] = yield from self::coverageTiles($op['_road'], $cell, $minTile, $maxTile, $blocksAcross);
 				$overlay['grid'] = [$cell,$minTile,$maxTile];
 			}
 
@@ -68,12 +74,12 @@ final class RoadAtlas
 			foreach($tiles as $tile => $addresses) $blocks[$block][$tile][$base] = $addresses;
 		}
 
-		$cache = $used;
 
 		$directory = array_fill(0, $blocksAcross ** 2, 0);
 
 		foreach($blocks as $block => $tiles)
 		{
+			yield;
 			$leaves = array_fill(0, 64, 0);
 
 			foreach($tiles as $tile => $groups)
@@ -101,6 +107,7 @@ final class RoadAtlas
 		$width = min(1024, (int)ceil(strlen($data) / 16));
 		$height = (int)ceil(strlen($data) / ($width * 16));
 
+		$cache = $used;
 		return [
 			'bytes' => str_pad($data, $width * $height * 16, "\0")
 			, 'width' => $width
@@ -119,7 +126,7 @@ final class RoadAtlas
 	 * @param array $op Normalized road edit to encode.
 	 * @return string Packed segment, paint, grading and continuation data.
 	 */
-	private static function overlay(array $op): string
+	private static function overlay(array $op): \Generator
 	{
 		$data = '';
 		$road = $op['_road'];
@@ -148,6 +155,7 @@ final class RoadAtlas
 
 		foreach($road['samples'] as $i => [$x, $y, $z, $tx, $tz, $grade, $bank, $opacity])
 		{
+			if(($i & 63) === 0) yield;
 			// A 32-bit float rounds an absolute coordinate by up to 1 mm at 30 km, and the kernel weights turn that
 			// into centimetres of height. Store each of X and Z as the float nearest to it plus the remainder, so
 			// the shader can subtract both and stay within a micron of PHP anywhere in a 65.5 km world.
@@ -182,8 +190,10 @@ final class RoadAtlas
 			);
 		}
 
-		foreach($road['fills'] ?? [] as [$x,$z,$edge,$half,$nx,$nz,$end,$apron,$grade])
-		$data .= pack('g12', $x, $z, $edge, $half, $nx, $nz, $end, $apron, $grade, RoadFill::CROSS_FALL, 0., 0.);
+		foreach($road['fills'] ?? [] as $i => [$x,$z,$edge,$half,$nx,$nz,$end,$apron,$grade]) {
+			if(($i & 127) === 0) yield;
+			$data .= pack('g12', $x, $z, $edge, $half, $nx, $nz, $end, $apron, $grade, RoadFill::CROSS_FALL, 0., 0.);
+		}
 
 		return $pointers ? $data . pack('g4', $pointers[0] ?? 0, $pointers[1] ?? 0, 0, 0) . $extra : $data;
 	}
@@ -204,12 +214,13 @@ final class RoadAtlas
 		, int $minTile
 		, int $maxTile
 		, int $blocksAcross
-	): array {
+	): \Generator {
 		$tiles = [];
 		$radius = $road['gridSize'];
 
 		foreach($road['samples'] as $i => [$x,,$z])
 		{
+			if(($i & 63) === 0) yield;
 			$address = 1 + 4 * $i;
 			$left = max($minTile, (int)floor(($x - $radius) / $cell)) - $minTile;
 			$right = min($maxTile, (int)floor(($x + $radius) / $cell)) - $minTile;
@@ -228,14 +239,16 @@ final class RoadAtlas
 		// Negative relative addresses identify fill-only strips, which never contribute paint or markings.
 		$first = 1 + 4 * count($road['samples']);
 
-		foreach($road['fills'] ?? [] as $i => $fill)
-		foreach(RoadFill::cells($fill[9], $cell) as [$x,$z])
-		{
-			if($x < $minTile || $z < $minTile || $x > $maxTile || $z > $maxTile) continue;
+		foreach($road['fills'] ?? [] as $i => $fill) {
+			if(($i & 63) === 0) yield;
+			foreach(RoadFill::cells($fill[9], $cell) as [$x,$z])
+			{
+				if($x < $minTile || $z < $minTile || $x > $maxTile || $z > $maxTile) continue;
 
-			$x -= $minTile;
-			$z -= $minTile;
-			$tiles[intdiv($z, 8) * $blocksAcross + intdiv($x, 8)][($z % 8) * 8 + $x % 8][] = -($first + 3 * $i);
+				$x -= $minTile;
+				$z -= $minTile;
+				$tiles[intdiv($z, 8) * $blocksAcross + intdiv($x, 8)][($z % 8) * 8 + $x % 8][] = -($first + 3 * $i);
+			}
 		}
 
 		return $tiles;

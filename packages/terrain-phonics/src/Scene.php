@@ -35,7 +35,7 @@ final class Scene
 	private AtmosphereRenderer $atmosphereCache;
 	private TerrainShadows $terrainShadows;
 	private Lod $lod;
-	private ?Clipmap $clipmap = null;
+	private ?Clipmap $clipmap = null, $arrivalClipmap = null;
 	public ?SurfaceLayers $layers = null;
 	public ?TerrainAppearance $paint = null;
 	private array $boundPaint = [];
@@ -58,7 +58,7 @@ final class Scene
 	private array $groundGroups = [];
 	private ?Program $surfaceProgram = null, $nearGround = null, $litNearGround = null;
 	private bool $sampleMaterials = true;
-	private ?MaterialFieldCache $materialFields = null;
+	private ?MaterialFieldCache $materialFields = null, $arrivalFields = null;
 	private ?Landscape $preparing = null;
 	private int $preparingRevision = -1, $preparingSourceRevision = -1;
 	private array $replacementJobs = [], $replacements = [];
@@ -508,6 +508,55 @@ final class Scene
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, 33, 33, 0, GL_RED, GL_FLOAT, pack('f*', ...$heights));
 	}
 
+	/** Warm one candidate without replacing the renderable or physical landscape. */
+	public function prepareArrival(Landscape $land, Camera $camera): \Generator
+	{
+		if(!$this->clipmap || $this->closed) return;
+		$this->discardArrival();
+		$clipmap = $this->arrivalClipmap = new Clipmap;
+		$complete = false;
+		try {
+			$recipe = $land->recipe();
+			$appearance = new TerrainAppearance(TerrainAppearance::PRESET_DEFAULTS[$recipe['preset']] ?? []);
+			$origin = [-$recipe['noiseOffsetX'], 0., -$recipe['noiseOffsetZ']];
+			$materials = [[SurfaceLayers::landscape($recipe, $appearance), $recipe, $origin]];
+			if(isset($recipe['join'])) {
+				$origins = JoinedTerrain::origins($recipe['join']['span'], count($recipe['join']['destinations']));
+				$materials[0][2][0] += $origins[0][0];
+				array_push($materials, ...self::destinationMaterials($recipe, $origins));
+			}
+			$work = (function() use($materials, $clipmap, $land, $camera) {
+				yield from $this->prepareProgramSteps($materials, $this->sampleMaterials);
+				if(count($materials) > 1) {
+					$this->arrivalFields = new MaterialFieldCache;
+					yield;
+					$this->arrivalFields->update($camera->position, $materials, $this->vao[0]);
+					yield;
+				}
+				yield from $clipmap->prepareArrival($land, $camera, $this->quality);
+				yield;
+				$clipmap->updateShadows($camera->position, $this->atmosphere->uniforms()['sunDirection'], $this->heightTextureRevision + 1);
+			})();
+			// Context restoration or a route change retires the old job even if the caller resumes it.
+			while($this->arrivalClipmap === $clipmap && $work->valid()) {
+				yield;
+				if($this->arrivalClipmap !== $clipmap) return;
+				$work->next();
+			}
+			$complete = $this->arrivalClipmap === $clipmap;
+		} finally {
+			if(!$complete && $this->arrivalClipmap === $clipmap) $this->discardArrival();
+		}
+	}
+
+	public function discardArrival(): void
+	{
+		$this->arrivalFields?->close();
+		$this->arrivalFields = null;
+		$this->arrivalClipmap?->close();
+		$this->arrivalClipmap = null;
+	}
+
 	/**
 	 * Replace the landscape and invalidate its rendering cache.
 	 * @param Landscape $landscape Authoritative committed terrain surface.
@@ -516,7 +565,17 @@ final class Scene
 	public function setLandscape(Landscape $landscape): void
 	{
 		$this->clearPatches();
-		$this->clipmap?->invalidate();
+		if($this->arrivalClipmap?->preparedFor($landscape)) {
+			$this->clipmap->close();
+			$this->clipmap = $this->arrivalClipmap;
+			$this->materialFields?->close();
+			$this->materialFields = $this->arrivalFields;
+			$this->arrivalFields = null;
+			$this->arrivalClipmap = null;
+		} else {
+			$this->discardArrival();
+			$this->clipmap?->invalidate();
+		}
 
 		if($this->appearance === $this->presetAppearance)
 		{
@@ -3352,6 +3411,14 @@ final class Scene
 	 */
 	private function preparePrograms(array $materials, bool $sampleMaterials): string
 	{
+		$work = $this->prepareProgramSteps($materials, $sampleMaterials);
+		foreach($work as $_) {}
+		return $work->getReturn();
+	}
+
+	/** Allow a staged landscape to link one terrain program at a time. */
+	private function prepareProgramSteps(array $materials, bool $sampleMaterials): \Generator
+	{
 		$stacks = array_column($materials, 0);
 		$joinedClipmap = $this->useClipmap && count($stacks) > 1;
 		$ribRegion = null;
@@ -3397,15 +3464,18 @@ final class Scene
 
 		try
 		{
-			foreach([false,true] as $lamps)
-			$set[] = new Program(
-				$this->groundVertexSource
-				, str_replace('// SPOT LIGHTS', SpotLights::shaderSource($lamps), $ground)
-			);
+			foreach([false,true] as $lamps) {
+				yield;
+				$set[] = new Program(
+					$this->groundVertexSource
+					, str_replace('// SPOT LIGHTS', SpotLights::shaderSource($lamps), $ground)
+				);
+			}
 
 			if($sampled) {
 				$near = str_replace('// MATERIAL PASSES', "#define NEAR_SURFACE\n" . $read, $source);
 				foreach([false,true] as $lamps) {
+					yield;
 					$set[$lamps ? 'nearLit' : 'near'] = new Program($this->groundVertexSource,
 						str_replace('// SPOT LIGHTS', SpotLights::shaderSource($lamps), $near));
 				}
@@ -3414,6 +3484,7 @@ final class Scene
 			{
 				$root = dirname(__DIR__) . '/shaders/';
 
+				yield;
 				$set[] = new Program(
 					file_get_contents($root . 'shadows.vert')
 					, MaterialShader::assemble(file_get_contents($root . 'chart.frag'), $stacks, chart:true)
@@ -3427,13 +3498,16 @@ final class Scene
 						, $source
 					);
 
+					yield;
 					$set[$sampled ? 'samples' : 'ribs'] = new Program($this->groundVertexSource, $field);
 				}
 			}
-		} catch(\Throwable $error)
-		{
+			// A concurrent editor validation may already have published this combination.
+			if(isset($this->materialPrograms[$key])) return $key;
+			$linked = $set;
+			$set = [];
+		} finally {
 			foreach($set as $program) $program->close();
-			throw $error;
 		}
 
 		// Bound user-authored program residency; never evict the displayed material during validation.
@@ -3454,7 +3528,7 @@ final class Scene
 			break;
 		}
 
-		$this->materialPrograms[$key] = $set;
+		$this->materialPrograms[$key] = $linked;
 
 		return $key;
 	}
@@ -3715,6 +3789,7 @@ final class Scene
 		// The meshes are rebuilt in place, so a selection in flight would still be right. It is dropped anyway,
 		// like every selection whose surroundings were replaced, and its replacement is spread like any other.
 		$this->abandonSelection();
+		$this->discardArrival();
 		$this->closeRecipeChart();
 		$this->ribTarget?->restore();
 		$this->surfaceSamples?->close();
@@ -3806,6 +3881,7 @@ final class Scene
 		if($this->closed) return;
 
 		$this->closed = true;
+		$this->discardArrival();
 		$this->closeRecipeChart();
 		$this->clearPatches();
 

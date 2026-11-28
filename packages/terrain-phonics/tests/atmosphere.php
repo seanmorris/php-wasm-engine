@@ -459,4 +459,21 @@ $expect(
 $sky->stars = new TerrainPhonics\Starfield;
 $expect($sky->stars->meteor(1.) === null && !$sky->starsMoving(12., 11.), 'Default sky is steady between frames');
 
+$source = new Atmosphere;
+$source->setHaze(1.4);
+$job = $source->prepareOptics(17.5);
+$steps = iterator_count($job);
+$prepared = $job->getReturn();
+$live = clone $source;
+$live->setSun([0., .3, 1.]);
+$live->usePreparedOptics($prepared);
+$expected = $source->transmittanceLut(64, 16, 24);
+$expect($steps > 1 && $live->transmittanceLut(64, 16, 24)['bytes'] === $expected['bytes'],
+	'Staged integration yields and produces identical transmission for a moving sun.');
+$live->setHaze(2.8);
+$live->usePreparedOptics($prepared);
+$changed = $live->transmittanceLut(64, 16, 24);
+$expect($changed['generation'] > $expected['generation'] && $changed['bytes'] !== $expected['bytes'],
+	'A haze edit rejects the stale arrival table and preserves the local generation.');
+
 echo "Atmosphere: {$checks} checks passed\n";

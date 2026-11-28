@@ -155,7 +155,7 @@ final class Clipmap
 	 * @param Landscape $land Landscape supplying elevation and committed edits.
 	 * @return void No value.
 	 */
-	private function generate(Landscape $land): void
+	private function generate(Landscape $land, ?array $atlas = null): void
 	{
 		if($this->chartDetail) $this->chartDetail['origin'] = null;
 
@@ -203,7 +203,7 @@ final class Clipmap
 		}
 
 		if($switched || $roads !== $this->roads || ($roads && $r['worldSize'] !== ($this->recipe['worldSize'] ?? null)))
-		$this->uploadRoads($roads, $r['worldSize']);
+		$this->uploadRoads($roads, $r['worldSize'], $atlas);
 
 		if(!$newRecipe) return;
 
@@ -327,7 +327,7 @@ final class Clipmap
 	 * @param float $extent Width of the editable square in meters.
 	 * @return void Updates the generator uniforms and the texture byte counters.
 	 */
-	private function uploadRoads(array $roads, float $extent): void
+	private function uploadRoads(array $roads, float $extent, ?array $atlas): void
 	{
 		$this->roads = $roads;
 		$p = $this->generator;
@@ -347,7 +347,7 @@ final class Clipmap
 			return;
 		}
 
-		$atlas = RoadAtlas::build($roads, $extent, $this->roadOverlays);
+		$atlas ??= RoadAtlas::build($roads, $extent, $this->roadOverlays);
 		$this->roadOverlayBuilds += $atlas['rebuilt'];
 
 		if(!$this->roadTexture) glGenTextures(1, $this->roadTexture);
@@ -1309,6 +1309,44 @@ final class Clipmap
 
 			$this->refresh($this->overview, [0,0], $half / 128, -$half, $changed, $region, -1, $this->overview['n']);
 		}
+	}
+
+	/** Prepare a separate arrival clipmap while its predecessor still owns the display. */
+	public function prepareArrival(Landscape $land, Camera $camera, float $quality): \Generator
+	{
+		$roads = $land->roads();
+		$recipe = $land->recipe();
+		$focus = [$camera->position[0], $camera->position[2]];
+		$atlas = null;
+		if($roads) {
+			$atlas = yield from RoadAtlas::buildSteps($roads, $recipe['worldSize'], $this->roadOverlays);
+			$this->roadside = yield from RoadsideDetail::prepare($roads);
+			$spans = self::spans($recipe, $quality, true);
+			// The four driving rings overlap. Cached tiles are rasterized only once.
+			foreach(array_slice($spans, 0, min(4, count($spans) - 1)) as $i => $span) {
+				$step = $recipe['spacing'] * (2 ** $i);
+				$radius = ($span / 2 + self::roadsidePad($span, $step) + 2) * $step;
+				yield from $this->roadside->prepareWindow(RoadsideDetail::window($focus, $radius));
+			}
+		}
+		yield;
+		$previous = $this->beginElevation();
+		try {
+			glActiveTexture(GL_TEXTURE0);
+			$this->generate($land, $atlas);
+		} finally {
+			glBindFramebuffer(GL_FRAMEBUFFER, is_array($previous) ? $previous[0] : $previous);
+		}
+		unset($atlas);
+		do {
+			yield;
+			$this->update($land, $camera, $quality, microtime(true) + .001, $focus);
+		} while($this->pending);
+	}
+
+	public function preparedFor(Landscape $land): bool
+	{
+		return $this->source === $land && $this->revision === $land->revision() && !$this->pending;
 	}
 
 	/**

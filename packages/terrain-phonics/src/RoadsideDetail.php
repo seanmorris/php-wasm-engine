@@ -17,6 +17,19 @@ final class RoadsideDetail
 	 */
 	public function __construct(array $roads)
 	{
+		foreach($this->index($roads) as $_) {}
+	}
+
+	/** Build the segment index without doing a whole landscape of splines in one frame. */
+	public static function prepare(array $roads): \Generator
+	{
+		$detail = new self([]);
+		yield from $detail->index($roads);
+		return $detail;
+	}
+
+	private function index(array $roads): \Generator
+	{
 		foreach($roads as $road)
 		{
 			$samples = $road['_road']['samples'];
@@ -29,6 +42,7 @@ final class RoadsideDetail
 
 			foreach($samples as $i => [$bx,,$bz])
 			{
+				if(($i & 127) === 0) yield;
 				$dx = $bx - $ax;
 				$dz = $bz - $az;
 				$squared = $dx * $dx + $dz * $dz;
@@ -52,6 +66,22 @@ final class RoadsideDetail
 		}
 	}
 
+	/** Rasterize occupied tiles in small turns before the display needs this window. */
+	public function prepareWindow(array $window): \Generator
+	{
+		[$x,$z,$size] = $window;
+		$left = (int)floor($x / self::TILE);
+		$right = (int)floor(($x + $size - 1) / self::TILE);
+		$bottom = (int)floor(($z + $size - 1) / self::TILE);
+		for($row = (int)floor($z / self::TILE); $row <= $bottom; $row++) {
+			foreach($this->buckets[$row] ?? [] as $col => $_) {
+				if($col < $left || $col > $right || isset($this->tiles[$row][$col])) continue;
+				$this->tiles[$row][$col] = $this->tile($col, $row);
+				yield;
+			}
+		}
+	}
+
 	/**
 	 * Rasterize road coverage for one cached tile.
 	 *
@@ -59,6 +89,7 @@ final class RoadsideDetail
 	 * @param int $z Horizontal Z coordinate.
 	 * @return string Packed coverage bytes for the tile.
 	 */
+
 	private function tile(int $x, int $z): string
 	{
 		$bytes = str_repeat("\0", self::TILE ** 2);

@@ -3062,6 +3062,61 @@ renderCheck(
 $driver->close();
 $land->close();
 
+// A journey can prepare a branch, change its mind, restore the context, or edit a candidate before publication.
+$departure = new Landscape(['worldSize'=>8192]);
+$arrival = new Landscape(['preset'=>'canyon','worldSize'=>8192,'spacing'=>2]);
+$arrival->queue(['type'=>'road','width'=>24,'points'=>[[-96,1,-32],[128,2,32]]]);
+$arrival->commit();
+$drive = new Scene($departure, new Water, new Atmosphere, useClipmap:true);
+$eye = new Camera;
+$eye->position = [-40.,20.,-16.];
+$baseline = $resources();
+$aborted = $drive->prepareArrival($arrival, $eye);
+$aborted->current();
+$aborted->next();
+unset($aborted);
+renderCheck($resources() === $baseline, 'Abandoning a partial arrival frees its private GPU objects.');
+$stale = $drive->prepareArrival($arrival, $eye);
+$stale->current();
+$drive->restore();
+$stale->next();
+renderCheck(!$stale->valid(), 'A restored context cannot resume the discarded arrival.');
+$work = $drive->prepareArrival($arrival, $eye);
+$turns = 0;
+foreach($work as $_) {
+	renderCheck(renderGet($drive, 'landscape') === $departure, 'The outgoing landscape stays authoritative during preparation.');
+	$turns++;
+}
+$clipmap = renderGet($drive, 'arrivalClipmap');
+$hot = $clipmap->stats();
+renderCheck($turns > 8 && $clipmap->preparedFor($arrival) && $hot['roadTextureBytes'] > 0
+	&& $hot['cameraSpacing'] === 2., 'Full road and fine elevation coverage are ready before the handoff.');
+$drive->setLandscape($arrival);
+$drive->update(1/60, $eye, [$eye->position[0],$eye->position[2]]);
+renderCheck(renderGet($drive, 'clipmap') === $clipmap && $drive->stats()['heightTexelsWritten'] === $hot['heightTexelsWritten'],
+	'Swapping a ready stage preserves its populated rings without a single redundant elevation texel.');
+foreach($drive->prepareArrival($departure, $eye) as $_) {}
+$old = renderGet($drive, 'arrivalClipmap');
+$departure->queue(['type'=>'raise','x'=>0,'z'=>0,'radius'=>8,'amount'=>1]);
+$departure->commit();
+$drive->setLandscape($departure);
+renderCheck(renderGet($drive, 'clipmap') !== $old && renderGet($drive, 'arrivalClipmap') === null,
+	'A committed edit invalidates the staged revision before it can be displayed.');
+$fork = new Landscape(['preset'=>'rolling-prairie','noiseOffsetX'=>14.,'noiseOffsetZ'=>-27.,
+	'join'=>['span'=>16384,'destinations'=>[['preset'=>'canyon']]]]);
+foreach($drive->prepareArrival($fork, $eye) as $_) {}
+$fields = renderGet($drive, 'arrivalFields');
+$written = $fields->texelsWritten;
+$drive->setLandscape($fork);
+$drive->update(1/60, $eye);
+$drive->render($eye, 1280, 720, 0.);
+renderCheck(renderGet($drive, 'materialFields') === $fields && $written > 0 && $fields->texelsWritten === $written,
+	'The first joined draw uses the staged material noise at the actual regional origin.');
+$fork->close();
+$drive->close();
+$departure->close();
+$arrival->close();
+
 // A close view can arrive before the regular rings have finished loading.
 $land = new Landscape(['preset' => 'rolling-prairie','worldSize' => 32768,'spacing' => 1]);
 
