@@ -110,6 +110,16 @@ grassCheck(
 );
 
 grassCheck(
+	str_contains($grassSource, 'dressedAt(vWorld.xz + run)') && str_contains($grassSource, 'texelFetch(uInk')
+	, 'The pass reads the paint under the ground each pixel shows'
+);
+
+grassCheck(
+	!str_contains($grassSource, 'vRoad.x/vRoad.w') && str_contains($grassSource, 'dot(abs(vArms')
+	, 'Road arms that meet keep their own distances'
+);
+
+grassCheck(
 	str_contains($grassSource, 'smoothstep(.02, .3, 1. - vOpen)')
 	, 'Grass ends where paint starts to show on the ground'
 );

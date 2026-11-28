@@ -145,7 +145,9 @@ final class GrassShells
 		out float vOpen;
 		out float vGround;
 		out float vTop;
-		out vec4 vRoad;
+		out vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
+		out vec4 vArmsX, vArmsZ; // how those distances change per meter along X and Z, times the weight
+		out float vRoadWeight; // whether this corner is a road cell
 		// A road cell's signed distance from its centerline in half-widths and the arm it belongs to, as the terrain
 		// shader reads them. The arm is -1 away from roads and 4 on other painted ground.
 		vec2 roadCell(ivec2 cell) {
@@ -169,9 +171,16 @@ final class GrassShells
 			// cells stay open here and the fragment ends the grass at the pavement's edge.
 			vec2 road = roadCell(cell);
 			bool marked = road.y >= 0. && road.y < 4.;
-			vRoad = vec4(0.);
+			// Each arm of a junction keeps its own distance. Blended into one, the distances from two centerlines
+			// would cancel where the arms meet and read as pavement.
+			vArms = vArmsX = vArmsZ = vec4(0.);
+			vRoadWeight = 0.;
 			if(marked) {
-				vRoad = vec4(road.x, roadStep(road, cell, ivec2(1, 0))/uGridStep, roadStep(road, cell, ivec2(0, 1))/uGridStep, 1.);
+				int arm = int(road.y);
+				vArms[arm] = road.x;
+				vArmsX[arm] = roadStep(road, cell, ivec2(1, 0))/uGridStep;
+				vArmsZ[arm] = roadStep(road, cell, ivec2(0, 1))/uGridStep;
+				vRoadWeight = 1.;
 			}
 			float cover = road.y < 4. ? 1. : 0.;
 			vOpen = cover;
@@ -199,7 +208,9 @@ final class GrassShells
 		in float vOpen; // whether grass may grow here, before the taper toward the blades' radius
 		in float vGround;
 		in float vTop;
-		in vec4 vRoad; // signed distance from a road's centerline in half-widths, its change per meter along X and Z, weight
+		in vec4 vArms; // each road arm's distance from its centerline in half-widths, signed, times the weight
+		in vec4 vArmsX, vArmsZ; // how those distances change per meter along X and Z, times the weight
+		in float vRoadWeight; // how much of this pixel's ground is road cells
 		uniform vec3 uEye;
 		uniform float uWaterLevel;
 		uniform vec2 uView; // radians per pixel, seconds
@@ -208,6 +219,9 @@ final class GrassShells
 		uniform float uSnowCover; // snow cover on level ground, as the terrain pass draws it
 		uniform vec2 uReach; // radius the blades are drawn to, radius at which they start to taper
 		uniform vec2 uDots; // radius to which grass standing in snow is marked with dots, how strongly a dot shows
+		uniform highp sampler2D uInk; // this grid's paint and road codes, one texel for each cell
+		uniform int uTextureMask; // wraps a cell onto its texel
+		uniform float uGridStep; // meters across a cell of this grid
 		// REGIONS
 		out vec4 color;
 		uint bladeHash(ivec2 c) {
@@ -254,6 +268,36 @@ final class GrassShells
 				best = max(best, step(max(abs(at.x), abs(at.y)), .5)*(kept ? 1. : 1. - rising));
 			}
 			return best;
+		}
+		// Distance from a road's centerline in half-widths, a few meters from this pixel's surface point. Pavement ends
+		// one half-width out. Each arm's distance is blended on its own and the arms are then added, as the terrain
+		// does, so the pass and the ground agree on what is paved where roads meet.
+		float roadAt(vec2 offset) {
+			return dot(abs(vArms + vArmsX*offset.x + vArmsZ*offset.y), vec4(1.))/vRoadWeight;
+		}
+		// How much of the ground at a point is dressed, as the terrain draws it there: paint, and pavement within a
+		// road's half-width. The terrain blends the paint of the grid corners around a point, so this reads the same
+		// four corners. It is looked up at the ground the pixel shows, with nothing extrapolated, so the pass and the
+		// ground agree on every pixel.
+		float dressedAt(vec2 point) {
+			vec2 at = point/uGridStep;
+			ivec2 corner = ivec2(floor(at));
+			vec2 part = at - vec2(corner);
+			float paint = 0., weight = 0.;
+			vec4 arms = vec4(0.);
+			for(int i = 0; i < 4; i++) {
+				ivec2 hop = ivec2(i & 1, i>>1);
+				float share = (hop.x == 1 ? part.x : 1. - part.x)*(hop.y == 1 ? part.y : 1. - part.y);
+				ivec4 ink = ivec4(texelFetch(uInk, (corner + hop) & ivec2(uTextureMask), 0)*255. + .5);
+				int code = (ink.g<<16) | (ink.b<<8) | ink.a;
+				if(ink.r == 5 && code != 0) {
+					arms[(code>>10) & 3] += share*float((code>>12) - 2048)/1024.;
+					weight += share;
+				} else if(ink.r != 0) paint += share;
+			}
+			// Pavement ends one half-width from the centerline. Each arm is blended on its own and the arms are added.
+			float paved = weight > .0001 ? weight*(1. - smoothstep(1., 1.06, dot(abs(arms), vec4(1.))/weight)) : 0.;
+			return paint + paved;
 		}
 		void main() {
 			vec3 normal = normalize(vNormal);
@@ -318,15 +362,13 @@ final class GrassShells
 			float outward = distance(vWorld.xz, uEye.xz); // meters from the eye along the ground
 			float marked = tallest <= 0. ? 0. : uDots.y*smoothstep(.15, .5, snowed)*min(1., grows*4.)
 				*smoothstep(.5*(uReach.x + uReach.y), uReach.x, outward)*(1. - smoothstep(uReach.x, uDots.x, outward));
-			if(marked > .004) {
-				float slope = max(-dot(ray, normal), .01); // sine of the angle between the line of sight and the ground
-				vec2 under = vWorld.xz + ray.xz*(max(vTop, 0.)*normal.y/max(slope, .05));
-				speck = marked*dotAt(under, normalize(ray.xz + vec2(1e-6, 0.)), range*uView.x, slope, kind.x);
-			}
+			float slope = max(-dot(ray, normal), .01); // sine of the angle between the line of sight and the ground
+			vec2 under = vWorld.xz + ray.xz*(max(vTop, 0.)*normal.y/max(slope, .05)); // the ground this pixel shows
+			if(marked > .004) speck = marked*dotAt(under, normalize(ray.xz + vec2(1e-6, 0.)), range*uView.x, slope, kind.x);
 			vec3 dotTone = mix(vec3(.9*shade.x), 1.29*tip, .8)*standing;
 			if(tallest <= 0. || cover <= .01) {
 				// No blades here. A dot is drawn on its own, though not on pavement.
-				if(speck <= .004 || (vRoad.w > .0001 && abs(vRoad.x/vRoad.w) < 1.1)) discard;
+				if(speck <= .004 || dressedAt(under) > .1) discard;
 				color = vec4(.5*min(mix(vec3(1.), dotTone, speck), vec3(2.)), 1.);
 				return;
 			}
@@ -341,11 +383,12 @@ final class GrassShells
 			// then through the grass.
 			vec2 run = ray.xz*(top*normal.y/max(-dot(ray, normal), .05));
 			// Near a road, the distance from its centerline at any point close by. Pavement ends one half-width out.
-			bool roadside = vRoad.w > .0001;
-			float lateral = roadside ? vRoad.x/vRoad.w : 9.;
-			vec2 grade = roadside ? vRoad.yz/vRoad.w : vec2(0.);
-			// The pass multiplies the ground the pixel shows, so a blade in front of pavement would only darken it.
-			if(roadside && abs(lateral + dot(grade, run)) < 1.03) discard;
+			bool roadside = vRoadWeight > .0001;
+			// The pass multiplies the ground the pixel shows, so a blade in front of pavement or paint would only darken
+			// it. The shade between the blades ends with them.
+			float dressed = dressedAt(vWorld.xz + run);
+			if(dressed > .3) discard;
+			float verge = 1. - smoothstep(0., .3, dressed);
 			vec2 enter = vWorld.xz + run*(1. - start/top);
 			run *= start/top;
 			// Neighbors lean the same way and bend more toward the tip. Gusts push the tips further.
@@ -362,7 +405,7 @@ final class GrassShells
 			// it into one stroke instead of a piece per segment.
 			float offset = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(.06711056,.00583715))));
 			// The snow between the blades is not shaded by them.
-			vec3 light = vec3(mix(1., shade.x, cover*(1. - snowed)));
+			vec3 light = vec3(mix(1., shade.x, cover*verge*(1. - snowed)));
 			// Beyond a few tens of meters a blade is a pixel wide, and a few segments find as much as many do up close.
 			int count = max(3, int(float(uSteps)*(1. - .65*smoothstep(12., 45., range)) + .5));
 			float steps = float(count);
@@ -384,7 +427,7 @@ final class GrassShells
 				float tall = full*(.4 + .6*float(h & 1023u)/1023.);
 				// Snow hides whole blades where they stand. Each cell's turn is fixed, so no blade moves as the cover changes.
 				if(float((h*0x9E3779B1u)>>22)/1023. < uBuried) tall = 0.;
-				if(roadside) tall *= smoothstep(1.03, 1.14, abs(lateral + dot(grade, middle - vWorld.xz)));
+				if(roadside) tall *= smoothstep(1.03, 1.14, roadAt(middle - vWorld.xz));
 				if(h1 < tall) {
 					vec2 jitter = vec2(float((h>>10) & 1023u), float((h>>20) & 1023u))/1023. - .5;
 					// From the blade's foot to the middle of the segment, worked out inside the cell: world coordinates are
