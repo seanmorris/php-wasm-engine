@@ -2592,16 +2592,19 @@ final class Scene
 				, $environment['sunDirection'][1]
 				, $this->landscape
 				, $camera->position
+				, $environment['exposure']
 			);
 		} else $this->weatherRenderer?->clear();
 
 		$bounds = $this->landscape->bounds();
 		$this->clipmap?->updateShadows($camera->position, $environment['sunDirection'], $this->heightTextureRevision);
 
+		$coarse = $this->clipmap
+			? $this->clipmap->overview()[0]
+			: (isset($this->patches['0:0:0']) ? $this->heightTexture[0] : 0);
+
 		$this->terrainShadows->update(
-			$this->clipmap
-				? $this->clipmap->overview()[0]
-				: (isset($this->patches['0:0:0']) ? $this->heightTexture[0] : 0)
+			$coarse
 			, $this->lod->extent
 			, $environment['sunDirection']
 			, $this->heightTextureRevision
@@ -2609,6 +2612,20 @@ final class Scene
 			, $bounds['minY']
 			, $bounds['maxY']
 		);
+
+		// A lightning strike that lights the land has its own shadows, drawn from the same coarse heights before
+		// its first flash. While it is lit the land's exposure drops and the sky's does not.
+		$this->weatherRenderer?->bake(
+			$coarse
+			, $this->lod->extent
+			, $this->clipmap?->packed() ?? false
+			, $this->heightTextureRevision
+			, [$bounds['minY'], $bounds['maxY']]
+			, $this->clipmap?->fine(3000.)
+		);
+
+		$land = $environment;
+		$land['exposure'] *= $this->weatherRenderer?->exposure() ?? 1.;
 
 		$materials = $this->regionalMaterials();
 		// On smaller targets and at the detailed setting the material shader runs at native resolution.
@@ -2671,7 +2688,7 @@ final class Scene
 
 		if($joined) $this->bindJourney($groundProgram, $materials);
 
-		$this->common($groundProgram, $camera, $width, $height, $environment);
+		$this->common($groundProgram, $camera, $width, $height, $land);
 		$this->water->appearance->bind($groundProgram);
 
 		$id = spl_object_id($groundProgram);
@@ -2825,7 +2842,7 @@ final class Scene
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		$waterProgram->use();
 		$this->water->appearance->bind($waterProgram);
-		$this->common($waterProgram, $camera, $width, $height, $environment);
+		$this->common($waterProgram, $camera, $width, $height, $land);
 		[$wakeCount, $wakeBounds] = $this->waterUniforms($waterProgram, $time);
 		$lastCount = $lastBoundary = null;
 		$wakeLocation = $waterProgram->location('uFrameWakeCount');

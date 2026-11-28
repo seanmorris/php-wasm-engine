@@ -387,28 +387,30 @@ foreach([NAN, INF, 1e13] as $invalid)
 
 // Weather saved before lightning existed still loads, without lightning.
 $old = (new Weather)->snapshot(0.);
-
-foreach([
+$added = [
 	'lightning'
 	, 'boltSeconds'
 	, 'flashDark'
 	, 'flashGlow'
+	, 'flashLight'
 	, 'boltWidth'
 	, 'boltZigzag'
 	, 'boltForks'
-	, 'boltReach'
-	, 'boltColor'
-] as $key)
-unset($old['controls'][$key]);
+	, 'boltReach', 'boltColor'
+];
+
+foreach($added as $key) unset($old['controls'][$key]);
 
 expectLightning(Weather::valid($old), 'Weather saved before lightning existed is valid');
 $restored = new Weather;
 $restored->restore($old, 0.);
 
 expectLightning(
-	$restored->controls() === Weather::DEFAULTS
-	, 'Old weather loads without lightning, with every option as designed'
+	$restored->controls() == Weather::DEFAULTS
+	, 'Old weather loads with every lightning option as designed'
 );
+
+expectLightning(Weather::DEFAULTS['flashLight'] === 0, 'The flash lights the land only when asked to');
 
 foreach(['clear', 'cloudy', 'rain', 'snow'] as $preset)
 expectLightning(Weather::PRESETS[$preset]['lightning'] === 0, "Choosing $preset ends the storm");

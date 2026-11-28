@@ -318,6 +318,9 @@ void main()
 	#endif
 	lit += terrainNightMaterial(albedo, mix(lightingNormal,n,painted), uNightAmbient);
 	lit += albedo / 3.14159265 * terrainSpotLight(vWorld, mix(lightingNormal,n,painted), uWaterLevel, uWaterOptics.z);
+	#ifdef TERRAIN_WEATHER
+	lit += albedo * boltLight(vWorld, mix(lightingNormal,n,painted));
+	#endif
 	#ifdef MATERIAL_REFLECTION
 	lit=dielectricReflection(lit,lightingNormal,finish,painted,direct,shadow);
 	#endif

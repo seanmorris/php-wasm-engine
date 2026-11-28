@@ -19,6 +19,7 @@ final class Weather
 		, 'boltSeconds' => .8
 		, 'flashDark' => 70
 		, 'flashGlow' => 100
+		, 'flashLight' => 0
 		, 'boltWidth' => 100
 		, 'boltZigzag' => 100
 		, 'boltForks' => 100
@@ -45,6 +46,7 @@ final class Weather
 		, 'boltSeconds' => [.3,2]
 		, 'flashDark' => [0,100]
 		, 'flashGlow' => [0,200]
+		, 'flashLight' => [0,100]
 		, 'boltWidth' => [25,400]
 		, 'boltZigzag' => [0,200]
 		, 'boltForks' => [0,100]
@@ -58,6 +60,7 @@ final class Weather
 		, 'boltSeconds' => true
 		, 'flashDark' => true
 		, 'flashGlow' => true
+		, 'flashLight' => true
 		, 'boltWidth' => true
 		, 'boltZigzag' => true
 		, 'boltForks' => true

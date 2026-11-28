@@ -26,7 +26,11 @@ final class WeatherRenderer
 	 *
 	 * @return void No value.
 	 */
-	public function __construct() { $this->enabled = new \WeakMap; }
+	public function __construct()
+	{
+		$this->enabled = new \WeakMap;
+		$this->lighted = new \WeakMap;
+	}
 
 	private ?Program $clouds = null, $particles = null, $bolt = null, $shade = null;
 	/** Strikes lit this frame, nearest first: top, landing point, seed, light, and distance from the eye. */
@@ -34,6 +38,21 @@ final class WeatherRenderer
 	/** Strikes begun in the last two slots, the controls and square they were listed for, and where each landed. */
 	private array $slots = [], $listed = [], $landed = [];
 	private bool $flashed = false;
+	/**
+	 * The strike that lights the land this frame, and the one whose shadows are drawn next: each a name, where its
+	 * light is and how brightly it shines. Empty when there is none.
+	 */
+	private array $light = [], $next = [];
+	private ?FlashShadows $shadows = null;
+	/** The name of the strike the shadow map holds, or nothing when it holds none that can be used. */
+	private string $shadowed = '';
+	private \WeakMap $lighted;
+	private float $exposure = 1.;
+	/**
+	 * How far up the bolt the light that falls on the land sits, the distance at which it is half as bright, in
+	 * meters, and how bright it makes a surface that faces it at the foot of the bolt.
+	 */
+	private const LAMP = .35, HALF = 1200., SHINE = 5.;
 	/** Where the eye last was, when, and its velocity from there, which slants the rain. */
 	private array $eye = [], $drift = [0., 0., 0.];
 	private float $seen = 0.;
@@ -48,7 +67,7 @@ final class WeatherRenderer
 	public function clear(): void
 	{
 		$this->active = false;
-		$this->strikes = [];
+		$this->strikes = $this->light = $this->next = [];
 	}
 
 	/**
@@ -60,6 +79,7 @@ final class WeatherRenderer
 	 * @param float $sunY Vertical component of the normalized sun direction.
 	 * @param ?Landscape $ground Landscape lightning lands on. Without one there is no lightning.
 	 * @param array $eye Eye position in meters.
+	 * @param float $exposure The scene's exposure, which a flash's light on the land is set against.
 	 * @return void No value.
 	 */
 	public function prepare(
@@ -69,6 +89,7 @@ final class WeatherRenderer
 		, float $sunY
 		, ?Landscape $ground = null
 		, array $eye = [0., 0., 0.]
+		, float $exposure = 1.
 	): void {
 		$this->controls = $c = $weather->controls();
 
@@ -76,7 +97,8 @@ final class WeatherRenderer
 		$this->sea = $sea;
 		$this->ground = $weather->ground($time);
 		$this->active = $c['coverage'] > 0 || ($c['kind'] !== 'none' && $c['intensity'] > 0) || max($this->ground) > 0.;
-		$this->strikes = [];
+		$this->strikes = $this->light = $this->next = [];
+		$this->exposure = $exposure;
 
 		if(!$this->active) return;
 
@@ -133,7 +155,8 @@ final class WeatherRenderer
 		$this->slots = array_intersect_key($this->slots, [$slot - 1 => true, $slot => true]);
 		$rain = $this->controls['kind'] === 'rain' ? $this->controls['intensity'] / 100. : 0.;
 		$life = $this->controls['boltSeconds'];
-		$landed = [];
+		$landed = $soon = [];
+		$ahead = false;
 		$called = $weather->called();
 
 		foreach([$slot - 1, $slot] as $n) $this->slots[$n] ??= Lightning::begun($weather, $n, $eye[0], $eye[2]);
@@ -146,7 +169,23 @@ final class WeatherRenderer
 			// A strike keeps the landing point found for it for as long as its slot is listed.
 			if(isset($this->landed[$id])) $landed[$id] = $this->landed[$id];
 
-			if($this->time < $start || $this->time - $start >= $life) continue;
+			if($this->time - $start >= $life) continue;
+
+			if($this->time < $start)
+			{
+				// A strike due within a second has its landing looked up now, one strike a frame, so the frame it
+				// begins on does not pay for it. The soonest of them has its shadows drawn ahead as well.
+				if($start - $this->time < 1. && !isset($landed[$id]) && !$ahead)
+				{
+					$landed[$id] = Lightning::ground($ground, $x, $z, $this->sea, $this->controls['boltReach']);
+					$ahead = true;
+				}
+
+				if(isset($landed[$id]) && $start - $this->time < .15 && (!$soon || $start < $soon[3]))
+				$soon = [$id, Lightning::top($x, $z, $landed[$id], $this->deck[1]), $landed[$id], $start];
+
+				continue;
+			}
 
 			$land = $landed[$id] ??= Lightning::ground($ground, $x, $z, $this->sea, $this->controls['boltReach']);
 
@@ -165,6 +204,7 @@ final class WeatherRenderer
 				, $seed
 				, [$main * $clear, $forks * $clear, $down]
 				, $far
+				, $id
 			];
 		}
 
@@ -172,6 +212,126 @@ final class WeatherRenderer
 		// Nearest first, so the strikes that matter most are the ones kept.
 		array_multisort(array_column($this->strikes, 4), $this->strikes);
 		$this->strikes = array_slice($this->strikes, 0, self::SHOWN);
+
+		if($this->controls['flashLight'] <= 0) return;
+
+		// The nearest lit strike lights the land. With none lit, the next one due has its shadows drawn ahead.
+		if($this->strikes)
+		{
+			[$top, $land, , $light, , $id] = $this->strikes[0];
+			$this->light = $this->next = [$id, self::lamp($top, $land), $light[0]];
+		}
+		elseif($soon) $this->next = [$soon[0], self::lamp($soon[1], $soon[2]), 0.];
+	}
+
+	/**
+	 * Place the light a bolt sheds on the land: a point part of the way up it.
+	 *
+	 * @param array $top Where the bolt leaves the cloud, as X, height and Z in meters.
+	 * @param array $land Where it lands, as X, height and Z in meters.
+	 * @return array The light's X, height and Z in meters.
+	 */
+	private static function lamp(array $top, array $land): array
+	{
+		return [
+			$land[0] + self::LAMP * ($top[0] - $land[0])
+			, $land[1] + self::LAMP * ($top[1] - $land[1])
+			, $land[2] + self::LAMP * ($top[2] - $land[2])
+		];
+	}
+
+	/**
+	 * Draw the shadows of the strike that lights the land, or of the one about to, if they are not drawn yet.
+	 *
+	 * @param int $heights The scene's coarse height texture, or zero before it exists.
+	 * @param float $extent Width of the square world that texture covers, in meters.
+	 * @param bool $packed Whether its heights are stored in RGBA8.
+	 * @param int $revision Revision of the landscape it holds.
+	 * @param array $range The lowest and highest ground in the landscape, in meters.
+	 * @param ?array $fine The fine grid of heights near the eye from Clipmap::fine(), if there is one.
+	 * @return void The caller resets the viewport and the depth, cull, blend and scissor state afterward.
+	 */
+	public function bake(
+		int $heights
+		, float $extent
+		, bool $packed
+		, int $revision
+		, array $range = [-32768., 32767.]
+		, ?array $fine = null
+	): void {
+		if(!$this->next) return;
+
+		$this->shadows ??= new FlashShadows;
+
+		$drawn = $this->shadows->update(
+			$heights
+			, $extent
+			, $packed
+			, $revision
+			, $this->next[1]
+			, $this->next[0]
+			, $range
+			, $fine
+		);
+
+		// A map that could not be drawn, or that holds another strike, must not shadow this one.
+		$this->shadowed = $drawn || $this->shadowed === $this->next[0] ? $this->next[0] : '';
+	}
+
+	/**
+	 * Tell how far the land's exposure drops while lightning lights it.
+	 *
+	 * @return float A factor for the exposure of everything but the sky and the cloud: 1 with no flash.
+	 */
+	public function exposure(): float
+	{
+		$share = $this->controls ? $this->controls['flashLight'] / 100. : 0.;
+
+		if($share <= 0. || !$this->strikes) return 1.;
+
+		// Lowering exposure by the darkening's factor raised to 2.2 dims a mid-gray about as much as multiplying
+		// the finished picture by that factor does.
+		return 1. - $share * (1. - $this->keep() ** 2.2);
+	}
+
+	/**
+	 * Hand a ground or water program the strike that lights the land, or take it away again.
+	 *
+	 * @param Program $p Program in use that declares uBoltAt and uBoltLight.
+	 * @return void No value.
+	 */
+	private function shine(Program $p): void
+	{
+		if(!$this->light)
+		{
+			if(isset($this->lighted[$p]))
+			{
+				glUniform3f($p->location('uBoltLight'), 0., 0., 0.);
+				unset($this->lighted[$p]);
+			}
+
+			return;
+		}
+
+		[$id, $at, $power] = $this->light;
+		[$red, $green, $blue] = $this->tint();
+		// The light is set against the lowered exposure, so a slope facing the bolt comes out bright however dark
+		// the rest of the land has gone.
+		$shine = self::SHINE * $power * $this->controls['flashLight'] / 100.
+			/ max(.0001, $this->exposure * $this->exposure());
+
+		$this->lighted[$p] = true;
+		glUniform4f($p->location('uBoltAt'), $at[0], $at[1], $at[2], self::HALF);
+
+		glUniform3f(
+			$p->location('uBoltLight')
+			, $shine * (.6 * $red + .4)
+			, $shine * (.6 * $green + .4)
+			, $shine * (.6 * $blue + .4)
+		);
+
+		if($this->shadowed === $id) $this->shadows->bind($p);
+		else glUniform3f($p->location('uBoltShadowAt'), 0., 0., 0.);
 	}
 
 	/**
@@ -207,6 +367,8 @@ final class WeatherRenderer
 				unset($this->enabled[$p]);
 			}
 
+			$this->shine($p);
+
 			return;
 		}
 
@@ -214,6 +376,7 @@ final class WeatherRenderer
 		glUniform4f($p->location('uDeck'), ...$this->deck);
 		glUniform2f($p->location('uGroundCover'), ...$this->ground);
 		glUniform1f($p->location('uRoadSnow'), $this->controls['roadSnow'] / 100.);
+		$this->shine($p);
 
 		if($this->deck[0] <= 0.) return;
 
@@ -342,7 +505,10 @@ final class WeatherRenderer
 	 */
 	private function darken(string $root): void
 	{
-		$keep = $this->keep();
+		// The share of the darkening that the flash's own light has taken over is left to the land's exposure.
+		$keep = 1. - (1. - $this->keep()) * (1. - $this->controls['flashLight'] / 100.);
+
+		if($keep >= 1.) return;
 
 		$p = $this->shade ??= new Program(
 			file_get_contents($root . 'sky.vert')
@@ -451,6 +617,7 @@ final class WeatherRenderer
 		$this->particles?->close();
 		$this->bolt?->close();
 		$this->shade?->close();
+		$this->shadows?->close();
 
 		if($this->texture) glDeleteTextures(1, $this->texture);
 	}
